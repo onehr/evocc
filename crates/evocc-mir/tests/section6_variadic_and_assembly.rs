@@ -17,7 +17,7 @@ use evocc_mir::{compile_module_for, Target};
 /// A variadic callee with one named parameter, its list object and one
 /// `va_arg` of `bits<64>`.
 const CALLEE: &str = r#"func @sum(%arg0: bits<32>, ..., %arg1: mem<all>, %arg2: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=1, size=32, align=8]
@@ -32,7 +32,7 @@ const CALLEE: &str = r#"func @sum(%arg0: bits<32>, ..., %arg1: mem<all>, %arg2: 
 const CALLER: &str = r#"declare @sum(bits<32>, ..., mem<all>, world) -> (bits<64>, mem<all>, world) cc = target_default
 
 func @call_it(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 2
@@ -46,7 +46,7 @@ func @call_it(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc =
 /// The implicit `asm` a global register variable reads through, exactly as the
 /// front end writes it for `register unsigned long sp_var asm("sp")`.
 const REGISTER_READ: &str = r#"func @get_sp(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=false, io=true, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=true, atomic=false, io=true, fenv=true, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     (%v2, %v3, %v4) = asm volatile "mov %0, sp" %v0, %v1 outputs [("=r", "", bits<64>, -)] inputs [] clobbers []

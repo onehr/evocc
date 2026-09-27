@@ -22,7 +22,7 @@ fn wrap(body: &str) -> String {
     format!(
         "func @main(%arg0: bits<64>, %arg1: bits<64>, %arg2: mem<all>, %arg3: world) \
 -> (bits<64>, mem<all>, world) cc = target_default\n    \
-effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, \
+effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, \
 may_trap=false, may_unwind=false }}\n{{\n\
 ^entry(%v0: bits<64>, %v1: bits<64>, %v2: mem<all>, %v3: world):\n{body}    \
 ret %v99, %v2, %v3\n}}\n"

@@ -102,7 +102,13 @@ fn the_pinned_seed_space_still_names_the_modules_it_named() {
     for (seed, digest) in PINNED {
         let module = generate_module(seed, GeneratorConfig::default());
         assert_eq!(
-            sha256_hex(render_module(&module).as_bytes()),
+            // Preserve the pinned semantic seed space across the mandatory
+            // 1.9.106 text-field addition, without replacing historical hashes.
+            sha256_hex(
+                evocc_evoir::render_pre_fenv_module(&module)
+                    .unwrap()
+                    .as_bytes()
+            ),
             digest,
             "seed {seed} no longer names the module it named"
         );

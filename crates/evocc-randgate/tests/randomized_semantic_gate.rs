@@ -36,6 +36,7 @@ fn family(inst: &Inst) -> &'static str {
         Inst::TlsAddr(_) => "tls_addr",
         Inst::Vector(_) => "vec",
         Inst::Floating(_) => "fp",
+        Inst::StrictFloating(_) => "fp.strict",
         Inst::Atomic(access) => {
             if access.is_load() {
                 "atomic.load"

@@ -4,7 +4,7 @@ use evocc_types::{EvoIRType, Region};
 
 fn source(op: &str, bits: u16, count_bits: u16, count: u64) -> String {
     format!("func @main(%arg0: bits<{bits}>, %arg1: mem<all>, %arg2: world) -> (bits<{bits}>, mem<all>, world) cc = target_default
-    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}
+    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}
 {{
 ^entry(%v0: bits<{bits}>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<{count_bits}> {count}

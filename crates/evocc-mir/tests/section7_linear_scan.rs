@@ -564,7 +564,7 @@ fn the_allocated_form_names_physical_registers_and_no_block_arguments() {
 /// this is the reduction of the first of them.
 const CARRIED_AROUND_A_LOOP: &str = "\
 func @h0(%arg0: mem<all>, %arg1: world) -> (bits<32>, bits<64>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     (%v2, %v3, %v4) = alloca %v0, %v1 [origin=0, size=8, align=8]

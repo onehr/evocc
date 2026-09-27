@@ -36,9 +36,15 @@ const FUEL_FLOOR: u64 = 256;
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
 
 fn main() -> ExitCode {
-    let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let mut arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     if arguments.len() == 1 && arguments[0] == "--probe" {
         return ExitCode::SUCCESS;
+    }
+    let legacy = arguments
+        .first()
+        .is_some_and(|arg| arg == "--legacy-pre-fenv");
+    if legacy {
+        arguments.remove(0);
     }
     if arguments.len() != 3 {
         return ExitCode::from(2);
@@ -53,11 +59,16 @@ fn main() -> ExitCode {
     let Ok(proof) = read(&arguments[2]) else {
         return ExitCode::from(2);
     };
-    let before_module = match evocc_evoir::parse_section9_module(&before) {
+    let parse = if legacy {
+        evocc_evoir::parse_pre_fenv_module
+    } else {
+        evocc_evoir::parse_section9_module
+    };
+    let before_module = match parse(&before) {
         Ok(module) => module,
         Err(_) => return ExitCode::from(2),
     };
-    if evocc_evoir::parse_section9_module(&after).is_err() {
+    if parse(&after).is_err() {
         return ExitCode::from(2);
     }
     let certificate = match parse_evp1(&proof) {
@@ -84,7 +95,7 @@ fn main() -> ExitCode {
     if seed_facts.inductive(&before_module).is_err() {
         return ExitCode::from(3);
     }
-    let reassembled_module = match claim(
+    let rebuilt = match claim(
         &certificate,
         &before_module,
         &eligible,
@@ -96,12 +107,20 @@ fn main() -> ExitCode {
         // nothing else. Comparing against the raw input bytes instead would
         // refuse every gapped or otherwise non-canonical input the producer had
         // merely rendered.
-        Ok(Claim::Zero) => evocc_evoir::render_module(&before_module).into_bytes(),
+        Ok(Claim::Zero) => before_module,
         Ok(Claim::Regions(replacements)) => match reassemble(&before_module, replacements) {
-            Ok(module) => evocc_evoir::render_module(&module).into_bytes(),
+            Ok(module) => module,
             Err(()) => return ExitCode::from(3),
         },
         Err(()) => return ExitCode::from(3),
+    };
+    let reassembled_module = if legacy {
+        match evocc_evoir::render_pre_fenv_module(&rebuilt) {
+            Ok(text) => text.into_bytes(),
+            Err(_) => return ExitCode::from(3),
+        }
+    } else {
+        evocc_evoir::render_module(&rebuilt).into_bytes()
     };
     if certificate.output_digest != sha256_hex(&reassembled_module) || reassembled_module != after {
         return ExitCode::from(3);

@@ -391,7 +391,7 @@ fn the_two_profiles_differ_where_the_platforms_do() {
 global @counter origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = global_addr @counter : ptr<generic>

@@ -17,7 +17,7 @@ use evocc_mir::{compile_module_for, Target};
 fn adder(name: &str, visibility: &str) -> String {
     format!(
         "func @{name}(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default{visibility}
-    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}
+    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}
 {{
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 1
@@ -49,11 +49,11 @@ fn caller(name: &str, visibility: &str, callee: &str, effects: &str) -> String {
 const INTERNAL: &str = " visibility=internal";
 
 /// Section 4.6's empty summary, which a call to a pure function keeps.
-const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }";
+const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }";
 
 /// Section 4.6's top summary, which every external function has and which a
 /// call to a `declare` therefore gives its caller.
-const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }";
+const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }";
 
 #[test]
 fn function_sections_preserve_entry_metadata_and_restore_default_text() {
@@ -354,7 +354,7 @@ fn the_check_repeats_until_no_internal_function_is_dropped() {
 #[test]
 fn a_func_addr_and_a_relocation_each_keep_an_internal_function() {
     let taken = "func @take(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = func_addr @helper : fnptr<(bits<32>, mem<all>, world)->(bits<32>, mem<all>, world)>

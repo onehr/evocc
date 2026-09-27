@@ -17,7 +17,7 @@ fn lower(text: &str) -> evocc_mir::MModule {
 #[test]
 fn dynamic_allocation_and_release_preserve_their_text_operands() {
     let source = "func @main(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<64>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=8, align=8]
@@ -184,7 +184,7 @@ fn mnemonics_with_boundary(module: &evocc_mir::MModule) -> Vec<String> {
 
 const ADD: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 7
@@ -227,7 +227,7 @@ fn the_memory_and_world_arguments_do_not_occupy_registers() {
 
 const UNSIGNED_NARROW: &str = "\
 func @main(%arg0: bits<13>, %arg1: mem<all>, %arg2: world) -> (bits<13>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<13>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<13> 3
@@ -254,7 +254,7 @@ fn lshr_on_a_narrow_value_zero_extends_first() {
 
 const SIGNED_NARROW: &str = "\
 func @main(%arg0: bits<13>, %arg1: mem<all>, %arg2: world) -> (bits<13>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<13>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<13> 3
@@ -278,7 +278,7 @@ fn ashr_on_a_narrow_value_sign_extends_first() {
 
 const BYTE_NARROW: &str = "\
 func @main(%arg0: bits<8>, %arg1: mem<all>, %arg2: world) -> (bits<8>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<8>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<8> 3
@@ -298,7 +298,7 @@ fn a_width_of_eight_uses_the_byte_extension_spellings() {
 
 const REMAINDER: &str = "\
 func @main(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     %v4 = urem.bits<32> %v0, %v1
@@ -313,7 +313,7 @@ fn a_remainder_lowers_to_a_divide_and_an_msub() {
 
 const COMPARE_THEN_BRANCH: &str = "\
 func @main(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     %v4 = icmp.ult %v0, %v1
@@ -338,7 +338,7 @@ fn a_comparison_consumed_only_by_a_branch_fuses_into_b_cond() {
 
 const COMPARE_THEN_RETURN: &str = "\
 func @main(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<1>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     %v4 = icmp.slt %v0, %v1
@@ -353,7 +353,7 @@ fn a_comparison_with_another_consumer_lowers_to_cmp_then_cset() {
 
 const BRANCH_ON_A_BIT: &str = "\
 func @main(%arg0: bits<1>, %arg1: mem<all>, %arg2: world) -> (bits<1>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<1>, %v1: mem<all>, %v2: world):
     cond_br %v0, ^b1(%v0, %v1, %v2), ^b1(%v0, %v1, %v2)
@@ -379,7 +379,7 @@ fn an_unfused_condition_branches_on_bit_zero() {
 
 const MEMORY: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=4, align=4]
@@ -404,7 +404,7 @@ const GLOBAL: &str = "\
 global @counter origin=0 kind=file visibility=external size=4 align=4 bytes=00000000 initialized=1111
 
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = global_addr @counter : ptr<generic>
@@ -421,7 +421,7 @@ fn a_global_address_lowers_to_the_page_relative_pair() {
 
 const UB_ASSUME: &str = "\
 func @main(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     %v4 = icmp.ne %v0, %v1
@@ -455,7 +455,7 @@ fn an_obligation_becomes_a_checked_branch_to_a_trap() {
 
 const TRAP: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     trap.unreachable_reached
@@ -473,14 +473,14 @@ fn a_trap_becomes_a_brk_with_the_reason_number() {
 
 const CALL: &str = "\
 func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     ret %v0, %v1, %v2
 }
 
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = call @helper(%v0, %v1, %v2)
@@ -531,7 +531,7 @@ fn predicate(width: u16, body: &str, effects_trap: bool) -> Vec<String> {
     let trap = if effects_trap { "true" } else { "false" };
     let text = [
         format!("func @main(%arg0: bits<{width}>, %arg1: bits<{width}>, %arg2: mem<all>, %arg3: world) -> (bits<1>, mem<all>, world) cc = target_default"),
-        format!("    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap={trap}, may_unwind=false }}"),
+        format!("    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap={trap}, may_unwind=false }}"),
         "{".to_owned(),
         format!("^entry(%v0: bits<{width}>, %v1: bits<{width}>, %v2: mem<all>, %v3: world):"),
         format!("    {body}"),
@@ -635,7 +635,7 @@ fn the_signed_left_shift_check_adds_the_non_negative_operand_condition() {
 
 const OBJECT_COPY: &str = "\
 func @main(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<64>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=16, align=8]
@@ -656,7 +656,7 @@ fn an_object_copy_lowers_to_the_mem_copy_pseudo_form() {
 
 const THREE_RESULTS: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, bits<32>, bits<1>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = add.bits<32> %v0, %v0

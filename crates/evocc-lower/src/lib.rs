@@ -16035,6 +16035,7 @@ fn inst_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     match instruction {
         Inst::Vector(operation) => operation.values_mut(),
         Inst::Floating(operation) => operation.values_mut(),
+        Inst::StrictFloating(operation) => operation.values_mut(),
         Inst::Atomic(access) => access.values_mut(),
         Inst::TlsAddr(access) => access.values_mut(),
         Inst::IndirectBr { target, edges } => std::iter::once(target)

@@ -27,7 +27,7 @@ const CASES: &[Case] = &[
         source: "int main(void) { return 42; }\n",
         expected: 42,
         golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry():
     %v0 = const.bits<32> 42
@@ -40,7 +40,7 @@ const CASES: &[Case] = &[
         source: "int main(void) { return 1 ? 7 : 9; }\n",
         expected: 7,
         golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry():
     %v0 = const.bits<32> 1
@@ -62,7 +62,7 @@ const CASES: &[Case] = &[
         source: "int main(void) { int x = 3; x += 4; return x; }\n",
         expected: 7,
         golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry():
     %v0 = const.bits<32> 3
@@ -79,7 +79,7 @@ const CASES: &[Case] = &[
         source: "int main(void) { int n = 8; int a = 0; int b = 1; while (n > 0) { int next = a + b; a = b; b = next; n -= 1; } return a; }\n",
         expected: 21,
         golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry():
     %v0 = const.bits<32> 8
@@ -112,7 +112,7 @@ const CASES: &[Case] = &[
         source: "int main(void) { int x = 2; int r = 0; if (x == 2) { switch (x) { case 1: r = 3; break; case 2: r = 10; default: r += 5; break; } } else { r = 99; } return r; }\n",
         expected: 15,
         golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry():
     %v0 = const.bits<32> 2
@@ -160,7 +160,7 @@ const CASES: &[Case] = &[
         source: "int main(void) { int sum = 0; for (int i = 0; i < 10; i++) { if (i == 2) continue; if (i == 7) break; sum += i; } return sum; }\n",
         expected: 19,
         golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry():
     %v0 = const.bits<32> 0
@@ -205,7 +205,7 @@ const CASES: &[Case] = &[
         source: "int add1(int x) { return x + 1; } int main(void) { return add1(41); }\n",
         expected: 42,
         golden_evoir: r#"func @add1(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 1
@@ -216,7 +216,7 @@ const CASES: &[Case] = &[
 }
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 41
@@ -230,7 +230,7 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
         source: "int fib(int n) { if (n < 2) return n; return fib(n - 1) + fib(n - 2); } int main(void) { return fib(8); }\n",
         expected: 21,
         golden_evoir: r#"func @fib(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 2
@@ -258,7 +258,7 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
 }
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 8
@@ -281,7 +281,7 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
             source: "int main(void) { int x = 7; int a = 0 && (x = 99); int b = 1 || (x = 88); return x * 100 + a * 10 + b; }\n",
             expected: 701,
             golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry():
     %v0 = const.bits<32> 7
@@ -319,7 +319,7 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
             source: "int main(void) { int i = 0; int sum = 0; do { i++; if (i == 2) continue; if (i == 5) break; sum += i; } while (i < 8); return sum * 10 + i; }\n",
             expected: 85,
             golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry():
     %v0 = const.bits<32> 0
@@ -371,7 +371,7 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
             source: "int main(void) { int x = 0; goto start; again: x += 3; start: x += 1; if (x < 5) goto again; return x; }\n",
             expected: 5,
             golden_evoir: r#"func @main() -> (bits<32>) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry():
     %v0 = const.bits<32> 0
@@ -409,7 +409,7 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
             source: "void touch(int x) { x += 1; return; } int main(void) { touch(41); return 42; }\n",
             expected: 42,
             golden_evoir: r#"func @touch(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 1
@@ -420,7 +420,7 @@ const EXTENDED_CASES: &[ExtendedCase] = &[
 }
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 41
@@ -643,6 +643,7 @@ fn render_inst(inst: &Inst) -> String {
         | Inst::TlsAddr(_)
         | Inst::Vector(_)
         | Inst::Floating(_)
+        | Inst::StrictFloating(_)
         | Inst::Atomic(_)
         | Inst::Asm(_)
         | Inst::AsmGoto { .. }
@@ -988,6 +989,7 @@ struct IndependentEffectSummary {
     volatile: bool,
     atomic: bool,
     io: bool,
+    fenv: bool,
     may_trap: bool,
     may_unwind: bool,
 }
@@ -1000,6 +1002,7 @@ impl IndependentEffectSummary {
             volatile: true,
             atomic: true,
             io: true,
+            fenv: true,
             may_trap: true,
             may_unwind: true,
         }
@@ -1011,6 +1014,7 @@ impl IndependentEffectSummary {
         self.volatile |= other.volatile;
         self.atomic |= other.atomic;
         self.io |= other.io;
+        self.fenv |= other.fenv;
         self.may_trap |= other.may_trap;
         self.may_unwind |= other.may_unwind;
     }
@@ -1024,6 +1028,19 @@ fn independent_local_effects(function: &Function) -> IndependentEffectSummary {
         .flat_map(|block| block.insts.iter().chain(std::iter::once(&block.terminator)))
     {
         let local = match inst {
+            Inst::StrictFloating(_) => IndependentEffectSummary {
+                fenv: true,
+                ..IndependentEffectSummary::default()
+            },
+            Inst::Asm(_) | Inst::AsmGoto { .. } => IndependentEffectSummary {
+                reads_all: true,
+                writes_all: true,
+                volatile: true,
+                io: true,
+                fenv: true,
+                may_trap: true,
+                ..IndependentEffectSummary::default()
+            },
             Inst::SDiv(..)
             | Inst::UDiv(..)
             | Inst::SRem(..)
@@ -1121,12 +1138,13 @@ fn render_function(function: &Function, effects: IndependentEffectSummary) -> St
     .unwrap();
     writeln!(
         rendered,
-        "    effects {{ reads={}, writes={}, volatile={}, atomic={}, io={}, may_trap={}, may_unwind={} }}",
+        "    effects {{ reads={}, writes={}, volatile={}, atomic={}, io={}, fenv={}, may_trap={}, may_unwind={} }}",
         if effects.reads_all { "{all}" } else { "{}" },
         if effects.writes_all { "{all}" } else { "{}" },
         effects.volatile,
         effects.atomic,
         effects.io,
+        effects.fenv,
         effects.may_trap,
         effects.may_unwind,
     )

@@ -12,7 +12,7 @@ const WATCHDOG: Duration = Duration::from_secs(2);
 const LOOP_AND_CALL_SOURCE: &str = "int add1(int x) { return x + 1; } int main(void) { int total = 0; for (int i = 0; i < 3; i++) { total += add1(i); } return total; }\n";
 
 const LOOP_AND_CALL_EVOIR: &str = r#"func @add1(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 1
@@ -23,7 +23,7 @@ const LOOP_AND_CALL_EVOIR: &str = r#"func @add1(%arg0: bits<32>, %arg1: mem<all>
 }
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 0

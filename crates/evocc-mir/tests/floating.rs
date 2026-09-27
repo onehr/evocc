@@ -4,7 +4,7 @@ use evocc_mir::{
     verify_allocation, MInst, MirLimits, MirValue, RegClass,
 };
 
-const CYCLE: &str = "func @cycle() -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n{\n^entry():\n    %v0 = const.f64 0x3ff0000000000000\n    %v1 = const.f64 0x4000000000000000\n    %v2 = const.bits<32> 5\n    br ^b1(%v0, %v1, %v2)\n\n^b1(%v3: f64, %v4: f64, %v5: bits<32>):\n    %v6 = const.bits<32> 0\n    %v7 = const.bits<32> 1\n    %v8 = sub.bits<32> %v5, %v7\n    %v9 = icmp.ne %v5, %v6\n    cond_br %v9, ^b1(%v4, %v3, %v8), ^b2(%v3, %v4)\n\n^b2(%v10: f64, %v11: f64):\n    %v12 = fp.sub %v10, %v11 : f64\n    %v13 = fp.to_bits %v12 : bits<64>\n    ret %v13\n}\n";
+const CYCLE: &str = "func @cycle() -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry():\n    %v0 = const.f64 0x3ff0000000000000\n    %v1 = const.f64 0x4000000000000000\n    %v2 = const.bits<32> 5\n    br ^b1(%v0, %v1, %v2)\n\n^b1(%v3: f64, %v4: f64, %v5: bits<32>):\n    %v6 = const.bits<32> 0\n    %v7 = const.bits<32> 1\n    %v8 = sub.bits<32> %v5, %v7\n    %v9 = icmp.ne %v5, %v6\n    cond_br %v9, ^b1(%v4, %v3, %v8), ^b2(%v3, %v4)\n\n^b2(%v10: f64, %v11: f64):\n    %v12 = fp.sub %v10, %v11 : f64\n    %v13 = fp.to_bits %v12 : bits<64>\n    ret %v13\n}\n";
 
 #[test]
 fn floating_copies_text_and_interpreter_preserve_cycles_and_register_classes() {

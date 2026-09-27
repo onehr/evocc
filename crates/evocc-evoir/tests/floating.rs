@@ -1,6 +1,6 @@
 use evocc_evoir::{interpret_module, parse_section9_module, render_module, InterpreterLimits};
 
-const NUMBERS: &str = "func @main() -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n{\n^entry():\n    %v0 = const.f64 0x7ff8000000000011\n    %v1 = const.f64 0xfff0000000000022\n    %v2 = fp.add %v0, %v1 : f64\n    %v3 = fp.to_bits %v2 : bits<64>\n    ret %v3\n}\n";
+const NUMBERS: &str = "func @main() -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry():\n    %v0 = const.f64 0x7ff8000000000011\n    %v1 = const.f64 0xfff0000000000022\n    %v2 = fp.add %v0, %v1 : f64\n    %v3 = fp.to_bits %v2 : bits<64>\n    ret %v3\n}\n";
 
 #[test]
 fn floating_text_and_interpreter_preserve_nan_operand_order() {

@@ -41,7 +41,7 @@ fn far_branch(filler: usize) -> String {
     let _ = writeln!(
         text,
         "func @far(%arg0: bits<1>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default\n\
-         \x20   effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}\n\
+         \x20   effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}\n\
          {{\n\
          ^entry(%v0: bits<1>, %v1: bits<32>, %v2: mem<all>, %v3: world):\n\
          \x20   cond_br %v0, ^b2(%v1, %v2, %v3), ^b1(%v1, %v2, %v3)\n"

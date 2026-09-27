@@ -2,7 +2,7 @@ use evocc_evoir::{parse_section9_module, render_module, validate_ssa};
 
 const UNIT: &str = "\
 func @f(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default visibility=internal
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 7

@@ -17,7 +17,7 @@ fn source(
     };
     let (mem, world) = if barrier.is_empty() { (5, 2) } else { (13, 14) };
     format!("func @read(%arg0: ptr<generic>, %arg1: mem<all>, %arg2: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects {{ reads={{all}}, writes={{}}, volatile=true, atomic=false, io=false, may_trap=true, may_unwind=false }}
+    effects {{ reads={{all}}, writes={{}}, volatile=true, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }}
 {{
 ^entry(%v0: ptr<generic>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<{bits}> {value}

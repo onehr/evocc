@@ -11,6 +11,7 @@ pub enum FloatingOp {
     Sub,
     Mul,
     Div,
+    Fma,
     Neg,
     Oeq,
     Une,
@@ -36,6 +37,7 @@ impl FloatingOp {
             Self::Sub => "sub",
             Self::Mul => "mul",
             Self::Div => "div",
+            Self::Fma => "fma",
             Self::Neg => "neg",
             Self::Oeq => "oeq",
             Self::Une => "une",
@@ -62,6 +64,7 @@ impl FloatingOp {
             "sub" => Self::Sub,
             "mul" => Self::Mul,
             "div" => Self::Div,
+            "fma" => Self::Fma,
             "neg" => Self::Neg,
             "oeq" => Self::Oeq,
             "une" => Self::Une,
@@ -134,6 +137,7 @@ impl FloatingInst {
                     && (*result != EvoIRType::F32 || raw <= u64::from(u32::MAX))
             }
             Add | Sub | Mul | Div => fp_binary && *result == args[0].ty,
+            Fma => args.len() == 3 && fp_result && args.iter().all(|a| a.ty == *result),
             Neg => fp_unary && *result == args[0].ty,
             Oeq | Une | Olt | Ole | Ogt | Oge => fp_binary && *result == EvoIRType::Bits(1),
             Convert => fp_unary && fp_result,
@@ -178,6 +182,15 @@ impl FloatingInst {
                 .unwrap()
                 .bits(),
             Neg => float(0).negated().bits(),
+            Fma => float(0)
+                .target_fma_round(
+                    float(1),
+                    float(2),
+                    evocc_types::floating::FpRounding::NearestEven,
+                )
+                .unwrap()
+                .value
+                .bits(),
             Convert => float(0).target_convert(target()).unwrap().bits(),
             FromSigned => {
                 let EvoIRType::Bits(width) = self.arguments[0].ty else {

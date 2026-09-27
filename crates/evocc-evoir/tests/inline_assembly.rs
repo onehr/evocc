@@ -4,7 +4,7 @@ use evocc_evoir::{
 use evocc_types::{EvoIRType, Region};
 
 const EDGES: &str = r#"func @branching(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=false, io=true, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=true, atomic=false, io=true, fenv=true, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     (%v4, %v5, %v6) = asm.goto "cbnz %w1, %l[taken]\x0a\x09add %w0, %w0, #5" %v2, %v3 outputs [("+r", "value", bits<32>, %v0)] inputs [("r", "branch", %v1)] clobbers [] labels [("taken", ^b2(%v4, %v5, %v6))] fallthrough ^b1(%v4, %v5, %v6)
@@ -21,7 +21,7 @@ fn ordinary(template: &str) -> String {
     format!(
         concat!(
             "func @main(%arg0: mem<all>, %arg1: world) -> (mem<all>, world) cc = target_default\n",
-            "    effects {{ reads={{all}}, writes={{all}}, volatile=true, atomic=false, io=true, may_trap=true, may_unwind=false }}\n",
+            "    effects {{ reads={{all}}, writes={{all}}, volatile=true, atomic=false, io=true, fenv=true, may_trap=true, may_unwind=false }}\n",
             "{{\n^entry(%v0: mem<all>, %v1: world):\n",
             "    (%v2, %v3) = asm {template} %v0, %v1 outputs [] inputs [] clobbers [\"memory\"]\n",
             "    ret %v2, %v3\n}}\n"
@@ -114,7 +114,7 @@ fn address_references_round_trip_and_validate_the_named_input_type() {
             for reference in ["%a0", "%a[address]"] {
                 let source = format!(concat!(
                     "func @hint(%arg0: {ty}, %arg1: mem<all>, %arg2: world) -> (mem<all>, world) cc = target_default\n",
-                    "    effects {{ reads={{all}}, writes={{all}}, volatile=true, atomic=false, io=true, may_trap=true, may_unwind=false }}\n",
+                    "    effects {{ reads={{all}}, writes={{all}}, volatile=true, atomic=false, io=true, fenv=true, may_trap=true, may_unwind=false }}\n",
                     "{{\n^entry(%v0: {ty}, %v1: mem<all>, %v2: world):\n",
                     "    (%v3, %v4) = asm \"prfm pldl1keep, {reference}\" %v1, %v2 outputs [] inputs [(\"{constraint}\", \"address\", %v0)] clobbers []\n",
                     "    ret %v3, %v4\n}}\n"
@@ -138,7 +138,7 @@ fn symbolic_address_operands_and_constant_modifiers_preserve_opaque_effects() {
     let source = concat!(
         "global @object origin=0 kind=file visibility=internal size=4 align=4 bytes=00000000 initialized=1111\n\n",
         "func @main(%arg0: mem<all>, %arg1: world) -> (mem<all>, world) cc = target_default\n",
-        "    effects { reads={all}, writes={all}, volatile=true, atomic=false, io=true, may_trap=true, may_unwind=false }\n",
+        "    effects { reads={all}, writes={all}, volatile=true, atomic=false, io=true, fenv=true, may_trap=true, may_unwind=false }\n",
         "{\n^entry(%v0: mem<all>, %v1: world):\n",
         "    %v2 = global_addr @object : ptr<generic>\n",
         "    (%v3, %v4) = asm \"// %c[address]\" %v0, %v1 outputs [] inputs [(\"i\", \"address\", %v2)] clobbers []\n",

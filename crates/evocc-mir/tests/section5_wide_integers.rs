@@ -35,7 +35,7 @@ fn func(param_tys: &[&str], entry: &str, results: &str, body: &str, ret: &str) -
     format!(
         "func @main({params}{separator}%arg{memory}: mem<all>, %arg{world}: world) \
 -> ({results}, mem<all>, world) cc = target_default\n    \
-effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, \
+effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, \
 may_trap=false, may_unwind=false }}\n{{\n\
 ^entry({entry}, %v90: mem<all>, %v91: world):\n{body}    ret {ret}, %v90, %v91\n}}\n"
     )
@@ -352,7 +352,7 @@ fn an_ordered_comparison_subtracts_with_borrow_through_the_high_half() {
 /// A 16-byte load and store of a `bits<128>` through a pointer parameter.
 const WIDE_MEMORY: &str = "\
 func @main(%arg0: ptr<generic>, %arg1: bits<128>, %arg2: mem<all>, %arg3: world) -> (bits<128>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: ptr<generic>, %v1: bits<128>, %v90: mem<all>, %v91: world):
     %v2 = access_in_bounds %v90, %v0 [size=16, align=16]
@@ -390,7 +390,7 @@ fn wide_division_and_remainder_use_verified_runtime_calls() {
         // that says so.
         let text = [
             "func @main(%arg0: bits<128>, %arg1: bits<128>, %arg2: mem<all>, %arg3: world) -> (bits<128>, mem<all>, world) cc = target_default".to_owned(),
-            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }".to_owned(),
+            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }".to_owned(),
             "{".to_owned(),
             "^entry(%v0: bits<128>, %v1: bits<128>, %v90: mem<all>, %v91: world):".to_owned(),
             format!("    %v2 = {operation}.bits<128> %v0, %v1"),
@@ -767,7 +767,7 @@ fn a_wide_comparison_fuses_into_the_branch_that_consumes_it() {
     for operation in ["eq", "ne", "ult", "ule", "slt", "sle"] {
         let text = [
             "func @main(%arg0: bits<128>, %arg1: bits<128>, %arg2: mem<all>, %arg3: world) -> (bits<64>, mem<all>, world) cc = target_default".to_owned(),
-            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }".to_owned(),
+            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }".to_owned(),
             "{".to_owned(),
             "^entry(%v0: bits<128>, %v1: bits<128>, %v90: mem<all>, %v91: world):".to_owned(),
             format!("    %v2 = icmp.{operation} %v0, %v1"),

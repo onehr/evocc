@@ -61,7 +61,7 @@ int main(void)
 /// `_RET_IP_` before passing it on.
 const UNIT: &str = "\
 func @probe(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     (%v2, %v3, %v4) = alloca %v0, %v1 [origin=0, size=32, align=8]

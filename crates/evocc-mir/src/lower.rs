@@ -526,7 +526,7 @@ fn scan_inst(
     match inst {
         // The Section 5 table, row by row.
         Inst::Vector(_) => {}
-        Inst::Floating(_) => {}
+        Inst::Floating(_) | Inst::StrictFloating(_) => {}
         // Section 5's bit-counting and byte-swap row (revision 0.14). EvoIR
         // 3.4 fixes `bswap` at 16, 32 or 64; the counting forms take any `N`
         // the register classes hold, and width 128 has no row.
@@ -2932,7 +2932,10 @@ fn lower_inst(
         }
         // Section 5's bit-counting and byte-swap row (revision 0.14).
         Inst::Vector(vector) => lower_vector(lowerer, insts, vector)?,
-        Inst::Floating(operation) => lower_floating(lowerer, insts, operation)?,
+        Inst::Floating(operation) => lower_floating(lowerer, insts, operation, false)?,
+        Inst::StrictFloating(operation) => {
+            lower_floating(lowerer, insts, &operation.instruction, true)?
+        }
         Inst::BitOperation {
             result,
             operand,
@@ -3639,6 +3642,7 @@ fn lower_floating(
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
     operation: &evocc_evoir::FloatingInst,
+    strict: bool,
 ) -> Result<(), String> {
     use evocc_evoir::FloatingOp::*;
     use evocc_types::FloatKind;
@@ -3662,6 +3666,8 @@ fn lower_floating(
         });
         let dst = lowerer.fresh(crate::floating::class(kind));
         insts.push(MInst::Floating {
+            strict: false,
+            integer_bits: 0,
             dst,
             op: FromBits,
             kind,
@@ -3673,6 +3679,9 @@ fn lower_floating(
     let from_pair = matches!(op, FromSigned | FromUnsigned) && is_pair(&operation.arguments[0].ty);
     let to_pair = matches!(op, ToSigned | ToUnsigned) && is_pair(&result.ty);
     if from_pair || to_pair {
+        if strict {
+            return Err("E3065: strict 128-bit integer helper status is not yet qualified".into());
+        }
         insts.push(MInst::FpEnvCheck);
         let mut args = call_args(lowerer, insts, &operation.arguments)?;
         if to_pair {
@@ -3681,6 +3690,8 @@ fn lower_floating(
             let input = args[0];
             let defined = lowerer.fresh(RegClass::Gpr32);
             insts.push(MInst::Floating {
+                strict: false,
+                integer_bits: 0,
                 dst: defined,
                 op: ToIntDefined {
                     width: 128,
@@ -3695,6 +3706,8 @@ fn lower_floating(
                 RegClass::Gpr64
             });
             insts.push(MInst::Floating {
+                strict: false,
+                integer_bits: 0,
                 dst: raw,
                 op: ToBits,
                 kind,
@@ -3703,6 +3716,8 @@ fn lower_floating(
             let selected = floating_select_zero(lowerer, insts, raw, defined);
             let input = lowerer.fresh(crate::floating::class(kind));
             insts.push(MInst::Floating {
+                strict: false,
+                integer_bits: 0,
                 dst: input,
                 op: FromBits,
                 kind,
@@ -3743,6 +3758,12 @@ fn lower_floating(
     let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
     let mut dst = lowerer.fresh(class);
     insts.push(MInst::Floating {
+        strict,
+        integer_bits: if strict && matches!(op, ToSigned | ToUnsigned) {
+            significant_bits(&result.ty)
+        } else {
+            0
+        },
         dst,
         op,
         kind,
@@ -3750,9 +3771,11 @@ fn lower_floating(
     });
     if matches!(op, ToSigned | ToUnsigned) {
         let bits = significant_bits(&result.ty);
-        if bits < class.bit_width().unwrap() {
+        if bits < class.bit_width().unwrap() && !strict {
             let defined = lowerer.fresh(RegClass::Gpr32);
             insts.push(MInst::Floating {
+                strict: false,
+                integer_bits: 0,
                 dst: defined,
                 op: ToIntDefined {
                     width: bits,
@@ -3762,6 +3785,9 @@ fn lower_floating(
                 args,
             });
             dst = floating_select_zero(lowerer, insts, dst, defined);
+            dst = lowerer.zero_extend(insts, dst, bits, width_of(class));
+        }
+        if strict && bits < class.bit_width().unwrap() {
             dst = lowerer.zero_extend(insts, dst, bits, width_of(class));
         }
     }

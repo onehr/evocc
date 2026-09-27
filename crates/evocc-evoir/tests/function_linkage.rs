@@ -19,7 +19,7 @@ use evocc_types::{EvoIRType, Region};
 /// One internal helper and one external function that calls it.
 const UNIT: &str = "\
 func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default visibility=internal
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 1
@@ -28,7 +28,7 @@ func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<a
 }
 
 func @caller(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = call @helper(%v0, %v1, %v2)

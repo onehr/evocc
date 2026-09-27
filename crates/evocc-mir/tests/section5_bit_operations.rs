@@ -19,7 +19,7 @@ fn unit(op: &str, width: u16) -> String {
     format!(
         "\
 func @main(%arg0: bits<{width}>, %arg1: mem<all>, %arg2: world) -> (bits<{width}>, mem<all>, world) cc = target_default
-    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}
+    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}
 {{
 ^entry(%v0: bits<{width}>, %v1: mem<all>, %v2: world):
     %v3 = {op}.bits<{width}> %v0

@@ -249,7 +249,7 @@ int main(void) { return middle(); }
     );
     let output = evocc(&[TARGET, "--emit=evoir", effects_source.path()]);
     let text = String::from_utf8_lossy(&output.stdout);
-    let transitive = "effects { reads={all}, writes={}, volatile=true, atomic=false, io=false, may_trap=true, may_unwind=false }";
+    let transitive = "effects { reads={all}, writes={}, volatile=true, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }";
     if output.status.code() != Some(0)
         || !output.stderr.is_empty()
         || text.matches(transitive).count() != 3

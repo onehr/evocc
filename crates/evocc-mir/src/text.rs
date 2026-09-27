@@ -223,14 +223,22 @@ pub fn escape_template(template: &str) -> String {
 pub fn render_inst(inst: &MInst) -> String {
     match inst {
         MInst::Floating {
+            strict,
+            integer_bits,
             dst,
             op,
             kind,
             args,
         } => format!(
-            "{}fp.{}.{} ({})",
+            "{}fp.{}{}{}.{} ({})",
             defined(*dst),
+            if *strict { "strict." } else { "" },
             op.mnemonic(),
+            if *integer_bits != 0 {
+                format!(".i{integer_bits}")
+            } else {
+                String::new()
+            },
             if *kind == evocc_types::FloatKind::F32 {
                 "f32"
             } else {

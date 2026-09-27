@@ -51,7 +51,7 @@ here:
 /// yet given `&&label` its `block_addr` lowering.
 const UNIT: &str = "\
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     br ^b1(%v0, %v1)

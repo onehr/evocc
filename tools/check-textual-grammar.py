@@ -84,7 +84,11 @@ def is_rendered_form(text: str) -> bool:
         return " origin=" in text
     if text.startswith("func @"):
         return " cc = " in text
-    if text.startswith("effects {") or text == "{":
+    if text.startswith("effects {"):
+        # Like `global @`, the historical reader's line-identification prefix
+        # is not an emitted form. A summary includes its closing delimiter.
+        return text.endswith("}")
+    if text == "{":
         return True
     if " = " in text:
         lhs = text.split(" = ", 1)[0]

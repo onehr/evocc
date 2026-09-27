@@ -13,7 +13,7 @@ const UNIT: &str = r#"extern @table_value size=4 align=4
 declare @helper(bits<32>, mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default
 
 func @caller(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = call @helper(%v0, %v1, %v2)
@@ -29,7 +29,7 @@ func @caller(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<a
 const NARROW: &str = r#"declare @take(bits<8>, mem<all>, world) -> (bits<32>, mem<all>, world) cc = target_default
 
 func @pass(%arg0: bits<8>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }
 {
 ^entry(%v0: bits<8>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = call @take(%v0, %v1, %v2)

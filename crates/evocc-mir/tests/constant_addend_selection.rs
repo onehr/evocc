@@ -5,7 +5,7 @@ use evocc_types::{EvoIRType, Region};
 fn source(op: &str, bits: u16, constant: u64, left: bool) -> String {
     let operands = if left { "%v3, %v0" } else { "%v0, %v3" };
     format!("func @main(%arg0: bits<{bits}>, %arg1: mem<all>, %arg2: world) -> (bits<{bits}>, mem<all>, world) cc = target_default
-    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}
+    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}
 {{
 ^entry(%v0: bits<{bits}>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<{bits}> {constant}

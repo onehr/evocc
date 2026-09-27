@@ -19,6 +19,8 @@ mod atomic;
 mod floating;
 pub use atomic::{AtomicAccess, AtomicOp, AtomicOrder, AtomicRmwOp};
 pub use floating::{floating_kind, FloatingInst, FloatingOp};
+mod strict_floating;
+pub use strict_floating::StrictFloatingInst;
 mod text;
 mod text_parse;
 mod variadic;
@@ -33,8 +35,8 @@ pub use assembly::{
     assembly_register_type, AssemblyEdge, AssemblyInput, AssemblyLabel, AssemblyOutput,
     InlineAssembly,
 };
-pub use text::{render_global, render_module, validate_section9_bytes};
-pub use text_parse::{parse_global_text, parse_section9_module};
+pub use text::{render_global, render_module, render_pre_fenv_module, validate_section9_bytes};
+pub use text_parse::{parse_global_text, parse_pre_fenv_module, parse_section9_module};
 
 // ---------------------------------------------------------------------------
 // Core data types
@@ -218,6 +220,7 @@ impl TrapReason {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inst {
     Floating(FloatingInst),
+    StrictFloating(StrictFloatingInst),
     TlsAddr(TlsAddress),
     Vector(VectorInst),
     /// One naturally aligned atomic access with an explicit memory order.
@@ -527,6 +530,9 @@ pub fn inst_results(inst: &Inst) -> Vec<&Value> {
         Inst::TlsAddr(access) => access.results(),
         Inst::Vector(operation) => vec![&operation.result],
         Inst::Floating(operation) => vec![&operation.result],
+        Inst::StrictFloating(operation) => {
+            vec![&operation.instruction.result, &operation.world_out]
+        }
         Inst::IndirectBr { .. } => vec![],
         Inst::PointerCast { result, .. } => vec![result],
         Inst::BitOperation { result, .. } => vec![result],
@@ -625,6 +631,7 @@ pub fn inst_uses(inst: &Inst) -> Vec<&Value> {
         Inst::TlsAddr(access) => access.operands(),
         Inst::Vector(operation) => operation.arguments.iter().collect(),
         Inst::Floating(operation) => operation.arguments.iter().collect(),
+        Inst::StrictFloating(operation) => operation.operands(),
         Inst::IndirectBr { target, edges } => std::iter::once(target)
             .chain(edges.iter().flat_map(|edge| &edge.arguments))
             .collect(),
@@ -795,6 +802,7 @@ pub struct EffectSummary {
     pub volatile: bool,
     pub atomic: bool,
     pub io: bool,
+    pub fenv: bool,
     pub may_trap: bool,
     pub may_unwind: bool,
 }
@@ -809,6 +817,7 @@ impl EffectSummary {
             volatile: true,
             atomic: true,
             io: true,
+            fenv: true,
             may_trap: true,
             may_unwind: true,
         }
@@ -820,6 +829,7 @@ impl EffectSummary {
         self.volatile |= other.volatile;
         self.atomic |= other.atomic;
         self.io |= other.io;
+        self.fenv |= other.fenv;
         self.may_trap |= other.may_trap;
         self.may_unwind |= other.may_unwind;
     }
@@ -1024,6 +1034,10 @@ fn local_effect_summary(function: &Function) -> EffectSummary {
 fn inst_effect_summary(inst: &Inst) -> EffectSummary {
     match inst {
         Inst::Floating(_) => EffectSummary::default(),
+        Inst::StrictFloating(_) => EffectSummary {
+            fenv: true,
+            ..EffectSummary::default()
+        },
         Inst::TlsAddr(_) => EffectSummary {
             reads_all: true,
             writes_all: true,
@@ -1053,6 +1067,7 @@ fn inst_effect_summary(inst: &Inst) -> EffectSummary {
             writes_all: true,
             volatile: true,
             io: true,
+            fenv: true,
             may_trap: true,
             ..EffectSummary::default()
         },
@@ -2692,6 +2707,15 @@ impl EffectState {
     }
 
     fn advance(&mut self, inst: &Inst, block: BlockId) -> Result<(), String> {
+        if let Inst::StrictFloating(operation) = inst {
+            if self.world != Some(operation.world_in.id) {
+                return Err(format!(
+                    "strict floating effect in block {block} consumes stale world token"
+                ));
+            }
+            self.world = Some(operation.world_out.id);
+            return Ok(());
+        }
         let tokens = match inst {
             Inst::TlsAddr(a) => Some((&a.mem_in, &a.world_in, &a.mem_out, &a.world_out)),
             Inst::Atomic(access) => Some((
@@ -2849,6 +2873,7 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
         }
         Inst::Vector(operation) => operation.validate(),
         Inst::Floating(operation) => operation.validate(),
+        Inst::StrictFloating(operation) => operation.validate(),
         Inst::VaAccess(access) => access.validate(),
         Inst::Atomic(access) => access.validate(),
         Inst::TlsAddr(access) => access.validate(),
@@ -4410,13 +4435,34 @@ pub fn interpret_module_with_target(
     target: &TargetDataLayout,
     limits: InterpreterLimits,
 ) -> Result<InterpreterOutcome, InterpreterError> {
+    interpret_module_with_fp_environment(
+        module,
+        entry_name,
+        entry_args,
+        target,
+        limits,
+        evocc_types::floating::FpEnvironment::default(),
+    )
+}
+
+/// Explicit caller environment for one logical execution. Existing entry
+/// points retain the default environment; recursive calls share this snapshot.
+pub fn interpret_module_with_fp_environment(
+    module: &Module,
+    entry_name: &str,
+    entry_args: &[RuntimeValue],
+    target: &TargetDataLayout,
+    limits: InterpreterLimits,
+    environment: evocc_types::floating::FpEnvironment,
+) -> Result<InterpreterOutcome, InterpreterError> {
     let alignment = module
         .functions
         .iter()
         .map(|function| function.alignment)
         .max()
         .unwrap_or(4);
-    let state = ExecutionState::for_target(target, alignment)?;
+    let mut state = ExecutionState::for_target(target, alignment)?;
+    state.world = state.world.with_fp_environment(environment);
     interpret_module_in_state(module, entry_name, entry_args, limits, state)
 }
 
@@ -5264,6 +5310,9 @@ fn execute_instruction(
     match inst {
         Inst::Vector(operation) => vector::execute(operation, block, values, state)?,
         Inst::Floating(operation) => floating::execute(operation, block, values)?,
+        Inst::StrictFloating(operation) => {
+            strict_floating::execute(operation, block, values, state)?
+        }
         Inst::VaAccess(access) => execute_variadic_access(access, &[], block, values, state)?,
         Inst::Atomic(access) => atomic::execute_atomic(access, block, values, state)?,
         Inst::TlsAddr(access) => tls::execute(access, block, values, state)?,
@@ -6681,6 +6730,12 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 pub fn remap_inst_uses(inst: &mut Inst, aliases: &HashMap<u32, Value>) {
     match inst {
+        Inst::StrictFloating(operation) => {
+            remap(&mut operation.world_in, aliases);
+            for value in &mut operation.instruction.arguments {
+                remap(value, aliases);
+            }
+        }
         Inst::Floating(operation) => {
             for value in &mut operation.arguments {
                 remap(value, aliases);

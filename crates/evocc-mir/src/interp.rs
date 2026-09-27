@@ -233,6 +233,22 @@ pub fn interpret_module(
     args: &[MirValue],
     limits: MirLimits,
 ) -> Result<MirOutcome, MirError> {
+    interpret_module_with_fp_environment(
+        module,
+        entry,
+        args,
+        limits,
+        evocc_types::floating::FpEnvironment::default(),
+    )
+}
+
+pub fn interpret_module_with_fp_environment(
+    module: &MModule,
+    entry: &str,
+    args: &[MirValue],
+    limits: MirLimits,
+    environment: evocc_types::floating::FpEnvironment,
+) -> Result<MirOutcome, MirError> {
     let target = TargetDataLayout::aarch64_unknown_linux_gnu();
     let config = MemoryConfig::for_target(
         &target,
@@ -247,7 +263,8 @@ pub fn interpret_module(
         memory: MemoryState::new(config).map_err(|error| memory_error(&error))?,
         world: WorldState::new(WorldLimits {
             max_volatile_events: MAX_VOLATILE_EVENTS,
-        }),
+        })
+        .with_fp_environment(environment),
         globals: HashMap::new(),
         identities: HashMap::new(),
         blocks: HashMap::new(),
@@ -1068,12 +1085,14 @@ fn layout_for(size: u64) -> AccessLayout {
 fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), MirError> {
     match inst {
         MInst::Floating {
+            strict,
+            integer_bits,
             dst,
             op,
             kind,
             args,
         } => {
-            let operation = crate::floating::operation(*dst, *op, *kind, args)
+            let operation = crate::floating::operation(*dst, *op, *kind, args, *integer_bits)
                 .map_err(|detail| MirError::Invalid { detail })?;
             let values = args
                 .iter()
@@ -1094,7 +1113,16 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                     }),
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let bits = operation.evaluate(&values);
+            let bits = if *strict {
+                let environment = state.world.fp_environment();
+                let result = operation.evaluate_strict(&values, environment.rounding);
+                state.world = state
+                    .world
+                    .with_fp_environment(environment.raised(result.status));
+                result.value
+            } else {
+                operation.evaluate(&values)
+            };
             let result = if dst.class.is_simd() {
                 let bytes = usize::from(dst.class.bit_width().unwrap() / 8);
                 let mut value = evocc_memory::ObjectRepresentation::uninitialized(bytes)

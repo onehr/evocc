@@ -16,7 +16,7 @@ use evocc_evoir::{parse_section9_module, render_module, Module};
 /// reason about, so a decline is visible as work done elsewhere.
 const ACTIVATION_ADDRESSES: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<64>, bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = return_address : ptr<generic>

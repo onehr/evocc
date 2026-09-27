@@ -76,7 +76,7 @@ impl Drop for ProofFiles {
 
 const MODULE: &str = concat!(
     "func @identity_around_copy(%arg0: bits<32>, %arg1: ptr<generic>, %arg2: ptr<generic>, %arg3: mem<all>, %arg4: world) -> (bits<32>, mem<all>, world) cc = target_default\n",
-    "    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }\n",
+    "    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }\n",
     "{\n",
     "^entry(%v0: bits<32>, %v1: ptr<generic>, %v2: ptr<generic>, %v3: mem<all>, %v4: world):\n",
     "    %v5 = const.bits<32> 0\n",
@@ -86,6 +86,42 @@ const MODULE: &str = concat!(
     "    ret %v9, %v7, %v8\n",
     "}\n",
 );
+
+#[test]
+fn scalar_proof_cannot_rewrite_strict_fp_or_erase_its_observable_status() {
+    let source = include_str!("../../../tests/fixtures/floating-strict-world.evoir");
+    let before = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+    assert!(outcome.certificate.regions.is_empty());
+    let files = ProofFiles::new();
+    fs::write(&files.before, render_module(&before)).unwrap();
+    let after = render_module(&outcome.module);
+    fs::write(&files.after, &after).unwrap();
+    fs::write(&files.proof, render_evp1(&outcome.certificate)).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+        .args([&files.before, &files.after, &files.proof])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    files.reject_forged_output(
+        &outcome.certificate,
+        &after.replace("fp.strict.add", "fp.strict.sub"),
+    );
+    // This forgery remains internally well typed, correctly summarized and
+    // canonically serialized; a stale checksum is not the reason for rejection.
+    let pure = after
+        .replace(
+            "(%v4, %v5) = fp.strict.add %v3, %v0, %v1",
+            "%v4 = fp.add %v0, %v1",
+        )
+        .replace("fenv=true", "fenv=false")
+        .replace("ret %v4, %v2, %v5", "ret %v4, %v2, %v3");
+    files.reject_forged_output(&outcome.certificate, &pure);
+    files.reject_forged_output(
+        &outcome.certificate,
+        &after.replace("%v3, %v0, %v1 : f64", "%v3, %v1, %v0 : f64"),
+    );
+}
 
 #[test]
 fn scalar_proof_cannot_drop_or_relocate_a_patchable_function_entry() {
@@ -221,6 +257,7 @@ fn scalar_proof_cannot_change_simd_assembly_constraints_or_clobbers() {
     let source = MODULE
         .replace("volatile=false", "volatile=true")
         .replace("io=false", "io=true")
+        .replace("fenv=false", "fenv=true")
         .replace("    (%v7, %v8) = copy %v3, %v4, %v1, %v2 [size=4, align=4]", "    %v10 = const.bits<64> 0\n    %v11 = vec.pack %v10, %v10 : vec<2, bits<64>>\n    (%v12, %v7, %v8) = asm volatile \"\" %v3, %v4 outputs [(\"+w\", \"\", vec<2, bits<64>>, %v11)] inputs [] clobbers []");
     let before = parse_section9_module(source.as_bytes()).unwrap();
     let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
@@ -278,7 +315,7 @@ fn scalar_proof_cannot_replace_an_aes_round_with_its_inverse() {
 fn scalar_proofs_preserve_load_instance_and_tls_metadata() {
     let startup = concat!(
         "func @startup(%arg0: mem<all>, %arg1: world) -> (mem<all>, world) cc = target_default\n",
-        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n",
         "{\n^entry(%v0: mem<all>, %v1: world):\n    ret %v0, %v1\n}\n\n",
     );
     let with_access = MODULE.replace(

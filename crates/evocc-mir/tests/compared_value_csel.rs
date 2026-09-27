@@ -6,7 +6,7 @@ fn text(bits: u16, cmp: &str, reverse: bool, local_zero: bool) -> String {
     let zero = format!("    %v6 = const.bits<{bits}> 0\n");
     format!(
         "func @main(%arg0: bits<{bits}>, %arg1: bits<{bits}>, %arg2: mem<all>, %arg3: world) -> (bits<{bits}>, mem<all>, world) cc = target_default
-    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}
+    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}
 {{
 ^entry(%v0: bits<{bits}>, %v1: bits<{bits}>, %v2: mem<all>, %v3: world):
 {early}    %v4 = icmp.{cmp} %v0, %v1

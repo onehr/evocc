@@ -15,7 +15,7 @@ use evocc_mir::{compile_module_for, Target};
 const UNIT: &str = r#"global @seen origin=0 kind=file visibility=external size=4 align=4 bytes=01000000 initialized=1111
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 0

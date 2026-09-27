@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.105** | **Authoritative reference** | **2026-09-23**
+**Revision 1.9.106** | **Authoritative reference** | **2026-09-27**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -293,7 +293,7 @@ arguments to the entry block arguments positionally.
 
 ```text
 func @name(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     ret %v0, %v1, %v2
@@ -1384,7 +1384,9 @@ operands still obey local SSA, initializedness, text/proof reconstruction and
 existing call/edge rules. Native **E3064** denotes an incompatible FP environment,
 not C UB; no hidden FPCR reset is permitted. `STDC FENV_ACCESS ON` is refused
 with **E3065**; unsupported strict/fast/contraction options are not ignored.
-Executable binary128, FP complex/vectors and strict fenv remain deferred.
+Executable binary128 and FP complex/vectors remain deferred. Strict IR is
+specified below; source-option and environment-library acceptance require the
+separate L01 gates, not merely the presence of these opcodes.
 
 The driver advertises source-format evaluation (`__FLT_EVAL_METHOD__=0`) but
 does not advertise Annex F/IEC-60559 conformance, complex FP or fast FMA:
@@ -1407,6 +1409,49 @@ independent of GPRs, with one shared stack cursor and packed HFA stack objects;
 float anonymous arguments promote to double. No object-layout substitution or
 private scalarized external ABI is authorized.
 
+#### 3.13.1 Strict world operations and explicit FMA (revision 1.9.106)
+
+`fp.fma %a, %b, %c : T` accepts three identical f32/f64 operands and returns
+their product-plus-addend rounded once to T. It is never introduced implicitly
+from multiply/add. Its target NaN order is addend, a, b (signaling first);
+a quiet addend does not hide invalid zero*infinity, which yields default NaN.
+
+```text
+(%r, %w1) = fp.strict.add %w0, %a, %b : f64
+(%r, %w1) = fp.strict.fma %w0, %a, %b, %c : f32
+(%r, %w1) = fp.strict.convert %w0, %a : f32
+```
+
+Strict forms exist for add/sub/mul/div/fma, oeq/une/olt/ole/ogt/oge, convert,
+from_signed/from_unsigned and to_signed/to_unsigned. Numeric operand/result
+types obey the baseline rules; the first operand is the currently live world
+token and the second result is a fresh world token. Negation, constants, bits
+transport and to_int_defined have no strict form. Strict effects read no memory,
+append no volatile/atomic event, and are not I/O or traps in this masked profile.
+
+The world snapshot holds the executing logical thread's rounding direction
+(nearest-even, upward, downward or toward-zero) and sticky invalid, divide-by-zero,
+overflow, underflow and inexact flags. Each executed operation reads that rounding
+direction and ORs its raised flags into the returned world. Arm tininess is
+detected before rounding, with underflow only for an inexact tiny result.
+Strict equality/inequality are quiet comparisons (invalid for signaling NaN);
+strict ordered comparisons signal invalid for any NaN. Classification and
+quiet source comparison builtins retain their separate contracts.
+
+Integer conversions still truncate toward zero regardless of dynamic rounding;
+nonrepresentable C conversions retain E3063 and the distinct pure guard. An
+invalid raw conversion returns zero plus invalid status, never a defined C value.
+Translation-time literal/static initialization remains RNE. Strict executed
+operations, including discarded numeric results, cannot be deleted, cloned or
+reordered in ways that change world state. All FP remains outside P0.
+
+Native strict admission permits all four rounding directions but refuses other
+unsupported FPCR controls with E3064, never resetting FPCR/FPSR. External/runtime
+functions own concrete fenv_t encoding; the IR does not encode libc structures.
+Missing external execution models fail closed. Baseline pure FP retains its
+environment-unobservable admission contract; it is not a substitute for a
+strict operation inside an observable-environment source region.
+
 ## 4. Effect Model
 
 ### 4.1 Effect Summary
@@ -1421,6 +1466,7 @@ EffectSummary {
     volatile: bool,         -- is this a volatile access?
     atomic: bool,           -- is this an atomic access?
     io: bool,               -- does this interact with I/O?
+    fenv: bool,             -- reads/modifies observable floating environment
     may_trap: bool,         -- can this instruction trap?
     may_unwind: bool,       -- can this instruction unwind the stack?
 }
@@ -1428,43 +1474,44 @@ EffectSummary {
 
 ### 4.2 Effect Assignment by Instruction Category
 
-| Instruction | reads | writes | volatile | atomic | io | may_trap | may_unwind |
-|---|---|---|---|---|---|---|---|
-| `const` | `{}` | `{}` | false | false | false | false | false |
-| baseline `fp.*` (3.13) | `{}` | `{}` | false | false | false | false | false |
-| `uninitialized.bits<N>`, `uninitialized.ptr<AS>`, `uninitialized.fnptr<Sig>` | `{}` | `{}` | false | false | false | false | false |
-| `add`, `sub`, `mul` | `{}` | `{}` | false | false | false | false | false |
-| `sdiv`, `udiv`, `srem`, `urem` | `{}` | `{}` | false | false | false | true | false |
-| integer UB predicates | `{}` | `{}` | false | false | false | false | false |
-| `ub.assume.<reason>` | `{}` | `{}` | false | false | false | true | false |
-| `and`, `or`, `xor` | `{}` | `{}` | false | false | false | false | false |
-| `ctlz`, `cttz`, `ctpop`, `bswap` | `{}` | `{}` | false | false | false | false | false |
-| `shl`, `lshr`, `ashr` | `{}` | `{}` | false | false | false | false | false |
-| `icmp.*` | `{}` | `{}` | false | false | false | false | false |
-| `sext`, `zext`, `trunc` | `{}` | `{}` | false | false | false | false | false |
-| `ptr.null`, `global_addr`, `func_addr` | `{}` | `{}` | false | false | false | false | false |
-| `tls_addr` | `{All}` | `{All}` | false | false | false | true | false |
-| `vec.pack`, `vec.bitcast` | `{}` | `{}` | false | false | false | false | false |
-| `vec.extract` | `{}` | `{}` | false | false | false | true | false |
-| `ptr.offset.*.*` | `{}` | `{}` | false | false | false | true | false |
-| `ptr.to_int`, `ptr.from_int.*` | `{}` | `{}` | false | false | false | false | false |
-| `block_addr` | `{}` | `{}` | false | false | false | false | false |
-| `br.indirect` | `{}` | `{}` | false | false | false | true | false |
-| `return_address`, `frame_address` | `{}` | `{}` | false | false | false | false | false |
-| `asm`, `asm.goto` | `{all}` | `{all}` | true | false | true | true | false |
-| `va_start`, `va_arg.*`, `va_end` | `{All}` | `{All}` | false | false | false | true | false |
-| `alloca`, `lifetime.end` | `{All}` | `{All}` | false | false | false | true | false |
-| `pointer_valid`, `access_in_bounds` | `{All}` | `{}` | false | false | false | true | false |
-| `load` (normal) | `{All}` | `{}` | false | false | false | true | false |
-| `store` (normal) | `{}` | `{All}` | false | false | false | true | false |
-| `copy` | `{All}` | `{All}` | false | false | false | true | false |
-| `copy.volatile.read/write/readwrite` | `{All}` | `{All}` | true | false | false | true | false |
-| `load volatile` | `{All}` | `{}` | true | false | false | true | false |
-| `store volatile` | `{}` | `{All}` | true | false | false | true | false |
-| `atomic.load` | `{All}` | `{}` | marker | true | false | true | false |
-| `atomic.store` | `{}` | `{All}` | marker | true | false | true | false |
-| `call` | depends on callee | depends on callee | depends | depends | depends | depends | depends |
-| `trap.<reason>` | `{}` | `{}` | false | false | false | true | false |
+| Instruction | reads | writes | volatile | atomic | io | fenv | may_trap | may_unwind |
+|---|---|---|---|---|---|---|---|---|
+| `const` | `{}` | `{}` | false | false | false | false | false | false |
+| baseline `fp.*` (3.13) | `{}` | `{}` | false | false | false | false | false | false |
+| `fp.strict.*` (3.13.1) | `{}` | `{}` | false | false | false | true | false | false |
+| `uninitialized.bits<N>`, `uninitialized.ptr<AS>`, `uninitialized.fnptr<Sig>` | `{}` | `{}` | false | false | false | false | false | false |
+| `add`, `sub`, `mul` | `{}` | `{}` | false | false | false | false | false | false |
+| `sdiv`, `udiv`, `srem`, `urem` | `{}` | `{}` | false | false | false | false | true | false |
+| integer UB predicates | `{}` | `{}` | false | false | false | false | false | false |
+| `ub.assume.<reason>` | `{}` | `{}` | false | false | false | false | true | false |
+| `and`, `or`, `xor` | `{}` | `{}` | false | false | false | false | false | false |
+| `ctlz`, `cttz`, `ctpop`, `bswap` | `{}` | `{}` | false | false | false | false | false | false |
+| `shl`, `lshr`, `ashr` | `{}` | `{}` | false | false | false | false | false | false |
+| `icmp.*` | `{}` | `{}` | false | false | false | false | false | false |
+| `sext`, `zext`, `trunc` | `{}` | `{}` | false | false | false | false | false | false |
+| `ptr.null`, `global_addr`, `func_addr` | `{}` | `{}` | false | false | false | false | false | false |
+| `tls_addr` | `{All}` | `{All}` | false | false | false | false | true | false |
+| `vec.pack`, `vec.bitcast` | `{}` | `{}` | false | false | false | false | false | false |
+| `vec.extract` | `{}` | `{}` | false | false | false | false | true | false |
+| `ptr.offset.*.*` | `{}` | `{}` | false | false | false | false | true | false |
+| `ptr.to_int`, `ptr.from_int.*` | `{}` | `{}` | false | false | false | false | false | false |
+| `block_addr` | `{}` | `{}` | false | false | false | false | false | false |
+| `br.indirect` | `{}` | `{}` | false | false | false | false | true | false |
+| `return_address`, `frame_address` | `{}` | `{}` | false | false | false | false | false | false |
+| `asm`, `asm.goto` | `{all}` | `{all}` | true | false | true | true | true | false |
+| `va_start`, `va_arg.*`, `va_end` | `{All}` | `{All}` | false | false | false | false | true | false |
+| `alloca`, `lifetime.end` | `{All}` | `{All}` | false | false | false | false | true | false |
+| `pointer_valid`, `access_in_bounds` | `{All}` | `{}` | false | false | false | false | true | false |
+| `load` (normal) | `{All}` | `{}` | false | false | false | false | true | false |
+| `store` (normal) | `{}` | `{All}` | false | false | false | false | true | false |
+| `copy` | `{All}` | `{All}` | false | false | false | false | true | false |
+| `copy.volatile.read/write/readwrite` | `{All}` | `{All}` | true | false | false | false | true | false |
+| `load volatile` | `{All}` | `{}` | true | false | false | false | true | false |
+| `store volatile` | `{}` | `{All}` | true | false | false | false | true | false |
+| `atomic.load` | `{All}` | `{}` | marker | true | false | false | true | false |
+| `atomic.store` | `{}` | `{All}` | marker | true | false | false | true | false |
+| `call` | depends on callee | depends on callee | depends | depends | depends | depends | depends | depends |
+| `trap.<reason>` | `{}` | `{}` | false | false | false | false | true | false |
 
 **Trap terminators.** `trap.<reason>` is the zero-operand terminator family.
 It takes no operands, produces no results, has no successors, and reaching it
@@ -1491,7 +1538,7 @@ an unchanged snapshot under a fresh SSA identity.
 The `world` token `%w` is a global ordering token. Day 6 reserves world input
 and output positions on every memory instruction. A normal non-observable
 access forwards the same abstract state through a distinct SSA token;
-instructions that carry `volatile = true`, `atomic = true`, or `io = true`
+instructions that carry `volatile = true`, `atomic = true`, `io = true`, or `fenv = true`
 use that token as an ordering constraint.
 
 ```text
@@ -1503,6 +1550,10 @@ The world token acts as a **scheduling barrier**. Two operations that do not
 touch the same region and do not touch `world` can be reordered with respect
 to each other. Two operations that consume/produce `world` cannot be reordered
 past each other.
+
+The observable world state also carries the per-logical-thread FP environment
+of Section 3.13.1. It is part of immutable snapshot equality, not a hidden
+interpreter-global variable. It has no independent implicit token channel.
 
 The observable world state contains an ordered volatile trace. Each event
 records a monotonically increasing sequence number, load/store direction, the
@@ -1560,7 +1611,7 @@ not own it.
 
 ```text
 func @name(...) -> (...) cc = target_default
-    effects { reads=R, writes=W, volatile=B, atomic=B, io=B, may_trap=B, may_unwind=B }
+    effects { reads=R, writes=W, volatile=B, atomic=B, io=B, fenv=B, may_trap=B, may_unwind=B }
 {
 ```
 
@@ -1571,6 +1622,16 @@ one following space, and written `{}` when empty. Each boolean is `true` or
 the calling convention and the opening brace, and is present on every function
 including those whose summary is empty; an absent clause is malformed rather
 than defaulted, because a default would be indistinguishable from an omission.
+
+Revision 1.9.106 adds the mandatory `fenv` field. Current canonical parsing
+rejects omission rather than silently interpreting legacy text as fenv=false.
+Archived pre-1.9.106 text/proofs retain their old identity and require the
+explicit `parse_pre_fenv_module` reader (`evo-proofcheck --legacy-pre-fenv`);
+this reader rejects strict FP/FMA and derives the new effect component while
+validating every old recorded field. It never serves as a fallback for current
+text. Migration must regenerate the canonical subject
+and its proof, never rewrite an archived receipt in place. Canonical subject
+hashes bind the new field and strict world edges.
 
 **Derivation.** A summary is the least fixed point over the call graph:
 
@@ -3066,6 +3127,7 @@ function        := "func " symbol "(" param_list [", ..."] ")"
 block_seq       := block (newline block)*
 effects_clause  := "effects { reads=" region_set ", writes=" region_set
                    ", volatile=" bool ", atomic=" bool ", io=" bool
+                   ", fenv=" bool
                    ", may_trap=" bool ", may_unwind=" bool " }"
 region_set      := "{}" | "{" region ("," " " region)* "}"
 region          := "all" | "unknown" | "global" | "stack" | "heap" | "escaped"
@@ -3093,6 +3155,8 @@ inst_body :=
     value_name " = const.f32 0x" hex8
   | value_name " = const.f64 0x" hex16
   | value_name " = fp." fp_op " " value_list " : " type
+  | "(" value_name ", " value_name ") = fp.strict." strict_fp_op
+        " " value_list " : " type
   | value_name " = const." type " " integer
   | value_name " = uninitialized." type
   | value_name " = " arith_op "." type " " value_name ", " value_name
@@ -3158,11 +3222,15 @@ arith_op         := "add" | "sub" | "mul" | "sdiv" | "udiv" | "srem" | "urem"
                   | "shl" | "ashr" | "lshr" | "and" | "or" | "xor"
 cmp_op           := "eq" | "ne" | "slt" | "sle" | "ult" | "ule"
 cast_op          := "sext" | "zext" | "trunc"
-fp_op            := "add" | "sub" | "mul" | "div" | "neg"
+fp_op            := "add" | "sub" | "mul" | "div" | "fma" | "neg"
                   | "oeq" | "une" | "olt" | "ole" | "ogt" | "oge"
                   | "convert" | "from_signed" | "from_unsigned"
                   | "to_signed" | "to_unsigned" | "to_bits" | "from_bits"
                   | "to_int_defined." ("s" | "u") positive_integer
+strict_fp_op     := "add" | "sub" | "mul" | "div" | "fma"
+                  | "oeq" | "une" | "olt" | "ole" | "ogt" | "oge"
+                  | "convert" | "from_signed" | "from_unsigned"
+                  | "to_signed" | "to_unsigned"
 bit_op           := "ctlz" | "cttz" | "ctpop" | "bswap"
 binary_predicate := "signed_add_defined" | "signed_sub_defined"
                   | "signed_mul_defined" | "signed_div_rem_no_overflow"
@@ -3245,6 +3313,7 @@ while a unary predicate was written with two operands. Names are not shapes.
 <> = const.<> <>
 <> = const.<> 0x<>
 <> = fp.<> <> : <>
+(<>, <>) = fp.strict.<> <> : <>
 <> = uninitialized.<>
 <> = <>.<> <>, <>
 <> = <>.<> <>
@@ -3289,7 +3358,7 @@ ret <>
 trap.<>
 global @<> origin=<> kind=<> visibility=<> size=<> align=<> bytes=<> initialized=<>
 func @<>(<>) -> (<>) cc = <>
-    effects { reads=<>, writes=<>, volatile=<>, atomic=<>, io=<>, may_trap=<>, may_unwind=<> }
+effects { reads=<>, writes=<>, volatile=<>, atomic=<>, io=<>, fenv=<>, may_trap=<>, may_unwind=<> }
 {
 ```
 
@@ -3417,7 +3486,7 @@ findings and are acted on differently.
 
 ```text
 func @sum(%arg0: ptr<generic>, %arg1: bits<64>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: ptr<generic>, %v1: bits<64>, %v2: mem<all>, %v3: world):
     %v4 = const.bits<64> 0
@@ -3451,7 +3520,7 @@ to, and are numbered in the `%v` namespace like every other value.
 
 ```text
 func @checked_add(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     %v4 = signed_add_defined %v0, %v1
@@ -3470,7 +3539,7 @@ moving or deleting the point at which the invalid execution is observed.
 
 ```text
 func @caller(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=true }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=true }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = call @callee(%v0, %v1, %v2)
@@ -6471,6 +6540,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.106 | 2026-09-27 | Add explicit strict FP world transformations, mandatory fenv effects and explicit FMA. Preserve exact bits, target status/NaN rules, C conversion guards, local SSA and P0 exclusion; source fenv and binary128 acceptance remain separate gates. |
 | 1.9.105 | 2026-09-23 | Erratum: synchronize the diagnostic registry and 128-bit execution paragraph with Appendix D's already-approved S08 hosted division/remainder rule; retain runtime dependencies and all arithmetic obligations. |
 | 1.9.104 | 2026-09-21 | Apply approved function-section placement through declaration merging, canonical IR/proof metadata and ELF emission, preserving linkage, alignment, aliases, labels and patchable entries. |
 | 1.9.103 | 2026-09-20 | Apply approved scalar binary32/binary64 numerical/environment contract, explicit operations and conversion obligation, HFA metadata and profile identity; implementation acceptance remains separately measured. |

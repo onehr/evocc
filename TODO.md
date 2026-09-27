@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-27**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.105** and EvoMIR **0.44**. This is the Git-tracked execution backlog,
+EvoIR **1.9.106** and EvoMIR **0.45**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -700,6 +700,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   The September 27 report approves strict world-threaded FP, a separate `fenv`
   effect, four rounding modes and five sticky flags; dynamic rounding precedes
   full non-trapping FENV_ACCESS. Traps and Annex F claims remain excluded.
+  September 27 targeted progress: the explicit rounding/status adapter and
+  world snapshot passed 2,630,976 independent TestFloat value/status records;
+  22,568 Arm instruction records agree in GCC/Clang O0/O2. Strict IR, effect
+  derivation, text/proof preservation and MIR lowering are implemented in
+  1.9.106/0.45. A reference caller of actual EvoCC-emitted strict IR passes
+  62 checks in each of the four sealed native builds, including narrow integer
+  conversion and a signaling-NaN definedness predicate that must not set flags.
+  Source option/lowering, complete fenv API models and original musl replay
+  remain OPEN; this is not source-level strict-FP acceptance.
   Implement the finite `-frounding-math`/FENV_ACCESS contract, exceptions, rounding,
   calls and thread-owned explicit state. Implement it through constant evaluation,
   both interpreters, IR/proof metadata and native FPCR/FPSR behavior. Close with
@@ -710,6 +719,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   The September 27 report approves real f128, the existing shared ABI classifier
   and audited hosted helpers. Fixed-RNE and strict helper behavior are separate
   gates; approval does not itself establish implementation or original-program PASS.
+  The sealed hosted runtime exports the required TFmode helper families. A
+  new 6,400-record binary128 arithmetic/FPCR/FPSR probe agrees byte-for-byte
+  under GCC14/Clang19 O0/O2. This establishes a target observation, not EvoCC
+  f128 execution or independently qualified helper acceptance.
   Qualify real binary128 semantics and target runtime helpers, then implement
   literals, operations, conversions, both interpreters and the integrated ABI.
   Close with GCC/Clang crossed calls, HFA/stack/varargs and affected originals,

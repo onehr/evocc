@@ -1338,7 +1338,7 @@ fn emit_blocks(
             let _ = writeln!(text, "{}:", block_symbol(target, &allocated.name, block.id));
         }
         for (inst_index, inst) in block.insts.iter().enumerate() {
-            if fp_guards.contains(&(block.id, inst_index)) {
+            if let Some(strict) = fp_guards.get(&(block.id, inst_index)) {
                 let name = format!(
                     "{}{}_fp_env{}",
                     target.label_prefix(),
@@ -1346,9 +1346,14 @@ fn emit_blocks(
                     copies
                 );
                 copies += 1;
+                let mask = if *strict {
+                    "    bic x16, x16, #0xc00000\n"
+                } else {
+                    ""
+                };
                 let _ = writeln!(
                     text,
-                    "    mrs x16, fpcr\n    cbz x16, {name}\n    brk #3064\n{name}:"
+                    "    mrs x16, fpcr\n{mask}    cbz x16, {name}\n    brk #3064\n{name}:"
                 );
             }
             emit_inst(
@@ -1892,12 +1897,7 @@ fn emit_inst(
     let at = |reg: VReg, width: Width| spell(reg, width.class());
     let vector_name = |reg: VReg| format!("v{}", &name(reg)[1..]);
     match inst {
-        MInst::Floating {
-            dst,
-            op,
-            kind,
-            args,
-        } => {
+        MInst::Floating { .. } => {
             let label = format!(
                 "{}fp_{}_{}",
                 if target == Target::Linux { ".L" } else { "L" },
@@ -1905,7 +1905,7 @@ fn emit_inst(
                 *copies
             );
             *copies += 1;
-            crate::floating::emit(text, *dst, *op, *kind, args, &name, &label);
+            crate::floating::emit(text, inst, &name, &label);
         }
         MInst::Aes { dst, op, args } => {
             if target == Target::Linux {

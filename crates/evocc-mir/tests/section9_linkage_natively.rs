@@ -52,8 +52,8 @@ const STUB_MAIN_C: &str = "int three(void);\nint main(void) { return three(); }\
 /// The answer of the second program.
 const STUB_ANSWER: i32 = 7;
 
-const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }";
-const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }";
+const PURE: &str = "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }";
+const TOP: &str = "    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }";
 
 /// `ONE_C` and `TWO_C` in EvoIR, written by hand because the front end does
 /// not yet carry a storage class as far as the function header.

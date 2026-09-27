@@ -42,6 +42,17 @@ struct Header {
 /// This makes accepted bytes a producer-reachable spelling rather than a
 /// permissive source language with aliases for the same module.
 pub fn parse_section9_module(bytes: &[u8]) -> Result<Module, String> {
+    parse_module_profile(bytes, false)
+}
+
+/// Explicit reader for archived pre-1.9.106 text. Never used as a fallback by
+/// the current reader. The newly introduced effect is derived, not assumed
+/// false; strict operations cannot be smuggled into this historical grammar.
+pub fn parse_pre_fenv_module(bytes: &[u8]) -> Result<Module, String> {
+    parse_module_profile(bytes, true)
+}
+
+fn parse_module_profile(bytes: &[u8], legacy: bool) -> Result<Module, String> {
     validate_section9_bytes(bytes)?;
     if bytes.is_empty() {
         return Ok(Module::default());
@@ -93,16 +104,28 @@ pub fn parse_section9_module(bytes: &[u8]) -> Result<Module, String> {
         lines: &lines,
         position: 0,
         signatures: &signatures,
+        legacy,
     };
-    let module = parser.module()?;
+    let mut module = parser.module()?;
     if parser.position != lines.len() {
         return Err(format!(
             "unexpected module text at line {}",
             parser.position + 1
         ));
     }
+    if legacy {
+        let derived = crate::derive_effect_summaries(&module);
+        for (function, effects) in module.functions.iter_mut().zip(derived) {
+            function.effects.fenv = effects.fenv;
+        }
+    }
     validate_module(&module)?;
-    if crate::render_module(&module).as_bytes() != bytes {
+    let rendered = if legacy {
+        crate::render_pre_fenv_module(&module)?
+    } else {
+        crate::render_module(&module)
+    };
+    if rendered.as_bytes() != bytes {
         return Err("EvoIR module is not in canonical Section 9 form".to_owned());
     }
     Ok(module)
@@ -112,6 +135,7 @@ struct ModuleParser<'a> {
     lines: &'a [&'a str],
     position: usize,
     signatures: &'a HashMap<String, Signature>,
+    legacy: bool,
 }
 
 impl ModuleParser<'_> {
@@ -305,7 +329,7 @@ impl ModuleParser<'_> {
             .lines
             .get(self.position)
             .ok_or_else(|| format!("function '{}' has no effects clause", header.name))?;
-        let effects = parse_effects(effects_line)?;
+        let effects = parse_effects(effects_line, self.legacy)?;
         self.position += 1;
         if self.lines.get(self.position) != Some(&"{") {
             return Err(format!("function '{}' has no opening brace", header.name));
@@ -776,7 +800,7 @@ fn check_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> 
     Ok(())
 }
 
-fn parse_effects(line: &str) -> Result<EffectSummary, String> {
+fn parse_effects(line: &str, legacy: bool) -> Result<EffectSummary, String> {
     let mut cursor = Cursor::new(line);
     cursor.expect("    effects { reads=")?;
     let reads_all = cursor.region_set()?;
@@ -788,6 +812,12 @@ fn parse_effects(line: &str) -> Result<EffectSummary, String> {
     let atomic = cursor.boolean()?;
     cursor.expect(", io=")?;
     let io = cursor.boolean()?;
+    let fenv = if legacy {
+        false // Derived from the complete module before validation.
+    } else {
+        cursor.expect(", fenv=")?;
+        cursor.boolean()?
+    };
     cursor.expect(", may_trap=")?;
     let may_trap = cursor.boolean()?;
     cursor.expect(", may_unwind=")?;
@@ -800,6 +830,7 @@ fn parse_effects(line: &str) -> Result<EffectSummary, String> {
         volatile,
         atomic,
         io,
+        fenv,
         may_trap,
         may_unwind,
     })
@@ -1208,6 +1239,37 @@ fn parse_tuple_instruction(
         .ok_or_else(|| "malformed multi-result instruction".to_owned())?;
     let result_ids = parse_result_ids(&body[1..close])?;
     let rhs = &body[close + 4..];
+    if let Some(rest) = rhs.strip_prefix("fp.strict.") {
+        require_count(&result_ids, 2, "strict floating results")?;
+        let (name, rest) = rest
+            .split_once(' ')
+            .ok_or("missing strict floating operands")?;
+        let (operands, ty) = rest
+            .rsplit_once(" : ")
+            .ok_or("missing strict floating result type")?;
+        let mut operands = parse_values(operands, values, false)?;
+        if operands.is_empty() {
+            return Err("missing strict world input".into());
+        }
+        let world_in = operands.remove(0);
+        let operation = crate::StrictFloatingInst {
+            instruction: crate::FloatingInst {
+                result: Value {
+                    id: result_ids[0],
+                    ty: parse_type(ty)?,
+                },
+                op: crate::FloatingOp::parse(name).ok_or("unknown strict floating operation")?,
+                arguments: operands,
+            },
+            world_in,
+            world_out: Value {
+                id: result_ids[1],
+                ty: EvoIRType::World,
+            },
+        };
+        operation.validate()?;
+        return Ok(Inst::StrictFloating(operation));
+    }
     if let Some(rest) = rhs.strip_prefix("va_arg.byval ") {
         require_count(&result_ids, 2, "record variadic access results")?;
         let (operands, attributes) = split_attributes(rest)?;

@@ -87,7 +87,7 @@ fn a_null_indirect_target_is_a_branch_error_not_a_call_error() {
 
 #[test]
 fn a_legacy_explicit_signed_shift_obligation_is_still_executable() {
-    let source = "func @legacy(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: mem<all>, %v1: world):\n    %v2 = const.bits<32> 4294967295\n    %v3 = const.bits<64> 1\n    %v4 = signed_shl_defined.signed %v2, %v3\n    ub.assume.invalid_signed_left_shift %v4\n    %v5 = shl.bits<32> %v2, %v3\n    ret %v5, %v0, %v1\n}\n";
+    let source = "func @legacy(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: mem<all>, %v1: world):\n    %v2 = const.bits<32> 4294967295\n    %v3 = const.bits<64> 1\n    %v4 = signed_shl_defined.signed %v2, %v3\n    ub.assume.invalid_signed_left_shift %v4\n    %v5 = shl.bits<32> %v2, %v3\n    ret %v5, %v0, %v1\n}\n";
     let module = parse_section9_module(source.as_bytes()).unwrap();
     let args = [
         RuntimeValue::new(EvoIRType::Mem(Region::All), 0),

@@ -254,11 +254,33 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
     }
     match inst {
         MInst::Floating {
+            strict,
+            integer_bits,
             dst,
             op,
             kind,
             args,
-        } => crate::floating::operation(*dst, *op, *kind, args).map(|_| ()),
+        } => {
+            if *integer_bits != 0 && !strict {
+                return Err("integer width metadata requires strict conversion".into());
+            }
+            let instruction = crate::floating::operation(*dst, *op, *kind, args, *integer_bits)?;
+            if *strict {
+                evocc_evoir::StrictFloatingInst {
+                    instruction,
+                    world_in: evocc_evoir::Value {
+                        id: u32::MAX,
+                        ty: evocc_evoir::EvoIRType::World,
+                    },
+                    world_out: evocc_evoir::Value {
+                        id: u32::MAX - 1,
+                        ty: evocc_evoir::EvoIRType::World,
+                    },
+                }
+                .validate()?;
+            }
+            Ok(())
+        }
         MInst::Asm(body) => validate_assembly_classes(body),
         MInst::Aes { dst, op, args } => {
             if dst.class != RegClass::Simd128

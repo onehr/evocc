@@ -11,7 +11,7 @@ fn module_text(result_types: &str, instructions: &str, returned: &str) -> String
     format!(
         concat!(
             "func @main(%arg0: mem<all>, %arg1: world) -> ({result_types}) cc = target_default\n",
-            "    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}\n",
+            "    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }}\n",
             "{{\n",
             "^entry(%v0: mem<all>, %v1: world):\n",
             "{instructions}",

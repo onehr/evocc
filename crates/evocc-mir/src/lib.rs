@@ -690,6 +690,10 @@ pub enum MInst {
     /// Scalar floating instructions share the physical SIMD bank. Format and
     /// ordered comparison / conversion kind remain semantic, not asm strings.
     Floating {
+        strict: bool,
+        /// Semantic destination width for strict integer conversions. Zero
+        /// means the ordinary physical register width; non-conversions use zero.
+        integer_bits: u16,
         dst: VReg,
         op: evocc_evoir::FloatingOp,
         kind: evocc_types::FloatKind,

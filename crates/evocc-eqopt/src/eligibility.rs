@@ -248,6 +248,7 @@ fn operands(instruction: &Inst) -> Vec<&Value> {
     match instruction {
         Inst::Vector(operation) => operation.arguments.iter().collect(),
         Inst::Floating(operation) => operation.arguments.iter().collect(),
+        Inst::StrictFloating(operation) => operation.operands(),
         Inst::VaAccess(access) => vec![&access.list, &access.mem_in, &access.world_in],
         Inst::Atomic(access) => access.operands(),
         Inst::TlsAddr(access) => access.operands(),

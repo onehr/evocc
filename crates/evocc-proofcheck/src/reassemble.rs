@@ -208,6 +208,12 @@ fn remap(value: &mut Value, aliases: &HashMap<u32, Value>) {
 #[allow(clippy::too_many_lines)]
 fn remap_uses(instruction: &mut Inst, aliases: &HashMap<u32, Value>) {
     match instruction {
+        Inst::StrictFloating(operation) => {
+            remap(&mut operation.world_in, aliases);
+            for value in &mut operation.instruction.arguments {
+                remap(value, aliases);
+            }
+        }
         Inst::Floating(operation) => {
             for value in &mut operation.arguments {
                 remap(value, aliases);
@@ -465,6 +471,7 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
         } => vec![result, operand],
         Inst::Vector(operation) => operation.values_mut(),
         Inst::Floating(operation) => operation.values_mut(),
+        Inst::StrictFloating(operation) => operation.values_mut(),
         Inst::Atomic(access) => access.values_mut(),
         Inst::TlsAddr(access) => access.values_mut(),
         Inst::VaAccess(access) => {

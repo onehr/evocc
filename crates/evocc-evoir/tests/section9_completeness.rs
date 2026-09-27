@@ -114,6 +114,19 @@ fn sentinel_instructions() -> Vec<Inst> {
             arguments: vec![value(1970, EvoIRType::F64)],
         }),
         Inst::UbAssume(value(1971, EvoIRType::Bits(1)), UbReason::FloatingToInteger),
+        Inst::StrictFloating(evocc_evoir::StrictFloatingInst {
+            instruction: evocc_evoir::FloatingInst {
+                result: value(1980, EvoIRType::F64),
+                op: evocc_evoir::FloatingOp::Fma,
+                arguments: vec![
+                    value(1981, EvoIRType::F64),
+                    value(1982, EvoIRType::F64),
+                    value(1983, EvoIRType::F64),
+                ],
+            },
+            world_in: value(1984, EvoIRType::World),
+            world_out: value(1985, EvoIRType::World),
+        }),
         Inst::Atomic(evocc_evoir::AtomicAccess {
             op: evocc_evoir::AtomicOp::Rmw {
                 result: value(1960, EvoIRType::Bits(16)),
@@ -529,6 +542,20 @@ fn inst_schema(inst: &Inst) -> &'static str {
             } = operation;
             let _ = (result, op, arguments);
             "Inst.Floating(result,op,arguments)"
+        }
+        Inst::StrictFloating(operation) => {
+            let evocc_evoir::StrictFloatingInst {
+                instruction,
+                world_in,
+                world_out,
+            } = operation;
+            let evocc_evoir::FloatingInst {
+                result,
+                op,
+                arguments,
+            } = instruction;
+            let _ = (result, op, arguments, world_in, world_out);
+            "Inst.StrictFloating(result,op,arguments,world_in,world_out)"
         }
         Inst::IndirectBr { target, edges } => {
             let _ = (target, edges);
@@ -1080,13 +1107,16 @@ fn structural_schema(module: &Module) -> BTreeSet<&'static str> {
             volatile,
             atomic,
             io,
+            fenv,
             may_trap,
             may_unwind,
         } = effects;
         let _ = (
-            reads_all, writes_all, volatile, atomic, io, may_trap, may_unwind,
+            reads_all, writes_all, volatile, atomic, io, fenv, may_trap, may_unwind,
         );
-        keys.insert("EffectSummary(reads_all,writes_all,volatile,atomic,io,may_trap,may_unwind)");
+        keys.insert(
+            "EffectSummary(reads_all,writes_all,volatile,atomic,io,fenv,may_trap,may_unwind)",
+        );
         for block in blocks {
             let Block {
                 id,

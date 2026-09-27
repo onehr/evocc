@@ -67,7 +67,7 @@ fn with_tokens(mut values: Vec<RuntimeValue>) -> Vec<RuntimeValue> {
 
 const ARITHMETIC: &str = "\
 func @main(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     %v4 = add.bits<32> %v0, %v1
@@ -90,7 +90,7 @@ fn arithmetic_agrees() {
 
 const NARROW: &str = "\
 func @main(%arg0: bits<13>, %arg1: bits<13>, %arg2: mem<all>, %arg3: world) -> (bits<13>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<13>, %v1: bits<13>, %v2: mem<all>, %v3: world):
     %v8 = const.bits<13> 7
@@ -117,7 +117,7 @@ fn narrow_widths_agree() {
 
 const DIVISION: &str = "\
 func @main(%arg0: bits<17>, %arg1: bits<17>, %arg2: mem<all>, %arg3: world) -> (bits<17>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<17>, %v1: bits<17>, %v2: mem<all>, %v3: world):
     %v4 = const.bits<17> 3
@@ -141,7 +141,7 @@ fn division_and_remainder_agree() {
 
 const COMPARISONS: &str = "\
 func @main(%arg0: bits<7>, %arg1: bits<7>, %arg2: mem<all>, %arg3: world) -> (bits<7>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<7>, %v1: bits<7>, %v2: mem<all>, %v3: world):
     %v4 = icmp.eq %v0, %v1
@@ -170,7 +170,7 @@ fn comparisons_at_a_narrow_width_agree() {
 
 const TRUNCATED_EQUALITY: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<1>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = trunc.bits<3> %v0
@@ -194,7 +194,7 @@ fn equality_on_a_truncated_value_agrees() {
 
 const MEMORY: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=8, align=4]
@@ -221,7 +221,7 @@ fn allocation_offsetting_stores_and_loads_agree() {
 
 const VOLATILE: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=true, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=4, align=4]
@@ -240,7 +240,7 @@ fn the_volatile_trace_agrees_including_the_object_origin() {
 
 const LOOP: &str = "\
 func @main(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<64>, %v1: mem<all>, %v2: world):
     %v20 = const.bits<64> 0
@@ -271,7 +271,7 @@ fn a_loop_agrees() {
 
 const CALLS: &str = "\
 func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = add.bits<32> %v0, %v0
@@ -279,7 +279,7 @@ func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<a
 }
 
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = call @helper(%v0, %v1, %v2)
@@ -299,7 +299,7 @@ const GLOBALS: &str = "\
 global @counter origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111
 
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = global_addr @counter : ptr<generic>
@@ -319,7 +319,7 @@ fn a_global_read_and_written_agrees() {
 
 const OBLIGATION: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 0
@@ -357,7 +357,7 @@ fn a_violated_obligation_traps_in_both_interpreters() {
 
 const INDIRECT: &str = "\
 func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 3
@@ -366,7 +366,7 @@ func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<a
 }
 
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = func_addr @helper : fnptr<(bits<32>, mem<all>, world)->(bits<32>, mem<all>, world)>
@@ -384,7 +384,7 @@ fn a_function_address_and_an_indirect_call_agree() {
 
 const NULL_COMPARISON: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<1>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=4, align=4]
@@ -403,7 +403,7 @@ fn a_null_pointer_comparison_agrees() {
 
 const OBJECT_COPY: &str = "\
 func @main(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<64>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=16, align=8]
@@ -431,7 +431,7 @@ fn an_object_copy_agrees() {
 
 const LIFETIME: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=4, align=4]
@@ -447,7 +447,7 @@ fn an_explicit_lifetime_end_agrees() {
 
 const OBLIGATION_IN_A_LOOP: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 0
@@ -485,7 +485,7 @@ fn an_obligation_inside_a_loop_body_agrees() {
 
 const FELL_OFF_THE_END: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<32> 0
@@ -524,7 +524,7 @@ fn a_trap_reached_stops_both_interpreters_with_the_same_reason() {
 
 const WIDE_SCALAR: &str = "\
 func @main(%arg0: bits<47>, %arg1: bits<47>, %arg2: mem<all>, %arg3: world) -> (bits<47>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<47>, %v1: bits<47>, %v2: mem<all>, %v3: world):
     %v4 = const.bits<47> 5
@@ -561,7 +561,7 @@ fn a_gpr64_class_scalar_agrees() {
 fn predicate_module(width: u16, body: &str) -> String {
     [
         format!("func @main(%arg0: bits<{width}>, %arg1: bits<{width}>, %arg2: mem<all>, %arg3: world) -> (bits<1>, mem<all>, world) cc = target_default"),
-        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }".to_owned(),
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }".to_owned(),
         "{".to_owned(),
         format!("^entry(%v0: bits<{width}>, %v1: bits<{width}>, %v2: mem<all>, %v3: world):"),
         format!("    {body}"),
@@ -657,7 +657,7 @@ fn a_shift_predicate_agrees_when_its_two_widths_differ() {
     for (shifted, amount) in [(32_u16, 3_u16), (3, 32), (13, 47), (64, 1), (1, 64)] {
         let text = [
             format!("func @main(%arg0: bits<{shifted}>, %arg1: bits<{amount}>, %arg2: mem<all>, %arg3: world) -> (bits<1>, mem<all>, world) cc = target_default"),
-            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }".to_owned(),
+            "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }".to_owned(),
             "{".to_owned(),
             format!("^entry(%v0: bits<{shifted}>, %v1: bits<{amount}>, %v2: mem<all>, %v3: world):"),
             "    %v4 = signed_shl_defined.signed %v0, %v1".to_owned(),
@@ -679,7 +679,7 @@ fn a_shift_predicate_agrees_when_its_two_widths_differ() {
 
 const MULTIPLE_RESULTS: &str = "\
 func @main(%arg0: bits<32>, %arg1: bits<13>, %arg2: mem<all>, %arg3: world) -> (bits<32>, bits<13>, bits<1>, bits<64>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<13>, %v2: mem<all>, %v3: world):
     %v4 = add.bits<32> %v0, %v0
@@ -704,7 +704,7 @@ fn four_results_agree() {
 
 const GUARDED_DIVISION: &str = "\
 func @main(%arg0: bits<17>, %arg1: bits<17>, %arg2: mem<all>, %arg3: world) -> (bits<17>, bits<17>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<17>, %v1: bits<17>, %v2: mem<all>, %v3: world):
     %v4 = divisor_nonzero %v1

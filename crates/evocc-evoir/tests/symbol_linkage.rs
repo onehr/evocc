@@ -1,7 +1,7 @@
 use evocc_evoir::{parse_section9_module, render_module};
 
 fn function(name: &str, marks: &str) -> String {
-    format!("func @{name}(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default{marks}\n    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}\n{{\n^entry(%v0: mem<all>, %v1: world):\n    %v2 = const.bits<32> 7\n    ret %v2, %v0, %v1\n}}\n")
+    format!("func @{name}(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default{marks}\n    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}\n{{\n^entry(%v0: mem<all>, %v1: world):\n    %v2 = const.bits<32> 7\n    ret %v2, %v0, %v1\n}}\n")
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn alias_records_name_definitions_without_allocating_another_object() {
 
 #[test]
 fn aliases_supply_direct_call_signatures_and_effects() {
-    let text = format!("alias @alternative = @implementation\n\n{}\nfunc @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}\n{{\n^entry(%v0: mem<all>, %v1: world):\n    (%v2, %v3, %v4) = call @alternative(%v0, %v1)\n    ret %v2, %v3, %v4\n}}\n", function("implementation", " visibility=internal"));
+    let text = format!("alias @alternative = @implementation\n\n{}\nfunc @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}\n{{\n^entry(%v0: mem<all>, %v1: world):\n    (%v2, %v3, %v4) = call @alternative(%v0, %v1)\n    ret %v2, %v3, %v4\n}}\n", function("implementation", " visibility=internal"));
     let module =
         parse_section9_module(text.as_bytes()).expect("the alias has its target's signature");
     let args = module.functions[1]

@@ -18,7 +18,7 @@ use evocc_evoir::{parse_section9_module, render_module, Module};
 /// 32-bit work the profile does reason about.
 const WIDE_CONSTANT: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = const.bits<128> 5
@@ -33,7 +33,7 @@ func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all
 /// The same width reached through arithmetic rather than a constant.
 const WIDE_ARITHMETIC: &str = "\
 func @main(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<64>, %v1: mem<all>, %v2: world):
     %v3 = zext.bits<128> %v0

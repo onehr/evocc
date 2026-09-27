@@ -76,7 +76,7 @@ fn assemble(text: &str) -> Result<(), String> {
 
 const ARITHMETIC: &str = "\
 func @main(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     %v4 = add.bits<32> %v0, %v1
@@ -91,7 +91,7 @@ const EVERY_SHAPE: &str = "\
 global @counter origin=0 kind=file visibility=external size=4 align=4 bytes=07000000 initialized=1111
 
 func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = add.bits<32> %v0, %v0
@@ -99,7 +99,7 @@ func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<a
 }
 
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=1, size=16, align=8]
@@ -141,7 +141,7 @@ fn copy_program(size: usize) -> String {
 global @source origin=0 kind=file visibility=external size={size} align=8 bytes={bytes} initialized={initialized}
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }}
 {{
 ^entry(%v0: mem<all>, %v1: world):
     (%v2, %v3, %v4) = alloca %v0, %v1 [origin=1, size={size}, align=8]

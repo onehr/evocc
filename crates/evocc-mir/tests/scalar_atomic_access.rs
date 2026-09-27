@@ -6,7 +6,7 @@ fn read_modify_write_is_one_event_and_round_trips_every_operand() {
     let source = "global @cell origin=0 kind=file visibility=external size=4 align=4 bytes=00000000 initialized=1111
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=true, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=true, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = global_addr @cell : ptr<generic>
@@ -62,7 +62,7 @@ fn atomic_machine_text_and_execution_preserve_order_and_events() {
     let source = "global @cell origin=0 kind=file visibility=external size=4 align=4 bytes=00000000 initialized=1111
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = global_addr @cell : ptr<generic>

@@ -23,7 +23,7 @@ use evocc_types::{EvoIRType, Region};
 /// `ptr.to_int`.
 const ROUND_TRIP: &str = "\
 func @f(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = return_address : ptr<generic>
@@ -39,7 +39,7 @@ func @f(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = targe
 /// own return address, so the freshness rule has something to disagree with.
 const FRESHNESS: &str = "\
 func @leaf(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = return_address : ptr<generic>
@@ -48,7 +48,7 @@ func @leaf(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = ta
 }
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<64>, bits<64>, bits<64>, bits<64>, bits<64>, bits<64>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = return_address : ptr<generic>
@@ -209,7 +209,7 @@ fn dereference(mnemonic: &str) -> String {
     format!(
         "\
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects {{ reads={{all}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+    effects {{ reads={{all}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }}
 {{
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = {mnemonic} : ptr<generic>

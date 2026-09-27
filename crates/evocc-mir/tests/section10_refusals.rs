@@ -15,7 +15,7 @@ fn codes(text: &str) -> Vec<&'static str> {
 
 const WIDE_INTEGER: &str = "\
 func @main(%arg0: bits<96>, %arg1: mem<all>, %arg2: world) -> (bits<96>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<96>, %v1: mem<all>, %v2: world):
     %v3 = add.bits<96> %v0, %v0
@@ -30,7 +30,7 @@ fn a_non_pair_ninety_six_bit_integer_is_e4003() {
 
 const PREDICATE: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<1>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = divisor_nonzero %v0
@@ -48,7 +48,7 @@ fn every_ub_predicate_now_has_a_row_and_is_not_refused() {
 
 const EIGHT_RESULTS: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     ret %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v1, %v2
@@ -57,7 +57,7 @@ func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, bits<32
 
 const NINE_RESULTS: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     ret %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v0, %v1, %v2
@@ -78,7 +78,7 @@ fn a_ninth_ordinary_result_is_e4013() {
 
 const NINE_ARGUMENTS: &str = "\
 func @main(%arg0: bits<32>, %arg1: bits<32>, %arg2: bits<32>, %arg3: bits<32>, %arg4: bits<32>, %arg5: bits<32>, %arg6: bits<32>, %arg7: bits<32>, %arg8: bits<32>, %arg9: mem<all>, %arg10: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: bits<32>, %v2: bits<32>, %v3: bits<32>, %v4: bits<32>, %v5: bits<32>, %v6: bits<32>, %v7: bits<32>, %v8: bits<32>, %v9: mem<all>, %v10: world):
     ret %v0, %v9, %v10
@@ -92,7 +92,7 @@ fn a_ninth_integer_argument_is_e4010() {
 
 const FLOATING_POINT: &str = "\
 func @main(%arg0: f64, %arg1: mem<all>, %arg2: world) -> (f64, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: f64, %v1: mem<all>, %v2: world):
     ret %v0, %v1, %v2
@@ -113,7 +113,7 @@ const POINTER_IN_STATIC_DATA: &str = "\
 global @table origin=0 kind=file visibility=external size=8 align=8 bytes=0000000000000000 initialized=11111111
 
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     ret %v0, %v1, %v2

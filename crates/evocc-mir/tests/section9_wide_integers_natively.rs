@@ -47,7 +47,7 @@ fn func(name: &str, param_tys: &[&str], results: &str, body: &str, ret: &str) ->
     format!(
         "func @{name}({head}{separator}%arg{memory}: mem<all>, %arg{world}: world) \
 -> ({results}, mem<all>, world) cc = target_default\n    \
-effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, \
+effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, \
 may_trap=false, may_unwind=false }}\n{{\n\
 ^entry({entry}{entry_separator}%v90: mem<all>, %v91: world):\n{body}    \
 ret {ret}, %v90, %v91\n}}\n"
@@ -220,7 +220,7 @@ fn module_text() -> String {
     // of Section 5 against the layout the host compiler gives the union.
     let memory = [
         "func @wide_through_memory(%arg0: ptr<generic>, %arg1: bits<128>, %arg2: mem<all>, %arg3: world) -> (bits<128>, mem<all>, world) cc = target_default",
-        "    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }",
+        "    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }",
         "{",
         "^entry(%v0: ptr<generic>, %v1: bits<128>, %v90: mem<all>, %v91: world):",
         "    %v2 = access_in_bounds %v90, %v0 [size=16, align=16]",

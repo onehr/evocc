@@ -349,9 +349,8 @@ pub struct Driver {
 impl Driver {
     /// Find `evocc` next to the running test or binary.
     ///
-    /// The release build is preferred where both exist, because a campaign of
-    /// hundreds of programs spends real time in the front end; either is the
-    /// same driver.
+    /// Prefer the current profile. A retained release executable can belong to
+    /// an older compiler/text revision and must not contaminate a debug gate.
     pub fn locate() -> Result<Self, String> {
         let mut directory =
             std::env::current_exe().map_err(|error| format!("current executable: {error}"))?;
@@ -362,10 +361,10 @@ impl Driver {
         let profile = directory.clone();
         let root = profile.parent().map(Path::to_path_buf);
         let name = format!("evocc{}", std::env::consts::EXE_SUFFIX);
-        let candidates = root
-            .into_iter()
-            .map(|root| root.join("release").join(&name))
-            .chain(std::iter::once(profile.join(&name)));
+        let candidates = std::iter::once(profile.join(&name)).chain(
+            root.into_iter()
+                .map(|root| root.join("release").join(&name)),
+        );
         for candidate in candidates {
             if candidate.is_file() {
                 return Ok(Self { binary: candidate });

@@ -222,9 +222,9 @@ impl Body {
 }
 
 /// Section 4.6's exact summary for the three shapes of body below.
-const READS: &str = "effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }";
-const WRITES: &str = "effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }";
-const CALLS: &str = "effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }";
+const READS: &str = "effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }";
+const WRITES: &str = "effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }";
+const CALLS: &str = "effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }";
 
 fn header(name: &str, params: &[String], results: &[&str], effects: &str) -> String {
     let mut spelled: Vec<String> = params
@@ -890,7 +890,7 @@ const ZSTD: &str = "\
 declare @get(ptr<generic> sret(8, 8), mem<all>, world) -> (mem<all>, world) cc = target_default
 
 func @span(%arg0: ptr<generic> byval(8, 8), %arg1: ptr<generic> byval(8, 8), %arg2: mem<all>, %arg3: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: ptr<generic>, %v1: ptr<generic>, %v2: mem<all>, %v3: world):
     %v4 = access_in_bounds %v2, %v0 [size=8, align=8]
@@ -902,7 +902,7 @@ func @span(%arg0: ptr<generic> byval(8, 8), %arg1: ptr<generic> byval(8, 8), %ar
 }
 
 func @use_get(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }
 {
 ^entry(%v0: mem<all>, %v1: world):
     (%v2, %v3, %v4) = alloca %v0, %v1 [origin=0, size=8, align=8]
@@ -989,7 +989,7 @@ fn emitted(target: Target, positions: &[usize]) -> String {
 
 #[test]
 fn zero_sized_aligned_arguments_do_not_skip_a_register() {
-    let text = "func @after(%arg0: bits<64>, %arg1: ptr<generic> byval(0, 16), %arg2: bits<64>) -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: bits<64>, %v1: ptr<generic>, %v2: bits<64>):\n    ret %v2\n}\n";
+    let text = "func @after(%arg0: bits<64>, %arg1: ptr<generic> byval(0, 16), %arg2: bits<64>) -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: bits<64>, %v1: ptr<generic>, %v2: bits<64>):\n    ret %v2\n}\n";
     let module = parse_section9_module(text.as_bytes()).unwrap();
     for target in [Target::Linux, Target::Darwin] {
         let machine = evocc_mir::lower_module_for(target, &module, &|_| true).unwrap();

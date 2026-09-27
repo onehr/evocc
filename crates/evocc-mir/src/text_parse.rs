@@ -1098,16 +1098,31 @@ fn parse_defining(
         return Ok(MInst::Aes { dst, op, args });
     }
     if let Some(name) = mnemonic.strip_prefix("fp.") {
+        let strict = name.starts_with("strict.");
+        let name = name.strip_prefix("strict.").unwrap_or(name);
         let (op, kind) = name.rsplit_once('.').ok_or("missing FP format")?;
         let kind = match kind {
             "f32" => evocc_types::FloatKind::F32,
             "f64" => evocc_types::FloatKind::F64,
             _ => return Err("unsupported FP format".into()),
         };
+        let (op, integer_bits) = if let Some((op, width)) = op.rsplit_once(".i") {
+            let width = width
+                .parse::<u16>()
+                .map_err(|_| "invalid FP integer width")?;
+            if width == 0 {
+                return Err("explicit FP integer width must be positive".into());
+            }
+            (op, width)
+        } else {
+            (op, 0)
+        };
         let op = evocc_evoir::FloatingOp::parse(op).ok_or("unknown FP operation")?;
         let args = scan.use_list()?;
         scan.finish()?;
         return Ok(MInst::Floating {
+            strict,
+            integer_bits,
             dst,
             op,
             kind,

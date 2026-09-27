@@ -232,7 +232,7 @@ fn day8_proof_format_eligibility_and_binding_contract() {
     );
     assert_status(&inputs.run(), 3, "certificate bound to different input");
 
-    let nonempty_after = b"func @main() -> () cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n{\n^entry():\n    ret\n}\n";
+    let nonempty_after = b"func @main() -> () cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry():\n    ret\n}\n";
     inputs.write(
         b"",
         nonempty_after,
@@ -251,7 +251,7 @@ fn day8_proof_format_eligibility_and_binding_contract() {
 fn nonempty_reviewed_rewrite_is_replayed_and_reassembled() {
     let before = concat!(
         "func @main(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
-        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n",
         "{\n",
         "^entry(%v0: bits<32>):\n",
         "    %v1 = const.bits<32> 0\n",
@@ -261,7 +261,7 @@ fn nonempty_reviewed_rewrite_is_replayed_and_reassembled() {
     );
     let after = concat!(
         "func @main(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
-        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n",
         "{\n",
         "^entry(%v0: bits<32>):\n",
         "    %v1 = const.bits<32> 0\n",
@@ -309,7 +309,7 @@ fn nonempty_reviewed_rewrite_is_replayed_and_reassembled() {
 fn reviewed_replay_is_derived_from_module_identity_not_one_hardcoded_fixture() {
     let before = concat!(
         "func @renamed(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
-        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n",
         "{\n",
         "^entry(%v7: bits<32>):\n",
         "    %v8 = const.bits<32> 0\n",
@@ -319,7 +319,7 @@ fn reviewed_replay_is_derived_from_module_identity_not_one_hardcoded_fixture() {
     );
     let after = concat!(
         "func @renamed(%arg0: bits<32>) -> (bits<32>) cc = target_default\n",
-        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }\n",
+        "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n",
         "{\n",
         "^entry(%v0: bits<32>):\n",
         "    %v1 = const.bits<32> 0\n",

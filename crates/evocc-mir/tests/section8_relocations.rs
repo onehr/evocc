@@ -15,7 +15,7 @@ const UNIT: &str = r#"global @table origin=0 kind=file visibility=external size=
 global @pointers origin=1 kind=file visibility=external size=24 align=8 bytes=000000000000000000000000000000007b00000000000000 initialized=111111111111111111111111 relocs=[(0, @table, 8), (8, @twice, 0)]
 
 func @twice(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = add.bits<32> %v0, %v0
@@ -23,7 +23,7 @@ func @twice(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<al
 }
 
 func @round_trip(%arg0: mem<all>, %arg1: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = global_addr @table : ptr<generic>

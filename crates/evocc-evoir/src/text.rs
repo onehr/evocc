@@ -247,6 +247,33 @@ pub fn render_module(module: &Module) -> String {
     rendered
 }
 
+/// Render an archived pre-fenv grammar without rewriting its evidence bytes.
+/// This is an explicit compatibility boundary, not the current canonical form.
+pub fn render_pre_fenv_module(module: &Module) -> Result<String, String> {
+    crate::validate_module(module)?;
+    if module
+        .functions
+        .iter()
+        .flat_map(|f| &f.blocks)
+        .flat_map(|b| &b.insts)
+        .any(|inst| {
+            matches!(inst, Inst::StrictFloating(_))
+                || matches!(inst, Inst::Floating(fp) if fp.op == crate::FloatingOp::Fma)
+        })
+    {
+        return Err("strict FP and FMA have no pre-fenv text representation".into());
+    }
+    let mut legacy = String::new();
+    for line in render_module(module).split_inclusive('\n') {
+        if line.starts_with("    effects { ") {
+            legacy.push_str(&line.replace(", fenv=false", "").replace(", fenv=true", ""));
+        } else {
+            legacy.push_str(line);
+        }
+    }
+    Ok(legacy)
+}
+
 fn render_type(ty: &EvoIRType) -> String {
     match ty {
         EvoIRType::Bits(width) => format!("bits<{width}>"),
@@ -429,6 +456,19 @@ impl FunctionRenderer {
                     .collect::<Vec<_>>()
                     .join(", "),
                 render_type(&operation.result.ty)
+            ),
+            Inst::StrictFloating(operation) => format!(
+                "({}, {}) = fp.strict.{} {} : {}",
+                render_value(&operation.instruction.result),
+                render_value(&operation.world_out),
+                operation.instruction.op.mnemonic(),
+                operation
+                    .operands()
+                    .into_iter()
+                    .map(render_value)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                render_type(&operation.instruction.result.ty)
             ),
             Inst::Floating(operation) => {
                 if let crate::FloatingOp::Constant(bits) = operation.op {
@@ -1062,12 +1102,13 @@ fn render_function(function: &Function) -> String {
         function.linkage.suffix(),
     ));
     rendered.push_str(&format!(
-        "    effects {{ reads={}, writes={}, volatile={}, atomic={}, io={}, may_trap={}, may_unwind={} }}\n{{\n",
+        "    effects {{ reads={}, writes={}, volatile={}, atomic={}, io={}, fenv={}, may_trap={}, may_unwind={} }}\n{{\n",
         if function.effects.reads_all { "{all}" } else { "{}" },
         if function.effects.writes_all { "{all}" } else { "{}" },
         function.effects.volatile,
         function.effects.atomic,
         function.effects.io,
+        function.effects.fenv,
         function.effects.may_trap,
         function.effects.may_unwind,
     ));
@@ -1161,7 +1202,7 @@ mod tests {
             render_module(&module),
             concat!(
                 "func @stopped() -> (bits<32>) cc = target_default\n",
-                "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }\n",
+                "    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }\n",
                 "{\n",
                 "^entry():\n",
                 "    trap.scalar_function_fell_off_end\n",

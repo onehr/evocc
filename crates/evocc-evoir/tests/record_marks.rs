@@ -25,7 +25,7 @@ const MARKED: &str = "\
 declare @host_span(ptr<generic> byval(8, 8), ptr<generic> byval(8, 8), mem<all>, world) -> (bits<64>, mem<all>, world) cc = target_default
 
 func @span(%arg0: ptr<generic> byval(8, 8), %arg1: ptr<generic> byval(8, 8), %arg2: mem<all>, %arg3: world) -> (bits<64>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: ptr<generic>, %v1: ptr<generic>, %v2: mem<all>, %v3: world):
     %v4 = access_in_bounds %v2, %v0 [size=8, align=8]
@@ -37,7 +37,7 @@ func @span(%arg0: ptr<generic> byval(8, 8), %arg1: ptr<generic> byval(8, 8), %ar
 }
 
 func @make(%arg0: bits<64>, %arg1: ptr<generic> sret(24, 8), %arg2: mem<all>, %arg3: world) -> (mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<64>, %v1: ptr<generic>, %v2: mem<all>, %v3: world):
     %v4 = access_in_bounds %v2, %v1 [size=8, align=8]
@@ -163,14 +163,14 @@ fn the_marks_are_part_of_the_signature_for_equality() {
 /// and the writer inside a module that takes a marked function's address.
 const POINTER: &str = "\
 func @callee(%arg0: ptr<generic> byval(16, 16), %arg1: mem<all>, %arg2: world) -> (mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: ptr<generic>, %v1: mem<all>, %v2: world):
     ret %v1, %v2
 }
 
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = func_addr @callee : fnptr<(ptr<generic> byval(16, 16), mem<all>, world)->(mem<all>, world)>
@@ -246,7 +246,7 @@ fn a_record_shape_is_a_real_record() {
 /// caller-allocated copy.
 const DRIVER: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=8, align=8]

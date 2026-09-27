@@ -7,7 +7,7 @@ use evocc_types::{EvoIRType, Region};
 fn builtin_trap_round_trips_and_reports_only_on_its_executed_edge() {
     let text = "\
 func @f(%arg0: bits<1>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: bits<1>, %v1: mem<all>, %v2: world):
     cond_br %v0, ^b1(%v1, %v2), ^b2(%v1, %v2)
@@ -71,7 +71,7 @@ fn bit_instructions_are_total_and_typed() {
         ("bswap", 32, 0x11223344, 0x44332211),
         ("bswap", 16, 0x1234, 0x3412),
     ] {
-        let text = format!("func @f(%arg0: bits<{width}>, %arg1: mem<all>, %arg2: world) -> (bits<{width}>, mem<all>, world) cc = target_default\n    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}\n{{\n^entry(%v0: bits<{width}>, %v1: mem<all>, %v2: world):\n    %v3 = {op}.bits<{width}> %v0\n    ret %v3, %v1, %v2\n}}\n");
+        let text = format!("func @f(%arg0: bits<{width}>, %arg1: mem<all>, %arg2: world) -> (bits<{width}>, mem<all>, world) cc = target_default\n    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}\n{{\n^entry(%v0: bits<{width}>, %v1: mem<all>, %v2: world):\n    %v3 = {op}.bits<{width}> %v0\n    ret %v3, %v1, %v2\n}}\n");
         let module =
             parse_section9_module(text.as_bytes()).expect("total bit operation is admitted");
         assert_eq!(render_module(&module), text);

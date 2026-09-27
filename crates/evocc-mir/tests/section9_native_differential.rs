@@ -102,7 +102,7 @@ fn interpreted(module: &evocc_evoir::Module) -> u8 {
 fn private_stack_reuse_preserves_loaded_values_and_overlapping_objects() {
     use std::fmt::Write;
     for overlapping in [false, true] {
-        let mut source = String::from("func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: mem<all>, %v1: world):\n    %v2 = const.bits<32> 0\n");
+        let mut source = String::from("func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: mem<all>, %v1: world):\n    %v2 = const.bits<32> 0\n");
         let mut next = 3;
         let mut fresh = || {
             let id = next;
@@ -172,7 +172,7 @@ fn computed_edges_keep_label_identity_and_simultaneous_parameter_locations() {
         .replace("^b2(%v23, %v9,", "^b2(%v23, %v40, %v9,")
         .replace("^b2(%v24, %v9,", "^b2(%v24, %v40, %v9,")
         .replace("^b1(%v26, %v27,", "^b1(%v41, %v26, %v27,");
-    let mut pressure = String::from("func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: mem<all>, %v1: world):\n");
+    let mut pressure = String::from("func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: mem<all>, %v1: world):\n");
     let mut next = 2;
     let mut fresh = || {
         let id = next;
@@ -284,7 +284,7 @@ fn assembly_and_computed_edges_share_the_same_parameter_entry() {
     ] {
         let source = include_str!("../../../tests/fixtures/computed-counter.evoir")
             .replace("@computed_counter", "@main")
-            .replace("volatile=false, atomic=false, io=false", "volatile=true, atomic=false, io=true")
+            .replace("volatile=false, atomic=false, io=false, fenv=false", "volatile=true, atomic=false, io=true, fenv=true")
             .replace("    br ^b1(%v2, %v7, %v8)", &format!("    (%v36, %v37) = asm.goto \"{template}\" %v7, %v8 outputs [] inputs [] clobbers [] labels [(\"again\", ^b1(%v2, %v36, %v37))] fallthrough ^b1(%v2, %v36, %v37)"));
         let (allocated, module) = build(&source);
         let asm = emit_module(&allocated, &module.globals);
@@ -299,7 +299,7 @@ fn dynamic_stack_storage_preserves_fixed_objects_and_spills() {
     for (size, align) in [(16, 16), (16, 64), (70000, 256)] {
         let mut source = format!(
             "func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }}
 {{
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<64> 35
@@ -366,7 +366,7 @@ fn dynamic_stack_storage_preserves_fixed_objects_and_spills() {
 
 const CONSTANT: &str = "\
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 42
@@ -376,7 +376,7 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
 
 const ARITHMETIC: &str = "\
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<32> 1000003
@@ -393,7 +393,7 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
 
 const NARROW: &str = "\
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<13> 8191
@@ -411,7 +411,7 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
 
 const BRANCHING: &str = "\
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     %v2 = const.bits<64> 10
@@ -439,7 +439,7 @@ const MEMORY: &str = "\
 global @counter origin=0 kind=file visibility=external size=4 align=4 bytes=11000000 initialized=1111
 
 func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     %v3 = add.bits<32> %v0, %v0
@@ -447,7 +447,7 @@ func @helper(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<a
 }
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: mem<all>, %v1: world):
     (%v2, %v3, %v4) = alloca %v0, %v1 [origin=1, size=8, align=4]
@@ -491,7 +491,7 @@ fn copy_program(size: usize) -> String {
 global @source origin=0 kind=file visibility=external size={size} align=8 bytes={bytes} initialized={initialized}
 
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }}
 {{
 ^entry(%v0: mem<all>, %v1: world):
     (%v2, %v3, %v4) = alloca %v0, %v1 [origin=1, size={size}, align=8]
@@ -550,7 +550,7 @@ fn large_frame_program(object: usize, copied: usize) -> String {
     format!(
         "\
 func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+    effects {{ reads={{all}}, writes={{all}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }}
 {{
 ^entry(%v0: mem<all>, %v1: world):
     (%v2, %v3, %v4) = alloca %v0, %v1 [origin=1, size={object}, align=8]

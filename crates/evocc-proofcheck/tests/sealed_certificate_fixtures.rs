@@ -19,8 +19,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use evocc_eqopt::{optimize_scalar_module_with_policy, ExtractionPolicy};
-use evocc_evoir::{parse_section9_module, render_module, validate_module};
-use evocc_proof::{render_evp1, EvpCertificate, EvpEvent};
+use evocc_evoir::{parse_pre_fenv_module, render_pre_fenv_module, validate_module};
+use evocc_proof::{render_evp1, sha256_hex, EvpCertificate, EvpEvent};
 
 /// The smallest corpus the reviewed plan asks to be sealed. A run that found
 /// fewer directories has lost fixtures rather than passed.
@@ -61,6 +61,7 @@ fn name(triple: &Path) -> String {
 
 fn run_checker(before: &Path, after: &Path, proof: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_evo-proofcheck"))
+        .arg("--legacy-pre-fenv")
         .args([before, after, proof])
         .output()
         .expect("run standalone proof checker")
@@ -146,20 +147,26 @@ fn every_sealed_triple_is_what_the_current_optimizer_produces() {
     for triple in triples() {
         let label = name(&triple);
         let sealed_before = read(&triple.join("before.evo"));
-        let before = parse_section9_module(sealed_before.as_bytes())
+        let before = parse_pre_fenv_module(sealed_before.as_bytes())
             .expect("the sealed module parses under Section 9");
         validate_module(&before).expect("the fixture is valid EvoIR");
-        let outcome = optimize_scalar_module_with_policy(&before, &ExtractionPolicy::default());
+        let mut outcome = optimize_scalar_module_with_policy(&before, &ExtractionPolicy::default());
         validate_module(&outcome.module).expect("the optimized fixture is valid EvoIR");
+        let legacy_after = render_pre_fenv_module(&outcome.module).unwrap();
+        // The semantic certificate is unchanged; only the two whole-module
+        // byte bindings depend on the explicitly selected historical grammar.
+        // Never edit the sealed input, output or certificate on disk.
+        outcome.certificate.input_digest = sha256_hex(sealed_before.as_bytes());
+        outcome.certificate.output_digest = sha256_hex(legacy_after.as_bytes());
 
         assert_eq!(
             sealed_before,
-            render_module(&before),
+            render_pre_fenv_module(&before).unwrap(),
             "{label}: before.evo is not in canonical form"
         );
         assert_eq!(
             read(&triple.join("after.evo")),
-            render_module(&outcome.module),
+            legacy_after,
             "{label}: after.evo is not what the current optimizer produces"
         );
         assert_eq!(

@@ -1,7 +1,7 @@
 use evocc_evoir::{parse_section9_module, render_module};
 
 const SOURCE: &str = "func @access(%arg0: ptr<generic>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=false, may_trap=true, may_unwind=false }
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=false, fenv=false, may_trap=true, may_unwind=false }
 {
 ^entry(%v0: ptr<generic>, %v1: bits<32>, %v2: mem<all>, %v3: world):
     %v4 = access_in_bounds %v2, %v0 [size=4, align=4]
@@ -51,7 +51,7 @@ fn atomic_validation_rejects_invalid_orders_widths_alignment_and_tokens() {
 
 #[test]
 fn atomic_rmw_preserves_operation_and_rejects_boolean_arithmetic() {
-    let source = "func @increment(%arg0: ptr<generic>, %arg1: mem<all>, %arg2: world) -> (bits<8>, mem<all>, world) cc = target_default\n    effects { reads={all}, writes={all}, volatile=false, atomic=true, io=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: ptr<generic>, %v1: mem<all>, %v2: world):\n    %v3 = const.bits<8> 1\n    %v4 = access_in_bounds %v1, %v0 [size=1, align=1]\n    (%v5, %v6, %v7) = atomic.rmw.add seq_cst %v4, %v2, %v0, %v3 : bits<8>\n    ret %v5, %v6, %v7\n}\n";
+    let source = "func @increment(%arg0: ptr<generic>, %arg1: mem<all>, %arg2: world) -> (bits<8>, mem<all>, world) cc = target_default\n    effects { reads={all}, writes={all}, volatile=false, atomic=true, io=false, fenv=false, may_trap=true, may_unwind=false }\n{\n^entry(%v0: ptr<generic>, %v1: mem<all>, %v2: world):\n    %v3 = const.bits<8> 1\n    %v4 = access_in_bounds %v1, %v0 [size=1, align=1]\n    (%v5, %v6, %v7) = atomic.rmw.add seq_cst %v4, %v2, %v0, %v3 : bits<8>\n    ret %v5, %v6, %v7\n}\n";
     let module = parse_section9_module(source.as_bytes()).unwrap();
     for replacement in ["rmw.sub seq_cst", "rmw.add relaxed"] {
         let changed =

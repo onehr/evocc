@@ -21,7 +21,7 @@ fn function(name: &str, predicate: &str, widths: &[u16]) -> String {
     let world = memory + 1;
     format!(
         "func @{name}({params}%arg{memory}: mem<all>, %arg{world}: world) -> (bits<32>, mem<all>, world) cc = target_default\n\
-         \x20   effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=false, may_unwind=false }}\n\
+         \x20   effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }}\n\
          {{\n^entry({args}%v90: mem<all>, %v91: world):\n\
          \x20   %v2 = {predicate}\n\
          \x20   %v3 = zext.bits<32> %v2\n\

@@ -17,7 +17,8 @@ CmpOp.SLe|%v1239 = icmp.sle %v1240, %v1241
 CmpOp.SLt|%v1236 = icmp.slt %v1237, %v1238
 CmpOp.ULe|%v1245 = icmp.ule %v1246, %v1247
 CmpOp.ULt|%v1242 = icmp.ult %v1243, %v1244
-EffectSummary(reads_all,writes_all,volatile,atomic,io,may_trap,may_unwind)|effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, may_trap=true, may_unwind=true }
+EffectSummary(reads_all,writes_all,volatile,atomic,io,fenv,may_trap,may_unwind)|effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }
+Inst.StrictFloating(result,op,arguments,world_in,world_out)|(%v1980, %v1985) = fp.strict.fma %v1984, %v1981, %v1982, %v1983 : f64
 EvoIRType.Bits(width)|bits<37>
 EvoIRType.F32|%arg1: f32
 EvoIRType.F64|%arg2: f64

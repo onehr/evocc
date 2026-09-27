@@ -1,0 +1,7 @@
+func @strict_add(%arg0: f64, %arg1: f64, %arg2: mem<all>, %arg3: world) -> (f64, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=true, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f64, %v1: f64, %v2: mem<all>, %v3: world):
+    (%v4, %v5) = fp.strict.add %v3, %v0, %v1 : f64
+    ret %v4, %v2, %v5
+}

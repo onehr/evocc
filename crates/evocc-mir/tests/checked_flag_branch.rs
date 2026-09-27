@@ -4,7 +4,7 @@ use evocc_mir::{Cond, MInst, MTerm, MirError, MirLimits, MirValue};
 fn text(bits: u16, predicate: &str, before: &str, after: &str) -> String {
     format!(
         "func @main(%arg0: bits<{bits}>, %arg1: bits<{bits}>, %arg2: mem<all>, %arg3: world) -> (bits<{bits}>, mem<all>, world) cc = target_default
-    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, may_trap=true, may_unwind=false }}
+    effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }}
 {{
 ^entry(%v0: bits<{bits}>, %v1: bits<{bits}>, %v2: mem<all>, %v3: world):
     %v4 = {predicate} %v0, %v1

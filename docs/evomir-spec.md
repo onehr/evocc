@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.44** | **Authoritative reference** | **2026-09-26**
+**Revision 0.45** | **Authoritative reference** | **2026-09-27**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -158,6 +158,29 @@ to `__float[un]ti{sf,df}` / `__fix[uns]{sf,df}ti`, not hidden emitter calls.
 Invalid raw integer conversions yield zero; source UB obligations remain.
 Spills/copies preserve exact width; FP predicates cannot invalidate a live
 NZCV value because the existing immediate-consumer rule still applies.
+
+**Strict scalar FP (0.45).** `fp.strict.OP.f32/f64` preserves the distinction
+from baseline `fp.OP` through text, interpretation, allocation and emission.
+Validated EvoIR world order determines instruction order before tokens are
+erased; strict arithmetic is never scheduled as pure arithmetic. It uses the
+same SIMD bank, call ABI, spills and copies. FP admission is a three-level must
+analysis (unchecked, strict controls, fixed controls): fixed admission implies
+strict admission, but not conversely; calls/opaque asm invalidate both. Strict
+checks permit only the two rounding bits beyond the baseline FPCR=0 contract,
+and never write FPCR/FPSR. Pure representation operations and the exact-domain
+predicate do not depend on rounding. Ordered strict comparisons use FCMPE;
+strict equality/inequality use FCMP. Explicit FMA uses FMADD; no multiply/add
+contraction is permitted. Hardware accumulates sticky status for executed ops.
+
+The interpreter carries explicit FP state in its existing world snapshot.
+Strict integer destinations retain their semantic width as
+`fp.strict.to_signed.iN.f64` (and unsigned/f32 analogues), independent of the
+GPR container width. Invalid raw conversions return zero and raise invalid;
+narrow results are masked only after the checked conversion. Missing width
+means the physical register width, not an inferred C type.
+Strict 128-bit integer conversion helper execution remains refused until its
+rounding/status behavior is qualified; baseline helpers are not silently reused.
+Executable f128 and its audited hosted helper mapping are a separate milestone.
 
 A `flags` value may be consumed only by the instruction that immediately
 follows its producer in the same block, and nothing between them may write
@@ -1135,6 +1158,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.45 | 2026-09-27 | Add strict FP operations, machine strictness and logical integer conversion widths, dynamic-rounding admission, FPSR effects and explicit FMA; retain the shared SIMD bank. |
 | 0.44 | 2026-09-26 | Select existing unsigned twelve-bit add/sub immediates for directly known full-register constants; commute only already-evaluated ADD operands, preserving source checks and nonmatching paths. |
 | 0.43 | 2026-09-26 | Select existing immediate scalar shifts for directly known in-range counts decoded at their own width; retain source obligations, operand extensions and dynamic/pair paths. |
 | 0.42 | 2026-09-26 | Select either adjacent conditional successor as fall-through after parameter-copy placement; invert only the emitted condition, retaining logical edges, labels and long-branch relaxation. |

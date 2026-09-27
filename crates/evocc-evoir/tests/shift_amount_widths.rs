@@ -26,7 +26,7 @@ fn shift(operation: &str, width: u16, amount_width: u16, value: u128, amount: u1
     let text = format!(
         "func @main(%arg0: bits<{width}>, %arg1: bits<{amount_width}>, %arg2: mem<all>, \
 %arg3: world) -> (bits<{width}>, mem<all>, world) cc = target_default\n    \
-effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, \
+effects {{ reads={{}}, writes={{}}, volatile=false, atomic=false, io=false, fenv=false, \
 may_trap=false, may_unwind=false }}\n{{\n\
 ^entry(%v0: bits<{width}>, %v1: bits<{amount_width}>, %v2: mem<all>, %v3: world):\n    \
 %v4 = {operation}.bits<{width}> %v0, %v1\n    \

@@ -17,7 +17,7 @@ whole compiler or a claim that every program is optimized through EqSat.
 
 The illustration describes the design, not a live completion counter.
 The authoritative language and machine profiles are
-[EvoIR 1.9.105](docs/evoir-spec.md) and [EvoMIR 0.40](docs/evomir-spec.md).
+[EvoIR 1.9.106](docs/evoir-spec.md) and [EvoMIR 0.45](docs/evomir-spec.md).
 GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements;
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.
@@ -134,9 +134,11 @@ Evidence: [locked K6](tests/contracts/kernel-full-receipt.json),
 Scalar `float`/`double` execution, both interpreters, AAPCS64 HFA/varargs,
 integer vectors, TLS, lifecycle registration and the approved GNU extensions
 are implemented with targeted tests. The scalar FP engine has **661,848**
-independent numerical checks across 32 operations. Strict dynamic fenv,
-executable binary128, floating complex/vectors and other explicitly refused
-forms remain outside the current executable profile. FP is not the only
+independent numerical checks across 32 operations. The strict FP adapter and
+world-threaded IR/backend now have [targeted value/status and native checks](docs/notebook/strict-floating-implementation-20260927.md);
+C-source strict-fenv support is still incomplete. Executable binary128,
+floating complex/vectors and other explicitly refused forms remain outside
+the current source profile. FP is not the only
 remaining application or kernel-test blocker.
 
 Other measured dialect boundaries, including tiny-vector external ABI,
