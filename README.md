@@ -316,6 +316,11 @@ changed crates and their dependents for Cargo tests, Clippy and fmt; relevant
 Python/Ruff, layout corpora and isolated offline checks run separately. A passing
 changed gate is not a new application or kernel measurement. Regenerate the
 dashboard with `python3 tools/render-status.py`; `--check` detects receipt drift.
+`rust-toolchain.toml` pins Rust 1.97.1 from the frozen build-environment contract,
+including Clippy/rustfmt; the host's moving `stable` alias is not the acceptance
+toolchain. Changing that pin selects the whole workspace in the changed gate.
+Use `CARGO_BUILD_JOBS=2` to bound both tests and Clippy while kernel work runs;
+the Cargo test `-j` argument alone does not constrain the later Clippy invocation.
 Update [TODO.md](TODO.md) in each relevant implementation commit; a targeted fix
 does not close its full benchmark or kernel acceptance task without that replay.
 Figures come from `tools/render-figures.py` and are not live status indicators.

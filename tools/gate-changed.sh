@@ -8,7 +8,7 @@
 #
 # Prints the crate set it chose, then runs: cargo test -p <set>, cargo clippy
 # --all-targets for the same set, and cargo fmt --check for the workspace.
-# A workspace Cargo.toml/Cargo.lock change runs every crate. Other changes
+# A workspace Cargo manifest/lock or Rust toolchain change runs every crate. Other changes
 # outside crates also select consumers of Rust include!/include_str!/include_bytes!
 # inputs, including nested includes. Unrelated external changes run no cargo
 # tests; run the relevant Python tests or renderer check by hand. A nonliteral
@@ -74,7 +74,7 @@ if external:
 print("\n".join(sorted(owners)))
 PY
 )"
-if printf '%s\n' "$changed" | grep -qE '^(Cargo\.(toml|lock))$'; then crates="$(ls crates)"; echo "workspace manifest changed: testing every crate"; fi
+if printf '%s\n' "$changed" | grep -qE '^(Cargo\.(toml|lock)|rust-toolchain(\.toml)?)$'; then crates="$(ls crates)"; echo "workspace manifest/toolchain changed: testing every crate"; fi
 if [ -z "$crates" ]; then echo "no crate changed since $BASE; nothing to test"; exit 0; fi
 # reverse dependencies inside the workspace, via cargo metadata
 set_="$(python3 - "$crates" <<'PY'

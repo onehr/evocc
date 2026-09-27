@@ -1,0 +1,63 @@
+2026-09-28 — T05k: stop silently following the ambient Rust stable toolchain.
+
+RED: the host's active stable alias resolves to Rust/Clippy 1.98.0 (88d9e12ae),
+while contracts/build-environment.json freezes 1.97.1 (8bab26f4f). No repository
+toolchain file existed. The changed gate also scheduled no packages for either
+rust-toolchain spelling. Thirteen targeted tests produce five failing assertions:
+the missing pin plus committed/uncommitted changes of each toolchain filename.
+
+Fix: rust-toolchain.toml selects the already installed 1.97.1 with Clippy and
+rustfmt. The existing changed gate treats either toolchain filename as a full
+workspace change, just as Cargo.toml/Cargo.lock. This is not a change to the
+frozen compiler version and does not change the host's global default toolchain.
+README distinguishes CARGO_BUILD_JOBS (all Cargo invocations) from test-only -j.
+
+The actual installed rustc and cargo match the frozen contract hashes:
+rustc 210df6794001b73ec3d453878707fa1e0bdcb63c427024a6e6574bbe5615a4da
+cargo 7672ead309d505577c018fff2cafb3433601f073e38cbe87359ac1f7b944bbf5
+
+GREEN under Rust/Cargo 1.97.1, Clippy 0.1.97 and its rustfmt:
+* All 17 workspace crates: 2801 PASS / 0 FAIL / 4 historical ignored.
+* Clippy --all-targets -D warnings and workspace fmt check PASS.
+* All 315 ladder Python tests PASS, including the thirteen targeted gate tests.
+* Ruff tools/tests-acceptance PASS; status renderer --check PASS.
+* Fresh layout observations: 128/128 + 22/22 PASS against the unchanged frozen
+  oracle manifests. No new reference-layout execution is claimed.
+* Textual grammar: 54 renderer / 54 specified shapes, zero differences. This
+  is shape coverage, not a proof that the full spec is implemented.
+* Fresh empty-CARGO_HOME, vendored --locked --offline replay: thirteen tests
+  PASS, zero failure/ignore, using the existing pinned-check target.
+* All six logical-immediate fixture variants produce byte-identical assembly
+  with the 1.97.1 compiler and the previously native-tested 1.98.0 compiler.
+  Native execution is not re-labelled as a new independent measurement.
+
+Resource policy: target/pinned-check, CARGO_BUILD_JOBS=2, CARGO_INCREMENTAL=0,
+CARGO_PROFILE_DEV_DEBUG=0, CARGO_PROFILE_TEST_DEBUG=0, CARGO_NET_OFFLINE=true.
+The cache is 2.8 GiB at the first complete build, not another source/workspace or
+VM clone. No running kernel compiler or kernel object was changed.
+
+Important boundary: frozen kernel compiler 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5
+contains /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea, the 1.98.0 standard
+library source marker. It is NOT re-labelled as a 1.97.1 build. Its ongoing
+7002-object composition keeps its actual compiler identity. A future final
+campaign must use an explicitly recorded pinned build; this pin does not
+retroactively certify previous builds or close T04/B10/K13/K14/T05.
+
+Commands and raw logs: .build/floating-targeted/pinned-host-20260928/.
+tools/gate-changed.sh 1a2bd09 --offline -j 2 (environment above)
+python3 -m unittest discover -s tools/ladder/tests
+python3 tools/check-textual-grammar.py
+cargo build --locked --offline -p evocc-parser --example day5_layout_probe
+day5-layout-subject.py + day5-layout-corpus.py compare-subject, both manifests
+cargo test -p evocc-eqopt -p evocc-lower -p evocc-proofcheck --locked --offline
+  --test day8_persistent_state_contract --test day6_g1_equivalence_red
+  --test day8_corpus_replay --test day8_proof_contract -- --test-threads=1
+
+SHA256:
+toolchain file 71fc697d65d4f33720dd209664e10bfa1fc7b5b4a449f55dcb6ba69c41cc0986
+pinned debug compiler c6079c7caba21e9efb68df4dddbd3b5732e6113b80f381b74ae137b678cf8f08
+red.log 421ad35296625ece1ec8fd443ae5057bf378adffca57c5b7c46d1e312b17e19b
+gate.log 31550f1a14eb32bce77912d2d240cccd06d689ae049eb48aaa7df37150cf645c
+python.log 0ab76355e3f91366c10f31d2ce06298e26562ad8e93aa27a085afa7139730bff
+layout.log 2c114fbeb2e9304139718a80e9d14e0d6f57098bc13fc074548f778d41d6ffc5
+offline.log 10aa427c36783a7e324cb050f608eca1eb5455d92d223ebec00ccda3e55efa6a

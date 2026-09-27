@@ -70,7 +70,7 @@ class ChangedGateTest(unittest.TestCase):
         self.assertEqual(calls[3], ["fmt", "--all", "--", "--check"])
 
     def test_manifest_only_change_runs_every_package(self):
-        for path in ("Cargo.toml", "Cargo.lock"):
+        for path in ("Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml"):
             for committed in (True, False):
                 with self.subTest(path=path, committed=committed):
                     result, calls = self.run_gate(
@@ -78,6 +78,15 @@ class ChangedGateTest(unittest.TestCase):
                         status="" if committed else f" M {path}")
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assert_packages(calls, {"leaf", "consumer", "unrelated"})
+
+    def test_repository_toolchain_matches_frozen_build_contract(self):
+        import re
+        root = GATE.parents[1]
+        expected = json.loads((root / 'contracts/build-environment.json').read_text())['toolchain']['rust']['version']
+        path = root / 'rust-toolchain.toml'
+        self.assertTrue(path.is_file(), 'ambient stable must not select the acceptance compiler')
+        channels = re.findall(r'^channel\s*=\s*"([^"]+)"\s*$', path.read_text(), re.M)
+        self.assertEqual(channels, [expected])
 
     def test_crate_change_includes_reverse_dependencies(self):
         result, calls = self.run_gate(changed="crates/leaf/src/lib.rs")

@@ -1,0 +1,5 @@
+[toolchain]
+# Match contracts/build-environment.json; do not follow the host's stable alias.
+channel = "1.97.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]

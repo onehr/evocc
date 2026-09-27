@@ -1577,6 +1577,19 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     live K1 path T05i or a historical full-campaign result.
     [Small reproduction and exact identities](tests/fixtures/command-projection-packed.out).
 
+  - [x] **T05k — Pin the actual host toolchain and revalidate current compiler code**, 2026-09-28.
+    The ambient stable alias had moved to Rust 1.98.0; the repository now pins
+    the contract's installed, hash-verified 1.97.1 with Clippy/rustfmt. A RED
+    also shows toolchain-file changes incorrectly selected no crates; either
+    filename now selects the whole workspace. All 2,801 Rust tests pass with
+    four historical ignores, Clippy/fmt pass, 315 ladder tests pass, and fresh
+    layout (128+22), grammar (54 shapes) and thirteen isolated offline replays
+    pass. Six fixture assemblies match their previously native-tested bytes.
+    The running kernel's frozen binary still contains the 1.98.0 library marker;
+    it is not retroactively called a pinned-host build. The final campaign must
+    record its actual pinned compiler. This does not close the T05 parent.
+    [Tool identities, REDs and exact scope](tests/fixtures/pinned-host-toolchain.out).
+
 ## Later roadmap gates — not substitutes for runtime closure
 
 - [ ] **R01 — G2 whole-kernel EqSat reproducibility and certificates** — `LATER`, P3.
