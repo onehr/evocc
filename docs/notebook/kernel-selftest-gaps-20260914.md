@@ -6,6 +6,27 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Connector/FPU preflight and bounded cache retirement — 2026-09-28
+
+The [small configuration/original-unit preflight](../../tests/fixtures/kernel-connector-fpu-preflight.out)
+solves exactly three values (CONNECTOR=y, PROC_EVENTS=y, TEST_FPU=m). All five
+new original C units compile/assemble with the current pinned compiler
+`ab2eeb7b…` and match GCC's externally defined symbols/kinds. The FPU implementation
+uses its original floating-point command; the glue retains general-register-only.
+The source-pinned audit remains valid. No objects are installed and runtime is
+NOT_RUN for this candidate; K12e/K12f require the next uniform composition.
+
+Active selected pair `20260927T223104Z` is bound to the previous `f2a06079…`
+configuration and `65035621…` compiler. At this checkpoint its owner/worker
+7006/7011 still execute, with log
+`.build/floating-targeted/module-uniform-20260928/affected-originals.log`.
+Do not mutate its Images/modules/config or promote the preflight to its results.
+
+Only the unused exact `target/frontend/debug/incremental` cache was deleted
+after process/open-handle checks (approximately 5.2 GiB by du). It is recoverable
+by rebuilding. Host free space is about 57 GiB and the kernel volume about 15 GiB;
+sources, receipts and runtime pairs remain intact. This is not test acceptance.
+
 ### Uniform 7,002-object composition completes — 2026-09-28
 
 Common bench `20260927T135325.342339Z` exits zero; its K1 run

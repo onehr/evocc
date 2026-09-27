@@ -1,0 +1,55 @@
+Connector/FPU configuration and original-unit preflight, 2026-09-28
+==================================================================
+
+This is NOT a kernel build, module installation, or runtime PASS. The currently
+running paired tests retain their original Images, configuration and modules.
+
+The existing source-pinned prerequisite audit verifies both reviewed source
+contracts before and after solving the candidate with GCC14 olddefconfig.
+Exactly three effective values change; no other enabled/disabled value changes:
+  CONFIG_CONNECTOR    n -> y
+  CONFIG_PROC_EVENTS  n -> y
+  CONFIG_TEST_FPU     n -> m
+ARCH_HAS_KERNEL_FPU_SUPPORT=y and KCOV_INSTRUMENT_ALL=n already hold.
+
+An isolated output reuses the original read-only Linux source. Kbuild generates
+the real headers and commands for five newly enabled original target-C units:
+  drivers/connector/connector.o
+  drivers/connector/cn_queue.o
+  drivers/connector/cn_proc.o
+  lib/test_fpu_glue.o
+  lib/test_fpu_impl.o
+All five compile and assemble with the current pinned Rust 1.97.1 EvoCC release;
+all five match the GCC reference's externally defined symbols and symbol kinds.
+No assembly is resumed from cache. The FPU implementation command removes
+-mgeneral-regs-only and retains -ffreestanding and _LINUX_FPU_COMPILATION_UNIT;
+the glue command retains -mgeneral-regs-only. No object is installed into the
+active kernel. Existing K1 command projection and all omitted flags are recorded
+in config-units.json; this does not newly establish diagnostic-option parity.
+
+The resulting config still needs one uniform complete reference/subject build,
+generated-input convergence, module signing/installation and unchanged connector
+and FPU original execution on both matching Images. K12e/K12f remain OPEN.
+
+SHA256:
+  previous config f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+  candidate config 95853321d8dd6ae0b2d779abc094659a327936cb557244bed45b484ccf4c0e09
+  compiler ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+  config-next.json 0680e8a5b31a12e5e8bb7fa2716945ec2686cfd0798d4d8179cf1bffb3931f88
+  config-units.json 3ae33164da054671142981c4a35093edb70ff68749212f2176954b02de385661
+  config-units.log ca400ed5c7c9e15eab97f9af90334e5b20c07457700479ed30f11f78c0593cd8
+  reference make log 45f60eb5f714d8b79700b0d673d64f75da2447d7a8a1a82dba927c8955d94143
+
+Raw commands, source-pinned audits, projected argv and results:
+  .build/floating-targeted/module-uniform-20260928/config-next.{py,json,log}
+  .build/floating-targeted/module-uniform-20260928/config-units.{py,json,log}
+  .build/floating-targeted/module-uniform-20260928/config-units-reference.log
+Candidate output:
+  .build/k7-coverage/config-review/connector-fpu-20260928/
+
+Storage maintenance: after checking the exact non-symlink path and finding no
+open handles/build users, only target/frontend/debug/incremental was removed
+(du: approximately 5.2 GiB). It is reconstructible compiler cache, not source,
+test evidence or a runtime. Host available space rose from about 53 to 57 GiB;
+the kernel volume remains approximately 15 GiB free. No full workspace/source
+clone or replacement runtime disk was created for this preflight.

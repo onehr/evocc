@@ -641,6 +641,11 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     batch both built-in options into a separately identified configuration and
     replay the original on its matching pair. No active config or historical
     outcome changes. [Exact evidence](tests/fixtures/connector-configuration.out).
+    The [batched configuration preflight](tests/fixtures/kernel-connector-fpu-preflight.out)
+    now solves exactly CONNECTOR=y, PROC_EVENTS=y and TEST_FPU=m, and all five
+    newly enabled original C units assemble with reference symbol parity using
+    the current pinned compiler. No active Image/config/module changes; full
+    composition and unchanged paired runtime remain required for both items.
 
   - [ ] **K12f — Enable and execute the omitted kernel FPU module** — `OPEN`, P2.
     Both unchanged originals on the new uniform pair explicitly SKIP because
