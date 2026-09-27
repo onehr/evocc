@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Opt-in numerical dependency repair supplement, NOT the frozen musl rung.
+"""Opt-in dependency repair supplements, NOT the frozen musl rung.
 
 Reuse the sealed ladder executor, installed archives, original test objects and
-watchdog. Only two copied source files are patched. Their replacement objects
+watchdog. Only the selected copied source files are patched. Replacement objects
 are explicit link inputs; original archives, source and verdicts never change.
 No successful supplement result can upgrade the original benchmark receipt.
 """
@@ -32,6 +32,13 @@ SUBJECTS = tuple('functional/' + name + suffix for name in (
     'strtold', 'strtof', 'strtod', 'strtod_long', 'strtod_simple', 'sscanf', 'sscanf_long'
 ) for suffix in ('', '-static')) + ('math/powf',)
 FIXTURE = 'musl-patched-numerics.c'
+SUITES = {
+    'numerics': dict(sources=SOURCES, subjects=SUBJECTS, fixture=FIXTURE, checks=5920),
+    'time': dict(sources={'src/time/strptime.c':
+        '9d3eb656b897a82c3b43a6ef973239a014ee9ee89361c1b308b0a2429a4766ff'},
+        subjects=('functional/strptime', 'functional/strptime-static'),
+        fixture='musl-patched-time.c', checks=45),
+}
 
 
 def digest(path: Path) -> str:
@@ -49,9 +56,12 @@ def execute(argv: list[str], timeout: int = 90) -> dict:
 
 def passed(data: dict) -> bool:
     """Exact population and successful builds/runs, not a stdout PASS marker."""
+    suite = SUITES.get(data.get('suite'))
+    if suite is None:
+        return False
     expected = {(cc, opt, lib, name) for cc in ('gcc-14', 'clang-19', 'evocc')
                 for opt in ('0', '2') for lib in ('reference', 'mixed')
-                for name in ('probe', *SUBJECTS)}
+                for name in ('probe', *suite['subjects'])}
     if data.get('patched') is not True:
         return False
     seen = set()
@@ -64,9 +74,10 @@ def passed(data: dict) -> bool:
             return False
         if not row.get('binarySha256') or not row.get('objectSha256'):
             return False
-        if row.get('replacementObjects', {}).keys() != {'floatscan', 'powf'} or not row.get('linkMapVerified'):
+        if (row.get('replacementObjects', {}).keys() != {Path(p).stem for p in suite['sources']}
+                or not row.get('linkMapVerified')):
             return False
-        if key[-1] == 'probe' and row['run'].get('stdout') != 'checks=5920 failures=0\n':
+        if key[-1] == 'probe' and row['run'].get('stdout') != f"checks={suite['checks']} failures=0\n":
             return False
     return seen == expected and data.get('inputsUnchanged') is True
 
@@ -80,22 +91,23 @@ def audit_map(text: str, objects: list[Path]) -> bool:
 
 def inside(output: Path) -> int:
     plan = json.loads((output / 'plan.json').read_text())
+    suite = SUITES[plan['suite']]
     rows = []
     sources = output / 'source'
     includes = ['-I/work/musl/' + p for p in PRIVATE]
     libraries = {'reference': Path('/work/reference/libc-reference.a'),
                  'mixed': Path('/work/musl/lib/libc.a')}
     identities = {str(p): digest(p) for p in libraries.values()}
-    data = {'rows': rows, 'libraryHashes': identities, 'patched': plan['patched']}
+    data = {'rows': rows, 'libraryHashes': identities, 'patched': plan['patched'], 'suite': plan['suite']}
     for opt in ('0', '2'):
         for cc in ('gcc-14', 'clang-19', 'evocc'):
             directory = output / (cc + '-' + opt)
             directory.mkdir()
             objects, builds = [], []
-            for source in (*SOURCES, FIXTURE):
+            for source in (*suite['sources'], suite['fixture']):
                 name = Path(source).stem
                 obj = directory / (name + '.o')
-                path = sources / source if source in SOURCES else Path('/work/fixtures') / source
+                path = sources / source if source in suite['sources'] else Path('/work/fixtures') / source
                 argv = (['gcc-14', '-c', str(output / f'{name}-{opt}.s'), '-o', str(obj)]
                         if cc == 'evocc' else
                         [cc, *FLAGS, '-O' + opt, *includes, '-c', str(path), '-o', str(obj)])
@@ -109,7 +121,7 @@ def inside(output: Path) -> int:
                 return 1
             replacements = {p.stem: digest(p) for p in objects[:-1]}
             for library, archive in libraries.items():
-                for subject in ('probe', *SUBJECTS):
+                for subject in ('probe', *suite['subjects']):
                     obj = (objects[-1] if subject == 'probe' else
                            Path('/work/tests/src') / (subject.removesuffix('-static') + '.o'))
                     exe = directory / (library + '-' + subject.replace('/', '-'))
@@ -146,6 +158,7 @@ def main() -> int:
     parser.add_argument('--evocc', type=Path)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--unpatched-control', action='store_true')
+    parser.add_argument('--suite', choices=SUITES, default='numerics')
     args = parser.parse_args()
     if args.inside:
         return inside(args.inside)
@@ -153,19 +166,20 @@ def main() -> int:
         parser.error('--evocc and --output are required')
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import mixed
+    suite = SUITES[args.suite]
     tree = ROOT / '.build/ladder/musl-work'
     tests = ROOT / '.build/ladder/libc-test-work'
     reference = ROOT / '.build/floating-targeted/strict-20260927/musl-thread-ssa'
-    patch = ROOT / 'tests/fixtures/musl-patched-numerics.patch'
+    patch = ROOT / 'tests/fixtures' / Path(suite['fixture']).with_suffix('.patch')
     compiler = args.evocc.resolve()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    paths = [compiler, Path(__file__).resolve(), patch, ROOT / 'tests/fixtures' / FIXTURE,
+    paths = [compiler, Path(__file__).resolve(), patch, ROOT / 'tests/fixtures' / suite['fixture'],
              tree / 'lib/libc.a', reference / 'libc-reference.a', tests / 'reference-runtest',
-             tests / 'src/common/libtest.a', *(tree / name for name in SOURCES),
-             *(tests / 'src' / (name.removesuffix('-static') + '.o') for name in SUBJECTS)]
+             tests / 'src/common/libtest.a', *(tree / name for name in suite['sources']),
+             *(tests / 'src' / (name.removesuffix('-static') + '.o') for name in suite['subjects'])]
     identity = {str(p): digest(p) for p in paths}
-    for name, wanted in SOURCES.items():
+    for name, wanted in suite['sources'].items():
         if digest(tree / name) != wanted:
             raise ValueError('unexpected dependency source: ' + name)
         target = out / 'source' / name
@@ -176,17 +190,17 @@ def main() -> int:
     (out / 'patch.json').write_text(json.dumps(applied, indent=2) + '\n')
     if applied['exit'] != 0:
         raise ValueError('dependency patch failed')
-    plan = dict(configuration='musl-1.2.6-numerical-repair-supplement',
+    plan = dict(configuration='musl-1.2.6-' + args.suite + '-repair-supplement', suite=args.suite,
                 patched=not args.unpatched_control, image=mixed.IMAGE,
                 originalBenchmarkUnchanged=True, identity=identity,
-                patchedSources={name: digest(out / 'source' / name) for name in SOURCES},
-                scope='two replacement library objects; 15 original subjects and focused matrix',
+                patchedSources={name: digest(out / 'source' / name) for name in suite['sources']},
+                scope=f"{len(suite['sources'])} replacement objects; {len(suite['subjects'])} original entries",
                 objectMode='explicit link inputs before original archive; no installed replacement')
     (out / 'plan.json').write_text(json.dumps(plan, indent=2) + '\n')
     emissions = []
     for opt in ('0', '2'):
-        for source in (*SOURCES, FIXTURE):
-            path = out / 'source' / source if source in SOURCES else ROOT / 'tests/fixtures' / source
+        for source in (*suite['sources'], suite['fixture']):
+            path = out / 'source' / source if source in suite['sources'] else ROOT / 'tests/fixtures' / source
             argv = [str(compiler), '--target=aarch64-unknown-linux-gnu', '--emit=asm',
                     *FLAGS, '-O' + opt, *['-I' + str(tree / p) for p in PRIVATE], str(path)]
             row = execute(argv)

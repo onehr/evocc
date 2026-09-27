@@ -917,6 +917,15 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       numerical supplement, not the original musl lane or B08d parent.
       [Patch, recipe and retained REDs](tests/fixtures/musl-patched-numerics.out).
 
+    - [x] **B08d9 — Verify explicit patched strptime compatibility**, 2026-09-28.
+      In the separate dependency configuration, `%s` now populates local broken-
+      down time with signed/overflow checks and `%z` accepts HH as well as HHMM.
+      **540/540** focused checks and **24/24** unchanged original-entry replays
+      pass across three compilers, O0/O2 and both archives. These extend musl's
+      intentional behavior; they are not compiler defects or unchanged-original
+      PASS. The numerical supplement's 192 executions remain green after sharing
+      suite selection. [Bounded contract and evidence](tests/fixtures/musl-patched-time.out).
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private

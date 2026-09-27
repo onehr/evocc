@@ -12,7 +12,7 @@ spec.loader.exec_module(module)
 
 class SupplementVerdict(unittest.TestCase):
     def complete(self):
-        return {'inputsUnchanged': True, 'patched': True, 'rows': [
+        return {'inputsUnchanged': True, 'patched': True, 'suite': 'numerics', 'rows': [
             dict(compiler=cc, opt=opt, library=lib, subject=name,
                  build={'exit': 0}, link={'exit': 0},
                  run={'exit': 0, 'stdout': 'checks=5920 failures=0\n' if name == 'probe' else ''},
@@ -25,10 +25,25 @@ class SupplementVerdict(unittest.TestCase):
         self.assertEqual(len(self.complete()['rows']), 192)
         self.assertTrue(module.passed(self.complete()))
 
+    def test_time_suite_has_its_own_population_and_probe_contract(self):
+        data = self.complete()
+        data['suite'] = 'time'
+        data['rows'] = [dict(compiler=cc, opt=opt, library=lib, subject=name,
+            build={'exit': 0}, link={'exit': 0},
+            run={'exit': 0, 'stdout': 'checks=45 failures=0\n' if name == 'probe' else ''},
+            binarySha256='binary', objectSha256='object', linkMapVerified=True,
+            replacementObjects={'strptime': 'object'})
+            for cc in ('gcc-14', 'clang-19', 'evocc') for opt in ('0', '2')
+            for lib in ('reference', 'mixed') for name in ('probe', *module.SUITES['time']['subjects'])]
+        self.assertEqual(len(data['rows']), 36)
+        self.assertTrue(module.passed(data))
+        data['rows'][0]['run']['stdout'] = 'checks=5920 failures=0\n'
+        self.assertFalse(module.passed(data))
+
     def test_missing_duplicate_failing_or_changed_inputs_never_pass(self):
         for change in ('missing', 'duplicate', 'extra', 'build', 'link', 'run',
                        'timeout', 'missing-hash', 'inputs-changed', 'probe-count', 'probe-errors',
-                       'unpatched', 'wrong-object', 'bad-map'):
+                       'unpatched', 'wrong-object', 'bad-map', 'unknown-suite', 'wrong-suite'):
             data = copy.deepcopy(self.complete())
             row = data['rows'][0]
             if change == 'missing':
@@ -53,6 +68,10 @@ class SupplementVerdict(unittest.TestCase):
                 row['replacementObjects'].pop('floatscan')
             elif change == 'bad-map':
                 row['linkMapVerified'] = False
+            elif change == 'unknown-suite':
+                data['suite'] = 'invented'
+            elif change == 'wrong-suite':
+                data['suite'] = 'time'
             else:
                 row['run']['stdout'] = 'checks=5920 failures=1\n'
             with self.subTest(change=change):

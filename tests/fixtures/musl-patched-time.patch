@@ -1,0 +1,67 @@
+diff --git a/src/time/strptime.c b/src/time/strptime.c
+--- a/src/time/strptime.c
++++ b/src/time/strptime.c
+@@ -5,6 +5,7 @@
+ #include <stddef.h>
+ #include <string.h>
+ #include <strings.h>
++#include <errno.h>
+ 
+ char *strptime(const char *restrict s, const char *restrict f, struct tm *restrict tm)
+ {
+@@ -131,11 +132,24 @@ char *strptime(const char *restrict s, const char *restrict f, struct tm *restrict tm)
+-		case 's':
+-			/* Parse only. Effect on tm is unspecified
+-			 * and presently no effect is implemented.. */
+-			if (*s == '-') s++;
+-			if (!isdigit(*s)) return 0;
+-			while (isdigit(*s)) s++;
++		case 's': {
++			/* Patched profile: seconds since the epoch in the current zone.
++			 * Convert into a temporary so overflow cannot partially set tm. */
++			const char *p = s + (*s == '-' || *s == '+');
++			if (!isdigit(*p)) return 0;
++			char *end;
++			int saved_errno = errno;
++			errno = 0;
++			long long seconds = strtoll(s, &end, 10);
++			int invalid = errno == ERANGE || (time_t)seconds != seconds;
++			errno = saved_errno;
++			if (invalid) return 0;
++			time_t t = seconds;
++			struct tm result;
++			if (!localtime_r(&t, &result)) return 0;
++			*tm = result;
++			s = end;
++			want_century = 0;
+ 			break;
++		}
+ 		case 'S':
+ 			dest = &tm->tm_sec;
+ 			min = 0;
+ 			range = 61;
+@@ -200,11 +214,19 @@ char *strptime(const char *restrict s, const char *restrict f, struct tm *restrict tm)
+-		case 'z':
++		case 'z': {
+ 			if (*s == '+') neg = 0;
+ 			else if (*s == '-') neg = 1;
+ 			else return 0;
+-			for (i=0; i<4; i++) if (!isdigit(s[1+i])) return 0;
+-			tm->__tm_gmtoff = (s[1]-'0')*36000+(s[2]-'0')*3600
+-				+ (s[3]-'0')*600 + (s[4]-'0')*60;
++			if (!isdigit(s[1]) || !isdigit(s[2])) return 0;
++			int hours = (s[1]-'0')*10 + s[2]-'0';
++			int minutes = 0;
++			s += 3;
++			if (isdigit(*s)) {
++				if (!isdigit(s[1])) return 0;
++				minutes = (s[0]-'0')*10 + s[1]-'0';
++				s += 2;
++			}
++			if (hours > 23 || minutes > 59) return 0;
++			tm->__tm_gmtoff = hours*3600 + minutes*60;
+ 			if (neg) tm->__tm_gmtoff = -tm->__tm_gmtoff;
+-			s += 5;
+ 			break;
++		}
+ 		case 'Z':

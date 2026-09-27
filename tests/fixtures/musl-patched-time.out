@@ -1,0 +1,51 @@
+B08d9 — explicit patched strptime compatibility profile, 2026-09-28
+================================================================
+
+The frozen library's parse-only %s and four-digit %z are intentional choices,
+not newly discovered EvoCC defects. This user-approved dependency supplement
+chooses useful concrete extensions without changing the original benchmark:
+  %s: signed epoch seconds -> localtime_r in the current TZ; reject integer,
+      time_t and broken-down-calendar overflow; commit tm only after success;
+      preserve existing errno on successful parsing; clear an earlier pending
+      century/year conversion so it cannot overwrite the resulting full date.
+  %z: signed HH or HHMM, 00..23 hours and 00..59 minutes, exact prefix consumption;
+      reject incomplete numeric offsets without modifying tm_gmtoff.
+Other conversions are unchanged. No blanket glibc/locale/colon-offset claim.
+
+Primary background: musl's 2018 review explicitly warns about signed parsing,
+time_t overflow and the TZ choice:
+https://www.openwall.com/lists/musl/2018/07/16/1
+Its 2025 libc-test discussion confirms the two intentional old limitations:
+https://www.openwall.com/lists/musl/2025/08/20/2
+We extend the isolated library implementation; we DO NOT take the alternative
+of deleting/changing libc-test's two original assertions.
+
+45 checks per small fixture: three fixed-offset zones, pre-epoch and post-2038
+values, epoch fields, adjacent century/year ordering, integer/calendar overflow,
+truncated/malformed/range-invalid offsets, non-offset fields and suffix pointers.
+GCC14/Clang19/EvoCC x O0/O2 x reference/mixed archives:
+  Original-library RED: all 36 executions FAIL as expected.
+  Patched GREEN: 12 focused runs, 540/540 checks; 24 unchanged original-entry
+  replays PASS (strptime and strptime-static share one frozen test object).
+  36/36 executions PASS. Both lanes are static; no DSO claim.
+  All input hashes and replacement-object link maps verified.
+  27 musl adapter tests PASS; Ruff and git diff --check PASS.
+After sharing the executor's suite selection, the numerical supplement was
+rerun: all 192 executions still PASS (musl-patched-suite-regression-20260928).
+
+Recipe:
+  python3 tools/ladder/musl_patched.py --suite time \
+    --evocc target/frontend/debug/evocc --output .build/floating-targeted/TIME-NEW
+Add --unpatched-control to reproduce original failures. The existing frozen
+sources, archives, test objects and benchmark receipt are never overwritten.
+
+Raw evidence .build/floating-targeted/musl-patched-time-green-20260928/
+plan.json SHA256 3c71a25fd93239ed6ce7c1cdebef3812509f7fc94a332bb7f78f1ecd13b65035
+executions.json SHA256 0d0010d3c3b89b5bef9b3488735327422a48085332fe5fe5a406ded6f3caf90e
+fixture SHA256 966de72d599cdb8c07bb41f946ca7388e3f36a6b65c0f26422e87ac8fff8d774
+patch SHA256 a2d600c4491c764378d4c3f7e4284ddd300c0258074ab9eb7b1fc0e084c3ecd6
+Compiler/image/archive identities match musl-patched-numerics.out and plan.json.
+Source SHA256 9d3eb656b897a82c3b43a6ef973239a014ee9ee89361c1b308b0a2429a4766ff.
+
+This closes the selected patched compatibility extension only. Original musl's
+strptime failures, wordexp/API/complex gaps and full B08 acceptance remain separate.
