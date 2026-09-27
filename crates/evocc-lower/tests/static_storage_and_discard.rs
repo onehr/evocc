@@ -231,24 +231,12 @@ fn effect_only_returns_do_not_admit_mismatched_value_types() {
         let mut lexer = Lexer::new(file, source);
         let tokens = std::iter::from_fn(|| lexer.next()).collect();
         let mut parser = Parser::new(tokens, file, source);
-        let unit = parser.parse_translation_unit_in(&arena);
-        assert!(!parser.had_error(), "{:?}", parser.diagnostic());
-        assert!(
-            evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu()).is_err()
-        );
-        let main = unit
-            .iter()
-            .find_map(|decl| match decl {
-                CHirDecl::Function(f) if f.name.spelling == "main" => Some(f.symbol),
-                _ => None,
-            })
-            .unwrap();
-        assert!(interp::interpret_scalar_function(
-            &unit,
-            main,
-            interp::InterpreterLimits::new(10000)
-        )
-        .is_err());
+        let _unit = parser.parse_translation_unit_in(&arena);
+        assert!(parser.had_error());
+        assert_eq!(parser.diagnostic().unwrap().code, "E1207");
+        // Failed declarations are rolled back. Lowering their recovered
+        // partial unit cannot test rejection of the original invalid program;
+        // the driver now stops at this shared frontend diagnostic instead.
     }
 }
 

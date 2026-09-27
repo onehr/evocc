@@ -2717,3 +2717,28 @@ pass; ten unchanged original musl commands emit and assemble, and all 1,339
 records retain every `-f`/`-m`/`-O` request. No installed object is replaced.
 Remaining diagnostic/output/assembler accounting is still B08b, and this does
 not close B08d's original wordexp failures or B10's final serial campaign.
+
+### Written conversion constraints and include-search fidelity — September 28
+
+The diagnostic-option inventory exposes a genuine source-checking omission,
+separate from warning support: 20 invalid returns/fixed arguments pass the
+older frontend. The shared assignment rule now applies before lowering,
+including dead branches, indirect calls and transparent-union conversion.
+EvoIR 1.9.115 names void/value mismatches E1207 while retaining E2202 for
+incompatible types. Follow-up regression fixes preserve the existing va_list
+record-copy and full-width integer pointer contracts. The 123 targeted tests,
+80 explicit-Werror oracle controls, 12 native positive executions and ten
+unchanged musl object commands pass. All 1,339 original musl sources parse in
+a read-only sweep; that is not a new assembled/native population.
+[Exact scope and retained failed attempts](../../tests/fixtures/return-conversion-constraints.out).
+
+A separate three-file reduction also exposes wrong header selection when
+`-isystem` is rewritten to `-I`, or its joined spelling disappears. Three of
+four projected native commands fail before repair; all four pass afterward,
+with eight sealed reference controls per round. Both adapters preserve the
+include search class and literal joined operands. The 314 ladder tests pass;
+unsupported quote/macro options still refuse instead of changing meaning.
+[Exact inputs and executions](../../tests/fixtures/include-projection.out).
+Remaining warning-policy requests are explicitly
+[not closed](../../tests/fixtures/driver-diagnostic-policy.out); no historical
+application/kernel receipt or installed object is overwritten by these checks.

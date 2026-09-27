@@ -289,9 +289,9 @@ def evocc_command(
 ) -> tuple[list[str], list[str]]:
     """The EvoCC command for one unit, and the options it does not consume.
 
-    ``-isystem`` and ``-iquote`` become ``-I`` because the front end has one
-    include path list; the ordering within that list is preserved, which is
-    what a subject that shadows a system header depends on.
+    Preserve each include search class. ``-isystem`` does not have ``-I``
+    priority; unsupported quote-only or macro-only requests must reach the
+    driver and fail closed, not become ordinary include directories.
     """
     argv = list(unit.argv)
     command = [str(evocc), "--emit=asm", "--survey", f"--target={target}"]
@@ -308,22 +308,22 @@ def evocc_command(
             continue
         if value in SEPARATE_VALUE:
             if index + 1 >= len(argv):
-                omitted.append(value)
+                command.append(value)
                 break
             following = argv[index + 1]
             if value in PATH_VALUED:
                 following = to_host(following, mount, host, unit.cwd)
-            command.extend(("-I" if value in ("-isystem", "-iquote") else value, following))
+            command.extend((value, following))
             index += 2
             continue
+        joined_path = next((option for option in PATH_VALUED if option != '-I'
+                            and value.startswith(option) and len(value) > len(option)), None)
         if value.startswith("-I") and len(value) > 2:
             command.append("-I" + to_host(value[2:], mount, host, unit.cwd))
-        elif value.startswith("-isystem") and len(value) > 8:
-            command.append("-I" + to_host(value[8:], mount, host, unit.cwd))
+        elif joined_path:
+            command.extend((joined_path, to_host(value[len(joined_path):], mount, host, unit.cwd)))
         elif value.startswith(("-D", "-U")) and len(value) > 2:
             command.append(value)
-        elif value.startswith("-include") and len(value) > 8:
-            command.extend(("-include", to_host(value[8:], mount, host, unit.cwd)))
         elif requires_driver_option(value):
             command.append(value)
         elif value != "-c":

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.114** | **Authoritative reference** | **2026-09-27**
+**Revision 1.9.115** | **Authoritative reference** | **2026-09-28**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -6756,6 +6756,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.115 | 2026-09-28 | Enforce existing return and prototype-argument assignment compatibility before execution/lowering; name void/value return mismatches E1207 without repurposing existing diagnostics or changing admitted GNU conversions. |
 | 1.9.114 | 2026-09-27 | Extend existing SIMD asm bindings to scalar f32/f64 with exact transport, complete operand/edge binding, opaque fenv effects and unchanged unsupported-type/interpreter boundaries. |
 | 1.9.113 | 2026-09-27 | Admit no-strict-aliasing as the existing conservative access contract; preserve all object/provenance/access guards and the deferred effective-type/TBAA boundary. |
 | 1.9.112 | 2026-09-27 | Admit explicit standard excess precision as the existing source-format evaluation contract; preserve rounding/environment and unsupported-mode boundaries. |
@@ -7386,7 +7387,39 @@ Torture run `20260907T093504Z` has 3, 1, 1, 1, and 1 first-error units for `spri
 
 A `return expression;` in a void function accepts an expression of type void, executes its effects exactly once, and returns no data value; discarded void conditional, comma, and statement expressions preserve the selected and sequenced effects without inventing a scalar result.
 Both sealed oracles execute `tests/fixtures/void-return-effects.c` at `-O0` and `-O2` with exit zero, recorded in `.evidence/builtin-probes/20260908-void-return/results.txt`.
-No diagnostic code is added and a non-void value returned from a void function, or a void expression returned from a non-void function, retains the existing refusal.
+This original admission added no diagnostic. Revision 1.9.115 assigns the
+existing void/value mismatch refusal the frontend diagnostic `E1207`
+(`invalid-return-value`), also covering a bare `return;` in a non-void function.
+`E1205` remains nested-function-definition and `E1206` remains
+function-declaration-in-for-initializer; neither is repurposed. The frontend checks
+every written return before inlining, execution or IR construction, including
+returns in unreachable branches. It does not reject ordinary fall-through at
+this statement check or replace its existing runtime/source rules.
+
+For a non-void return expression, initialization of the result uses the same
+simple-assignment compatibility contract as other value sites: arithmetic
+conversion, compatible aggregate/vector results, null pointer constants and
+the approved GNU pointer sign/immediate qualification/void-function conversions
+remain admitted. Incompatible implicit pointer/aggregate conversions retain
+`E2202` (`invalid-initializer-type`), as already required by Section 10.1.18.
+An explicit valid cast supplies its resulting type; this is not a ban on casts.
+Checking the written type performs no evaluation and does not duplicate
+operand effects, floating conversions, aggregate copies or scope-exit actions.
+The same compatibility check applies to each fixed prototype argument, after
+the approved transparent-union member selection and before implicit numeric
+conversion. Direct and function-pointer calls use the same rule. Unprototyped
+arguments and the anonymous variadic tail retain default promotions, not an
+invented fixed parameter type. Invalid fixed arguments retain `E2202`; builtin
+specific arity/type diagnostics and unsupported representation boundaries remain
+separate. This corrects missing enforcement of Section 10.1.18, not a new
+permission to reinterpret incompatible pointers.
+The check includes the existing 32-byte `__builtin_va_list` record value
+contract (Section 3.12), including the caller-made complete copy when passed
+by value. Integer classification includes the admitted signed/unsigned
+`__int128` types for null pointer constants, pointer arithmetic and conditional
+pointer typing; this does not narrow a wide index before the existing pointer
+range/overflow checks. Neither boundary may be lost merely by enabling the
+shared compatibility check at a previously unchecked value site.
 Toybox run `20260907T144525Z` has 16 first-error return mismatches, with `blkid.o`'s `return xputsn(str)` reduced to this rule; actual improvement requires the original-unit replay.
 
 ### Fixed local-register operands

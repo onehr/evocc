@@ -1,0 +1,62 @@
+2026-09-28 — shared return and fixed-prototype conversion constraints
+
+The old compiler accepts all 20 invalid written forms in parse-only mode:
+11 return cases and 9 direct/indirect fixed-argument cases. This includes dead
+branches, incompatible pointed-to/record/function types, nested qualifiers,
+array extents and non-null implicit integer/pointer conversion. A non-void
+bare return also reached E3101 on emission instead of a frontend refusal.
+EvoIR Section 10.1.18 already requires E2202 for incompatible implicit pointer
+conversions at these sites; this repairs enforcement, not a new cast prohibition.
+
+GREEN: reuse simple-assignment compatibility before numeric conversion and
+after transparent-union argument selection. Invalid value types use E2202;
+bare/void/value return mismatches use the newly unused E1207. E1205 and E1206
+keep their existing meanings. All 80 negative compiler-mode observations
+(20 programs x parse/C-HIR/EvoIR/assembly) reject before output. The old frozen
+compiler remains unchanged and confirms 20/20 parse-only false acceptances.
+
+Positive controls preserve GNU sign/immediate qualification/function-void
+conversions, explicit casts, arithmetic, aggregate/vector values, old-style
+default promotion and once-only side effects. The full affected regression
+initially exposed missing va_list record compatibility and __int128 pointer
+type inference; both shared rules are repaired. Valid full-width add/subtract,
+compound updates and null conditionals pass, while existing overflowing VLA
+index tests still report E3011. A by-value va_list copy preserves the caller's
+position. Recovered partial ASTs after a parser error are not a legal lowering
+input; the old late-refusal test now asserts the earlier E1207 diagnostic.
+
+Validation:
+  - Four CLI tests exercise all four modes; both positive interpreters exit 0.
+  - 123 targeted CLI/parser/lowering tests pass, including VLA and varargs.
+  - 80 GCC14/Clang19 x O0/O2 negative controls reject with explicit -Werror.
+    This does not assert that default GCC rejects every GNU extension.
+  - 12 legal native executions (two sources x three compilers x O0/O2) exit 0.
+  - Ten unchanged original musl commands emit identical assembly to their
+    earlier controls and assemble; their installed object hashes do not change.
+  - All 1,339 original musl sources pass a 56-second read-only parser sweep.
+    No object is assembled or installed by that sweep. Existing diagnostic
+    omissions remain disclosed; floating-complex/native/library acceptance
+    does not follow from parsing those source files.
+  - The final ten-crate gate passes 2,362 tests, zero failures and four
+    historical ignored tests; Clippy -D warnings and workspace fmt pass.
+
+Preserved unsuccessful attempts: the first complete gate exposed seven
+regressions, not PASS; the first native positive fixture lacked an out-of-line
+definition for its old-style control and failed to link. The final fixture
+defines and actually executes that control with float-to-double promotion.
+Neither failure is concealed as a successful compiler or native run.
+
+SHA256:
+  sealed image: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+  RED compiler: 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5
+  GREEN compiler: 111e6219cdfa451bbc0319c2a2c858c7839d40366f170fe49c57a01d79c40e3e
+  EvoIR 1.9.115: 8d510fdf573dbfc41c20a08a218444e96e122a2925b30f80aa2da4b3d1f9504e
+  return source: 7f9aefdb7878d295d89fdcc1320e0de6ecc9ebdd5798f735b0b98c94a94f2e25
+  call source: 0059975bb7280fdff7854fdec3f16cee998967da3318ca3062c7d01c72737afd
+  conversion-final.json: 754136baaa92b4ca417aabb12026b0d5322a2287f4c09e435c37e52826622d46
+  conversion-native.json: ffdebcb7d4e89e8bbe59439185b14fd3eef79dc4c26168c4cb96959ffadbbe51
+  musl-parse-summary.json: 3f003556a91fc8ffb4cfc8359479d8fc68bc6eb32d6c3525c59659c96b58f28e
+
+Raw commands, diagnostics, assembly, native controls and gate logs:
+.build/floating-targeted/command-projection-20260928/
+No live kernel binary/driver, installed archive or historical receipt changes.

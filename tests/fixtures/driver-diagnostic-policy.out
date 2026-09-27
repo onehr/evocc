@@ -1,0 +1,21 @@
+2026-09-28 — diagnostic-option inventory, NOT closed option support
+
+driver-diagnostic-policy.c reduces ten original musl warning categories.
+The sealed GCC14 controls are compile-only, not runtime tests. With each
+category's original flag, all ten reject. Without it, GCC accepts cases
+2, 3, 4, 7 and 9; the rest already reject.
+The exact stderr/argv are retained in diagnostics-gcc.json.
+
+The initial EvoCC emission survey rejects cases 0 and 1, accepts cases 2..7
+and 9, and reaches E3101 for case 8. Exact warning options themselves are all
+explicit driver refusals, not implemented warning policies. The subsequent
+return/call constraint repair corrects cases 5, 6 and 8 at the shared frontend;
+return-conversion-constraints.out gives its final evidence and positive GNU
+controls. This does NOT implement -Werror=pointer-sign, pointer-arith,
+discarded qualifiers, or every musl diagnostic option. Do not remove approved
+GNU source semantics merely to mimic a warning promoted by an unimplemented
+command-line option. B08b remains open.
+
+Raw source/hash/argv/diagnostics:
+.build/floating-targeted/command-projection-20260928/diagnostics-*.json
+The earlier parse-only inventory is not an assembly or runtime measurement.

@@ -108,13 +108,20 @@ class TranslateCommand(unittest.TestCase):
         self.assertIn("-I/host/tree/sub", command)
         self.assertEqual(command[-1], "/host/tree/a.c")
 
-    def test_isystem_and_iquote_become_include_paths_in_order(self):
+    def test_include_search_classes_are_not_rewritten_to_I(self):
         unit = self.unit("-c", "a.c", "-iquote", "q", "-isystem", "/work/t/s")
         command, _ = mixed.evocc_command(unit, Path("/evocc"), "t", Path("/host/tree"))
-        paths = [
-            command[index + 1] for index, word in enumerate(command) if word == "-I"
-        ]
-        self.assertEqual(paths, ["/host/tree/q", "/host/tree/s"])
+        self.assertEqual(command[4:-1], ['-iquote', '/host/tree/q',
+                                        '-isystem', '/host/tree/s'])
+
+    def test_joined_preprocessor_paths_keep_their_kind_and_literal_operand(self):
+        for flag in ('-isystem', '-iquote', '-imacros', '-include'):
+            with self.subTest(flag=flag):
+                command, omitted = mixed.evocc_command(
+                    self.unit('-c', 'a.c', flag + 'path with spaces'),
+                    Path('/evocc'), 't', Path('/host/tree'))
+                self.assertEqual(command[4:-1], [flag, '/host/tree/path with spaces'])
+                self.assertEqual(omitted, [])
 
     def test_definitions_survive_and_unknown_options_are_named(self):
         unit = self.unit("-c", "a.c", "-DX=1", "-U", "Y", "-O2", "-Wall", "-fPIC")
@@ -167,6 +174,13 @@ class TranslateCommand(unittest.TestCase):
             self.unit('-x', 'c++', '-c', 'a.c'), Path('/evocc'), 't', Path('/host'))
         self.assertEqual(command[4:-1], ['-x', 'c++'])
         self.assertEqual(omitted, [])
+
+    def test_missing_preprocessor_operand_is_preserved_for_driver_refusal(self):
+        for flag in mixed.SEPARATE_VALUE:
+            command, omitted = mixed.evocc_command(
+                self.unit('-c', 'a.c', flag), Path('/evocc'), 't', Path('/host'))
+            self.assertEqual(command[4:-1], [flag])
+            self.assertEqual(omitted, [])
 
     def test_the_output_operand_never_reaches_the_front_end(self):
         unit = self.unit("-c", "a.c", "-o", "obj/a.o", "-MF", "dep.d")

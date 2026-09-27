@@ -541,17 +541,20 @@ def evocc_argv(
             continue
         if value in SEPARATE_VALUE:
             if index + 1 >= len(argv):
+                projected.append(value)
                 break
             following = argv[index + 1]
             projected.extend((value, path(following) if value in PATH_VALUED else following))
             index += 2
             continue
+        joined_path = next((option for option in PATH_VALUED if option != '-I'
+                            and value.startswith(option) and len(value) > len(option)), None)
         if value.startswith("-I") and len(value) > 2:
             projected.append("-I" + path(value[2:]))
+        elif joined_path:
+            projected.extend((joined_path, path(value[len(joined_path):])))
         elif value.startswith(("-D", "-U")) and len(value) > 2:
             projected.append(value)
-        elif value.startswith("-include") and len(value) > len("-include"):
-            projected.append("-include" + path(value[len("-include") :]))
         elif e0.requires_driver_option(value):
             projected.append(value)
         else:

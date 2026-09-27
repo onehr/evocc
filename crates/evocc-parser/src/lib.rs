@@ -8767,6 +8767,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     // ── statements ─────────────────────────────────────────────────────
 
+    fn enclosing_return_type(&self) -> Option<TypeId> {
+        let mut scope = Some(self.current_scope);
+        while let Some(id) = scope {
+            let entry = self.symbols.scope(id).ok()?;
+            if let Some(function) = entry.function_owner() {
+                let ty = self.types.get(self.symbols.symbol(function).ok()?.ty())?;
+                return match ty.kind {
+                    TypeKind::Function { return_type, .. } => Some(return_type),
+                    _ => None,
+                };
+            }
+            scope = entry.parent();
+        }
+        None
+    }
+
     fn parse_statement(&mut self) -> Option<&'arena CHirStmt<'arena>> {
         match self.peek_kind()? {
             _ if self.attribute_starts_at(self.pos) => {
@@ -8794,31 +8810,40 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TokenKind::Return => {
                 let ret_tok = self.advance().unwrap();
                 let start_span = ret_tok.span;
+                let return_type = self.enclosing_return_type();
                 if self.peek_kind() == Some(TokenKind::Semicolon) {
                     let semi_span = self.advance().expect("peeked semicolon").span;
                     let span = self.merge_span(start_span, semi_span);
+                    if return_type.is_some_and(|ty| {
+                        !matches!(self.types.get(ty).map(|ty| &ty.kind), Some(TypeKind::Void))
+                    }) {
+                        self.report("E1207", "invalid-return-value", start_span);
+                    }
                     return Some(self.alloc_node(CHirStmt::Return(None, span)));
                 }
                 let mut expr = self.parse_expression()?;
-                let mut scope = Some(self.current_scope);
-                while let Some(id) = scope {
-                    let Ok(entry) = self.symbols.scope(id) else {
-                        break;
-                    };
-                    if let Some(function) = entry.function_owner() {
-                        if let Some(ty) = self
-                            .symbols
-                            .symbol(function)
-                            .ok()
-                            .and_then(|symbol| self.types.get(symbol.ty()))
-                        {
-                            if let TypeKind::Function { return_type, .. } = ty.kind {
-                                expr = self.explicit_floating_integer_conversion(return_type, expr);
-                            }
+                if let Some(target) = return_type {
+                    let target_void = matches!(
+                        self.types.get(target).map(|ty| &ty.kind),
+                        Some(TypeKind::Void)
+                    );
+                    let source_void = self.converted_expression_type(expr).is_some_and(|ty| {
+                        matches!(self.operand_type_class(ty.ty), OperandTypeClass::Void)
+                    });
+                    if target_void || source_void {
+                        if target_void != source_void {
+                            self.report("E1207", "invalid-return-value", expr.span());
                         }
-                        break;
+                    } else if self.assignment_constraint(AssignmentOp::Simple, target, expr)
+                        == UpdateConstraint::Invalid
+                    {
+                        // Returning initializes the result value. Reuse the
+                        // same compatibility rule as initialization/assignment;
+                        // an explicit source cast still supplies its own type.
+                        self.report("E2202", "invalid-initializer-type", expr.span());
+                    } else {
+                        expr = self.explicit_floating_integer_conversion(target, expr);
                     }
-                    scope = entry.parent();
                 }
                 let semi = self.expect(TokenKind::Semicolon);
                 let end_span = semi.as_ref().map_or(expr.span(), |token| token.span);
@@ -10094,6 +10119,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (OperandTypeClass::Other, OperandTypeClass::Other)
                     if matches!(right_type, InferredType::Canonical(source)
                         if self.types.compatible_ignoring_top_qualifiers(target_ty, source)
+                        && matches!(self.types.get(target_ty).map(|ty| &ty.kind), Some(TypeKind::BuiltinVaList))) =>
+                {
+                    UpdateConstraint::AggregateBoundary
+                }
+                (OperandTypeClass::Other, OperandTypeClass::Other)
+                    if matches!(right_type, InferredType::Canonical(source)
+                        if self.types.compatible_ignoring_top_qualifiers(target_ty, source)
                         && matches!(self.types.get(target_ty).map(|ty| &ty.kind), Some(TypeKind::TargetBuiltin(_)))) =>
                 {
                     UpdateConstraint::Scalar
@@ -10127,8 +10159,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         UpdateConstraint::Invalid
                     }
                 }
-                (OperandTypeClass::Pointer(_), OperandTypeClass::Integer(_))
-                    if right.null_pointer_constant =>
+                (OperandTypeClass::Pointer(_), integer)
+                    if is_integer_class(integer) && right.null_pointer_constant =>
                 {
                     UpdateConstraint::Scalar
                 }
@@ -10147,7 +10179,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (left, right) if is_arithmetic_class(left) && is_arithmetic_class(right) => {
                     UpdateConstraint::Scalar
                 }
-                (OperandTypeClass::Pointer(pointee), OperandTypeClass::Integer(_)) => {
+                (OperandTypeClass::Pointer(pointee), integer) if is_integer_class(integer) => {
                     if self.pointer_arithmetic_is_valid(pointee.pointee) {
                         UpdateConstraint::PointerBoundary
                     } else {
@@ -11033,21 +11065,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let right_class = self.operand_type_class(right.ty);
         match op {
             BinaryOp::Add => match (left_class, right_class) {
-                (OperandTypeClass::Pointer(pointee), OperandTypeClass::Integer(_))
-                | (OperandTypeClass::Integer(_), OperandTypeClass::Pointer(pointee)) => {
+                (OperandTypeClass::Pointer(pointee), integer)
+                | (integer, OperandTypeClass::Pointer(pointee))
+                    if is_integer_class(integer) =>
+                {
                     Some(InferredType::Pointer(pointee))
                 }
-                (OperandTypeClass::StringPointer(prefix), OperandTypeClass::Integer(_))
-                | (OperandTypeClass::Integer(_), OperandTypeClass::StringPointer(prefix)) => {
+                (OperandTypeClass::StringPointer(prefix), integer)
+                | (integer, OperandTypeClass::StringPointer(prefix))
+                    if is_integer_class(integer) =>
+                {
                     Some(InferredType::StringPointer(prefix))
                 }
                 _ => self.usual_arithmetic_expression_type(left.ty, right.ty),
             },
             BinaryOp::Sub => match (left_class, right_class) {
-                (OperandTypeClass::Pointer(pointee), OperandTypeClass::Integer(_)) => {
+                (OperandTypeClass::Pointer(pointee), integer) if is_integer_class(integer) => {
                     Some(InferredType::Pointer(pointee))
                 }
-                (OperandTypeClass::StringPointer(prefix), OperandTypeClass::Integer(_)) => {
+                (OperandTypeClass::StringPointer(prefix), integer) if is_integer_class(integer) => {
                     Some(InferredType::StringPointer(prefix))
                 }
                 (OperandTypeClass::Pointer(left), OperandTypeClass::Pointer(right))
@@ -11186,23 +11222,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             {
                 Some(InferredType::Pointer(pointee))
             }
-            (OperandTypeClass::Pointer(pointee), OperandTypeClass::Integer(_))
-                if when_false.null_pointer_constant =>
+            (OperandTypeClass::Pointer(pointee), integer)
+                if is_integer_class(integer) && when_false.null_pointer_constant =>
             {
                 Some(InferredType::Pointer(pointee))
             }
-            (OperandTypeClass::StringPointer(prefix), OperandTypeClass::Integer(_))
-                if when_false.null_pointer_constant =>
+            (OperandTypeClass::StringPointer(prefix), integer)
+                if is_integer_class(integer) && when_false.null_pointer_constant =>
             {
                 Some(InferredType::StringPointer(prefix))
             }
-            (OperandTypeClass::Integer(_), OperandTypeClass::StringPointer(prefix))
-                if when_true.null_pointer_constant =>
+            (integer, OperandTypeClass::StringPointer(prefix))
+                if is_integer_class(integer) && when_true.null_pointer_constant =>
             {
                 Some(InferredType::StringPointer(prefix))
             }
-            (OperandTypeClass::Integer(_), OperandTypeClass::Pointer(pointee))
-                if when_true.null_pointer_constant =>
+            (integer, OperandTypeClass::Pointer(pointee))
+                if is_integer_class(integer) && when_true.null_pointer_constant =>
             {
                 Some(InferredType::Pointer(pointee))
             }
@@ -12178,6 +12214,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     if let FunctionParameters::Prototype { types, .. } = &parameters {
                         for (argument, parameter) in arguments.iter_mut().zip(types) {
                             *argument = self.resolve_union_argument(*parameter, argument)?;
+                            if self.assignment_constraint(
+                                AssignmentOp::Simple,
+                                *parameter,
+                                argument,
+                            ) == UpdateConstraint::Invalid
+                            {
+                                self.report("E2202", "invalid-initializer-type", argument.span());
+                                return None;
+                            }
                             *argument =
                                 self.explicit_floating_integer_conversion(*parameter, argument);
                         }

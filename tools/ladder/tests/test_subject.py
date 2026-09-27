@@ -313,8 +313,16 @@ class EvoccArgvTest(unittest.TestCase):
 
     def test_joined_forced_include_with_c_suffix_is_not_an_input_operand(self) -> None:
         argv, omitted = self.command('gcc -includeprefix.c -c -o a.o a.c\n')
-        self.assertIn('-include' + str(self.tree / 'prefix.c'), argv)
+        self.assertEqual(argv[argv.index('-include') + 1], str(self.tree / 'prefix.c'))
         self.assertEqual(omitted, [])
+
+    def test_joined_preprocessor_paths_keep_kind_and_literal_operand(self) -> None:
+        for flag in ('-isystem', '-iquote', '-imacros', '-include'):
+            with self.subTest(flag=flag):
+                argv, omitted = self.command(
+                    f"gcc '{flag}path with spaces' -c -o a.o a.c\n")
+                self.assertEqual(argv[3:-2], [flag, str(self.tree / 'path with spaces')])
+                self.assertEqual(omitted, [])
 
     def test_rejected_standard_is_not_silently_replaced_with_the_default(self) -> None:
         (unit,) = ladder.parse_build_log('gcc -std=c99 -c -o a.o a.c\n', TREE)
@@ -322,6 +330,15 @@ class EvoccArgvTest(unittest.TestCase):
             unit, Path('/bin/evocc'), self.subject, self.tree, [], frozenset({'-std=c99'}))
         self.assertIn('-std=c99', argv)
         self.assertNotIn('-std=c99', omitted)
+
+    def test_missing_preprocessor_operand_is_preserved_for_driver_refusal(self) -> None:
+        for flag in ladder.SEPARATE_VALUE:
+            unit = ladder.Unit(obj='a.o', source='a.c', directory='',
+                               argv=('gcc', '-c', 'a.c', flag))
+            argv, omitted = ladder.evocc_argv(
+                unit, Path('/bin/evocc'), self.subject, self.tree, [])
+            self.assertEqual(argv[3:-1], [flag])
+            self.assertEqual(omitted, [])
 
     def test_the_object_and_the_source_do_not_reach_the_front_end_twice(self) -> None:
         argv, _ = self.command("gcc -c -o a.o a.c\n")

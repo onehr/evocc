@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-28**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.114** and EvoMIR **0.51**. This is the Git-tracked execution backlog,
+EvoIR **1.9.115** and EvoMIR **0.51**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -808,6 +808,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       remain explicit refusals. Diagnostic policy remains B08b, not waived.
       [Reproduction and measured boundaries](tests/fixtures/command-projection-packed.out).
 
+    - [x] **B08b3 — Preserve include search classes and joined operands**, 2026-09-28.
+      A three-file reduction detects wrong header selection after `-isystem`
+      becomes `-I`, or a joined system option disappears. Three of four native
+      projected commands fail before repair; all four pass afterward, with
+      eight GCC/Clang controls per round. Both projectors preserve search class,
+      joined macro/quote/forced-include paths, literal spaces and incomplete
+      operands for driver refusal. Unsupported quote/macro options are not
+      translated into supported ordinary includes. All 314 ladder tests and
+      targeted Ruff pass. This is not complete diagnostic-option fidelity.
+      [Exact inputs and results](tests/fixtures/include-projection.out).
+
     The [standard-excess-precision subcase](tests/fixtures/floating-standard-evaluation.out)
     is now repaired: the existing FLT_EVAL_METHOD=0 semantics satisfy the explicit
     option, which survives shared command projection. Both interpreters, eight
@@ -1333,6 +1344,19 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     pass. This closes verification gaps and errata, not new compiler features
     or the entire spec audit. [Exact scope and evidence](tests/fixtures/section9-contract-audit.out).
 
+  - [x] **T03f — Enforce return/prototype compatibility at every written site** — `DONE`, 2026-09-28.
+    Twenty small invalid programs previously passed parsing, including dead
+    arms and indirect calls. The shared assignment rule now rejects these
+    before execution/lowering; void/value mismatches receive E1207 without
+    reusing E1205/E1206. Follow-up regressions preserve by-value va_list and
+    full-width integer pointer typing instead of weakening the new check.
+    Both interpreters, 80 explicit-Werror reference controls, 12 native legal
+    controls and ten unchanged original musl object emissions/assemblies pass.
+    All 1,339 original musl sources pass a read-only parser sweep; this is NOT
+    1,339 compiled/assembled objects. The ten-crate gate passes 2,362 tests
+    with zero failures and four historical ignores; Clippy/fmt also pass.
+    [Exact scope and preserved failed attempts](tests/fixtures/return-conversion-constraints.out).
+
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed
   configuration; its first launch stopped on the inventory-role defect T04b.
@@ -1361,6 +1385,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   second pass is live at **1,408/7,002**, with zero resumed compilations;
   assembly-object cache reuse is accounted separately. Final fixed point,
   link/provenance and boot are still pending, not inferred from the first pass.
+  At **20:43 UTC**, the same worker's prepared-input checkpoint reaches
+  **4,928/7,002**, still with zero resumed compilations. Subsequent frontend
+  validation/adapter fixes are independently tested, not silently inserted into
+  the frozen `65035621...` compiler or credited to this running composition.
   Its reused output currently starts from GCC seed objects, not an accepted
   EvoCC Image. Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,

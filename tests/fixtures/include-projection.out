@@ -1,0 +1,42 @@
+2026-09-28 — preserve include search classes in application command projection
+
+Small source: include-projection/main.c plus two distinct selector.h files.
+Original flags: -isystem system -Isystem -Iuser, also tested with joined
+-isystemsystem. GCC14 documents that a directory occurring in both classes
+keeps only its system position; user/selector.h must therefore win.
+https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Directory-Options.html
+
+RED against b34c17f application projectors:
+  mixed, separated or joined: rewrites -isystem as -I; native exit 1.
+  subject, joined: drops -isystemsystem; native exit 1.
+  subject, separated: already retains the correct class; native exit 0.
+  GCC14/Clang19 x O0/O2 x both spellings: all eight native controls exit 0.
+
+GREEN: both adapters retain the search class and mapped operand. All four
+projected native executions exit 0, and all eight reference controls remain
+green. Joined -include/-isystem/-iquote/-imacros are split into their actual
+option and single path operand, preserving spaces. Missing operands reach the
+driver instead of being removed. Quote-only/macro-only options remain driver
+refusals, not newly implemented features or ordinary include directories.
+This is an adapter repair, not a new C preprocessing dialect.
+
+All 314 ladder tests and targeted Ruff pass. The read-only original musl sweep
+still parses all 1,339 sources with the current compiler; none of those original
+records uses the changed include spellings, and no installed object changes.
+It is not a new assembly, musl runtime, or full-benchmark receipt. Existing
+diagnostic option omissions and other B08b boundaries remain open.
+
+SHA256:
+  sealed image: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+  compiler: 111e6219cdfa451bbc0319c2a2c858c7839d40366f170fe49c57a01d79c40e3e
+  main.c: 2480b8b7e0cd067d908c85f4c48c1a8064afbb14e5b478f4833986e7d6a2d54a
+  system/selector.h: 3abcac75b2810dd746747bf3df5dc8486fdd9911dbf8f1ec2ad12977bf402323
+  user/selector.h: a936b38c3a2d671510fc21246c81467dd5e5989977b6479a1de2a17d30dae23e
+  include-red-native.json: 6ca651a6406c5e2ee1dec03658801dbbe7be01c6a6b838aa4004313643d693d4
+  include-green-native.json: 9db9e8cbeebb819dec00eda23646ebdb642d51b644535ee6d5ff2e009de463cc
+  musl-parse-summary.json: 3f003556a91fc8ffb4cfc8359479d8fc68bc6eb32d6c3525c59659c96b58f28e
+
+Exact commands, stdout/stderr, RED/GREEN unit logs and native records:
+.build/floating-targeted/command-projection-20260928/include-*
+The live K1 driver, frozen compiler, original sources and historical receipts
+are untouched. No new disk image or clone is used.
