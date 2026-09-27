@@ -905,6 +905,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       attribution, not wordexp, B08d or full musl.
       [Small cases and exact observations](tests/fixtures/musl-wordexp-boundaries.out).
 
+    - [x] **B08d8 — Repair numerical bugs in an explicitly patched dependency lane**, 2026-09-28.
+      User-approved supplement leaves original musl sources, archives and FAIL
+      receipts untouched. Backport the upstream hexadecimal guard-digit fix;
+      also fix newly reproduced directed subnormal double rounding and exact
+      powf(x,1) value/status handling. Integer-derived four-mode probes pass
+      **71,040/71,040** checks across GCC/Clang/EvoCC O0/O2 and two base archives.
+      **180/180** unchanged original-entry replays pass (15 entry names, eight
+      distinct source programs); 192 total executions have verified link maps
+      and unchanged inputs. 301 ladder tests pass. This closes only the patched
+      numerical supplement, not the original musl lane or B08d parent.
+      [Patch, recipe and retained REDs](tests/fixtures/musl-patched-numerics.out).
+
 - [x] **B09 — Exercise cJSON's complete upstream private-helper suite** — `DONE`, P2, 2026-09-23.
   The corrected common bench path compiles/installs **23/23** units: both library
   units and all 21 upstream Unity test TUs, including their embedded private

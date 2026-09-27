@@ -1,0 +1,70 @@
+"""A patched dependency supplement must not manufacture complete acceptance."""
+import copy
+import importlib.util
+from pathlib import Path
+import unittest
+
+path = Path(__file__).resolve().parents[1] / 'musl_patched.py'
+spec = importlib.util.spec_from_file_location('musl_patched', path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+
+class SupplementVerdict(unittest.TestCase):
+    def complete(self):
+        return {'inputsUnchanged': True, 'patched': True, 'rows': [
+            dict(compiler=cc, opt=opt, library=lib, subject=name,
+                 build={'exit': 0}, link={'exit': 0},
+                 run={'exit': 0, 'stdout': 'checks=5920 failures=0\n' if name == 'probe' else ''},
+                 binarySha256='binary', objectSha256='object', linkMapVerified=True,
+                 replacementObjects={'floatscan': 'a', 'powf': 'b'})
+            for cc in ('gcc-14', 'clang-19', 'evocc') for opt in ('0', '2')
+            for lib in ('reference', 'mixed') for name in ('probe', *module.SUBJECTS)]}
+
+    def test_exact_paired_population_passes(self):
+        self.assertEqual(len(self.complete()['rows']), 192)
+        self.assertTrue(module.passed(self.complete()))
+
+    def test_missing_duplicate_failing_or_changed_inputs_never_pass(self):
+        for change in ('missing', 'duplicate', 'extra', 'build', 'link', 'run',
+                       'timeout', 'missing-hash', 'inputs-changed', 'probe-count', 'probe-errors',
+                       'unpatched', 'wrong-object', 'bad-map'):
+            data = copy.deepcopy(self.complete())
+            row = data['rows'][0]
+            if change == 'missing':
+                data['rows'].pop()
+            elif change == 'duplicate':
+                data['rows'].append(copy.deepcopy(row))
+            elif change == 'extra':
+                row['subject'] = 'not-tested'
+            elif change in ('build', 'link', 'run'):
+                row[change]['exit'] = 1
+            elif change == 'timeout':
+                row['run'] = {'exit': None, 'timeout': True}
+            elif change == 'missing-hash':
+                row.pop('binarySha256')
+            elif change == 'inputs-changed':
+                data['inputsUnchanged'] = False
+            elif change == 'probe-count':
+                row['run']['stdout'] = 'checks=1 failures=0\n'
+            elif change == 'unpatched':
+                data['patched'] = False
+            elif change == 'wrong-object':
+                row['replacementObjects'].pop('floatscan')
+            elif change == 'bad-map':
+                row['linkMapVerified'] = False
+            else:
+                row['run']['stdout'] = 'checks=5920 failures=1\n'
+            with self.subTest(change=change):
+                self.assertFalse(module.passed(data))
+
+    def test_link_maps_must_name_both_replacements_without_archive_fallback(self):
+        objects = [Path('/work/out/floatscan.o'), Path('/work/out/powf.o')]
+        text = ''.join(f'LOAD {p}\n' for p in objects)
+        self.assertTrue(module.audit_map(text, objects))
+        self.assertFalse(module.audit_map(text.replace('LOAD /work/out/powf.o\n', ''), objects))
+        self.assertFalse(module.audit_map(text + '/work/libc.a(floatscan.lo)\n', objects))
+
+
+if __name__ == '__main__':
+    unittest.main()

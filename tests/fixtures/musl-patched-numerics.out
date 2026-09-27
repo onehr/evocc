@@ -1,0 +1,87 @@
+B08d8 — isolated numerical dependency repair, 2026-09-28 local time
+================================================================
+
+This is the user-approved PATCHED musl 1.2.6 supplement, not a replacement for
+the frozen original rung. No installed source/object/archive or original FAIL
+receipt was changed. Explicit replacement objects precede each original archive
+on the linker command line; all 192 final maps verify both replacements and no
+old floatscan/powf archive member. The same preserved five-second/100-KiB-stack
+libc-test supervisor executes every case.
+
+Three source defects repaired in two objects:
+
+1. hexfloat's collected digit count must round LDBL_MANT_DIG/4 upward. This
+   backports the arithmetic change from musl upstream commit
+   50979c5bc89a7b02023e5c0a5ea1ca4da8616a91 (Rich Felker, 2026-05-21):
+   https://repo.or.cz/musl.git/commit/50979c5bc89a7b02023e5c0a5ea1ca4da8616a91
+   The independently inspected commit describes exactly the two frozen failures.
+
+2. The expanded matrix exposed another hexfloat defect: with fewer than 32
+   effective significand bits, bias+x+y may round both additions upward. For
+   example 0x8.1111111111111111111111111110000p-16494 in upward mode must round
+   to binary128 subnormal bit pattern 9, not 10. Preserve the integer x and a
+   nonzero fractional tail as x+0.5, an EXACT <=33-bit value, before adding the
+   bias. On this branch the target rounding grid is at least 2 integer units:
+   any tail in (0,1) has the same relation to every target value/midpoint as
+   0.5. This preserves below/at/above-half classification, including bits=31,
+   without the second directed rounding. bits>=32 retains the original path.
+
+3. powf(x,1) for non-NaN x now returns x before approximate log/exp work. This
+   preserves both signed zeros, all finite values/subnormals and infinities in
+   all rounding modes, without new INEXACT/UNDERFLOW/OVERFLOW. NaNs retain the
+   original arithmetic path; no new library NaN sign/payload guarantee is made.
+
+The small fixture's binary128 expected values use only integer significand
+quotient/remainder rounding, not host FP, APFloat, strtold or oracle agreement.
+5 leading nibbles x 2 patterns x 6 tails x 6 exponents x 2 signs x 4 modes x
+2 entry points (strtold, scanf) = 5760 checks. These include ordinary values,
+very small subnormals, the 31/32-bit branch boundary and large finite values.
+40 powf identity/status checks x 4 modes = 160 checks, including pre-existing
+DIVBYZERO, qNaN and sNaN. Total 5920 checks per execution.
+
+Final result:
+  GCC14 / Clang19 / EvoCC x O0/O2 x reference/mixed base archives = 12 lanes.
+  12/12 focused executions PASS, 71040/71040 checks.
+  15 original libc-test entry names x 12 lanes = 180/180 original replays PASS.
+  These are eight distinct original source programs; seven retain both ordinary
+  and -static entry identities, which share a test object in the frozen build.
+  Both configurations link statically, just as the frozen static rung does.
+  No shared-loader coverage is inferred from the two entry names.
+  Exact combined population: 192/192 completed PASS, no skips/timeouts.
+  301 ladder Python tests PASS; Ruff and git diff --check PASS.
+
+Original programs: functional/{strtold,strtof,strtod,strtod_long,strtod_simple,
+sscanf,sscanf_long}{,-static} and math/powf. Original assertions/test objects
+are unchanged. The two strtold and one powf original failures are now green ONLY
+with the patched composition. The original archives still fail those programs.
+
+Retained intermediate negatives:
+  musl-patched-red-20260928: initial source fingerprint rejected (wordexp's hash
+    was mistakenly assigned to floatscan; the guard correctly stopped it).
+  musl-patched-red-20260928b: sandbox refused container access, not a test result.
+  musl-patched-red-20260928c: original archives, 144 PASS / 48 FAIL.
+  musl-patched-green-20260928: first candidate, 180 PASS / 12 focused FAIL;
+    discovered directed subnormal issue. Also removed an overstrong probe
+    assertion about negative NaN sign, which powf's library contract does not
+    promise. No expected finite value/status or original assertion was weakened.
+  musl-patched-green-20260928b: expanded numerical controls all pass.
+  musl-patched-final-20260928: final link/identity-audited 192/192 PASS.
+
+Recipe (output must not already exist):
+  python3 tools/ladder/musl_patched.py --evocc target/frontend/debug/evocc \
+    --output .build/floating-targeted/musl-patched-NEW
+Use --unpatched-control for the deliberately failing original-archive control.
+The supplement never publishes tests/contracts/ladder-musl-receipt.json.
+
+Final evidence: .build/floating-targeted/musl-patched-final-20260928/
+plan.json SHA256 9e414eb87d50e562bcf3d09bc3a858348d2870f8de05a0b34355473a6e4c1054
+executions.json SHA256 ecfa29e192e6536b498c3180cbcc09f6a652aa6db49d3392a9f5c073a17a46d8
+patch SHA256 c6ce14a4787ae9f1e1eaa2b997c7a2580a0d2b637f367f6c904fe87ffa3e672b
+fixture SHA256 9458bda0b7f9dbd1ecc9e7fafa08ad658645e7901d0e4587ccff36fec36025f4
+compiler SHA256 e4614da3bbaa12edf3799c6c87d690c88ccb90f5e724b69a8ecc8509323e2604
+Sealed image sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+GCC 14.2.0-19, Clang 19.1.7, AArch64 Linux LP64 little-endian.
+
+Claim ceiling: targeted numerical library repairs and their unchanged original
+tests, not full musl, full scalar conformance, 68 refused complex units, wordexp,
+strptime/API gaps, full roadmap acceptance or the still-running kernel rebuild.
