@@ -26,7 +26,7 @@
   "selected": [
     "kernel-full"
   ],
-  "status": "RUNNING",
+  "status": "PASS",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -5425,8 +5425,22 @@
     },
     "kernel-full": {
       "rung": "K6",
-      "status": "RUNNING",
       "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
+      "outcomes": {
+        "substituted": 7002
+      },
+      "refusals": {},
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 7002,
+      "passed": 7002,
+      "compiled": 7002,
+      "kind": "units",
+      "status": "PASS",
+      "testVerdict": "PASS",
+      "evidence": ".evidence/k1/20260927T135325Z",
+      "run": null,
+      "receipt": "tests/contracts/kernel-bpf-full-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "/Users/onehrxn/dev/30days/c30/tools/k1/substitute.py",
@@ -5446,7 +5460,33 @@
         "--src-root",
         "/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/linux-src",
         "--low-disk"
-      ]
+      ],
+      "exitCode": 0,
+      "seconds": 23015.0,
+      "previous": {
+        "rung": "K6",
+        "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
+        "outcomes": {
+          "rebuilt-by-kbuild": 13,
+          "substituted": 6989
+        },
+        "refusals": {},
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 7002,
+        "passed": 0,
+        "compiled": 6989,
+        "kind": "units",
+        "status": "INCOMPLETE",
+        "testVerdict": "NOT_RUN",
+        "evidence": ".evidence/k1/20260926T133321Z",
+        "run": null
+      },
+      "measurement": {
+        "run": "20260927T135325.342339Z",
+        "subject": "94071fb398d3b35fe92a68a0659ac36cd3575f60",
+        "driverSha256": "65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5"
+      }
     },
     "kernel-selftest": {
       "rung": "K7",

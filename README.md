@@ -22,7 +22,7 @@ GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.
 
-## Status — 2026-09-27
+## Status — 2026-09-28
 
 **Full kernel boot is working; full kernel testing and the complete application
 ladder are not yet closed.** The latest recorded application lanes contain
@@ -83,7 +83,7 @@ userspace test dependencies are accounted for separately.
 | Scope | Verified result | Limit |
 |---|---|---|
 | K6 locked configuration | **2,799/2,799 target-C**, complete link, real boot and normal shutdown PASS; uniform EvoCC rebuild, zero GCC target-C fallback | Not every Linux configuration or subsystem |
-| BPF/module configuration | **6,765/6,765 target-C**, complete link/boot PASS; 745 modules relinked, signed and installed | Latest composition: 1 repaired + 6,764 retained EvoCC objects, not a fresh one-compiler survey; not every driver loaded |
+| BPF/module configuration | **7,002/7,002 target-C**, uniform compiler, generated-input fixed point, complete link/boot PASS; 847 module links/BTF PASS | New modules are not yet signed/installed/runtime-tested; this frozen compiler predates later fixes and the host toolchain pin; QEMU drift explicitly recorded |
 | K7 selected kselftests | Both kernels: **9/9 programs, 125/125 subtests PASS**, no skip/failure | Not all kselftests or KUnit |
 | Full installed kselftest population | All **970 programs started on each kernel**; aggregate INCOMPLETE; counts below | Unbuilt collections and unavailable hardware remain; latest Image needs a full rerun |
 | Expanded built-in KUnit | Of 1,504 cases: EvoCC **1,432 PASS / 12 FAIL / 60 SKIP**; GCC **1,438 / 7 / 59** | Subsequent filtered repairs are not a new full result |
@@ -97,8 +97,12 @@ verdicts, not individual nested assertions:
 | GCC control | 532 | 121 | 302 | 11 | 2 | 2 |
 | EvoCC | 529 | 114 | 302 | 19 | 3 | 3 |
 
-Later BPF repairs changed the subject Image; the September 22 totals remain
-historical. The latest September 23 checkpoint is explicitly a **one-program
+The September 28 uniform composition changes the subject Image to `62c29ae4…`;
+the September 22 totals remain historical. Its real boot/poweroff and zero
+GCC replacement are verified, not a full kselftest or KUnit result. The frozen
+`65035621…` compiler contains Rust 1.98.0 std code; it is not retroactively
+credited with the newly pinned Rust 1.97.1 build or subsequent compiler fixes.
+The September 23 checkpoint remains explicitly a **one-program
 BPF replay**, not a new 970-program campaign: GCC completes with 651/5644
 successful test/subtest counts, 127 skip counts and 11 failed tests; EvoCC
 times out at the unchanged 300-second limit after group 482. Both shut down

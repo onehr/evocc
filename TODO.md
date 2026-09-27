@@ -171,6 +171,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   again completes three modes before 120 seconds; GCC completes ten. All 6,765
   installed objects and generated inputs survive linking. Smaller code in two
   objects does not close a whole-kernel performance gap.
+  September 28's [uniform 7,002-object original replay](tests/fixtures/kvm-uniform-original-replay.out)
+  still times out after 3/10 modes; matching GCC completes 10/10. Both use the
+  unchanged 1 GiB workload and 120-second limit. All inputs remain unchanged;
+  neither the cumulative code-size repairs nor a successful boot closes K02.
 
   - [x] **K02a — Remove redundant negated-truth materialization**, 2026-09-23.
     [Minimal C case](tests/fixtures/negated-truth-branch.c) went RED → GREEN;
@@ -274,6 +278,9 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   GCC completes all ten. Both shutdowns pass; this is not K03 closure.
   September 26's [new two-object replay](tests/fixtures/kvm-transport-replay.out)
   has the same original-program timeout: three completed modes, ten for GCC.
+  The September 28 [uniform-composition replay](tests/fixtures/kvm-uniform-original-replay.out)
+  confirms the same 3/10 versus 10/10 outcome under the unchanged workload,
+  fixed-CPU/EL2 lane and timeout. No new full-test PASS is inferred.
 
   - [x] **K03a — Substitute bounded private leaf helpers**, 2026-09-23.
     The [small C case](tests/fixtures/private-leaf-substitution.c) goes RED → GREEN
@@ -1391,29 +1398,21 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   13 target objects (T04d). No fresh link/boot occurred; no worker remains live.
   Later K02d/K02e/K02f/K02g are independently tested but deliberately absent from that frozen
   executable; its final integration must not be inferred from this run.
-  September 27's replacement bench `20260927T135325.342339Z` is live at
-  14:15 UTC (owner 80895 / worker 80898): frozen release `65035621…`, four jobs,
-  low-disk mode, same source/build trees. Its earlier two-job launch was
-  interrupted to use the measured 12-core/64-GiB host; verified cache entries
-  are reused, not relabeled as fresh compilation. The current run has 768
-  assembled records at that historical checkpoint. At **18:11 UTC** the same
-  owner/worker and frozen compiler remain live with **5,440/6,966 assembled**
-  in the current queue, plus 36 separately retained reuse candidates. No new
-  generated-input, link or boot verdict exists yet. It includes K03b and the accumulated compiler repairs;
-  T04d runs through the common driver. The preceding debug-binary launch
-  was explicitly interrupted before installing objects and is not a completed
-  survey. [Live log and identities][kernel].
-  At **19:12 UTC**, all **6,966/6,966** first-pass queued records are assembled
-  with the 36 separate reuse candidates retained. The actual-generated-input
-  second pass is live at **1,408/7,002**, with zero resumed compilations;
-  assembly-object cache reuse is accounted separately. Final fixed point,
-  link/provenance and boot are still pending, not inferred from the first pass.
-  At **20:43 UTC**, the same worker's prepared-input checkpoint reaches
-  **4,928/7,002**, still with zero resumed compilations. Subsequent frontend
-  validation/adapter fixes are independently tested, not silently inserted into
-  the frozen `65035621...` compiler or credited to this running composition.
-  Its reused output currently starts from GCC seed objects, not an accepted
-  EvoCC Image. Before final acceptance, freeze the
+  The replacement bench `20260927T135325.342339Z` **completed with exit 0**
+  at 21:43 UTC (September 28 local). Frozen release `65035621…` substitutes
+  **7,002/7,002 target-C objects**: first pass 6,966 fresh plus 36 verified cache
+  rows; actual-generated-input pass 7,002 fresh, zero resumed. The generated
+  content fixed point, 848 generated-C recompilations, complete link and all
+  installed-object hash checks pass, with zero GCC replacement. All **847
+  modules link/BTF PASS**; signing, installation and execution remain separate.
+  Image `62c29ae4…` boots and powers off with the actual nonce on `hvf-host`.
+  The run uses explicitly permitted QEMU drift, not the locked QEMU executable.
+  Its compiler contains Rust 1.98.0 standard-library code and excludes later
+  frontend/logical-immediate repairs and T05k's Rust 1.97.1 pin. Thus this closes
+  the measured uniform composition, not final-current-compiler integration or
+  K13/K14. No build worker remains live. Earlier interrupted launches and
+  September 26 negative evidence stay recorded. [Exact receipt and boundaries][kernel].
+  Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,
   Image and module/runtime hashes. Use a uniform rebuild for any single-compiler
   claim; otherwise state incremental provenance. Close with link/boot and
@@ -1450,7 +1449,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     already-running worker loaded the old implementation and is unchanged.
     [Fixture, invalidation matrix and result](tests/fixtures/kernel-prepared-consumer.out).
 
-  - [ ] **T04d — Include late host-generated inputs in preparation** — `RETEST`, P1.
+  - [x] **T04d — Include late host-generated inputs in preparation** — `DONE`, 2026-09-28.
     Modpost regenerated ASN.1 sources/headers, CRC tables, consolemap, logo and
     RAID6 tables after the prepared-input pass, rebuilding 13 consumers with GCC.
     Current generated contents match pristine, but that does not authorize a
@@ -1458,8 +1457,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     the original vmlinux/module producer graph before freezing consumer inputs.
     A real one-C-object Make reduction goes RED -> GREEN: header 7 -> 37,
     native exit 0, subject hash unchanged after the late producer. All 251 K1
-    tests pass and the actual Kbuild preparation target exits 0. Fresh full
-    composition must still prove no replacements after modpost, after K12b.
+    tests pass and the actual Kbuild preparation target exits 0. The fresh full
+    7,002-object composition `20260927T135325Z` now completes the real producer
+    fixed point, modpost, final link, 847 module links and nonce-bound boot.
+    All installed target-C hashes survive: zero GCC replacements. The prior
+    13 replacements remain a failed observation, not rewritten evidence.
     [Exact scope and evidence](tests/fixtures/kernel-late-generator.out).
 
 - [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.

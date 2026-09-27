@@ -6,6 +6,39 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Uniform 7,002-object composition completes — 2026-09-28
+
+Common bench `20260927T135325.342339Z` exits zero; its K1 run
+`20260927T135325Z` completes at 21:43 UTC September 27 (September 28 local).
+The [current full receipt](../../tests/contracts/kernel-bpf-full-receipt.json)
+records 7,002/7,002 target-C objects from one frozen compiler, 7,002 fresh
+actual-generated-input compilations (zero resumed), a stable content fixed
+point, 848 recompiled modpost-generated sources, complete link and zero GCC
+object replacement. First-pass compilation remains separately 6,966 fresh
+plus 36 verified cache rows. All 847 module links and BTF operations pass;
+module signing, installation and runtime are not implied.
+
+The exact Image `62c29ae4…` passes the nonce-bound boot and orderly poweroff
+on `hvf-host`, KUnit autorun disabled. The [producer fixture](../../tests/fixtures/kernel-late-generator.out)
+records full hashes. This closes T04d's real late-generator replay; the former
+13 replaced objects/eight bitmap assertions remain historical failures.
+The owner/worker have exited; running checkpoints below are historical.
+
+Compiler `65035621…` predates the later frontend/logical-immediate repairs and
+the Rust 1.97.1 host pin: its embedded Rust std commit identifies 1.98.0.
+Actual QEMU `45d74da5…` differs from the frozen contract, with explicit drift
+authorization. Neither current-code pinned-host acceptance nor locked-QEMU
+acceptance is inferred. K13/K14 still require fresh runtime evidence, and T04
+retains the final-current-compiler integration requirement.
+
+The [four serial original KVM flights](../../tests/fixtures/kvm-uniform-original-replay.out)
+also finish: GCC completes all ten modes in both programs; EvoCC completes
+three, starts the fourth and reaches the original 120-second watchdog in both.
+The default 1 GiB workload, EL2/fixed-CPU lane and all ten modes are unchanged.
+All four boot/shutdown checks pass and protected inputs hash identically after
+execution. This is a retained failure of the cumulative candidate, not K02/K03
+closure and not an improvement inferred from smaller generated objects.
+
 ### Connector prerequisite omitted from fragment-only review — 2026-09-28
 
 The [small original-API probe](../../tests/fixtures/connector-configuration.out)

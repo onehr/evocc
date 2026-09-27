@@ -1,4 +1,32 @@
-2026-09-27 T04d: producer ordering repaired; fresh full composition NOT RUN.
+2026-09-28 T04d: producer ordering and fresh full composition PASS.
+
+Original full replay .evidence/k1/20260927T135325Z completed at 21:43 UTC
+September 27 (September 28 local), common bench 20260927T135325.342339Z exit 0.
+7002/7002 target-C substituted; actual-generated-input pass recompiles all
+7002 (zero resumed), content fixed point PASS. First pass separately records
+6966 fresh + 36 verified cache rows. Modpost's 848 generated C consumers
+(847 descriptors and .vmlinux.export.c) are recompiled and source-stable.
+Complete link and all installed-object hash checks PASS, zero GCC replacement.
+847 module links/BTF PASS, with 3814 target-C and six reference assembly inputs.
+Module signing/installation/runtime are NOT established by this build.
+
+Compiler 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5
+Image 62c29ae431c920e3b591a97f2287239b9177b32698a965b1854474a1f456fe6c
+vmlinux 76bcccbdf045e42d86878ffaf990a84e40fad7bbad8cbc8433441f18ff1afabf
+config f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+units 29fdef89eb40af238b5e0c1730375cd567663b09b7185c994c7d09a049bacf60
+prepared snapshot 4835df5d05d8762bfdf9e0f4a9922557bfc369983c5dde58984da4f2220b8423
+final snapshot a2847bd15b97ae37e62040a93a8a638ef047e294f825f9d20de74a9f9ffbbf9e
+Boot/shutdown PASS: hvf-host, KUnit autorun 0,
+nonce k1-20260927T214306Z-2e1cef83.
+serial 49ec6c8347afe698b2b44e115831b92ce7227d47e71359caa90760bcf039b13d
+QEMU 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+does not match the frozen QEMU contract; allow-qemu-drift was explicit.
+The compiler contains Rust 1.98.0 std marker 88d9e12ae178fab0fb5cc050a94da85685d449ea.
+It excludes later frontend/logical-immediate repairs and the Rust 1.97.1 pin.
+This is the measured composition, not a final-current-code or K13/K14 PASS.
+
+Historical reduction and initial evidence (preserved):
 
 Original failure: .evidence/k1/20260926T133321Z/modpost.log runs ASN.1, CRC,
 consolemap, logo and RAID6 generators after `prepare` and all 7002 EvoCC

@@ -1,0 +1,37 @@
+2026-09-28: unchanged original KVM pair on the new uniform kernel.
+
+Measured run: .evidence/k1/kvm-uniform-20260928/runtime.json
+SHA256 39a9457fe745a3a9b6b3eaffed949ac8e0a01277f9dca0bfe11f935182aed350
+Existing tools/k1/boot.sh, tcg-neoverse-n2-el2, original ELFs, no arguments,
+default 1 GiB workload, all ten guest modes, original 120-second program
+watchdog and 240-second outer boot allowance. Four serial flights, no
+concurrent build/test workload started by this agent.
+
+                                  GCC reference       EvoCC subject
+demand_paging_test                 PASS, 10/10, exit0  TIMEOUT, 3/10, exit124
+memslot_modification_stress_test   PASS, 10/10, exit0  TIMEOUT, 3/10, exit124
+
+Both subject programs start mode four before timing out. All four nonce-bound
+boot/shutdown predicates PASS. That does not turn either timeout into PASS.
+K02/K03 remain OPEN; the cumulative compiler repairs have not closed this
+whole-kernel runtime gap. No smaller workload, raised budget or excluded mode.
+
+Subject compiler 65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5
+Subject Image 62c29ae431c920e3b591a97f2287239b9177b32698a965b1854474a1f456fe6c
+Reference Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+Both configs f2a06079b52ed50a40416b470417ffdbc104696c06eaac4ef9f62621e4f1ecbd
+QEMU 45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+Explicit QEMU drift; not frozen-QEMU acceptance. The subject compiler predates
+later frontend/logical-immediate fixes and the Rust 1.97.1 host pin.
+
+Payload b31c60595529ba1b92725c709b6590f80c7901a35d89d9512dbfc5f4e2e57df2
+Scratch 257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
+Existing 4 MiB initramfs and 64 MiB snapshot-only disk reused, not copied.
+Both Images/configs, payload, scratch and full-build receipt hash identically
+before and after all flights.
+
+Serial SHA256, in execution order:
+reference demand 41111590d1a33aca5092fb086f0721cc2e8468d07bbfe48dd671e8110b997f91
+subject demand   953e0e05e9ad47ec29ae1b58cc03ced7605b2486637058778688ba741154ce98
+reference slots  e94ea452cc41fa0f32d28b750050fe81cd63cea36a6871bd0e6004d8d301c587
+subject slots    529909e95ab9e7a4d0a88ce49fbe6402a921866b265423f74dbcc4f7bc8beeb3
