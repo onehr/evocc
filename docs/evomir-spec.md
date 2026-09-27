@@ -657,6 +657,30 @@ virtual register), then the register save area of a variadic function
 `sp` stays 16-byte aligned at every call. Fixed slots remain in this frame;
 EvoIR's approved `alloca.dynamic` additionally moves `sp` at runtime.
 
+**Driver compatibility with the existing native model (2026-09-27).**
+Every current function needs the frame record above. `-fno-omit-frame-pointer`
+therefore selects existing behavior; `-fomit-frame-pointer` permits removal only
+when a frame is unnecessary and does not override this requirement. Neither
+spelling introduces ancestor return-address support. The backend has no sibling
+or tail-call transformation, so `-fno-optimize-sibling-calls` also selects the
+existing call/frame behavior.
+
+`-fno-align-functions`, `-fno-align-jumps`, `-fno-align-labels` and
+`-fno-align-loops` disable optional performance padding, which this backend does
+not insert. They never cancel instruction alignment, source `aligned` attributes,
+the effective minimum function alignment or patch-region requirements. Similarly,
+`-fno-prefetch-loop-arrays`, `-fno-tree-ch` and
+`-fno-tree-loop-distribute-patterns` forbid absent automatic prefetch,
+loop-header-copying and loop-pattern distribution/library-call transformations.
+Explicit source calls/builtins and object-copy lowering are not those transforms.
+These options leave existing IR/native semantics unchanged; any future pass
+implementing such a transform must honor them. Positive transform options and
+unrelated GCC allocator/reordering algorithms remain unsupported. The application
+projectors preserve these admitted options and their written order. This is not
+a promise to reproduce GCC's optimization quality or assembly.
+See [GCC 14.2 optimization options](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Optimize-Options.html)
+for the source option meanings; the exact EvoCC behavior is specified above.
+
 **Dynamic frames (revision 0.41, synchronization with EvoIR Appendix D).**
 Each `stack.alloc` evaluates its existing size operand once, subtracts that
 unsigned byte count from the current SP and rounds the object address down to

@@ -246,6 +246,17 @@ class EvoccArgvTest(unittest.TestCase):
         self.assertEqual([flag for flag in argv if flag in flags], flags)
         self.assertEqual(omitted, [])
 
+    def test_conservative_codegen_controls_survive_projection(self) -> None:
+        flags = ['-fomit-frame-pointer', '-fno-omit-frame-pointer',
+                 '-fno-optimize-sibling-calls', '-fno-align-functions',
+                 '-fno-align-jumps', '-fno-align-labels', '-fno-align-loops',
+                 '-fno-prefetch-loop-arrays', '-fno-tree-ch',
+                 '-fno-tree-loop-distribute-patterns']
+        for written in (flags, flags[::-1]):
+            argv, omitted = self.command(f"gcc {' '.join(written)} -c -o a.o a.c\n")
+            self.assertEqual([flag for flag in argv if flag in flags], written)
+            self.assertEqual(omitted, [])
+
     def test_symbol_section_switches_survive_projection(self) -> None:
         flags = ['-ffunction-sections', '-fno-function-sections',
                  '-fdata-sections', '-fno-data-sections', '-ffunction-sections']

@@ -126,6 +126,10 @@ class TranslateCommand(unittest.TestCase):
 
     def test_supported_language_and_machine_options_keep_written_overrides(self):
         flags = [
+            '-fomit-frame-pointer', '-fno-omit-frame-pointer',
+            '-fno-optimize-sibling-calls', '-fno-align-functions',
+            '-fno-align-jumps', '-fno-align-labels', '-fno-align-loops',
+            '-fno-prefetch-loop-arrays', '-fno-tree-ch', '-fno-tree-loop-distribute-patterns',
             '-fno-strict-aliasing',
             '-fexcess-precision=standard',
             '-ffunction-sections', '-fno-function-sections',

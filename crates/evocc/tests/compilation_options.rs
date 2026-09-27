@@ -39,6 +39,87 @@ fn check_preprocessed_program(source: &str) -> String {
 }
 
 #[test]
+fn conservative_codegen_controls_match_the_existing_native_contract() {
+    let source = include_str!("../../../tests/fixtures/conservative-codegen-options.c");
+    let flags = [
+        "-fomit-frame-pointer",
+        "-fno-omit-frame-pointer",
+        "-fno-optimize-sibling-calls",
+        "-fno-align-functions",
+        "-fno-align-jumps",
+        "-fno-align-labels",
+        "-fno-align-loops",
+        "-fno-prefetch-loop-arrays",
+        "-fno-tree-ch",
+        "-fno-tree-loop-distribute-patterns",
+    ];
+    for optimization in ["-O0", "-O2"] {
+        for mode in [
+            "--interpret-c-hir",
+            "--interpret-evoir",
+            "--emit=evoir",
+            "--emit=asm",
+        ] {
+            let baseline = successful(run(&[mode, optimization], source));
+            for flag in flags {
+                assert_eq!(
+                    successful(run(&[mode, optimization, flag], source)),
+                    baseline,
+                    "{flag}"
+                );
+            }
+            let mut arguments = vec![mode, optimization];
+            arguments.extend(flags);
+            arguments.extend(flags.iter().rev());
+            assert_eq!(successful(run(&arguments, source)), baseline);
+            if mode.starts_with("--interpret-") {
+                assert_eq!(baseline.trim(), "0");
+            }
+            if mode == "--emit=asm" {
+                assert_eq!(baseline.matches("stp x29, x30, [sp, #-16]!").count(), 4);
+                assert_eq!(baseline.matches("mov x29, sp").count(), 4);
+                assert!(baseline
+                    .contains(".p2align 6\n.type source_aligned, %function\nsource_aligned:"));
+                assert_eq!(
+                    baseline
+                        .lines()
+                        .filter(|line| line.starts_with(".p2align "))
+                        .count(),
+                    4
+                );
+                assert!(!baseline.contains("bl memset"));
+                assert!(!baseline.contains("prfm "));
+            }
+        }
+    }
+    let base = ["--emit=asm", "-fmin-function-alignment=32"];
+    let expected = successful(run(&base, source));
+    let mut arguments = base.to_vec();
+    arguments.extend(flags);
+    assert_eq!(successful(run(&arguments, source)), expected);
+    assert!(expected.contains(".p2align 5\n.type plain_leaf, %function\nplain_leaf:"));
+    assert!(expected.contains(".p2align 6\n.type source_aligned, %function\nsource_aligned:"));
+    // Disabling absent transforms is not approval for new positive transforms
+    // or arbitrary GCC allocator/layout algorithms.
+    for flag in [
+        "-falign-functions=32",
+        "-falign-loops",
+        "-fprefetch-loop-arrays",
+        "-ftree-ch",
+        "-ftree-loop-distribute-patterns",
+        "-foptimize-sibling-calls",
+        "-fira-region=one",
+        "-fira-hoist-pressure",
+        "-freorder-blocks-algorithm=simple",
+    ] {
+        assert!(
+            !run(&["--emit=asm", flag], source).status.success(),
+            "{flag}"
+        );
+    }
+}
+
+#[test]
 fn individual_symbol_sections_preserve_storage_kinds_and_explicit_placement() {
     let source = include_str!("../../../tests/fixtures/driver-symbol-sections.c");
     for relocation in ["-fno-pic", "-fPIC"] {

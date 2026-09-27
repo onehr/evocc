@@ -744,6 +744,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     add driver/projector REDs and preserve effective option order. Diagnostic
     and optimizer-tuning omissions remain separately disclosed. No full musl
     fidelity claim may be inferred from accepting `-frounding-math` alone.
+    - [x] **B08b1 — Preserve already-satisfied conservative codegen options**, 2026-09-27.
+      Ten frame/disabled-transform options now reach the driver without being
+      discarded. Existing frame, source/minimum alignment and no-transform
+      contracts are explicit; positive transforms and unrelated GCC tuning still
+      reject. Both interpreters, 12 native controls, ten original musl object
+      commands and a 1,339-record option inventory pass. The affected gate is
+      green (1,062 passed, four existing ignores), as are 298 ladder tests.
+      [Reproducer, boundaries and identities](tests/fixtures/conservative-codegen-options.out).
+      This is one B08b subcase, not complete option fidelity.
+
     The [standard-excess-precision subcase](tests/fixtures/floating-standard-evaluation.out)
     is now repaired: the existing FLT_EVAL_METHOD=0 semantics satisfy the explicit
     option, which survives shared command projection. Both interpreters, eight

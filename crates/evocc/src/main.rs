@@ -335,6 +335,22 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             // No pass derives non-aliasing from the C access type. Existing
             // object/provenance, initializedness and permission checks remain.
             "-fno-strict-aliasing" => {}
+            // Every current function requires the Section 6 frame record.
+            // Omission is permission, not a requirement to remove a needed
+            // frame. No sibling-call transform exists in this backend.
+            "-fomit-frame-pointer" | "-fno-omit-frame-pointer" | "-fno-optimize-sibling-calls" => {}
+            // There is no optional function/branch padding, automatic array
+            // prefetch, loop-header copying or loop-to-libcall transform.
+            // These disabling options select that existing contract; source
+            // and minimum function alignment remain mandatory. Do not admit
+            // the positive transforms or unrelated GCC tuning options here.
+            "-fno-align-functions"
+            | "-fno-align-jumps"
+            | "-fno-align-labels"
+            | "-fno-align-loops"
+            | "-fno-prefetch-loop-arrays"
+            | "-fno-tree-ch"
+            | "-fno-tree-loop-distribute-patterns" => {}
             "-ffp-contract=off" | "-fno-fast-math" => {}
             // FLT_EVAL_METHOD=0 already rounds every arithmetic operation,
             // assignment and cast to its semantic source format. Preserve

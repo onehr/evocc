@@ -1,0 +1,53 @@
+2026-09-27 — conservative code-generation option admission (B08b1)
+
+RED: the driver rejects -fomit-frame-pointer and the three application-projector
+tests drop the ten options now covered. This is a driver/projection gap, not a
+new optimizer or an assertion that arbitrary GCC tuning flags are ignorable.
+
+Contract: EvoMIR Section 6 still requires every current function's frame.
+Omission permission cannot remove a required frame. No sibling-call transform,
+optional branch/function padding, automatic loop-array prefetch, loop-header
+copying or loop-pattern distribution/libcall pass exists. Their disabling flags
+select existing behavior. Mandatory instruction/source/minimum alignment,
+explicit source builtins/calls and object-copy lowering remain unchanged.
+Positive transform requests and unrelated allocator/reordering flags reject.
+The shared application projector preserves the admitted flags in written order.
+The ongoing kernel run and its command projector were not changed.
+
+GREEN: focused driver coverage exercises each flag, combined/reversed order at
+O0/O2, both interpreters, identical EvoIR/assembly, four retained frame records,
+source 64-byte and requested minimum 32-byte alignment, and unsupported positive
+flags. The affected gate passes 1,062 tests, zero failures, four existing ignores,
+plus Clippy/fmt (against e23c2bd; evocc, evocc-mir, evocc-policy, evocc-proofcheck,
+evocc-randgate). All 298 ladder Python tests and targeted Ruff/diff checks pass.
+
+Sealed AArch64 native: 12 executions pass. GCC/Clang baseline O0/O2 supply four
+controls; GCC and EvoCC each pass flags and flags+minimum-alignment at O0/O2.
+No claim that Clang accepts GCC-only tuning flags is made.
+
+Ten unchanged original musl commands emit and assemble with all ten applicable
+options retained: __math_oflow, __math_uflow, frexp, scalbn, AArch64 ceil/floor/
+rint/rintf, memcmp and memmove. Outputs match the controls removing only these
+newly admitted flags; installed objects remain untouched with unchanged hashes.
+The 1,339-record read-only inventory has no omitted newly admitted option.
+Remaining GCC allocator/reordering tuning, diagnostic policy and transport/output
+actions are separately reported. This does not close B08b or full musl testing.
+
+The retained intermediate driver-final.log contains a test-assertion failure:
+the expected assembly omitted the .type directive between .p2align and the
+function label. Correcting that assertion yields the final green gate; the
+earlier failed/provisional logs are not claimed as passes.
+
+SHA256 identities:
+  sealed image: 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+  compiler: e4614da3bbaa12edf3799c6c87d690c88ccb90f5e724b69a8ecc8509323e2604
+  fixture: 0395aef69c011f4b91645517cb80390ad2998787801cdc7bceb71167e56b0fd6
+  identity.json: f5e4c3a530b52c01fdf2e3b24c76af487349013cc26185339d13aadf831fc482
+  original.json: 0e2b429ea62331050012d7258bab4ab7423289736893fea86a5a791cf4a055eb
+  native.json: 991081e3255ed84bb0249e2b14591f5b50f46153b1e8dcc3be18d54e6a150cc7
+  inventory.json: 4fced4afb72f123d4f1e64341988b1332682366e1b11b03d2d428b7238eb1672
+
+Artifacts: .build/floating-targeted/codegen-options-20260927/
+replay.py, exact argv/stdout/stderr and JSON above, driver-red.log,
+projection-red.log, driver-final.log, ladder-final.log and changed-gate.log.
+No new image, clone, installed library or historical acceptance receipt.
