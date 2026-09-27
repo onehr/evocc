@@ -2,16 +2,16 @@
  "schemaVersion": 1,
  "rung": "E9",
  "subject": "llvm-test-suite",
- "run": "20260919T230110Z",
+ "run": "20260927T085137Z",
  "pin": "llvmorg-23.1.0 (2919e55176a572ee085cb46b291c47b7092c363e)",
  "tarballSha256": "415106c9962e07a24326ad9173bbecd4215f6dee49bce9aec5181d75d07db770",
- "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
+ "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 1735,
  "programsTotal": 1735,
- "unitsEvoccCompiled": 1027,
- "unitsSubstituted": 1027,
- "unitsInPassingBuild": 1014,
+ "unitsEvoccCompiled": 1048,
+ "unitsSubstituted": 1048,
+ "unitsInPassingBuild": 1039,
  "substitutedUnits": [
   "build/SingleSource/Benchmarks/BenchmarkGame/CMakeFiles/fannkuch.dir/fannkuch.c.o",
   "build/SingleSource/Benchmarks/BenchmarkGame/CMakeFiles/n-body.dir/n-body.c.o",
@@ -159,6 +159,7 @@
   "build/SingleSource/UnitTests/CMakeFiles/2007-04-10-BitfieldTest.dir/2007-04-10-BitfieldTest.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/2007-04-25-weak.dir/2007-04-25-weak.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/2008-07-13-InlineSetjmp.dir/2008-07-13-InlineSetjmp.c.o",
+  "build/SingleSource/UnitTests/CMakeFiles/2009-04-16-BitfieldInitialization.dir/2009-04-16-BitfieldInitialization.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/2009-12-07-StructReturn.dir/2009-12-07-StructReturn.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/2010-05-24-BitfieldTest.dir/2010-05-24-BitfieldTest.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/2020-01-06-coverage-001.dir/2020-01-06-coverage-001.c.o",
@@ -175,6 +176,7 @@
   "build/SingleSource/UnitTests/CMakeFiles/StructModifyTest.dir/StructModifyTest.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/TestLoop.dir/TestLoop.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/block-byref-test.dir/block-byref-test.c.o",
+  "build/SingleSource/UnitTests/CMakeFiles/byval-alignment.dir/byval-alignment.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/conditional-gnu-ext.dir/conditional-gnu-ext.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/printargs.dir/printargs.c.o",
   "build/SingleSource/UnitTests/CMakeFiles/testcase-CGExprConstant.dir/testcase-CGExprConstant.c.o",
@@ -224,6 +226,7 @@
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-2004-03-15-IndirectGoto.dir/2004-03-15-IndirectGoto.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-2004-08-12-InlinerAndAllocas.dir/2004-08-12-InlinerAndAllocas.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-2005-05-06-LongLongSignedShift.dir/2005-05-06-LongLongSignedShift.c.o",
+  "build/SingleSource/Regression/C/CMakeFiles/Regression-C-2008-01-07-LongDouble.dir/2008-01-07-LongDouble.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-ConstructorDestructorAttributes.dir/ConstructorDestructorAttributes.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-PR1386.dir/PR1386.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-PR491.dir/PR491.c.o",
@@ -352,6 +355,9 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040704-1.dir/20040704-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040705-1.dir/20040705-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040705-2.dir/20040705-2.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-1.dir/20040709-1.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-2.dir/20040709-2.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-3.dir/20040709-3.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040811-1.dir/20040811-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040820-1.dir/20040820-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040823-1.dir/20040823-1.c.o",
@@ -429,6 +435,7 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20080222-1.dir/20080222-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20080408-1.dir/20080408-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20080424-1.dir/20080424-1.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20080502-1.dir/20080502-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20080506-1.dir/20080506-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20080506-2.dir/20080506-2.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20080519-1.dir/20080519-1.c.o",
@@ -696,6 +703,7 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr44555.dir/pr44555.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr44683.dir/pr44683.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr44828.dir/pr44828.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr44942.dir/pr44942.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr45034.dir/pr45034.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr45070.dir/pr45070.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr45262.dir/pr45262.c.o",
@@ -990,6 +998,8 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-shiftopt-1.dir/shiftopt-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-simd-6.dir/simd-6.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-ssad-run.dir/ssad-run.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stdarg-1.dir/stdarg-1.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stdarg-2.dir/stdarg-2.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stdarg-3.dir/stdarg-3.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stdarg-4.dir/stdarg-4.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stkalign.dir/stkalign.c.o",
@@ -1030,11 +1040,22 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-20030331-1.dir/20030331-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-20041213-1.dir/20041213-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-builtin-nan-1.dir/builtin-nan-1.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-1.dir/compare-fp-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-2.dir/compare-fp-2.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-3.dir/compare-fp-3.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-4.dir/compare-fp-4.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-copysign1.dir/copysign1.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-copysign2.dir/copysign2.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-4e.dir/fp-cmp-4e.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-8e.dir/fp-cmp-8e.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-inf-1.dir/inf-1.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-inf-2.dir/inf-2.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-inf-3.dir/inf-3.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-mzero4.dir/mzero4.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr29302-1.dir/pr29302-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr30704.dir/pr30704.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr36332.dir/pr36332.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr50310.dir/pr50310.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr67218.dir/pr67218.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr72824.dir/pr72824.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr84235.dir/pr84235.c.o",
@@ -2598,30 +2619,27 @@
   }
  ],
  "programOutcomes": {
-  "PASS": 1014,
-  "compiler-refused": 708,
+  "PASS": 1039,
+  "compiler-refused": 687,
   "oracle-unusable": 1,
-  "runtime-failure": 11,
-  "link-failure": 1
+  "runtime-failure": 8
  },
  "dispositionCounts": {
-  "PASS": 1014,
-  "compiler-failure": 44,
-  "FP-deferred": 17,
-  "not-applicable": 659,
+  "PASS": 1039,
+  "compiler-failure": 1,
+  "FP-deferred": 30,
+  "not-applicable": 664,
   "oracle-unusable": 1
  },
  "outcomes": {
-  "assembled": 1027,
-  "refused": 708
+  "assembled": 1048,
+  "refused": 687
  },
  "refusalsByCode": {
-  "E3050": 21,
+  "E3050": 14,
   "E1001": 345,
   "E0112": 9,
-  "E3049": 9,
-  "E2001": 303,
-  "E2101": 2,
+  "E2001": 299,
   "E2202": 2,
   "E2102": 1,
   "E1003": 5,
@@ -2630,6 +2648,7 @@
   "E4002": 2,
   "E3051": 1,
   "other": 1,
+  "E2101": 1,
   "E2204": 1,
   "E2940": 1,
   "E2929": 1
@@ -2714,22 +2733,10 @@
    "at": "UnitTests/2008-04-20-LoopBug2.c:11:1"
   },
   {
-   "unit": "build/SingleSource/UnitTests/CMakeFiles/2009-04-16-BitfieldInitialization.dir/2009-04-16-BitfieldInitialization.c.o",
-   "code": "E3050",
-   "message": "evoir-lowering-failed: not-lowered: floating-value",
-   "at": "UnitTests/2009-04-16-BitfieldInitialization.c:97:35"
-  },
-  {
    "unit": "build/SingleSource/UnitTests/CMakeFiles/AtomicOps.dir/AtomicOps.c.o",
    "code": "E1001",
    "message": "expected-declaration",
    "at": "UnitTests/AtomicOps.c:3:18"
-  },
-  {
-   "unit": "build/SingleSource/UnitTests/CMakeFiles/byval-alignment.dir/byval-alignment.c.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "UnitTests/byval-alignment.c:9:1"
   },
   {
    "unit": "build/SingleSource/UnitTests/Float/CMakeFiles/classify.dir/classify.c.o",
@@ -2775,15 +2782,9 @@
   },
   {
    "unit": "build/SingleSource/UnitTests/Vector/AArch64/CMakeFiles/aarch64_neon_intrinsics.dir/aarch64_neon_intrinsics.c.o",
-   "code": "E2101",
-   "message": "expected-modifiable-lvalue",
-   "at": "AArch64/aarch64_neon_intrinsics.c:72230:10"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/CMakeFiles/Regression-C-2008-01-07-LongDouble.dir/2008-01-07-LongDouble.c.o",
    "code": "E3050",
    "message": "evoir-lowering-failed: not-lowered: floating-value",
-   "at": "C/2008-01-07-LongDouble.c:2:1"
+   "at": "include/arm_neon.h:2571:10"
   },
   {
    "unit": "build/SingleSource/Regression/C/CMakeFiles/Regression-C-DuffsDevice.dir/DuffsDevice.c.o",
@@ -3812,24 +3813,6 @@
    "at": "execute/20040707-1.c:11:3"
   },
   {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-1.dir/20040709-1.c.o",
-   "code": "E3050",
-   "message": "evoir-lowering-failed: not-lowered: floating-value",
-   "at": "execute/20040709-1.c:114:66"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-2.dir/20040709-2.c.o",
-   "code": "E3050",
-   "message": "evoir-lowering-failed: not-lowered: floating-value",
-   "at": "execute/20040709-2.c:114:70"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-3.dir/20040709-3.c.o",
-   "code": "E3050",
-   "message": "evoir-lowering-failed: not-lowered: floating-value",
-   "at": "execute/20040709-2.c:114:70"
-  },
-  {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040805-1.dir/20040805-1.c.o",
    "code": "E2001",
    "message": "undeclared-identifier: abort",
@@ -3966,12 +3949,6 @@
    "code": "E2001",
    "message": "undeclared-identifier: abort",
    "at": "execute/20070623-1.c:17:36"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20080502-1.dir/20080502-1.c.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "execute/20080502-1.c:5:1"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20091229-1.dir/20091229-1.c.o",
@@ -6260,12 +6237,6 @@
    "at": "execute/pr44575.c:47:5"
   },
   {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr44942.dir/pr44942.c.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "execute/pr44942.c:5:1"
-  },
-  {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr49644.dir/pr49644.c.o",
    "code": "E0112",
    "message": "stray-token",
@@ -6372,18 +6343,6 @@
    "code": "E2001",
    "message": "undeclared-identifier: memcmp",
    "at": "execute/simd-5.c:49:7"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stdarg-1.dir/stdarg-1.c.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "execute/stdarg-1.c:33:7"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stdarg-2.dir/stdarg-2.c.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "execute/stdarg-2.c:26:18"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-strcmp-1.dir/strcmp-1.c.o",
@@ -6686,36 +6645,6 @@
    "at": "ieee/acc2.c:17:5"
   },
   {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-1.dir/compare-fp-1.c.o",
-   "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/compare-fp-1.c:25:3"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-3.dir/compare-fp-3.c.o",
-   "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/compare-fp-3.c:44:7"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-4.dir/compare-fp-4.c.o",
-   "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/compare-fp-4.c:27:3"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-copysign1.dir/copysign1.c.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "ieee/copysign1.c:68:1"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-copysign2.dir/copysign2.c.o",
-   "code": "E3050",
-   "message": "evoir-lowering-failed: not-lowered: floating-value",
-   "at": "ieee/copysign2.c:62:1"
-  },
-  {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-1.dir/fp-cmp-1.c.o",
    "code": "E2001",
    "message": "undeclared-identifier: exit",
@@ -6736,26 +6665,26 @@
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-4.dir/fp-cmp-4.c.o",
    "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/fp-cmp-4.c:8:7"
+   "message": "undeclared-identifier: abort",
+   "at": "ieee/fp-cmp-4.c:11:2"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-4f.dir/fp-cmp-4f.c.o",
    "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/fp-cmp-4.c:8:7"
+   "message": "undeclared-identifier: abort",
+   "at": "ieee/fp-cmp-4.c:11:2"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-4l.dir/fp-cmp-4l.c.o",
    "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/fp-cmp-4.c:8:7"
+   "message": "undeclared-identifier: abort",
+   "at": "ieee/fp-cmp-4.c:11:2"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-5.dir/fp-cmp-5.c.o",
    "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/fp-cmp-5.c:6:10"
+   "message": "undeclared-identifier: abort",
+   "at": "ieee/fp-cmp-5.c:80:5"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-6.dir/fp-cmp-6.c.o",
@@ -6766,44 +6695,26 @@
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-8.dir/fp-cmp-8.c.o",
    "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/fp-cmp-8.c:10:10"
+   "message": "undeclared-identifier: abort",
+   "at": "ieee/fp-cmp-8.c:85:5"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-8f.dir/fp-cmp-8f.c.o",
    "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/fp-cmp-8.c:10:10"
+   "message": "undeclared-identifier: abort",
+   "at": "ieee/fp-cmp-8.c:85:5"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-8l.dir/fp-cmp-8l.c.o",
    "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/fp-cmp-8.c:10:10"
+   "message": "undeclared-identifier: abort",
+   "at": "ieee/fp-cmp-8.c:85:5"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-hugeval.dir/hugeval.c.o",
    "code": "E2001",
    "message": "undeclared-identifier: abort",
    "at": "ieee/hugeval.c:13:5"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-inf-1.dir/inf-1.c.o",
-   "code": "E3050",
-   "message": "evoir-lowering-failed: not-lowered: floating-value",
-   "at": "ieee/inf-1.c:10:20"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-inf-2.dir/inf-2.c.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "ieee/inf-2.c:53:1"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-inf-3.dir/inf-3.c.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "ieee/inf-3.c:49:1"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-minuszero.dir/minuszero.c.o",
@@ -6848,28 +6759,10 @@
    "at": "ieee/pr28634.c:13:5"
   },
   {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr29302-1.dir/pr29302-1.c.o",
-   "code": "E3050",
-   "message": "evoir-lowering-failed: not-lowered: floating-value",
-   "at": "ieee/pr29302-1.c:3:1"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr36332.dir/pr36332.c.o",
-   "code": "E3049",
-   "message": "evoir-lowering-failed: not-lowered: floating-call-interface",
-   "at": "ieee/pr36332.c:3:1"
-  },
-  {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr38016.dir/pr38016.c.o",
    "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isunordered",
-   "at": "ieee/fp-cmp-8.c:10:10"
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr50310.dir/pr50310.c.o",
-   "code": "E2001",
-   "message": "undeclared-identifier: __builtin_isgreater",
-   "at": "ieee/pr50310.c:11:21"
+   "message": "undeclared-identifier: abort",
+   "at": "ieee/fp-cmp-8.c:85:5"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-pr72824-2.dir/pr72824-2.c.o",
@@ -6886,132 +6779,6 @@
  ],
  "failingUnits": [
   {
-   "unit": "build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/CMakeFiles/lu.dir/lu.c.o",
-   "source": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c",
-   "assemblerFlags": [],
-   "omittedFlags": [
-    "-Werror=date-time",
-    "-Wno-error=incompatible-pointer-types",
-    "-w"
-   ],
-   "outcome": "assembled",
-   "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/CMakeFiles/lu.dir/lu.c.s",
-   "assemblySha256": "c92b80947b426ebd01e3caa08ef9d8e26b1051a97d48a035a89772049467ca74",
-   "objectSha256": "e9a56be1642d923ca8ac4a7a926d21a467bebfa663714f03b6537a5f9264a74f",
-   "program": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.test",
-   "reference": "PASS",
-   "native": "FAIL",
-   "programOutcome": "runtime-failure",
-   "originalArguments": [
-    "/usr/bin/clang-19",
-    "-DFP_ABSTOLERANCE=1e-5",
-    "-DNDEBUG",
-    "-O3",
-    "-DNDEBUG",
-    "-w",
-    "-Werror=date-time",
-    "-I",
-    "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
-    "-DPOLYBENCH_DUMP_ARRAYS",
-    "-Wno-error=incompatible-pointer-types",
-    "-o",
-    "CMakeFiles/lu.dir/lu.c.o",
-    "-c",
-    "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c"
-   ],
-   "disposition": "compiler-failure",
-   "dispositionReason": "current fail supersedes the former FP deferral: The original PolyBench program executes floating array arithmetic and prints its results through print_element(double). Its enabled check_FP also performs floating subtraction/fabs/comparison.",
-   "dispositionEvidence": [
-    "tests/fixtures/llvm-polybench-floating-paths.out",
-    ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-   ],
-   "sourceSha256": "8e752a8d13e90c6464c3573cf75a7df201a36dc0d43914de49ae65a88da20f15"
-  },
-  {
-   "unit": "build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/CMakeFiles/ludcmp.dir/ludcmp.c.o",
-   "source": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c",
-   "assemblerFlags": [],
-   "omittedFlags": [
-    "-Werror=date-time",
-    "-Wno-error=incompatible-pointer-types",
-    "-w"
-   ],
-   "outcome": "assembled",
-   "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/CMakeFiles/ludcmp.dir/ludcmp.c.s",
-   "assemblySha256": "92bdae7ee5bab71c085a27e2c4c0c535b265a1e9f35d1575efdc2c38ba27f0c7",
-   "objectSha256": "8692fbb8435676a24bfad888c22c174c0ec75693cc5c3a88308c72c715ae6990",
-   "program": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.test",
-   "reference": "PASS",
-   "native": "FAIL",
-   "programOutcome": "runtime-failure",
-   "originalArguments": [
-    "/usr/bin/clang-19",
-    "-DFP_ABSTOLERANCE=1e-5",
-    "-DNDEBUG",
-    "-O3",
-    "-DNDEBUG",
-    "-w",
-    "-Werror=date-time",
-    "-I",
-    "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
-    "-DPOLYBENCH_DUMP_ARRAYS",
-    "-Wno-error=incompatible-pointer-types",
-    "-o",
-    "CMakeFiles/ludcmp.dir/ludcmp.c.o",
-    "-c",
-    "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c"
-   ],
-   "disposition": "compiler-failure",
-   "dispositionReason": "current fail supersedes the former FP deferral: The original PolyBench program executes floating array arithmetic and prints its results through print_element(double). Its enabled check_FP also performs floating subtraction/fabs/comparison.",
-   "dispositionEvidence": [
-    "tests/fixtures/llvm-polybench-floating-paths.out",
-    ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-   ],
-   "sourceSha256": "e724fc2006a0ea556eba773ead35c64532680ffdc185fd07ff40e8264280a549"
-  },
-  {
-   "unit": "build/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/CMakeFiles/floyd-warshall.dir/floyd-warshall.c.o",
-   "source": "SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c",
-   "assemblerFlags": [],
-   "omittedFlags": [
-    "-Werror=date-time",
-    "-Wno-error=incompatible-pointer-types",
-    "-w"
-   ],
-   "outcome": "assembled",
-   "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/CMakeFiles/floyd-warshall.dir/floyd-warshall.c.s",
-   "assemblySha256": "55a72f418a7e898a74ec48141a8a14a56f1a75893aedf1eedf216a081b86b8cd",
-   "objectSha256": "dd0310fcb645887440fde86d617f140e68459e49def0c9384b58d5d3a669942a",
-   "program": "SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.test",
-   "reference": "PASS",
-   "native": "FAIL",
-   "programOutcome": "runtime-failure",
-   "originalArguments": [
-    "/usr/bin/clang-19",
-    "-DFP_ABSTOLERANCE=1e-5",
-    "-DNDEBUG",
-    "-O3",
-    "-DNDEBUG",
-    "-w",
-    "-Werror=date-time",
-    "-I",
-    "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
-    "-DPOLYBENCH_DUMP_ARRAYS",
-    "-Wno-error=incompatible-pointer-types",
-    "-o",
-    "CMakeFiles/floyd-warshall.dir/floyd-warshall.c.o",
-    "-c",
-    "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c"
-   ],
-   "disposition": "compiler-failure",
-   "dispositionReason": "current fail supersedes the former FP deferral: The original LLVM variant has an integer kernel, but main calls check_FP, which converts array values to double and executes subtraction/fabs/comparison; its enabled output also calls print_element(double). The original source/flags are unchanged.",
-   "dispositionEvidence": [
-    "tests/fixtures/llvm-polybench-floating-paths.out",
-    ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-   ],
-   "sourceSha256": "5ebbb740697eccb7becd8f1bca26d5f05a7696911cfac13c683889ae3e9f6953"
-  },
-  {
    "unit": "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-nestedloop.dir/nestedloop.c.o",
    "source": "SingleSource/Benchmarks/Shootout/nestedloop.c",
    "assemblerFlags": [],
@@ -7022,8 +6789,8 @@
    ],
    "outcome": "assembled",
    "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-nestedloop.dir/nestedloop.c.s",
-   "assemblySha256": "fa5dd6193fb8a7a23c0bfc75a7fe4197cb96a2605535a527e388c898e2b6a93b",
-   "objectSha256": "c80fb4887771d8418cdfe8cf341b6745ae15adba65b70aa73d200859f3f41bc4",
+   "assemblySha256": "0dcfb96c74fdadbfaadd0d65ae7ff6ea2c74b00363cf2df7a5b4eebf2334e897",
+   "objectSha256": "3981caf846de79fca257450f46437e4ce0774090fd4102e8efd414bde1e9310e",
    "program": "SingleSource/Benchmarks/Shootout/Shootout-nestedloop.test",
    "reference": "PASS",
    "native": "FAIL",
@@ -7050,51 +6817,6 @@
    "sourceSha256": "45606b720ba68dc8320bb1ed7a4348a14cfb8db5f0c677d87874cc99f5fc7744"
   },
   {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.o",
-   "source": "SingleSource/Regression/C/gcc-c-torture/execute/20020720-1.c",
-   "assemblerFlags": [],
-   "omittedFlags": [
-    "-Werror=date-time",
-    "-Wno-error=incompatible-pointer-types",
-    "-Wno-implicit-function-declaration",
-    "-Wno-implicit-int",
-    "-Wno-int-conversion",
-    "-w"
-   ],
-   "outcome": "assembled",
-   "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.s",
-   "assemblySha256": "77fb90b16fc8ba619c7de3b272ffea525e8751b50c7c103d52de190e047b75f3",
-   "objectSha256": "71ac29a4021214e1c77fc079f6c4b09b664deaf3d04ecc48b3178eb628abe2c7",
-   "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-20020720-1.test",
-   "reference": "PASS",
-   "native": "NOEXE",
-   "programOutcome": "link-failure",
-   "originalArguments": [
-    "/usr/bin/clang-19",
-    "-DNDEBUG",
-    "-O3",
-    "-DNDEBUG",
-    "-w",
-    "-Werror=date-time",
-    "-Wno-implicit-int",
-    "-Wno-int-conversion",
-    "-Wno-implicit-function-declaration",
-    "-w",
-    "-Wno-error=incompatible-pointer-types",
-    "-o",
-    "CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.o",
-    "-c",
-    "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20020720-1.c"
-   ],
-   "disposition": "compiler-failure",
-   "dispositionReason": "current fail supersedes the former FP deferral: main calls foo(double), which calls fabs and performs a floating comparison. Its link_error reference is intentionally unreachable, not the criterion for this disposition.",
-   "dispositionEvidence": [
-    "tests/fixtures/llvm-floating-value-paths.out",
-    ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-   ],
-   "sourceSha256": "4520a96e5b9f279852f32f22c4551a1eff4cbdbb934275af62079f4de3cd4bf8"
-  },
-  {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20090113-1.dir/20090113-1.c.o",
    "source": "SingleSource/Regression/C/gcc-c-torture/execute/20090113-1.c",
    "assemblerFlags": [],
@@ -7108,8 +6830,8 @@
    ],
    "outcome": "assembled",
    "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20090113-1.dir/20090113-1.c.s",
-   "assemblySha256": "2c727aeb36c88744b355f59c44305fba58bb7bc3d4dbd859443a58d18c174933",
-   "objectSha256": "ba1aa2a9c8a53e28f050b371e6eb5dd305b723bd5eb713718cc7bd5be2597322",
+   "assemblySha256": "d394f4bd70bf32e82e8cd4f6cbcee99f48608cd00aa6c40262ddedfa21df7a4d",
+   "objectSha256": "52a9662010ea78b7c99468e5661712ce18b35fd81adc8923b86437317ff2c03e",
    "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-20090113-1.test",
    "reference": "PASS",
    "native": "FAIL",
@@ -7131,7 +6853,12 @@
     "-c",
     "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20090113-1.c"
    ],
-   "disposition": "compiler-failure"
+   "disposition": "not-applicable",
+   "dispositionReason": "R01: the original reads uninitialized automatic adata[9] in msum_i4 before any store. Both independently compiled GCC-14/Clang-19 UBSan-instrumented originals give positive Memcheck initializedness errors at line 43; plain Memcheck controls alone do not. See the exact diagnostic qualification, not a claim that UBSan alone detects uninitialized data.",
+   "dispositionEvidence": [
+    "tests/fixtures/llvm-uninitialized-original.out"
+   ],
+   "sourceSha256": "95564445bb0083c9904587014c8d5ec3ef1f61c96c7f498dbf8cc8d7382243b0"
   },
   {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr23135.dir/pr23135.c.o",
@@ -7148,8 +6875,8 @@
    ],
    "outcome": "assembled",
    "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr23135.dir/pr23135.c.s",
-   "assemblySha256": "7584a4303846c2d4106f8f3a8aaa2ec9f1a3c2b6db3b51a412ae74ac0e1a3cb2",
-   "objectSha256": "0e11279232fa32db8ea3615c53d524eb1fa11e3a50aa695bd8b13a9ab3b0ffa0",
+   "assemblySha256": "6d37b3205c8a91797ac4946894ca5974c7306264e1a82194b0e2bc580b14d4c6",
+   "objectSha256": "658615b1e9cbe828616a6ca3cc97262af1dae627ec54cd2aa303c2c29afa2193",
    "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-pr23135.test",
    "reference": "PASS",
    "native": "FAIL",
@@ -7186,8 +6913,8 @@
    ],
    "outcome": "assembled",
    "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-05-26-Shorts.dir/2003-05-26-Shorts.c.s",
-   "assemblySha256": "9b39ecb032bf0dbea2732d735c733470f91f1433fabd57bd702d7081f5f08e5a",
-   "objectSha256": "2160151e55c21d8245d73e68da8b496d791408c517ff2cf8bbd5c8ffcb66bc16",
+   "assemblySha256": "b462f2e17698aeb1b3533d787f567e343b8d1a7a6f6dc6b41539c793ea5c13ef",
+   "objectSha256": "14f23a6db3fd3ad9fbb4e03657f64a6045336a7900a7249f238a7e7ea760f5fa",
    "program": "SingleSource/UnitTests/2003-05-26-Shorts.test",
    "reference": "PASS",
    "native": "FAIL",
@@ -7226,8 +6953,8 @@
    ],
    "outcome": "assembled",
    "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-06-IntOverflow.dir/2003-07-06-IntOverflow.c.s",
-   "assemblySha256": "80fa00970758a873445af29500971dab2123a31ea322fa3b46291991aab020f5",
-   "objectSha256": "56604f75bfa4ba7dc332a9984a59a5f69b352e9fa871eb435c061a23b3a4d66b",
+   "assemblySha256": "3c3001eb9d11e90d59f94fb311718f974a9cfbcc1b8d088d428342ab075b3b5a",
+   "objectSha256": "2fcc08b84e4a012a8fda882a4f522cddc54e2d6ba4ec4f8c2a0d6d02cf5e81df",
    "program": "SingleSource/UnitTests/2003-07-06-IntOverflow.test",
    "reference": "PASS",
    "native": "FAIL",
@@ -7266,8 +6993,8 @@
    ],
    "outcome": "assembled",
    "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-09-LoadShorts.dir/2003-07-09-LoadShorts.c.s",
-   "assemblySha256": "f0cce7af2bdcf21f3ddc23650d30246e9beffd84ea33d6276505cf57823dc3af",
-   "objectSha256": "fd188cfd1f2bb13c20f4293b3856b6c7d75be9058095663ce5fd7a693580ca3a",
+   "assemblySha256": "71e83b8bf57e66c4e08bc3d259d593e06318e82615f55c7528b6424edbed96c2",
+   "objectSha256": "b85aaa0c651d4f16a9f4177228c38ec75c9bab124a3db6b8d9b9505d75df6485",
    "program": "SingleSource/UnitTests/2003-07-09-LoadShorts.test",
    "reference": "PASS",
    "native": "FAIL",
@@ -7306,8 +7033,8 @@
    ],
    "outcome": "assembled",
    "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-09-SignedArgs.dir/2003-07-09-SignedArgs.c.s",
-   "assemblySha256": "1716bce981c6e596860fed7ea7c5b14902f951f965886cce13d1a64417986691",
-   "objectSha256": "0c6bd378bbddf27084beb5a096c24fb4622b3a396c6f9d975a785654a0f67872",
+   "assemblySha256": "2126497dfb1f14a2a0d2c419a48e6e66bd73ec4ddbd08fa501eb198b4b9d7c11",
+   "objectSha256": "a89e3d3685205494018b25650b5bf6a766e1006e2f8307203748c0341b21ec90",
    "program": "SingleSource/UnitTests/2003-07-09-SignedArgs.test",
    "reference": "PASS",
    "native": "FAIL",
@@ -7344,8 +7071,8 @@
    ],
    "outcome": "assembled",
    "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/SignlessTypes/CMakeFiles/shr.dir/shr.c.s",
-   "assemblySha256": "b01703ecdcf8ab3f23a495a6656138c8843abb28cf1862f1034e39c9335458a1",
-   "objectSha256": "92c44969845427f0575427c4d770d1a9606c37fad856d1afe40cb03143df6c72",
+   "assemblySha256": "a15684741e549e91de88c92064429b9141fec9698a2cb538617f5ae2df3700a0",
+   "objectSha256": "e79a66650e2a58fc0cf31ab334a852fa9ce669e364d2bf647a8d9c1db87e9113",
    "program": "SingleSource/UnitTests/SignlessTypes/shr.test",
    "reference": "PASS",
    "native": "FAIL",
@@ -7383,12 +7110,11 @@
  "test": {
   "passed": false,
   "status": 1,
-  "relinkStatus": 2,
+  "relinkStatus": 0,
   "command": "PYTHONPATH=/work/llvm-test-suite/lit python3 /work/llvm-test-suite/llvm_single_source.py test",
   "outcomes": {
-   "FAIL": 12,
-   "PASS": 1722,
-   "NOEXE": 1
+   "FAIL": 9,
+   "PASS": 1726
   }
  },
  "adjustments": {
@@ -7678,29 +7404,9 @@
    "-fno-trapping-math",
    "-fno-vect-cost-model",
    "-ftree-vectorize",
-   "-pthread",
    "-w"
   ]
  },
- "targetedFollowups": [
-  {
-   "task": "B02",
-   "date": "2026-09-24",
-   "scope": "One unchanged LARGE original; does not update frozen full-campaign counters",
-   "source": "SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c",
-   "sourceSha256": "5ebbb740697eccb7becd8f1bca26d5f05a7696911cfac13c683889ae3e9f6953",
-   "driverSha256": "d9148a721a6997f8d62bf2ba463d5b963668020b5949b9e324b1eca7b0a0b091",
-   "assemblySha256": "faef7f932d5015b812e6ff4816ca39a2135510ba9bb204089c1a067d291853b7",
-   "outcome": "PASS",
-   "timeoutSeconds": 60,
-   "realSeconds": 52.036,
-   "exitCode": 0,
-   "outputHash": "50f7f0386b159a1161e1cf5fbd132682",
-   "outputComparisonExitCode": 0,
-   "evidence": "tests/fixtures/loop-value-transport.out",
-   "capture": ".build/floating-targeted/loop-transport-20260924/original-verified.log"
-  }
- ],
- "evidence": ".evidence/ladder/llvm-test-suite/20260919T230110Z",
- "summaryLine": "LLVM SingleSource: 1014/1735 C programs compiled by EvoCC and PASS; {'PASS': 1014, 'compiler-refused': 708, 'oracle-unusable': 1, 'runtime-failure': 11, 'link-failure': 1}"
+ "evidence": ".evidence/ladder/llvm-test-suite/20260927T085137Z",
+ "summaryLine": "LLVM SingleSource: 1039/1735 C programs compiled by EvoCC and PASS; {'PASS': 1039, 'compiler-refused': 687, 'oracle-unusable': 1, 'runtime-failure': 8}"
 }

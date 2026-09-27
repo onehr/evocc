@@ -22,15 +22,16 @@ GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.
 
-## Status — 2026-09-23
+## Status — 2026-09-27
 
 **Full kernel boot is working; full kernel testing and the complete application
 ladder are not yet closed.** The latest recorded application lanes contain
-**7 PASS, 2 PROFILE_CLEAN, 5 INCOMPLETE and 1 FAIL**.
+**10 PASS, 1 PROFILE_CLEAN, 3 INCOMPLETE and 1 FAIL**.
 
 This is an audit of existing measurements, not a new run of today's checkout.
-Most application results come from the September 19–20 campaign, TinyCC has a
-later lane replay, and September 23 targeted repairs are identified separately.
+Unchanged-program September 27 replays cover torture, c-testsuite, TinyCC,
+toybox, LLVM SingleSource and jq. Other lanes retain their earlier measurements;
+this is not a completed fresh 15-lane campaign or a kernel-test rerun.
 Each receipt retains its compiler and input identity. See the generated
 [status dashboard](docs/status.md), [pinned roadmap](docs/roadmap.md),
 [application ledger](docs/notebook/benchmark-evaluation-20260915.md) and
@@ -56,24 +57,22 @@ not test counts. Mixed-link builds can still contain reference-built code.
 | cJSON | PASS | 23/23 TU | Both libraries + all 21 Unity/private-helper programs; 161 cases PASS, 1 upstream IGNORE; public-API controls also pass |
 | Mbed TLS | PASS | 382/382 TU | Default configuration selftest and 148/148 CTest |
 | TinyCC | PASS | 11/11 TU | Original `make test`; relink/test exits and installed objects audited |
-| toybox | FAIL (shared upstream assertion) | 203/203 TU installed; all 1,669 test occurrences complete | Both builds: 1,648 PASS / 1 FAIL / 20 SKIP; tar expected-hash contradiction reproduced; zero EvoCC regressions |
+| toybox | INCOMPLETE (shared test FAIL retained) | 203/203 TU installed; all 1,669 test occurrences complete | Both builds: 1,648 PASS / 1 FAIL / 20 SKIP; tar expected-hash contradiction reproduced; zero EvoCC regressions |
 | musl + libc-test | FAIL | Historical 0/1,339 TU | Strict fenv now has targeted tests; original ARM64 math units expose the still-excluded scalar FP asm constraint |
 | PolyBench/C | PASS | 30/30 kernels | MINI_DATASET array-output correctness, not performance; reference-built allocation utility |
-| LLVM test-suite | INCOMPLETE | 1,014/1,735 programs PASS | Frozen account: 44 compiler failures, 17 FP-deferred, 659 not applicable, 1 oracle-unusable; follow-ups below |
+| LLVM test-suite | INCOMPLETE | 1,039/1,735 programs PASS | Fresh full run: 1 unresolved compiler failure, 30 FP-deferred, 664 not applicable, 1 oracle-unusable; no installed object rebuilt |
 | jq | PASS | 69/69 TU; original `make check` PASS | Real binary128 interface; original `-pthread` preserved; no object fallback |
 | Lua | PASS | 34/34 TU | Matching official `all.lua`, without soft skips |
 | SQLite | PASS | 86/86 TU | Public Tcl `veryquick`: 329,803 assertions; not proprietary TH3 |
 
 The [benchmark receipt](tests/contracts/bench-receipt.json) and individual
 `ladder-*-receipt.json` files bind these results to their measured subjects.
-The historical LLVM 44-failure count is not a claim that all 44 remain broken:
-later original-program replays pass `compare-fp-1`, `compare-fp-3`,
-`compare-fp-4`, `pr50310` and `20020720-1`. On September 23, unchanged LARGE
-`lu` and `ludcmp` also pass in **59.2533 s / 48.8197 s** under the original
-60-second limit. On September 24, unchanged LARGE `floyd-warshall` passes its
-original output/hash checks in **52.0360 s** after removal of redundant loop
-transport copies. A new full LLVM campaign has not run, so these targeted
-repairs do not increase its frozen numerator.
+The September 27 complete LLVM replay adds 25 original-program passes over
+the old full run, including the earlier targeted FP repairs and all three
+LARGE `lu`, `ludcmp` and `floyd-warshall` workloads under the unchanged
+60-second limit. All 1,048 installed objects survive the final build unchanged.
+The remaining compiler-failure classification is `pr23135` (L10 in TODO),
+pending its integer-vector source-definedness ruling; it is not FP-deferred.
 
 ### Linux boot, kselftest and KUnit
 

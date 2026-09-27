@@ -1983,7 +1983,7 @@ and the 6,765-target-C BPF/module composition. The complete 970-program kselftes
 pair and 1,504-case built-in KUnit pair have executed but have not passed as a
 whole; both kernels' 31 KUnit test modules pass 765/765 cases. Later filtered
 FORTIFY repairs reach 25/26 PASS, not a new full KUnit result. The
-[generated dashboard](status.md) and [README snapshot](../README.md#status--2026-09-23)
+[generated dashboard](status.md) and [README snapshot](../README.md#status--2026-09-27)
 separate current receipts, targeted follow-ups and open gates. The dated kernel
 journal below retains older failures; it is not the current status table.
 The Git-tracked [execution backlog](../TODO.md) maps the remaining concrete

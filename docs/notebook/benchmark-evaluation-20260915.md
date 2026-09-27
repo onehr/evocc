@@ -2420,3 +2420,26 @@ to ten disabled applets, four explicit nonroot guards, two >5-CPU guards, one
 unconditional upstream performance skip, two unavailable filesystem flags and
 the absent dummy network module/device. The fixture record retains exact errors.
 This closes B06's compilation/full-execution/diagnosis task, not all-tests PASS.
+
+## 2026-09-27: complete LLVM SingleSource replay
+
+Run `20260927T085137Z` uses the frozen `523a698237c9...` subject and all **1,735**
+original C programs. Final accounting is **1,039 PASS / 1 compiler failure /
+30 FP-deferred / 664 not-applicable / 1 oracle-unusable**. All **1,048** assembled
+objects are installed and survive the original relink; none is rebuilt by make.
+
+Compared with the old complete run, **25** programs newly pass: nineteen former
+compiler failures and six former FP deferrals. The 44 former compiler failures
+now split nineteen PASS, nineteen precise deferred-feature dispositions, five
+source-bound not-applicable dispositions, and the one still-open integer-vector
+`pr23135` case (L10). Existing dispositions are checked against unchanged source
+hashes and original commands. In particular, LARGE Floyd-Warshall, LU and LUDCMP
+pass the full lane without changing their original inputs or 60-second budget.
+
+The reference has 1,734 PASS and one unchanged Gram-Schmidt FAIL. The overall
+lit invocation prints 1,726 PASS / 9 FAIL because it also executes executables
+whose target objects EvoCC refused; **those reference-built executions are not
+EvoCC PASS credit**. Compiler accounting credits only the 1,039 validated subject
+programs. Of the eight subject runtime failures, seven retain evidence-backed
+source-definedness exclusions and `pr23135` remains unwaived. This is INCOMPLETE,
+not all-program PASS, and does not close the final B10 campaign.

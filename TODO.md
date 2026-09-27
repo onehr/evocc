@@ -7,7 +7,7 @@ Task IDs are stable: update or split an item with cross-references; do not recyc
 IDs or silently delete unresolved work. Historical review IDs remain in their
 original ledgers; the IDs below belong to this tracker.
 
-The [README](README.md#status--2026-09-23) summarizes measured capability;
+The [README](README.md#status--2026-09-27) summarizes measured capability;
 [docs/status.md](docs/status.md) is generated from receipts. This file answers
 **what remains, what to do next, and what evidence closes it**. Detailed sources,
 commands and measurements stay in the [kernel ledger][kernel],
@@ -542,6 +542,12 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   evidence. Eight obsolete scalar-FP waivers are removed with a RED/GREEN test.
   This closes reconciliation only: L02–L05/L10 remain open, and the frozen
   1,735-program run and its PASS numerator are unchanged. [Evidence][apps].
+  The September 27 complete replay now supersedes that historical checkpoint:
+  **1,039 PASS / 1 compiler failure / 30 FP-deferred / 664 not-applicable /
+  1 oracle-unusable**. The remaining failure is precisely L10; all 25 newly
+  passing original programs and unchanged installed-object hashes are retained
+  in run `20260927T085137Z`. L02 is closed for the hosted profile; L03–L05/L10
+  remain separate boundaries, not a blanket FP waiver.
 
 - [x] **B02 — LLVM LARGE floyd-warshall performance failure** — `DONE`, P1, 2026-09-24.
   The [small loop transport case](tests/fixtures/loop-value-transport.c) goes
@@ -745,6 +751,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   146 not-applicable / 3 oracle-unusable**, fixed population 1,692. The six
   original raw execution failures retain their existing source-bound non-PASS
   dispositions; no source, timeout, option or applicability predicate changes.
+  LLVM run `20260927T085137Z` adds **25** original-program PASS over the old full
+  run, leaving only L10 as an unclosed compiler-failure classification. All
+  1,735 identities remain and none of the 1,048 installed objects is rebuilt.
+  These six fresh lanes still do not rerun the nine other application lanes.
 
 ## Remaining numerical and language contracts
 
@@ -1054,8 +1064,8 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   bounded result. Passing this gate alone does not close B10/K13/K14.
   [Workflow](README.md#layout-and-development).
   September 27's [post-repair checkpoint](tests/fixtures/compiler-health-20260927.out)
-  passes **2718 workspace tests**, Clippy/fmt, **504 Python tests**, Ruff,
-  53/53 grammar shapes, both frozen layout corpora (**128 + 22**) and **13**
+  most recently passes **2763 workspace tests**, Clippy/fmt, **513 Python tests**, Ruff,
+  54/54 grammar shapes, both frozen layout corpora (**128 + 22**) and **13**
   isolated offline replays. Four historical Rust ignores remain explicit.
   This verifies current code, not a last-semantic-change or final campaign claim;
   T05 stays OPEN until its remaining-task dependencies are actually closed.

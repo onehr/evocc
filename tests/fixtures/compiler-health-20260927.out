@@ -40,3 +40,24 @@ Raw logs: .build/floating-targeted/bitmap-constants-20260927/
   workspace.log, python-health.log, layout-health.log, offline-health.log.
 All commands exited. This checkpoint does not resolve outstanding semantics,
 old runtime failures, T04 composition, K13/K14 or B10's final campaigns.
+
+Second checkpoint, compiler/source eaf23d1, EvoIR 1.9.112 / EvoMIR 0.48:
+  same workspace test command: exit 0; 2763 PASS / 0 FAIL / 4 historical
+  ignored, 345 result groups. Clippy --workspace --all-targets -D warnings
+  and cargo fmt --all -- --check both exit 0.
+  K1 Python regressions: 251 PASS; ladder regressions: 262 PASS; Ruff PASS.
+  Textual grammar: 54/54 instruction shapes, zero differences (not a
+  complete grammar/semantics proof).
+  Fresh layout build/observations: 128/128 + 22/22 against the unchanged
+  frozen oracle manifests. No fresh reference-layout execution claimed.
+  Fresh empty-CARGO_HOME, vendored --locked --offline proof replay: 13 PASS,
+  zero failure/ignore, reusing the existing absolute target path, no clone.
+  Debug compiler SHA256:
+  5e5a5816af87ad0a53652fffe87ffe27d9f073ad412b8f0ba1ae4b6db15c3e3a
+  Raw logs: .build/floating-targeted/strict-20260927/
+    workspace-final.log, k1-regression.log, excess-projection-final.log,
+    layout-final.log, offline-final.log.
+  The six complete application replays retain their own frozen compiler
+  523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa.
+  This checkpoint does not replace those executable identities or close
+  remaining TODO dependencies. No kernel campaign was run in this checkpoint.

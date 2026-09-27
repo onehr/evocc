@@ -1,24 +1,22 @@
 {
   "schemaVersion": 1,
-  "run": "20260927T084656.017760Z",
-  "subject": "edc69054d72660ffbb9bde2ccec61333ef0d1748",
-  "dirty": true,
+  "run": "20260927T085135.287066Z",
+  "subject": "281de34e333410b64fae14078cb4fa28085956f3",
+  "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject",
   "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "toybox",
+    "llvm-test-suite",
     "--evocc",
     ".build/floating-targeted/strict-20260927/evocc-pthread-subject",
     "--jobs",
-    "2",
-    "--budget",
-    "1"
+    "2"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "toybox"
+    "llvm-test-suite"
   ],
   "status": "INCOMPLETE",
   "benchmarks": {
@@ -3277,19 +3275,16 @@
       "rung": "E9",
       "note": "SingleSource C objects with original lit outputs; C++ excluded by language, mixed ramp",
       "outcomes": {
-        "PASS": 1014,
-        "compiler-refused": 708,
+        "PASS": 1039,
+        "compiler-refused": 687,
         "oracle-unusable": 1,
-        "runtime-failure": 11,
-        "link-failure": 1
+        "runtime-failure": 8
       },
       "refusals": {
-        "E3050": 21,
+        "E3050": 14,
         "E1001": 345,
         "E0112": 9,
-        "E3049": 9,
-        "E2001": 303,
-        "E2101": 2,
+        "E2001": 299,
         "E2202": 2,
         "E2102": 1,
         "E1003": 5,
@@ -3298,138 +3293,13 @@
         "E4002": 2,
         "E3051": 1,
         "other": 1,
+        "E2101": 1,
         "E2204": 1,
         "E2940": 1,
         "E2929": 1
       },
       "baselineFailures": 1,
       "failingUnits": [
-        {
-          "unit": "build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/CMakeFiles/lu.dir/lu.c.o",
-          "source": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c",
-          "assemblerFlags": [],
-          "omittedFlags": [
-            "-Werror=date-time",
-            "-Wno-error=incompatible-pointer-types",
-            "-w"
-          ],
-          "outcome": "assembled",
-          "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/CMakeFiles/lu.dir/lu.c.s",
-          "assemblySha256": "c92b80947b426ebd01e3caa08ef9d8e26b1051a97d48a035a89772049467ca74",
-          "objectSha256": "e9a56be1642d923ca8ac4a7a926d21a467bebfa663714f03b6537a5f9264a74f",
-          "program": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.test",
-          "reference": "PASS",
-          "native": "FAIL",
-          "programOutcome": "runtime-failure",
-          "originalArguments": [
-            "/usr/bin/clang-19",
-            "-DFP_ABSTOLERANCE=1e-5",
-            "-DNDEBUG",
-            "-O3",
-            "-DNDEBUG",
-            "-w",
-            "-Werror=date-time",
-            "-I",
-            "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
-            "-DPOLYBENCH_DUMP_ARRAYS",
-            "-Wno-error=incompatible-pointer-types",
-            "-o",
-            "CMakeFiles/lu.dir/lu.c.o",
-            "-c",
-            "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c"
-          ],
-          "disposition": "compiler-failure",
-          "dispositionReason": "current fail supersedes the former FP deferral: The original PolyBench program executes floating array arithmetic and prints its results through print_element(double). Its enabled check_FP also performs floating subtraction/fabs/comparison.",
-          "dispositionEvidence": [
-            "tests/fixtures/llvm-polybench-floating-paths.out",
-            ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-          ],
-          "sourceSha256": "8e752a8d13e90c6464c3573cf75a7df201a36dc0d43914de49ae65a88da20f15"
-        },
-        {
-          "unit": "build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/CMakeFiles/ludcmp.dir/ludcmp.c.o",
-          "source": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c",
-          "assemblerFlags": [],
-          "omittedFlags": [
-            "-Werror=date-time",
-            "-Wno-error=incompatible-pointer-types",
-            "-w"
-          ],
-          "outcome": "assembled",
-          "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/CMakeFiles/ludcmp.dir/ludcmp.c.s",
-          "assemblySha256": "92bdae7ee5bab71c085a27e2c4c0c535b265a1e9f35d1575efdc2c38ba27f0c7",
-          "objectSha256": "8692fbb8435676a24bfad888c22c174c0ec75693cc5c3a88308c72c715ae6990",
-          "program": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.test",
-          "reference": "PASS",
-          "native": "FAIL",
-          "programOutcome": "runtime-failure",
-          "originalArguments": [
-            "/usr/bin/clang-19",
-            "-DFP_ABSTOLERANCE=1e-5",
-            "-DNDEBUG",
-            "-O3",
-            "-DNDEBUG",
-            "-w",
-            "-Werror=date-time",
-            "-I",
-            "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
-            "-DPOLYBENCH_DUMP_ARRAYS",
-            "-Wno-error=incompatible-pointer-types",
-            "-o",
-            "CMakeFiles/ludcmp.dir/ludcmp.c.o",
-            "-c",
-            "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c"
-          ],
-          "disposition": "compiler-failure",
-          "dispositionReason": "current fail supersedes the former FP deferral: The original PolyBench program executes floating array arithmetic and prints its results through print_element(double). Its enabled check_FP also performs floating subtraction/fabs/comparison.",
-          "dispositionEvidence": [
-            "tests/fixtures/llvm-polybench-floating-paths.out",
-            ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-          ],
-          "sourceSha256": "e724fc2006a0ea556eba773ead35c64532680ffdc185fd07ff40e8264280a549"
-        },
-        {
-          "unit": "build/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/CMakeFiles/floyd-warshall.dir/floyd-warshall.c.o",
-          "source": "SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c",
-          "assemblerFlags": [],
-          "omittedFlags": [
-            "-Werror=date-time",
-            "-Wno-error=incompatible-pointer-types",
-            "-w"
-          ],
-          "outcome": "assembled",
-          "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/CMakeFiles/floyd-warshall.dir/floyd-warshall.c.s",
-          "assemblySha256": "55a72f418a7e898a74ec48141a8a14a56f1a75893aedf1eedf216a081b86b8cd",
-          "objectSha256": "dd0310fcb645887440fde86d617f140e68459e49def0c9384b58d5d3a669942a",
-          "program": "SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.test",
-          "reference": "PASS",
-          "native": "FAIL",
-          "programOutcome": "runtime-failure",
-          "originalArguments": [
-            "/usr/bin/clang-19",
-            "-DFP_ABSTOLERANCE=1e-5",
-            "-DNDEBUG",
-            "-O3",
-            "-DNDEBUG",
-            "-w",
-            "-Werror=date-time",
-            "-I",
-            "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
-            "-DPOLYBENCH_DUMP_ARRAYS",
-            "-Wno-error=incompatible-pointer-types",
-            "-o",
-            "CMakeFiles/floyd-warshall.dir/floyd-warshall.c.o",
-            "-c",
-            "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c"
-          ],
-          "disposition": "compiler-failure",
-          "dispositionReason": "current fail supersedes the former FP deferral: The original LLVM variant has an integer kernel, but main calls check_FP, which converts array values to double and executes subtraction/fabs/comparison; its enabled output also calls print_element(double). The original source/flags are unchanged.",
-          "dispositionEvidence": [
-            "tests/fixtures/llvm-polybench-floating-paths.out",
-            ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-          ],
-          "sourceSha256": "5ebbb740697eccb7becd8f1bca26d5f05a7696911cfac13c683889ae3e9f6953"
-        },
         {
           "unit": "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-nestedloop.dir/nestedloop.c.o",
           "source": "SingleSource/Benchmarks/Shootout/nestedloop.c",
@@ -3441,8 +3311,8 @@
           ],
           "outcome": "assembled",
           "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-nestedloop.dir/nestedloop.c.s",
-          "assemblySha256": "fa5dd6193fb8a7a23c0bfc75a7fe4197cb96a2605535a527e388c898e2b6a93b",
-          "objectSha256": "c80fb4887771d8418cdfe8cf341b6745ae15adba65b70aa73d200859f3f41bc4",
+          "assemblySha256": "0dcfb96c74fdadbfaadd0d65ae7ff6ea2c74b00363cf2df7a5b4eebf2334e897",
+          "objectSha256": "3981caf846de79fca257450f46437e4ce0774090fd4102e8efd414bde1e9310e",
           "program": "SingleSource/Benchmarks/Shootout/Shootout-nestedloop.test",
           "reference": "PASS",
           "native": "FAIL",
@@ -3469,51 +3339,6 @@
           "sourceSha256": "45606b720ba68dc8320bb1ed7a4348a14cfb8db5f0c677d87874cc99f5fc7744"
         },
         {
-          "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.o",
-          "source": "SingleSource/Regression/C/gcc-c-torture/execute/20020720-1.c",
-          "assemblerFlags": [],
-          "omittedFlags": [
-            "-Werror=date-time",
-            "-Wno-error=incompatible-pointer-types",
-            "-Wno-implicit-function-declaration",
-            "-Wno-implicit-int",
-            "-Wno-int-conversion",
-            "-w"
-          ],
-          "outcome": "assembled",
-          "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.s",
-          "assemblySha256": "77fb90b16fc8ba619c7de3b272ffea525e8751b50c7c103d52de190e047b75f3",
-          "objectSha256": "71ac29a4021214e1c77fc079f6c4b09b664deaf3d04ecc48b3178eb628abe2c7",
-          "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-20020720-1.test",
-          "reference": "PASS",
-          "native": "NOEXE",
-          "programOutcome": "link-failure",
-          "originalArguments": [
-            "/usr/bin/clang-19",
-            "-DNDEBUG",
-            "-O3",
-            "-DNDEBUG",
-            "-w",
-            "-Werror=date-time",
-            "-Wno-implicit-int",
-            "-Wno-int-conversion",
-            "-Wno-implicit-function-declaration",
-            "-w",
-            "-Wno-error=incompatible-pointer-types",
-            "-o",
-            "CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.o",
-            "-c",
-            "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20020720-1.c"
-          ],
-          "disposition": "compiler-failure",
-          "dispositionReason": "current fail supersedes the former FP deferral: main calls foo(double), which calls fabs and performs a floating comparison. Its link_error reference is intentionally unreachable, not the criterion for this disposition.",
-          "dispositionEvidence": [
-            "tests/fixtures/llvm-floating-value-paths.out",
-            ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
-          ],
-          "sourceSha256": "4520a96e5b9f279852f32f22c4551a1eff4cbdbb934275af62079f4de3cd4bf8"
-        },
-        {
           "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20090113-1.dir/20090113-1.c.o",
           "source": "SingleSource/Regression/C/gcc-c-torture/execute/20090113-1.c",
           "assemblerFlags": [],
@@ -3527,8 +3352,8 @@
           ],
           "outcome": "assembled",
           "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20090113-1.dir/20090113-1.c.s",
-          "assemblySha256": "2c727aeb36c88744b355f59c44305fba58bb7bc3d4dbd859443a58d18c174933",
-          "objectSha256": "ba1aa2a9c8a53e28f050b371e6eb5dd305b723bd5eb713718cc7bd5be2597322",
+          "assemblySha256": "d394f4bd70bf32e82e8cd4f6cbcee99f48608cd00aa6c40262ddedfa21df7a4d",
+          "objectSha256": "52a9662010ea78b7c99468e5661712ce18b35fd81adc8923b86437317ff2c03e",
           "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-20090113-1.test",
           "reference": "PASS",
           "native": "FAIL",
@@ -3550,7 +3375,12 @@
             "-c",
             "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20090113-1.c"
           ],
-          "disposition": "compiler-failure"
+          "disposition": "not-applicable",
+          "dispositionReason": "R01: the original reads uninitialized automatic adata[9] in msum_i4 before any store. Both independently compiled GCC-14/Clang-19 UBSan-instrumented originals give positive Memcheck initializedness errors at line 43; plain Memcheck controls alone do not. See the exact diagnostic qualification, not a claim that UBSan alone detects uninitialized data.",
+          "dispositionEvidence": [
+            "tests/fixtures/llvm-uninitialized-original.out"
+          ],
+          "sourceSha256": "95564445bb0083c9904587014c8d5ec3ef1f61c96c7f498dbf8cc8d7382243b0"
         },
         {
           "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr23135.dir/pr23135.c.o",
@@ -3567,8 +3397,8 @@
           ],
           "outcome": "assembled",
           "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr23135.dir/pr23135.c.s",
-          "assemblySha256": "7584a4303846c2d4106f8f3a8aaa2ec9f1a3c2b6db3b51a412ae74ac0e1a3cb2",
-          "objectSha256": "0e11279232fa32db8ea3615c53d524eb1fa11e3a50aa695bd8b13a9ab3b0ffa0",
+          "assemblySha256": "6d37b3205c8a91797ac4946894ca5974c7306264e1a82194b0e2bc580b14d4c6",
+          "objectSha256": "658615b1e9cbe828616a6ca3cc97262af1dae627ec54cd2aa303c2c29afa2193",
           "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-pr23135.test",
           "reference": "PASS",
           "native": "FAIL",
@@ -3605,8 +3435,8 @@
           ],
           "outcome": "assembled",
           "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-05-26-Shorts.dir/2003-05-26-Shorts.c.s",
-          "assemblySha256": "9b39ecb032bf0dbea2732d735c733470f91f1433fabd57bd702d7081f5f08e5a",
-          "objectSha256": "2160151e55c21d8245d73e68da8b496d791408c517ff2cf8bbd5c8ffcb66bc16",
+          "assemblySha256": "b462f2e17698aeb1b3533d787f567e343b8d1a7a6f6dc6b41539c793ea5c13ef",
+          "objectSha256": "14f23a6db3fd3ad9fbb4e03657f64a6045336a7900a7249f238a7e7ea760f5fa",
           "program": "SingleSource/UnitTests/2003-05-26-Shorts.test",
           "reference": "PASS",
           "native": "FAIL",
@@ -3645,8 +3475,8 @@
           ],
           "outcome": "assembled",
           "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-06-IntOverflow.dir/2003-07-06-IntOverflow.c.s",
-          "assemblySha256": "80fa00970758a873445af29500971dab2123a31ea322fa3b46291991aab020f5",
-          "objectSha256": "56604f75bfa4ba7dc332a9984a59a5f69b352e9fa871eb435c061a23b3a4d66b",
+          "assemblySha256": "3c3001eb9d11e90d59f94fb311718f974a9cfbcc1b8d088d428342ab075b3b5a",
+          "objectSha256": "2fcc08b84e4a012a8fda882a4f522cddc54e2d6ba4ec4f8c2a0d6d02cf5e81df",
           "program": "SingleSource/UnitTests/2003-07-06-IntOverflow.test",
           "reference": "PASS",
           "native": "FAIL",
@@ -3685,8 +3515,8 @@
           ],
           "outcome": "assembled",
           "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-09-LoadShorts.dir/2003-07-09-LoadShorts.c.s",
-          "assemblySha256": "f0cce7af2bdcf21f3ddc23650d30246e9beffd84ea33d6276505cf57823dc3af",
-          "objectSha256": "fd188cfd1f2bb13c20f4293b3856b6c7d75be9058095663ce5fd7a693580ca3a",
+          "assemblySha256": "71e83b8bf57e66c4e08bc3d259d593e06318e82615f55c7528b6424edbed96c2",
+          "objectSha256": "b85aaa0c651d4f16a9f4177228c38ec75c9bab124a3db6b8d9b9505d75df6485",
           "program": "SingleSource/UnitTests/2003-07-09-LoadShorts.test",
           "reference": "PASS",
           "native": "FAIL",
@@ -3725,8 +3555,8 @@
           ],
           "outcome": "assembled",
           "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-09-SignedArgs.dir/2003-07-09-SignedArgs.c.s",
-          "assemblySha256": "1716bce981c6e596860fed7ea7c5b14902f951f965886cce13d1a64417986691",
-          "objectSha256": "0c6bd378bbddf27084beb5a096c24fb4622b3a396c6f9d975a785654a0f67872",
+          "assemblySha256": "2126497dfb1f14a2a0d2c419a48e6e66bd73ec4ddbd08fa501eb198b4b9d7c11",
+          "objectSha256": "a89e3d3685205494018b25650b5bf6a766e1006e2f8307203748c0341b21ec90",
           "program": "SingleSource/UnitTests/2003-07-09-SignedArgs.test",
           "reference": "PASS",
           "native": "FAIL",
@@ -3763,8 +3593,8 @@
           ],
           "outcome": "assembled",
           "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/SignlessTypes/CMakeFiles/shr.dir/shr.c.s",
-          "assemblySha256": "b01703ecdcf8ab3f23a495a6656138c8843abb28cf1862f1034e39c9335458a1",
-          "objectSha256": "92c44969845427f0575427c4d770d1a9606c37fad856d1afe40cb03143df6c72",
+          "assemblySha256": "a15684741e549e91de88c92064429b9141fec9698a2cb538617f5ae2df3700a0",
+          "objectSha256": "e79a66650e2a58fc0cf31ab334a852fa9ce669e364d2bf647a8d9c1db87e9113",
           "program": "SingleSource/UnitTests/SignlessTypes/shr.test",
           "reference": "PASS",
           "native": "FAIL",
@@ -3791,9 +3621,9 @@
         }
       ],
       "total": 1735,
-      "passed": 1014,
+      "passed": 1039,
       "kind": "programs",
-      "compiled": 1027,
+      "compiled": 1048,
       "excluded": 141,
       "adjustments": {
         "subject": [
@@ -4082,60 +3912,186 @@
           "-fno-trapping-math",
           "-fno-vect-cost-model",
           "-ftree-vectorize",
-          "-pthread",
           "-w"
         ]
       },
       "dispositions": {
-        "PASS": 1014,
-        "compiler-failure": 44,
-        "FP-deferred": 17,
-        "not-applicable": 659,
+        "PASS": 1039,
+        "compiler-failure": 1,
+        "FP-deferred": 30,
+        "not-applicable": 664,
         "oracle-unusable": 1
       },
       "status": "INCOMPLETE",
-      "run": "20260919T230110Z",
-      "evidence": ".evidence/ladder/llvm-test-suite/20260919T230110Z",
+      "run": "20260927T085137Z",
+      "evidence": ".evidence/ladder/llvm-test-suite/20260927T085137Z",
       "receipt": "tests/contracts/ladder-llvm-test-suite-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/llvm-test-suite.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/evocc-20260920-closure"
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject"
       ],
       "exitCode": 0,
-      "seconds": 701.0,
+      "seconds": 649.1,
       "previous": {
         "rung": "E9",
         "note": "SingleSource C objects with original lit outputs; C++ excluded by language, mixed ramp",
         "outcomes": {
-          "PASS": 887,
-          "compiler-refused": 839,
+          "PASS": 1014,
+          "compiler-refused": 708,
           "oracle-unusable": 1,
-          "runtime-failure": 8
+          "runtime-failure": 11,
+          "link-failure": 1
         },
         "refusals": {
-          "E3049": 98,
-          "E3050": 48,
-          "E1001": 347,
+          "E3050": 21,
+          "E1001": 345,
           "E0112": 9,
-          "E2001": 312,
+          "E3049": 9,
+          "E2001": 303,
+          "E2101": 2,
           "E2202": 2,
           "E2102": 1,
           "E1003": 5,
           "E2913": 1,
-          "E1006": 7,
           "E2903": 3,
           "E4002": 2,
           "E3051": 1,
-          "E2101": 1,
+          "other": 1,
           "E2204": 1,
           "E2940": 1,
           "E2929": 1
         },
         "baselineFailures": 1,
         "failingUnits": [
+          {
+            "unit": "build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/CMakeFiles/lu.dir/lu.c.o",
+            "source": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c",
+            "assemblerFlags": [],
+            "omittedFlags": [
+              "-Werror=date-time",
+              "-Wno-error=incompatible-pointer-types",
+              "-w"
+            ],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/CMakeFiles/lu.dir/lu.c.s",
+            "assemblySha256": "c92b80947b426ebd01e3caa08ef9d8e26b1051a97d48a035a89772049467ca74",
+            "objectSha256": "e9a56be1642d923ca8ac4a7a926d21a467bebfa663714f03b6537a5f9264a74f",
+            "program": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.test",
+            "reference": "PASS",
+            "native": "FAIL",
+            "programOutcome": "runtime-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DFP_ABSTOLERANCE=1e-5",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-I",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
+              "-DPOLYBENCH_DUMP_ARRAYS",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/lu.dir/lu.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/lu/lu.c"
+            ],
+            "disposition": "compiler-failure",
+            "dispositionReason": "current fail supersedes the former FP deferral: The original PolyBench program executes floating array arithmetic and prints its results through print_element(double). Its enabled check_FP also performs floating subtraction/fabs/comparison.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-polybench-floating-paths.out",
+              ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
+            ],
+            "sourceSha256": "8e752a8d13e90c6464c3573cf75a7df201a36dc0d43914de49ae65a88da20f15"
+          },
+          {
+            "unit": "build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/CMakeFiles/ludcmp.dir/ludcmp.c.o",
+            "source": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c",
+            "assemblerFlags": [],
+            "omittedFlags": [
+              "-Werror=date-time",
+              "-Wno-error=incompatible-pointer-types",
+              "-w"
+            ],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/CMakeFiles/ludcmp.dir/ludcmp.c.s",
+            "assemblySha256": "92bdae7ee5bab71c085a27e2c4c0c535b265a1e9f35d1575efdc2c38ba27f0c7",
+            "objectSha256": "8692fbb8435676a24bfad888c22c174c0ec75693cc5c3a88308c72c715ae6990",
+            "program": "SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.test",
+            "reference": "PASS",
+            "native": "FAIL",
+            "programOutcome": "runtime-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DFP_ABSTOLERANCE=1e-5",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-I",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
+              "-DPOLYBENCH_DUMP_ARRAYS",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/ludcmp.dir/ludcmp.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/linear-algebra/solvers/ludcmp/ludcmp.c"
+            ],
+            "disposition": "compiler-failure",
+            "dispositionReason": "current fail supersedes the former FP deferral: The original PolyBench program executes floating array arithmetic and prints its results through print_element(double). Its enabled check_FP also performs floating subtraction/fabs/comparison.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-polybench-floating-paths.out",
+              ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
+            ],
+            "sourceSha256": "e724fc2006a0ea556eba773ead35c64532680ffdc185fd07ff40e8264280a549"
+          },
+          {
+            "unit": "build/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/CMakeFiles/floyd-warshall.dir/floyd-warshall.c.o",
+            "source": "SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c",
+            "assemblerFlags": [],
+            "omittedFlags": [
+              "-Werror=date-time",
+              "-Wno-error=incompatible-pointer-types",
+              "-w"
+            ],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/CMakeFiles/floyd-warshall.dir/floyd-warshall.c.s",
+            "assemblySha256": "55a72f418a7e898a74ec48141a8a14a56f1a75893aedf1eedf216a081b86b8cd",
+            "objectSha256": "dd0310fcb645887440fde86d617f140e68459e49def0c9384b58d5d3a669942a",
+            "program": "SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.test",
+            "reference": "PASS",
+            "native": "FAIL",
+            "programOutcome": "runtime-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DFP_ABSTOLERANCE=1e-5",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-I",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/utilities",
+              "-DPOLYBENCH_DUMP_ARRAYS",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/floyd-warshall.dir/floyd-warshall.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Polybench/medley/floyd-warshall/floyd-warshall.c"
+            ],
+            "disposition": "compiler-failure",
+            "dispositionReason": "current fail supersedes the former FP deferral: The original LLVM variant has an integer kernel, but main calls check_FP, which converts array values to double and executes subtraction/fabs/comparison; its enabled output also calls print_element(double). The original source/flags are unchanged.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-polybench-floating-paths.out",
+              ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
+            ],
+            "sourceSha256": "5ebbb740697eccb7becd8f1bca26d5f05a7696911cfac13c683889ae3e9f6953"
+          },
           {
             "unit": "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-nestedloop.dir/nestedloop.c.o",
             "source": "SingleSource/Benchmarks/Shootout/nestedloop.c",
@@ -4147,6 +4103,7 @@
             ],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-nestedloop.dir/nestedloop.c.s",
+            "assemblySha256": "fa5dd6193fb8a7a23c0bfc75a7fe4197cb96a2605535a527e388c898e2b6a93b",
             "objectSha256": "c80fb4887771d8418cdfe8cf341b6745ae15adba65b70aa73d200859f3f41bc4",
             "program": "SingleSource/Benchmarks/Shootout/Shootout-nestedloop.test",
             "reference": "PASS",
@@ -4165,7 +4122,58 @@
               "-c",
               "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Benchmarks/Shootout/nestedloop.c"
             ],
-            "disposition": "compiler-failure"
+            "disposition": "not-applicable",
+            "dispositionReason": "R01/C04: Original default input makes x++ overflow signed int (2147483647 + 1). Both fixed compilers instrument the positive UB observation; runtime obligations and original benchmark flags remain unchanged.",
+            "dispositionEvidence": [
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-ubsan.out",
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-clang-ubsan.out"
+            ],
+            "sourceSha256": "45606b720ba68dc8320bb1ed7a4348a14cfb8db5f0c677d87874cc99f5fc7744"
+          },
+          {
+            "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.o",
+            "source": "SingleSource/Regression/C/gcc-c-torture/execute/20020720-1.c",
+            "assemblerFlags": [],
+            "omittedFlags": [
+              "-Werror=date-time",
+              "-Wno-error=incompatible-pointer-types",
+              "-Wno-implicit-function-declaration",
+              "-Wno-implicit-int",
+              "-Wno-int-conversion",
+              "-w"
+            ],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.s",
+            "assemblySha256": "77fb90b16fc8ba619c7de3b272ffea525e8751b50c7c103d52de190e047b75f3",
+            "objectSha256": "71ac29a4021214e1c77fc079f6c4b09b664deaf3d04ecc48b3178eb628abe2c7",
+            "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-20020720-1.test",
+            "reference": "PASS",
+            "native": "NOEXE",
+            "programOutcome": "link-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-Wno-implicit-int",
+              "-Wno-int-conversion",
+              "-Wno-implicit-function-declaration",
+              "-w",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/GCC-C-execute-20020720-1.dir/20020720-1.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20020720-1.c"
+            ],
+            "disposition": "compiler-failure",
+            "dispositionReason": "current fail supersedes the former FP deferral: main calls foo(double), which calls fabs and performs a floating comparison. Its link_error reference is intentionally unreachable, not the criterion for this disposition.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-floating-value-paths.out",
+              ".evidence/ladder/llvm-test-suite/20260915T152557Z/lit-baseline.json"
+            ],
+            "sourceSha256": "4520a96e5b9f279852f32f22c4551a1eff4cbdbb934275af62079f4de3cd4bf8"
           },
           {
             "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20090113-1.dir/20090113-1.c.o",
@@ -4181,6 +4189,7 @@
             ],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20090113-1.dir/20090113-1.c.s",
+            "assemblySha256": "2c727aeb36c88744b355f59c44305fba58bb7bc3d4dbd859443a58d18c174933",
             "objectSha256": "ba1aa2a9c8a53e28f050b371e6eb5dd305b723bd5eb713718cc7bd5be2597322",
             "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-20090113-1.test",
             "reference": "PASS",
@@ -4220,6 +4229,7 @@
             ],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr23135.dir/pr23135.c.s",
+            "assemblySha256": "7584a4303846c2d4106f8f3a8aaa2ec9f1a3c2b6db3b51a412ae74ac0e1a3cb2",
             "objectSha256": "0e11279232fa32db8ea3615c53d524eb1fa11e3a50aa695bd8b13a9ab3b0ffa0",
             "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-pr23135.test",
             "reference": "PASS",
@@ -4257,6 +4267,7 @@
             ],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-05-26-Shorts.dir/2003-05-26-Shorts.c.s",
+            "assemblySha256": "9b39ecb032bf0dbea2732d735c733470f91f1433fabd57bd702d7081f5f08e5a",
             "objectSha256": "2160151e55c21d8245d73e68da8b496d791408c517ff2cf8bbd5c8ffcb66bc16",
             "program": "SingleSource/UnitTests/2003-05-26-Shorts.test",
             "reference": "PASS",
@@ -4276,7 +4287,13 @@
               "-c",
               "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/UnitTests/2003-05-26-Shorts.c"
             ],
-            "disposition": "compiler-failure"
+            "disposition": "not-applicable",
+            "dispositionReason": "R01/C04: Original arithmetic multiplies -976897885 by itself in signed int. Both fixed compilers instrument the positive UB observation; runtime obligations and original benchmark flags remain unchanged.",
+            "dispositionEvidence": [
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-ubsan.out",
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-clang-ubsan.out"
+            ],
+            "sourceSha256": "72c4246247dd413f423e9ae536657f7f217e92fdc735050c96b2c0af469eae8e"
           },
           {
             "unit": "build/SingleSource/UnitTests/CMakeFiles/2003-07-06-IntOverflow.dir/2003-07-06-IntOverflow.c.o",
@@ -4290,6 +4307,7 @@
             ],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-06-IntOverflow.dir/2003-07-06-IntOverflow.c.s",
+            "assemblySha256": "80fa00970758a873445af29500971dab2123a31ea322fa3b46291991aab020f5",
             "objectSha256": "56604f75bfa4ba7dc332a9984a59a5f69b352e9fa871eb435c061a23b3a4d66b",
             "program": "SingleSource/UnitTests/2003-07-06-IntOverflow.test",
             "reference": "PASS",
@@ -4309,7 +4327,13 @@
               "-c",
               "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/UnitTests/2003-07-06-IntOverflow.c"
             ],
-            "disposition": "compiler-failure"
+            "disposition": "not-applicable",
+            "dispositionReason": "R01/C04: Original arithmetic multiplies 2097152 by itself in signed int. Both fixed compilers instrument the positive UB observation; runtime obligations and original benchmark flags remain unchanged.",
+            "dispositionEvidence": [
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-ubsan.out",
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-clang-ubsan.out"
+            ],
+            "sourceSha256": "ff8384da7748441ee70541a0af49f04e3b62b7fc0c27b700e9bbfbd597f58733"
           },
           {
             "unit": "build/SingleSource/UnitTests/CMakeFiles/2003-07-09-LoadShorts.dir/2003-07-09-LoadShorts.c.o",
@@ -4323,6 +4347,7 @@
             ],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-09-LoadShorts.dir/2003-07-09-LoadShorts.c.s",
+            "assemblySha256": "f0cce7af2bdcf21f3ddc23650d30246e9beffd84ea33d6276505cf57823dc3af",
             "objectSha256": "fd188cfd1f2bb13c20f4293b3856b6c7d75be9058095663ce5fd7a693580ca3a",
             "program": "SingleSource/UnitTests/2003-07-09-LoadShorts.test",
             "reference": "PASS",
@@ -4342,7 +4367,13 @@
               "-c",
               "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/UnitTests/2003-07-09-LoadShorts.c"
             ],
-            "disposition": "compiler-failure"
+            "disposition": "not-applicable",
+            "dispositionReason": "R01/C04: Original arithmetic multiplies -976897885 by itself in signed int. Both fixed compilers instrument the positive UB observation; runtime obligations and original benchmark flags remain unchanged.",
+            "dispositionEvidence": [
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-ubsan.out",
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-clang-ubsan.out"
+            ],
+            "sourceSha256": "722b90afb5f992597afe6edbe4c2012bb1f2c20c879ad40450c4efe712f86113"
           },
           {
             "unit": "build/SingleSource/UnitTests/CMakeFiles/2003-07-09-SignedArgs.dir/2003-07-09-SignedArgs.c.o",
@@ -4356,6 +4387,7 @@
             ],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-09-SignedArgs.dir/2003-07-09-SignedArgs.c.s",
+            "assemblySha256": "1716bce981c6e596860fed7ea7c5b14902f951f965886cce13d1a64417986691",
             "objectSha256": "0c6bd378bbddf27084beb5a096c24fb4622b3a396c6f9d975a785654a0f67872",
             "program": "SingleSource/UnitTests/2003-07-09-SignedArgs.test",
             "reference": "PASS",
@@ -4375,7 +4407,13 @@
               "-c",
               "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/UnitTests/2003-07-09-SignedArgs.c"
             ],
-            "disposition": "compiler-failure"
+            "disposition": "not-applicable",
+            "dispositionReason": "R01/C04: Original promoted arithmetic multiplies -1899251712 by -128 in signed int. Both fixed compilers instrument the positive UB observation; runtime obligations and original benchmark flags remain unchanged.",
+            "dispositionEvidence": [
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-ubsan.out",
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-clang-ubsan.out"
+            ],
+            "sourceSha256": "424733c76f5361cff30e877db25610cc4edc7e324a97b5017746c4a2251fe422"
           },
           {
             "unit": "build/SingleSource/UnitTests/SignlessTypes/CMakeFiles/shr.dir/shr.c.o",
@@ -4387,6 +4425,7 @@
             ],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/SignlessTypes/CMakeFiles/shr.dir/shr.c.s",
+            "assemblySha256": "b01703ecdcf8ab3f23a495a6656138c8843abb28cf1862f1034e39c9335458a1",
             "objectSha256": "92c44969845427f0575427c4d770d1a9606c37fad856d1afe40cb03143df6c72",
             "program": "SingleSource/UnitTests/SignlessTypes/shr.test",
             "reference": "PASS",
@@ -4404,13 +4443,19 @@
               "-c",
               "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/UnitTests/SignlessTypes/shr.c"
             ],
-            "disposition": "compiler-failure"
+            "disposition": "not-applicable",
+            "dispositionReason": "R01/C04: Original call ShrTest8(73) shifts a 32-bit int right by 73; GNU signed-left-shift truncation does not make the count valid. Both fixed compilers instrument the positive UB observation; runtime obligations and original benchmark flags remain unchanged.",
+            "dispositionEvidence": [
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-ubsan.out",
+              ".evidence/builtin-probes/20260915-benchmark-frontier/llvm-clang-ubsan.out"
+            ],
+            "sourceSha256": "a8561c9477c968aff04ba825e1dfa46697d933e68097daeaf5ab25f9101b232d"
           }
         ],
         "total": 1735,
-        "passed": 887,
+        "passed": 1014,
         "kind": "programs",
-        "compiled": 895,
+        "compiled": 1027,
         "excluded": 141,
         "adjustments": {
           "subject": [
@@ -4691,8 +4736,6 @@
             "-Wno-return-type",
             "-Wno-shift-overflow",
             "-fexpensive-optimizations",
-            "-ffast-math",
-            "-ffp-contract=off",
             "-finput-charset=utf-8",
             "-fno-builtin-abort",
             "-fno-common",
@@ -4706,20 +4749,20 @@
           ]
         },
         "dispositions": {
-          "PASS": 887,
-          "compiler-failure": 9,
-          "FP-deferred": 186,
-          "not-applicable": 652,
+          "PASS": 1014,
+          "compiler-failure": 44,
+          "FP-deferred": 17,
+          "not-applicable": 659,
           "oracle-unusable": 1
         },
         "status": "INCOMPLETE",
-        "run": "20260915T215214Z",
-        "evidence": ".evidence/ladder/llvm-test-suite/20260915T215214Z"
+        "run": "20260919T230110Z",
+        "evidence": ".evidence/ladder/llvm-test-suite/20260919T230110Z"
       },
       "measurement": {
-        "run": "20260919T222250.259791Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882"
+        "run": "20260927T085135.287066Z",
+        "subject": "281de34e333410b64fae14078cb4fa28085956f3",
+        "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa"
       }
     },
     "jq": {
