@@ -30,6 +30,14 @@ an optimization gap. The compiler patch must not be reported as a full fix for
 that object. [Small source](../../tests/fixtures/bitmap-constant-mutation.c).
 Existing accepted Images and K6 history remain unchanged. K13/K14 are not run.
 
+T04d's implementation now materializes the original `vmlinux_o`/module producer
+graph before freezing inputs and recompiling consumers. A real one-object
+C/Make reduction proves the old late replacement and the repaired value 37
+with preserved object hash; all 251 K1 tests pass. The actual Kbuild preparation
+command also exits 0, but its already-regenerated tree is not original-failure
+closure. T04d remains RETEST for the next complete composition after K12b.
+[Commands and limits](../../tests/fixtures/kernel-late-generator.out).
+
 ### Internal instruction-publication race experiment — 2026-09-27
 
 The matching QEMU 11.1.1 build reproduces the six-case reduction at **3 PASS /

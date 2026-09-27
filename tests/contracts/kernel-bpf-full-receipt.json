@@ -1,4 +1,13 @@
 {
+  "targetedRepairs": [{
+    "id": "T04d",
+    "status": "RETEST",
+    "date": "2026-09-27",
+    "isolatedProducerAndConsumer": "PASS",
+    "originalPreparationTarget": "PASS",
+    "freshCompleteComposition": "NOT_RUN",
+    "evidence": "tests/fixtures/kernel-late-generator.out"
+  }],
   "allowSymbolDrift": true,
   "assemblerImage": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
   "assemblyBatchSize": 64,

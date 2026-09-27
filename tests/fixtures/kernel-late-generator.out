@@ -1,0 +1,45 @@
+2026-09-27 T04d: producer ordering repaired; fresh full composition NOT RUN.
+
+Original failure: .evidence/k1/20260926T133321Z/modpost.log runs ASN.1, CRC,
+consolemap, logo and RAID6 generators after `prepare` and all 7002 EvoCC
+consumers. Kbuild then replaces 13 objects with GCC output; provenance rejects
+them. The eight unresolved bitmap assertions are a separate K12b gap.
+
+The fixed Linux tree's top Makefile defines `vmlinux_o` over vmlinux.a and
+kernel libraries, and modules.order over the module build graph. Running
+prepare + vmlinux_o (+ modules.order with KBUILD_MODULES=1 when configured)
+materializes those original generators before taking the input snapshot.
+This is not final modpost/link/boot and preparatory GCC objects receive no
+EvoCC credit. The following pass recompiles every selected target-C consumer.
+The existing final prepare/content and post-link object audits still apply.
+The late .vmlinux.export.c and .mod.c consumers still use the existing modpost
+recompile step; they are not silently removed from the denominator.
+
+RED: 15 failed ordering assertions in checkpoint subcases, zero import errors.
+GREEN: 46 survey/cache tests; all 251 K1 Python tests pass; Ruff/diff green.
+Failure injection proves a failed producer never starts compilation/install.
+Resume continues to bind the implementation, inputs, compiler, commands,
+prepare log and object hashes. Mutating any bound identity invalidates reuse.
+
+Real C/Make reduction: kernel-late-generator.mk uses the unchanged
+kernel-prepared-consumer.c. Its ordinary prepare target deliberately omits the
+directory-local header; the producer graph changes PREPARED_OFFSET 7 -> 37.
+Old ordering: both prepare checks pass, but a later producer replaces the
+EvoCC object. New ordering: the EvoCC consumer sees 37 and remains byte-identical
+after the same late make invocation. kernel-late-generator-check.c links to
+that object and executes exit 0 in the sealed network-none ARM64 container.
+The producer callback in this isolated test runs the fixture Makefile, not
+Linux Kbuild; object emission/assembly/symbol/install are the real shared path.
+Compiler SHA b6ae7333091c741946fd0b418efc4d242cf6337f3ce6816306a69304a57e5fc8.
+Make fixture SHA 3576561811c55c44630d316a40534098368fa556690aedc915e89972f08dc136.
+
+Original Kbuild phase sanity check also exits 0 on the current reviewed tree:
+make -C /work/src O=/work/out ARCH=arm64 -j2 CC=gcc-14 KBUILD_MODULES=1 \
+  prepare vmlinux_o modules.order
+The runner also executes the existing fixed-version-header recipes. The tree
+had already regenerated its tables in the failed run, so this check alone
+does NOT reproduce or close the original 13-object replacement. Fresh complete
+composition remains required after K12b; no old receipt is relabelled PASS.
+
+Small results: .build/floating-targeted/bitmap-constants-20260927/producer-fixture/result.json
+Original phase log: same parent /producer-real.log. No clone or runtime image.

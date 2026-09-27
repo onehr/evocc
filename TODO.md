@@ -908,13 +908,17 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     all 65 functions. This is recovery validation, not kernel acceptance; the
     already-running worker loaded the old implementation and is unchanged.
 
-  - [ ] **T04d — Include late host-generated inputs in preparation** — `OPEN`, P1.
+  - [ ] **T04d — Include late host-generated inputs in preparation** — `RETEST`, P1.
     Modpost regenerated ASN.1 sources/headers, CRC tables, consolemap, logo and
     RAID6 tables after the prepared-input pass, rebuilding 13 consumers with GCC.
     Current generated contents match pristine, but that does not authorize a
-    provenance exemption or blind timestamp touch. Stabilize the original
-    producer recipes before subject consumers, then recheck inputs and all
-    installed object hashes after modpost. This defect is independent of K12b.
+    provenance exemption or blind timestamp touch. The shared path now runs
+    the original vmlinux/module producer graph before freezing consumer inputs.
+    A real one-C-object Make reduction goes RED -> GREEN: header 7 -> 37,
+    native exit 0, subject hash unchanged after the late producer. All 251 K1
+    tests pass and the actual Kbuild preparation target exits 0. Fresh full
+    composition must still prove no replacements after modpost, after K12b.
+    [Exact scope and evidence](tests/fixtures/kernel-late-generator.out).
     [Fixture, invalidation matrix and result](tests/fixtures/kernel-prepared-consumer.out).
 
 - [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.

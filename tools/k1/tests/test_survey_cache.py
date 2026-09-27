@@ -41,6 +41,23 @@ class CacheKeyTest(unittest.TestCase):
     def test_prepared_checkpoint_is_discarded_if_inputs_change_during_compilation(self):
         self._prepared_checkpoint_case('during-compile')
 
+    def test_failed_producer_graph_never_compiles_or_installs_subject_objects(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = root / 'evocc'
+            binary.write_bytes(b'compiler')
+            (root / 'modules.order').write_text('module.o\n')
+            args = SimpleNamespace(src_root=root, evocc=binary, k1_root=root,
+                                   no_cache=False, resume_prepared_run=None, relink_jobs=2)
+            with patch.object(substitute, 'relink', return_value=2) as producer, \
+                 patch.object(substitute, 'emit_assembly') as compile_one, \
+                 patch.object(substitute, 'install') as install:
+                result = substitute.recompile_after_prepare([], {}, args, root, root, root, root)
+            self.assertEqual(result['prepareExitCode'], 2)
+            self.assertEqual(producer.call_args.args[-1], ('prepare', 'vmlinux_o', 'modules.order'))
+            compile_one.assert_not_called()
+            install.assert_not_called()
+
     def _prepared_checkpoint_case(self, change=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -69,6 +86,8 @@ class CacheKeyTest(unittest.TestCase):
             emitted = []
             interrupt = True
             def emit(unit, record, *unused):
+                self.assertTrue((output / 'generated-table.h').is_file(),
+                                'all producer recipes must run before EvoCC consumers')
                 emitted.append(unit)
                 if interrupt and unit == 'u64.o':
                     raise RuntimeError('injected interruption')
@@ -95,6 +114,9 @@ class CacheKeyTest(unittest.TestCase):
                                and change == 'symbol-drift' and row['unit'] == 'u00.o' else [])
             def prepare(src, out, log, *unused):
                 log.write_text('prepare completed\n')
+                targets = unused[-1]
+                if 'vmlinux_o' in targets:
+                    (output / 'generated-table.h').write_text('#define TABLE 37\n')
                 # Real Kbuild rewrites identical GEN Makefile bytes: a resume
                 # must validate the old prepared state before doing that again.
                 (out / 'Makefile').write_text('generated\n')
@@ -687,6 +709,14 @@ class CacheKeyTest(unittest.TestCase):
                 self.assertEqual(substitute.relink(root / 'src', out, root / 'modpost.log', 2, ('modpost',)), 0)
             self.assertIn('KBUILD_MODULES=1', run.call_args.args[0][-1],
                           'a vmlinux-only modpost leaves module symbol versions stale')
+            with patch.object(substitute.subprocess, 'run', return_value=completed) as run:
+                self.assertEqual(substitute.relink(
+                    root / 'src', out, root / 'producers.log', 2,
+                    ('prepare', 'vmlinux_o', 'modules.order')), 0)
+            script = run.call_args.args[0][-1]
+            self.assertIn('KBUILD_MODULES=1 prepare vmlinux_o modules.order', script)
+            self.assertIn('obj=init include/generated/utsversion.h init/utsversion-tmp.h', script)
+            self.assertNotIn('modpost', script, 'generated module C follows final subject inputs')
 
     def test_prepare_fixed_point_ignores_only_metadata_not_changed_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

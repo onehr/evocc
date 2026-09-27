@@ -866,12 +866,12 @@ def relink(src_root: Path, out_root: Path, log: Path, jobs: int,
         f"KBUILD_BUILD_HOST='{reproducibility['KBUILD_BUILD_HOST']}' "
         f"KBUILD_BUILD_VERSION='{version[1]}'\n"
         f"make -C /work/src O=/work/out ARCH=arm64 -j{jobs} CC=gcc-14 "
-        + ('KBUILD_MODULES=1 ' if targets == ('modpost',)
+        + ('KBUILD_MODULES=1 ' if ('modpost' in targets or 'modules.order' in targets)
            and (out_root / 'modules.order').is_file()
            and (out_root / 'modules.order').read_text().strip() else '')
         + " ".join(_quote(target) for target in targets) + "\n"
     )
-    if targets == ("prepare",):
+    if "prepare" in targets:
         # link-vmlinux normally creates the final version header too late for
         # substituted consumers. Run its original Kbuild header recipes now;
         # no C object is compiled by this header-only invocation.
@@ -929,8 +929,17 @@ def recompile_after_prepare(rows: list[dict], records: dict[str, Record], args,
         result['prepareReusedFrom'] = state['log']
     else:
         log = run_dir / 'prepare.log'
+        # `prepare` alone does not run per-directory host generators (ASN.1,
+        # CRC/RAID tables, logos, ...). Materialize the original producer graph
+        # before freezing inputs. These preparatory artifacts are not credited
+        # to EvoCC: every selected target-C object is recompiled below, and the
+        # existing post-link hash audit still rejects any later GCC replacement.
+        targets = ('prepare', 'vmlinux_o')
+        module_order = out_root / 'modules.order'
+        if module_order.is_file() and module_order.read_text().strip():
+            targets += ('modules.order',)
         result['prepareExitCode'] = relink(args.src_root, out_root, log,
-                                          args.relink_jobs, ('prepare',))
+                                          args.relink_jobs, targets)
         if result['prepareExitCode'] != 0:
             return result
         before = input_snapshot(args.src_root, out_root, toolchain_root=toolchain_root)
