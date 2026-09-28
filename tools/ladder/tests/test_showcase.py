@@ -56,16 +56,37 @@ class ShowcaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "sprite sheet differs"):
             visuals.draw("zlib", record)
 
-    def test_album_rejects_changed_pixels_and_duplicate_kept_images(self):
+    def test_bundle_rejects_changed_hashes_and_false_negative_control(self):
         original = showcase.read_json(showcase.OUT / "captures.json")["programs"]["toybox"]
         record = copy.deepcopy(original)
-        record["album"]["pictures"]["alpine"]["rgb"] = "00" + record["album"]["pictures"]["alpine"]["rgb"][2:]
-        with self.assertRaisesRegex(ValueError, "postcard differs"):
+        record["bundle"]["files"][0]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "manifest differs"):
             visuals.draw("toybox", record)
         record = copy.deepcopy(original)
-        record["album"]["kept"][1] = record["album"]["kept"][0]
-        with self.assertRaisesRegex(ValueError, "exactly one"):
+        negative, = [c for c in record["commands"] if c.get("stage") == "detect-change"]
+        negative["exitCode"] = 0
+        with self.assertRaisesRegex(ValueError, "exit code"):
             visuals.draw("toybox", record)
+
+    def test_bundle_requires_both_restore_and_change_detection(self):
+        original = showcase.read_json(showcase.OUT / "captures.json")["programs"]["toybox"]
+        for stage, message in (("verify", "did not all verify"), ("detect-change", "not detected")):
+            record = copy.deepcopy(original)
+            command, = [c for c in record["commands"] if c.get("stage") == stage]
+            command["stdout"] = "raytrace.c:  OK\nraytrace:  OK\n"  # Missing image result.
+            with self.assertRaisesRegex(ValueError, message):
+                visuals.draw("toybox", record)
+
+    def test_fpu_capture_rejects_missing_worker_module_or_nonce(self):
+        record = showcase.read_json(showcase.OUT / "captures.json")["linux"]["fpu"]
+        log = (showcase.OUT / "linux-fpu.stdout.txt").read_text()
+        self.assertEqual(showcase.fpu_facts(log, record["nonce"]), record["facts"])
+        for changed in (log.replace("# [OK]\ttest_fpu\n", "", 1),
+                        log.replace("module test_fpu loaded", "module test_fpu missing"),
+                        log.replace("EVO_BOOT_NONCE", "WRONG_NONCE"),
+                        log.replace("reboot: Power down", "not powered off")):
+            with self.assertRaises(ValueError):
+                showcase.fpu_facts(changed, record["nonce"])
 
     def test_boot_facts_require_ordered_milestones_and_bound_nonce(self):
         facts = showcase.read_json(showcase.OUT / "captures.json")["linux"]["facts"]
@@ -80,12 +101,9 @@ class ShowcaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing/out of order"):
             showcase.boot_facts(log.replace("EVO_INIT_ALIVE", "EVO_INIT_DONE").replace("\nEVO_INIT_DONE\n[", "\nEVO_INIT_ALIVE\n["), facts["nonce"])
 
-    def test_fixture_images_are_distinct_and_well_formed(self):
-        fixtures = showcase.demo_inputs()
-        scenes = [fixtures.sprite_sheet(), *fixtures.postcards().values()]
-        self.assertEqual(len({scene["rgb"] for scene in scenes}), 4)
-        for scene in scenes:
-            self.assertEqual(len(bytes.fromhex(scene["rgb"])), scene["width"] * scene["height"] * 3)
+    def test_sprite_fixture_is_well_formed(self):
+        scene = showcase.demo_inputs().sprite_sheet()
+        self.assertEqual(len(bytes.fromhex(scene["rgb"])), scene["width"] * scene["height"] * 3)
 
     def test_committed_captures_match_assets_and_output(self):
         showcase.check()
@@ -119,7 +137,7 @@ class ShowcaseTests(unittest.TestCase):
                     self.current = 0
 
         gallery = Gallery()
-        gallery.assert_exists = lambda value: self.assertTrue((showcase.ROOT / value).is_file(), value)
+        gallery.assert_exists = lambda value: self.assertTrue((showcase.ROOT / value.split("#")[0]).is_file(), value)
         section = (showcase.ROOT / "README.md").read_text().split("## Built with EvoCC\n", 1)[1].split("## Status", 1)[0]
         gallery.feed(section)
         self.assertEqual((gallery.images, gallery.cells), (12, 12))

@@ -1,2 +1,2 @@
-/tmp/evocc-showcase-hvvxsyf2/pixels.rgb : 19.12%   (  60.8 KiB =>   11.6 KiB, /tmp/evocc-showcase-hvvxsyf2/pixels.zst) 
-/tmp/evocc-showcase-hvvxsyf2/pixels.zst: 62208 bytes 
+/tmp/evocc-showcase-dph7otsy/pixels.rgb : 19.12%   (  60.8 KiB =>   11.6 KiB, /tmp/evocc-showcase-dph7otsy/pixels.zst) 
+/tmp/evocc-showcase-dph7otsy/pixels.zst: 62208 bytes 

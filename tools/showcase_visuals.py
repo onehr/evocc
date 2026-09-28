@@ -33,8 +33,9 @@ class Card:
         self.text(28, 73, subtitle, 18, "#97b9da")
         self.text(28, 476, footer, 15, "#97aac1")
 
-    def text(self, x, y, text, size=22, color="#dce8f5"):
-        self.parts.append(f'<text x="{x}" y="{y}" font-family="sans-serif" font-size="{size}" '
+    def text(self, x, y, text, size=22, color="#dce8f5", mono=False):
+        family = "monospace" if mono else "sans-serif"
+        self.parts.append(f'<text x="{x}" y="{y}" font-family="{family}" font-size="{size}" '
                           f'fill="{color}">{html.escape(str(text))}</text>')
 
     def rect(self, x, y, w, h, color, radius=0):
@@ -54,6 +55,40 @@ class Card:
 
 def output(record):
     return json.loads(record["commands"][-1]["stdout"])
+
+
+def bundle_commands(record):
+    """Validate both the positive verification and the intentional negative control."""
+    data = record["bundle"]
+    stages = {}
+    for command in record["commands"]:
+        if "stage" in command:
+            if command["stage"] in stages:
+                raise ValueError("repeated artifact verification stage")
+            stages[command["stage"]] = command
+        expected = 1 if command.get("stage") == "detect-change" else 0
+        if command["exitCode"] != expected or command.get("expectedExitCode", 0) != expected:
+            raise ValueError("unexpected artifact verification exit code")
+    if set(stages) != {"manifest", "contents", "verify", "detect-change"}:
+        raise ValueError("missing artifact verification stage")
+    files = data["files"]
+    names = [f["name"] for f in files]
+    if names != ["raytrace.c", "raytrace", "frame.rgb"]:
+        raise ValueError("unexpected build artifact set")
+    expected_manifest = "".join(f"{f['sha256']}  {f['name']}\n" for f in files)
+    if stages["manifest"]["stdout"] != expected_manifest:
+        raise ValueError("artifact manifest differs from recorded file hashes")
+    if stages["contents"]["stdout"].splitlines() != names + ["SHA256SUMS"]:
+        raise ValueError("archive is missing build artifacts")
+    # Ignore output spacing, not missing files or changed verdicts.
+    good = [line.split() for line in stages["verify"]["stdout"].splitlines()]
+    bad = [line.split() for line in stages["detect-change"]["stdout"].splitlines()]
+    if good != [[name + ":", "OK"] for name in names]:
+        raise ValueError("restored artifacts did not all verify")
+    if data["changedFile"] != "raytrace.c" or data["changedBytes"] != 1 or bad != [
+            [name + ":", "FAILED" if name == "raytrace.c" else "OK"] for name in names]:
+        raise ValueError("one-byte change was not detected in exactly one artifact")
+    return stages
 
 
 def terrain_color(value):
@@ -196,85 +231,43 @@ def draw(name, record, programs=None):
         c.text(100, 439, f"min {lo:.2f}", 22, "#98baff")
         c.text(562, 439, f"max {hi:.2f}", 22, "#f3bc7c")
     elif name == "toybox":
-        data = record["album"]
-        if not data["equal"] or not data["originalsKept"]:
-            raise ValueError("album was not copied intact")
-        hashes = {}
-        for scene, picture in data["pictures"].items():
-            ppm = f"P6\n{picture['width']} {picture['height']}\n255\n".encode() + bytes.fromhex(picture["rgb"])
-            hashes[scene] = hashlib.sha256(ppm).hexdigest()
-        for item in data["inputs"] + data["kept"]:
-            if hashes[item["scene"]] != item["sha256"]:
-                raise ValueError("postcard differs from Toybox hashed bytes")
-        counts = {sha: sum(item["sha256"] == sha for item in data["inputs"]) for sha in hashes.values()}
-        if counts != data["groups"] or sorted(i["sha256"] for i in data["kept"]) != sorted(counts):
-            raise ValueError("album must retain exactly one of every unique image")
-        c = Card("Toybox / tidy a photo folder", "Same pictures, different filenames. Find the duplicates.",
-                 "Procedural postcards / actual sha256sum, sort, uniq, mkdir, cp / originals kept")
-        c.text(38, 119, "MESSY DOWNLOADS", 19, "#f3bc7c")
-        c.text(540, 119, "CLEAN ALBUM", 19, "#66dec4")
-        colors = {"alpine": "#9ad8ec", "coast": "#f5cda1", "dunes": "#c596d8"}
-        for i, item in enumerate(data["inputs"]):
-            x, y = 38 + (i % 2) * 167, 139 + (i // 2) * 97
-            c.parts.append(f'<g transform="rotate({-3 if i % 2 else 3} {x+73} {y+42})">')
-            c.rect(x, y, 146, 86, colors[item["scene"]], 3)
-            c.picture(data["pictures"][item["scene"]], x+5, y+5, 136, 61)
-            c.text(x+7, y+79, item["file"], 11, "#17293c")
-            c.parts.append('</g>')
-        c.text(387, 235, "HASH", 20, "#97b9da")
-        c.text(400, 279, "→", 48, "#66dec4")
-        c.text(383, 308, "GROUP", 18, "#97b9da")
-        for i, item in enumerate(sorted(data["kept"], key=lambda item: item["scene"])):
-            x, y = 528, 139 + i * 97
-            c.rect(x, y, 242, 86, "#183841", 6)
-            c.picture(data["pictures"][item["scene"]], x+6, y+6, 124, 70)
-            c.text(x+140, y+39, item["scene"], 19)
-            c.text(x+140, y+64, "1 copy", 16, "#66dec4")
-        c.text(38, 448, f"{len(data['inputs'])} files → {len(data['kept'])} unique pictures. No originals deleted.", 24)
+        data, stages = record["bundle"], bundle_commands(record)
+        c = Card("Toybox / verify a build artifact", "Package the TinyCC demo's C source, ELF and rendered RGB",
+                 "Real Toybox commands / disposable one-byte negative control / not a full-suite run")
+        for x, label in ((28, "BUILD OUTPUT"), (288, "tar → extract"), (548, "sha256sum -c")):
+            c.rect(x, 99, 224, 40, "#183044", 5)
+            c.text(x+14, 125, label, 20, "#a8d4ed", mono=True)
+        c.text(260, 126, "→", 23, "#66dec4")
+        c.text(520, 126, "→", 23, "#66dec4")
+        for i, item in enumerate(data["files"]):
+            y = 175+i*37
+            c.text(30, y, item["name"], 21, mono=True)
+            c.text(240, y, item["sha256"][:16] + "…", 19, "#97b9da", mono=True)
+            c.text(565, y, "OK", 22, "#66dec4", mono=True)
+        c.text(30, 289, f"{data['archiveBytes']:,}-byte tar / manifest + byte-for-byte cmp verified", 21)
+        c.rect(28, 309, 744, 136, "#172334", 8)
+        c.text(44, 337, "CONTROL: flip one byte in extracted raytrace.c", 19, "#f3bc7c", mono=True)
+        for i, line in enumerate(stages["detect-change"]["stdout"].splitlines()):
+            c.text(44, 368+i*27, line, 20, "#f3bc7c" if "FAILED" in line else "#66dec4", mono=True)
+        c.text(588, 399, "exit 1", 27, "#f3bc7c", mono=True)
     else:
         raise ValueError(name)
     return c.finish()
 
 
-def linux(facts):
-    c = Card("Linux / a computer wakes up", "An EvoCC-built ARM64 kernel brings a virtual machine to life",
-             "Diagram of recorded boot / log timestamps, not a speed test / full tests separate")
-    # A diagram, not a claimed desktop screenshot or physical-board photograph.
-    c.rect(28, 102, 407, 263, "#123630", 16)
-    for x in (53, 410):
-        for y in (123, 344):
-            c.parts.append(f'<circle cx="{x}" cy="{y}" r="5" fill="#75968a"/>')
-    for i in range(facts["cpuCount"]):
-        x, y = 77 + (i % 2) * 128, 140 + (i // 2) * 91
-        c.line([(x+36, y+33), (373, y+33), (373, 232), (488, 232)], "#387f69", 2)
-        for offset in range(8, 65, 11):
-            c.rect(x+offset, y-6, 4, 78, "#91bba4")
-            c.rect(x-6, y+offset, 85, 4, "#91bba4")
-        c.rect(x, y, 74, 67, "#152d30", 5)
-        c.rect(x+6, y+6, 62, 55, "#215149", 3)
-        c.text(x+14, y+29, f"CPU {i}", 15)
-        c.text(x+12, y+50, "ONLINE", 12, "#75f4b5")
-    c.rect(66, 323, 275, 21, "#24624b", 3)
-    for x in range(73, 332, 32):
-        c.rect(x, 326, 23, 15, "#152b31", 2)
-    c.text(69, 125, f"{facts['cpuCount']} cores / {facts['totalKiB']/1048576:g} GiB RAM", 17, "#a4e6bf")
-    c.line([(435, 232), (487, 232)], "#66dec4", 5)
-    c.text(448, 217, "→", 28, "#66dec4")
-    c.rect(486, 124, 284, 190, "#28415b", 12)
-    c.rect(495, 133, 266, 170, "#0a202a", 7)
-    c.text(515, 161, "SERIAL / USERSPACE", 16, "#97b9da")
-    c.text(515, 203, "/init is alive", 32, "#75f4b5")
-    c.text(515, 238, "EVO_INIT_ALIVE", 19, "#dce8f5")
-    c.text(515, 267, "boot nonce matched ✓", 18, "#75f4b5")
-    c.rect(612, 314, 32, 22, "#28415b")
-    c.rect(567, 336, 121, 7, "#3d5774", 3)
-    c.text(488, 366, "Verified → clean poweroff", 20, "#66dec4")
-    stages = (("reset", "RESET"), ("cpus", "4 CPUs"), ("devices", "DEVICES"),
-              ("init", "/init"), ("poweroff", "OFF"))
-    c.line([(50, 413), (735, 413)], "#3f6c79", 3)
-    for i, (key, label) in enumerate(stages):
-        x = 50+i*171
-        c.parts.append(f'<circle cx="{x}" cy="413" r="5" fill="#66dec4"/>')
-        c.text(x-19, 400, label, 14)
-        c.text(x-19, 443, f"{facts[key]['seconds']*1000:.1f} ms", 16, "#97b9da")
+def linux(facts, objects, image_sha):
+    c = Card("Linux / boot → module → FPU stress", "Linux 6.18.44 / AArch64 / recorded kernel + module execution",
+             "Recorded HVF run / reference-built userspace tests / full kselftest + KUnit still open")
+    c.text(28, 129, f"{objects:,}/{objects:,}", 37, "#66dec4")
+    c.text(28, 157, "target-C objects from EvoCC", 19)
+    c.text(441, 129, f"{facts['passed']:,}/{facts['expectedWorkers']:,}", 37, "#66dec4")
+    c.text(441, 157, f"worker OKs / {facts['onlineCpus']} online CPUs", 19)
+    c.rect(28, 180, 744, 231, "#111f31", 7)
+    c.text(44, 208, "SERIAL EXCERPT / run_test_fpu.sh", 17, "#97b9da", mono=True)
+    lines = [facts["moduleLoaded"], "# Running 1000 iterations on all CPUs...",
+             f"… {facts['passed']:,} × [OK] test_fpu (counted; not shown individually)",
+             facts["tap"], "EVO_INIT_DONE", facts["poweroff"]]
+    for i, line in enumerate(lines):
+        c.text(44, 240+i*29, line, 18, "#66dec4" if i == 2 else "#dce8f5", mono=True)
+    c.text(28, 444, "Image SHA-256  " + image_sha[:32] + "…", 19, "#97b9da", mono=True)
     return c.finish()

@@ -13,12 +13,53 @@ by these small examples, and no kernel rebuild or large disk image is needed.
 | SQLite island | Recursive SQL generates 2,304 terrain cells; delete/rollback restores the data and integrity check passes | [86-unit testfixture](../../../tests/contracts/ladder-sqlite-receipt.json); reference-built Tcl adapter; renderer maps SQL elevations to colors |
 | jq rover | jq generates and aggregates 48 fictional sensor samples | [69 C units](../../../tests/contracts/ladder-jq-receipt.json); charts depict simulated data, not a real Mars mission |
 | cJSON harbor | A small GCC-built driver uses the audited EvoCC cJSON object to parse a scene, count its floors and serialize it | [Library build](../../../tests/contracts/ladder-cjson-receipt.json); renderer draws the returned buildings, not a game engine |
-| Linux boot | Retained, receipt-bound serial log supplies CPU count, memory, device initialization, `/init`, matching nonce and poweroff | [7,008 target-C objects](../../../tests/contracts/kernel-bpf-full-receipt.json); board-style diagram, not a desktop screenshot; milestones evenly spaced for readability, timestamps from this single log, not a speed benchmark; not a fresh boot or full kselftest/KUnit completion |
+| Linux kernel/module stress | Recorded kernel boots, loads `test_fpu.ko` and runs the unchanged upstream `run_test_fpu.sh`: 4,000/4,000 worker OKs, then orderly shutdown | [7,008 target-C objects](../../../tests/contracts/kernel-bpf-full-receipt.json); [runtime evidence](../../../tests/fixtures/fpu-worker-verdict.out); tests kernel/user FPU control-state isolation; reference-built userspace driver; recorded HVF lane, not a fresh boot or full kselftest/KUnit completion |
 | PolyBench field | Existing EvoCC FDTD-2D executable runs 20 steps and dumps a 20×30 magnetic field | [Original kernel](../../../tests/contracts/ladder-polybench-receipt.json); exact output matches retained GCC dump; reference-built allocation harness; field colors normalized to observed min/max |
 | Mbed TLS pixels | EvoCC-built crypto archive encrypts/decrypts a pixel message with AES-GCM and rejects a changed ciphertext | [Library build](../../../tests/contracts/ladder-mbedtls-receipt.json); GCC-built adapter, public fixed test key/nonce, never production; first 256 ciphertext bytes displayed, tag not pictured |
 | Zstandard fractal | The real Lua RGB image is compressed and restored with byte equality | [44 C units](../../../tests/contracts/ladder-zstd-receipt.json); measured raw-RGB sizes, not PNG sizes or a speed benchmark |
 | zlib arcade sprites | `minigzip` compresses/restores a repository-owned six-sprite RGB sheet, independent of the fractal | [19 C units](../../../tests/contracts/ladder-zlib-receipt.json); Python-generated input fixture, actual compression and byte-equal recovery; not a game engine or full-suite rerun |
-| Toybox photo organizer | `sha256sum`, `sort`, `uniq -c` find three pairs among six differently named images; `mkdir` and `cp` create a unique album, verified byte for byte | [Measured executable](../../../tests/contracts/ladder-toybox-receipt.json); procedural travel postcards, not personal photos; Python routes measured hash groups to copy commands; originals retained; full Toybox lane remains incomplete with its shared test failure |
+| Toybox build artifacts | `tar` packages the TinyCC demo's source, ELF and RGB output; `sha256sum -c` and `cmp` verify the extracted files; a deliberate one-byte change is detected | [Measured executable](../../../tests/contracts/ladder-toybox-receipt.json); real artifacts, not mock filenames; expected negative exits 1, all other commands exit 0; full Toybox lane remains incomplete with its shared test failure |
+
+## Linux kernel/module demo
+
+The engineering question is whether compiled kernel code actually runs across a
+module and userspace boundary. The upstream FPU test changes userspace rounding
+and exception controls, invokes the kernel helper through debugfs, and checks that
+userspace controls survive. The card shows the retained September 28 result on
+Image `18b36fee4bb02657…`, the same Image as the 7,008-object build receipt.
+
+[`linux-fpu.stdout.txt`](linux-fpu.stdout.txt) retains the complete raw serial log.
+Rendering reuses the existing kselftest parser to verify the nonce, 1,000-iteration
+announcement, four online CPUs and all 4,000 worker messages; it also requires
+module loading and orderly shutdown. The condensed line on the card is labeled
+as a count, not fabricated serial output or a per-CPU execution trace. These are
+worker messages, not 4,000 independent TAP test cases. The original boot excerpt
+is retained separately in [`linux.stdout.txt`](linux.stdout.txt).
+
+This was the **HVF host lane with a recorded QEMU contract mismatch**, not the
+locked-QEMU lane. The installed module was signed, but `CONFIG_MODULE_SIG_FORCE`
+was disabled: loading does not demonstrate signature enforcement. The userspace
+test driver is reference-built; the target-C provenance claim is for the kernel
+and module. Full kselftest and expanded KUnit remain separate open milestones.
+
+## Toybox build-artifact demo
+
+This links two real demos: the EvoCC-built TinyCC produces `raytrace`, and the
+EvoCC-built Toybox handles that executable, its `raytrace.c` input and the actual
+`frame.rgb` output. Python only stages files and routes command output.
+
+```text
+source + compiled ELF + rendered RGB
+  → sha256sum manifest → tar → extract → sha256sum -c + cmp
+  → change one byte in the temporary extracted source → sha256sum -c exits 1
+```
+
+Every restored payload must first verify. The negative control must subsequently
+report **only `raytrace.c` as FAILED**, while ELF and RGB remain OK. This is a
+file-integrity check, not a reproducible-build, signed-release or whole-suite
+claim. Original repository/build files are never modified. Exact argv, exit
+codes, hashes and stdout/stderr are in [`captures.json`](captures.json) and
+[`toybox.stdout.txt`](toybox.stdout.txt).
 
 ## Source and identity
 

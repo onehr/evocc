@@ -12,6 +12,8 @@ Its bounded scalar optimizer uses an [e-graph](https://egraphs-good.github.io/):
 rewrites retain equivalent alternatives, extraction chooses a form, and a
 separate checker verifies the rewrite certificate. This is not a proof of the
 whole compiler or a claim that every program is optimized through EqSat.
+The design separates **semantic equivalence in EvoIR**, **machine constraints in
+EvoMIR**, and **rule soundness in Lean 4**. [Why this split, and what is proved](#why-evoir-and-evomir).
 
 The authoritative language and machine profiles are
 [EvoIR 1.9.115](docs/evoir-spec.md) and [EvoMIR 0.54](docs/evomir-spec.md).
@@ -38,14 +40,14 @@ Click an image to enlarge it; **results** links to the underlying build/test sco
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/cjson.svg"><img src="docs/images/showcase/cjson.svg" alt="Neon harbor skyline visualizing building data parsed and serialized by cJSON" width="320"></a><br><b>cJSON carries a city</b><br>Scene data → a neon harbor<br><a href="tests/contracts/ladder-cjson-receipt.json">results</a></td>
   </tr>
   <tr>
-    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/linux.svg"><img src="docs/images/showcase/linux.svg" alt="Board-style diagram of a recorded Linux boot: four CPUs online, 2 GiB RAM, userspace alive and clean poweroff" width="320"></a><br><b>Linux wakes a computer</b><br>Four cores online → userspace alive<br><a href="tests/contracts/kernel-bpf-full-receipt.json">results</a></td>
+    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/linux.svg"><img src="docs/images/showcase/linux.svg" alt="Recorded EvoCC kernel loads test_fpu and completes 4000 worker checks with orderly shutdown" width="320"></a><br><b>Linux: boot, load, stress</b><br>Kernel/user FPU state isolation · 4,000 worker OKs<br><a href="tests/fixtures/fpu-worker-verdict.out">results</a></td>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/polybench.svg"><img src="docs/images/showcase/polybench.svg" alt="Heatmap of the actual PolyBench FDTD-2D magnetic field after twenty steps" width="320"></a><br><b>PolyBench models a field</b><br>20 simulation steps · FDTD-2D<br><a href="tests/contracts/ladder-polybench-receipt.json">results</a></td>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/mbedtls.svg"><img src="docs/images/showcase/mbedtls.svg" alt="Actual AES-GCM plaintext and ciphertext bytes with verified recovery and tamper rejection" width="320"></a><br><b>Mbed TLS seals pixels</b><br>Encrypt → restore → reject tampering<br><a href="tests/contracts/ladder-mbedtls-receipt.json">results</a></td>
   </tr>
   <tr>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/zstd.svg"><img src="docs/images/showcase/zstd.svg" alt="Real Lua fractal compressed and restored with Zstandard, with measured byte sizes" width="320"></a><br><b>Zstandard packs a fractal</b><br>Smaller bytes · identical pixels<br><a href="tests/contracts/ladder-zstd-receipt.json">results</a></td>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/zlib.svg"><img src="docs/images/showcase/zlib.svg" alt="Six colorful arcade sprites compressed by zlib and restored pixel-perfect, with measured byte sizes" width="320"></a><br><b>zlib ships a tiny arcade</b><br>Pixel-art sprites → gzip → intact<br><a href="tests/contracts/ladder-zlib-receipt.json">results</a></td>
-    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/toybox.svg"><img src="docs/images/showcase/toybox.svg" alt="Before and after contact sheets: Toybox hashes six procedural travel postcards and copies three unique images into a clean album" width="320"></a><br><b>Toybox tidies a photo folder</b><br>Six files → three unique postcards<br><a href="tests/contracts/ladder-toybox-receipt.json">results</a></td>
+    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/toybox.svg"><img src="docs/images/showcase/toybox.svg" alt="Toybox packages real C source, ELF and rendered pixels; verifies restored artifacts and detects a controlled one-byte change" width="320"></a><br><b>Toybox verifies a build artifact</b><br>C + ELF + RGB → tar → verify → detect change<br><a href="docs/images/showcase/README.md#toybox-build-artifact-demo">results</a></td>
   </tr>
 </table>
 
@@ -356,32 +358,84 @@ Other flags include `-E`, `--parse-only`, `--emit=c-hir`, `--emit=evoir`,
 certificate; an optimization may remove work without discarding the original
 undefined-behavior obligations.
 
-## How it works
+## Why EvoIR and EvoMIR?
 
-![EvoCC architecture](docs/images/evocc-concept.png)
+EvoCC's design goal is **an optimizer whose decisions can be inspected and
+checked separately from the search that found them**, with a conventional native
+backend. The two IRs separate two different correctness problems:
 
-The illustration describes the design, not a live completion counter.
+```text
+C source → checked C-HIR → EvoIR → EqSat search + extraction → EvoIR → EvoMIR → assembly
+                            │              │                  │        │
+                            └─ before ─────┴─ certificate ────┘        └─ allocation verifier
+                                         evo-proofcheck
 
-- C lowers to EvoIR, block-argument SSA with explicit `mem` and `world`
-  tokens, `ub.assume` obligations and pointer provenance. Ordinary cross-block
-  values travel through explicit edge arguments.
-- Within admitted scalar regions, rewrites merge e-classes instead of replacing
-  nodes. Extraction chooses among alternatives found within explicit budgets;
-  this does not eliminate every phase-ordering or optimization limitation.
-- `evo-proofcheck` independently replays certificates against the before/after
-  modules. Floating operations and other excluded forms do not acquire an
-  optimization license merely because they parse or execute.
-- All **55 scalar rule theorems** are machine-checked in Lean 4. The rule and
-  known-bits model is compared with Rust implementations on **1,325,045 vectors**.
-  The [proof audit](tests/contracts/lean-p0-receipt.json) records assumptions;
-  the front end, backend and memory model are not proved by these results.
-- EvoMIR allocation has an independent verifier. Recorded scalar and MIR gates
-  each cover **21,000 generated IR programs** with zero mismatches; native C
-  corpora separately pass **384/384 on Linux and 384/384 on Darwin**. These are
-  different populations, not 21,000 native cross-platform C programs.
-- Kernel bring-up uses original Kbuild inputs, then requires every target-C
-  object from EvoCC, retained through generated-input convergence and linking.
-  Actual boot and runtime selftests are separate acceptance steps.
+Lean 4 (offline): proofs about the scalar rule registry and known-bits model
+Native tests:     C lowering, machine code, ABI and real-program behavior
+```
+
+### EvoIR: make semantic obligations inspectable
+
+| Design choice | Problem it addresses | Cost / boundary |
+|---|---|---|
+| Block-local SSA; every cross-block value is an explicit edge argument | Dependencies, including object addresses, can be checked locally. A branch cannot quietly refer to an entry-block value. | More explicit edge plumbing; complete successor bindings are essential. |
+| Explicit memory state, `world`, pointer provenance and `ub.assume` obligations | A numeric identity alone cannot justify deleting a volatile event, inventing a valid pointer, or discarding a C-definedness check. | More semantic bookkeeping. These models are specified and tested, not all formally proved. |
+| Bounded equality saturation over an admitted scalar subset | Equivalent alternatives coexist until extraction, so finding one rewrite need not destroy another useful choice. | Search/extraction budgets and cost models still matter; this does not solve all phase ordering or promise faster code. |
+| Persistent equality state with transactional updates | Class identity and proof history survive extraction and value renumbering; failed optimization rolls back both the graph and module. | Reuse is identity-bound. A retained alternative is not automatically an admissible witness in a new certificate. |
+| A separate certificate checker consumes the before/after modules | The optimizer's own verdict is not sufficient: the checker replays the claimed rewrites and rejects unauthorized changes. | The checker, parser and eligibility logic remain part of the trusted implementation. |
+
+For example, `(x + 0) * 1 → x` is a scalar bit-vector identity under the
+registry's premises. It is **not** permission to remove the evaluation that
+produced `x`, or to apply the same rule to floating point. FP execution support
+does not put FP rewrites into the P0 optimization allowlist.
+See the [EvoIR contract](docs/evoir-spec.md) and
+[independent checker](crates/evocc-proofcheck/src).
+
+### EvoMIR: expose the constraints of the machine
+
+[EvoMIR](docs/evomir-spec.md) makes virtual/physical registers, ABI locations,
+call clobbers, spills, flags and parallel copies explicit. Semantic rewriting
+does not have to reason in physical registers; conversely, the allocator cannot
+ignore that an argument must reach a particular register or that a call clobbers
+a live value. Scalar FP and SIMD share the same physical register bank.
+
+A separate allocation verifier checks defined register reads, live-value
+conflicts and flags dependencies. The EvoMIR interpreter provides another
+lowering check on its executable subset; inline assembly requires native tests
+instead. This split localizes failures: wrong expression, wrong lowering and
+wrong allocation are different checks, not one final wrong exit code.
+
+These are **advantages for EvoCC's auditability goals**, not evidence that its
+IRs universally outperform LLVM/GCC or that multiple IR levels are novel.
+More explicit state and checks also cost compiler complexity and compile time.
+Performance and coverage remain measured roadmap work.
+
+### What Lean 4 proves—and what it does not
+
+Lean is an **offline proof tool**, not EvoCC's code generator and not a runtime
+dependency of compiled C programs.
+
+| Layer | What it establishes |
+|---|---|
+| [Lean rule proofs](lean/EvoIR/Proofs/Rules.lean) | The retained audit covers all **55 rules in `p0.scalar.v4`**, parametrically over the admitted 1–64-bit widths and stated premises. These rule proofs are classified **kernel-only**. |
+| [Lean known-bits proofs](lean/EvoIR/Proofs/Transfer.lean) | Soundness of the modeled transfer functions, lattice operations and side conditions. Some proofs are **native-backed** and have additional Lean compiler / SAT-LRAT trust dependencies, recorded per theorem. |
+| Rust `evo-proofcheck` | Whether a particular before/after rewrite certificate follows the allowed rules and reconstruction checks. It does not invoke Lean for each compilation. |
+| [Rust–Lean correspondence tests](tests/contracts/lean-correspondence-receipt.json) | **1,325,045 / 1,325,045** recorded comparisons agree. Differential agreement is not a proof that the Rust implementation equals the Lean model. |
+
+The [proof audit and trust list](tests/contracts/lean-p0-receipt.json) bind the
+registry digest and historical proof subject; they are not a blanket theorem
+about every feature in the latest specification. The semantic definitions,
+registry decoder, checker and correspondence to Rust remain explicit trust
+boundaries. These results **do not prove the C front end, memory model, backend,
+entire compiler, or Linux kernel correct**. Reproduce the separate proof gate
+with [`tools/gate-lean.sh`](tools/gate-lean.sh).
+
+Implementation evidence stays separate: recorded scalar and MIR gates each
+cover **21,000 generated IR programs** with zero mismatches; native C corpora
+separately pass **384/384 on Linux and 384/384 on Darwin**. Kernel acceptance
+additionally checks original Kbuild inputs, EvoCC object provenance through
+generated-input convergence and linking, then actual boot and runtime tests.
+None of these test populations substitutes for the others.
 
 ## Layout and development
 

@@ -55,6 +55,13 @@ def demo_inputs():
     return module
 
 
+def visualizer():
+    spec = importlib.util.spec_from_file_location("showcase_visuals", ROOT / "tools/showcase_visuals.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def boot_facts(log, nonce):
     """Extract visual facts from the accepted log; missing milestones fail closed."""
     patterns = (
@@ -85,13 +92,46 @@ def boot_facts(log, nonce):
     return facts
 
 
-def run(argv, *, cwd, input_data=None):
+def fpu_facts(log, nonce):
+    """Reuse the kernel verdict parser, including its nested-worker checks."""
+    spec = importlib.util.spec_from_file_location("showcase_selftest", ROOT / "tools/k1/selftest.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    program = "fpu:run_test_fpu.sh"
+    row, = module.parse_transcript(log, nonce, [program])
+    if (row["outcome"] != "PASS" or not row["valid"] or row["nestedFailureSummaries"]
+            or row["nestedSkipSummaries"] or row["nestedSummaryErrors"]):
+        raise ValueError("FPU stress did not pass its full worker protocol")
+    summary, = row["fpuSummaries"]
+    lines = log.replace("\r", "").splitlines()
+    milestones = ["EVO_INIT_ALIVE", f"EVO_BOOT_NONCE {nonce}",
+                  "KSELFTEST_SETUP module test_fpu loaded",
+                  f"KSELFTEST_BEGIN {nonce} {program}",
+                  f"KSELFTEST_END {nonce} {program} 0", "EVO_INIT_DONE"]
+    try:
+        positions = [lines.index(line) for line in milestones]
+        poweroff = next(i for i, line in enumerate(lines) if "reboot: Power down" in line)
+    except (ValueError, StopIteration) as error:
+        raise ValueError("missing module load or orderly FPU shutdown") from error
+    if positions != sorted(positions) or poweroff <= positions[-1]:
+        raise ValueError("FPU lifecycle milestones out of order")
+    return {**summary, "onlineCpus": summary["expectedWorkers"] // 1000,
+            "moduleLoaded": milestones[2], "poweroff": lines[poweroff],
+            "tap": "ok 1 selftests: fpu: run_test_fpu.sh"}
+
+
+def run(argv, *, cwd, input_data=None, expected_exit=0, stage=None):
     result = subprocess.run([str(a) for a in argv], cwd=cwd, input=input_data,
                             capture_output=True, timeout=30)
-    if result.returncode:
+    if result.returncode != expected_exit:
         raise RuntimeError(f"demo exited {result.returncode}: {argv}\n{result.stderr.decode('utf-8')}")
-    return {"argv": [str(a) for a in argv], "exitCode": result.returncode,
-            "stdout": result.stdout.decode("utf-8"), "stderr": result.stderr.decode("utf-8")}
+    record = {"argv": [str(a) for a in argv], "exitCode": result.returncode,
+              "stdout": result.stdout.decode("utf-8"), "stderr": result.stderr.decode("utf-8")}
+    if stage:
+        record["stage"] = stage
+    if expected_exit:
+        record["expectedExitCode"] = expected_exit
+    return record
 
 
 def audit(name, tree, binary):
@@ -200,43 +240,38 @@ def capture():
                 record["adapter"] = "GCC14-built scene adapter linked to audited EvoCC cJSON.o"
                 record["generatedExecutableSha256"] = digest(work / "scene")
             elif name == "toybox":
-                fixtures = demo_inputs()
-                pictures = fixtures.postcards()
-                inbox = work / "inbox"
-                inbox.mkdir()
-                names = [("IMG_0042.ppm", "alpine"), ("beach-copy.ppm", "coast"),
-                         ("download.ppm", "dunes"), ("IMG_0042-copy.ppm", "alpine"),
-                         ("IMG_0108.ppm", "coast"), ("saved-again.ppm", "dunes")]
-                for filename, scene in names:
-                    (inbox / filename).write_bytes(fixtures.ppm(pictures[scene]))
-                commands.append(run([binary, "sha256sum", *["inbox/" + n for n, _ in names]], cwd=work))
-                hashes = [line.split()[0] for line in commands[-1]["stdout"].splitlines()]
-                if hashes != [digest(inbox / n) for n, _ in names]:
-                    raise ValueError("Toybox hash output differs from actual postcard bytes")
-                commands.append(run([binary, "sort"], cwd=work, input_data=("\n".join(hashes) + "\n").encode()))
-                sorted_hashes = commands[-1]["stdout"]
-                commands.append(run([binary, "uniq", "-c"], cwd=work, input_data=sorted_hashes.encode()))
-                groups = {fields[1]: int(fields[0]) for line in commands[-1]["stdout"].splitlines()
-                          if (fields := line.split())}
-                if sorted(groups.values()) != [2, 2, 2] or set(groups) != set(hashes):
-                    raise ValueError("Toybox duplicate grouping mismatch")
-                commands.append(run([binary, "mkdir", "album"], cwd=work))
-                kept = []
-                for sha in groups:
-                    index = hashes.index(sha)
-                    filename, scene = names[index]
-                    target = "album/" + scene + ".ppm"
-                    commands.append(run([binary, "cp", "inbox/" + filename, target], cwd=work))
-                    if digest(work / target) != sha:
-                        raise ValueError("Toybox organized image bytes differ")
-                    kept.append({"file": target, "scene": scene, "sha256": sha})
-                if [digest(inbox / n) for n, _ in names] != hashes:
-                    raise ValueError("Toybox demo changed an original")
-                record["album"] = {"pictures": pictures, "groups": groups, "kept": kept,
-                                   "originalsKept": True, "equal": True,
-                                   "inputs": [{"file": n, "scene": s, "sha256": h}
-                                              for (n, s), h in zip(names, hashes)]}
-                record["adapter"] = "Python supplies procedural postcards and routes Toybox hash groups to cp; no originals deleted"
+                release, restored = work / "release", work / "unpacked"
+                commands.append(run([binary, "mkdir", release, restored], cwd=work))
+                commands.append(run([binary, "cp", FIXTURES / "raytrace.c", work / "raytrace", release], cwd=work))
+                picture = json.loads(records["programs"]["tinycc"]["commands"][-1]["stdout"])
+                (release / "frame.rgb").write_bytes(bytes.fromhex(picture["rgb"]))
+                names = ["raytrace.c", "raytrace", "frame.rgb"]
+                commands.append(run([binary, "sha256sum", *names], cwd=release, stage="manifest"))
+                manifest = commands[-1]["stdout"]
+                if {line.split()[1]: line.split()[0] for line in manifest.splitlines()} != {
+                        name: digest(release / name) for name in names}:
+                    raise ValueError("Toybox manifest differs from actual build artifacts")
+                (release / "SHA256SUMS").write_text(manifest)
+                archive = work / "raytrace.tar"
+                commands.append(run([binary, "tar", "-cf", archive, *names, "SHA256SUMS"], cwd=release))
+                commands.append(run([binary, "tar", "-tf", archive], cwd=work, stage="contents"))
+                if commands[-1]["stdout"].splitlines() != names + ["SHA256SUMS"]:
+                    raise ValueError("Toybox archive contents differ")
+                commands.append(run([binary, "tar", "-xf", archive], cwd=restored))
+                commands.append(run([binary, "sha256sum", "-c", "SHA256SUMS"], cwd=restored, stage="verify"))
+                for filename in names + ["SHA256SUMS"]:
+                    commands.append(run([binary, "cmp", release / filename, restored / filename], cwd=work))
+                # Controlled change in a disposable extracted copy, never a source/artifact in the repo.
+                changed = bytearray((restored / "raytrace.c").read_bytes())
+                changed[0] ^= 1
+                (restored / "raytrace.c").write_bytes(changed)
+                commands.append(run([binary, "sha256sum", "-c", "SHA256SUMS"], cwd=restored,
+                                    expected_exit=1, stage="detect-change"))
+                record["bundle"] = {"files": [{"name": name, "bytes": (release / name).stat().st_size,
+                                                "sha256": digest(release / name)} for name in names],
+                                    "archiveBytes": archive.stat().st_size, "archiveSha256": digest(archive),
+                                    "changedFile": "raytrace.c", "changedBytes": 1}
+                record["adapter"] = "Python routes actual TinyCC demo source, ELF and RGB output; changes one byte only in a temporary extracted copy"
             elif name == "mbedtls":
                 library = tree / "build/tf-psa-crypto/core/libtfpsacrypto.a"
                 record["archive"] = checked_archive(library, set(record["objectHashes"]))
@@ -259,9 +294,11 @@ def capture():
             if digest(binary) != record["binarySha256"]:
                 raise ValueError(f"binary changed while running: {name}")
             record["commands"] = commands
+            if name == "toybox":
+                visualizer().bundle_commands(record)
             record.pop("objectHashes")
             records["programs"][name] = record
-            print(f"{name}: capture exit 0; {record['verifiedInstalledObjects']} installed objects verified", flush=True)
+            print(f"{name}: capture verified; {record['verifiedInstalledObjects']} installed objects verified", flush=True)
         # Publish only after every case succeeds, preserving complete raw output.
         for name, record in records["programs"].items():
             for stream in ("stdout", "stderr"):
@@ -270,9 +307,7 @@ def capture():
 
 
 def render():
-    spec = importlib.util.spec_from_file_location("showcase_visuals", ROOT / "tools/showcase_visuals.py")
-    visuals = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(visuals)
+    visuals = visualizer()
     records = read_json(OUT / "captures.json")
     for name in APPS:
         stdout = (OUT / f"{name}.stdout.txt").read_text()
@@ -288,11 +323,37 @@ def render():
     lines = path.read_text().splitlines()[-7:]
     (OUT / "linux.stdout.txt").write_text("\n".join(lines) + "\n")
     facts = boot_facts(path.read_text(), boot["nonce"])
-    (OUT / "linux.svg").write_text(visuals.linux(facts))
+    # This prior test is on exactly the kernel Image named by the build receipt.
+    # The tracked fixture pins the source result and raw serial hashes, not just a PASS label.
+    fpu_path = ROOT / ".build/floating-targeted/module-uniform-20260928/final-subject-prerequisites/subject.json"
+    fpu_receipt = read_json(fpu_path)
+    fixture = ROOT / "tests/fixtures/fpu-worker-verdict.out"
+    if f"Original results {digest(fpu_path)}" not in fixture.read_text():
+        raise ValueError("FPU source result differs from tracked closure evidence")
+    row, = [r for r in fpu_receipt["rows"] if r["id"] == "fpu:run_test_fpu.sh"]
+    fpu_boot = row["result"]["boot"]
+    fpu_log = Path(fpu_boot["serialLog"])
+    if (fpu_boot["imageSha256"] != boot["imageSha256"] or fpu_boot["verdict"] != "PASS"
+            or digest(fpu_log) != fpu_boot["serialLogSha256"]):
+        raise ValueError("FPU log or kernel Image differs from the passing run")
+    stress = fpu_facts(fpu_log.read_text(), fpu_boot["nonce"])
+    expected_stress, = row["result"]["programs"][0]["fpuSummaries"]
+    if {k: stress[k] for k in expected_stress} != expected_stress:
+        raise ValueError("reparsed FPU worker totals differ")
+    (OUT / "linux-fpu.stdout.txt").write_bytes(fpu_log.read_bytes())
+    counts = receipt["counts"]
+    if counts["substituted"] != receipt["requestedUnits"] or not receipt["completeComposition"]:
+        raise ValueError("Linux composition is incomplete")
+    (OUT / "linux.svg").write_text(visuals.linux(stress, counts["substituted"], boot["imageSha256"]))
     records["linux"] = {"buildReceipt": "tests/contracts/kernel-bpf-full-receipt.json",
                         "imageSha256": boot["imageSha256"], "serialLogSha256": digest(path),
                         "flownAt": boot["flownAt"], "excerpt": "last 7 lines; CRLF normalized",
-                        "facts": facts}
+                        "facts": facts,
+                        "fpu": {"evidence": str(fpu_path.relative_to(ROOT)), "evidenceSha256": digest(fpu_path),
+                                "fixture": str(fixture.relative_to(ROOT)), "fixtureSha256": digest(fixture),
+                                "serialLogSha256": digest(fpu_log), "nonce": fpu_boot["nonce"],
+                                "flownAt": fpu_boot["flownAt"], "bootLane": fpu_boot["bootLane"],
+                                "qemuMatchesContract": fpu_boot["qemu"]["matchesContract"], "facts": stress}}
     source = ROOT / ".build/ladder/doom/evocc-demo1-0/frame-350.png"
     doom_receipt = read_json(ROOT / "tests/contracts/ladder-doom-receipt.json")
     runtime = ROOT / ".build/ladder/doom/runtime.json"
@@ -327,8 +388,13 @@ def check():
         if digest(OUT / name) != expected:
             raise ValueError(f"asset changed since rendering: {name}")
     for name in APPS:
-        if not records["programs"][name]["commands"] or any(c["exitCode"] for c in records["programs"][name]["commands"]):
+        commands = records["programs"][name]["commands"]
+        if not commands or any(c["exitCode"] != c.get("expectedExitCode", 0) for c in commands):
             raise ValueError(f"unsuccessful demo capture: {name}")
+        if name == "toybox":
+            visualizer().bundle_commands(records["programs"][name])
+        elif any(c.get("expectedExitCode", 0) for c in commands):
+            raise ValueError(f"unexpected negative test: {name}")
         for stream in ("stdout", "stderr"):
             expected = "".join(c[stream] for c in records["programs"][name]["commands"])
             if (OUT / f"{name}.{stream}.txt").read_text() != expected:
@@ -336,6 +402,10 @@ def check():
     for name, expected in records["fixtures"].items():
         if digest(FIXTURES / name) != expected:
             raise ValueError(f"demo source differs from capture: {name}")
+    fpu = records["linux"]["fpu"]
+    raw = OUT / "linux-fpu.stdout.txt"
+    if digest(raw) != fpu["serialLogSha256"] or fpu_facts(raw.read_text(), fpu["nonce"]) != fpu["facts"]:
+        raise ValueError("FPU capture no longer matches worker verdicts")
     print(f"Showcase: {len(required)} assets and {len(APPS)} captured stdout/stderr pairs verified")
 
 
