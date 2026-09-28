@@ -834,6 +834,8 @@ struct Lowerer {
     /// prior definition in the same function, and this is where an assembly
     /// operand finds it.
     constants: HashMap<u32, u64>,
+    /// Direct `ptr.null` definitions only, not inferred integer addresses.
+    null_pointers: HashSet<u32>,
     symbolic_addresses: HashMap<u32, (String, i64)>,
     literal_only: HashSet<u32>,
     /// Section 6 (revision 0.18): the shape of the record result this function
@@ -1567,6 +1569,7 @@ fn lower_function(
             .variadic
             .then(|| named_argument_extent(target, function)),
         constants: HashMap::new(),
+        null_pointers: HashSet::new(),
         symbolic_addresses: HashMap::new(),
         literal_only: HashSet::new(),
         destination: None,
@@ -2562,10 +2565,36 @@ fn lower_compare(
     if is_pair(&lhs.ty) {
         return lower_pair_compare(lowerer, insts, operation, lhs, rhs);
     }
+    // Null's target representation is zero, while the other operand keeps
+    // its pointer identity in the MIR interpreter. No address exposure or
+    // provenance inference is involved. EQ/NE are symmetric, so either
+    // operand may be the directly defined null.
+    if matches!(operation, CmpOp::Eq | CmpOp::Ne)
+        && matches!(lhs.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. })
+    {
+        let selected = if lowerer.null_pointers.contains(&rhs.id) {
+            Some(lhs)
+        } else if lowerer.null_pointers.contains(&lhs.id) {
+            Some(rhs)
+        } else {
+            None
+        };
+        if let Some(value) = selected {
+            let register = lowerer.reg(value)?;
+            let flags = lowerer.fresh(RegClass::Flags);
+            insts.push(MInst::CmpImm {
+                dst: flags,
+                lhs: register,
+                imm: 0,
+                width: Width::X,
+            });
+            return Ok((flags, condition_of(operation)));
+        }
+    }
     // The admitted immediate is nonnegative in both full-width signed and
     // unsigned interpretations. Swapping already evaluated SSA operands needs
-    // the reversed relation, not its logical negation. Narrow/pair and pointer
-    // comparisons retain their established extension/provenance paths.
+    // the reversed relation, not its logical negation. Narrow/pair and remaining
+    // pointer comparisons retain their established extension/provenance paths.
     if matches!(lhs.ty, EvoIRType::Bits(32 | 64)) {
         let literal = |value: &Value| {
             lowerer
@@ -3007,6 +3036,7 @@ fn lower_inst(
             lowerer.bind(result, dst);
         }
         Inst::PtrNull(result) => {
+            lowerer.null_pointers.insert(result.id);
             let dst = lowerer.fresh(RegClass::Gpr64);
             insts.push(MInst::MovImm { dst, imm: 0 });
             lowerer.bind(result, dst);

@@ -58,3 +58,39 @@ original C ad83b9ed85e8f6f204563e7960048e896a94338043c91297f3cb4c53c5e17514
 Directory: .build/floating-targeted/pidfd-progress-20260926/
 namespace-result.json 3a1b6201ec8b78c567cb1185e7521ec5d15707074723ac85bad399a4a0c2cb99
 original.json a91f2c9aec431dcb47caa756c8396526b162444a86211ceada705cf9e1d46fd8
+
+2026-09-28 — unchanged original on the pinned 7008-object composition.
+
+Both matching Images complete the original pidfd:pidfd_test at the unchanged
+45-second program deadline and normal shutdown (105-second outer allowance):
+  reference: program PASS, 7 nested PASS / 0 FAIL / 1 SKIP, shutdown 17.505192s
+  subject:   program PASS, 7 nested PASS / 0 FAIL / 1 SKIP, shutdown 42.139318s
+The eight numbered inner records and Totals line agree. The generic parser's
+outer TAP count is one wrapper program, NOT one inner assertion; its separate
+nestedSkipSummaries field preserves the 7/1 inner summary. No skip becomes PASS.
+The same bounded PID-recycling search still skips. This fresh completion does
+not establish a cause-backed repair for the historical timeout or acceptable
+margin under a complete campaign's load. K11f/K13 remain open for final-pair
+acceptance; no old timeout is overwritten by this observation.
+
+The tested kernel is the accepted ab2eeb7b... compiler composition, not the
+subsequent null-comparison compiler. Both runtime disks have 848 matching
+kernel modules, pass their build hashes and remain byte-identical after the
+snapshot-only flights. No kernel, disk or payload is rebuilt/copied. The
+reference uses reference-fpu-preload, the subject its matching final payload.
+No concurrent build/test job is started by the agent; unrelated host workload
+is not controlled. Lane remains hvf-host with explicit QEMU drift.
+
+Subject Image 18b36fee4bb0265719f59df8db1da7098374df3c5e245071dc8f0662ea6a7032
+Reference Image 22a87df276887cc6454053dee56ea96742ab9cf24043b00fd1a21accf93a0fa6
+Subject compiler ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+Reference disk 04ec7e687af54988daadc2155d388a16e7ec38c0f385d9213ab8806bd178d4c1
+Subject disk 9cfac9639e4f5f876c7bd9e8e0cbaabf2f55fc6bf1069bf2c8c95904252e198e
+Reference payload b56ce21c948ff60301c5f7bbfc8cd4870aab51b880af4e6b278b8ed73eda00f9
+Subject payload 0f736857c4f56a4cb9eef43814798b607f3e49c95f727ba877380dca76effbd3
+Reference serial 12bcf0c16aa0cc0531216d905f15ebee94be77c10bed4fde75b2c5909b1894f9
+Subject serial 13431cffd4b8ccbe7a4cf1d7e8141ecfb24ae383118291b9a1bb773bc053cbd6
+Capture .build/floating-targeted/pidfd-current-20260928/original.json
+SHA256 7553a1a55a669f4065dbdfc12e49bac52711abacc2283e021aa7ef019a498c0b
+Replay .build/floating-targeted/pidfd-current-20260928/replay.py
+SHA256 903661323994b81bde8cfd235c7a394da625d416ad7468da36f9dfefc5fb0340

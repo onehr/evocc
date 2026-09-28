@@ -876,6 +876,17 @@ fn read_pointer(frame: &Frame, reg: VReg) -> Result<Pointer, MirError> {
     }
 }
 
+/// Typed pointer operands share `ptr.null`'s `mov #0` representation.
+/// This is not address recovery: nonzero raw bits acquire no provenance.
+fn pointer_value(value: MirValue) -> Option<PointerValue> {
+    match value {
+        MirValue::Int(0) => Some(PointerValue::Null),
+        MirValue::Ptr(pointer) => Some(PointerValue::object(pointer)),
+        MirValue::Fn(pointer) => Some(pointer),
+        MirValue::Int(_) | MirValue::Vector(_) => None,
+    }
+}
+
 fn read_flags(frame: &Frame, reg: VReg) -> Result<Flags, MirError> {
     match frame.regs.get(&reg.id) {
         Some(Slot::Flags(flags)) => Ok(*flags),
@@ -1296,13 +1307,11 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 MirValue::Int(raw) if !matches!(kind, LoadKind::P | LoadKind::Pf) => {
                     Ok(evocc_memory::AtomicValue::Integer(raw as u128))
                 }
-                MirValue::Ptr(pointer) => Ok(evocc_memory::AtomicValue::Pointer(
-                    PointerValue::object(pointer),
-                )),
-                MirValue::Fn(pointer) => Ok(evocc_memory::AtomicValue::Pointer(pointer)),
-                _ => Err(MirError::Invalid {
-                    detail: "invalid atomic RMW operand".into(),
-                }),
+                value => pointer_value(value)
+                    .map(evocc_memory::AtomicValue::Pointer)
+                    .ok_or_else(|| MirError::Invalid {
+                        detail: "invalid atomic RMW operand".into(),
+                    }),
             };
             let value = convert(read(frame, *value)?)?;
             let expected = expected
@@ -1376,16 +1385,12 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             } else {
                 let value = read(frame, *value)?;
                 let value = if matches!(kind, LoadKind::P | LoadKind::Pf) {
-                    evocc_memory::AtomicValue::Pointer(match value {
-                        MirValue::Ptr(value) => PointerValue::object(value),
-                        MirValue::Fn(value) => value,
-                        MirValue::Int(_) | MirValue::Vector(_) => {
-                            return Err(MirError::Memory {
-                                code: "E3013",
-                                detail: "invalid-pointer-representation".into(),
-                            })
+                    evocc_memory::AtomicValue::Pointer(pointer_value(value).ok_or_else(|| {
+                        MirError::Memory {
+                            code: "E3013",
+                            detail: "invalid-pointer-representation".into(),
                         }
-                    })
+                    })?)
                 } else {
                     let raw = match value {
                         MirValue::Int(value) => value,
@@ -1515,23 +1520,14 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                     state.memory = memory;
                     state.world = world;
                 }
-                (StoreKind::P, MirValue::Ptr(pointer)) => {
-                    store_pointer_value(
-                        state,
-                        address,
-                        access,
-                        PointerValue::object(pointer),
-                        *volatile,
-                    )?;
-                }
-                (StoreKind::P, MirValue::Fn(pointer)) => {
-                    store_pointer_value(state, address, access, pointer, *volatile)?;
-                }
-                (StoreKind::P, MirValue::Int(_)) => {
-                    return Err(MirError::Memory {
+                (StoreKind::P, value) => {
+                    // The typed store creates a pointer fragment. Ordinary
+                    // integer stores, including zero, still write raw bytes.
+                    let pointer = pointer_value(value).ok_or_else(|| MirError::Memory {
                         code: "E3013",
                         detail: "invalid-pointer-representation".to_owned(),
-                    });
+                    })?;
+                    store_pointer_value(state, address, access, pointer, *volatile)?;
                 }
                 // `strb`/`strh`/`str` write the low bytes of the register.
                 //

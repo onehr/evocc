@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.53** | **Authoritative reference** | **2026-09-28**
+**Revision 0.54** | **Authoritative reference** | **2026-09-28**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -344,13 +344,30 @@ If the left operand is selected as the immediate, reverse the comparison's
 relation: EQ/NE remain EQ/NE, SLT/SLE become GT/GE and ULT/ULE become HI/HS.
 This swaps already evaluated SSA values, not source evaluation. Preserve
 the existing adjacent flags consumer, branch fusion and checked obligations.
-Narrow/pair values, pointers, negative or otherwise unencodable constants and
-dynamic operands retain the established extension/register paths. Pure known
+Narrow/pair values, non-null pointer comparisons, negative or otherwise
+unencodable constants and dynamic operands retain the established
+extension/register paths. Pure known
 definitions remain until ordinary unused-definition removal proves them dead;
 there is no new IR operation, effect permission or EqSat rewrite.
 The current immediate comparison form is unshifted: validation rejects operands
 outside `[0, 4095]`, even if an assembler could alias a larger number to a
 different shifted encoding. Raw MIR does not bypass this constraint.
+
+For pointer EQ/NE (revision 0.54), a directly defined `ptr.null` operand may
+select the existing 64-bit `cmp rn, #0` form on either side. The other operand
+retains its provenance; MIR interpretation uses the same identity comparison
+as register CMP. Do not infer null-definition facts from arbitrary integer
+addresses, symbol spellings, casts or nonlocal definitions. Both operands are
+already evaluated, and flags consumers, effects and guards remain unchanged.
+Ordinary unused-definition removal may remove the now-unused null register.
+The existing `ptr.null` machine representation remains `mov #0`: a typed
+`str.p` of that zero stores a null pointer fragment in the MIR interpreter,
+including for function pointers and volatile stores. Typed atomic stores and
+admitted pointer exchange/compare-exchange operands use that same conversion;
+their order, status and observable events are unchanged. A nonzero raw integer is
+not pointer provenance; an ordinary integer store of zero creates only raw
+bytes, not a pointer fragment. This corrects interpretation of existing forms,
+not C pointer conversions or memory initializedness rules.
 
 `bits<1>` lives in a `gpr32` with bit 0 significant. Comparisons produce
 their `bits<1>` result with `cset`, which writes 0 or 1 into the whole
@@ -1320,6 +1337,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.54 | 2026-09-28 | Select existing immediate-zero pointer equality for direct null definitions; preserve identity and repair typed null-pointer stores in MIR interpretation without admitting nonzero raw provenance or integer-store pointer fragments. |
 | 0.53 | 2026-09-28 | Select unshifted immediate full-register comparisons with correct reversed relations; independently reject malformed imm12 values, preserving flags adjacency, source evaluation, guards and nonmatching paths. |
 | 0.52 | 2026-09-28 | Select existing encodable full-width logical immediates, including exact bitwise constant expressions; reject malformed logical immediates in MIR validation without changing operand evaluation or effects. |
 | 0.51 | 2026-09-28 | Bound three GCC tuning option admissions to existing whole-function allocation, absent hoisting and nonduplicating block placement; preserve unsupported semantic requests through application projection. |

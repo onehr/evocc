@@ -1,0 +1,75 @@
+2026-09-28 — K02j: direct-null comparison selection and MIR null transport.
+
+The hot-path assembly audit found pointer-null tests materializing a separate
+zero register. The shape RED now selects the existing 64-bit CMP-immediate
+only for EQ/NE with a directly defined ptr.null, on either side. Other pointer
+facts, casts, exposed addresses and nonlocal data are not reclassified. The
+other operand retains its pointer identity in the interpreter. Existing
+branch fusion, guards, operand evaluation and dead-definition handling remain.
+
+The C reduction also exposed a correctness failure BEFORE the selection fix:
+C-HIR/EvoIR return 0, but MIR rejects a typed null-pointer store with E3013
+invalid-pointer-representation. ptr.null already lowers to MovImm(0), while
+the old typed store accepts only tagged pointer variants. Atomic stores and
+pointer exchange/compare-exchange have the same operand-conversion gap.
+One shared conversion now recognizes that null representation in all three
+paths. It does not expose an object/function, admit nonzero raw provenance,
+or turn an ordinary integer-zero store into a pointer fragment. Existing
+nonzero raw-MIR errors and atomic/volatile events remain checked independently.
+This interpreter correction is not a new atomic width/order/source contract.
+
+Ten focused MIR/CLI tests PASS. Coverage includes 20 null/object/exposed/
+function comparison shapes, both EQ/NE operand orders, explicit expected
+values and EvoIR/MIR agreement; branch flags, cast controls, text round-trip,
+allocation verification and 40 Linux/Darwin assembler combinations. Ordinary
+null transport covers both pointer types with/without volatile (4 cases).
+Atomic store/exchange/CAS cover both types with/without volatile (12 cases),
+including exact world/event equality. Six ordinary-store and six atomic
+negative controls preserve nonzero/raw-byte rejection. The permanent C test
+passes O0/O2 C-HIR, EvoIR and MIR, including once-only operand side effects.
+
+An initial combined assembler fixture accidentally reused allocation origin 0
+across functions and was correctly rejected. Distinct origins repair the test;
+targeted.log and verify.json retain that failed attempt. The first ordinary-null
+gate precedes the discovered atomic follow-up and is not the final gate.
+
+Final pinned Rust/Cargo 1.97.1 affected five-crate gate:
+  1093 PASS, 0 FAIL, 4 historical ignored; Clippy -D warnings and fmt PASS.
+  tools/gate-changed.sh 49adf32 --offline -j 2
+All source changes were fixed for that final gate and release build.
+
+Fourteen sealed ARM64 link/runs PASS at O0/O2: EvoCC/GCC14/Clang19 whole
+programs, and both caller/callee directions for EvoCC versus each reference.
+Reference sources use -Wall -Wextra -Werror. The native C fixture includes
+ordinary null arrays, function pointers, atomic null store/load and legacy
+pointer CAS/exchange. These are single-thread semantic checks, not a new
+concurrency-memory-model proof. Container network is disabled and the image
+digest is verified before and after execution.
+
+Unchanged original KVM objects, before/after compilation (no cache reuse):
+                                before text     after text
+  virt/kvm/kvm_main.o               153936         152912
+  arch/arm64/kvm/hyp/pgtable.o        31440          31328
+Both pairs assemble and exactly preserve reference symbol names/kinds;
+data/BSS sizes do not change. Original argv, source, config, installed objects,
+both Images and full-build receipt remain unchanged. Nothing is installed.
+Smaller text does NOT prove a runtime speedup or close K02/K03/K13/K14.
+The retained 7008-object kernel still uses ab2eeb7b..., not this new compiler.
+
+Commands and small captures: .build/floating-targeted/null-pointer-20260928/
+  verify.py, native.py, kernel.py, replay.py
+No new kernel tree, full runtime disk or Image was built. This capture is 20 MiB.
+Reuse target/pinned-check, CARGO_INCREMENTAL=0, debug info disabled, offline.
+
+SHA256:
+  C source f881f7b63ad9baa77c8b272959e18bca374a5fd6dd39f1e38e16aefe6f75d157
+  before compiler ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+  after compiler d8010273cd49d7cf139e6a56ff9b860a45b0a5ff8467495b4f3a17b36a4ca48e
+  verify-complete.json e0551a97650915f52c103e0cc20f3f1971dbec405f4f887bfbb423357f69e175
+  gate-complete.log d76d83e83e6be2be7549f0a39fe23900e26d182f2e0ae5aca10e697825c1ae82
+  preparation.json 85fb07447dce7ecc5ba57dff2a51c05350591999c41d05dee04e827603e0ecd1
+  native.log 5b31c22dfa5951dd68e475d759bde3c2f081ca063a3db86037b9b6a08f8a6f4a
+  kernel.json 8413bcff22a09335262aed3313c922003db12879fa46cb326bf8e52a6ae6a7e9
+  size.log 651c64898d5ebaa98242c025aae9c31683ab9bc5a89e28253f1807017c4a51f7
+  replay.json 1fce54a0ee86d9f7ec1e9b841309767aa907151dad32e633f8735633b777112d
+  sealed image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2

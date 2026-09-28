@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-09-28**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.115** and EvoMIR **0.53**. This is the Git-tracked execution backlog,
+EvoIR **1.9.115** and EvoMIR **0.54**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -276,6 +276,19 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     historical ignores, with Clippy/fmt PASS. No objects are installed and no
     runtime speedup is inferred; K02/K03 remain OPEN.
     [Exact result and retained failed attempts](tests/fixtures/constant-compare-selection.out).
+
+  - [x] **K02j — Select direct-null tests and repair MIR null transport**, 2026-09-28.
+    The [minimal C case](tests/fixtures/null-compare-selection.c) exposes both
+    redundant pointer comparison materialization and an existing interpreter
+    E3013 on typed null stores. One shared conversion now handles null for
+    ordinary/atomic stores and admitted pointer exchange/CAS; nonzero raw
+    provenance and ordinary integer-store fragments remain rejected. Ten focused
+    tests, 40 assembler combinations and fourteen native/crossed executions
+    pass. The final five-crate gate has 1,093 PASS, zero FAIL, four historical
+    ignores; Clippy/fmt pass. Both original KVM objects preserve symbols, with
+    text reductions of 1,024/112 bytes. No object is installed; the existing
+    7,008-object kernel does not include this change and K02/K03 stay OPEN.
+    [Exact scope and identities](tests/fixtures/null-compare-selection.out).
 
 - [ ] **K03 — KVM memslot_modification_stress_test timeout** — `OPEN`, P1.
   The subject is interrupted in its third mode while the reference completes.
@@ -563,6 +576,12 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     bounded-search SKIP. Fresh unchanged originals both finish within 45s with
     7 PASS / 1 SKIP, but the historical subject timeout and measured slowdown
     are not declared repaired by that retry. Preserve them for K13's final pair.
+    September 28's new pinned 7,008-object pair again completes the unchanged
+    original: both have 7 nested PASS / 1 SKIP, with shutdown at 17.505/42.139s.
+    The original 45-second limit, disk/payload hashes and historical timeout
+    remain intact. This updates current-image evidence but does not prove a
+    performance repair or a complete-campaign margin. It excludes K02j's later
+    compiler change. [Current capture](tests/fixtures/pidfd-recycle-progress.out).
 
   - [x] **K11g — Attribute delayed dying-memcg release** — `DONE`, P1, 2026-09-26.
     The [small frozen-workload control](tests/fixtures/cgroup-stock-displacement.c)
