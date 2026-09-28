@@ -37,3 +37,46 @@ Capture .build/floating-targeted/ublk-blocked-20260927/result.json
 Exact per-flight nonce, serial, Image/disk identity and outcomes are in that
 small result record and flights/*/boot.json. The old workload hashes remain
 those in ublk-background-exit.out; the runtime backing is unmodified.
+
+2026-09-28: original GCC stall captured; cause still OPEN.
+
+The unchanged stress_04 again reaches its original 45-second limit. At 25 s,
+40 s and before shutdown sync, writeback workers flush-259:5 / flush-259:8
+remain in blk_mq_get_tag -> __blk_mq_alloc_requests -> blk_mq_submit_bio ->
+submit_bh_wbc -> block_write_full_folio -> blkdev_writepages -> wb_workfn.
+fio/io_uring workers wait for folios in filemap_get_pages / filemap_read.
+Available memory is about 1.77 GiB; dirty bytes fall from about 88 MiB to
+66 MiB while writeback remains 2484 KiB. This is blocked request/writeback
+progress, not evidence that the machine ran out of RAM.
+
+The outer script exits zero after the inner TIMEOUT, but the existing parser
+correctly records FAIL. Shutdown sync does not complete; outer boot TIMEOUT
+105 s. No timeout or source is changed. This capture is GCC reference evidence,
+not an EvoCC miscompilation diagnosis. Leaders with wchan=0 are not sufficient
+evidence to label them zombies; thread states and device/queue mapping were
+not captured by that observer revision.
+
+The observer now also collects cmdline/status, each kublk thread's wait stack,
+and each ublk device's inflight/stat and bounded debugfs queue state. Two
+three-pair runs with that added observation all pass: 6 GCC + 6 EvoCC original
+invocations and shutdowns. They do not erase the captured failure or identify
+a repair. Per-file reads are capped at 4096 bytes, kmsg at 256 records, thread
+enumeration at 64 per leader; these are deliberately partial observations.
+The optional UBLK_DIAGNOSTIC_PROBE build executes ublk-kill-cancel instead of
+the original runner, while retaining the shared nonce/timeout/shutdown path.
+It is separately labeled diagnostic and is never original-program credit.
+
+Retained matching inputs for the new observations:
+  reference Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+  subject Image   62c29ae431c920e3b591a97f2287239b9177b32698a965b1854474a1f456fe6c
+  reference disk  0d18b2afbb20c7a19f08c61c684580a191cd88854f12d7b47cb58132edaa196d
+  subject disk    d8775e787acbd0d39b63bd69c6dcf491b4f17cd2b181131d4421dc643fbbeaee
+  stalled serial  2b2f740e79e69be41c8d26d92ccb1d3679952c5ea0482f2cb6cf0f565db03058
+  stalled result  ae3218aed8a8503db71afb24e3f570c7fb074788fd9a0665f66e1a2bde1c0e2c
+  thread result 1 4ae27a7aa7ba0475d9cd4fffeae5a57108b5fb2d6290c3c4d9ff86a3e8ce3db2
+  thread result 2 f40b4e97f429a86a742c7f3bc89a1d435c6ad67aff8a09107d8e91aeab29226f
+Captures: .build/floating-targeted/ublk-blocked-current-20260928/{result.json,
+thread-state/result.json,thread-state-second/result.json}; each retains its
+actual source/payload hash. Four-worker disjoint kernel compilation was active;
+no timing or performance claim. HVF, explicit QEMU drift and KUnit-off settings
+remain recorded. Snapshot backing hashes are unchanged.

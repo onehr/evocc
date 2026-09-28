@@ -333,6 +333,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   September 28's [39-program original pair](tests/fixtures/kernel-uniform-selected-runtime.out)
   again reproduces GCC stress_04's 45-second timeout and blocked shutdown;
   EvoCC passes that invocation. The cause and full K13 acceptance remain open.
+  A subsequent original GCC failure now has real blocked-task evidence:
+  two writeback workers wait in `blk_mq_get_tag`, while fio/io_uring readers
+  wait on folios. The 45-second inner TIMEOUT is preserved despite wrapper
+  exit zero; shutdown still exceeds the 105-second outer bound. This narrows
+  the stall to request/writeback progress, without proving its cause. Expanded
+  per-thread/device observation then gives 12 successful original invocations;
+  these negative reproductions are not a fix. See the same observer record.
+  The [single-device C reduction](tests/fixtures/ublk-kill-cancel.out) passes
+  4 cold-null + 3 warm-loop cases per retained Image, including real queued I/O,
+  forced writeback, bounded client/deletion completion and normal shutdown.
+  Earlier fixture setup failures are retained separately. This does not
+  reproduce the multi-device original or justify a compiler/kernel repair.
 
   - [x] **K04b — Isolate ublk completion-order assertions** — `DONE`, P1, 2026-09-28, classification only.
     Newly exposed generic_01 fails on both kernels; generic_02 fails on GCC

@@ -65,6 +65,30 @@ has now executed: sealed GCC/Clang compilation passes, and the GCC probe passes
 shows reordering, so the original fio/trace failure is still not reproduced.
 Both nonce-bound boots shut down; runtime backing hashes remain unchanged.
 
+### ublk stalled writeback captured — 2026-09-28
+
+The [bounded original observer](../../tests/fixtures/ublk-blocked-observer.out)
+now captures GCC stress_04 blocked at 25/40 seconds and before shutdown:
+writeback workers for devices 259:5 / 259:8 wait in `blk_mq_get_tag`, and
+fio/io_uring readers wait on folios. Roughly 1.77 GiB remains available.
+The original inner limit still gives FAIL at 45 seconds despite wrapper exit
+zero; shutdown sync exceeds the 105-second outer bound. This is a real
+reference-side failure, not a diagnosis of EvoCC code generation.
+
+Per-thread state and bounded device/queue observations have been added to the
+diagnostic init. Two further three-pair batches pass all twelve unchanged
+original invocations and shutdowns; none closes the intermittent stall. The
+fixture preserves raw hashes, bounded-observation limits and both negative
+and positive runs. K04 remains OPEN; full K13 totals are unchanged.
+
+The [single-device cancellation reduction](../../tests/fixtures/ublk-kill-cancel.out)
+adds 4 cold-null and 3 warm-loop checks per retained Image. Each final case
+establishes pending I/O; warm cases also establish actual prior completions
+and force buffered writeback. All 14 checks and four boot/shutdown predicates
+pass. This is not a compiler fix or original-program PASS. Early reductions
+with missing request preconditions or an unsupported loop-server mode remain
+recorded as diagnostic setup failures, with their logs and hashes preserved.
+
 ### ublk completion-order classification — 2026-09-28
 
 K04b's [independent trace controls](../../tests/fixtures/ublk-trace-order.out)

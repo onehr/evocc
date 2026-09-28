@@ -1,0 +1,68 @@
+2026-09-28: bounded single-device controls PASS; K04 remains OPEN.
+
+This is a diagnostic reduction, not unchanged upstream stress_04 acceptance.
+The reference-built C program exercises one owned device at a time on the
+retained matching GCC/EvoCC Images. It never signals a host process or modifies
+the backing runtime disks. Modes match the installed upstream server:
+  cold null: -z --no_ublk_fixed_fd; --auto_zc; --nthreads 8 --per_io_tasks;
+             -z --auto_zc --auto_zc_fallback (4 cases)
+  warm loop: first three modes, independent 64 MiB backing file (3 cases)
+
+Cold controls stop the new daemon before submission. Warm controls require
+at least 64 new completed requests, run buffered I/O, stop that daemon and
+explicitly request fdatasync. Both require a positive outstanding-request
+count before killing the daemon. The small loop working set can fit in cache;
+without explicit writeback a zero request count is not a kernel failure.
+Each client has an 8-second completion bound; device deletion also has an
+8-second bound. Expected client I/O error exit 4 is distinguished from missing
+executables/setup errors. The original selftest budget is not changed.
+
+Final source acc8d252d86b70ff41fab631fbb0a57e56640a7e10d3c920be614a087095a4e3
+Observer     5cd517aa5f57e42a1c494a3abf3acc69917cc1bd1a56fed0ad0a6f6cb5729763
+Cold: GCC 4/4, EvoCC 4/4; queued requests observed, clients/delete complete.
+Warm: GCC 3/3, EvoCC 3/3; completion deltas and pending writeback observed,
+      fdatasync returns EIO after daemon death, clients/delete complete.
+All four nonce-bound boot/shutdown predicates PASS. No stalled final tasks.
+This rules out these basic single-device schedules as sufficient to reproduce
+the old stall; it is not proof that all cancellation schedules are correct.
+No compiler or kernel source was repaired. Multi-device/backing-file/timing
+interactions and the actual original blocked path remain unclosed.
+
+Validation: GCC14 static build and independent Clang19 object compilation with
+-std=gnu11 -O2 -Wall -Wextra -Werror. For the warm variant add
+-DUBLK_WARM_LOOP=1. The init includes the existing selftest-init.c with
+-DUBLK_DIAGNOSTIC_PROBE -I/harness. Existing selftest.py flight: hvf-host,
+KUnit autorun off, explicit QEMU drift, diagnostic budget 120 + 60 seconds.
+No new benchmark framework. Each initramfs is under 2 MiB, with snapshot-backed
+I/O and no full disk copy. Kernel recovery was concurrently active; the final
+cold/warm flights may also overlap. No timing or performance claim.
+
+Reference Image 13bd4d0b0e89a0c72926d8fc44715063db2e065bf9967532309cece04233c388
+Subject Image   62c29ae431c920e3b591a97f2287239b9177b32698a965b1854474a1f456fe6c
+Reference disk  0d18b2afbb20c7a19f08c61c684580a191cd88854f12d7b47cb58132edaa196d
+Subject disk    d8775e787acbd0d39b63bd69c6dcf491b4f17cd2b181131d4421dc643fbbeaee
+Cold payload    e651f6683bf0787df04aa4d2f1c530748afab86b43d740f4944b2bda855585dd
+Warm payload    0cda255342fa2de8bd3ce966c5e1950f4da34fff228824a9994b3901bdedd8f7
+Cold result     d0b7c5e0b05f6c9c5c32fd6daa7dba3253889f9d5f795bee4e9d65bd180dc857
+Warm result     5c3ccf8328aadbb46f62b5b36203c9e1b5c121f70dc13e25bd25aefb79521f57
+
+Capture root: .build/floating-targeted/ublk-kill-cancel-20260928/
+Final results: {cold-final,warm-final}/result.json, with exact commands and
+per-flight nonce/serial/Image/disk identity. Both backing hashes are unchanged.
+
+Earlier diagnostic failures are preserved, not silently regraded:
+- Initial cold-null version passes 4/4 on each Image (different fourth mode).
+- warm-loop: reference 3 PASS/1 FAIL, subject 0 PASS/1 FAIL; later cases NOT_RUN.
+  It could count the partition scan as completed workload and failed to ensure
+  outstanding I/O. This was not an established kernel-cancellation RED.
+- warm-completion: each side 0 PASS/1 FAIL, later cases NOT_RUN. Real completion
+  deltas are observed, but dirty buffered pages have not yet been forced into
+  device requests. The fixture correctly refuses PASS with no queued request.
+- warm-writeback: each side 3 PASS/1 FAIL. First three cancellations complete;
+  the fourth is a kublk loop-mode setup refusal (auto_zc_fallback), not a stall.
+  Final scope follows the original's placement of this mode on null only.
+Their respective result hashes:
+  5cf495829f5d5df6c08604dc7a3a45adcfd768c1d832e0a163c27f28aa5906b5
+  d52809bce727bcfec33aa59fe339df4f3a9c439b5ce02a7e4539c4646299de40
+  caba8271badab69f13ec6e230a2c92fa2e25dbaba74c1fdeb89f61d67e18558c
+The original captured stress_04 failure remains in ublk-blocked-observer.out.
