@@ -6,6 +6,65 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Current pinned composition running — 2026-09-28
+
+Common bench `20260927T233955.767167Z`, K1 `20260927T233955Z`, initially ran
+with owner/bench/worker PIDs 25047/25048/25051. It uses the frozen
+`ab2eeb7b…` compiler and `95853321…` configuration, four workers and batches
+of 64 assemblies. At 02:35 UTC September 28, all 7,008/7,008 first-pass
+objects have compiled, assembled and passed symbol checks, with zero cache
+reuse, and the runner has installed all 7,008 EvoCC objects. It is preparing
+generated headers before recompiling their consumers. This is first-pass
+progress; actual-generated-input convergence, final link, installed-object
+audit and boot still follow. The existing log is
+`.build/floating-targeted/module-uniform-20260928/final-build/kernel-full.log`.
+
+A follow-up C fixture, `ublk-aio-refill-order.c`, adds continuous replenishment
+to the earlier batched AIO diagnostic. Its sealed-target execution is currently
+**NOT RUN**: the terminal launcher began returning OS error 24 (`Too many open
+files`) before its first compile could start. Ordinary, escalated and PTY
+command launches failed. The alternative process launcher was sandbox-denied, and Computer Use
+explicitly disallows Terminal. An independent read-only file channel confirms that the existing kernel
+worker continues advancing; no new kernel/runtime result is inferred. The
+small diagnostic files are retained as unfinished work, not a closed K04b.
+
+The command channel subsequently recovered. Read-only inspection identified
+the command-service process, not the build workers, near the inherited
+256-descriptor soft limit: 225--233 descriptors, including 115 pipes, 26 session
+logs, 26 session locks and 28 SQLite handles. System-wide usage was far below
+its ceiling. This localizes the resource exhaustion but does not establish a
+descriptor leak or justify killing other sessions.
+
+The resumed turn then encountered a separate authorization-service failure:
+`application network permission was revoked`; automatic approval review could
+not complete. No denied command was executed or rerouted, and no active build
+was stopped. Sandboxed Apple Clang 21 AArch64 `-fsyntax-only`, with the existing
+target sysroot and `-Wall -Wextra -Werror`, accepts the refill fixture
+(`eda08c9fe582eeee3af0ccd3af2032c8fc5a080befe8761d89cb06fb7862da03`).
+That is only a syntax check, not GCC14/Clang19 sealed compilation or runtime
+evidence. The build session was live at that observation; new container
+validation then awaited restoration of approval-service access.
+
+The command and authorization channels subsequently recovered. Process checks
+found the old build stopped, despite its stale RUNNING record. Last prepared
+checkpoint: 1,920/7,008 at 07:42 UTC. The first resume refused 17 producer-replaced
+working objects; the shared recovery fix now keeps them explicitly uncredited
+until prepared validation and installation. The [65-object native regression](../../tests/fixtures/kernel-prepared-phase.out)
+and 275 K1 tests pass. No stopped process is reported as running.
+
+Corrected common-bench recovery is K1 `20260928T075419Z`, wrapper PID 90753,
+with the same compiler/configuration, four workers and no new source tree or
+runtime disk. It recovered all 7,008 first-pass records and completed its first
+64 prepared consumers. Log: `final-build/resume-phase-fixed.log`. The changed
+harness correctly invalidates old prepared-cache identities; no receipt was
+edited to force reuse. This is progress, not final link/boot acceptance.
+
+The [continuous-refill AIO diagnostic](../../tests/fixtures/ublk-aio-refill-order.out)
+has now executed: sealed GCC/Clang compilation passes, and the GCC probe passes
+4/4 cases with 65,536 exact completions on each retained old Image. Neither
+shows reordering, so the original fio/trace failure is still not reproduced.
+Both nonce-bound boots shut down; runtime backing hashes remain unchanged.
+
 ### Current-code integration prerequisites complete — 2026-09-28
 
 The new `95853321…` reference finishes its 7,008-target-C/848-module build and

@@ -309,11 +309,12 @@ def resume_prepared_rows(run: Path, records: dict[str, Record], args,
                          cache: dict, inputs: str) -> tuple[list[dict], dict]:
     """Recover only a complete first pass; revalidate prepared-input consumers.
 
-    The normal cache binds source, all inputs, command and compiler. Installed
-    object hashes additionally prove that the interrupted pass reached the
-    existing working tree. The separate prepared cache validates completed
-    batches; uncheckpointed partial outputs are not evidence. Never modify the
-    earlier run's inventory.
+    The normal cache binds source, all inputs, command and compiler. The
+    producer graph may have replaced installed first-pass objects with GCC
+    output. Those bytes receive no EvoCC credit: every recovered row is pending
+    until the complete prepared-input pass validates and installs its object.
+    The separate prepared cache validates completed batches; uncheckpointed
+    partial outputs are not evidence. Never modify the earlier inventory.
     """
     inventory = run / 'units.jsonl'
     rows = [json.loads(line) for line in inventory.read_text().splitlines()]
@@ -336,10 +337,12 @@ def resume_prepared_rows(run: Path, records: dict[str, Record], args,
                 or row.get('record') != str(record.path)
                 or not row.get('assemblySha256')
                 or entry.get('assemblySha256') != row['assemblySha256']
-                or not (output / unit).is_file()
-                or sha256_file(output / unit) != row.get('objectSha256')):
-            raise ValueError(f'prepared resume input or installed object changed: {unit}')
-        recovered.append(dict(row, outcome='substituted', installedSha256=row['objectSha256']))
+                or not (output / unit).is_file()):
+            raise ValueError(f'prepared resume input changed or working object missing: {unit}')
+        pending = dict(row, outcome='prepared-pending',
+                       objectSha256BeforeResume=sha256_file(output / unit))
+        pending.pop('installedSha256', None)
+        recovered.append(pending)
     return recovered, {'run': str(run), 'inventorySha256': sha256_file(inventory),
                        'firstPassUnits': len(rows), 'preparedCompilationsReused': 0,
                        'policy': 'verify every prepared-input compilation; repeat fixed-point check, link and boot'}
@@ -963,7 +966,7 @@ def recompile_after_prepare(rows: list[dict], records: dict[str, Record], args,
         before = input_snapshot(args.src_root, out_root, toolchain_root=toolchain_root)
         state = {'compiler': compiler, 'image': image, 'implementation': implementation,
                  'inputs': before, 'log': str(log.resolve()), 'logSha256': sha256_file(log)}
-    selected = [row for row in rows if row["outcome"] == "substituted"]
+    selected = [row for row in rows if row["outcome"] in ("substituted", "prepared-pending")]
     keys = {}
     for old in selected:
         unit = old['unit']
@@ -1250,7 +1253,7 @@ def main() -> int:
         rows, resumption = resume_prepared_rows(args.resume_prepared_run, records,
                                                 args, cache, inputs_sha256)
         pending = []
-        print(f"k1: recovered {len(rows)} verified installed first-pass objects; "
+        print(f"k1: recovered {len(rows)} verified first-pass records, no installed-object credit; "
               "every prepared-input consumer requires matching compilation evidence", flush=True)
     snapshot_seconds = time.monotonic() - started
     keys: dict[str, str] = {}
@@ -1354,9 +1357,13 @@ def main() -> int:
         print(f"k1: restored {len(restored)} previously substituted objects", flush=True)
         if resumption is None:
             install(rows, asm_root, out_root, args.allow_symbol_drift)
-        substituted = [row["unit"] for row in rows if row["outcome"] == "substituted"]
-        save_state(args.k1_root, substituted)
-        print(f"k1: installed {len(substituted)} EvoCC objects", flush=True)
+            substituted = [row["unit"] for row in rows if row["outcome"] == "substituted"]
+            save_state(args.k1_root, substituted)
+            print(f"k1: installed {len(substituted)} EvoCC objects", flush=True)
+        else:
+            save_state(args.k1_root, [])
+            print(f"k1: {len(rows)} working objects require prepared-input validation and installation",
+                  flush=True)
 
     relink_code = None
     preparation = None

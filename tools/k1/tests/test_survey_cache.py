@@ -28,6 +28,9 @@ class CacheKeyTest(unittest.TestCase):
     def test_prepared_compilation_resumes_verified_batches_without_reemitting(self):
         self._prepared_checkpoint_case()
 
+    def test_prepared_resume_replaces_every_uncredited_producer_object(self):
+        self._prepared_checkpoint_case('producer-replaced')
+
     def test_prepared_checkpoint_invalidates_changed_inputs_and_compiler(self):
         for change in ('header', 'new-header', 'compiler', 'command', 'prepare-log', 'image', 'malformed-cache'):
             with self.subTest(change=change):
@@ -117,6 +120,9 @@ class CacheKeyTest(unittest.TestCase):
                 targets = unused[-1]
                 if 'vmlinux_o' in targets:
                     (output / 'generated-table.h').write_text('#define TABLE 37\n')
+                    if change == 'producer-replaced':
+                        for unit in records:
+                            (output / unit).write_bytes(b'preparatory reference')
                 # Real Kbuild rewrites identical GEN Makefile bytes: a resume
                 # must validate the old prepared state before doing that again.
                 (out / 'Makefile').write_text('generated\n')
@@ -129,7 +135,16 @@ class CacheKeyTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'injected interruption'):
                     substitute.recompile_after_prepare(rows, records, args, assembly,
                                                        pristine, output, first)
-                self.assertEqual((output / 'u00.o').read_bytes(), b'first-pass')
+                if change == 'producer-replaced':
+                    # Resume input objects carry no EvoCC credit. They may be
+                    # preparatory reference output until the complete second
+                    # pass installs freshly validated subject objects.
+                    for row in rows:
+                        row['outcome'] = 'prepared-pending'
+                        self.assertEqual((output / row['unit']).read_bytes(),
+                                         b'preparatory reference')
+                else:
+                    self.assertEqual((output / 'u00.o').read_bytes(), b'first-pass')
                 self.assertFalse(substitute.assembly_path(assembly, 'u01.o').exists())
                 progress = substitute.load_cache(first / 'prepared-progress.json')
                 self.assertEqual(progress['examinedUnits'], 64)
@@ -172,7 +187,7 @@ class CacheKeyTest(unittest.TestCase):
                                                             pristine, output, second)
                 fresh_all = change in ('header', 'new-header', 'compiler', 'prepare-log', 'image',
                                        'no-cache', 'malformed-cache')
-                expected = 65 if fresh_all else 2 if change else 1
+                expected = 65 if fresh_all else 2 if change and change != 'producer-replaced' else 1
                 self.assertEqual(len(emitted), expected,
                                  'an interrupted prepared pass must not reemit verified unchanged objects')
                 self.assertEqual(result['preparedCacheHits'], 65 - expected)
@@ -182,6 +197,8 @@ class CacheKeyTest(unittest.TestCase):
                 self.assertEqual(sum(len(call.args[0]) for call in symbols.call_args_list), 65,
                                  'cached objects must still undergo current symbol comparison')
                 self.assertTrue(all(row['outcome'] == 'substituted' for row in rows))
+                self.assertTrue(all((output / unit).read_bytes() == b'prepared object ' + unit.encode()
+                                    for unit in records))
 
     def test_a_reconfigured_tree_cannot_count_stale_module_metadata_as_target_c(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -215,7 +232,7 @@ class CacheKeyTest(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, 'module inventory'):
                         substitute.target_c_records(root)
 
-    def test_prepared_resume_requires_complete_matching_inputs_and_installed_objects(self):
+    def test_prepared_resume_requires_complete_inputs_without_crediting_preparatory_objects(self):
         resume = getattr(substitute, 'resume_prepared_rows', None)
         self.assertTrue(callable(resume), 'resume must validate the completed first pass')
         with tempfile.TemporaryDirectory() as directory:
@@ -241,11 +258,21 @@ class CacheKeyTest(unittest.TestCase):
             original = json.dumps(row) + '\n'
             inventory.write_text(original)
             recovered, detail = resume(run, {'a.o': record}, args, cache, 'inputs')
-            self.assertEqual(recovered[0]['outcome'], 'substituted')
-            self.assertEqual(recovered[0]['installedSha256'], row['objectSha256'])
+            self.assertEqual(recovered[0]['outcome'], 'prepared-pending')
+            self.assertNotIn('installedSha256', recovered[0])
+            self.assertFalse(substitute.complete_coverage(recovered, ['a.o'], 'substituted'))
             self.assertEqual(detail['firstPassUnits'], 1)
             self.assertEqual(inventory.read_text(), original)
-            for change in ('input', 'compiler', 'source', 'object', 'assembly', 'partial', 'duplicate', 'timeout'):
+            # The real producer graph may rebuild a target object with GCC.
+            # Recovery must recompile/install it, never call it substituted.
+            (output / 'a.o').write_bytes(b'preparatory GCC object')
+            recovered, detail = resume(run, {'a.o': record}, args, cache, 'inputs')
+            self.assertEqual(recovered[0]['outcome'], 'prepared-pending')
+            self.assertEqual(recovered[0]['objectSha256BeforeResume'],
+                             substitute.sha256_file(output / 'a.o'))
+            self.assertNotIn('installedSha256', recovered[0])
+            self.assertEqual((output / 'a.o').read_bytes(), b'preparatory GCC object')
+            for change in ('input', 'compiler', 'source', 'missing-object', 'assembly', 'partial', 'duplicate', 'timeout'):
                 with self.subTest(change=change):
                     binary.write_bytes(b'compiler')
                     (source / 'a.c').write_text('int a;\n')
@@ -259,8 +286,8 @@ class CacheKeyTest(unittest.TestCase):
                         binary.write_bytes(b'changed compiler')
                     if change == 'source':
                         (source / 'a.c').write_text('int b;\n')
-                    if change == 'object':
-                        (output / 'a.o').write_bytes(b'reference object')
+                    if change == 'missing-object':
+                        (output / 'a.o').unlink()
                     if change == 'assembly':
                         altered[key] = dict(cache[key], assemblySha256='other')
                     if change == 'partial':

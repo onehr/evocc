@@ -343,6 +343,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     observer before attributing the failure; the general block-layer absence
     of an ordering guarantee alone is not a diagnosis of this test.
     [Results and limits](tests/fixtures/ublk-aio-completion-order.out).
+    The [continuous-refill follow-up](tests/fixtures/ublk-aio-refill-order.out)
+    also passes 4/4 cases and 65,536 completions per Image, without reordering.
+    Batch replenishment alone does not explain the missing reproduction;
+    fio submission details and the trace observer still need isolation.
 
   - [x] **K04a — Preserve ublk worker failures beneath a successful wrapper**, 2026-09-23.
     The [small shell reduction](tests/fixtures/ublk-background-exit.sh) and
@@ -1476,6 +1480,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   the measured uniform composition, not final-current-compiler integration or
   K13/K14. No build worker remains live. Earlier interrupted launches and
   September 26 negative evidence stay recorded. [Exact receipt and boundaries][kernel].
+  A separately identified current-pinned run, `20260927T233955Z`, started
+  with compiler `ab2eeb7b…` and configuration `95853321…` (connector/process
+  events and FPU module enabled). Its **7,008/7,008 first-pass objects** passed,
+  with zero cache reuse. It was later found stopped with a 1,920-object
+  second-pass checkpoint and stale RUNNING record. After fixing T04e, recovery
+  `20260928T075419Z` is live (last observation: first 64 of 7,008 prepared
+  consumers complete). The changed harness invalidates the old prepared cache.
+  Second-pass convergence, final link/boot,
+  848-module signing/runtime and K13/K14 are not yet acceptance results.
   Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,
   Image and module/runtime hashes. Use a uniform rebuild for any single-compiler
@@ -1527,6 +1540,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     All installed target-C hashes survive: zero GCC replacements. The prior
     13 replacements remain a failed observation, not rewritten evidence.
     [Exact scope and evidence](tests/fixtures/kernel-late-generator.out).
+
+  - [x] **T04e — Recover producer-replaced objects without crediting them**, 2026-09-28.
+    Real recovery stopped because preparation replaced 17 first-pass working
+    objects. Recovery now labels every row prepared-pending, without installed
+    provenance, and requires prepared validation and installation. Two RED
+    assertions, 275 K1 tests and a real 65-object native recovery pass; full
+    coverage still requires the post-link audit. No object is exempted. The
+    full run retains the same compiler/configuration; T04/K13/K14 stay OPEN.
+    [Reproduction and identities](tests/fixtures/kernel-prepared-phase.out).
 
 - [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.
   After the last semantic repair, run workspace tests, Clippy `-D warnings`, fmt,

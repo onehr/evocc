@@ -1,0 +1,43 @@
+2026-09-28 -- T04e: recover Kbuild preparation without crediting GCC objects.
+
+Original failure: the stopped 7,008-object run retained 1,920 second-pass
+checkpoints. Resume refused alternative.o because its bytes no longer matched
+the first-pass EvoCC hash. Read-only audit found 17 changed objects: prepare's
+real producer graph recompiled target consumers. This is intermediate state,
+never final provenance. Failed resume: .evidence/bench/20260928T074609.788520Z.
+
+RED: recovered rows incorrectly claim substitution; pending rows are omitted
+from compilation (two failed assertions). GREEN: validate complete first-pass
+source/command/compiler/input evidence, but recover rows as prepared-pending,
+without installedSha256. Record current object hashes for diagnosis only.
+Every row requires prepared-input compilation/cache checks, symbol comparison,
+installation, generated-input fixed point and final post-link object audit.
+Pending rows cannot satisfy complete_coverage; old inventories stay unchanged.
+
+275 K1 Python tests PASS; changed-file Ruff and git diff --check PASS.
+gate-changed b23a705 --offline -j2 selects no Rust crates, not a new Rust PASS.
+Permanent regression: tools/k1/tests/test_survey_cache.py, including replaced
+producer objects, missing objects, stale inputs, interruption and invalidation.
+
+Real integration reuses kernel-prepared-consumer.c for 65 functions. Preparation
+changes the header from 7 to 37 and replaces one installed EvoCC object with
+real GCC output. Interrupt after 64 second-pass objects. Public recovery gives
+65 pending rows; then 64 validated cache hits plus one fresh compilation are
+installed. All symbol checks/fixed-point checks pass. A GCC-linked AArch64
+executable checks all 65 results equal 37 and exits zero. Coverage is false
+before the post-link hash audit, then true. An earlier script assertion wrongly
+required coverage before that audit; its failed attempt is retained.
+
+Compiler ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+Harness c24f165afe27b67cbb494d1ead3742774ad390ff037b3a708f129d76886556d1
+Sealed image sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+Script d52adbf699cf5eed991407ab81062119e704e6b9eeefebbd7e6d33520caa06d5
+Result 819496e6ce9951bb17f2220337914f888ae9b8cd7de860392f9096e386227a7a
+  .build/floating-targeted/prepared-phase-20260928/green/result.json
+Replay:
+  python3 .build/floating-targeted/prepared-phase-20260928/replay.py \
+    .build/floating-targeted/prepared-phase-20260928/green
+
+This uses a producer stand-in, not Linux link/boot acceptance. Full recovery
+is restarted at .evidence/k1/20260928T075419Z. The changed whole-harness identity
+invalidates the old prepared cache; no hash is edited to force reuse. T04 OPEN.

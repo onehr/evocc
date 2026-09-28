@@ -1,0 +1,27 @@
+2026-09-28 -- K04b continuous-refill control, NOT original failure closure.
+
+The new C case replenishes completed requests immediately instead of waiting
+for a full batch. It retains null devices, 4-KiB direct writes, depths 1/16 and
+1/2 queues. Each case checks 16,384 identities, object addresses, lengths and
+unique completions; only depth one requires order. Null writes do not establish
+persistence. No original assertion or source is changed.
+
+GCC14 and Clang19 -O2 -Wall -Wextra -Werror compilation PASS in sealed ARM64.
+GCC-built probe on retained GCC/EvoCC kernels: 4/4 cases and 65,536 complete
+writes per Image PASS. All eight combinations show zero displaced/backward
+completions. Replenishment alone does not reproduce the original fio/trace
+failure; K04b remains OPEN.
+
+Both nonce-bound HVF boot/shutdowns PASS; both runtime backing hashes unchanged.
+The 1.6-MiB payload uses shared init and no new runtime disk. A separate kernel
+recovery job was active; no performance inference. Older Images do not inherit
+current compiler repairs. Image/runtime identities: kernel-uniform-selected-runtime.out.
+
+Source eda08c9fe582eeee3af0ccd3af2032c8fc5a080befe8761d89cb06fb7862da03
+Probe 2c8f3f9a1cc1dda89e7fcccc944317b8ace400278de907c07a72b49e4cffd1ad
+Payload da72dc98eb117ef956c9c9e2d1f2f89ca7714970f213d91431d570f8f23bbb40
+Result 39f961d7c26547e34ce6743aacb0fb39df28a366ab3e0d373a7d0f3f282cb251
+Reference serial 41b91963febd7a3b1f2002f802cde28c970df15c16308ed7bcf4046c9fe277c5
+Subject serial 711058d1212491ef8802fd603e27b4dac66d5cddbfbaede8099ffddc5b3ee8d1
+  .build/floating-targeted/ublk-refill-20260928/{build.py,replay.py,result.json}
+  .build/floating-targeted/ublk-refill-20260928/flights/{reference,subject}/boot.log
