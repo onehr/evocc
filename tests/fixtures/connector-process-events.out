@@ -52,3 +52,26 @@ Disposition: enabled-reference process-event delivery and normal signaled
 termination are verified. The original program is not a finite unattended
 acceptance test. Preserve its TIMEOUT, report the bounded diagnostic separately,
 and repeat both paths on the new subject before closing K12e.
+
+Final current-subject follow-up:
+The pinned 7,008-object Image 18b36fee4bb0265719f59df8db1da7098374df3c5e245071dc8f0662ea6a7032
+has the same enabled configuration as the qualified GCC reference. The same
+4,274,176-byte payload (not rebuilt) passes 20/20 checks on this EvoCC Image;
+both GCC/Clang diagnostic binaries observe all 20 owned original-listener
+children and normal SIGINT exit. Nonce-bound boot/shutdown PASS; Image/config,
+source, payload and backing disk hashes are verified unchanged.
+
+The unchanged unattended original separately still records FAIL with its
+inner TIMEOUT at 45 seconds, then normal guest shutdown. This is the expected
+persistent-listener boundary confirmed on both kernels, not an invented
+finite-test PASS. K12e's omitted-configuration/event-delivery issue is now
+closed. The raw TIMEOUT remains in campaign accounting; K13 is not closed.
+
+Bounded result edcfa84de07e7fbc49a730f1191e9d4a363cd080cb7732c5ed1259a8c58e25f6
+Bounded serial 3bb72b3315ba6809ea32d4d0a6afe7da862ac3dedf8523316c7d755b171f7188
+Original result 171514c1ee2c3e63549be4c2c3b64f40127aa14c5c3a23f76160d6e3bc7a350d
+Original serial 042adddce3250c3e57199071831b49a97d84eb81c48564c004cbb049b8c92610
+Command: python3 .build/floating-targeted/connector-events-20260928/current-subject/replay.py
+Capture: .build/floating-targeted/connector-events-20260928/current-subject/
+Original: .build/floating-targeted/module-uniform-20260928/final-subject-prerequisites/
+Compiler and original replay command are bound in fpu-worker-verdict.out.

@@ -82,3 +82,37 @@ Standalone serial 9316c0a42ceb6375e45716e902c065f09593fd2d09c32b2e2f01698a663ac5
 Stress serial     627b57b1e80931e1304629133d9c60f2b0e6b24e2241f2ee0e4a464d59e30262
 Capture: .build/floating-targeted/fpu-worker-verdict-20260928/preload/
 The new disk/payload hashes are bound in reference.json and runtime build.json.
+
+Final current-subject closure, 2026-09-28:
+The 7,008-object pinned compiler composition is complete (see
+kernel-current-composition.out). Its new runtime installs and signs all 848
+kernel modules, including test_fpu, through the original module install path.
+The linked module body and installed signature trailer are checked separately.
+Its common init actually modprobes test_fpu before both unchanged originals:
+  fpu:test_fpu       1/1 OK, zero FAIL/SKIP; normal shutdown
+  fpu:run_test_fpu.sh 4000/4000 OK, zero FAIL/SKIP; normal shutdown
+The observed stress denominator matches the nonce-bound online-CPU count (4).
+Outer TAP and nested worker verdicts are both retained. Original argv and
+45-second test limits are unchanged; no failure is rescued by retries.
+
+This pairs with the qualified reference results above and closes K12f, not
+the complete 970-program campaign or expanded KUnit. CONFIG_MODULE_SIG_FORCE
+is disabled, so loading is not a signature-enforcement acceptance claim.
+
+Subject compiler ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+Subject Image    18b36fee4bb0265719f59df8db1da7098374df3c5e245071dc8f0662ea6a7032
+Linked test_fpu  99f43c36c57a99f16e47cac378bde85e26a7816550f356b73feb1ed94fc66d05
+Installed module 1b243d903c74661c98a23cfc7fecc1d9efb62a03f87ef0af6da8707723ec489f
+Runtime build    9ff541e449eb54021f2bd1dcfd77d9b9dd7663f283e4533f39d5882d802677e9
+Disk             9cfac9639e4f5f876c7bd9e8e0cbaabf2f55fc6bf1069bf2c8c95904252e198e
+Initramfs        0f736857c4f56a4cb9eef43814798b607f3e49c95f727ba877380dca76effbd3
+Original results 171514c1ee2c3e63549be4c2c3b64f40127aa14c5c3a23f76160d6e3bc7a350d
+Standalone serial fe0f9935944998da4da8dd28def15b14dddab0d25f9787cfb0480fd2de7710a9
+Stress serial    f9b347ec97bc245d213ae446806a1ebb9d12f5c796d12d9d00519be0d5f5b4d8
+Capture: .build/floating-targeted/module-uniform-20260928/
+  final-subject-prerequisites/subject.json and flights/*/boot.{json,log}
+Runtime: .build/k7-coverage/case/selftests/runtime-final-20260928/subject/
+Command: python3 .build/floating-targeted/module-uniform-20260928/final-prerequisites.py
+  subject .build/floating-targeted/module-uniform-20260928/final-subject-prerequisites
+  fpu:test_fpu fpu:run_test_fpu.sh connector:proc_filter
+The connector TIMEOUT in the same result is explicitly not a FPU failure or PASS.

@@ -692,7 +692,7 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     no complete new runtime disk or subject Image is manufactured.
     [Identity-bound record](tests/fixtures/ovpn-base64-prefix.out).
 
-  - [ ] **K12e — Enable the missing connector process-event configuration** — `OPEN`, P2.
+  - [x] **K12e — Enable the missing connector process-event configuration** — `DONE`, P2, 2026-09-28.
     The earlier uniform configuration disables CONNECTOR; the collection has no
     upstream config fragment. Two reference controls pass 12/12 absence checks,
     while unchanged proc_filter still fails EPROTONOSUPPORT. PROC_EVENTS needs
@@ -714,9 +714,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     confirms proc_filter is a persistent listener, so the original 45-second
     runner still legitimately records TIMEOUT rather than a finite-test PASS.
     [Exact controls and retained failures](tests/fixtures/connector-process-events.out).
-    Repeat the bounded control and unchanged original on the new subject.
+    The final pinned 7,008-object subject now enables both options. The same
+    qualified payload passes **20/20** checks there, including the unchanged
+    original's owned-child events and normal SIGINT exit. The unchanged
+    unattended original still records its **45-second TIMEOUT** on both sides:
+    this closes the missing-config/event-delivery task, not that program's
+    outer PASS count. Its persistent-listener disposition remains explicit.
 
-  - [ ] **K12f — Enable and execute the omitted kernel FPU module** — `OPEN`, P2.
+  - [x] **K12f — Enable and execute the omitted kernel FPU module** — `DONE`, P2, 2026-09-28.
     Both unchanged originals on the new uniform pair explicitly SKIP because
     CONFIG_TEST_FPU=m is absent. The collection has no upstream config fragment.
     Source-pinned audit now records TEST_FPU=m, architecture support and the
@@ -732,7 +737,12 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     module. Its RED and all 283 K1 tests pass; unchanged reference replays now
     record 1/1 standalone and 4000/4000 stress worker OKs, with normal shutdown.
     Only /tests/modules changes on an APFS clone; the old disk/captures remain.
-    Repeat both originals on the new subject before closing this item.
+    The final pinned subject's matching module is now signed, installed and
+    actually loaded. Both unchanged originals pass: **1/1 standalone** and
+    **4000/4000 stress workers**, zero FAIL/SKIP, normal shutdown. This matches
+    the qualified GCC reference and closes the omitted-module/runtime gap;
+    it does not close the other 968 programs or K13/K14.
+    [Final subject identity and original results](tests/fixtures/fpu-worker-verdict.out).
 
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts
@@ -1560,8 +1570,12 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   replacement. Image `18b36fee…` boots and shuts down with its nonce on
   `hvf-host`, with explicit QEMU drift. This is the pinned current-compiler
   composition, not a stale image. [Exact identities and scope](tests/fixtures/kernel-current-composition.out).
-  Its matching signed module runtime is being prepared; K13/K14 and the
-  expanded-KUnit configuration still require their own current acceptance.
+  Its matching runtime now installs/signs all 848 modules, rebuilds the 17
+  reference test-support modules, and preserves all 4,396 original non-module
+  userspace files. Actual FPU loading/execution and connector delivery pass
+  their targeted gates. K13/K14 and the expanded-KUnit configuration still
+  require their own current acceptance; installed does not mean every module
+  was executed.
   Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,
   Image and module/runtime hashes. Use a uniform rebuild for any single-compiler
