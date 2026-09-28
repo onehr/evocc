@@ -44,6 +44,7 @@ CATALOG = {
     "jq": ("E10", "subject", "original make check with bundled Oniguruma; mixed-object ramp"),
     "lua": ("E11", "subject", "matching official all.lua without soft skips; mixed-object ramp"),
     "sqlite": ("E12", "subject", "public Tcl veryquick suite against installed fixture objects; mixed-object ramp"),
+    "doom": ("R06", "doom", "pinned headless doomgeneric/Freedoom demos; explicit wrap profile and video-init port repair; not interactive/audio acceptance"),
     "kernel-full": ("K6", "kernel-full", "all target C objects, generated-input fixed point, full link and real boot; selftests separate"),
     "kernel-selftest": ("K7", "kernel-selftest", "selected upstream kselftests in the existing complete kernel; identical reference-built payload on both kernels, KUnit separate"),
     "kernel-selftest-all": ("K7", "kernel-selftest-all", "all upstream collections attempted; build gaps, unavailable hardware/configuration, skips and timeouts remain separate"),
@@ -210,7 +211,7 @@ def command(name, args, binary):
         cmd += ["--suite", name]
     if name == "csmith":
         cmd += ["--campaign", args.campaign, "--programs", str(args.programs), "--jobs", str(args.jobs)]
-    if name in ("toybox", "musl", "tinycc"):
+    if name in ("toybox", "musl", "tinycc", "doom"):
         cmd += ["--jobs", str(args.jobs)]
     if name in ("toybox", "musl"):
         cmd += ["--budget", str(args.budget)]
@@ -374,6 +375,19 @@ def metrics(name, data):
             if verdict not in ("proven", "proven-modulo-relocations", "no-symbols", "not-linked")
         ):
             row["status"] = "FAIL"
+    elif name == 'doom':
+        complete = (data.get('status') == 'PASS' and data.get('frameAgreement') is True
+                    and data.get('inputAndCompilerStable') is True
+                    and data.get('executions') == 12 and data.get('frameCount') == 350
+                    and data.get('unitsTotal') == 81 and data.get('unitsEvoccCompiled') == 81
+                    and data.get('unitsInPassingBuild') == 81
+                    and all(data.get('artifacts', {}).get(key) for key in
+                            ('native-build.json', 'runtime.json', 'object-audit.json', 'angle-controls.json')))
+        row.update(total=81, passed=81 if complete else 0,
+                   compiled=data.get('unitsEvoccCompiled', 0), kind='units',
+                   status='PASS' if complete else 'INCOMPLETE',
+                   executions=data.get('executions', 0), framesPerExecution=data.get('frameCount', 0),
+                   adjustments=data.get('profileAdjustments', []), portRepair=data.get('portRepair'))
     elif name in ('llvm-test-suite', 'polybench'):
         outcomes = data['programOutcomes']
         row.update(total=data['programsTotal'], passed=outcomes.get('PASS', 0),

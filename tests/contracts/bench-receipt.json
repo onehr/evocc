@@ -1,32 +1,22 @@
 {
   "schemaVersion": 1,
-  "run": "20260928T075419.645158Z",
-  "subject": "b23a705dcaa9ed1fe57ac7b0b8b2df059a3080e2",
+  "run": "20260928T122910.089006Z",
+  "subject": "69c1b763842703645b67856249e293226ab1420d",
   "dirty": true,
-  "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/module-uniform-20260928/final-build/evocc",
-  "driverSha256": "ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e",
+  "driver": "/Users/onehrxn/dev/30days/c30/target/pinned-check/release/evocc",
+  "driverSha256": "d8010273cd49d7cf139e6a56ff9b860a45b0a5ff8467495b4f3a17b36a4ca48e",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "kernel-full",
+    "doom",
     "--evocc",
-    "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/module-uniform-20260928/final-build/evocc",
+    "target/pinned-check/release/evocc",
     "--jobs",
-    "4",
-    "--low-disk",
-    "--kernel-work-root",
-    ".build/k7-coverage/case/bpf",
-    "--kernel-source-root",
-    ".build/k7-coverage/case/linux-src",
-    "--kernel-full-receipt",
-    "tests/contracts/kernel-bpf-full-receipt.json",
-    "--allow-qemu-drift",
-    "--resume-kernel-prepared",
-    "/Users/onehrxn/dev/30days/c30/.evidence/k1/20260927T233955Z"
+    "2"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "kernel-full"
+    "doom"
   ],
   "status": "PASS",
   "benchmarks": {
@@ -6062,6 +6052,81 @@
         "run": "20260927T223054.412661Z",
         "subject": "d1d8d549c0e116bbf715982b0fd467670132901e",
         "driverSha256": null
+      }
+    },
+    "doom": {
+      "rung": "R06",
+      "note": "pinned headless doomgeneric/Freedoom demos; explicit wrap profile and video-init port repair; not interactive/audio acceptance",
+      "outcomes": {},
+      "refusals": {},
+      "baselineFailures": 0,
+      "failingUnits": [],
+      "total": 81,
+      "passed": 81,
+      "compiled": 81,
+      "kind": "units",
+      "status": "PASS",
+      "executions": 12,
+      "framesPerExecution": 350,
+      "adjustments": [
+        "headless platform replaces Xlib; 320x200; sound disabled",
+        "explicit gnu11 O2 instead of upstream Os; no debug/Wall request",
+        "fwrapv required by signed ANG45 multiplication, not guard suppression"
+      ],
+      "portRepair": {
+        "path": "doomgeneric/i_video.c",
+        "originalSha256": "8b9e1998f344f8af78d904a3e806817733fd0defcf6d54368b03f5c1f61a2eed",
+        "patchedSha256": "fcfc52cfe0c23145454ef75ce98cdf91f432c37db701acee1d5b33078d596131",
+        "patchSha256": "37ea8e0c3639c9b69f565074fea2ddcb49f6b5a6a48a8b439f187dfc866603cc",
+        "reason": "initial melt reads uninitialized prior screen; GCC self-repeats also differ"
+      },
+      "run": "20260928T122910Z",
+      "evidence": ".build/ladder/doom",
+      "receipt": "tests/contracts/ladder-doom-receipt.json",
+      "command": [
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+        "-u",
+        "/Users/onehrxn/dev/30days/c30/tools/ladder/doom.py",
+        "--evocc",
+        "/Users/onehrxn/dev/30days/c30/target/pinned-check/release/evocc",
+        "--jobs",
+        "2"
+      ],
+      "exitCode": 0,
+      "seconds": 18.8,
+      "previous": {
+        "rung": "R06",
+        "note": "pinned headless doomgeneric/Freedoom demos; explicit wrap profile and video-init port repair; not interactive/audio acceptance",
+        "outcomes": {},
+        "refusals": {},
+        "baselineFailures": 0,
+        "failingUnits": [],
+        "total": 81,
+        "passed": 81,
+        "compiled": 81,
+        "kind": "units",
+        "status": "PASS",
+        "executions": 12,
+        "framesPerExecution": 350,
+        "adjustments": [
+          "headless platform replaces Xlib; 320x200; sound disabled",
+          "explicit gnu11 O2 instead of upstream Os; no debug/Wall request",
+          "fwrapv required by signed ANG45 multiplication, not guard suppression"
+        ],
+        "portRepair": {
+          "path": "doomgeneric/i_video.c",
+          "originalSha256": "8b9e1998f344f8af78d904a3e806817733fd0defcf6d54368b03f5c1f61a2eed",
+          "patchedSha256": "fcfc52cfe0c23145454ef75ce98cdf91f432c37db701acee1d5b33078d596131",
+          "patchSha256": "37ea8e0c3639c9b69f565074fea2ddcb49f6b5a6a48a8b439f187dfc866603cc",
+          "reason": "initial melt reads uninitialized prior screen; GCC self-repeats also differ"
+        },
+        "run": "20260928T122443Z",
+        "evidence": ".build/ladder/doom"
+      },
+      "measurement": {
+        "run": "20260928T122910.089006Z",
+        "subject": "69c1b763842703645b67856249e293226ab1420d",
+        "driverSha256": "d8010273cd49d7cf139e6a56ff9b860a45b0a5ff8467495b4f3a17b36a4ca48e"
       }
     }
   }

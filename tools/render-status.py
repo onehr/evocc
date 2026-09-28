@@ -34,6 +34,7 @@ RECEIPTS = (
     "kernel-expanded-kunit-receipt.json", "semantic-gate-contract.json",
     "kernel-kunit-bench-receipt.json",
     "lean-p0-receipt.json", "lean-correspondence-receipt.json",
+    "ladder-doom-receipt.json",
 )
 OUTCOMES = ("PASS", "FAIL", "SKIP", "TIMEOUT", "INVALID_OUTPUT", "INCOMPLETE", "NOT_RUN")
 
@@ -46,6 +47,15 @@ def cells(text: str) -> int:
 def record_count(value) -> int:
     """Receipts may carry either records or their already-computed count."""
     return value if isinstance(value, int) else len(value or [])
+
+
+def doom_status(receipts):
+    data = receipts.get('ladder-doom-receipt.json', {})
+    if (data.get('status') == 'PASS' and data.get('frameAgreement') is True
+            and data.get('inputAndCompilerStable') is True
+            and data.get('unitsInPassingBuild') == 81 and data.get('executions') == 12):
+        return 'PASS: 81/81 TU; 12 x 350 matching headless frames; wrap/video-init profile, not audio/window'
+    return data.get('status', 'NOT_RUN') + ': no complete headless acceptance'
 
 
 def revision(path: Path) -> str:
@@ -307,6 +317,7 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
                      f"{correspondence.get('differences', '?')} differences")
     lines += [
         "  FP: scalar/strict and hosted f128 implemented; jq PASS; full musl and FP complex/vector open",
+        "  R06 Doom " + doom_status(receipts),
         "  G2 EqSat whole-kernel reproducibility + every optimized TU proof: NOT_ACCEPTED",
         "  Q2 GCC -O2 same-task performance comparison: NOT_ACCEPTED",
         "  Q3 measured self-improvement benefit: NOT_ACCEPTED",
@@ -360,8 +371,10 @@ def render_document(receipts: dict[str, dict], *, evoir: str, evomir: str) -> st
         "of different populations. They are not the current compiler's lowering ceiling. "
         "Current full compositions are reported separately above.\n"
         "- A Rust-built compiler is not C self-hosting. Kernel target-C coverage does not establish "
-        "complete HOSTCC coverage. Doom has no accepted benchmark receipt yet.\n"
+        "complete HOSTCC coverage.\n"
     )
+    text += "- Doom: " + doom_status(receipts) + ". See the [separate receipt](../tests/contracts/ladder-doom-receipt.json). "
+    text += "This integration does not change the frozen 15-lane application denominator.\n"
     expanded = receipts.get("kernel-expanded-kunit-receipt.json", {})
     text += "\n## Kernel evidence and remaining work\n\n"
     if expanded.get("compositionNote"):

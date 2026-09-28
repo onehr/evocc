@@ -1842,12 +1842,19 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   is not literal self-hosting; tested scalar certificates are not a proof of the
   entire compiler. Close with the actual release checklist and artifacts. [Roadmap][roadmap].
 
-- [ ] **R06 — Pinned Doom integration** — `LATER`, P3.
-  Select a specific port, legally usable data, platform shim and deterministic
-  input/demo; add an adapter to the existing bench tool. Close with original
-  program execution and reproducible framebuffer/output checks. First inventory
-  the chosen port's real FP/platform needs; accepting scalar FP does not itself
-  prove the game works. [FP integration plan](docs/notebook/floating-point-research-brief-20260915.md).
+- [x] **R06 — Pinned Doom integration** — `DONE`, 2026-09-28, bounded headless profile.
+  doomgeneric `dcb7a8db...` plus Freedoom 0.13.0 Phase 1: all 80 engine units
+  and the platform adapter compile/link with EvoCC, zero target-C fallback.
+  Two bundled demos, two repeats, EvoCC/GCC14/Clang19 produce identical full
+  350-frame sequences (12 runs / 4,200 captured frames). The common bench
+  entry owns execution; original 15-lane populations remain unchanged.
+  Explicit GNU11/O2/-fwrapv handles the original signed angle multiplication;
+  a source-bound, shared one-line video initialization repair removes initial
+  wipe nondeterminism also reproduced by GCC self-repeats. The unadjusted
+  attempts remain FAIL, not unchanged-upstream PASS. No compiler language
+  expansion was necessary. Window/audio/live input, all maps and other ports
+  are not covered. [Receipt](tests/contracts/ladder-doom-receipt.json),
+  [profile and checks](tests/fixtures/doom-headless.out).
 
 ## Benchmark coverage index
 

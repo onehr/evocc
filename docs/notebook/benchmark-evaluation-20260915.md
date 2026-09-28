@@ -2758,3 +2758,33 @@ actual original commands refuse the first unsupported warning option, leaving
 installed objects unchanged. This is an evaluation-integrity repair, not warning
 implementation or a faithful musl PASS. B08b still needs that implementation;
 the historical 1,271-object result keeps its original disclosed omissions.
+
+### R06 — Pinned headless Doom integration — September 28
+
+The new common `doom` adapter pins doomgeneric `dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284`
+and Freedoom 0.13.0 Phase 1. Run `20260928T122910Z` compiles and links all 80
+engine C units plus the platform adapter with EvoCC, without target-C fallback.
+GCC14 and Clang19 independently build the same population. Two demos, each
+repeated twice by each compiler, complete **12/12** executions with **350/350**
+frames apiece; full corresponding SHA-256 sequences agree, including the first
+frame. Binary/object identities remain unchanged through execution.
+
+This is an explicit headless GNU11/O2/**-fwrapv** profile, not the original Xlib
+Makefile with all options preserved. The reduced signed ANG45 multiplication
+overflows before unsigned assignment: both reference sanitizers and EvoCC's
+default guard establish the issue; ordinary wrapping controls pass. A one-line
+shared port patch initializes the previous video buffer. Without it the first
+27 wipe frames differ even between GCC repeats; no such frames are omitted
+from final acceptance. Failed driver/runtime/harness attempts remain recorded.
+
+The existing sealed ARM64 container supplies libc/libm/CRT and assembler/linker;
+it runs its Linux 6.18.15 kernel, **not** the separately compiled EvoCC kernel.
+No new kernel disk was created; the entire Doom work directory is 134 MiB.
+No compiler implementation/spec expansion was needed. The affected Rust gate
+passes 551 tests, the Python ladder passes 323, and Clippy/fmt/Ruff pass.
+
+R06 closes only this pinned deterministic demo-prefix/render integration.
+Interactive window/input/audio, other maps and ports remain untested. The
+original 15-lane application campaign and other TODO items are unchanged.
+[Receipt](../../tests/contracts/ladder-doom-receipt.json),
+[exact scope and negative evidence](../../tests/fixtures/doom-headless.out).

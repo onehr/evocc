@@ -170,8 +170,40 @@ addresses, are itemized in the [remaining-semantics brief](docs/notebook/remaini
 
 Whole-kernel EqSat reproducibility/certificate acceptance (G2), the GCC `-O2`
 performance comparison (Q2), measured self-improvement (Q3), x86/release gates
-and a pinned Doom integration still have no accepted completion result.
+still have no accepted completion result.
 Scalar proof results and successful boot do not close those milestones.
+
+### Doom integration
+
+The separate headless Doom lane builds all **80 engine C units plus one platform
+adapter with EvoCC**, without target-C object fallback. It pins doomgeneric
+`dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284` and Freedoom 0.13.0 Phase 1.
+Two bundled demos, two repetitions each, run under EvoCC/GCC14/Clang19:
+**12 executions, 350 frames each**, with exact corresponding framebuffer SHA-256
+sequences. Runtime libraries, assembler and linker remain the sealed target's
+existing tools; this is not a self-contained EvoCC libc build.
+
+The declared profile is GNU11/O2 with **`-fwrapv`**: the original signed `ANG45`
+multiplication overflows before conversion to unsigned. A separately recorded
+one-line port repair initializes the previous screen before the initial melt;
+without it GCC's own repeated runs have nondeterministic initial frames.
+Neither compiler guards nor mismatching frames are skipped. The profile replaces
+Xlib with a deterministic 320x200 headless adapter; audio, live keyboard/window
+play and other maps/ports are **not tested**. This additional R06 lane does not
+change the frozen 15-lane application campaign.
+
+```sh
+python3 tools/bench.py doom --evocc target/pinned-check/release/evocc --jobs 2
+python3 tools/bench.py doom --status
+```
+
+The first command requires the existing sealed Apple Container image and
+exported ARM64 headers, and downloads about 26 MiB of pinned source/data if
+absent. No kernel VM disk is created. Binaries, a few PPM snapshots and detailed
+frame hashes stay in `.build/ladder/doom`; the Linux ARM64 executable is
+`.build/ladder/doom/evocc/doom`. It streams frames rather than opening a window.
+See the [receipt](tests/contracts/ladder-doom-receipt.json) and
+[scope, failed attempts and checks](tests/fixtures/doom-headless.out).
 
 ## Try it
 

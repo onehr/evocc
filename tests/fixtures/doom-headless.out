@@ -1,0 +1,94 @@
+2026-09-28 — R06: pinned headless Doom integration, explicit port profile.
+
+Inputs:
+  doomgeneric dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284
+  https://codeload.github.com/ozkl/doomgeneric/tar.gz/dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284
+  archive SHA256 1bd3f7f26220494159a38d71f2847ec81b58d6bbd7c7c8d81b08993018001148
+  Freedoom 0.13.0, freedoom1.wad (Phase 1), bundled demo1 and demo2
+  https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip
+  archive SHA256 3f9b264f3e3ce503b4fb7f6bdcb1f419d93c7b546f4df3e874dd878db9688f59
+  Game-data COPYING.txt and CREDITS remain with the extracted release.
+  Engine GPL-2.0 license remains in the source archive/tree.
+  EvoCC d8010273cd49d7cf139e6a56ff9b860a45b0a5ff8467495b4f3a17b36a4ca48e
+  sealed ARM64 image 2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+
+Scope and explicit changes from the upstream Xlib Makefile:
+  80 unchanged engine translation-unit selections + doom-headless.c in place
+  of doomgeneric_xlib.c. Resolution 320x200; virtual clock and no live keyboard.
+  Source changes are limited to the separately hashed doom-video-init.patch.
+  All other unpacked source/header/Makefile bytes are checked against the pin.
+  GNU11/O2 instead of upstream Os; no ggdb3/Wall; no X11 or sound dependency.
+  -fwrapv supplied to ALL THREE compilers, not just EvoCC.
+  Target libc/libm/CRT and assembler/linker remain reference infrastructure.
+  Every subject object, including the platform adapter, is EvoCC-generated.
+  Subject objects cannot fall back: failed emission stops before native link.
+
+Preserved negative attempts in .build/ladder/doom:
+  attempt-1-unsupported-wall.json: EvoCC explicitly refuses -Wall.
+  attempt-2-first-trap.json / attempt-2-runtime.json / attempt-2/:
+    all 81 units compile and link, but EvoCC traps before frame 1 (E3004).
+    Diagnostic-only signal trace maps PC 0x43bbcc to P_SpawnMapThing.
+    The ANG45 * (mthing->angle/45) expression performs signed multiplication
+    before assignment to angle_t. doom-angle-wrap.c reduces it to angle 270:
+    6 * 536870912 exceeds INT_MAX. GCC14 and Clang19 UBSan both diagnose it;
+    EvoCC C-HIR/EvoIR report E3004 without wrapping and return 0 with -fwrapv.
+    The final regression also checks MIR at O0/O2. No guard is suppressed.
+  attempt-3/:
+    with wrapping, all compilers execute both demos successfully, but the first
+    27 frames vary even across GCC self-repeats. Later frames agree.
+    i_video.c allocates I_VideoBuffer using Z_Malloc without initializing it;
+    the first D_Display wipe captures that old screen. The explicit one-line
+    memset repair gives the initial prior screen defined bytes for every build.
+    Final acceptance includes every frame, including the initial melt.
+  attempt-4-sanitizer-contract.json / attempt-4-summary.json:
+    the auxiliary test incorrectly expected Clang's explicit signed-overflow
+    sanitizer not to diagnose -fwrapv. The positive now executes the ordinary
+    wrapping program; both unwrapped negatives remain sanitized. The sealed
+    image lacks Clang's optional sanitizer archive, so its instrumented object
+    uses the compatible GCC libubsan runtime. This is disclosed, not a skipped
+    oracle. The first common-entry attempt also lacked driverSha256 at the
+    required receipt location and was correctly rejected as ERROR.
+
+Acceptance:
+  81/81 EvoCC translation units assembled, complete subject link, no fallback.
+  GCC14/Clang19 separately compile all the same 81 C units and link.
+  demo1/demo2 x two repeats x three compilers = 12 normal exit-0 executions.
+  Each streams exactly 350 complete 320x200x4 frames; 4,200 frame instances.
+  Corresponding full SHA-256 sequences agree across compilers and repetitions.
+  Each demo has over 100 distinct frames; a repeated black frame cannot pass.
+  No warm-up frame is dropped. Runtime binary/object hashes survive unchanged.
+  A few rendered PPM snapshots are retained; full raw video is streamed, not
+  stored. Native execution is offline, within the existing ARM64 container.
+  Reference tools/libc, source/compiler/adapter/image identities are captured.
+
+Command:
+  python3 tools/bench.py doom --evocc target/pinned-check/release/evocc --jobs 2
+  python3 tools/bench.py doom --status
+
+Tracked receipt: tests/contracts/ladder-doom-receipt.json
+Detailed capture: .build/ladder/doom/{summary,native-build,native-environment,
+  runtime,object-audit,angle-controls}.json and native.log.
+
+Final run 20260928T122910Z, common bench 20260928T122910.089006Z: PASS.
+The preceding 20260928T122443Z full pair also passed; the final replay adds the
+explicit extracted-WAD identity guard without changing game/compiler semantics.
+Both references also establish the angle negative/positive expectations (4/4).
+The data file was independently checked against the pinned release ZIP member.
+Native host: the existing Apple Container ARM64 Linux 6.18.15 environment,
+GCC 14.2.0-19, Clang 19.1.7, binutils 2.44, glibc 2.41. This is not a run
+on the separate EvoCC-built Linux kernel. Game execution and kernel acceptance
+are separate measurements.
+
+Post-integration verification:
+  tools/gate-changed.sh 69c1b76 --offline -j 2: 551 PASS, zero FAIL/ignored in
+  the affected evocc crate; Clippy -D warnings and workspace fmt PASS.
+  All 323 ladder Python tests PASS, including full-matrix, first-frame mutation,
+  missing/duplicate run, failed exit, partial frame and static-screen negatives.
+  Targeted Ruff and generated status consistency checks PASS.
+  No production compiler source or normative language rule changed.
+  Final Doom working directory is 134 MiB including retained negative attempts.
+
+Claim ceiling: this pinned, repaired headless port/profile executes two bounded
+demo prefixes correctly. Not an unchanged upstream default-build PASS, all-map
+coverage, interactive window/input/audio validation, compiler performance gate,
+whole-system self-hosting or completion of the other roadmap tasks.

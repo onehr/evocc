@@ -1,0 +1,10 @@
+--- a/doomgeneric/i_video.c
++++ b/doomgeneric/i_video.c
+@@ -288,6 +288,7 @@
+ 
+     /* Allocate screen to draw to */
+ 	I_VideoBuffer = (byte*)Z_Malloc (SCREENWIDTH * SCREENHEIGHT, PU_STATIC, NULL);  // For DOOM to draw on
++    memset(I_VideoBuffer, 0, SCREENWIDTH * SCREENHEIGHT);
+ 
+ 
+ 	screenvisible = true;

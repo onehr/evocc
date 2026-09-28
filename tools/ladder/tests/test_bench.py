@@ -22,6 +22,22 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_doom_is_separate_from_the_frozen_fifteen_application_lanes(self):
+        args = bench.parser().parse_args(['doom', '--no-build'])
+        command, _ = bench.command('doom', args, Path('/compiler'))
+        self.assertTrue(any(x.endswith('/ladder/doom.py') for x in command))
+        self.assertEqual(bench.lane_receipt('doom').name, 'ladder-doom-receipt.json')
+        artifacts = {key: 'hash' for key in
+                     ('native-build.json', 'runtime.json', 'object-audit.json', 'angle-controls.json')}
+        data = dict(status='PASS', frameAgreement=True, inputAndCompilerStable=True,
+                    executions=12, frameCount=350, unitsTotal=81, unitsEvoccCompiled=81,
+                    unitsInPassingBuild=81, artifacts=artifacts)
+        self.assertEqual(bench.metrics('doom', data)['status'], 'PASS')
+        for key, value in (('frameAgreement', False), ('executions', 11), ('artifacts', {}),
+                           ('unitsEvoccCompiled', 80), ('inputAndCompilerStable', False)):
+            changed = {**data, key: value}
+            self.assertNotEqual(bench.metrics('doom', changed)['status'], 'PASS')
+
     def test_toybox_historical_failed_prefix_has_no_validated_unit_numerator(self):
         data = {'units': 203, 'unitsInPassingBuild': 201, 'unitsCompiledByEvocc': 201,
                 'testResult': 'no-regression', 'baselineTest': {'tests': 56, 'failing': ['chattr immutable']}}
