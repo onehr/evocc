@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+<title>Zstandard: Compression round trip</title>
+<rect width="800" height="500" rx="16" fill="#0d1520"/>
+<path d="M24 94H776" stroke="#2b3b4f"/>
+<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f1f5f9" xml:space="preserve">Zstandard</text>
+<text x="28" y="74" font-family="sans-serif" font-size="18" fill="#93c5fd" xml:space="preserve">Compression round trip</text>
+<text x="28" y="128.0" font-family="monospace" font-size="21.596516690856312" fill="#d8e4ef" xml:space="preserve">*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***</text>
+<text x="28" y="156.0754716981132" font-family="monospace" font-size="21.596516690856312" fill="#d8e4ef" xml:space="preserve"></text>
+<text x="28" y="184.1509433962264" font-family="monospace" font-size="21.596516690856312" fill="#d8e4ef" xml:space="preserve">Measured by capture runner:</text>
+<text x="28" y="212.22641509433964" font-family="monospace" font-size="21.596516690856312" fill="#d8e4ef" xml:space="preserve">Input:       144,000 bytes</text>
+<text x="28" y="240.30188679245282" font-family="monospace" font-size="21.596516690856312" fill="#d8e4ef" xml:space="preserve">Compressed:  122 bytes</text>
+<text x="28" y="268.37735849056605" font-family="monospace" font-size="21.596516690856312" fill="#d8e4ef" xml:space="preserve"></text>
+<text x="28" y="296.4528301886793" font-family="monospace" font-size="21.596516690856312" fill="#d8e4ef" xml:space="preserve">Decompressed bytes match original.</text>
+<text x="28" y="470" font-family="sans-serif" font-size="16" fill="#95a7bc" xml:space="preserve">Captured version + measured round trip / exit 0</text>
+</svg>

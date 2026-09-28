@@ -1,0 +1,5 @@
+[
+  {"item": "coffee", "units": 3, "price": 4.5},
+  {"item": "tea", "units": 5, "price": 2.0},
+  {"item": "coffee", "units": 2, "price": 4.5}
+]

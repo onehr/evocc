@@ -1,0 +1,222 @@
+{
+  "capturedAt": "2026-09-28T12:41:27.174998+00:00",
+  "runtime": "Linux-6.18.15-aarch64-with-glibc2.41",
+  "kind": "small showcase executions, not full tests",
+  "fixtures": {
+    "hello.c": "30155c5c8bc213278f46eb750717b1085e60a012a16002620564bc0132be5fc9",
+    "mandelbrot.lua": "e9f929198ef4b2743a0a941856226666f9d4f926443e507efab24723fdc108e9",
+    "query.tcl": "e68fb4fdef1de60d081e388956789c71e808633b97b96d40fd640746d69af27a",
+    "sales.jq": "1f5a025a52febdf96dd0a7be3a7da4ed68321430fe57957d296277f646f9c61b",
+    "sales.json": "fd966d437b2a3ba90e487443828efbdfd2a5235aeb4a99f31a478dbd26029331"
+  },
+  "programs": {
+    "tinycc": {
+      "buildReceipt": "tests/contracts/ladder-tinycc-receipt.json",
+      "buildReceiptSha256": "76b2db383e87ac8b845c26a603b0c77b0007b7fba5a45ccc660479391bea3f93",
+      "buildRun": "20260927T083017Z",
+      "binaryMatchesOriginalReceipt": true,
+      "verifiedInstalledObjects": 0,
+      "binary": ".build/ladder/tinycc/tcc",
+      "binarySha256": "cb63a957639598475f4fb72c849387c7af3e342899a69f538f3a00cebda24cd2",
+      "commands": [
+        {
+          "argv": [
+            "/repo/.build/ladder/tinycc/tcc",
+            "-B/repo/.build/ladder/tinycc",
+            "-I/repo/.build/ladder/tinycc/include",
+            "/repo/tools/showcase/hello.c",
+            "-o",
+            "/tmp/evocc-showcase-03azcix9/hello"
+          ],
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "argv": [
+            "/tmp/evocc-showcase-03azcix9/hello"
+          ],
+          "exitCode": 0,
+          "stdout": "Hello from a TinyCC-compiled C program!\nTinyCC itself was built with EvoCC.\nFibonacci: 0 1 1 2 3 5 8 13 21 34 55 89\n",
+          "stderr": ""
+        }
+      ]
+    },
+    "sqlite": {
+      "buildReceipt": "tests/contracts/ladder-sqlite-receipt.json",
+      "buildReceiptSha256": "94d32ee416a37c4e0167b3c4dc022223a17692fc24557499a2c3cc26ae23a9e2",
+      "buildRun": "20260919T231713Z",
+      "binaryMatchesOriginalReceipt": false,
+      "verifiedInstalledObjects": 86,
+      "binary": ".build/ladder/sqlite/sqlite-src-3530400/testfixture",
+      "binarySha256": "39452307ba75c1ce4e0b565188e335bd4461bcf26e7216c83a052a120c84ab29",
+      "commands": [
+        {
+          "argv": [
+            "/repo/.build/ladder/sqlite/sqlite-src-3530400/testfixture",
+            "/repo/tools/showcase/query.tcl"
+          ],
+          "exitCode": 0,
+          "stdout": "SQLite 3.53.4\nIn-memory SQL / transactions / integrity\n\nitem         units   revenue\ncoffee           5     22.50\ntea              5     10.00\n\nAfter rollback: 3 rows\nIntegrity check: ok\n",
+          "stderr": ""
+        }
+      ]
+    },
+    "lua": {
+      "buildReceipt": "tests/contracts/ladder-lua-receipt.json",
+      "buildReceiptSha256": "2507cfe90606206395aa397c3ae9d075b6aa3534ae8b2e14137a10b79c22f4f4",
+      "buildRun": "20260919T231634Z",
+      "binaryMatchesOriginalReceipt": false,
+      "verifiedInstalledObjects": 34,
+      "binary": ".build/ladder/lua/lua-5.5.1/src/lua",
+      "binarySha256": "a64eb41569f0cf848dfd8054105a483f7631001d7693c28ddaa4420c8e7682ef",
+      "commands": [
+        {
+          "argv": [
+            "/repo/.build/ladder/lua/lua-5.5.1/src/lua",
+            "/repo/tools/showcase/mandelbrot.lua"
+          ],
+          "exitCode": 0,
+          "stdout": "Lua 5.5 / Mandelbrot in floating-point Lua\n          ....................::-+::........      \n       ....................:::-@@@@-:.........    \n     ..................::@=-#*@@@@@@@%:-*:......  \n    ................:::=+@@@@@@@@@@@@@@%-:........\n   .........::++--+----#@@@@@@@@@@@@@@@@@*:.......\n  .........*:-@@@@@@@@*@@@@@@@@@@@@@@@@@@=:.......\n  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@=::........\n  .........*:-@@@@@@@@*@@@@@@@@@@@@@@@@@@=:.......\n   .........::++--+----#@@@@@@@@@@@@@@@@@*:.......\n    ................:::=+@@@@@@@@@@@@@@%-:........\n     ..................::@=-#*@@@@@@@%:-*:......  \n       ....................:::-@@@@-:.........    \n          ....................::-+::........      \n",
+          "stderr": ""
+        }
+      ]
+    },
+    "jq": {
+      "buildReceipt": "tests/contracts/ladder-jq-receipt.json",
+      "buildReceiptSha256": "03cf5c9ff6669a17a7fc932bf1732f3791a096e15662279ceea37a69c30f4705",
+      "buildRun": "20260927T082205Z",
+      "binaryMatchesOriginalReceipt": false,
+      "verifiedInstalledObjects": 69,
+      "binary": ".build/ladder/jq/jq-1.8.2/jq",
+      "binarySha256": "8541bf1e4f1c346618eedc0a9405e1264361b8defea2d8609dd0d0fd489a52ee",
+      "commands": [
+        {
+          "argv": [
+            "/repo/.build/ladder/jq/jq-1.8.2/jq",
+            "-M",
+            "-f",
+            "/repo/tools/showcase/sales.jq",
+            "/repo/tools/showcase/sales.json"
+          ],
+          "exitCode": 0,
+          "stdout": "[\n  {\n    \"item\": \"coffee\",\n    \"units\": 5,\n    \"revenue\": 22.5\n  },\n  {\n    \"item\": \"tea\",\n    \"units\": 5,\n    \"revenue\": 10\n  }\n]\n",
+          "stderr": ""
+        }
+      ]
+    },
+    "zstd": {
+      "buildReceipt": "tests/contracts/ladder-zstd-receipt.json",
+      "buildReceiptSha256": "887bb0aff32604a6a5460262d4e4832d22e546872ae1c3762883bf794af0d0ef",
+      "buildRun": "20260919T233745Z",
+      "binaryMatchesOriginalReceipt": false,
+      "verifiedInstalledObjects": 44,
+      "binary": ".build/ladder/zstd/zstd-1.5.7/programs/zstd",
+      "binarySha256": "23e8ebe3307c178e1a1af0e115cfc860a5e89654f7df3a5069fbb3ded8194a37",
+      "roundTrip": {
+        "bytes": 144000,
+        "compressedBytes": 122,
+        "sha256": "1b736c8707cb48856b87dbceea07bfdde2b576c4e0e1526a5300e5c9caba571a",
+        "equal": true
+      },
+      "commands": [
+        {
+          "argv": [
+            "/repo/.build/ladder/zstd/zstd-1.5.7/programs/zstd",
+            "--version"
+          ],
+          "exitCode": 0,
+          "stdout": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***\n",
+          "stderr": ""
+        },
+        {
+          "argv": [
+            "/repo/.build/ladder/zstd/zstd-1.5.7/programs/zstd",
+            "-f",
+            "/tmp/evocc-showcase-03azcix9/input.json",
+            "-o",
+            "/tmp/evocc-showcase-03azcix9/input.zst"
+          ],
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": "/tmp/evocc-showcase-03azcix9/input.json :  0.08%   (   141 KiB =>    122 B, /tmp/evocc-showcase-03azcix9/input.zst) \n"
+        },
+        {
+          "argv": [
+            "/repo/.build/ladder/zstd/zstd-1.5.7/programs/zstd",
+            "-d",
+            "-f",
+            "/tmp/evocc-showcase-03azcix9/input.zst",
+            "-o",
+            "/tmp/evocc-showcase-03azcix9/roundtrip.json"
+          ],
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": "/tmp/evocc-showcase-03azcix9/input.zst: 144000 bytes \n"
+        }
+      ]
+    },
+    "cjson": {
+      "buildReceipt": "tests/contracts/ladder-cjson-receipt.json",
+      "buildReceiptSha256": "495ac198041d85d44ebf1cbd735259f80bda65efdcab870bb32ed67a5b04738d",
+      "buildRun": "20260927T092953Z",
+      "binaryMatchesOriginalReceipt": false,
+      "verifiedInstalledObjects": 23,
+      "binary": ".build/ladder/cjson/cJSON-1.7.19/cJSON_test",
+      "binarySha256": "0c0f44d9f8625aa2135b943deeef101cd8e2fbaa1c44c3c51e4cc826e68cdbf5",
+      "commands": [
+        {
+          "argv": [
+            "/repo/.build/ladder/cjson/cJSON-1.7.19/cJSON_test"
+          ],
+          "exitCode": 0,
+          "stdout": "Version: 1.7.19\n{\n\t\"name\":\t\"Jack (\\\"Bee\\\") Nimble\",\n\t\"format\":\t{\n\t\t\"type\":\t\"rect\",\n\t\t\"width\":\t1920,\n\t\t\"height\":\t1080,\n\t\t\"interlace\":\tfalse,\n\t\t\"frame rate\":\t24\n\t}\n}\n[\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"]\n[[0, -1, 0], [1, 0, 0], [0, 0, 1]]\n{\n\t\"Image\":\t{\n\t\t\"Width\":\t800,\n\t\t\"Height\":\t600,\n\t\t\"Title\":\t\"View from 15th Floor\",\n\t\t\"Thumbnail\":\t{\n\t\t\t\"Url\":\t\"http:/*www.example.com/image/481989943\",\n\t\t\t\"Height\":\t125,\n\t\t\t\"Width\":\t\"100\"\n\t\t},\n\t\t\"IDs\":\t[116, 943, 234, 38793]\n\t}\n}\n[{\n\t\t\"precision\":\t\"zip\",\n\t\t\"Latitude\":\t37.7668,\n\t\t\"Longitude\":\t-122.3959,\n\t\t\"Address\":\t\"\",\n\t\t\"City\":\t\"SAN FRANCISCO\",\n\t\t\"State\":\t\"CA\",\n\t\t\"Zip\":\t\"94107\",\n\t\t\"Country\":\t\"US\"\n\t}, {\n\t\t\"precision\":\t\"zip\",\n\t\t\"Latitude\":\t37.371991,\n\t\t\"Longitude\":\t-122.026,\n\t\t\"Address\":\t\"\",\n\t\t\"City\":\t\"SUNNYVALE\",\n\t\t\"State\":\t\"CA\",\n\t\t\"Zip\":\t\"94085\",\n\t\t\"Country\":\t\"US\"\n\t}]\n{\n\t\"number\":\tnull\n}\n",
+          "stderr": ""
+        }
+      ]
+    }
+  },
+  "linux": {
+    "buildReceipt": "tests/contracts/kernel-bpf-full-receipt.json",
+    "imageSha256": "18b36fee4bb0265719f59df8db1da7098374df3c5e245071dc8f0662ea6a7032",
+    "serialLogSha256": "b02b10368aa08b868ac13b2711a592356828bec88896260da2a4b58ec2c6d6f9",
+    "flownAt": "2026-09-28T11:07:16Z",
+    "excerpt": "last 7 lines; CRLF normalized"
+  },
+  "doom": {
+    "buildReceipt": "tests/contracts/ladder-doom-receipt.json",
+    "source": ".build/ladder/doom/evocc-demo1-0/frame-350.png",
+    "imageSha256": "224c8586faa473ff4b65ddd3132d9f15066f897c79f29235096f98d65a95f1f7",
+    "buildRun": "20260928T122910Z",
+    "frameBgraSha256": "dd4f2d0e01c279bf58f394ab25e84f562a4aa16cb4abd53d0d47cec0395830e2",
+    "demo": "demo1",
+    "frame": 350,
+    "repeat": 0,
+    "compiler": "evocc"
+  },
+  "assets": {
+    "FREEDOOM-COPYING.txt": "7c62f2c520769c798774f416637eec4921e5f0aafdac1245ae7c8a8cf65fe102",
+    "FREEDOOM-CREDITS.txt": "72364333d295c598d75ef9553d3b3661ad0b60e27271c87b7637c74b2f46918a",
+    "cjson.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "cjson.stdout.txt": "f89ea3dc3655844568c97b190a06784317fe28dbeb44cc23d196bf0408595999",
+    "cjson.svg": "1b0b58704aabb65122672fe931cfcf14da3058798b9e29c526b9379c65801b1b",
+    "doom.png": "224c8586faa473ff4b65ddd3132d9f15066f897c79f29235096f98d65a95f1f7",
+    "jq.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "jq.stdout.txt": "de8fbaa527da1be087ded4dbf29f733df1466697f825cd3e0ebe433d1063c6f6",
+    "jq.svg": "859cd6daf7191acd9e54900cd4ed258d3bdedc8184c695fa40de702eff10880d",
+    "linux.stdout.txt": "9f919a216687c5b4c8ec65ce362205800d043e203d719b9999d711b0ec4d4311",
+    "linux.svg": "23256b2d019134515bb123a735afbc08affe9abd368a7d471ff89d69f9673c0b",
+    "lua.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "lua.stdout.txt": "c7483c35be611fddd82459c0ab249c8dd0175c68faf57c4a48dc191b436f9815",
+    "lua.svg": "a253d664e28586588edb60925a3168a2c397ad82f3c018e2709e73577437d80e",
+    "sqlite.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sqlite.stdout.txt": "490528f8e4f51892940c89915d21367cf0d60d66ccdb64b79ec204fcbd67c02d",
+    "sqlite.svg": "1fedb9e90b7c1834196659462472bf34df7245d400784a1f960c67856a0adf4c",
+    "tinycc.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tinycc.stdout.txt": "bf0dee3bb73de6383762b0814fa4945c0ae14e28e184d526a1319978bf19079a",
+    "tinycc.svg": "81390a6902cad1e9b48637db79d7ff255e50038f1ce7286b6cdc40e5acb72534",
+    "zstd.stderr.txt": "c2f1267a53bbde288fbb65bff679b7fa49aa76488809a4769891951d388d9206",
+    "zstd.stdout.txt": "f6d344e585f9a9ceb9500ff65355ce23bcc39dec9e4164aceab9da0a5ac3113e",
+    "zstd.svg": "cdd76580d3f7fd320abd5a59d71c8ca6cbd8afafbe65fdd7725cbdf2b9ea833a"
+  }
+}

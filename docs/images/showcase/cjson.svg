@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+<title>cJSON: Upstream JSON example (excerpt)</title>
+<rect width="800" height="500" rx="16" fill="#0d1520"/>
+<path d="M24 94H776" stroke="#2b3b4f"/>
+<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f1f5f9" xml:space="preserve">cJSON</text>
+<text x="28" y="74" font-family="sans-serif" font-size="18" fill="#93c5fd" xml:space="preserve">Upstream JSON example (excerpt)</text>
+<text x="28" y="128.0" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">Version: 1.7.19</text>
+<text x="28" y="156.1818181818182" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">{</text>
+<text x="28" y="184.36363636363637" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">  &quot;name&quot;: &quot;Jack (\&quot;Bee\&quot;) Nimble&quot;,</text>
+<text x="28" y="212.54545454545456" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">  &quot;format&quot;: {</text>
+<text x="28" y="240.72727272727275" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">    &quot;type&quot;: &quot;rect&quot;,</text>
+<text x="28" y="268.90909090909093" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">    &quot;width&quot;:  1920,</text>
+<text x="28" y="297.0909090909091" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">    &quot;height&quot;: 1080,</text>
+<text x="28" y="325.2727272727273" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">    &quot;interlace&quot;:  false,</text>
+<text x="28" y="353.4545454545455" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">    &quot;frame rate&quot;: 24</text>
+<text x="28" y="381.6363636363636" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">  }</text>
+<text x="28" y="409.81818181818187" font-family="monospace" font-size="21.67832167832168" fill="#d8e4ef" xml:space="preserve">}</text>
+<text x="28" y="470" font-family="sans-serif" font-size="16" fill="#95a7bc" xml:space="preserve">Captured stdout excerpt / reference-built example driver</text>
+</svg>

@@ -1,0 +1,9 @@
+SQLite 3.53.4
+In-memory SQL / transactions / integrity
+
+item         units   revenue
+coffee           5     22.50
+tea              5     10.00
+
+After rollback: 3 rows
+Integrity check: ok

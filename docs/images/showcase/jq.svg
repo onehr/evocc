@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+<title>jq: JSON aggregation</title>
+<rect width="800" height="500" rx="16" fill="#0d1520"/>
+<path d="M24 94H776" stroke="#2b3b4f"/>
+<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f1f5f9" xml:space="preserve">jq</text>
+<text x="28" y="74" font-family="sans-serif" font-size="18" fill="#93c5fd" xml:space="preserve">JSON aggregation</text>
+<text x="28" y="128.0" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">[</text>
+<text x="28" y="153.83333333333331" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">  {</text>
+<text x="28" y="179.66666666666666" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;item&quot;: &quot;coffee&quot;,</text>
+<text x="28" y="205.5" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;units&quot;: 5,</text>
+<text x="28" y="231.33333333333331" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;revenue&quot;: 22.5</text>
+<text x="28" y="257.16666666666663" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">  },</text>
+<text x="28" y="283.0" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">  {</text>
+<text x="28" y="308.8333333333333" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;item&quot;: &quot;tea&quot;,</text>
+<text x="28" y="334.66666666666663" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;units&quot;: 5,</text>
+<text x="28" y="360.5" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;revenue&quot;: 10</text>
+<text x="28" y="386.33333333333326" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">  }</text>
+<text x="28" y="412.16666666666663" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">]</text>
+<text x="28" y="470" font-family="sans-serif" font-size="16" fill="#95a7bc" xml:space="preserve">Captured stdout / ARM64 Linux / exit 0</text>
+</svg>

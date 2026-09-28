@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+<title>SQLite: SQL / transactions / integrity</title>
+<rect width="800" height="500" rx="16" fill="#0d1520"/>
+<path d="M24 94H776" stroke="#2b3b4f"/>
+<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f1f5f9" xml:space="preserve">SQLite</text>
+<text x="28" y="74" font-family="sans-serif" font-size="18" fill="#93c5fd" xml:space="preserve">SQL / transactions / integrity</text>
+<text x="28" y="128.0" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">SQLite 3.53.4</text>
+<text x="28" y="157.9" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">In-memory SQL / transactions / integrity</text>
+<text x="28" y="187.8" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve"></text>
+<text x="28" y="217.7" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">item         units   revenue</text>
+<text x="28" y="247.60000000000002" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">coffee           5     22.50</text>
+<text x="28" y="277.5" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">tea              5     10.00</text>
+<text x="28" y="307.4" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve"></text>
+<text x="28" y="337.3" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">After rollback: 3 rows</text>
+<text x="28" y="367.20000000000005" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">Integrity check: ok</text>
+<text x="28" y="470" font-family="sans-serif" font-size="16" fill="#95a7bc" xml:space="preserve">Captured stdout / ARM64 Linux / exit 0</text>
+</svg>

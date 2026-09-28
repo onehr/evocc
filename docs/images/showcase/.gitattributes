@@ -1,0 +1,4 @@
+# Preserve captured bytes and upstream notices, including meaningful spaces.
+*.stdout.txt -text -whitespace
+*.stderr.txt -text -whitespace
+FREEDOOM-*.txt -text -whitespace

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+<title>TinyCC: C compiler compiling C</title>
+<rect width="800" height="500" rx="16" fill="#0d1520"/>
+<path d="M24 94H776" stroke="#2b3b4f"/>
+<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f1f5f9" xml:space="preserve">TinyCC</text>
+<text x="28" y="74" font-family="sans-serif" font-size="18" fill="#93c5fd" xml:space="preserve">C compiler compiling C</text>
+<text x="28" y="128.0" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">Hello from a TinyCC-compiled C program!</text>
+<text x="28" y="157.9" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">TinyCC itself was built with EvoCC.</text>
+<text x="28" y="187.8" font-family="monospace" font-size="23" fill="#d8e4ef" xml:space="preserve">Fibonacci: 0 1 1 2 3 5 8 13 21 34 55 89</text>
+<text x="28" y="470" font-family="sans-serif" font-size="16" fill="#95a7bc" xml:space="preserve">Captured stdout / ARM64 Linux / exit 0</text>
+</svg>

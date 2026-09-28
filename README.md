@@ -13,14 +13,38 @@ rewrites retain equivalent alternatives, extraction chooses a form, and a
 separate checker verifies the rewrite certificate. This is not a proof of the
 whole compiler or a claim that every program is optimized through EqSat.
 
-![EvoCC](docs/images/evocc-concept.png)
-
-The illustration describes the design, not a live completion counter.
 The authoritative language and machine profiles are
 [EvoIR 1.9.115](docs/evoir-spec.md) and [EvoMIR 0.54](docs/evomir-spec.md).
 GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements;
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.
+
+## Built with EvoCC
+
+Real program output from EvoCC-built code: a captured game framebuffer,
+recorded Linux boot, and fresh executions of the existing application builds.
+CLI images render captured output for readability; they are not GUI screenshots.
+Click an image to enlarge it, or **results** for its measured scope.
+
+<table>
+  <tr>
+    <td width="25%" align="center" valign="top"><a href="docs/images/showcase/doom.png"><img src="docs/images/showcase/doom.png" alt="Actual Freedoom demo framebuffer rendered by the EvoCC-built Doom engine" width="240"></a><br><b>Doom / Freedoom</b><br>81 C units · headless demo<br><a href="tests/contracts/ladder-doom-receipt.json">results</a></td>
+    <td width="25%" align="center" valign="top"><a href="docs/images/showcase/linux.svg"><img src="docs/images/showcase/linux.svg" alt="Recorded EvoCC kernel serial output reaching init and normal poweroff" width="240"></a><br><b>Linux 6.18.44</b><br>7,008 target-C objects · boot<br><a href="tests/contracts/kernel-bpf-full-receipt.json">results</a></td>
+    <td width="25%" align="center" valign="top"><a href="docs/images/showcase/tinycc.svg"><img src="docs/images/showcase/tinycc.svg" alt="Actual output of a C program compiled and run by the EvoCC-built TinyCC" width="240"></a><br><b>TinyCC</b><br>A C compiler compiling C<br><a href="tests/contracts/ladder-tinycc-receipt.json">results</a></td>
+    <td width="25%" align="center" valign="top"><a href="docs/images/showcase/sqlite.svg"><img src="docs/images/showcase/sqlite.svg" alt="SQLite query results, transaction rollback and successful integrity check" width="240"></a><br><b>SQLite</b><br>SQL · transactions · integrity<br><a href="tests/contracts/ladder-sqlite-receipt.json">results</a></td>
+  </tr>
+  <tr>
+    <td width="25%" align="center" valign="top"><a href="docs/images/showcase/lua.svg"><img src="docs/images/showcase/lua.svg" alt="Mandelbrot ASCII image computed by the EvoCC-built Lua interpreter" width="240"></a><br><b>Lua</b><br>Floating-point Mandelbrot<br><a href="tests/contracts/ladder-lua-receipt.json">results</a></td>
+    <td width="25%" align="center" valign="top"><a href="docs/images/showcase/jq.svg"><img src="docs/images/showcase/jq.svg" alt="Actual jq output aggregating coffee and tea sales from JSON" width="240"></a><br><b>jq</b><br>JSON aggregation<br><a href="tests/contracts/ladder-jq-receipt.json">results</a></td>
+    <td width="25%" align="center" valign="top"><a href="docs/images/showcase/zstd.svg"><img src="docs/images/showcase/zstd.svg" alt="Zstandard version and measured exact-byte compression round trip" width="240"></a><br><b>Zstandard</b><br>Compression round trip<br><a href="tests/contracts/ladder-zstd-receipt.json">results</a></td>
+    <td width="25%" align="center" valign="top"><a href="docs/images/showcase/cjson.svg"><img src="docs/images/showcase/cjson.svg" alt="Captured JSON example output using the EvoCC-built cJSON library" width="240"></a><br><b>cJSON</b><br>JSON library · example output<br><a href="tests/contracts/ladder-cjson-receipt.json">results</a></td>
+  </tr>
+</table>
+
+Doom is a bounded headless replay, not interactive gameplay. Kernel boot is not
+full kernel-test completion. SQLite uses a reference-built Tcl dependency;
+the cJSON example uses a reference-built driver. Runtime dependencies and build
+adjustments are documented in the [capture notes and reproduction commands](docs/images/showcase/README.md).
 
 ## Status — 2026-09-28
 
@@ -323,6 +347,10 @@ certificate; an optimization may remove work without discarding the original
 undefined-behavior obligations.
 
 ## How it works
+
+![EvoCC architecture](docs/images/evocc-concept.png)
+
+The illustration describes the design, not a live completion counter.
 
 - C lowers to EvoIR, block-argument SSA with explicit `mem` and `world`
   tokens, `ub.assume` obligations and pointer provenance. Ordinary cross-block

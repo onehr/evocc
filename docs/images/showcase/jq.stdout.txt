@@ -1,0 +1,12 @@
+[
+  {
+    "item": "coffee",
+    "units": 5,
+    "revenue": 22.5
+  },
+  {
+    "item": "tea",
+    "units": 5,
+    "revenue": 10
+  }
+]
