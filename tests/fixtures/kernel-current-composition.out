@@ -1,0 +1,55 @@
+Pinned current-compiler kernel composition -- 2026-09-28
+
+PASS: 7,008/7,008 target-C objects compiled by the frozen EvoCC binary;
+no target-C fallback/replacement. Full vmlinux/Image link and 848 module links
+with BTF pass. Actual nonce-bound hvf-host boot and normal shutdown pass.
+This is not a load-every-driver, kselftest, expanded-KUnit or warning-policy
+conformance claim. The receipt retains all command-projection classifications.
+
+Original first pass: 20260927T233955Z, 7,008 fresh compilations, no cache reuse.
+It stopped with 1,920 prepared-input checkpoints and stale RUNNING state.
+Recovery: 20260928T075419Z. The whole-harness identity changed, so none of the
+old prepared cache is reused: 7,008 fresh prepared-input compilations complete.
+Preparation and verification exit zero; actual generated inputs reach a content
+fixed point. Modpost's 849 generated C units (848 module descriptors plus the
+vmlinux export unit) are compiled by EvoCC. All installed target-object hashes
+survive the final producer graph, link and module/BTF steps unchanged.
+
+Frozen identities:
+  compiler ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+  config   95853321d8dd6ae0b2d779abc094659a327936cb557244bed45b484ccf4c0e09
+  Image    18b36fee4bb0265719f59df8db1da7098374df3c5e245071dc8f0662ea6a7032
+  prepared input snapshot
+           e7856749a8d4b18235be4a3f51e8b2ee06f68535c0f0c15a88600cb1031d93e9
+  assembler image sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2
+  QEMU     45d74da57beb9be259ca3d6996e5c70d4ab14326ea59c3db3e80308859d91a3e
+  QEMU drift was explicitly enabled; this is not the locked-QEMU lane.
+
+The compiler was built with pinned Rust 1.97.1 and includes the previously
+isolated current frontend/logical-immediate/compare-immediate repairs.
+Configuration includes CONNECTOR=y, PROC_EVENTS=y, TEST_FPU=m. The corresponding
+GCC reference Image is 22a87df276887cc6454053dee56ea96742ab9cf24043b00fd1a21accf93a0fa6.
+Original upstream assembly and host tools retain their distinct identities;
+their use is not disguised as target-C EvoCC compilation.
+
+Boot: 2026-09-28T11:07:16Z, nonce k1-20260928T110715Z-7dbe7cc4,
+KUnit autorun disabled. Ordered boot predicate and normal power-off PASS.
+Reference/subject runtime packaging, signed-module execution, all 970 original
+kselftest programs and the independent expanded KUnit composition remain
+separate gates; no previous runtime result is inherited by this Image.
+
+SHA-256:
+  tests/contracts/kernel-bpf-full-receipt.json (also substitution.json)
+    49cfa7e0e1e4fe1d28747af7a26da30b504819d735533cfb7931f9fa1a70f6d3
+  units.jsonl
+    9c45c89017498ec859ac10968661e2626ff2dc14f66f0e3040d5087ecbcb0ac0
+  module-link.json
+    542f1c9f8f800ded70011433bc1cc1ddb0b6b9374f3cda00fa4935357a292a16
+  boot/boot.json
+    09be84dac65ef4e45f4346a76ffeb689a8f80b129ff8d21e2b226c4fd5aa2b16
+  boot/boot.log
+    b02b10368aa08b868ac13b2711a592356828bec88896260da2a4b58ec2c6d6f9
+Capture: .evidence/k1/20260928T075419Z/
+Invocation and completion: .build/floating-targeted/module-uniform-20260928/
+  final-build/resume-phase-fixed.{json,log}
+All earlier interrupted/rejected records remain preserved.

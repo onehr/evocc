@@ -41,3 +41,9 @@ Replay:
 This uses a producer stand-in, not Linux link/boot acceptance. Full recovery
 is restarted at .evidence/k1/20260928T075419Z. The changed whole-harness identity
 invalidates the old prepared cache; no hash is edited to force reuse. T04 OPEN.
+
+Follow-up: the unchanged resumed compiler/configuration completed all 7,008
+prepared consumers, real fixed-point verification, full link, 848 module
+links/BTF and post-link object audits. The resulting Image boots and shuts down
+with its nonce. See kernel-current-composition.out. This closes the actual
+recovery's link/boot gate, not the separate kselftest/KUnit runtime tasks.

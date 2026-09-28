@@ -1,46 +1,34 @@
 {
   "schemaVersion": 1,
-  "run": "20260927T223054.412661Z",
-  "subject": "d1d8d549c0e116bbf715982b0fd467670132901e",
+  "run": "20260928T075419.645158Z",
+  "subject": "b23a705dcaa9ed1fe57ac7b0b8b2df059a3080e2",
   "dirty": true,
-  "driver": null,
-  "driverSha256": null,
+  "driver": "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/module-uniform-20260928/final-build/evocc",
+  "driverSha256": "ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "kernel-selftest-all",
-    "--no-build",
+    "kernel-full",
+    "--evocc",
+    "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/module-uniform-20260928/final-build/evocc",
     "--jobs",
-    "1",
-    "--reuse-selftest-build",
-    "--expanded-selftest-kernel",
-    "--selftest-kernel-receipt",
-    "tests/contracts/kernel-bpf-full-receipt.json",
-    "--selftest-reference-boot",
-    ".build/floating-targeted/module-uniform-20260928/iommu-flights/reference/boot.json",
-    "--selftest-build-root",
-    ".build/k7-coverage/case/selftests",
-    "--selftest-source-root",
+    "4",
+    "--low-disk",
+    "--kernel-work-root",
+    ".build/k7-coverage/case/bpf",
+    "--kernel-source-root",
     ".build/k7-coverage/case/linux-src",
-    "--selftest-runtime",
-    ".build/k7-coverage/case/selftests/runtime-uniform-20260928",
+    "--kernel-full-receipt",
+    "tests/contracts/kernel-bpf-full-receipt.json",
     "--allow-qemu-drift",
-    "--selftest-select",
-    "bpf:test_progs",
-    "--selftest-select",
-    "sched_ext",
-    "--selftest-select",
-    "ublk",
-    "--selftest-select",
-    "net/ovpn",
-    "--selftest-select",
-    "pidfd:pidfd_test"
+    "--resume-kernel-prepared",
+    "/Users/onehrxn/dev/30days/c30/.evidence/k1/20260927T233955Z"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "kernel-selftest-all"
+    "kernel-full"
   ],
-  "status": "INCOMPLETE",
+  "status": "PASS",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -5441,18 +5429,18 @@
       "rung": "K6",
       "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
       "outcomes": {
-        "substituted": 7002
+        "substituted": 7008
       },
       "refusals": {},
       "baselineFailures": 0,
       "failingUnits": [],
-      "total": 7002,
-      "passed": 7002,
-      "compiled": 7002,
+      "total": 7008,
+      "passed": 7008,
+      "compiled": 7008,
       "kind": "units",
       "status": "PASS",
       "testVerdict": "PASS",
-      "evidence": ".evidence/k1/20260927T135325Z",
+      "evidence": ".evidence/k1/20260928T075419Z",
       "run": null,
       "receipt": "tests/contracts/kernel-bpf-full-receipt.json",
       "command": [
@@ -5462,7 +5450,7 @@
         "--require-all",
         "--boot",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/kvm-instructions-20260927/evocc-inline-release",
+        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/module-uniform-20260928/final-build/evocc",
         "--jobs",
         "4",
         "--relink-jobs",
@@ -5473,33 +5461,34 @@
         "/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/bpf",
         "--src-root",
         "/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/linux-src",
-        "--low-disk"
+        "--low-disk",
+        "--resume-prepared-run",
+        "/Users/onehrxn/dev/30days/c30/.evidence/k1/20260927T233955Z"
       ],
       "exitCode": 0,
-      "seconds": 23015.0,
+      "seconds": 11576.5,
       "previous": {
         "rung": "K6",
         "note": "all target C objects, generated-input fixed point, full link and real boot; selftests separate",
         "outcomes": {
-          "rebuilt-by-kbuild": 13,
-          "substituted": 6989
+          "substituted": 7002
         },
         "refusals": {},
         "baselineFailures": 0,
         "failingUnits": [],
         "total": 7002,
-        "passed": 0,
-        "compiled": 6989,
+        "passed": 7002,
+        "compiled": 7002,
         "kind": "units",
-        "status": "INCOMPLETE",
-        "testVerdict": "NOT_RUN",
-        "evidence": ".evidence/k1/20260926T133321Z",
+        "status": "PASS",
+        "testVerdict": "PASS",
+        "evidence": ".evidence/k1/20260927T135325Z",
         "run": null
       },
       "measurement": {
-        "run": "20260927T135325.342339Z",
-        "subject": "94071fb398d3b35fe92a68a0659ac36cd3575f60",
-        "driverSha256": "65035621f0921b11033455a2d02e72f94481fd6d3b82468279645a7a1e1fb3e5"
+        "run": "20260928T075419.645158Z",
+        "subject": "b23a705dcaa9ed1fe57ac7b0b8b2df059a3080e2",
+        "driverSha256": "ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e"
       }
     },
     "kernel-selftest": {

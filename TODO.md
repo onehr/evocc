@@ -1553,10 +1553,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   events and FPU module enabled). Its **7,008/7,008 first-pass objects** passed,
   with zero cache reuse. It was later found stopped with a 1,920-object
   second-pass checkpoint and stale RUNNING record. After fixing T04e, recovery
-  `20260928T075419Z` is live (last observation: first 64 of 7,008 prepared
-  consumers complete). The changed harness invalidates the old prepared cache.
-  Second-pass convergence, final link/boot,
-  848-module signing/runtime and K13/K14 are not yet acceptance results.
+  `20260928T075419Z` **completed** at 11:07 UTC: all **7,008/7,008 prepared
+  consumers** compile, with zero old prepared-cache reuse; the generated-input
+  fixed point and **849** generated export/module C units pass. Complete link,
+  **848 module links/BTF**, and installed-object audits pass, with zero GCC
+  replacement. Image `18b36fee…` boots and shuts down with its nonce on
+  `hvf-host`, with explicit QEMU drift. This is the pinned current-compiler
+  composition, not a stale image. [Exact identities and scope](tests/fixtures/kernel-current-composition.out).
+  Its matching signed module runtime is being prepared; K13/K14 and the
+  expanded-KUnit configuration still require their own current acceptance.
   Before final acceptance, freeze the
   selected compiler, actual generated inputs, every installed target object,
   Image and module/runtime hashes. Use a uniform rebuild for any single-compiler
