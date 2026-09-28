@@ -7,7 +7,7 @@ Task IDs are stable: update or split an item with cross-references; do not recyc
 IDs or silently delete unresolved work. Historical review IDs remain in their
 original ledgers; the IDs below belong to this tracker.
 
-The [README](README.md#status--2026-09-27) summarizes measured capability;
+The [README](README.md#status--2026-09-28) summarizes measured capability;
 [docs/status.md](docs/status.md) is generated from receipts. This file answers
 **what remains, what to do next, and what evidence closes it**. Detailed sources,
 commands and measurements stay in the [kernel ledger][kernel],
@@ -56,16 +56,76 @@ commands and measurements stay in the [kernel ledger][kernel],
 
 ## Execution order
 
-1. **Reconcile known cases (T01/B01), then diagnose runtime failures K01–K05**
-   using small reductions; B02's targeted LARGE timeout is now repaired.
-2. **Repair configuration/build gaps K06/K10–K12**, independently of pending
-   language decisions. Resolve K07 and L01–L10 with bounded rules/probes; implement
-   the shared paths and replay affected originals B05–B09.
-3. **Finish verification/tooling T02–T05.** Only after tailored failures are fixed
-   or individually dispositioned, run K13/K14 and B10 serially on identified final
-   subjects. Diagnose any newly exposed class and return to a minimal reproducer.
-4. **Proceed to R01–R06** as their prerequisites permit. A successful kernel boot
-   or application campaign does not close the optimizer/performance/release gates.
+September 28 replan at `6bd69b7`: prioritize **bounded ARM64 acceptance**, then
+the remaining language breadth, then the wider research/release roadmap. This
+is sequencing, not approval to drop features or convert failures into passes.
+The project has working boot and substantial application coverage, but the full
+roadmap is not just a few cleanup fixes. T01/B01, K05/K06/K08/K09, L01/L02,
+B05–B07/B09 and R06 already have their stated closure evidence; do not schedule
+them again as missing implementations.
+
+The queue below is checked against every unchecked task by
+`python3 tools/render-status.py --todo`. It counts **tracker entries, including
+parents and children**, not independent bugs, effort or a completion percentage.
+Scheduling does not launch a background worker. No compiler/kernel test process
+was found in the read-only process check at this planning checkpoint.
+
+<!-- closure-queues:start -->
+| Queue | Open IDs | Next deliverable |
+| --- | --- | --- |
+| KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
+| APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
+| REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
+| AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. |
+| ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
+| LATER | R01, R02, R03, R04, R05 | Whole-kernel EqSat/proofs, fair performance, measured self-improvement, x86-64 and release; none is waived or credited by ARM64 boot. |
+<!-- closure-queues:end -->
+
+### Working sequence and release gates
+
+| Stage | Work and dependency | Exit / stop condition |
+| --- | --- | --- |
+| 0 — Reconcile (this checkpoint) | Current receipts, task queues, live jobs, retained subjects and disk headroom. | Every open ID scheduled exactly once; historical PASS stays bound to its own subject. |
+| 1 — Engineering batch | K02/K03 measured hot-path diagnosis first; B08b warning policy is independent CPU-light work. Follow with K10/K11f and K01/K04 reductions. | An exact RED, a shared repair or source-bound disposition, focused tests and unchanged affected-original replay per class. A code-size win alone is not a runtime repair. |
+| 2 — Reviewed language batch | K07 unlocks FORTIFY/KUnit; L10 resolves LLVM's remaining classification; L04 unlocks 68 musl objects. Implement those once their bounded rules are approved. Then L03/L05–L09/L11a–c. | Both interpreters, native/crossed ABI and metadata negatives as applicable, followed by original-source replay. No silent expansion of the currently approved profile. |
+| 3 — Kernel acceptance | Kernel-affecting repairs/dispositions + K07 + T03 → T04. Build the BPF/selftest and independent expanded-KUnit configurations with matching module payloads. | K13's complete 970-program pair and K14/T02's 1,504 built-in + 765 cases in 31 loaded modules per side. Non-PASS cases retain individual reasons and zero missing results. |
+| 4 — Application acceptance | Relevant language/option fixes + B08 reference/patched-lane accounting + T03 → freeze one compiler/profile. | B10's 15 lanes serially, unchanged populations and original flags. Report originals, patched supplements and approved deferrals separately. Finish T05 on the same source. |
+| 5 — Full roadmap | After ARM64 correctness stabilizes: R01 → R02 → R03; R04 is a separate backend project; R05 audits the whole delivered scope. | Actual optimization/proof/performance/backend/release evidence, not a renamed ARM64 milestone. |
+
+Stages 1 and the review work in stage 2 are independent workstreams, **not a
+request to run multiple heavy jobs at once**. Kernel acceptance does not wait
+for floating complex, half/vector FP, generic atomics or x86-64 unless an actual
+kernel source requires them. Conversely, K13/K14 cannot close musl or B10.
+No calendar completion date is asserted before intermittent failures have
+reliable reductions and the numerical decisions have an accepted contract.
+
+Immediate boundaries that affect the schedule:
+
+- **K02/K03:** the current pair times out at 7/10 reference versus 3/10 subject;
+  the retained smaller trace has 87 matching fault-handler entries and zero
+  dropped events, but cost is distributed. Inspect that trace and emitted hot
+  functions before another speculative peephole or 7,008-object rebuild. Keep
+  the 1 GiB / ten-mode / 120-second original gate; do not replace it with a
+  quiet-host guess or the passing reduced workload.
+- **B08b:** warning requests already survive both adapters. Current faithful
+  musl commands therefore refuse unsupported warnings; the older 1,271/1,339
+  receipt contains omissions. The next job is actual diagnostic policy and
+  diagnostics, **not another projection fix** or accepting `-Werror` as a no-op
+  ([GCC 14.2 warning policy](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Warning-Options.html)).
+- **Review:** the supplied scalar/strict/binary128 report closed L01/L02, not
+  floating complex or the other pending decisions. Use the existing
+  [focused handoff][complex-prompt]. No fresh user approval is needed for ordinary
+  engineering under an existing contract; genuine new language/ABI choices
+  remain explicitly review-gated.
+- **Storage/runtime:** currently about 61 GiB host free at preflight. Reuse the
+  existing small diagnostic payloads and 64 MiB scratch disk. Keep one heavy
+  run active, check required headroom before launches, and never delete active
+  or sole retained evidence. A new configuration/build must first identify what
+  it replaces and which historical artifacts will remain recoverable.
+- **Stop repeating uninformative experiments:** each bounded diagnostic must
+  name the competing causes and the observation that distinguishes them. If
+  that observation cannot be obtained, record the specific missing capability
+  and switch to an independent ready task; do not count retries as fixes.
 
 No item below is marked actively running merely because it is queued here.
 
@@ -1903,3 +1963,4 @@ in the receipts/README so this index cannot independently drift.
 [strlen]: tests/fixtures/fortify-nonliteral-strlen-ice.c
 [strlen-out]: tests/fixtures/fortify-nonliteral-strlen-ice.out
 [closure-batch]: docs/notebook/todo-closure-batch-20260927.md
+[complex-prompt]: docs/notebook/remaining-complex-research-prompt-20260927.md

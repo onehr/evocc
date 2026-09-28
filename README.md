@@ -246,6 +246,7 @@ Read receipts without launching builds or VMs:
 
 ```sh
 python3 tools/render-status.py --ascii
+python3 tools/render-status.py --todo
 python3 tools/render-status.py --check
 python3 tools/bench.py --list
 ```
