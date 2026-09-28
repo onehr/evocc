@@ -1,0 +1,5 @@
+capsule/
+capsule/maps/
+capsule/maps/island.json
+capsule/scripts/
+capsule/scripts/fractal.lua

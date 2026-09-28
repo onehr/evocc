@@ -1,20 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
-<title>jq: JSON aggregation</title>
-<rect width="800" height="500" rx="16" fill="#0d1520"/>
-<path d="M24 94H776" stroke="#2b3b4f"/>
-<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f1f5f9" xml:space="preserve">jq</text>
-<text x="28" y="74" font-family="sans-serif" font-size="18" fill="#93c5fd" xml:space="preserve">JSON aggregation</text>
-<text x="28" y="128.0" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">[</text>
-<text x="28" y="153.83333333333331" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">  {</text>
-<text x="28" y="179.66666666666666" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;item&quot;: &quot;coffee&quot;,</text>
-<text x="28" y="205.5" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;units&quot;: 5,</text>
-<text x="28" y="231.33333333333331" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;revenue&quot;: 22.5</text>
-<text x="28" y="257.16666666666663" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">  },</text>
-<text x="28" y="283.0" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">  {</text>
-<text x="28" y="308.8333333333333" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;item&quot;: &quot;tea&quot;,</text>
-<text x="28" y="334.66666666666663" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;units&quot;: 5,</text>
-<text x="28" y="360.5" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">    &quot;revenue&quot;: 10</text>
-<text x="28" y="386.33333333333326" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">  }</text>
-<text x="28" y="412.16666666666663" font-family="monospace" font-size="19.87179487179487" fill="#d8e4ef" xml:space="preserve">]</text>
-<text x="28" y="470" font-family="sans-serif" font-size="16" fill="#95a7bc" xml:space="preserve">Captured stdout / ARM64 Linux / exit 0</text>
+<title>jq / a rover&#x27;s day on Mars: Fictional telemetry generated and aggregated by jq</title>
+<rect width="800" height="500" rx="16" fill="#0b1424"/>
+<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f3f7ff">jq / a rover&#x27;s day on Mars</text>
+<text x="28" y="73" font-family="sans-serif" font-size="18" fill="#97b9da">Fictional telemetry generated and aggregated by jq</text>
+<text x="28" y="476" font-family="sans-serif" font-size="15" fill="#97aac1">Charts of actual jq output / simulated sensor data, not a live mission</text>
+<text x="36" y="131" font-family="sans-serif" font-size="36" fill="#f3bc7c">39.8 km</text>
+<text x="36" y="158" font-family="sans-serif" font-size="16" fill="#dce8f5">distance travelled</text>
+<text x="490" y="131" font-family="sans-serif" font-size="36" fill="#66dec4">90.0 W</text>
+<text x="490" y="158" font-family="sans-serif" font-size="16" fill="#dce8f5">peak solar power</text>
+<text x="36" y="190" font-family="sans-serif" font-size="17" fill="#66dec4">Solar power / W</text>
+<rect x="36" y="202" width="728" height="83" rx="6" fill="#13253b"/>
+<polyline points="42.00,280.00 57.20,280.00 72.40,280.00 87.60,280.00 102.80,280.00 118.00,280.00 133.20,280.00 148.40,280.00 163.60,280.00 178.80,272.69 194.00,265.47 209.20,258.42 224.40,251.63 239.60,245.19 254.80,239.17 270.00,233.64 285.20,228.67 300.40,224.32 315.60,220.65 330.80,217.69 346.00,215.48 361.20,214.06 376.40,213.43 391.60,213.61 406.80,214.59 422.00,216.36 437.20,218.90 452.40,222.18 467.60,226.15 482.80,230.78 498.00,236.01 513.20,241.76 528.40,247.98 543.60,254.58 558.80,261.49 574.00,268.63 589.20,275.90 604.40,280.00 619.60,280.00 634.80,280.00 650.00,280.00 665.20,280.00 680.40,280.00 695.60,280.00 710.80,280.00 726.00,280.00 741.20,280.00 756.40,280.00" fill="none" stroke="#66dec4" stroke-width="3"/>
+<text x="36" y="316" font-family="sans-serif" font-size="17" fill="#b09aed">Battery / %</text>
+<rect x="36" y="328" width="728" height="83" rx="6" fill="#13253b"/>
+<polyline points="42.00,348.28 57.20,347.13 72.40,346.04 87.60,345.05 102.80,344.20 118.00,343.54 133.20,343.11 148.40,342.93 163.60,343.03 178.80,343.41 194.00,344.07 209.20,345.02 224.40,346.23 239.60,347.67 254.80,349.32 270.00,351.14 285.20,353.09 300.40,355.10 315.60,357.14 330.80,359.16 346.00,361.09 361.20,362.90 376.40,364.53 391.60,365.96 406.80,367.14 422.00,368.06 437.20,368.70 452.40,369.05 467.60,369.12 482.80,368.92 498.00,368.46 513.20,367.79 528.40,366.92 543.60,365.92 558.80,364.82 574.00,363.67 589.20,362.53 604.40,361.44 619.60,360.46 634.80,359.63 650.00,358.99 665.20,358.58 680.40,358.43 695.60,358.55 710.80,358.96 726.00,359.65 741.20,360.62 756.40,361.85" fill="none" stroke="#b09aed" stroke-width="3"/>
 </svg>

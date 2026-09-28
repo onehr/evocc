@@ -1,15 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
-<title>Linux 6.18.44: Recorded boot / 7,008 EvoCC target-C objects</title>
-<rect width="800" height="500" rx="16" fill="#0d1520"/>
-<path d="M24 94H776" stroke="#2b3b4f"/>
-<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f1f5f9" xml:space="preserve">Linux 6.18.44</text>
-<text x="28" y="74" font-family="sans-serif" font-size="18" fill="#93c5fd" xml:space="preserve">Recorded boot / 7,008 EvoCC target-C objects</text>
-<text x="28" y="128.0" font-family="monospace" font-size="20.43956043956044" fill="#d8e4ef" xml:space="preserve">[    0.287056] PM: genpd: Disabling unused power domains</text>
-<text x="28" y="154.57142857142858" font-family="monospace" font-size="20.43956043956044" fill="#d8e4ef" xml:space="preserve">[    0.289122] Freeing unused kernel memory: 3456K</text>
-<text x="28" y="181.14285714285717" font-family="monospace" font-size="20.43956043956044" fill="#d8e4ef" xml:space="preserve">[    0.289201] Run /init as init process</text>
-<text x="28" y="207.71428571428572" font-family="monospace" font-size="20.43956043956044" fill="#d8e4ef" xml:space="preserve">EVO_INIT_ALIVE</text>
-<text x="28" y="234.2857142857143" font-family="monospace" font-size="20.43956043956044" fill="#d8e4ef" xml:space="preserve">EVO_BOOT_NONCE k1-20260928T110715Z-7dbe7cc4</text>
-<text x="28" y="260.8571428571429" font-family="monospace" font-size="20.43956043956044" fill="#d8e4ef" xml:space="preserve">EVO_INIT_DONE</text>
-<text x="28" y="287.42857142857144" font-family="monospace" font-size="20.43956043956044" fill="#d8e4ef" xml:space="preserve">[    0.291147] reboot: Power down</text>
-<text x="28" y="470" font-family="sans-serif" font-size="16" fill="#95a7bc" xml:space="preserve">Serial-log excerpt / boot + poweroff, not full selftests</text>
+<title>Linux / from reset to userspace: Real ARM64 boot / 7,008 EvoCC target-C objects</title>
+<rect width="800" height="500" rx="16" fill="#0b1424"/>
+<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f3f7ff">Linux / from reset to userspace</text>
+<text x="28" y="73" font-family="sans-serif" font-size="18" fill="#97b9da">Real ARM64 boot / 7,008 EvoCC target-C objects</text>
+<text x="28" y="476" font-family="sans-serif" font-size="15" fill="#97aac1">Visualization + serial excerpt from recorded boot / not full kernel-test completion</text>
+<rect x="38" y="125" width="156" height="70" rx="12" fill="#163549"/>
+<text x="51" y="168" font-family="sans-serif" font-size="22" fill="#66dec4">KERNEL</text>
+<text x="201" y="166" font-family="sans-serif" font-size="26" fill="#dce8f5">→</text>
+<rect x="230" y="125" width="156" height="70" rx="12" fill="#163549"/>
+<text x="243" y="168" font-family="sans-serif" font-size="22" fill="#66dec4">/init</text>
+<text x="393" y="166" font-family="sans-serif" font-size="26" fill="#dce8f5">→</text>
+<rect x="422" y="125" width="156" height="70" rx="12" fill="#163549"/>
+<text x="435" y="168" font-family="sans-serif" font-size="22" fill="#66dec4">NONCE</text>
+<text x="585" y="166" font-family="sans-serif" font-size="26" fill="#dce8f5">→</text>
+<rect x="614" y="125" width="156" height="70" rx="12" fill="#163549"/>
+<text x="627" y="168" font-family="sans-serif" font-size="22" fill="#66dec4">POWEROFF</text>
+<text x="36" y="249" font-family="sans-serif" font-size="18" fill="#dce8f5">[    0.289201] Run /init as init process</text>
+<text x="36" y="283" font-family="sans-serif" font-size="18" fill="#dce8f5">EVO_INIT_ALIVE</text>
+<text x="36" y="317" font-family="sans-serif" font-size="18" fill="#dce8f5">EVO_BOOT_NONCE k1-20260928T110715Z-7dbe7cc4</text>
+<text x="36" y="351" font-family="sans-serif" font-size="18" fill="#dce8f5">EVO_INIT_DONE</text>
+<text x="36" y="385" font-family="sans-serif" font-size="18" fill="#dce8f5">[    0.291147] reboot: Power down</text>
 </svg>

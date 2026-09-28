@@ -1,2 +1,2 @@
-/tmp/evocc-showcase-03azcix9/input.json :  0.08%   (   141 KiB =>    122 B, /tmp/evocc-showcase-03azcix9/input.zst) 
-/tmp/evocc-showcase-03azcix9/input.zst: 144000 bytes 
+/tmp/evocc-showcase-1vrsty1a/pixels.rgb : 19.12%   (  60.8 KiB =>   11.6 KiB, /tmp/evocc-showcase-1vrsty1a/pixels.zst) 
+/tmp/evocc-showcase-1vrsty1a/pixels.zst: 62208 bytes 
