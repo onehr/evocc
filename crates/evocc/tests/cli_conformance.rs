@@ -31,6 +31,73 @@ fn stdin_run(args: &[&str], input: &[u8]) -> Output {
 }
 
 #[test]
+fn neverball_macro_reduction_does_not_weaken_float_conversion_checks() {
+    let source = include_bytes!("../../../tests/fixtures/neverball-material-conversion.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let fixed = stdin_run(&[mode, "/dev/stdin"], source);
+        assert!(
+            fixed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&fixed.stderr)
+        );
+        assert_eq!(fixed.stdout, b"0\n");
+        let original = stdin_run(&[mode, "-DORIGINAL_MACRO", "/dev/stdin"], source);
+        assert!(!original.status.success());
+        assert!(String::from_utf8_lossy(&original.stderr).contains("E3063"));
+    }
+}
+
+#[test]
+fn final_include_without_newline_keeps_implementation_body() {
+    let root = unique_dir("include-eof");
+    fs::write(root.join("body.c"), "int answer(void){return 42;}\n").unwrap();
+    for source in [
+        "#include \"body.c\"",
+        "#define BODY \"body.c\"\n#include BODY",
+    ] {
+        let input = root.join("input.c");
+        fs::write(&input, source).unwrap();
+        let output = Command::new(evocc())
+            .arg("--emit=asm")
+            .arg(&input)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("answer:"),
+            "include silently lost"
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn date_and_time_share_the_frozen_translation_timestamp() {
+    let root = unique_dir("translation-time");
+    let input = root.join("input.c");
+    fs::write(&input, "__DATE__;__TIME__;\n").unwrap();
+    for (epoch, expected) in [
+        ("0", "\"Jan  1 1970\";\"00:00:00\";"),
+        ("86399", "\"Jan  1 1970\";\"23:59:59\";"),
+        ("86401", "\"Jan  2 1970\";\"00:00:01\";"),
+    ] {
+        let output = Command::new(evocc())
+            .env("SOURCE_DATE_EPOCH", epoch)
+            .arg("-E")
+            .arg(&input)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), expected);
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn cpp_flags_have_real_semantics() {
     let root = unique_dir("cpp-flags");
     let include = root.join("include");

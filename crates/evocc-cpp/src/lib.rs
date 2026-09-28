@@ -782,6 +782,7 @@ impl Preprocessor {
         preprocessor
             .macros
             .define("__DATE__".into(), vec![make_date_token()], Vec::new());
+        preprocessor.set_predefined_time("00:00:00");
         Ok(preprocessor)
     }
 
@@ -910,6 +911,11 @@ impl Preprocessor {
     pub fn set_predefined_date(&mut self, date: &str) {
         self.macros
             .define("__DATE__".into(), vec![make_string_token(date)], vec![]);
+    }
+
+    pub fn set_predefined_time(&mut self, time: &str) {
+        self.macros
+            .define("__TIME__".into(), vec![make_string_token(time)], vec![]);
     }
 
     pub fn undefine(&mut self, name: &str) {
@@ -2879,7 +2885,7 @@ fn lex_decoded_tokens(file: FileId, source: &str, legacy_literal_prefixes: bool)
 
 /// Collect all tokens on the current logical preprocessing line.
 fn collect_line_tokens(tokens: &[Token], i: &mut usize, source: &[u8]) -> Vec<Token> {
-    if *i >= tokens.len() {
+    if *i >= tokens.len() || tokens[*i].kind == TokenKind::Eof {
         return Vec::new();
     }
     if *i > 0 && has_logical_newline_between(&tokens[*i - 1], &tokens[*i], source) {
@@ -2889,7 +2895,9 @@ fn collect_line_tokens(tokens: &[Token], i: &mut usize, source: &[u8]) -> Vec<To
     result.push(tokens[*i].clone());
     let mut previous = *i;
     *i += 1;
-    while *i < tokens.len() && !has_logical_newline_between(&tokens[previous], &tokens[*i], source)
+    while *i < tokens.len()
+        && tokens[*i].kind != TokenKind::Eof
+        && !has_logical_newline_between(&tokens[previous], &tokens[*i], source)
     {
         result.push(tokens[*i].clone());
         previous = *i;

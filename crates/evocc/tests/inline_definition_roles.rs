@@ -311,6 +311,22 @@ fn iso_c89_selects_legacy_declarations_and_its_own_keyword_set() {
 }
 
 #[test]
+fn iso_c99_long_option_spelling_is_the_same_language_mode() {
+    let source = include_str!("../../../tests/fixtures/iso-c99-language-mode.c");
+    let short = run(source, "--emit=asm", &["-std=c99"]);
+    let long = run(source, "--emit=asm", &["-std=iso9899:1999"]);
+    assert!(short.status.success());
+    assert!(
+        long.status.success(),
+        "{}",
+        String::from_utf8_lossy(&long.stderr)
+    );
+    assert_eq!(short.stdout, long.stdout);
+    let out = run("#if defined(__STRICT_ANSI__) || __STDC_VERSION__ != 201112L\n#error stale mode\n#endif\nint x;", "--parse-only", &["-std=iso9899:1999", "-std=gnu11"]);
+    assert!(out.status.success());
+}
+
+#[test]
 fn iso_c99_changes_macros_and_keyword_roles_not_just_the_option_parser() {
     let source = include_str!("../../../tests/fixtures/iso-c99-language-mode.c");
     let out = run(source, "--emit=asm", &["-std=c99"]);

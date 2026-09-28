@@ -505,7 +505,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-std=gnu11" => language = LanguageMode::Gnu11,
             "-std=gnu99" => language = LanguageMode::Gnu99,
             "-std=c89" | "-std=c90" | "-ansi" => language = LanguageMode::C89,
-            "-std=c99" => language = LanguageMode::C99,
+            "-std=c99" | "-std=iso9899:1999" => language = LanguageMode::C99,
             "-std=c11" => language = LanguageMode::C11,
             "-std=gnu17" => language = LanguageMode::Gnu17,
             "-std=gnu89" => language = LanguageMode::Gnu89,
@@ -700,7 +700,9 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     };
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
-    pp.set_predefined_date(&predefined_date());
+    let (date, time) = predefined_timestamp();
+    pp.set_predefined_date(&date);
+    pp.set_predefined_time(&time);
     for (name, enabled, value) in [
         ("__OPTIMIZE__", options.optimization != 0, "1"),
         ("__OPTIMIZE_SIZE__", options.optimization == 2, "1"),
@@ -1410,7 +1412,7 @@ fn emit_error(file: &str, line: u32, column: u32, code: &str, message: &str) {
     eprintln!("{file}:{line}:{column}: error[{code}]: {message}");
 }
 
-fn predefined_date() -> String {
+fn predefined_timestamp() -> (String, String) {
     let seconds = std::env::var("SOURCE_DATE_EPOCH")
         .ok()
         .and_then(|value| value.parse::<i64>().ok())
@@ -1420,7 +1422,16 @@ fn predefined_date() -> String {
                 .map(|duration| duration.as_secs() as i64)
                 .unwrap_or(0)
         });
-    c_date_from_days(seconds.div_euclid(86_400))
+    let day_seconds = seconds.rem_euclid(86_400);
+    (
+        c_date_from_days(seconds.div_euclid(86_400)),
+        format!(
+            "{:02}:{:02}:{:02}",
+            day_seconds / 3600,
+            day_seconds / 60 % 60,
+            day_seconds % 60
+        ),
+    )
 }
 
 fn c_date_from_days(days_since_epoch: i64) -> String {
