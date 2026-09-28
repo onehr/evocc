@@ -1,0 +1,44 @@
+2026-09-28 -- K04b independent completion-event observation.
+
+ublk-trace-order.c retains original fio --name=write_seq --ioengine=libaio
+--iodepth=16 --rw=write --size=512M --direct=1 --bs=4k and original seq_io.bt.
+It adds an independent tracefs instance of block_rq_issue/block_rq_complete,
+filtered to the device, with global clock and bounded per-CPU buffers. It
+checks all sectors exactly once, request errors, and overrun/drop counters.
+No order condition is imposed on the diagnostic's PASS verdict. Null storage
+cannot establish persistence. The upstream test/assertions remain unchanged.
+
+GCC14/Clang19 -O2 -Wall -Wextra -Werror compile PASS, GCC probe executed:
+                  original bpf breaks    independent completion breaks
+GCC, one queue                 0                         0
+EvoCC, one queue               0                         0
+GCC, two queues                4                         9
+EvoCC, two queues              5                         5
+All four cases: 131,072 issued / completed requests; 1,048,576 sectors exactly
+once; zero missing/duplicate/error/lost events; fio exits zero; issued requests
+are sequential. Both multi-queue traces show sector 128 completing on CPU 0
+before sector 64 on CPU 2. The upstream observer reports the same first jump.
+The two-queue runs use CPUs 0/2; one-queue controls use CPU 0. The original
+observer's global map is not an exact serialized event counter (4 vs 9 on
+GCC); nevertheless independent observation proves actual completion reordering,
+not merely a bpftrace formatting/mapping artifact. No compiler repair is claimed.
+
+The frozen kublk.c main initializes nr_hw_queues=2. Therefore generic_01's
+omitted -q does not mean one queue; generic_02 explicitly requests the same two
+queues. Runtime confirmation of that installed binary's default follows in a
+separate control. Frozen Documentation/block/blk-mq.rst states no completion
+order guarantee; the source-bound diagnosis must include the actual observed
+cross-CPU completions, not rely solely on that general documentation.
+
+Both diagnostic TAP populations 2/2 PASS and nonce-bound HVF shutdown PASS.
+These are observer/coverage checks, NOT original generic_01/02 PASS. The retained
+Images/configuration/QEMU drift are kernel-uniform-selected-runtime.out's
+subjects. Runtime hashes remain unchanged; no new full disk or workspace copy.
+
+Source 329b36f6bf163ccb84de517f00f16d934ed5201add317195ee37f507b0b70823
+Probe 8880feb1007d15bd323b3523c25d300af81e850f5f1314c7e4c1c466d7e7c2c9
+Payload 81f64b91c07eb8221b27ee3f10197b2324e5cdd1063ff04315889dbaa7619cb4
+Reference serial 77d62ba728e59441f4f8b754661ee501baaa3f195122939f8411452fd0efd937
+Subject serial ded90a8c1da9d8a98399c68540f9dee09672b546c90416bc03dfac4cf794cadc
+Local inputs/commands/results:
+  .build/floating-targeted/ublk-trace-20260928/{build.py,build.json,replay.py,result.json}
