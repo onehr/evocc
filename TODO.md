@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-09-28**, initially audited against `a83d803`; current clauses are
+Updated **2026-09-29**, initially audited against `a83d803`; current clauses are
 EvoIR **1.9.115** and EvoMIR **0.54**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -78,7 +78,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R04, R05 | Whole-kernel EqSat/proofs, fair performance, measured self-improvement, x86-64 and release; none is waived or credited by ARM64 boot. |
+| LATER | R01, R01a, R02, R02a, R02b, R02c, R03, R03a, R03b, R03c, R03d, R04, R05 | Follow the Q2/Q3 design: proof/coverage plumbing, correctness-admitted performance pilot, bounded policy/rule discovery, then final G2/Q2/Q3 gates; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1872,10 +1872,23 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
 
 ## Later roadmap gates — not substitutes for runtime closure
 
+The September 29 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
+without closing them. R01a/R02a infrastructure and R02b development measurements
+can proceed on correctness-admitted workloads; final acceptance remains
+R01 → R02 → R03. `LATER` describes roadmap priority, not an implementation or
+live-job status. Keep heavy campaigns serial under the existing ARM64 priorities.
+
 - [ ] **R01 — G2 whole-kernel EqSat reproducibility and certificates** — `LATER`, P3.
   Produce the two required EqSat builds with equal Image hashes and independently
   check every optimized translation unit's certificate. Record exact optimization
   coverage; existing scalar proofs and unoptimized boot do not satisfy G2. [Gate][roadmap].
+
+  - [ ] **R01a — Policy-aware persistent optimization and proof provenance** — `LATER`, P3.
+    Implement design P0: one shared certified persistent entry point for selected
+    policies, driver report/certificate export, explicit no-op/fallback reasons
+    and independent checker-before-install. Test joint rollback, altered IR,
+    certificate chains, wrong policy/object identity and coverage denominators.
+    Close with focused tests and a native small-program proof bundle, not G2.
 
 - [ ] **R02 — Q2 fair GCC -O2 performance evaluation** — `LATER`, P3.
   Use the same pinned programs, workloads, machine conditions and result checks;
@@ -1883,11 +1896,54 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   and code-size reductions are not performance acceptance. Close with the
   roadmap's measured comparison, not an inferred speedup. [Roadmap][roadmap].
 
+  - [ ] **R02a — Performance manifests and measurement runner** — `LATER`, P3.
+    Implement design P1 through `tools/bench.py` and existing adapters/locks.
+    Freeze semantic flags, object coverage, timing boundaries, raw metrics,
+    resource caps and separate performance receipts. REDs cover stale/mismatched
+    artifacts, missing results, invalid metrics, interference and cleanup ownership.
+
+  - [ ] **R02b — Correctness-admitted A/A and A/B pilot** — `LATER`, P3.
+    After R01a/R02a, calibrate noise and freeze the small C/IR plus application
+    workload inventory before search. Compare EqSat off/on with the same compiler,
+    source profile and backend; check each timed binary/output and retain failures.
+    Deliver coverage, code-size/runtime/compiler-cost baselines; no speedup assumed.
+
+  - [ ] **R02c — Frozen native Q2 comparison** — `LATER`, P3.
+    After the pilot and final R01, run admitted original workloads against declared
+    GCC-14/Clang-19 profiles with paired statistics and per-workload objectives.
+    Separate native/VM/emulator claims, mixed links, memory and code size; retain
+    regressions and all non-results. Complete measurement need not mean GCC parity.
+
 - [ ] **R03 — Q3 measured self-improvement** — `LATER`, P3.
   Freeze the baseline, candidate policy and evaluation protocol, then demonstrate
   validated improvement on the declared workloads without correctness regression.
   Close with measured results and independent checking; more rewrites or an
   e-graph implementation alone do not establish benefit. [Roadmap][roadmap].
+
+  - [ ] **R03a — Bounded AI and non-AI policy search** — `LATER`, P3.
+    Implement design P3 after R02b: closed candidate schema over existing weights
+    and budgets, deterministic replay and independent certificate gating. Compare
+    AI proposals with existing evolutionary/random search at declared budgets.
+    Preserve corpus exclusions and track feedback exposure; no model in normal compilation.
+
+  - [ ] **R03b — Derived rewrite shortcuts** — `LATER`, P3.
+    Implement design P4 over the current pure scalar domain and guard forms.
+    Expand shortcut certificates into existing rules; test substitutions, missing
+    premises, fact scope, poison and mixed-width boundaries. Measure search cost
+    and native effects separately; no unregistered trusted macro rule.
+
+  - [ ] **R03c — New-rule Lean admission and registry integration** — `LATER`, P3.
+    Implement design P5: qualify pinned-toolchain proof isolation/replay, bind exact
+    semantics/propositions/instance domains, reject sorry/unauthorized axioms and
+    require kernel-only new AI rule proofs. Integrate a reviewed registry revision
+    across producer/checker/spec/tests; keep arbitrary-script admission disabled
+    until its boundary is qualified. Existing native-backed analysis remains explicit.
+
+  - [ ] **R03d — Held-out ablation and measured promotion** — `LATER`, P3.
+    After final R02 and the relevant candidate paths, freeze rules/policies before
+    held-out A–E/non-AI evaluation. Report correctness, gain/regressions, uncertainty
+    and discovery/compilation cost; no tuning on final feedback. Promote only under
+    predeclared objectives/bounds. A negative study is not R03 improvement closure.
 
 - [ ] **R04 — x86-64 userspace backend/ABI milestone** — `LATER`, P3.
   Implement the gated SysV/backend slice after ARM64 acceptance priorities,
@@ -1964,3 +2020,4 @@ in the receipts/README so this index cannot independently drift.
 [strlen-out]: tests/fixtures/fortify-nonliteral-strlen-ice.out
 [closure-batch]: docs/notebook/todo-closure-batch-20260927.md
 [complex-prompt]: docs/notebook/remaining-complex-research-prompt-20260927.md
+[eqsat-plan]: docs/framing-draft.md

@@ -1,5 +1,13 @@
 # EvoCC: An Equality-Native, Self-Contained C Compiler Architecture and Launch Plan
 
+**Q2/Q3 implementation design, September 29:** the maintained
+[verified optimization and performance architecture](framing-draft.md) refines
+the research intentions below into existing-component interfaces, rule-proof
+admission, native measurement, AI/non-AI ablations and R01–R03 child tasks.
+Correctness admission precedes performance. The design is not a measurement or
+permission to expand the current EqSat allowlist; [TODO.md](../TODO.md) remains
+the execution tracker and [status.md](status.md) remains receipt-backed.
+
 ## Executive summary
 
 The correct architecture is **not** “C → conventional SSA → bolt on an e-graph optimizer → backend.” If equality saturation is genuinely the primary optimization paradigm, the compiler should treat **equivalence as persistent compiler state**: semantic lowering creates a typed, effect-aware representation; optimization accumulates alternatives rather than destructively choosing them; lowering to target instructions adds more equivalent alternatives; extraction is the point where the compiler finally commits to one implementation. That interpretation is closest to the original equality-saturation vision, to `egg`’s modern engineering techniques, and to the 2026 work on persistent e-graphs.
@@ -686,6 +694,13 @@ rule bypass-nonalias-store {
 ```
 
 Rules should belong to trust classes:
+
+The table below is the original architecture taxonomy, not an executable
+admission policy. For the current AI-discovery implementation plan, no model
+proposal becomes an axiom by review alone: new V1 AI rules require the fixed
+semantic proof and registry integration described in
+[rule admission](framing-draft.md#4-rule-soundness-and-admission). Existing
+registry/analysis trust boundaries remain explicit and unchanged.
 
 | Trust class | Origin | Kernel-mode policy |
 |---|---|---|
@@ -1812,6 +1827,12 @@ machine instruction candidate
 all connected by one proof history.
 
 A fourth is **agent-guided optimizer discovery**. Agents can mine:
+
+The bounded implementation is now specified in the
+[Q2/Q3 design](framing-draft.md#6-search-data-separation-and-promotion).
+The examples below are research possibilities, not permission to train on a
+protected acceptance corpus: kernel acceptance inputs and final hold-outs do
+not enter candidate prompts or fitness. Use admitted development workloads.
 
 ```text
 Csmith corpora

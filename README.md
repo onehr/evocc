@@ -437,6 +437,12 @@ boundaries. These results **do not prove the C front end, memory model, backend,
 entire compiler, or Linux kernel correct**. Reproduce the separate proof gate
 with [`tools/gate-lean.sh`](tools/gate-lean.sh).
 
+The [Q2/Q3 implementation design](docs/framing-draft.md) describes the next
+step: offline AI-proposed rules with fixed semantic proofs, independently
+checked applications, and correctness-gated native performance experiments.
+It separates rule soundness from measured benefit; this is planned work, not
+an AI optimization or speedup claim.
+
 Implementation evidence stays separate: recorded scalar and MIR gates each
 cover **21,000 generated IR programs** with zero mismatches; native C corpora
 separately pass **384/384 on Linux and 384/384 on Darwin**. Kernel acceptance

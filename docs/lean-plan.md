@@ -1,5 +1,20 @@
 # Lean 4 integration plan for EvoCC (second version)
 
+**September 29 integration note (design only).** The existing L0–L4 plan and its
+historical evidence below remain scoped to the reviewed scalar semantics,
+registry and analysis modules. The maintained
+[Q2/Q3 implementation architecture](framing-draft.md#4-rule-soundness-and-admission)
+adds a proposed consumer of this proof boundary: offline AI rule candidates.
+It reuses `RuleSound`/`RuleCovered`; AI cannot replace the semantic definitions
+or theorem statement. Candidate proof scripts need isolated execution and
+independent statement/dependency replay, not just the existing repository audit.
+Qualify that path on pinned Lean 4.32.2 before accepting arbitrary scripts.
+New V1 AI rules require kernel-only proofs and a reviewed registry revision;
+existing native-backed analysis proofs retain their documented extra trust.
+Derived shortcuts may instead expand into existing checked rule steps.
+No new proof, registry, toolchain upgrade or acceptance result is asserted by
+this note. Execution is tracked under R03b/R03c in [TODO.md](../TODO.md).
+
 Date: 2026-09-09. Status: the implementation version after two rounds of external review. The repository implements L0–L4 according to this document; L5 waits for the kernel milestone and is then decided by measurement.
 Basis: the team brief (`docs/notebook/lean-semantics-brief.md`), the two rounds of replies from the review panel on 2026-09-08, the local measurements of Section 0, and the independent exhaustive check by the review panel in Section 0b. Anything not marked "measured" is a plan, not a fact.
 

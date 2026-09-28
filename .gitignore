@@ -1,11 +1,12 @@
 # Design documents and research notes are internal working material. The
-# normative roadmap, the reader-facing implementation notebook and the README
-# figures are deliberately tracked exceptions.
+# normative roadmap, maintained Q2/Q3 implementation design, reader-facing
+# implementation notebook and README figures are deliberately tracked exceptions.
 docs/*
 !docs/roadmap.md
 !docs/evoir-spec.md
 !docs/evomir-spec.md
 !docs/lean-plan.md
+!docs/framing-draft.md
 !docs/status.md
 !docs/notebook/
 !docs/notebook/**
