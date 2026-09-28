@@ -65,6 +65,29 @@ has now executed: sealed GCC/Clang compilation passes, and the GCC probe passes
 shows reordering, so the original fio/trace failure is still not reproduced.
 Both nonce-bound boots shut down; runtime backing hashes remain unchanged.
 
+### New reference module runtime and FPU result accounting — 2026-09-28
+
+The new `95853321…` reference runtime installs/signs 848 kernel modules and
+rebuilds the 17 original support modules. All 4,396 checked non-module userspace
+files remain unchanged; the original 970-program population is retained.
+The bounded runtime image is 4.25 GiB logical capacity, not a build/source disk.
+Its module bodies and input kernel hashes are verified, separately from load.
+
+Unchanged connector now receives process events, but the source is a listener
+which exits on SIGINT rather than after a finite case count; under the original
+45-second runner limit it still records TIMEOUT/FAIL with normal shutdown.
+No timeout or source is adjusted to turn that into PASS.
+
+The [FPU worker protocol repair](../../tests/fixtures/fpu-worker-verdict.out)
+exposes the standalone program's previously hidden zero-exit SKIP. Stress
+execution actually loads the matching signed module and reports all 4,000
+worker OKs on the GCC Image, with normal shutdown. A nonce-bound online-CPU
+count now lets the shared parser check that denominator. Seven focused
+regressions and all 282 K1 / 317 ladder tests pass. The standalone module-load
+prerequisite and the new EvoCC runtime still need closure; no paired/full PASS
+is inferred. Only the small init changes during the parser replay; the runtime
+disk and original programs stay byte-identical, with old payloads retained.
+
 ### ublk stalled writeback captured — 2026-09-28
 
 The [bounded original observer](../../tests/fixtures/ublk-blocked-observer.out)

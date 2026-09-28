@@ -1,0 +1,56 @@
+2026-09-28: FPU nested-result accounting RED -> GREEN, not full kernel acceptance.
+
+Actual original fpu:test_fpu on the new GCC Image prints a missing-debugfs
+[SKIP] and exits zero. The upstream runner emits an outer TAP PASS. The old
+parser discarded the inner skip and could allow pair/campaign acceptance.
+The original run_test_fpu.sh launches 1000 * online-CPU workers; its final
+shell status also cannot establish every background worker's result.
+
+The small C fixture preserves the worker's three source-bound protocols:
+skip -> [SKIP], exit 0; fail -> [FAIL], exit 3; ok -> [OK], exit 0.
+GCC14 and Clang19 compile with -std=c11 -O2 -Wall -Wextra -Werror and execute
+all six controls successfully in the sealed linux/arm64 image. No EvoCC
+userspace code or altered upstream source is credited by this harness test.
+
+Before the repair, three focused tests have five failed assertions: missing,
+malformed, skipped and failing worker results are silently accepted/omitted.
+The shared parser now retains scoped FPU worker PASS/FAIL/SKIP counts apart
+from the outer TAP case, and both paired and full-campaign acceptance keep
+nested failures/skips INCOMPLETE. A stress success also requires the original
+iteration announcement and an exact 1000 * online-CPU message denominator.
+The common init emits that CPU count bound to the nonce and selected program.
+Missing/duplicate/foreign/zero/invalid count markers fail closed; no CPU count
+is invented for historical logs. Counts survive full program_case mapping.
+This verifies the frozen worker-message protocol, not a new adversarial log
+authentication mechanism or uniquely identified per-PID event stream.
+
+Six focused parser tests, the full-mapping test, all 282 K1 Python tests,
+317 ladder tests, Ruff and diff whitespace checks pass. Missing/extra workers,
+one changed failure, malformed/truncated statuses, unrelated output and
+combined standalone/stress collection scopes have explicit controls.
+GCC14 static init build and Clang19 object build pass. The first Clang build
+reported that fatal/poweroff lacked non-returning declarations; the code's
+existing infinite shutdown path now has truthful _Noreturn annotations rather
+than fabricated initialization. That failed build log remains preserved.
+
+Original unchanged reference replays with the new small init:
+  fpu:test_fpu       outer PASS; 0 OK / 0 FAIL / 1 SKIP -> INCOMPLETE acceptance
+  fpu:run_test_fpu.sh outer PASS; 4000/4000 OK, 0 FAIL, 0 SKIP; normal shutdown
+No source, argument, module body, disk or 45-second upstream limit changes.
+Only the tiny init payload changes; its old binary/cpio/build receipt remain.
+The standalone debugfs prerequisite still needs restoration. EvoCC's new full
+composition is still building; no matching subject-runtime result exists yet.
+
+Source       dbba64a338e90ef2d2d6bd23ffc5006e40a7763db921a6e6f190750819531a8b
+Parser       cbc86fa3dcda98d97e5f31dda6c5c24ea9daaa5b6d50917d91f83b245bfb5424
+Common init  08ee4ccb471c287e1cb18480c3fe69e99a317d83ee28234630159ded00735d6b
+Compiler log 68829b6bcd5a5ba3e20d98455d1f4b4af023dcca70c86c21f2be06d411b9cc3c
+Replay       543e603bf3c9d6deaecb85591ef6bf351f48d65aaf1b52ed02c7ebe2c880db4e
+GCC Image    22a87df276887cc6454053dee56ea96742ab9cf24043b00fd1a21accf93a0fa6
+Disk         37628d8b630337b3d09023cc51cea9fc96a1157cf648366359570af1d4ed24fe
+Configuration 95853321d8dd6ae0b2d779abc094659a327936cb557244bed45b484ccf4c0e09
+Capture: .build/floating-targeted/fpu-worker-verdict-20260928/
+  qualified/build.log, originals/reference.json and originals/flights/*/boot.json.
+Exact per-flight payload, Image, nonce, QEMU and raw serial identities remain in
+the receipts. HVF, KUnit autorun off and explicit QEMU drift. Historical raw
+captures and full-run counts are not rewritten.

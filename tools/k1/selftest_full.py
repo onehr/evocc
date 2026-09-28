@@ -979,7 +979,8 @@ def program_case(ident, result):
             'nestedFailureSummaries': row.get('nestedFailureSummaries', []),
             'nestedSkipSummaries': row.get('nestedSkipSummaries', []),
             'nestedSummaryErrors': row.get('nestedSummaryErrors', []),
-            'bpfSummaries': row.get('bpfSummaries', [])}
+            'bpfSummaries': row.get('bpfSummaries', []),
+            'fpuSummaries': row.get('fpuSummaries', [])}
 
 
 def regression_ids(reference, subject):

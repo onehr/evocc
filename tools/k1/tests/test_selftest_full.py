@@ -1399,6 +1399,20 @@ class FullSelftest(unittest.TestCase):
             {'outcome': 'FAIL', 'exitCode': 1, 'valid': True, 'cases': [{'outcome': 'PASS'}]}]}
         self.assertEqual(lane.program_case('mm:a', flight)['outcome'], 'FAIL')
 
+    def test_fpu_worker_denominator_survives_full_program_accounting(self):
+        summary = {'program': 'test_fpu', 'passed': 0, 'failed': 0,
+                   'skipped': 1, 'observedWorkers': 1, 'expectedWorkers': 1}
+        row = {'outcome': 'PASS', 'valid': True, 'exitCode': 0,
+               'cases': [{'number': 1, 'outcome': 'PASS'}],
+               'nestedSkipSummaries': [{'line': 'test_fpu worker results', 'skipped': 1}],
+               'fpuSummaries': [summary]}
+        case = lane.program_case('fpu:test_fpu', {'boot': {'verdict': 'PASS'}, 'programs': [row]})
+        self.assertEqual(case['fpuSummaries'], [summary])
+        self.assertEqual(case['nestedSkipSummaries'], row['nestedSkipSummaries'])
+        build = {'id': 'fpu', 'buildExit': 0, 'tests': ['fpu:test_fpu'], 'available': ['fpu:test_fpu']}
+        self.assertEqual(lane.summarize([build], [{'id': 'fpu', 'valid': True, 'cases': [case]}])['status'],
+                         'INCOMPLETE')
+
     def test_successful_wrapper_cannot_hide_a_nested_failure_summary(self):
         spec = importlib.util.spec_from_file_location('selftest_summary_probe', PATH.parent / 'selftest.py')
         selftest = importlib.util.module_from_spec(spec)

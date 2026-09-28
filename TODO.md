@@ -613,6 +613,18 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     or a compiler performance repair. No watchdog or kernel source is changed.
     [Controls, exact source and limits](tests/fixtures/bpf-module-harden-progress.out).
 
+  - [x] **K11m — Preserve FPU worker skips/failures and completion counts**, 2026-09-28.
+    The original standalone worker prints SKIP but exits zero; its outer TAP
+    PASS previously hid that skip. The [small C protocol](tests/fixtures/fpu-worker-verdict.c)
+    and parser RED reproduce it. Shared parsing and full-campaign mapping now
+    retain inner counts, reject malformed/missing worker results, and require
+    the init-owned nonce-bound CPU count for the stress denominator. All 282 K1
+    and 317 ladder tests, two sealed compiler controls and Ruff pass. Original
+    reference replay retains the standalone inner SKIP and records 4000/4000
+    stress workers OK with shutdown. This closes **result accounting**, not
+    the missing standalone prerequisite, new subject acceptance or K12f/K13.
+    [Commands, source and raw identities](tests/fixtures/fpu-worker-verdict.out).
+
 - [ ] **K12 — Close collection-build and configuration coverage gaps** — `OPEN`, P2.
   The separate Kconfig review resolves 100 disabled requests in 27 collections;
   the uniform 7,002-object composition now boots, and both new runtimes install
@@ -698,6 +710,11 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     request, not an arm64 limitation. Include it with K12e's next configuration
     batch, then compile, sign/install and run the original on both Images.
     [Original logs and precise boundary](tests/fixtures/kernel-uniform-module-runtime.out).
+    The new 848-module reference runtime is now installed and signed; unchanged
+    run_test_fpu.sh actually loads test_fpu and records 4000/4000 worker OKs.
+    Standalone test_fpu still prints an inner SKIP because it does not load its
+    own module. K11m now exposes that rather than treating outer exit 0 as full
+    success. Restore this runtime prerequisite and repeat on the new subject.
 
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts

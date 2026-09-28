@@ -16,7 +16,7 @@
 
 static int full_suite;
 
-static void poweroff(void)
+static _Noreturn void poweroff(void)
 {
     sync();
     reboot(RB_POWER_OFF);
@@ -24,7 +24,7 @@ static void poweroff(void)
         pause();
 }
 
-static void fatal(const char *what)
+static _Noreturn void fatal(const char *what)
 {
     dprintf(1, "KSELFTEST_INIT_ERROR %s: %s\n", what, strerror(errno));
     poweroff();
@@ -381,6 +381,12 @@ int main(void)
         }
         const char *selected = collection[0] ? collection : id;
         dprintf(1, "KSELFTEST_BEGIN %s %s\n", nonce, selected);
+        if (full_suite && (!strcmp(selected, "fpu") || !strncmp(selected, "fpu:", 4))) {
+            long cpus = sysconf(_SC_NPROCESSORS_ONLN);
+            if (cpus < 1 || cpus > 4096)
+                fatal("read FPU worker CPU count");
+            dprintf(1, "KSELFTEST_CPUS %s %s %ld\n", nonce, selected, cpus);
+        }
         int rc = run(selected, timeout_override ? timeout_override : limit);
         /* A timed-out child may leave an unfinished progress line. */
         dprintf(1, "\nKSELFTEST_END %s %s %d\n", nonce, selected, rc);

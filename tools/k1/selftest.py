@@ -95,7 +95,71 @@ def ublk_inner_results(output, cases):
     return failed, skipped, errors
 
 
-def parse_tap(output):
+def fpu_inner_results(output, cases, online_cpus):
+    """Retain FPU worker results hidden by the upstream shell/zero-exit paths.
+
+    Counts are worker messages, not extra TAP cases. A stress PASS needs the
+    init-owned CPU count as well as the original 1000-iteration announcement;
+    one successful worker cannot establish completion of the background jobs.
+    """
+    failed, skipped, errors, summaries = [], [], [], []
+    lines = output.splitlines()
+    failure_messages = {
+        'access with default rounding mode failed',
+        'access with downward rounding mode failed',
+        'usermode rounding mode clobbered',
+        'access with fpu exceptions unmasked failed',
+        'usermode fpu exception mask clobbered',
+    }
+    for case in cases:
+        match = re.fullmatch(r'selftests:\s+fpu:\s+(test_fpu|run_test_fpu\.sh)(?:\s+#.*)?', case['name'])
+        if not match:
+            continue
+        name = match[1]
+        headers = [i for i, line in enumerate(lines) if re.fullmatch(
+            r'#\s+selftests:\s+fpu:\s+' + re.escape(name) + r'\s*', line)]
+        if len(headers) != 1:
+            if case['outcome'] == 'PASS':
+                errors.append({'lines': [], 'reason': 'missing or repeated FPU program header'})
+            continue
+        counts = {'passed': 0, 'failed': 0, 'skipped': 0}
+        announcements = 0
+        for line in lines[headers[0] + 1:]:
+            if re.match(r'^(?:not ok|ok)\s+\d+\b', line):
+                break
+            comment = re.fullmatch(r'\s*(?:#\s*)+(.+?)\s*', line)
+            if not comment:
+                continue
+            message = comment[1]
+            if message == 'Running 1000 iterations on all CPUs...':
+                announcements += 1
+            elif re.fullmatch(r'\[OK\]\s+test_fpu', message):
+                counts['passed'] += 1
+            elif re.fullmatch(r"\[SKIP\]\s+can't access /sys/kernel/debug/selftest_helpers/test_fpu: .+", message):
+                counts['skipped'] += 1
+            elif ((result := re.fullmatch(r'\[FAIL\]\s+(.+)', message))
+                  and result[1] in failure_messages):
+                counts['failed'] += 1
+            elif re.match(r'\[(?:[A-Z]+\]|OK|FAIL|SKIP)', message):
+                errors.append({'lines': [line], 'reason': 'incomplete or malformed FPU worker result'})
+        expected = 1 if name == 'test_fpu' else 1000 * online_cpus if online_cpus else None
+        total = sum(counts.values())
+        summary = {'program': name, **counts, 'observedWorkers': total, 'expectedWorkers': expected}
+        summaries.append(summary)
+        if counts['failed']:
+            failed.append({'line': name + ' worker results', 'failed': counts['failed'], 'errors': 0})
+        if counts['skipped']:
+            skipped.append({'line': name + ' worker results', 'passed': counts['passed'],
+                            'skipped': counts['skipped']})
+        if case['outcome'] == 'PASS':
+            if expected is None or total != expected:
+                errors.append({'lines': [], 'reason': 'missing or inconsistent FPU worker denominator'})
+            if name == 'run_test_fpu.sh' and announcements != 1:
+                errors.append({'lines': [], 'reason': 'missing or repeated FPU iteration announcement'})
+    return failed, skipped, errors, summaries
+
+
+def parse_tap(output, online_cpus=None):
     plans = re.findall(r'^1\.\.(\d+)(?:\s+.*)?$', output, re.M)
     results = re.findall(r'^(not ok|ok)\s+(\d+)\b(.*)$', output, re.M)
     cases = [{'number': int(n), 'name': rest.strip(),
@@ -185,10 +249,15 @@ def parse_tap(output):
     nested.extend(ublk_failed)
     skipped.extend(ublk_skipped)
     summary_errors.extend(ublk_errors)
+    fpu_failed, fpu_skipped, fpu_errors, fpu_summaries = fpu_inner_results(output, cases, online_cpus)
+    nested.extend(fpu_failed)
+    skipped.extend(fpu_skipped)
+    summary_errors.extend(fpu_errors)
     valid = valid and not summary_errors
     return {'planned': planned, 'valid': valid, 'subtests': counts, 'cases': cases,
             'nestedFailureSummaries': nested, 'nestedSkipSummaries': skipped,
-            'nestedSummaryErrors': summary_errors, 'bpfSummaries': bpf_summaries}
+            'nestedSummaryErrors': summary_errors, 'bpfSummaries': bpf_summaries,
+            'fpuSummaries': fpu_summaries}
 
 
 def parse_transcript(text, nonce, programs):
@@ -211,7 +280,16 @@ def parse_transcript(text, nonce, programs):
         else:
             if active != name or status is None:
                 raise ValueError('test result without its corresponding execution')
-            tap = parse_tap(text[start:event.start()])
+            body = text[start:event.start()]
+            cpu_lines = [line for line in body.splitlines() if line.startswith('KSELFTEST_CPUS')]
+            online_cpus = None
+            if cpu_lines:
+                marker = re.fullmatch(r'KSELFTEST_CPUS (\S+) (\S+) ([1-9]\d*)', cpu_lines[0])
+                if (len(cpu_lines) != 1 or not marker or marker[1] != nonce or marker[2] != name
+                        or not 1 <= int(marker[3]) <= 4096):
+                    raise ValueError('invalid current-program CPU count')
+                online_cpus = int(marker[3])
+            tap = parse_tap(body, online_cpus)
             rc = int(status)
             outcome = ('TIMEOUT' if rc == 124 else 'FAIL' if rc not in (0, 4) or tap['subtests']['FAIL']
                        else 'INVALID_OUTPUT' if not tap['valid'] or not tap['cases'] and rc != 4

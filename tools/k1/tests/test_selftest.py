@@ -139,6 +139,74 @@ class KernelSelftest(unittest.TestCase):
         rows = lane.parse_transcript(self.transcript("1..1\nnot ok 1 broken\n", 4), "flight", ["memory"])
         self.assertEqual(rows[0]['outcome'], 'FAIL')
 
+    def test_fpu_zero_exit_skip_is_not_full_acceptance(self):
+        output = ('1..1\n# selftests: fpu: test_fpu\n'
+                  "# [SKIP]\tcan't access /sys/kernel/debug/selftest_helpers/test_fpu: No such file or directory\n"
+                  'ok 1 selftests: fpu: test_fpu\n')
+        rows = lane.parse_transcript(self.transcript(output), 'flight', ['memory'])
+        self.assertEqual(rows[0]['outcome'], 'PASS', 'preserve the observed outer TAP result')
+        self.assertTrue(rows[0]['nestedSkipSummaries'])
+        self.assertEqual(lane.compare(rows, rows)['status'], 'INCOMPLETE')
+
+    def test_fpu_worker_failure_is_retained_under_successful_wrapper(self):
+        output = ('1..1\n# selftests: fpu: run_test_fpu.sh\n'
+                  '# Running 1000 iterations on all CPUs... \n'
+                  '# [FAIL]\tusermode rounding mode clobbered\n'
+                  'ok 1 selftests: fpu: run_test_fpu.sh\n')
+        parsed = lane.parse_tap(output)
+        self.assertTrue(parsed['nestedFailureSummaries'])
+        self.assertFalse(parsed['valid'], 'unknown worker denominator cannot establish full success')
+
+    def test_fpu_requires_complete_worker_protocol(self):
+        for text in ('', '# [OK]\ttes', '# [UNKNOWN]\ttest_fpu'):
+            with self.subTest(text=text):
+                parsed = lane.parse_tap('1..1\n# selftests: fpu: test_fpu\n'
+                                        + text + '\nok 1 selftests: fpu: test_fpu\n')
+                self.assertFalse(parsed['valid'])
+        unrelated = '1..1\n# [FAIL]\tusermode rounding mode clobbered\nok 1 unrelated\n'
+        self.assertEqual(lane.parse_tap(unrelated)['nestedFailureSummaries'], [])
+
+    def test_fpu_stress_counts_every_worker_without_creating_tap_cases(self):
+        header = ('1..1\n# selftests: fpu: run_test_fpu.sh\n'
+                  '# Running 1000 iterations on all CPUs... \n')
+        tail = 'ok 1 selftests: fpu: run_test_fpu.sh\n'
+        workers = '# [OK]\ttest_fpu\n' * 2000
+        parsed = lane.parse_tap(header + workers + tail, online_cpus=2)
+        self.assertTrue(parsed['valid'])
+        self.assertEqual(parsed['subtests'], {'PASS': 1, 'FAIL': 0, 'SKIP': 0})
+        self.assertEqual(parsed['fpuSummaries'][0]['passed'], 2000)
+        for changed in (workers[:-len('# [OK]\ttest_fpu\n')], workers + '# [OK]\ttest_fpu\n'):
+            self.assertFalse(lane.parse_tap(header + changed + tail, online_cpus=2)['valid'])
+        failed = workers.replace('# [OK]\ttest_fpu\n', '# [FAIL]\tusermode rounding mode clobbered\n', 1)
+        parsed = lane.parse_tap(header + failed + tail, online_cpus=2)
+        self.assertTrue(parsed['valid'])
+        self.assertEqual(parsed['nestedFailureSummaries'][0]['failed'], 1)
+
+    def test_fpu_cpu_count_is_bound_to_current_nonce_and_program(self):
+        output = ('KSELFTEST_CPUS flight memory 1\n1..1\n# selftests: fpu: run_test_fpu.sh\n'
+                  '# Running 1000 iterations on all CPUs... \n' + '# [OK]\ttest_fpu\n' * 1000
+                  + 'ok 1 selftests: fpu: run_test_fpu.sh\n')
+        rows = lane.parse_transcript(self.transcript(output), 'flight', ['memory'])
+        self.assertEqual(lane.compare(rows, rows)['status'], 'PASS')
+        for marker in ('KSELFTEST_CPUS other memory 1', 'KSELFTEST_CPUS flight other 1',
+                       'KSELFTEST_CPUS flight memory 0', 'KSELFTEST_CPUS flight memory -1',
+                       'KSELFTEST_CPUS flight memory 4097', 'KSELFTEST_CPUS flight memory unknown',
+                       'KSELFTEST_CPUS flight memory 1\nKSELFTEST_CPUS flight memory 1'):
+            with self.subTest(marker=marker), self.assertRaises(ValueError):
+                lane.parse_transcript(self.transcript(output.replace('KSELFTEST_CPUS flight memory 1', marker)),
+                                      'flight', ['memory'])
+
+    def test_fpu_collection_keeps_standalone_skip_and_stress_results_distinct(self):
+        output = ('1..2\n# selftests: fpu: test_fpu\n'
+                  "# [SKIP]\tcan't access /sys/kernel/debug/selftest_helpers/test_fpu: No such file or directory\n"
+                  'ok 1 selftests: fpu: test_fpu\n# selftests: fpu: run_test_fpu.sh\n'
+                  '# Running 1000 iterations on all CPUs... \n' + '# [OK]\ttest_fpu\n' * 1000
+                  + 'ok 2 selftests: fpu: run_test_fpu.sh\n')
+        parsed = lane.parse_tap(output, online_cpus=1)
+        self.assertTrue(parsed['valid'])
+        self.assertEqual([r['observedWorkers'] for r in parsed['fpuSummaries']], [1, 1000])
+        self.assertEqual(parsed['nestedSkipSummaries'][0]['skipped'], 1)
+
     def test_truncated_scheduler_summary_cannot_be_an_all_tests_pass(self):
         output = (PATH.parents[2] / 'tests/fixtures/kselftest-scheduler-truncated.tap').read_text()
         parsed = lane.parse_tap(output)
