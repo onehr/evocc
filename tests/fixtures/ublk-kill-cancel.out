@@ -66,3 +66,49 @@ Their respective result hashes:
   d52809bce727bcfec33aa59fe339df4f3a9c439b5ce02a7e4539c4646299de40
   caba8271badab69f13ec6e230a2c92fa2e25dbaba74c1fdeb89f61d67e18558c
 The original captured stress_04 failure remains in ublk-blocked-observer.out.
+
+Follow-up controls (same retained Images/disks, no compiler/kernel repair):
+
+The running variant adds -DUBLK_RUNNING_KILL=1 to the warm-loop control. It
+never SIGSTOPs the daemon, retaining completion-versus-exit concurrency.
+All three modes have confirmed outstanding I/O on both Images: 6/6 PASS,
+all clients/delete finish and both guests shut down. This alone does not
+reproduce the original failure.
+  Tested source bf21dfce531f950cda2fc0e20e419e1bcc67657732587e6d79e8002683eadfca
+  Result 3acd5fe3ee33bf5d26ec1c99f15e7de1d8dc84976b2195917de2d9590acee8aa
+  Capture running/result.json
+
+ublk-shared-cancel.c reuses that implementation for two loop devices sharing
+the same backing file, as in stress_04. Both children must acknowledge actual
+queued I/O before the supervisor releases their running-daemon kill paths.
+It covers pairs of explicit-zero-copy, automatic-zero-copy and per-I/O modes.
+Fio logs are device-specific; the barrier itself is bounded and setup failures
+cannot become kernel-cancellation PASSes.
+
+Initial shared run:
+  GCC: 0 PASS / 1 FAIL, later 2 cases NOT RUN. Both devices report queued I/O,
+       all six client/writeback children finish with expected EIO, but one
+       kublk del hits the diagnostic's eight-second bound (wait status 31744).
+       Shutdown completes, no blocked writeback is captured before shutdown.
+  EvoCC: 3/3 pairs PASS, normal shutdown.
+This is a deletion-latency RED, not yet the original 45-second/writeback stall.
+Do not identify it as an EvoCC miscompile or claim a root cause from the retry.
+  Result ee542b268e14814dc7734aebcb5ce6046289d4b66eee47f149578d08dd026f4a
+  GCC serial d0edafaa023df81181a06d26ca95a4a85db2d0f8f60ee27f47945f912fd1ac3f
+  Capture shared/result.json
+
+The next observed pair adds bounded snapshots at 8/10/25/40 seconds, leaving
+the original observer's default 25/40/46/58 schedule unchanged. Both Images
+pass all three pairs and shut down. Those successful observed schedules do
+not close the retained uninstrumented failure or K04.
+  Shared source 4760dad4dc6918bc8ca72e8546ebfcb7f6f09afe54c633ab11dc8e57b6f5a683
+  Included helper c711dafb6a707818504865f024fbaa22db90ff49275b24785ccb7a1f8823a357
+  Observer 8089263d512434af1f5e364160fa323dcc3e7c14b4d2fb48aed89db1c9b5b425
+  Result b32ae7e79a3ead114e7956e2c48a443f24f9ef8b0746737865f2b6653e5ad4bc
+  GCC serial e1e69aaaea85c4fadf5f1185498ee8168c3c566cfa1775314e318988f7bc1d0a
+  EvoCC serial 45468537978d92faefdae7d5c28b61dd458cf9a136af479e4355db35d8bf48bb
+  Capture shared-observed/result.json
+Commands: python3 .build/floating-targeted/ublk-kill-cancel-20260928/{running,shared,shared-observed}/run.py
+Every build is sealed GCC14 static + Clang19 object, with warnings as errors.
+All payloads remain below 2 MiB; backing hashes are unchanged. The changed
+gate against 90bc046 selects no Rust crate; diff whitespace checks pass.

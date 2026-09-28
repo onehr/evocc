@@ -195,7 +195,10 @@ static int diagnostic_usleep(useconds_t delay)
 {
     static double started;
     static unsigned next;
-    static const unsigned times[] = {25, 40, 46, 58};
+#ifndef UBLK_DIAGNOSTIC_TIMES
+#define UBLK_DIAGNOSTIC_TIMES 25, 40, 46, 58
+#endif
+    static const unsigned times[] = {UBLK_DIAGNOSTIC_TIMES};
     double now = monotonic();
     if (!started)
         started = now;

@@ -18,6 +18,12 @@
 #ifndef UBLK_WARM_LOOP
 #define UBLK_WARM_LOOP 0
 #endif
+#ifndef UBLK_RUNNING_KILL
+#define UBLK_RUNNING_KILL 0
+#endif
+#ifndef UBLK_BEFORE_KILL
+#define UBLK_BEFORE_KILL(ready) ((void)(ready), 0)
+#endif
 
 static double now(void)
 {
@@ -51,7 +57,7 @@ static pid_t fio(unsigned device, int uring)
     if (child != 0)
         return child;
     char log[128];
-    snprintf(log, sizeof(log), "/tmp/k1-ublk-fio-%u.log", (unsigned)uring);
+    snprintf(log, sizeof(log), "/tmp/k1-ublk-fio-%u-%u.log", device, (unsigned)uring);
     int output = open(log, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (output < 0 || dup2(output, 1) < 0 || dup2(output, 2) < 0)
         _exit(120);
@@ -123,10 +129,10 @@ static int completed(unsigned device, unsigned long before)
     return 0;
 }
 
-static void client_log(unsigned client)
+static void client_log(unsigned device, unsigned client)
 {
     char path[128], bytes[8192];
-    snprintf(path, sizeof(path), "/tmp/k1-ublk-fio-%u.log", client);
+    snprintf(path, sizeof(path), "/tmp/k1-ublk-fio-%u-%u.log", device, client);
     int fd = open(path, O_RDONLY);
     if (fd < 0)
         return;
@@ -192,7 +198,7 @@ static int probe(const char *mode)
          * I/O and registered-buffer path before interrupting this daemon. */
         bad |= !completed(device, before);
         usleep(2000000);
-        if (kill(daemon, SIGSTOP))
+        if (!UBLK_RUNNING_KILL && kill(daemon, SIGSTOP))
             return 1;
         /* A 64 MiB buffered working set can fit entirely in cache. Request
          * real writeback so a zero inflight count cannot be mistaken for a
@@ -200,12 +206,17 @@ static int probe(const char *mode)
         children[2] = flush_device(device);
         bad |= children[2] <= 0;
     }
-    /* Cancellation without a queued request would be a vacuous observation.
+    /* The running variant retains completion-versus-exit concurrency; the
+     * original cold/stopped controls deliberately remove that race.
+     * Cancellation without a queued request would be a vacuous observation.
      * Keep the owned daemon stopped until sysfs confirms actual outstanding
      * I/O, and record a setup failure rather than PASS if no request arrives. */
     bad |= !queued(device);
     if (bad)
         puts("# could not establish outstanding I/O: setup failure");
+    printf("# cancellation control: daemon=%d stopped=%d\n", daemon,
+           !UBLK_WARM_LOOP || !UBLK_RUNNING_KILL);
+    bad |= UBLK_BEFORE_KILL(!bad);
     if (kill(daemon, SIGKILL))
         return 1;
     printf("# killed daemon device=%u\n", device);
@@ -220,10 +231,10 @@ static int probe(const char *mode)
     }
     if (bad)
         for (unsigned i = 0; i < 2; ++i)
-            client_log(i);
+            client_log(device, i);
     snprintf(command, sizeof(command), "timeout 8 /tests/ublk/kublk del -n %u", device);
     status = system(command);
-    printf("# deletion wait_status=%d\n", status);
+    printf("# deletion device=%u wait_status=%d\n", device, status);
     return bad || status != 0;
 }
 
@@ -244,7 +255,9 @@ int main(void)
         int fd = open("/tmp/k1-ublk-cancel-backing", O_RDWR | O_CREAT | O_EXCL, 0600);
         if (fd < 0 || ftruncate(fd, 64 * 1024 * 1024) || close(fd))
             return 2;
-        puts("# variant: independent loop backing, actual I/O before daemon stop");
+        puts(UBLK_RUNNING_KILL
+             ? "# variant: independent loop backing, kill running daemon during queued I/O"
+             : "# variant: independent loop backing, actual I/O before daemon stop");
     }
     for (unsigned i = 0; i < cases; ++i) {
         int bad = probe(modes[i]);

@@ -345,6 +345,13 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   forced writeback, bounded client/deletion completion and normal shutdown.
   Earlier fixture setup failures are retained separately. This does not
   reproduce the multi-device original or justify a compiler/kernel repair.
+  Running-daemon controls then pass 6/6 (no preceding SIGSTOP). The new
+  [shared-backing pair](tests/fixtures/ublk-shared-cancel.c) reproduces one GCC
+  deletion exceeding its eight-second diagnostic bound after all clients exit;
+  later cases are NOT_RUN, and shutdown still completes. EvoCC passes 3/3.
+  A follow-up observed pair passes 3/3 each, not a fix. This is narrower than
+  the original blocked-writeback/45-second failure and remains separately
+  recorded; do not waive K04 or lengthen the upstream watchdog.
 
   - [x] **K04b — Isolate ublk completion-order assertions** — `DONE`, P1, 2026-09-28, classification only.
     Newly exposed generic_01 fails on both kernels; generic_02 fails on GCC

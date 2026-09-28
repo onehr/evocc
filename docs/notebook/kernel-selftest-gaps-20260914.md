@@ -120,6 +120,14 @@ original invocations and shutdowns; none closes the intermittent stall. The
 fixture preserves raw hashes, bounded-observation limits and both negative
 and positive runs. K04 remains OPEN; full K13 totals are unchanged.
 
+Further controls preserve daemon execution until the actual kill (6/6 pass),
+then add two devices sharing the backing file. The shared GCC control records
+one eight-second device-deletion timeout after all clients exit; the same
+guest shuts down normally. This is not yet the original blocked-writeback
+path. EvoCC passes 3/3; adding bounded early observations yields 3/3 on each
+side without reproducing the timeout. All outcomes, including the initial
+failure and NOT_RUN cases, remain in [the C-control record](../../tests/fixtures/ublk-kill-cancel.out).
+
 The [single-device cancellation reduction](../../tests/fixtures/ublk-kill-cancel.out)
 adds 4 cold-null and 3 warm-loop checks per retained Image. Each final case
 establishes pending I/O; warm cases also establish actual prior completions
