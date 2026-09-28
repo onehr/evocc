@@ -13,8 +13,9 @@ at least 64 new completed requests, run buffered I/O, stop that daemon and
 explicitly request fdatasync. Both require a positive outstanding-request
 count before killing the daemon. The small loop working set can fit in cache;
 without explicit writeback a zero request count is not a kernel failure.
-Each client has an 8-second completion bound; device deletion also has an
-8-second bound. Expected client I/O error exit 4 is distinguished from missing
+Each historical client has an 8-second completion bound; those captured device
+deletions also have an 8-second bound (qualified below after source inspection).
+Expected client I/O error exit 4 is distinguished from missing
 executables/setup errors. The original selftest budget is not changed.
 
 Final source acc8d252d86b70ff41fab631fbb0a57e56640a7e10d3c920be614a087095a4e3
@@ -91,7 +92,7 @@ Initial shared run:
        kublk del hits the diagnostic's eight-second bound (wait status 31744).
        Shutdown completes, no blocked writeback is captured before shutdown.
   EvoCC: 3/3 pairs PASS, normal shutdown.
-This is a deletion-latency RED, not yet the original 45-second/writeback stall.
+This is an observed diagnostic deadline hit, not the original 45-second/writeback stall.
 Do not identify it as an EvoCC miscompile or claim a root cause from the retry.
   Result ee542b268e14814dc7734aebcb5ce6046289d4b66eee47f149578d08dd026f4a
   GCC serial d0edafaa023df81181a06d26ca95a4a85db2d0f8f60ee27f47945f912fd1ac3f
@@ -112,3 +113,44 @@ Commands: python3 .build/floating-targeted/ublk-kill-cancel-20260928/{running,sh
 Every build is sealed GCC14 static + Clang19 object, with warnings as errors.
 All payloads remain below 2 MiB; backing hashes are unchanged. The changed
 gate against 90bc046 selects no Rust crate; diff whitespace checks pass.
+
+Source qualification of the historical eight-second deletion deadline:
+Frozen kublk.c:ublk_stop_io_daemon explicitly calls
+wait_ublk_dev(ublkc, IN_CLOSE, 10). It checks daemon death after that inotify
+timeout because close can precede watch installation. The old diagnostic
+therefore allowed less time than the source's own normal fallback; its timeout
+cannot by itself prove abnormal kernel deletion latency. No syscall trace was
+captured in that failed flight, so the specific path it took remains unknown.
+The old FAIL/NOT_RUN records are preserved, not changed to PASS.
+
+The diagnostic now permits 15 seconds only for this owned kublk deletion and
+prints elapsed time. UBLK_TRACE_DELETE=1 records the actual unchanged command's
+syscalls with installed guest strace; at most 16 KiB are emitted per device.
+The parent budget accounts for three bounded clients and the deletion bound.
+The original stress_04 45-second watchdog and workload are NOT changed. Neither
+this fixture correction nor a later successful schedule closes original K04.
+
+Source-qualified traced replay, same retained old pair as the earlier control:
+  GCC 3/3 pairs PASS; EvoCC 3/3 pairs PASS; both normal shutdown.
+  All twelve device deletions exit zero: GCC 0.014..0.026 seconds,
+  EvoCC 0.028..0.085 seconds. These are instrumented observations, not latency
+  guarantees. Complete exit records fit within each bounded trace capture.
+  No inotify/poll fallback occurs in these successful traces; consequently
+  they do not establish that the old failed flight used that fallback.
+The change repairs an underqualified diagnostic deadline, not the kernel or
+original 45-second stress workload. K04 remains OPEN.
+
+Sealed GCC14 static + Clang19 object builds pass with warnings as errors.
+Result 559e547b7649eee5bb2243fb72e13f7a3145019917bea7d3558624c9a69d8c8f
+Helper 81e5a6d70796393c07e210fa092ab672381b8cf3fc30c5fb48eaaa7b54d00c58
+Pair   a5f5d835ab1fd557cac5ada3900b334ba61c5b0d985287d0a4b3e07cc9748027
+Frozen kublk source ca60a520616828fe0378e87388b8bb672129cb75f159b6903b491451c7877320
+Payload f1347ab13ed8964f1ec3c86cedd86fa0c1716ffd2761be820d606ba5ce1e871a
+GCC serial a0e9981c4031faed3c7e70444270d557fc018f58b2547d0430a9c0a247d66603
+Evo serial b19629b33960259aff931d0855ef8db4dd58884c7367f24446875f88ef93142a
+Capture: shared-qualified/result.json and flights/{reference,subject}/boot.*
+Commands: python3 .build/floating-targeted/ublk-kill-cancel-20260928/shared-qualified/run.py build
+          python3 .build/floating-targeted/ublk-kill-cancel-20260928/shared-qualified/run.py run
+No additional full disk or kernel clone; both backing disk hashes are unchanged.
+After the flights, all 283 K1 Python tests and diff checks pass. The changed
+gate against 8f45121 selects no Rust crate; no new compiler-health claim.

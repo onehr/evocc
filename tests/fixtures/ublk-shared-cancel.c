@@ -61,7 +61,9 @@ static int pair(const char *first, const char *second)
     close(ready[0]); close(release[1]);
     for (unsigned i = 0; i < 2; ++i) {
         int status = -1;
-        int timeout = finish(children[i], 32, &status);
+        /* Three independently bounded clients, then the source-qualified
+         * deletion wait. Do not let the parent cut off that diagnostic. */
+        int timeout = finish(children[i], 3 * 8 + UBLK_DELETE_TIMEOUT_SECONDS + 4, &status);
         printf("# pair worker=%u timeout=%d wait_status=%d\n", i, timeout, status);
         bad |= timeout || !WIFEXITED(status) || WEXITSTATUS(status) != 0;
     }

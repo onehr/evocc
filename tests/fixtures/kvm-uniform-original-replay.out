@@ -35,3 +35,77 @@ reference demand 41111590d1a33aca5092fb086f0721cc2e8468d07bbfe48dd671e8110b997f9
 subject demand   953e0e05e9ad47ec29ae1b58cc03ced7605b2486637058778688ba741154ce98
 reference slots  e94ea452cc41fa0f32d28b750050fe81cd63cea36a6871bd0e6004d8d301c587
 subject slots    529909e95ab9e7a4d0a88ce49fbe6402a921866b265423f74dbcc4f7bc8beeb3
+
+Pinned current-compiler replay, 2026-09-28 (separate result, not regrading):
+  .evidence/k1/kvm-current-20260928/runtime.json
+  SHA256 9397fb1eb3d389e7d5ffc16c6fb1736efeec18d64f6db924f6318cd4ef172e17
+
+                                  GCC reference        EvoCC subject
+demand_paging_test                 TIMEOUT 7/10, 124    TIMEOUT 3/10, 124
+memslot_modification_stress_test   TIMEOUT 7/10, 124    TIMEOUT 3/10, 124
+
+Every program starts its next mode before the deadline. All four real boot and
+normal-shutdown predicates PASS; all protected input hashes remain identical
+afterward. The original 1 GiB workload, ten modes, no arguments, 120-second
+program limit, 240-second outer allowance and Neoverse-N2 EL2 lane are retained.
+This is not the generic Cortex-A72 campaign lane, a smaller-workload result or
+an extension of the original timeout. The old GCC 10/10 result is not inherited
+by this new pair. No performance improvement or unique root cause is proved.
+The agent runs these flights serially and starts no simultaneous build. A
+read-only host-load observation still finds unrelated virtualization/indexing
+activity; this is not a controlled quiet-host performance benchmark or proof
+that such activity caused either timeout. No unrelated process is stopped.
+
+Compiler ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+Subject Image 18b36fee4bb0265719f59df8db1da7098374df3c5e245071dc8f0662ea6a7032
+Reference Image 22a87df276887cc6454053dee56ea96742ab9cf24043b00fd1a21accf93a0fa6
+Configuration 95853321d8dd6ae0b2d779abc094659a327936cb557244bed45b484ccf4c0e09
+QEMU, original payload and scratch hashes remain those recorded above.
+The final full-composition receipt is 49cfa7e0e1e4fe1d28747af7a26da30b504819d735533cfb7931f9fa1a70f6d3.
+Serial hashes, same execution order:
+  8663bf63a0a07edbbfa72457f511e10d267278c4a68bc67ffc630c024f424d49
+  66e8c6ea2c774d892f7b69f3adc59b907db9dafacccefc8fe6e0c98818fba639
+  37c5baffdb7d73ecfaade2d269529fe99ee3bc5f09802117ceff8d21eda38fad
+  56e10a6cc86ae2207c92836647a9c1b92220debb02e83e44ef1b9c478f669a25
+Replay: python3 .build/floating-targeted/kvm-current-20260928/replay.py
+K02/K03 and the full K13 campaign remain OPEN. Existing bounded profiling
+payloads are reused next on these exact Images to localize the remaining gap.
+
+Current-Image bounded profiling follow-up:
+Both retained 256 KiB one-mode payloads execute on both new Images: four inner
+TAP PASS and four nonce-bound boot/shutdown PASS. Independent log analysis
+requires zero overrun/commit-overrun/dropped events on all four CPUs and exactly
+87 demand roots, 86 fault-in/map calls, four memslot destructions and two
+invalidations per applicable flight. All these checks pass. The original
+full-workload TIMEOUTs above are not changed by the small controls.
+
+Inclusive instrumented sums, microseconds (do not add nested durations):
+  function                         GCC             EvoCC
+  kvm_handle_guest_abort           50140.000       177783.966
+  __kvm_faultin_pfn                 17751.024        60402.096
+  kvm_pgtable_stage2_map             9538.912        35349.008
+  kvm_release_page_dirty            3616.128        10784.944
+  kvm_free_stage2_pgd                4443.008        27447.008
+  kvm_arch_flush_shadow_memslot       816.000          581.008
+Demand guest execution is 0.079562 / 0.270028 seconds; the separate memslot
+whole diagnostic is 0.316724992 / 1.091386 seconds. These are single traced
+samples, not statistical performance or cross-run speedup evidence. Depth,
+inlining and scheduling affect attribution. The gap remains distributed:
+neither a single stuck call nor page-table destruction alone explains it.
+Next compiler work should reduce the measured hot-path code and validate it
+with isolated cases, not start another expensive full build without a cause.
+
+Existing payloads and the 64 MiB snapshot-only scratch disk are reused; no
+kernel, module, program or large disk is rebuilt for this follow-up.
+Capture: .build/floating-targeted/kvm-current-20260928/profiles/
+result.json   69e4a6663433e68bd2e66516e67ad94aecda017acadaf7befc3aa72165fb19d5
+analysis.json 59bfe74668bf64f420b98145156e8c79ca0ecc6ce2bd73f25c12622d9ef64ad8
+Serial hashes: demand reference / subject, then memslot reference / subject:
+  7b382da1f81d1177f17ef16b718513fe1f905d3d40b3214e08a324466bb19b7e
+  55589ba52065c143222648e717d733fdcc4cd8dde195ba7422f6f1fec2945d04
+  4e604bf46f0ba5f14ce92d655a05e7f9acc58ffab2537ea0539d5e4f52d5095b
+  f026a6ae14440b7870018d4a4cde70f87ddb3d4ae09c594c990c188df0d2fab7
+Runner: .build/floating-targeted/kvm-current-20260928/profile.py
+Read-only analysis: .build/floating-targeted/kvm-current-20260928/analyze.py
+The old demand payload has no whole-diagnostic elapsed marker; that field is
+left empty rather than invented. Its own guest execution time is retained.

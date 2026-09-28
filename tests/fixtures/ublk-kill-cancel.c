@@ -24,6 +24,14 @@
 #ifndef UBLK_BEFORE_KILL
 #define UBLK_BEFORE_KILL(ready) ((void)(ready), 0)
 #endif
+#ifndef UBLK_TRACE_DELETE
+#define UBLK_TRACE_DELETE 0
+#endif
+/* Frozen kublk waits up to 10 seconds for an inotify close event before
+ * checking whether the daemon is already gone. An eight-second diagnostic
+ * watchdog can interrupt that ordinary fallback. This is not the upstream
+ * stress_04 watchdog, which remains unchanged. */
+#define UBLK_DELETE_TIMEOUT_SECONDS 15
 
 static double now(void)
 {
@@ -164,6 +172,36 @@ static pid_t flush_device(unsigned device)
     return child;
 }
 
+static int delete_device(unsigned device)
+{
+    char command[512], path[128], bytes[16384];
+    snprintf(path, sizeof(path), "/tmp/k1-ublk-delete-%u.trace", device);
+    if (UBLK_TRACE_DELETE)
+        snprintf(command, sizeof(command),
+                 "timeout %u strace -tt -T -o %s "
+                 "/tests/ublk/kublk del -n %u",
+                 UBLK_DELETE_TIMEOUT_SECONDS, path, device);
+    else
+        snprintf(command, sizeof(command), "timeout %u /tests/ublk/kublk del -n %u",
+                 UBLK_DELETE_TIMEOUT_SECONDS, device);
+    double start = now();
+    int status = system(command);
+    printf("# deletion device=%u wait_status=%d elapsed=%.3f bound=%u\n",
+           device, status, now() - start, UBLK_DELETE_TIMEOUT_SECONDS);
+    if (UBLK_TRACE_DELETE) {
+        int fd = open(path, O_RDONLY);
+        if (fd < 0)
+            return 1;
+        puts("# deletion syscall trace (first 16384 bytes at most)");
+        ssize_t count = read(fd, bytes, sizeof(bytes));
+        close(fd);
+        if (count <= 0 || write(1, bytes, (size_t)count) != count)
+            return 1;
+        puts("");
+    }
+    return status != 0;
+}
+
 static int probe(const char *mode)
 {
     char command[256], line[512];
@@ -232,10 +270,8 @@ static int probe(const char *mode)
     if (bad)
         for (unsigned i = 0; i < 2; ++i)
             client_log(device, i);
-    snprintf(command, sizeof(command), "timeout 8 /tests/ublk/kublk del -n %u", device);
-    status = system(command);
-    printf("# deletion device=%u wait_status=%d\n", device, status);
-    return bad || status != 0;
+    int deletion_failed = delete_device(device);
+    return bad || deletion_failed;
 }
 
 int main(void)

@@ -175,6 +175,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   still times out after 3/10 modes; matching GCC completes 10/10. Both use the
   unchanged 1 GiB workload and 120-second limit. All inputs remain unchanged;
   neither the cumulative code-size repairs nor a successful boot closes K02.
+  The later pinned **7,008-object** composition also times out after 3/10;
+  this round's matching GCC reaches 7/10 and also times out. Both enter the
+  next mode and shut down normally. Retain this new common deadline failure
+  rather than importing the older GCC PASS; no runtime speedup is established.
 
   - [x] **K02a — Remove redundant negated-truth materialization**, 2026-09-23.
     [Minimal C case](tests/fixtures/negated-truth-branch.c) went RED → GREEN;
@@ -292,6 +296,10 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   The September 28 [uniform-composition replay](tests/fixtures/kvm-uniform-original-replay.out)
   confirms the same 3/10 versus 10/10 outcome under the unchanged workload,
   fixed-CPU/EL2 lane and timeout. No new full-test PASS is inferred.
+  The later pinned 7,008-object replay yields subject **3/10 TIMEOUT** and
+  reference **7/10 TIMEOUT**, with orderly shutdown on both. The current
+  original remains unclosed; smaller current-image profiles are diagnostic,
+  not substitutes for the unchanged full workload.
 
   - [x] **K03a — Substitute bounded private leaf helpers**, 2026-09-23.
     The [small C case](tests/fixtures/private-leaf-substitution.c) goes RED → GREEN
@@ -351,7 +359,11 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   later cases are NOT_RUN, and shutdown still completes. EvoCC passes 3/3.
   A follow-up observed pair passes 3/3 each, not a fix. This is narrower than
   the original blocked-writeback/45-second failure and remains separately
-  recorded; do not waive K04 or lengthen the upstream watchdog.
+  recorded. Later source inspection finds kublk's normal close-notification
+  fallback itself waits **10 seconds**, exceeding the diagnostic's old 8-second
+  bound. That observation alone cannot prove a kernel latency bug; retain the
+  historical failure and use the source-qualified syscall control. Do not waive
+  K04 or lengthen the upstream watchdog.
 
   - [x] **K04b — Isolate ublk completion-order assertions** — `DONE`, P1, 2026-09-28, classification only.
     Newly exposed generic_01 fails on both kernels; generic_02 fails on GCC
