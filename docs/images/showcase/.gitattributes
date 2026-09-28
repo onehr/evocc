@@ -2,3 +2,5 @@
 *.stdout.txt -text -whitespace
 *.stderr.txt -text -whitespace
 FREEDOOM-*.txt -text -whitespace
+LIBREQUAKE-*.txt -text -whitespace
+NEVERBALL-*.txt -text -whitespace

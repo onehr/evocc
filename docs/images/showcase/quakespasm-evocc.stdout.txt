@@ -1,0 +1,89 @@
+Command line: /work/games/evocc/quakespasm/quakespasm -basedir /work/games/data/librequake-lite/lite -userdir /work/games/capture/quakespasm/evocc/user -window -width 800 -height 600 -nosound +host_framerate 0.016666667 +timedemo demo1
+Found SDL version 2.32.4
+Terminal input not available.
+Detected 3 CPUs.
+Initializing QuakeSpasm v0.97.0
+Host_Init
+Playing registered version.
+Console initialized.
+UDP Initialized
+Server using protocol 666 (FitzQuake)
+Exe: 16:55:36 Sep 28 2026
+384.0 megabyte heap
+Video mode 800x600x24 0Hz (24-bit z-buffer, 0x FSAA) initialized
+GL_VENDOR: Mesa
+GL_RENDERER: llvmpipe (LLVM 19.1.7, 128 bits)
+GL_VERSION: 4.5 (Compatibility Profile) Mesa 25.0.7-2+deb13u1
+FOUND: ARB_vertex_buffer_object
+FOUND: ARB_multitexture
+GL_MAX_TEXTURE_UNITS: 8
+FOUND: ARB_texture_env_combine
+FOUND: ARB_texture_env_add
+Warning: vertical sync not supported (SDL_GL_SetSwapInterval failed)
+FOUND: EXT_texture_filter_anisotropic
+FOUND: ARB_texture_non_power_of_two
+FOUND: GLSL
+Enabled: GLSL gamma
+Enabled: GLSL alias model rendering
+Enabled: EXT_packed_pixels
+FOUND: glGenerateMipmap
+CDAudio disabled at compile time
+
+Language initialization
+Couldn't load 'localization/loc_english.txt'
+from '/work/games/data/librequake-lite/lite'
+
+========= Quake Initialized =========
+
+execing quake.rc
+execing default.cfg
+"PRINTSCREEN" isn't a valid key
+"scr_conalpha" is "0.5"
+Unknown command "topcolor"
+Unknown command "bottomcolor"
+Unknown command "serverinfo"
+Unknown command "set"
+Unknown command "if"
+execing default_$generic.cfg
+vid_fsaa 2 requires engine restart to take effect
+Unknown command "vid_fsaamode"
+Unknown command "scr_pixelaspect"
+Unknown command "sv_autoload"
+Unknown command "cl_fakeshaft"
+Unknown command "gl_texturemode_viewmodels"
+Unknown command "r_lerpmuzzlehack"
+Unknown command "gl_texturemode_sky"
+Unknown command "gl_texturemode_hud"
+Unknown command "gl_overbright_model"
+Unknown command "gl_smoothfont"
+Unknown command "cl_stainmaps"
+Unknown command "cl_decals"
+Unknown command "cl_particles_quake"
+Unknown command "cl_beams_polygons"
+Unknown command "r_font_postprocess_mono"
+Unknown command "r_waterscroll"
+execing style_ironwail_modern.cfg
+Modern Style 
+Unknown command "r_softemu"
+Unknown command "hudstyle"
+couldn't exec config.cfg
+couldn't exec autoexec.cfg
+Playing demo from demo1.dem.
+3 demo(s) in loop
+
+VERSION 1.09 SERVER (22264 CRC)
+
+Baseless Base Banter
+Using protocol 15
+
+============================== 
+check out our commands 
+Zoom90 or Zoom120 for the zoom function 
+Dev for development bindings 
+Cam for the camera system we use for the main menu demos 
+============================== 
+
+============================== 
+LibreQuake Version V0.09-beta 
+============================== 
+564 frames  10.9 seconds  51.9 fps

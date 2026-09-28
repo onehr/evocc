@@ -1,6 +1,6 @@
-# Built with EvoCC: twelve small, real demos
+# Built with EvoCC: fifteen small, real demos
 
-The README uses **four rows of three**. These are program-generated pixels or
+The README uses **five rows of three**. These are program-generated pixels or
 visualizations of real output, not invented application windows. Rendering a
 chart does not imply the CLI program has a GUI. No benchmark verdict is changed
 by these small examples, and no kernel rebuild or large disk image is needed.
@@ -19,6 +19,122 @@ by these small examples, and no kernel rebuild or large disk image is needed.
 | Zstandard fractal | The real Lua RGB image is compressed and restored with byte equality | [44 C units](../../../tests/contracts/ladder-zstd-receipt.json); measured raw-RGB sizes, not PNG sizes or a speed benchmark |
 | zlib arcade sprites | `minigzip` compresses/restores a repository-owned six-sprite RGB sheet, independent of the fractal | [19 C units](../../../tests/contracts/ladder-zlib-receipt.json); Python-generated input fixture, actual compression and byte-equal recovery; not a game engine or full-suite rerun |
 | Toybox build artifacts | `tar` packages the TinyCC demo's source, ELF and RGB output; `sha256sum -c` and `cmp` verify the extracted files; a deliberate one-byte change is detected | [Measured executable](../../../tests/contracts/ladder-toybox-receipt.json); real artifacts, not mock filenames; expected negative exits 1, all other commands exit 0; full Toybox lane remains incomplete with its shared test failure |
+| OpenTyrian | Built-in recorded shooter demo, real SDL2 framebuffer | 52/52 C units; zero C fallback; GCC and EvoCC exit 0; frames 180/360/600 match exactly |
+| Neverball | `map-easy/coins.sol`, Enter at presentation 60, normal physics/render loop | 82/82 C units including map compiler; 81 in game; zero C fallback; one disclosed application macro fix; both builds exit 0 |
+| Quakespasm / LibreQuake | LibreQuake v0.09-beta `demo1` through the real OpenGL engine | 77/77 C units; zero C fallback; both builds exit 0; no commercial Quake assets |
+
+## Three native C games
+
+The new row was captured on September 29, 2026. All game C objects were emitted
+by EvoCC, assembled/linked with the reference GNU toolchain, and run as AArch64
+Linux executables. SDL2, Mesa **llvmpipe**, libc/libm, image/font/audio libraries,
+Xvfb and the framebuffer observation adapter are reference-built dependencies.
+This is not a claim that EvoCC compiled the graphics stack or the running host
+kernel. Game music/audio, multiplayer and complete gameplay were **not tested**.
+
+[`games.json`](games.json) retains original and EvoCC compile argv, compiler,
+source/header, assembly, object and executable hashes, both run commands,
+exit codes and frame hashes. [`games-packages.tsv`](games-packages.tsv) identifies
+the runtime packages. Upstream source commits and archive digests are pinned in
+[`games.py`](../../../tools/ladder/games.py); Tyrian 2.1 and LibreQuake v0.09-beta
+lite have separate data-archive hashes. Neverball's `.sol` geometry is generated
+by the GCC-built map compiler and separately hashed; game execution is EvoCC.
+
+The reference and subject use **the same explicit demo build configuration**,
+not every project's default warning/tuning flags. OpenTyrian disables networking;
+Neverball retains its working curl build backend but uses `online 0` at runtime;
+Quakespasm disables MP3/Vorbis. Unsupported driver options are not silently erased.
+
+The [small SDL adapter](../../../tools/showcase/sdl_capture.c) reads the actual
+framebuffer before presentation. It retains only presentations 180, 360 and 600,
+then requests normal shutdown with `SDL_QUIT` at 610. Neverball also receives an
+Enter key at 60. OpenTyrian uses its built-in attract replay; Quakespasm uses
+`+timedemo demo1`. PNGs show presentation 600, losslessly encoded without cropping,
+repainting, generated overlays or upstream screenshots. The checker reconstructs
+the captured PPM from each PNG and verifies its original hash.
+
+**Comparison boundary:** OpenTyrian's three saved frames match GCC byte-for-byte.
+Neverball and Quakespasm both render and exit successfully, but their captured
+frame hashes differ from GCC. This lane does **not** assert visual/semantic
+equivalence for those two games. Presentation count is not a synchronized
+simulation-state identifier; timing and animation remain potential causes, not
+a completed diagnosis. Their images establish native execution only, not a full
+benchmark PASS. No existing roadmap verdict is promoted by this row.
+
+### Neverball source correction
+
+The sole game-source change is the disclosed
+[`neverball-mtrl.patch`](../../../tools/showcase/neverball-mtrl.patch), applied to
+**both** GCC and EvoCC inputs. Upstream `tobyte(f)` omitted parentheses around
+its macro argument. In `toushort(40.0f)`, this produced `40 - 40 * 255 = -10160`,
+then converted it to an unsigned byte. GCC's `-fsanitize=float-cast-overflow`
+reports that conversion, and EvoCC correctly stops with E3063. The fix computes
+`(40 - 40) * 255` instead; it does not suppress the compiler's check. The
+[minimal regression](../../../tests/fixtures/neverball-material-conversion.c)
+tests original rejection and corrected execution in both interpreters.
+
+The game builds also exposed and fixed three compiler gaps: the ISO C99 option
+alias, missing `__TIME__`, and an include at EOF without a trailing newline.
+Each has a focused driver regression; the dependent Rust tests and Clippy were
+rerun. `__DATE__` and `__TIME__` now share one translation timestamp, honoring
+`SOURCE_DATE_EPOCH`.
+
+### Game reproduction
+
+This is a separate, bounded graphics container; do not reuse a kernel disk image.
+Stage the five pinned archives under `.build/ladder/games/download/`:
+
+- `opentyrian.tar.gz`: [pinned C source](https://codeload.github.com/opentyrian/opentyrian/tar.gz/5a9d8daa2811347bec3a0c42f8da87682378f3cb).
+- `neverball.tar.gz`: [pinned C source](https://codeload.github.com/Neverball/neverball/tar.gz/d9df382786d7e5635a1457b6b465ab943cf4fee6).
+- `quakespasm.tar.gz`: [pinned C source](https://codeload.github.com/sezero/quakespasm/tar.gz/f5fe17864918239d443fe4c0d6bfb980e44d19e6).
+- `tyrian21.zip`: [freeware game data](https://camanis.net/tyrian/tyrian21.zip).
+- `librequake-lite.zip`: [v0.09-beta lite data](https://github.com/lavenderdotpet/LibreQuake/releases/download/v0.09-beta/lite.zip).
+
+`python3 tools/ladder/games.py prepare` checks the pins, extracts locally and
+applies the disclosed Neverball patch. Use Python 3.12+ for safe tar extraction.
+Mount the repository read-only at `/repo` and `.build/ladder` writable at `/work`
+in `evo-flight-lab:sealed`. Install these additional reference dependencies:
+`libsdl2-dev libsdl2-ttf-dev libgl-dev libgl1-mesa-dri libpng-dev libjpeg-dev
+libvorbis-dev libcurl4-openssl-dev xvfb xauth pkg-config`.
+The frozen base uses historical Debian snapshot metadata; package versions from
+the measured container are retained in the package manifest, not inferred from
+whatever a future `apt-get` happens to install.
+
+Inside the container, on fresh trees:
+
+```sh
+python3 /repo/tools/ladder/games.py reference opentyrian --work /work/games
+python3 /repo/tools/ladder/games.py reference neverball --work /work/games
+python3 /repo/tools/ladder/games.py reference quakespasm --work /work/games
+mkdir -p /work/games/sysroot
+tar -chf /tmp/games-headers.tar /usr/include /usr/lib/gcc/aarch64-linux-gnu/14/include
+tar -xf /tmp/games-headers.tar -C /work/games/sysroot
+dpkg-query -W > /work/games/packages.tsv
+gcc-14 -shared -fPIC -O2 -Wall -Wextra -I/usr/include/SDL2 \
+  /repo/tools/showcase/sdl_capture.c -o /work/games/sdl_capture.so -lSDL2 -lGL -ldl
+```
+
+On the host, emit each game's assembly using the current EvoCC binary:
+
+```sh
+python3 tools/ladder/games.py emit opentyrian
+python3 tools/ladder/games.py emit neverball
+python3 tools/ladder/games.py emit quakespasm
+```
+
+Then inside the container, repeat these commands for each game name:
+
+```sh
+python3 /repo/tools/ladder/games.py link opentyrian --work /work/games
+python3 /repo/tools/ladder/game_capture.py opentyrian gcc
+python3 /repo/tools/ladder/game_capture.py opentyrian evocc
+```
+
+`python3 tools/showcase_games.py --publish` publishes validated captures on the
+host (also expects the retained LibreQuake notices in the work directory).
+`python3 tools/showcase.py --check` validates the entire committed gallery offline.
+The three new PNGs total about **1.6 MiB**; source/build/data scratch work was about
+**688 MiB**, not another kernel-sized image. No videos are retained.
 
 ## Linux kernel/module demo
 
@@ -105,5 +221,12 @@ also reconstructed to BGRA and matched against the accepted exact frame hash.
 
 Doom's screenshot uses **Freedoom 0.13.0 Phase 1**, not commercial Doom game
 data. Its notices remain in [FREEDOOM-COPYING.txt](FREEDOOM-COPYING.txt) and
-[FREEDOOM-CREDITS.txt](FREEDOOM-CREDITS.txt). Other scenes and demo inputs are
-repository-owned procedural examples. No AI-generated imagery is used.
+[FREEDOOM-CREDITS.txt](FREEDOOM-CREDITS.txt). LibreQuake notices are in
+[LIBREQUAKE-COPYING.txt](LIBREQUAKE-COPYING.txt) and
+[LIBREQUAKE-CREDITS.txt](LIBREQUAKE-CREDITS.txt). Neverball retains its
+[license/exceptions](NEVERBALL-LICENSE.md) and [GPL text](NEVERBALL-COPYING.txt).
+OpenTyrian's screenshot depicts the original **Tyrian 2.1 freeware** artwork;
+freeware game data is not being relicensed as EvoCC-owned art. Game/project names
+and artwork remain their respective owners' work; these captures imply no
+endorsement. Other scenes and demo inputs are repository-owned procedural
+examples. No AI-generated imagery is used.

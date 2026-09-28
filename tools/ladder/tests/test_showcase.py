@@ -114,7 +114,7 @@ class ShowcaseTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "missing showcase assets"):
                     showcase.check()
 
-    def test_readme_gallery_has_four_rows_of_three(self):
+    def test_readme_gallery_has_five_rows_of_three(self):
         class Gallery(HTMLParser):
             images = 0
             cells = 0
@@ -140,8 +140,8 @@ class ShowcaseTests(unittest.TestCase):
         gallery.assert_exists = lambda value: self.assertTrue((showcase.ROOT / value.split("#")[0]).is_file(), value)
         section = (showcase.ROOT / "README.md").read_text().split("## Built with EvoCC\n", 1)[1].split("## Status", 1)[0]
         gallery.feed(section)
-        self.assertEqual((gallery.images, gallery.cells), (12, 12))
-        self.assertEqual(gallery.rows, [3, 3, 3, 3])
+        self.assertEqual((gallery.images, gallery.cells), (15, 15))
+        self.assertEqual(gallery.rows, [3, 3, 3, 3, 3])
 
 
 if __name__ == "__main__":

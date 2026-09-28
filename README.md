@@ -49,11 +49,18 @@ Click an image to enlarge it; **results** links to the underlying build/test sco
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/zlib.svg"><img src="docs/images/showcase/zlib.svg" alt="Six colorful arcade sprites compressed by zlib and restored pixel-perfect, with measured byte sizes" width="320"></a><br><b>zlib ships a tiny arcade</b><br>Pixel-art sprites → gzip → intact<br><a href="tests/contracts/ladder-zlib-receipt.json">results</a></td>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/toybox.svg"><img src="docs/images/showcase/toybox.svg" alt="Toybox packages real C source, ELF and rendered pixels; verifies restored artifacts and detects a controlled one-byte change" width="320"></a><br><b>Toybox verifies a build artifact</b><br>C + ELF + RGB → tar → verify → detect change<br><a href="docs/images/showcase/README.md#toybox-build-artifact-demo">results</a></td>
   </tr>
+  <tr>
+    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/opentyrian.png"><img src="docs/images/showcase/opentyrian.png" alt="Actual scrolling-shooter replay frame from EvoCC-built OpenTyrian" width="320"></a><br><b>OpenTyrian</b><br>52 C units · three frames match GCC exactly<br><a href="docs/images/showcase/README.md#three-native-c-games">results</a></td>
+    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/neverball.png"><img src="docs/images/showcase/neverball.png" alt="Actual Neverball level rendered by the EvoCC-built game with a disclosed material-macro fix" width="320"></a><br><b>Neverball</b><br>Physics + OpenGL · one disclosed source fix<br><a href="docs/images/showcase/README.md#three-native-c-games">results</a></td>
+    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/quakespasm.png"><img src="docs/images/showcase/quakespasm.png" alt="Real LibreQuake demo replay rendered by EvoCC-built Quakespasm" width="320"></a><br><b>Quakespasm / LibreQuake</b><br>77 C units · real 3D demo replay<br><a href="docs/images/showcase/README.md#three-native-c-games">results</a></td>
+  </tr>
 </table>
 
 Doom is a bounded headless replay, not interactive gameplay. Kernel boot is not
 full kernel-test completion. Library demos use explicitly labeled reference-built
 adapters; charts are renderings of captured data, not native application UIs.
+The three new games use reference SDL/OpenGL libraries; their screenshots are
+bounded native runs, not full-game acceptance or graphics-driver compilation.
 The [capture notes, exact commands and limitations](docs/images/showcase/README.md)
 keep these small examples separate from full benchmark acceptance.
 

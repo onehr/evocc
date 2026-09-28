@@ -1,0 +1,19 @@
+INFO: 
+INFO: Welcome to... >> OpenTyrian v2.1.??? <<
+INFO: 
+INFO: Copyright (C) The OpenTyrian Development Team
+INFO: 
+INFO: This program comes with ABSOLUTELY NO WARRANTY.
+INFO: This is free software, and you are welcome to redistribute it
+INFO: under certain conditions.  See the file COPYING for details.
+INFO: 
+WARN: Failed to open 'tyrian.cfg': No such file or directory
+WARN: 'tyrian.cfg' is invalid or missing.
+WARN: Failed to open 'opentyrian.cfg': No such file or directory
+WARN: Failed to open 'tyrian.sav': No such file or directory
+WARN: 'tyrian.sav' is invalid or missing.
+INFO: Assuming mouse detected.
+INFO: Audio is disabled.
+EVO_CAPTURE frame=180 width=640 height=400
+EVO_CAPTURE frame=360 width=640 height=400
+EVO_CAPTURE frame=600 width=640 height=400

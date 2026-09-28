@@ -1,0 +1,5 @@
+--- a/share/mtrl.h
++++ b/share/mtrl.h
+@@ -9 +9 @@
+-#define tobyte(f) ((GLubyte) (f * 255.0f))
++#define tobyte(f) ((GLubyte) ((f) * 255.0f))

@@ -380,6 +380,10 @@ def render():
 
 
 def check():
+    game_spec = importlib.util.spec_from_file_location("showcase_games", ROOT / "tools/showcase_games.py")
+    games = importlib.util.module_from_spec(game_spec)
+    game_spec.loader.exec_module(games)
+    games.check()
     records = read_json(OUT / "captures.json")
     required = {"doom.png", "linux.svg", *[f"{name}.svg" for name in APPS]}
     if not required <= set(records["assets"]):
@@ -406,7 +410,7 @@ def check():
     raw = OUT / "linux-fpu.stdout.txt"
     if digest(raw) != fpu["serialLogSha256"] or fpu_facts(raw.read_text(), fpu["nonce"]) != fpu["facts"]:
         raise ValueError("FPU capture no longer matches worker verdicts")
-    print(f"Showcase: {len(required)} assets and {len(APPS)} captured stdout/stderr pairs verified")
+    print(f"Showcase: {len(required) + len(games.NAMES)} images, {len(APPS)} output demos and {len(games.NAMES)} paired game captures verified")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,3 @@
+EVO_CAPTURE frame=180 width=800 height=600
+EVO_CAPTURE frame=360 width=800 height=600
+EVO_CAPTURE frame=600 width=800 height=600
