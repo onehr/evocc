@@ -54,3 +54,31 @@ Capture: .build/floating-targeted/fpu-worker-verdict-20260928/
 Exact per-flight payload, Image, nonce, QEMU and raw serial identities remain in
 the receipts. HVF, KUnit autorun off and explicit QEMU drift. Historical raw
 captures and full-run counts are not rewritten.
+
+Follow-up: installed-helper preload RED -> GREEN.
+The new full-runtime regression first fails: lib/test_fpu.ko is installed,
+but the shared prerequisite list omits test_fpu. The common installer now adds
+that module only when it is in the matching installed module inventory;
+missing/disabled modules still do not receive invented prerequisites.
+All 283 K1 tests, Ruff and diff whitespace checks pass.
+
+Command: python3 .build/floating-targeted/fpu-worker-verdict-20260928/preload.py
+The original disk is retained unchanged. /bin/cp -c creates an APFS clone,
+and debugfs changes only /tests/modules there; installed module bodies,
+original userspace and the counted init payload are unchanged. The common
+init performs its existing modprobe before executing the unchanged originals.
+
+New reference original results (same Image/config and 45-second test limit):
+  fpu:test_fpu       1/1 OK, 0 FAIL, 0 SKIP; normal shutdown
+  fpu:run_test_fpu.sh 4000/4000 OK, 0 FAIL, 0 SKIP; normal shutdown
+Both boot logs confirm KSELFTEST_SETUP module test_fpu loaded. The original
+SKIP capture remains valid historical evidence. Subject replay still awaits
+the current full composition; this does not close K12f or K13 by itself.
+
+Prerequisite code 4ef3e95bb8e4201bcc7e9281ff32dfcbbd247d9df7ff55187acaa39b172ab9c7
+Replay            8b47bf18770e25883a061910d2db1ff03d3c64fb1899d4e6bcd3b7ddb8f787c7
+debugfs log       a1cc1d83c252868bc68b91b851c14b3d966ad93e08db8a321ab1015604399cec
+Standalone serial 9316c0a42ceb6375e45716e902c065f09593fd2d09c32b2e2f01698a663ac5ee
+Stress serial     627b57b1e80931e1304629133d9c60f2b0e6b24e2241f2ee0e4a464d59e30262
+Capture: .build/floating-targeted/fpu-worker-verdict-20260928/preload/
+The new disk/payload hashes are bound in reference.json and runtime build.json.

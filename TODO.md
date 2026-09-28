@@ -712,9 +712,12 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     [Original logs and precise boundary](tests/fixtures/kernel-uniform-module-runtime.out).
     The new 848-module reference runtime is now installed and signed; unchanged
     run_test_fpu.sh actually loads test_fpu and records 4000/4000 worker OKs.
-    Standalone test_fpu still prints an inner SKIP because it does not load its
-    own module. K11m now exposes that rather than treating outer exit 0 as full
-    success. Restore this runtime prerequisite and repeat on the new subject.
+    K11m exposes the standalone inner SKIP instead of hiding it behind exit 0.
+    The shared prerequisite installer now loads the matching installed test_fpu
+    module. Its RED and all 283 K1 tests pass; unchanged reference replays now
+    record 1/1 standalone and 4000/4000 stress worker OKs, with normal shutdown.
+    Only /tests/modules changes on an APFS clone; the old disk/captures remain.
+    Repeat both originals on the new subject before closing this item.
 
 - [ ] **K13 — Fresh complete paired kselftest acceptance** — `OPEN`, P1, after K01–K12/T04.
   The last 970-program pair is INCOMPLETE and bound to an older Image; its counts

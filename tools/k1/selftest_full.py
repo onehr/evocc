@@ -594,10 +594,13 @@ def install_runtime_module_prerequisites(rootfs, kernel_modules):
     # Without a running udev daemon, opening a not-yet-created device node
     # cannot trigger module autoload. Only preload modules actually installed
     # for this Image; a disabled driver is still a configuration coverage gap.
+    # The standalone FPU worker likewise opens debugfs without modprobe; its
+    # stress driver loads the helper itself, but runs in a separate guest.
     required = (('fs/fuse/fuse.ko', 'fuse'), ('sound/core/snd-timer.ko', 'snd_timer'),
                 ('drivers/misc/ntsync.ko', 'ntsync'),
                 ('drivers/iommu/iommufd/iommufd.ko', 'iommufd'),
-                ('drivers/nfc/virtual_ncidev.ko', 'virtual_ncidev'))
+                ('drivers/nfc/virtual_ncidev.ko', 'virtual_ncidev'),
+                ('lib/test_fpu.ko', 'test_fpu'))
     names = [name for unit, name in required if unit in installed]
     (rootfs / 'tests/modules').write_text(''.join(name + '\n' for name in names))
     return names

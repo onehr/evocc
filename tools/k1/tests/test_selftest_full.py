@@ -173,6 +173,19 @@ class FullSelftest(unittest.TestCase):
                              ['virtual_ncidev'])
             self.assertEqual((rootfs / 'tests/modules').read_text(), 'virtual_ncidev\n')
 
+    def test_standalone_fpu_worker_gets_its_installed_debugfs_helper(self):
+        with tempfile.TemporaryDirectory() as temp:
+            rootfs = Path(temp)
+            (rootfs / 'tests').mkdir()
+            modules = {'modules': [{'unit': 'lib/unrelated.ko'}]}
+            self.assertEqual(lane.install_runtime_module_prerequisites(rootfs, modules), [])
+            modules['modules'].append({'unit': 'lib/test_fpu.ko'})
+            self.assertEqual(lane.install_runtime_module_prerequisites(rootfs, modules),
+                             ['test_fpu'])
+            self.assertEqual((rootfs / 'tests/modules').read_text(), 'test_fpu\n')
+            self.assertEqual(lane.install_runtime_module_prerequisites(rootfs, None), [])
+            self.assertEqual((rootfs / 'tests/modules').read_text(), '')
+
     def test_installed_fuse_is_loaded_before_mounting_its_control_filesystem(self):
         prepare = getattr(lane, 'install_runtime_module_prerequisites', None)
         self.assertTrue(callable(prepare), 'fusectl sysfs mountpoint exists only after loading fuse')

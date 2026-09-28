@@ -88,6 +88,15 @@ prerequisite and the new EvoCC runtime still need closure; no paired/full PASS
 is inferred. Only the small init changes during the parser replay; the runtime
 disk and original programs stay byte-identical, with old payloads retained.
 
+The subsequent prerequisite regression reproduces the omitted test_fpu preload.
+The shared runtime installer now adds it only when lib/test_fpu.ko is present
+in the installed module inventory. All 283 K1 tests pass. A versioned APFS
+clone changes only /tests/modules and retains the old disk; both unchanged
+reference programs now execute: **1/1 standalone and 4000/4000 stress workers
+OK**, no inner skips/failures, normal shutdown. The common init logs the actual
+module load. This closes the reference prerequisite, not pending new-subject
+or full-campaign acceptance. The same fixture records hashes and commands.
+
 ### ublk stalled writeback captured — 2026-09-28
 
 The [bounded original observer](../../tests/fixtures/ublk-blocked-observer.out)
