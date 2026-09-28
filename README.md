@@ -17,7 +17,7 @@ whole compiler or a claim that every program is optimized through EqSat.
 
 The illustration describes the design, not a live completion counter.
 The authoritative language and machine profiles are
-[EvoIR 1.9.115](docs/evoir-spec.md) and [EvoMIR 0.52](docs/evomir-spec.md).
+[EvoIR 1.9.115](docs/evoir-spec.md) and [EvoMIR 0.53](docs/evomir-spec.md).
 GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements;
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.
@@ -28,7 +28,7 @@ unsupported forms have explicit refusal boundaries.
 ladder are not yet closed.** The latest recorded application lanes contain
 **10 PASS, 1 PROFILE_CLEAN and 4 INCOMPLETE**.
 
-This is an audit of existing measurements, not a new run of today's checkout.
+Application rows are an audit of existing measurements, not a new run of today's checkout.
 Unchanged-program September 27 replays cover torture, c-testsuite, TinyCC,
 toybox, LLVM SingleSource, jq, cJSON and musl. Other lanes retain their earlier measurements;
 this is not a completed fresh 15-lane campaign or a kernel-test rerun.
@@ -83,7 +83,8 @@ userspace test dependencies are accounted for separately.
 | Scope | Verified result | Limit |
 |---|---|---|
 | K6 locked configuration | **2,799/2,799 target-C**, complete link, real boot and normal shutdown PASS; uniform EvoCC rebuild, zero GCC target-C fallback | Not every Linux configuration or subsystem |
-| BPF/module configuration | **7,002/7,002 target-C**, uniform compiler, generated-input fixed point, complete link/boot PASS; 847 modules linked/BTF/signed/installed; selected module-runtime tests below | Not all installed modules runtime-tested; this frozen compiler predates later fixes and the host toolchain pin; QEMU drift explicitly recorded |
+| BPF/module configuration | **7,008/7,008 target-C**, pinned current compiler, generated-input fixed point, complete link/boot PASS; 848 modules linked/BTF/signed/installed | Not all installed modules runtime-tested; fresh full kselftest/KUnit still pending; QEMU drift explicitly recorded |
+| Current FPU and connector follow-up | Both kernels: FPU **1/1 + 4,000/4,000 workers PASS**; bounded connector controls **20/20 each** | Actual signed FPU module loaded; unchanged persistent connector listener still times out under its original 45-second runner, not counted PASS |
 | K7 selected kselftests | Both kernels: **9/9 programs, 125/125 subtests PASS**, no skip/failure | Not all kselftests or KUnit |
 | Full installed kselftest population | All **970 programs started on each kernel**; aggregate INCOMPLETE; counts below | Unbuilt collections and unavailable hardware remain; latest Image needs a full rerun |
 | Expanded built-in KUnit | Of 1,504 cases: EvoCC **1,432 PASS / 12 FAIL / 60 SKIP**; GCC **1,438 / 7 / 59** | Subsequent filtered repairs are not a new full result |
@@ -97,7 +98,17 @@ verdicts, not individual nested assertions:
 | GCC control | 532 | 121 | 302 | 11 | 2 | 2 |
 | EvoCC | 529 | 114 | 302 | 19 | 3 | 3 |
 
-The September 28 uniform composition changes the subject Image to `62c29ae4…`;
+The latest September 28 [uniform composition](tests/fixtures/kernel-current-composition.out)
+uses pinned Rust 1.97.1 compiler `ab2eeb7b…` and Image `18b36fee…`. All 7,008
+actual-header consumers, 849 generated export/module units, the full link,
+848 module links/BTF and installed-object audits pass. Actual boot/poweroff
+passes; zero GCC target-C replacements. Its matching signed runtime preserves
+all 4,396 original non-module userspace files. Actual
+[FPU execution](tests/fixtures/fpu-worker-verdict.out) and
+[connector delivery](tests/fixtures/connector-process-events.out) close those
+two prerequisite gaps, not the complete 970-program campaign or expanded KUnit.
+
+The preceding September 28 composition used subject Image `62c29ae4…`;
 the September 22 totals remain historical. Its real boot/poweroff and zero
 GCC replacement are verified, not a full kselftest or KUnit result. The frozen
 `65035621…` compiler contains Rust 1.98.0 std code; it is not retroactively
