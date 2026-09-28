@@ -50,6 +50,43 @@ class ShowcaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "differs from Lua"):
             visuals.draw("zstd", corrupted, records["programs"])
 
+    def test_sprite_picture_must_match_compressed_bytes(self):
+        record = copy.deepcopy(showcase.read_json(showcase.OUT / "captures.json")["programs"]["zlib"])
+        record["picture"]["rgb"] = "00" + record["picture"]["rgb"][2:]
+        with self.assertRaisesRegex(ValueError, "sprite sheet differs"):
+            visuals.draw("zlib", record)
+
+    def test_album_rejects_changed_pixels_and_duplicate_kept_images(self):
+        original = showcase.read_json(showcase.OUT / "captures.json")["programs"]["toybox"]
+        record = copy.deepcopy(original)
+        record["album"]["pictures"]["alpine"]["rgb"] = "00" + record["album"]["pictures"]["alpine"]["rgb"][2:]
+        with self.assertRaisesRegex(ValueError, "postcard differs"):
+            visuals.draw("toybox", record)
+        record = copy.deepcopy(original)
+        record["album"]["kept"][1] = record["album"]["kept"][0]
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            visuals.draw("toybox", record)
+
+    def test_boot_facts_require_ordered_milestones_and_bound_nonce(self):
+        facts = showcase.read_json(showcase.OUT / "captures.json")["linux"]["facts"]
+        lines = [facts[k]["line"] for k in ("reset", "cpus", "memory", "devices", "init")]
+        lines += ["EVO_INIT_ALIVE", "EVO_BOOT_NONCE " + facts["nonce"], "EVO_INIT_DONE", facts["poweroff"]["line"]]
+        log = "\n".join(lines) + "\n"
+        self.assertEqual(showcase.boot_facts(log, facts["nonce"]), facts)
+        with self.assertRaisesRegex(ValueError, "missing/out of order"):
+            showcase.boot_facts(log, "different-boot")
+        with self.assertRaisesRegex(ValueError, "missing boot milestone"):
+            showcase.boot_facts(log.replace("devtmpfs: initialized", "not initialized"), facts["nonce"])
+        with self.assertRaisesRegex(ValueError, "missing/out of order"):
+            showcase.boot_facts(log.replace("EVO_INIT_ALIVE", "EVO_INIT_DONE").replace("\nEVO_INIT_DONE\n[", "\nEVO_INIT_ALIVE\n["), facts["nonce"])
+
+    def test_fixture_images_are_distinct_and_well_formed(self):
+        fixtures = showcase.demo_inputs()
+        scenes = [fixtures.sprite_sheet(), *fixtures.postcards().values()]
+        self.assertEqual(len({scene["rgb"] for scene in scenes}), 4)
+        for scene in scenes:
+            self.assertEqual(len(bytes.fromhex(scene["rgb"])), scene["width"] * scene["height"] * 3)
+
     def test_committed_captures_match_assets_and_output(self):
         showcase.check()
 

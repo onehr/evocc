@@ -14,6 +14,7 @@ import importlib.util
 import json
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -45,6 +46,43 @@ def digest(path):
 
 def read_json(path):
     return json.loads(Path(path).read_text())
+
+
+def demo_inputs():
+    spec = importlib.util.spec_from_file_location("pixel_scenes", FIXTURES / "pixel_scenes.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def boot_facts(log, nonce):
+    """Extract visual facts from the accepted log; missing milestones fail closed."""
+    patterns = (
+        ("reset", r"\[\s*([0-9.]+)\] Booting Linux on physical CPU"),
+        ("cpus", r"\[\s*([0-9.]+)\] smp: Brought up 1 node, (\d+) CPUs"),
+        ("memory", r"\[\s*([0-9.]+)\] Memory: (\d+)K/(\d+)K available"),
+        ("devices", r"\[\s*([0-9.]+)\] devtmpfs: initialized"),
+        ("init", r"\[\s*([0-9.]+)\] Run /init as init process"),
+        ("poweroff", r"\[\s*([0-9.]+)\] reboot: Power down"),
+    )
+    facts, positions = {}, []
+    for key, pattern in patterns:
+        match = re.search(pattern, log)
+        if not match:
+            raise ValueError(f"missing boot milestone: {key}")
+        facts[key] = {"seconds": float(match[1]), "line": log[match.start():].splitlines()[0]}
+        positions.append(match.start())
+        if key == "cpus":
+            facts["cpuCount"] = int(match[2])
+        elif key == "memory":
+            facts["availableKiB"], facts["totalKiB"] = int(match[2]), int(match[3])
+    alive = log.find("\nEVO_INIT_ALIVE\n")
+    bound_nonce = log.find(f"\nEVO_BOOT_NONCE {nonce}\n")
+    done = log.find("\nEVO_INIT_DONE\n")
+    if positions != sorted(positions) or not positions[-2] < alive < bound_nonce < done < positions[-1]:
+        raise ValueError("boot milestones or nonce are missing/out of order")
+    facts["nonce"] = nonce
+    return facts
 
 
 def run(argv, *, cwd, input_data=None):
@@ -131,9 +169,9 @@ def capture():
                 if len(result["samples"]) != 48 or result["distance"] != 47 * 47 * 0.018:
                     raise ValueError("jq result mismatch")
             elif name in ("zstd", "zlib"):
-                # Compress the real Lua-generated image, not a repeated string.
-                fractal = json.loads(records["programs"]["lua"]["commands"][-1]["stdout"])
-                original = bytes.fromhex(fractal["rgb"])
+                picture = (json.loads(records["programs"]["lua"]["commands"][-1]["stdout"])
+                           if name == "zstd" else demo_inputs().sprite_sheet())
+                original = bytes.fromhex(picture["rgb"])
                 (work / "pixels.rgb").write_bytes(original)
                 if name == "zstd":
                     commands.append(run([binary, "-f", work / "pixels.rgb", "-o", work / "pixels.zst"], cwd=work))
@@ -150,8 +188,11 @@ def capture():
                     raise ValueError(f"{name} round-trip mismatch")
                 record["roundTrip"] = {"bytes": len(original), "compressedBytes": compressed.stat().st_size,
                                        "sha256": digest(work / "restored.rgb"), "equal": True,
-                                       "source": "Lua-generated RGB pixels",
-                                       "width": fractal["width"], "height": fractal["height"]}
+                                       "source": ("Lua-generated RGB pixels" if name == "zstd"
+                                                  else "Repository-owned pixel-art sprite sheet fixture"),
+                                       "width": picture["width"], "height": picture["height"]}
+                if name == "zlib":
+                    record["picture"] = picture
             elif name == "cjson":
                 commands.append(run(["gcc-14", "-no-pie", "-I" + str(tree), FIXTURES / "scene.c",
                                      tree / "cJSON.o", "-lm", "-o", work / "scene"], cwd=work))
@@ -159,21 +200,43 @@ def capture():
                 record["adapter"] = "GCC14-built scene adapter linked to audited EvoCC cJSON.o"
                 record["generatedExecutableSha256"] = digest(work / "scene")
             elif name == "toybox":
-                bundle = work / "capsule"
-                (bundle / "maps").mkdir(parents=True)
-                (bundle / "scripts").mkdir()
-                (bundle / "maps/island.json").write_text(records["programs"]["sqlite"]["commands"][-1]["stdout"])
-                shutil.copyfile(FIXTURES / "fractal.lua", bundle / "scripts/fractal.lua")
-                commands.append(run([binary, "tar", "-cf", "capsule.tar", "capsule"], cwd=work))
-                commands.append(run([binary, "tar", "-tf", "capsule.tar"], cwd=work))
-                destination = work / "unpacked"
-                destination.mkdir()
-                commands.append(run([binary, "tar", "-xf", work / "capsule.tar", "-C", destination], cwd=work))
-                for p in bundle.rglob("*"):
-                    if p.is_file() and digest(p) != digest(destination / p.relative_to(work)):
-                        raise ValueError("Toybox extracted bytes differ")
-                record["archive"] = {"bytes": (work / "capsule.tar").stat().st_size, "equal": True,
-                                     "files": [str(p.relative_to(work)) for p in sorted(bundle.rglob("*")) if p.is_file()]}
+                fixtures = demo_inputs()
+                pictures = fixtures.postcards()
+                inbox = work / "inbox"
+                inbox.mkdir()
+                names = [("IMG_0042.ppm", "alpine"), ("beach-copy.ppm", "coast"),
+                         ("download.ppm", "dunes"), ("IMG_0042-copy.ppm", "alpine"),
+                         ("IMG_0108.ppm", "coast"), ("saved-again.ppm", "dunes")]
+                for filename, scene in names:
+                    (inbox / filename).write_bytes(fixtures.ppm(pictures[scene]))
+                commands.append(run([binary, "sha256sum", *["inbox/" + n for n, _ in names]], cwd=work))
+                hashes = [line.split()[0] for line in commands[-1]["stdout"].splitlines()]
+                if hashes != [digest(inbox / n) for n, _ in names]:
+                    raise ValueError("Toybox hash output differs from actual postcard bytes")
+                commands.append(run([binary, "sort"], cwd=work, input_data=("\n".join(hashes) + "\n").encode()))
+                sorted_hashes = commands[-1]["stdout"]
+                commands.append(run([binary, "uniq", "-c"], cwd=work, input_data=sorted_hashes.encode()))
+                groups = {fields[1]: int(fields[0]) for line in commands[-1]["stdout"].splitlines()
+                          if (fields := line.split())}
+                if sorted(groups.values()) != [2, 2, 2] or set(groups) != set(hashes):
+                    raise ValueError("Toybox duplicate grouping mismatch")
+                commands.append(run([binary, "mkdir", "album"], cwd=work))
+                kept = []
+                for sha in groups:
+                    index = hashes.index(sha)
+                    filename, scene = names[index]
+                    target = "album/" + scene + ".ppm"
+                    commands.append(run([binary, "cp", "inbox/" + filename, target], cwd=work))
+                    if digest(work / target) != sha:
+                        raise ValueError("Toybox organized image bytes differ")
+                    kept.append({"file": target, "scene": scene, "sha256": sha})
+                if [digest(inbox / n) for n, _ in names] != hashes:
+                    raise ValueError("Toybox demo changed an original")
+                record["album"] = {"pictures": pictures, "groups": groups, "kept": kept,
+                                   "originalsKept": True, "equal": True,
+                                   "inputs": [{"file": n, "scene": s, "sha256": h}
+                                              for (n, s), h in zip(names, hashes)]}
+                record["adapter"] = "Python supplies procedural postcards and routes Toybox hash groups to cp; no originals deleted"
             elif name == "mbedtls":
                 library = tree / "build/tf-psa-crypto/core/libtfpsacrypto.a"
                 record["archive"] = checked_archive(library, set(record["objectHashes"]))
@@ -224,10 +287,12 @@ def render():
         raise ValueError("boot log does not match its accepted receipt")
     lines = path.read_text().splitlines()[-7:]
     (OUT / "linux.stdout.txt").write_text("\n".join(lines) + "\n")
-    (OUT / "linux.svg").write_text(visuals.linux(lines))
+    facts = boot_facts(path.read_text(), boot["nonce"])
+    (OUT / "linux.svg").write_text(visuals.linux(facts))
     records["linux"] = {"buildReceipt": "tests/contracts/kernel-bpf-full-receipt.json",
                         "imageSha256": boot["imageSha256"], "serialLogSha256": digest(path),
-                        "flownAt": boot["flownAt"], "excerpt": "last 7 lines; CRLF normalized"}
+                        "flownAt": boot["flownAt"], "excerpt": "last 7 lines; CRLF normalized",
+                        "facts": facts}
     source = ROOT / ".build/ladder/doom/evocc-demo1-0/frame-350.png"
     doom_receipt = read_json(ROOT / "tests/contracts/ladder-doom-receipt.json")
     runtime = ROOT / ".build/ladder/doom/runtime.json"

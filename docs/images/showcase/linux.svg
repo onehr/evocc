@@ -1,23 +1,118 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
-<title>Linux / from reset to userspace: Real ARM64 boot / 7,008 EvoCC target-C objects</title>
+<title>Linux / a computer wakes up: An EvoCC-built ARM64 kernel brings a virtual machine to life</title>
 <rect width="800" height="500" rx="16" fill="#0b1424"/>
-<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f3f7ff">Linux / from reset to userspace</text>
-<text x="28" y="73" font-family="sans-serif" font-size="18" fill="#97b9da">Real ARM64 boot / 7,008 EvoCC target-C objects</text>
-<text x="28" y="476" font-family="sans-serif" font-size="15" fill="#97aac1">Visualization + serial excerpt from recorded boot / not full kernel-test completion</text>
-<rect x="38" y="125" width="156" height="70" rx="12" fill="#163549"/>
-<text x="51" y="168" font-family="sans-serif" font-size="22" fill="#66dec4">KERNEL</text>
-<text x="201" y="166" font-family="sans-serif" font-size="26" fill="#dce8f5">→</text>
-<rect x="230" y="125" width="156" height="70" rx="12" fill="#163549"/>
-<text x="243" y="168" font-family="sans-serif" font-size="22" fill="#66dec4">/init</text>
-<text x="393" y="166" font-family="sans-serif" font-size="26" fill="#dce8f5">→</text>
-<rect x="422" y="125" width="156" height="70" rx="12" fill="#163549"/>
-<text x="435" y="168" font-family="sans-serif" font-size="22" fill="#66dec4">NONCE</text>
-<text x="585" y="166" font-family="sans-serif" font-size="26" fill="#dce8f5">→</text>
-<rect x="614" y="125" width="156" height="70" rx="12" fill="#163549"/>
-<text x="627" y="168" font-family="sans-serif" font-size="22" fill="#66dec4">POWEROFF</text>
-<text x="36" y="249" font-family="sans-serif" font-size="18" fill="#dce8f5">[    0.289201] Run /init as init process</text>
-<text x="36" y="283" font-family="sans-serif" font-size="18" fill="#dce8f5">EVO_INIT_ALIVE</text>
-<text x="36" y="317" font-family="sans-serif" font-size="18" fill="#dce8f5">EVO_BOOT_NONCE k1-20260928T110715Z-7dbe7cc4</text>
-<text x="36" y="351" font-family="sans-serif" font-size="18" fill="#dce8f5">EVO_INIT_DONE</text>
-<text x="36" y="385" font-family="sans-serif" font-size="18" fill="#dce8f5">[    0.291147] reboot: Power down</text>
+<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f3f7ff">Linux / a computer wakes up</text>
+<text x="28" y="73" font-family="sans-serif" font-size="18" fill="#97b9da">An EvoCC-built ARM64 kernel brings a virtual machine to life</text>
+<text x="28" y="476" font-family="sans-serif" font-size="15" fill="#97aac1">Diagram of recorded boot / log timestamps, not a speed test / full tests separate</text>
+<rect x="28" y="102" width="407" height="263" rx="16" fill="#123630"/>
+<circle cx="53" cy="123" r="5" fill="#75968a"/>
+<circle cx="53" cy="344" r="5" fill="#75968a"/>
+<circle cx="410" cy="123" r="5" fill="#75968a"/>
+<circle cx="410" cy="344" r="5" fill="#75968a"/>
+<polyline points="113.00,173.00 373.00,173.00 373.00,232.00 488.00,232.00" fill="none" stroke="#387f69" stroke-width="2"/>
+<rect x="85" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="148" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="96" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="159" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="107" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="170" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="118" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="181" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="129" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="192" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="140" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="203" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="77" y="140" width="74" height="67" rx="5" fill="#152d30"/>
+<rect x="83" y="146" width="62" height="55" rx="3" fill="#215149"/>
+<text x="91" y="169" font-family="sans-serif" font-size="15" fill="#dce8f5">CPU 0</text>
+<text x="89" y="190" font-family="sans-serif" font-size="12" fill="#75f4b5">ONLINE</text>
+<polyline points="241.00,173.00 373.00,173.00 373.00,232.00 488.00,232.00" fill="none" stroke="#387f69" stroke-width="2"/>
+<rect x="213" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="148" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="224" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="159" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="235" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="170" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="246" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="181" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="257" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="192" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="268" y="134" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="203" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="205" y="140" width="74" height="67" rx="5" fill="#152d30"/>
+<rect x="211" y="146" width="62" height="55" rx="3" fill="#215149"/>
+<text x="219" y="169" font-family="sans-serif" font-size="15" fill="#dce8f5">CPU 1</text>
+<text x="217" y="190" font-family="sans-serif" font-size="12" fill="#75f4b5">ONLINE</text>
+<polyline points="113.00,264.00 373.00,264.00 373.00,232.00 488.00,232.00" fill="none" stroke="#387f69" stroke-width="2"/>
+<rect x="85" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="239" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="96" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="250" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="107" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="261" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="118" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="272" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="129" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="283" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="140" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="71" y="294" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="77" y="231" width="74" height="67" rx="5" fill="#152d30"/>
+<rect x="83" y="237" width="62" height="55" rx="3" fill="#215149"/>
+<text x="91" y="260" font-family="sans-serif" font-size="15" fill="#dce8f5">CPU 2</text>
+<text x="89" y="281" font-family="sans-serif" font-size="12" fill="#75f4b5">ONLINE</text>
+<polyline points="241.00,264.00 373.00,264.00 373.00,232.00 488.00,232.00" fill="none" stroke="#387f69" stroke-width="2"/>
+<rect x="213" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="239" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="224" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="250" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="235" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="261" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="246" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="272" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="257" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="283" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="268" y="225" width="4" height="78" rx="0" fill="#91bba4"/>
+<rect x="199" y="294" width="85" height="4" rx="0" fill="#91bba4"/>
+<rect x="205" y="231" width="74" height="67" rx="5" fill="#152d30"/>
+<rect x="211" y="237" width="62" height="55" rx="3" fill="#215149"/>
+<text x="219" y="260" font-family="sans-serif" font-size="15" fill="#dce8f5">CPU 3</text>
+<text x="217" y="281" font-family="sans-serif" font-size="12" fill="#75f4b5">ONLINE</text>
+<rect x="66" y="323" width="275" height="21" rx="3" fill="#24624b"/>
+<rect x="73" y="326" width="23" height="15" rx="2" fill="#152b31"/>
+<rect x="105" y="326" width="23" height="15" rx="2" fill="#152b31"/>
+<rect x="137" y="326" width="23" height="15" rx="2" fill="#152b31"/>
+<rect x="169" y="326" width="23" height="15" rx="2" fill="#152b31"/>
+<rect x="201" y="326" width="23" height="15" rx="2" fill="#152b31"/>
+<rect x="233" y="326" width="23" height="15" rx="2" fill="#152b31"/>
+<rect x="265" y="326" width="23" height="15" rx="2" fill="#152b31"/>
+<rect x="297" y="326" width="23" height="15" rx="2" fill="#152b31"/>
+<rect x="329" y="326" width="23" height="15" rx="2" fill="#152b31"/>
+<text x="69" y="125" font-family="sans-serif" font-size="17" fill="#a4e6bf">4 cores / 2 GiB RAM</text>
+<polyline points="435.00,232.00 487.00,232.00" fill="none" stroke="#66dec4" stroke-width="5"/>
+<text x="448" y="217" font-family="sans-serif" font-size="28" fill="#66dec4">→</text>
+<rect x="486" y="124" width="284" height="190" rx="12" fill="#28415b"/>
+<rect x="495" y="133" width="266" height="170" rx="7" fill="#0a202a"/>
+<text x="515" y="161" font-family="sans-serif" font-size="16" fill="#97b9da">SERIAL / USERSPACE</text>
+<text x="515" y="203" font-family="sans-serif" font-size="32" fill="#75f4b5">/init is alive</text>
+<text x="515" y="238" font-family="sans-serif" font-size="19" fill="#dce8f5">EVO_INIT_ALIVE</text>
+<text x="515" y="267" font-family="sans-serif" font-size="18" fill="#75f4b5">boot nonce matched ✓</text>
+<rect x="612" y="314" width="32" height="22" rx="0" fill="#28415b"/>
+<rect x="567" y="336" width="121" height="7" rx="3" fill="#3d5774"/>
+<text x="488" y="366" font-family="sans-serif" font-size="20" fill="#66dec4">Verified → clean poweroff</text>
+<polyline points="50.00,413.00 735.00,413.00" fill="none" stroke="#3f6c79" stroke-width="3"/>
+<circle cx="50" cy="413" r="5" fill="#66dec4"/>
+<text x="31" y="400" font-family="sans-serif" font-size="14" fill="#dce8f5">RESET</text>
+<text x="31" y="443" font-family="sans-serif" font-size="16" fill="#97b9da">0.0 ms</text>
+<circle cx="221" cy="413" r="5" fill="#66dec4"/>
+<text x="202" y="400" font-family="sans-serif" font-size="14" fill="#dce8f5">4 CPUs</text>
+<text x="202" y="443" font-family="sans-serif" font-size="16" fill="#97b9da">6.4 ms</text>
+<circle cx="392" cy="413" r="5" fill="#66dec4"/>
+<text x="373" y="400" font-family="sans-serif" font-size="14" fill="#dce8f5">DEVICES</text>
+<text x="373" y="443" font-family="sans-serif" font-size="16" fill="#97b9da">8.9 ms</text>
+<circle cx="563" cy="413" r="5" fill="#66dec4"/>
+<text x="544" y="400" font-family="sans-serif" font-size="14" fill="#dce8f5">/init</text>
+<text x="544" y="443" font-family="sans-serif" font-size="16" fill="#97b9da">289.2 ms</text>
+<circle cx="734" cy="413" r="5" fill="#66dec4"/>
+<text x="715" y="400" font-family="sans-serif" font-size="14" fill="#dce8f5">OFF</text>
+<text x="715" y="443" font-family="sans-serif" font-size="16" fill="#97b9da">291.1 ms</text>
 </svg>

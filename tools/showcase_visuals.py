@@ -104,14 +104,14 @@ def draw(name, record, programs=None):
             c.text(36, top, label, 17, color)
             c.rect(36, top+12, 728, 83, "#13253b", 6)
             c.line([(42+i*15.2, top+90-(r[key]-lo)/(hi-lo)*74) for i, r in enumerate(data["samples"])], color)
-    elif name in ("zstd", "zlib"):
+    elif name == "zstd":
         data = record["roundTrip"]
         if not data["equal"]:
             raise ValueError("cannot visualize an unsuccessful round trip")
         picture = output(programs["lua"])
         if hashlib.sha256(bytes.fromhex(picture["rgb"])).hexdigest() != data["sha256"]:
             raise ValueError("compressed image differs from Lua output")
-        c = Card(("Zstandard / pack a fractal" if name == "zstd" else "zlib / pixels survive the journey"),
+        c = Card("Zstandard / pack a fractal",
                  "A real image compressed, restored and compared byte for byte",
                  "Measured RGB sizes, not PNG sizes / exact round trip / not a speed benchmark")
         c.picture(picture, 28, 104, 305, 185)
@@ -125,6 +125,28 @@ def draw(name, record, programs=None):
         c.text(32, 399, f"{data['compressedBytes']:,} B", 21, "#66dec4")
         c.rect(230, 381, 490*data["compressedBytes"]/data["bytes"], 24, "#66dec4", 5)
         c.text(230, 441, f"{100*(1-data['compressedBytes']/data['bytes']):.1f}% smaller  /  every pixel recovered", 22)
+    elif name == "zlib":
+        data, picture = record["roundTrip"], record["picture"]
+        pixels = bytes.fromhex(picture["rgb"])
+        if not data["equal"] or len(pixels) != data["bytes"] or hashlib.sha256(pixels).hexdigest() != data["sha256"]:
+            raise ValueError("sprite sheet differs from compressed bytes")
+        c = Card("zlib / ship a tiny arcade", "Six pixel-art sprites → gzip → every pixel restored",
+                 "Repository-owned sprite fixture / real minigzip round trip / RGB byte sizes")
+        c.rect(28, 100, 465, 318, "#101f36", 12)
+        # Exact original/recovered pixels; nearest-neighbor display suits pixel art.
+        c.parts.append('<g style="image-rendering:pixelated">')
+        c.picture(picture, 44, 103, 432, 288)
+        c.parts.append('</g>')
+        c.text(71, 405, "SHIP     BOT     GEM     HEART     PLANET     STAR", 13, "#97b9da")
+        c.rect(542, 113, 180, 166, "#244052", 12)
+        c.rect(619, 113, 26, 166, "#f3bc7c")
+        for y in range(121, 276, 16):
+            c.rect(619 if y % 32 < 16 else 632, y, 13, 9, "#755c46")
+        c.text(561, 202, ".gz", 40, "#ffffff")
+        c.text(542, 316, f"{data['bytes']:,} → {data['compressedBytes']:,} B", 23)
+        c.text(542, 355, f"{100*(1-data['compressedBytes']/data['bytes']):.1f}% smaller", 28, "#66dec4")
+        c.text(542, 395, "✓ exact recovery", 21, "#66dec4")
+        c.text(30, 447, "Game assets travel light. The sprites arrive unchanged.", 23)
     elif name == "cjson":
         data = output(record)
         if data["floors"] != sum(b["height"] for b in data["buildings"]):
@@ -174,36 +196,85 @@ def draw(name, record, programs=None):
         c.text(100, 439, f"min {lo:.2f}", 22, "#98baff")
         c.text(562, 439, f"max {hi:.2f}", 22, "#f3bc7c")
     elif name == "toybox":
-        data = record["archive"]
-        if not data["equal"]:
-            raise ValueError("archive round trip failed")
-        c = Card("Toybox / build a world capsule", "Bundle the SQL island and Lua renderer; unpack intact",
-                 "Actual tar create/list/extract / byte equality / not full Toybox test closure")
-        c.rect(48, 135, 240, 235, "#193958", 16)
-        c.rect(48, 114, 107, 45, "#275679", 8)
-        c.text(75, 205, "CAPSULE", 29, "#66dec4")
-        c.text(75, 250, f"{data['bytes']:,} bytes", 23)
-        c.text(75, 286, "2 files", 23)
-        c.text(315, 250, "→", 48, "#f3bc7c")
-        for j, title in enumerate(("maps / island.json", "scripts / fractal.lua")):
-            c.rect(391, 145+j*126, 354, 92, "#182b44", 12)
-            c.text(414, 182+j*126, title, 23)
-            c.text(414, 213+j*126, "extracted bytes match", 18, "#66dec4")
-        c.text(50, 431, "Small Unix tools, one self-contained executable", 23)
+        data = record["album"]
+        if not data["equal"] or not data["originalsKept"]:
+            raise ValueError("album was not copied intact")
+        hashes = {}
+        for scene, picture in data["pictures"].items():
+            ppm = f"P6\n{picture['width']} {picture['height']}\n255\n".encode() + bytes.fromhex(picture["rgb"])
+            hashes[scene] = hashlib.sha256(ppm).hexdigest()
+        for item in data["inputs"] + data["kept"]:
+            if hashes[item["scene"]] != item["sha256"]:
+                raise ValueError("postcard differs from Toybox hashed bytes")
+        counts = {sha: sum(item["sha256"] == sha for item in data["inputs"]) for sha in hashes.values()}
+        if counts != data["groups"] or sorted(i["sha256"] for i in data["kept"]) != sorted(counts):
+            raise ValueError("album must retain exactly one of every unique image")
+        c = Card("Toybox / tidy a photo folder", "Same pictures, different filenames. Find the duplicates.",
+                 "Procedural postcards / actual sha256sum, sort, uniq, mkdir, cp / originals kept")
+        c.text(38, 119, "MESSY DOWNLOADS", 19, "#f3bc7c")
+        c.text(540, 119, "CLEAN ALBUM", 19, "#66dec4")
+        colors = {"alpine": "#9ad8ec", "coast": "#f5cda1", "dunes": "#c596d8"}
+        for i, item in enumerate(data["inputs"]):
+            x, y = 38 + (i % 2) * 167, 139 + (i // 2) * 97
+            c.parts.append(f'<g transform="rotate({-3 if i % 2 else 3} {x+73} {y+42})">')
+            c.rect(x, y, 146, 86, colors[item["scene"]], 3)
+            c.picture(data["pictures"][item["scene"]], x+5, y+5, 136, 61)
+            c.text(x+7, y+79, item["file"], 11, "#17293c")
+            c.parts.append('</g>')
+        c.text(387, 235, "HASH", 20, "#97b9da")
+        c.text(400, 279, "→", 48, "#66dec4")
+        c.text(383, 308, "GROUP", 18, "#97b9da")
+        for i, item in enumerate(sorted(data["kept"], key=lambda item: item["scene"])):
+            x, y = 528, 139 + i * 97
+            c.rect(x, y, 242, 86, "#183841", 6)
+            c.picture(data["pictures"][item["scene"]], x+6, y+6, 124, 70)
+            c.text(x+140, y+39, item["scene"], 19)
+            c.text(x+140, y+64, "1 copy", 16, "#66dec4")
+        c.text(38, 448, f"{len(data['inputs'])} files → {len(data['kept'])} unique pictures. No originals deleted.", 24)
     else:
         raise ValueError(name)
     return c.finish()
 
 
-def linux(lines):
-    c = Card("Linux / from reset to userspace", "Real ARM64 boot / 7,008 EvoCC target-C objects",
-             "Visualization + serial excerpt from recorded boot / not full kernel-test completion")
-    for j, label in enumerate(("KERNEL", "/init", "NONCE", "POWEROFF")):
-        x = 38+j*192
-        c.rect(x, 125, 156, 70, "#163549", 12)
-        c.text(x+13, 168, label, 22, "#66dec4")
-        if j<3:
-            c.text(x+163, 166, "→", 26)
-    for i, line in enumerate(lines[2:]):
-        c.text(36, 249+i*34, line, 18)
+def linux(facts):
+    c = Card("Linux / a computer wakes up", "An EvoCC-built ARM64 kernel brings a virtual machine to life",
+             "Diagram of recorded boot / log timestamps, not a speed test / full tests separate")
+    # A diagram, not a claimed desktop screenshot or physical-board photograph.
+    c.rect(28, 102, 407, 263, "#123630", 16)
+    for x in (53, 410):
+        for y in (123, 344):
+            c.parts.append(f'<circle cx="{x}" cy="{y}" r="5" fill="#75968a"/>')
+    for i in range(facts["cpuCount"]):
+        x, y = 77 + (i % 2) * 128, 140 + (i // 2) * 91
+        c.line([(x+36, y+33), (373, y+33), (373, 232), (488, 232)], "#387f69", 2)
+        for offset in range(8, 65, 11):
+            c.rect(x+offset, y-6, 4, 78, "#91bba4")
+            c.rect(x-6, y+offset, 85, 4, "#91bba4")
+        c.rect(x, y, 74, 67, "#152d30", 5)
+        c.rect(x+6, y+6, 62, 55, "#215149", 3)
+        c.text(x+14, y+29, f"CPU {i}", 15)
+        c.text(x+12, y+50, "ONLINE", 12, "#75f4b5")
+    c.rect(66, 323, 275, 21, "#24624b", 3)
+    for x in range(73, 332, 32):
+        c.rect(x, 326, 23, 15, "#152b31", 2)
+    c.text(69, 125, f"{facts['cpuCount']} cores / {facts['totalKiB']/1048576:g} GiB RAM", 17, "#a4e6bf")
+    c.line([(435, 232), (487, 232)], "#66dec4", 5)
+    c.text(448, 217, "→", 28, "#66dec4")
+    c.rect(486, 124, 284, 190, "#28415b", 12)
+    c.rect(495, 133, 266, 170, "#0a202a", 7)
+    c.text(515, 161, "SERIAL / USERSPACE", 16, "#97b9da")
+    c.text(515, 203, "/init is alive", 32, "#75f4b5")
+    c.text(515, 238, "EVO_INIT_ALIVE", 19, "#dce8f5")
+    c.text(515, 267, "boot nonce matched ✓", 18, "#75f4b5")
+    c.rect(612, 314, 32, 22, "#28415b")
+    c.rect(567, 336, 121, 7, "#3d5774", 3)
+    c.text(488, 366, "Verified → clean poweroff", 20, "#66dec4")
+    stages = (("reset", "RESET"), ("cpus", "4 CPUs"), ("devices", "DEVICES"),
+              ("init", "/init"), ("poweroff", "OFF"))
+    c.line([(50, 413), (735, 413)], "#3f6c79", 3)
+    for i, (key, label) in enumerate(stages):
+        x = 50+i*171
+        c.parts.append(f'<circle cx="{x}" cy="413" r="5" fill="#66dec4"/>')
+        c.text(x-19, 400, label, 14)
+        c.text(x-19, 443, f"{facts[key]['seconds']*1000:.1f} ms", 16, "#97b9da")
     return c.finish()

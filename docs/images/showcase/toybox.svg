@@ -1,20 +1,55 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
-<title>Toybox / build a world capsule: Bundle the SQL island and Lua renderer; unpack intact</title>
+<title>Toybox / tidy a photo folder: Same pictures, different filenames. Find the duplicates.</title>
 <rect width="800" height="500" rx="16" fill="#0b1424"/>
-<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f3f7ff">Toybox / build a world capsule</text>
-<text x="28" y="73" font-family="sans-serif" font-size="18" fill="#97b9da">Bundle the SQL island and Lua renderer; unpack intact</text>
-<text x="28" y="476" font-family="sans-serif" font-size="15" fill="#97aac1">Actual tar create/list/extract / byte equality / not full Toybox test closure</text>
-<rect x="48" y="135" width="240" height="235" rx="16" fill="#193958"/>
-<rect x="48" y="114" width="107" height="45" rx="8" fill="#275679"/>
-<text x="75" y="205" font-family="sans-serif" font-size="29" fill="#66dec4">CAPSULE</text>
-<text x="75" y="250" font-family="sans-serif" font-size="23" fill="#dce8f5">49,152 bytes</text>
-<text x="75" y="286" font-family="sans-serif" font-size="23" fill="#dce8f5">2 files</text>
-<text x="315" y="250" font-family="sans-serif" font-size="48" fill="#f3bc7c">→</text>
-<rect x="391" y="145" width="354" height="92" rx="12" fill="#182b44"/>
-<text x="414" y="182" font-family="sans-serif" font-size="23" fill="#dce8f5">maps / island.json</text>
-<text x="414" y="213" font-family="sans-serif" font-size="18" fill="#66dec4">extracted bytes match</text>
-<rect x="391" y="271" width="354" height="92" rx="12" fill="#182b44"/>
-<text x="414" y="308" font-family="sans-serif" font-size="23" fill="#dce8f5">scripts / fractal.lua</text>
-<text x="414" y="339" font-family="sans-serif" font-size="18" fill="#66dec4">extracted bytes match</text>
-<text x="50" y="431" font-family="sans-serif" font-size="23" fill="#dce8f5">Small Unix tools, one self-contained executable</text>
+<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f3f7ff">Toybox / tidy a photo folder</text>
+<text x="28" y="73" font-family="sans-serif" font-size="18" fill="#97b9da">Same pictures, different filenames. Find the duplicates.</text>
+<text x="28" y="476" font-family="sans-serif" font-size="15" fill="#97aac1">Procedural postcards / actual sha256sum, sort, uniq, mkdir, cp / originals kept</text>
+<text x="38" y="119" font-family="sans-serif" font-size="19" fill="#f3bc7c">MESSY DOWNLOADS</text>
+<text x="540" y="119" font-family="sans-serif" font-size="19" fill="#66dec4">CLEAN ALBUM</text>
+<g transform="rotate(3 111 181)">
+<rect x="38" y="139" width="146" height="86" rx="3" fill="#9ad8ec"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAACK0lEQVR42u3VWU7TYRQF8LOWrsSlAIIMgqBMIigoCAvwqa/MgwoqIDKpTMICGFpomcoQXtgCJP+kadre22+uDzf5PbXJd05OcvNHxfC+YKByZF8wUDV6IBh4OnYgGKgePxQM1EwcCgaeTR4JBmqnjgQDddMJwUD9TEIw0PA5KRh4/iUpGGj8eiwYaJo99iFzf+fp5cDwYu7Eucd1Ij4eDwzN307cyq4Tcf5+YGj5nnIob52I24jA8PJHypWi60QcpgSGV/NpJ5h1Iq6CAkPrQtpe4RxPqjsLf3SSpV7JyTtoWzy1VHSdSOFf9nFaleyfQvvPUxvMOtRGlom6lSxfQ8fSmbGS61Ab2YTqVrKMQ+evMzOK61AbGedqVbKPw+vlcwNa61AbmUWrV3ISh66Vc10G61AbGaSrV3IShzerF1qM16E20i2gVck+Dt1rF+os16FKa3XQrWQZh571S0VO1qFKq9cwqGQTh7e/L1U4XIcqrdjErJJxHN79yZTkfB2qtEoZ40pmcej9m+F5WocqXbKPTSWDOPRtXDG8rkOV9lpJNw7vN68oAdahSnutpB73CB+2rosKtg5V2msllbgI+revCwVehyrttRIfl4WBnZs8ZVmHKu21EhWXCx//3eQq4zpU6cCf0bxBMLh7m1X2dVQ2ChCXuwmG9m4j/8k6/EbB4rKzIDYUFwzEPsUFA7HuuGDIicmJyYnJicmJyYnJicmJyYkJOTE5MQ8eANYwhk8pwHRkAAAAAElFTkSuQmCC" x="43" y="144" width="136" height="61"/>
+<text x="45" y="218" font-family="sans-serif" font-size="11" fill="#17293c">IMG_0042.ppm</text>
+</g>
+<g transform="rotate(-3 278 181)">
+<rect x="205" y="139" width="146" height="86" rx="3" fill="#f5cda1"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAABPklEQVR42u3USU7DQBSE4bqLz1sHYBUzhClgCDO5CFsOURJL2GSDiJ7bbWTlOSV969fqf1HQghaAWloAOqYFoBNaADqlBaAzWgBa0gLQOS0AXdAC0CUtAF1xHr4/27/Gn4Wumd3ONL8yjTgOrZhab51to9r70A1TKw1Uex+6ZV6FdbaNqp6AOuY1LFDVE9Ad8xoWqOoJ6J55DQtU9QS0Zl7DAlU9AT0wr2GBqp6AHpnXsEBVT0BPTK20Tu196JmplQaqvQ+9MLv+OiOOQ6+ch91pRp+F3mgB6J0WgDa0AJpVZwE0684CaI46C6BZdBZAs+ws4JH2SHukPdIeaY+0Rzqlr4+212xHuuTzZYESDud/fb4s0J6N4pSfLws04eDt2+fLAk04eDkDTTh4KQMd8ucdyIEcyIEcyIEc6KD9AHVLicbDUOAtAAAAAElFTkSuQmCC" x="210" y="144" width="136" height="61"/>
+<text x="212" y="218" font-family="sans-serif" font-size="11" fill="#17293c">beach-copy.ppm</text>
+</g>
+<g transform="rotate(3 111 278)">
+<rect x="38" y="236" width="146" height="86" rx="3" fill="#c596d8"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAABoUlEQVR42u3QZ04CYRDG8ec2dkWQDiIo3Y6x9957P4S38IO34iZqQkLIKrP7vizL7DLJ7/Mzkz98PcuCgNHeFUGAv29VEBDoXxMEjA2sCwKCgxuCgNDQpiAgPLwlCIiMbGv7rn42amWKLUR9OxoMaRrpDbKF2OiuKqJOjcYmW4j791SZBtLYZAuJwL4S0zo1qrNsITl2oMRiINVZtjAePFRiMZDqLFtIhY6UWAykOssWJsLHSiwGUp1lC+nIiSrTOhqbbCETPVVlGkhjky1Mxs40EHX0BtnCVPxcmyFNK1NsIZu4EATkkpeCgPz4lSCgkLoWBBQnbgQBpfStIKCcuftX9eOw3ZqdZgXTk/cOtLDu9x9WwKrOXzNTD53FPZDBbPbRYS4L1Ggu9+QAFweqm88/t48XAjVaKLzYy2uB6haLr7bwbKC6SumtFa4M9FXZcsZS+R3SggYpwj0QtyIsAjGP0rFALuriXCA3RnEikNu7tCuQZ7rYH8h7aewJ5NUuNgTyfBrNQF3SRSdQt6VRCNSdacwDdXMXk0DSpWkgKWLwA5H+aqUMcp1YAAAAAElFTkSuQmCC" x="43" y="241" width="136" height="61"/>
+<text x="45" y="315" font-family="sans-serif" font-size="11" fill="#17293c">download.ppm</text>
+</g>
+<g transform="rotate(-3 278 278)">
+<rect x="205" y="236" width="146" height="86" rx="3" fill="#9ad8ec"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAACK0lEQVR42u3VWU7TYRQF8LOWrsSlAIIMgqBMIigoCAvwqa/MgwoqIDKpTMICGFpomcoQXtgCJP+kadre22+uDzf5PbXJd05OcvNHxfC+YKByZF8wUDV6IBh4OnYgGKgePxQM1EwcCgaeTR4JBmqnjgQDddMJwUD9TEIw0PA5KRh4/iUpGGj8eiwYaJo99iFzf+fp5cDwYu7Eucd1Ij4eDwzN307cyq4Tcf5+YGj5nnIob52I24jA8PJHypWi60QcpgSGV/NpJ5h1Iq6CAkPrQtpe4RxPqjsLf3SSpV7JyTtoWzy1VHSdSOFf9nFaleyfQvvPUxvMOtRGlom6lSxfQ8fSmbGS61Ab2YTqVrKMQ+evMzOK61AbGedqVbKPw+vlcwNa61AbmUWrV3ISh66Vc10G61AbGaSrV3IShzerF1qM16E20i2gVck+Dt1rF+os16FKa3XQrWQZh571S0VO1qFKq9cwqGQTh7e/L1U4XIcqrdjErJJxHN79yZTkfB2qtEoZ40pmcej9m+F5WocqXbKPTSWDOPRtXDG8rkOV9lpJNw7vN68oAdahSnutpB73CB+2rosKtg5V2msllbgI+revCwVehyrttRIfl4WBnZs8ZVmHKu21EhWXCx//3eQq4zpU6cCf0bxBMLh7m1X2dVQ2ChCXuwmG9m4j/8k6/EbB4rKzIDYUFwzEPsUFA7HuuGDIicmJyYnJicmJyYnJicmJyYkJOTE5MQ8eANYwhk8pwHRkAAAAAElFTkSuQmCC" x="210" y="241" width="136" height="61"/>
+<text x="212" y="315" font-family="sans-serif" font-size="11" fill="#17293c">IMG_0042-copy.ppm</text>
+</g>
+<g transform="rotate(3 111 375)">
+<rect x="38" y="333" width="146" height="86" rx="3" fill="#f5cda1"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAABPklEQVR42u3USU7DQBSE4bqLz1sHYBUzhClgCDO5CFsOURJL2GSDiJ7bbWTlOSV969fqf1HQghaAWloAOqYFoBNaADqlBaAzWgBa0gLQOS0AXdAC0CUtAF1xHr4/27/Gn4Wumd3ONL8yjTgOrZhab51to9r70A1TKw1Uex+6ZV6FdbaNqp6AOuY1LFDVE9Ad8xoWqOoJ6J55DQtU9QS0Zl7DAlU9AT0wr2GBqp6AHpnXsEBVT0BPTK20Tu196JmplQaqvQ+9MLv+OiOOQ6+ch91pRp+F3mgB6J0WgDa0AJpVZwE0684CaI46C6BZdBZAs+ws4JH2SHukPdIeaY+0Rzqlr4+212xHuuTzZYESDud/fb4s0J6N4pSfLws04eDt2+fLAk04eDkDTTh4KQMd8ucdyIEcyIEcyIEc6KD9AHVLicbDUOAtAAAAAElFTkSuQmCC" x="43" y="338" width="136" height="61"/>
+<text x="45" y="412" font-family="sans-serif" font-size="11" fill="#17293c">IMG_0108.ppm</text>
+</g>
+<g transform="rotate(-3 278 375)">
+<rect x="205" y="333" width="146" height="86" rx="3" fill="#c596d8"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAABoUlEQVR42u3QZ04CYRDG8ec2dkWQDiIo3Y6x9957P4S38IO34iZqQkLIKrP7vizL7DLJ7/Mzkz98PcuCgNHeFUGAv29VEBDoXxMEjA2sCwKCgxuCgNDQpiAgPLwlCIiMbGv7rn42amWKLUR9OxoMaRrpDbKF2OiuKqJOjcYmW4j791SZBtLYZAuJwL4S0zo1qrNsITl2oMRiINVZtjAePFRiMZDqLFtIhY6UWAykOssWJsLHSiwGUp1lC+nIiSrTOhqbbCETPVVlGkhjky1Mxs40EHX0BtnCVPxcmyFNK1NsIZu4EATkkpeCgPz4lSCgkLoWBBQnbgQBpfStIKCcuftX9eOw3ZqdZgXTk/cOtLDu9x9WwKrOXzNTD53FPZDBbPbRYS4L1Ggu9+QAFweqm88/t48XAjVaKLzYy2uB6haLr7bwbKC6SumtFa4M9FXZcsZS+R3SggYpwj0QtyIsAjGP0rFALuriXCA3RnEikNu7tCuQZ7rYH8h7aewJ5NUuNgTyfBrNQF3SRSdQt6VRCNSdacwDdXMXk0DSpWkgKWLwA5H+aqUMcp1YAAAAAElFTkSuQmCC" x="210" y="338" width="136" height="61"/>
+<text x="212" y="412" font-family="sans-serif" font-size="11" fill="#17293c">saved-again.ppm</text>
+</g>
+<text x="387" y="235" font-family="sans-serif" font-size="20" fill="#97b9da">HASH</text>
+<text x="400" y="279" font-family="sans-serif" font-size="48" fill="#66dec4">→</text>
+<text x="383" y="308" font-family="sans-serif" font-size="18" fill="#97b9da">GROUP</text>
+<rect x="528" y="139" width="242" height="86" rx="6" fill="#183841"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAACK0lEQVR42u3VWU7TYRQF8LOWrsSlAIIMgqBMIigoCAvwqa/MgwoqIDKpTMICGFpomcoQXtgCJP+kadre22+uDzf5PbXJd05OcvNHxfC+YKByZF8wUDV6IBh4OnYgGKgePxQM1EwcCgaeTR4JBmqnjgQDddMJwUD9TEIw0PA5KRh4/iUpGGj8eiwYaJo99iFzf+fp5cDwYu7Eucd1Ij4eDwzN307cyq4Tcf5+YGj5nnIob52I24jA8PJHypWi60QcpgSGV/NpJ5h1Iq6CAkPrQtpe4RxPqjsLf3SSpV7JyTtoWzy1VHSdSOFf9nFaleyfQvvPUxvMOtRGlom6lSxfQ8fSmbGS61Ab2YTqVrKMQ+evMzOK61AbGedqVbKPw+vlcwNa61AbmUWrV3ISh66Vc10G61AbGaSrV3IShzerF1qM16E20i2gVck+Dt1rF+os16FKa3XQrWQZh571S0VO1qFKq9cwqGQTh7e/L1U4XIcqrdjErJJxHN79yZTkfB2qtEoZ40pmcej9m+F5WocqXbKPTSWDOPRtXDG8rkOV9lpJNw7vN68oAdahSnutpB73CB+2rosKtg5V2msllbgI+revCwVehyrttRIfl4WBnZs8ZVmHKu21EhWXCx//3eQq4zpU6cCf0bxBMLh7m1X2dVQ2ChCXuwmG9m4j/8k6/EbB4rKzIDYUFwzEPsUFA7HuuGDIicmJyYnJicmJyYnJicmJyYkJOTE5MQ8eANYwhk8pwHRkAAAAAElFTkSuQmCC" x="534" y="145" width="124" height="70"/>
+<text x="668" y="178" font-family="sans-serif" font-size="19" fill="#dce8f5">alpine</text>
+<text x="668" y="203" font-family="sans-serif" font-size="16" fill="#66dec4">1 copy</text>
+<rect x="528" y="236" width="242" height="86" rx="6" fill="#183841"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAABPklEQVR42u3USU7DQBSE4bqLz1sHYBUzhClgCDO5CFsOURJL2GSDiJ7bbWTlOSV969fqf1HQghaAWloAOqYFoBNaADqlBaAzWgBa0gLQOS0AXdAC0CUtAF1xHr4/27/Gn4Wumd3ONL8yjTgOrZhab51to9r70A1TKw1Uex+6ZV6FdbaNqp6AOuY1LFDVE9Ad8xoWqOoJ6J55DQtU9QS0Zl7DAlU9AT0wr2GBqp6AHpnXsEBVT0BPTK20Tu196JmplQaqvQ+9MLv+OiOOQ6+ch91pRp+F3mgB6J0WgDa0AJpVZwE0684CaI46C6BZdBZAs+ws4JH2SHukPdIeaY+0Rzqlr4+212xHuuTzZYESDud/fb4s0J6N4pSfLws04eDt2+fLAk04eDkDTTh4KQMd8ucdyIEcyIEcyIEc6KD9AHVLicbDUOAtAAAAAElFTkSuQmCC" x="534" y="242" width="124" height="70"/>
+<text x="668" y="275" font-family="sans-serif" font-size="19" fill="#dce8f5">coast</text>
+<text x="668" y="300" font-family="sans-serif" font-size="16" fill="#66dec4">1 copy</text>
+<rect x="528" y="333" width="242" height="86" rx="6" fill="#183841"/>
+<image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAABoUlEQVR42u3QZ04CYRDG8ec2dkWQDiIo3Y6x9957P4S38IO34iZqQkLIKrP7vizL7DLJ7/Mzkz98PcuCgNHeFUGAv29VEBDoXxMEjA2sCwKCgxuCgNDQpiAgPLwlCIiMbGv7rn42amWKLUR9OxoMaRrpDbKF2OiuKqJOjcYmW4j791SZBtLYZAuJwL4S0zo1qrNsITl2oMRiINVZtjAePFRiMZDqLFtIhY6UWAykOssWJsLHSiwGUp1lC+nIiSrTOhqbbCETPVVlGkhjky1Mxs40EHX0BtnCVPxcmyFNK1NsIZu4EATkkpeCgPz4lSCgkLoWBBQnbgQBpfStIKCcuftX9eOw3ZqdZgXTk/cOtLDu9x9WwKrOXzNTD53FPZDBbPbRYS4L1Ggu9+QAFweqm88/t48XAjVaKLzYy2uB6haLr7bwbKC6SumtFa4M9FXZcsZS+R3SggYpwj0QtyIsAjGP0rFALuriXCA3RnEikNu7tCuQZ7rYH8h7aewJ5NUuNgTyfBrNQF3SRSdQt6VRCNSdacwDdXMXk0DSpWkgKWLwA5H+aqUMcp1YAAAAAElFTkSuQmCC" x="534" y="339" width="124" height="70"/>
+<text x="668" y="372" font-family="sans-serif" font-size="19" fill="#dce8f5">dunes</text>
+<text x="668" y="397" font-family="sans-serif" font-size="16" fill="#66dec4">1 copy</text>
+<text x="38" y="448" font-family="sans-serif" font-size="24" fill="#dce8f5">6 files → 3 unique pictures. No originals deleted.</text>
 </svg>
