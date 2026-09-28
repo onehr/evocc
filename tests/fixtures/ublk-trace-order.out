@@ -42,3 +42,42 @@ Reference serial 77d62ba728e59441f4f8b754661ee501baaa3f195122939f8411452fd0efd93
 Subject serial ded90a8c1da9d8a98399c68540f9dee09672b546c90416bc03dfac4cf794cadc
 Local inputs/commands/results:
   .build/floating-targeted/ublk-trace-20260928/{build.py,build.json,replay.py,result.json}
+
+Follow-up: -DTRACE_VARIANTS=4 adds omitted-queue and pinned-submitter controls.
+The installed binary prints nr_hw_queues=2 when -q is omitted, on both Images.
+All cases retain the original fio flags; only the last uses taskset -c 0.
+                    original bpf / independent completion order breaks
+                       GCC                  EvoCC
+explicit one queue     0 / 0                0 / 0
+explicit two queues   14 / 22               3 / 5
+default (two queues)  10 / 14              12 / 19
+two queues, pin fio    0 / 0                0 / 0
+Every case has 131,072 sequential issue events, every sector completed exactly
+once, zero trace drops/errors, fio exit zero, and normal nonce-bound shutdown.
+Unpinned two-queue completions span CPUs 0/2; pinned completions only CPU 0.
+This explains the failed strict global-order assertion for the actual default
+and explicit multi-queue setup; it does not prove every possible kernel I/O path.
+The differing bpf/tracefs counts additionally mean that the unsynchronized
+global map is not an exact event-order counter. No kernel fix is inferred.
+
+Unchanged originals replayed afterward under their original 45-second budget:
+  generic_01: GCC FAIL, EvoCC FAIL
+  generic_02: GCC PASS, EvoCC FAIL
+All four boots shut down; no backing file changes. Together with the earlier
+opposite intermittent generic_02 result, this is a scheduling-dependent upstream
+order assumption, not evidence of an EvoCC-only defect. K04b classification is
+closed; historical and new original FAILs remain FAIL, and K04/K13 remain OPEN.
+No test is patched or silently pinned in the acceptance lane.
+
+Follow-up source e33d6ce64146e8a4a3a824f60a1c8bd4b60f875282bccff4ab0655114baebe66
+Probe 69c07eb90ffc867a7e9bdbc5e39bb96cc28eb863dddbfe439cfd8957de53137f
+Payload 32ba232a102d6e2b1aff4504158c46305c8024434da580e7e67456b45aec9579
+Control result bb3b12237b68ca493319867bbf887ce148892c5a241d27d247aeaeef7d34be5b
+Original result 08cf64d0de841d5301f52c05e32b169cfd3d3ae8ecc9068a03611b951fccb61e
+Original observer 1adfa30b06de3505975962c73ce3dceb1833652009474ceafd1a10a59f1f16e5
+kublk.c ca60a520616828fe0378e87388b8bb672129cb75f159b6903b491451c7877320
+blk-mq.rst d46bc91367b5f7b4de98d28499d2d1d3efe6ca1f66707b72a245f57550911ea8
+  .build/floating-targeted/ublk-trace-20260928/controls/result.json
+  .build/floating-targeted/ublk-trace-20260928/originals/results.json
+Exact per-flight commands, Images, payloads, disks, nonces and serial hashes
+are retained in these small results. The first source version is at cc1119f.

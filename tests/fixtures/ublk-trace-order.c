@@ -16,6 +16,9 @@
 #include <unistd.h>
 
 enum { SECTORS = 512 * 1024 * 2 };
+#ifndef TRACE_VARIANTS
+#define TRACE_VARIANTS 2
+#endif
 static const char *tracing = "/sys/kernel/tracing";
 
 static int control(const char *name, const char *value)
@@ -140,23 +143,30 @@ static int inspect_trace(unsigned maj, unsigned min)
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
-    puts("TAP version 13\n1..2");
+    printf("TAP version 13\n1..%d\n", TRACE_VARIANTS);
     if (chdir("/tests/ublk") || system("modprobe ublk_drv")) return 2;
     unsigned failed = 0;
-    for (unsigned queues = 1; queues <= 2; ++queues) {
+    for (unsigned case_id = 1; case_id <= TRACE_VARIANTS; ++case_id) {
+        unsigned queues = case_id == 3 ? 0 : case_id == 4 ? 2 : case_id;
+        int pinned = case_id == 4;
         char command[128], device_path[64], dev[32], filter[64];
         char bpf_log[80], fio_log[80];
-        snprintf(command, sizeof(command), "./kublk add -t null -q %u", queues);
+        if (queues) snprintf(command, sizeof(command), "./kublk add -t null -q %u", queues);
+        else snprintf(command, sizeof(command), "./kublk add -t null");
         FILE *pipe = popen(command, "r");
-        unsigned device = 0;
+        unsigned device = 0, actual_queues = 0;
         int found = 0;
         if (!pipe) return 2;
         char line[1024];
         while (fgets(line, sizeof(line), pipe)) {
+            printf("# device-setup %s", line);
             char *p = strstr(line, "dev id ");
             if (p && sscanf(p, "dev id %u", &device) == 1) ++found;
+            p = strstr(line, "nr_hw_queues ");
+            if (p) sscanf(p, "nr_hw_queues %u", &actual_queues);
         }
         if (pclose(pipe) || found != 1 || system("udevadm settle")) return 2;
+        if (actual_queues != (queues ? queues : 2)) return 2;
         snprintf(device_path, sizeof(device_path), "/dev/ublkb%u", device);
         struct stat st;
         if (stat(device_path, &st)) return 2;
@@ -170,8 +180,8 @@ int main(void)
             || control("events/block/block_rq_complete/enable", "1")
             || control("events/block/block_rq_issue/enable", "1");
         if (bad) return 2;
-        snprintf(bpf_log, sizeof(bpf_log), "/tmp/ublk-trace-q%u.bpf.log", queues);
-        snprintf(fio_log, sizeof(fio_log), "/tmp/ublk-trace-q%u.fio.log", queues);
+        snprintf(bpf_log, sizeof(bpf_log), "/tmp/ublk-trace-case%u.bpf.log", case_id);
+        snprintf(fio_log, sizeof(fio_log), "/tmp/ublk-trace-case%u.fio.log", case_id);
         char *bpf[] = {"bpftrace", "trace/seq_io.bt", dev, "W", "1", NULL};
         pid_t tracer = launch(bpf, bpf_log);
         if (tracer < 0) return 2;
@@ -179,9 +189,9 @@ int main(void)
         if (kill(tracer, 0) || control("tracing_on", "1")) return 2;
         char filename[96];
         snprintf(filename, sizeof(filename), "--filename=%s", device_path);
-        char *fio[] = {"fio", "--name=write_seq", filename, "--ioengine=libaio",
+        char *fio[] = {"taskset", "-c", "0", "fio", "--name=write_seq", filename, "--ioengine=libaio",
                        "--iodepth=16", "--rw=write", "--size=512M", "--direct=1", "--bs=4k", NULL};
-        pid_t writer = launch(fio, fio_log);
+        pid_t writer = launch(fio + (pinned ? 0 : 3), fio_log);
         if (writer < 0) return 2;
         int fio_status = wait_child(writer);
         bad |= control("tracing_on", "0");
@@ -199,15 +209,15 @@ int main(void)
         }
         bad |= ferror(log);
         fclose(log);
-        printf("# queues=%u fio_status=%d tracer_status=%d original_order_breaks=%u\n",
-               queues, fio_status, tracer_status, bpf_failures);
+        printf("# queues=%u actual_queues=%u pinned=%d fio_status=%d tracer_status=%d original_order_breaks=%u\n",
+               queues, actual_queues, pinned, fio_status, tracer_status, bpf_failures);
         bad |= inspect_trace(maj, min);
         bad |= fio_status != 0 || tracer_status != 0 || !attached || !finished;
         bad |= control("events/enable", "0");
         snprintf(command, sizeof(command), "./kublk del -n %u >/dev/null", device);
         bad |= system(command) != 0;
-        printf("%s %u q%u independent trace coverage and unchanged fio success\n",
-               bad ? "not ok" : "ok", queues, queues);
+        printf("%s %u q%u pinned=%d independent trace coverage and unchanged fio success\n",
+               bad ? "not ok" : "ok", case_id, queues, pinned);
         failed += !!bad;
     }
     return !!failed;

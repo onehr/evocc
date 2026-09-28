@@ -65,6 +65,23 @@ has now executed: sealed GCC/Clang compilation passes, and the GCC probe passes
 shows reordering, so the original fio/trace failure is still not reproduced.
 Both nonce-bound boots shut down; runtime backing hashes remain unchanged.
 
+### ublk completion-order classification — 2026-09-28
+
+K04b's [independent trace controls](../../tests/fixtures/ublk-trace-order.out)
+now explain the shared order assertion: the installed kublk defaults to two
+queues. With the original fio parameters, all 131,072 requests issue in order,
+but completion events interleave across CPUs 0/2 on both kernels. Every sector
+completes exactly once, without request errors or trace loss. One queue, or
+only pinning the diagnostic fio submitter to CPU 0, removes the observed
+reordering. The original bpftrace global map is not an exact serialized counter,
+but independent tracefs proves real completion reordering as well.
+
+The unchanged original replay preserves its 45-second budget: generic_01 FAIL
+on both, generic_02 GCC PASS/EvoCC FAIL; all four guests shut down normally.
+Frozen blk-mq documentation expressly does not guarantee global completion
+order. This source-bound classification closes K04b without turning either
+historical or new failures into PASS. K04's separate shutdown stall stays OPEN.
+
 ### Current-code integration prerequisites complete — 2026-09-28
 
 The new `95853321…` reference finishes its 7,008-target-C/848-module build and

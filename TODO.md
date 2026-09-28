@@ -334,7 +334,7 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   again reproduces GCC stress_04's 45-second timeout and blocked shutdown;
   EvoCC passes that invocation. The cause and full K13 acceptance remain open.
 
-  - [ ] **K04b — Isolate ublk completion-order assertions** — `OPEN`, P1.
+  - [x] **K04b — Isolate ublk completion-order assertions** — `DONE`, P1, 2026-09-28, classification only.
     Newly exposed generic_01 fails on both kernels; generic_02 fails on GCC
     and passes on EvoCC. Both use the frozen fio/trace completion-order check.
     The [small AIO control](tests/fixtures/ublk-aio-completion-order.c) passes
@@ -347,6 +347,16 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     also passes 4/4 cases and 65,536 completions per Image, without reordering.
     Batch replenishment alone does not explain the missing reproduction;
     fio submission details and the trace observer still need isolation.
+    The [independent event observer](tests/fixtures/ublk-trace-order.out) then
+    reproduces actual cross-CPU completion reordering with original fio and
+    bpftrace inputs: all 131,072 requests are issued sequentially and every
+    sector completes exactly once, with zero trace loss. The installed default
+    is two queues, not one. One-queue and pinned-submitter controls have zero
+    order breaks on both Images. Unchanged original generic_01 still fails on
+    both; generic_02 is GCC PASS/EvoCC FAIL this time. This closes the shared
+    strict-order assumption's classification, not those originals as PASS,
+    the stress/shutdown problem K04 or final K13. No acceptance input is pinned
+    or rewritten; previous negative observations remain intact.
 
   - [x] **K04a — Preserve ublk worker failures beneath a successful wrapper**, 2026-09-23.
     The [small shell reduction](tests/fixtures/ublk-background-exit.sh) and
