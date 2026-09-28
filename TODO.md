@@ -686,7 +686,7 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     [Identity-bound record](tests/fixtures/ovpn-base64-prefix.out).
 
   - [ ] **K12e — Enable the missing connector process-event configuration** — `OPEN`, P2.
-    The new configuration still disables CONNECTOR; the collection has no
+    The earlier uniform configuration disables CONNECTOR; the collection has no
     upstream config fragment. Two reference controls pass 12/12 absence checks,
     while unchanged proc_filter still fails EPROTONOSUPPORT. PROC_EVENTS needs
     CONNECTOR=y, not a separately loaded module. The shared configuration audit
@@ -700,6 +700,14 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     newly enabled original C units assemble with reference symbol parity using
     the current pinned compiler. No active Image/config/module changes; full
     composition and unchanged paired runtime remain required for both items.
+    The current 848-module GCC reference enables both options and receives
+    events. A [bounded C control](tests/fixtures/connector-process-events.c)
+    passes 20/20 checks across GCC/Clang builds: owned fork/exit delivery and
+    normal SIGINT termination of the unchanged original. Source inspection
+    confirms proc_filter is a persistent listener, so the original 45-second
+    runner still legitimately records TIMEOUT rather than a finite-test PASS.
+    [Exact controls and retained failures](tests/fixtures/connector-process-events.out).
+    Repeat the bounded control and unchanged original on the new subject.
 
   - [ ] **K12f — Enable and execute the omitted kernel FPU module** — `OPEN`, P2.
     Both unchanged originals on the new uniform pair explicitly SKIP because

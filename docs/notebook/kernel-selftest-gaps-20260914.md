@@ -78,6 +78,13 @@ which exits on SIGINT rather than after a finite case count; under the original
 45-second runner limit it still records TIMEOUT/FAIL with normal shutdown.
 No timeout or source is adjusted to turn that into PASS.
 
+The [bounded event control](../../tests/fixtures/connector-process-events.out)
+now passes 20/20 reference checks with sealed GCC/Clang builds. It verifies
+owned child fork/exit records, then separately runs the unchanged listener,
+proves it keeps waiting, and observes its normal exit after an owned SIGINT.
+The original 45-second TIMEOUT remains. This uses a 4.1 MiB payload and the
+existing scratch disk; paired acceptance still needs the current EvoCC Image.
+
 The [FPU worker protocol repair](../../tests/fixtures/fpu-worker-verdict.out)
 exposes the standalone program's previously hidden zero-exit SKIP. Stress
 execution actually loads the matching signed module and reports all 4,000

@@ -1,0 +1,54 @@
+2026-09-28: bounded enabled-connector diagnosis, not a rewritten upstream PASS.
+
+The original proc_filter.c is a persistent listener: main loops until SIGINT,
+then unsubscribes, prints its count and returns zero. With the new config it
+receives process events but still times out under the unchanged original
+45-second runner limit. That original FAIL/TIMEOUT remains in its receipt.
+
+The small C fixture performs two distinct controls:
+  1. subscribe using the same process connector API; require a successful ACK,
+     then match the fork and exit (status 23) of an owned child; unsubscribe.
+  2. execute the unchanged original binary/argv; create 20 bounded owned child
+     events, prove the listener has not spontaneously exited, send SIGINT only
+     to that owned listener, and require normal completion within five seconds
+     plus matching child PID/parent/exit records and an untruncated final count.
+The second is an explicitly controlled diagnostic, not the original runner.
+
+Sealed GCC14 and Clang19 -std=gnu11 -O2 -static -Wall -Wextra -Werror builds
+pass. Both binaries execute on the new reference Image: 10/10 checks each,
+20/20 total, with normal shutdown. The listener sees all 20 owned children in
+each run. No kernel/test source, original program, timeout or denominator is
+changed. Only GCC reference acceptance is established here; new EvoCC replay
+still awaits final composition.
+
+The first compile catches a Clang signed-comparison warning in NLMSG_OK; the
+explicitly nonnegative receive length is now cast for that macro. The initial
+runtime control also wrongly assumes response seq echoes the request. Frozen
+cn_proc.c:send_msg overwrites seq with a per-CPU counter. The corrected probe
+checks the matching request ack + 1, which cn_proc_ack actually preserves.
+Both initial controls fail 3/10 assertions; their source/log/receipt remain.
+These are fixture repairs, not claimed compiler/kernel defects.
+
+Command: python3 .build/floating-targeted/connector-events-20260928/qualified/replay.py
+Capture: .build/floating-targeted/connector-events-20260928/{qualified/,}
+  build.json/container.json/result.json and flights/reference/boot.{json,log}
+The 4,274,176-byte initramfs reuses the existing 64 MiB scratch disk in snapshot
+mode. Image/config/original/scratch hashes are checked before and after flight.
+HVF with the explicitly declared QEMU drift; no new large runtime disk.
+
+Fixture         8fa7749bd2aa35bf413e7fc7f09c0cbc633270d4fb8fe09fb9f68b48bac1eb65
+Kernel source   103be309ede3613aca78825fa18d681107399b951cd2f7f7fb8ff57d2072bfaf
+Original source b4b3f1b2d3c6a1d9fc7eeedf35064ab84d96f035cfa1f4a79cfd89a15fe39f82
+Original binary 69dc2eaa6f6b6ebc38a99dcf336bf02a3fdd7eaa0cc68076cb390ab70d77d317
+Config          95853321d8dd6ae0b2d779abc094659a327936cb557244bed45b484ccf4c0e09
+GCC Image       22a87df276887cc6454053dee56ea96742ab9cf24043b00fd1a21accf93a0fa6
+Qualified result 79dceb5a3bfe5bc61de8e609ba66c3fb28822615ee9787e4e297ba95e3457c8b
+Initial result  71571920b9636fa1fd494ef770aa2f566d7976aee524dddd4f5539904f87f759
+Qualified serial d46b4b8e2007a3c7c1af8fab13657abd18204c837964f8eeed49e3bd6f442430
+Payload         3fd4e09cf77e38453f612cd6e3b22d186fc7e1031105eddf27f7fff4b3ebd3e5
+Scratch         257ea05494f245c52109a8c2cde4fe5e0b8830e9c33d46d988889477e3039fcb
+
+Disposition: enabled-reference process-event delivery and normal signaled
+termination are verified. The original program is not a finite unattended
+acceptance test. Preserve its TIMEOUT, report the bounded diagnostic separately,
+and repeat both paths on the new subject before closing K12e.
