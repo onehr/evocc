@@ -2742,3 +2742,19 @@ unsupported quote/macro options still refuse instead of changing meaning.
 Remaining warning-policy requests are explicitly
 [not closed](../../tests/fixtures/driver-diagnostic-policy.out); no historical
 application/kernel receipt or installed object is overwritten by these checks.
+
+### Diagnostic command projection — September 28
+
+The [two-case reduction](../../tests/fixtures/command-projection-diagnostics.out)
+shows a second form of false acceptance: both projectors discard diagnostic
+options under which all eight fixed GCC/Clang controls reject. Eight projected
+EvoCC native executables run only because those requests disappeared. The
+shared adapter now preserves warning/pedantic requests and written overrides;
+the unchanged driver explicitly refuses all eight cases, with no assembly.
+All 317 ladder tests and targeted Ruff pass.
+
+The 1,339-record musl inventory now preserves every diagnostic request. Ten
+actual original commands refuse the first unsupported warning option, leaving
+installed objects unchanged. This is an evaluation-integrity repair, not warning
+implementation or a faithful musl PASS. B08b still needs that implementation;
+the historical 1,271-object result keeps its original disclosed omissions.

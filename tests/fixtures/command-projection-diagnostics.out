@@ -1,0 +1,38 @@
+2026-09-28 — diagnostic requests must survive command projection
+
+RED: the two application command adapters discard -Werror=unused-variable
+and -pedantic-errors. The small C fixture has one unused-variable case and
+one GNU statement-expression case. With the requested options, the fixed
+GCC14/Clang19 O0/O2 controls reject all eight compilations; removing only
+the diagnostic request yields eight executable controls returning zero.
+Before repair the adapters emit eight EvoCC executables returning zero too,
+but only by discarding the requested diagnostic contract. Those are false
+acceptances, not successful implementations of either warning policy.
+
+GREEN: the shared predicate preserves -W diagnostic requests, -w, -pedantic
+and -pedantic-errors in written order. -Wa/-Wl retain separate consumers;
+-Wp is already preserved by the preprocessor policy. Unknown warning requests
+also reach the driver instead of being silently removed. All eight repaired
+commands explicitly refuse the unsupported option and produce no assembly.
+The unit cases independently check override order and forwarding boundaries.
+
+All 317 ladder Python tests, targeted Ruff and git diff --check pass.
+A read-only inventory of all 1,339 original musl commands finds no omitted
+diagnostic request. Ten actual unchanged original commands now explicitly
+refuse the first unsupported -Wno-pointer-to-int-cast option; installed objects
+are unchanged. This exposes missing driver warning support, not a C regression
+or a successful full musl build. B08b remains OPEN for warning implementation
+and other output/assembler accounting. Historical 1,271-object results retain
+their recorded omissions and are not regraded as faithful-command results.
+No Rust/compiler binary, frozen source, kernel input or runtime disk changed.
+
+SHA256:
+  compiler: ab2eeb7b686135f43a6b67d7a33ef6afb4848678c3ad4d0234fd44256bbd331e
+  fixture: 015057e2842f76294e6e7b02aca93a209d815f5ca47c00b1ac48b697da31a949
+  red.json: 0a756747b9e0706edf0708f4e714683f0d83d691ddf61de6028e4279154ddae7
+  green.json: 525d714638e05a6ded7e99414d7868780e3f02ea535d89d6c7976280a76cf53f
+  native.json: 0e544c89c71033837c23e0fc4ca2901e44c381e2d2241b2ba9f7a5b550add346
+  originals.json: 18f5251440408b0d964b1e8b2292fe243b568ccfb21b4d826c061594ee0a708d
+
+Raw exact argv, stderr, controls and original-command inventory:
+.build/floating-targeted/diagnostic-projection-20260928/

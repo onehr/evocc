@@ -927,6 +927,17 @@ complete K7/KUnit success; these configurations and their Images are distinct.
       targeted Ruff pass. This is not complete diagnostic-option fidelity.
       [Exact inputs and results](tests/fixtures/include-projection.out).
 
+    - [x] **B08b4 — Preserve diagnostic requests instead of false acceptance**, 2026-09-28.
+      Both adapters discard options that make the small source fail in all
+      eight GCC/Clang controls. They now preserve warning policy in written
+      order; eight EvoCC projections explicitly refuse, without assembly.
+      All 317 ladder tests and targeted Ruff pass. All 1,339 original musl
+      commands retain diagnostics; ten actual commands refuse unsupported
+      warnings without changing installed objects. This closes silent omission,
+      **not warning implementation**: a faithful full musl rebuild still needs
+      that support. Historical omitted-option runs retain their claim ceiling.
+      [Reproducer and exact results](tests/fixtures/command-projection-diagnostics.out).
+
     The [standard-excess-precision subcase](tests/fixtures/floating-standard-evaluation.out)
     is now repaired: the existing FLT_EVAL_METHOD=0 semantics satisfy the explicit
     option, which survives shared command projection. Both interpreters, eight

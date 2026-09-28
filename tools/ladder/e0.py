@@ -98,11 +98,16 @@ def requires_driver_option(value: str) -> bool:
     An unsupported layout/ABI/language/optimization option must not turn into
     a successful compilation with different defaults. GCC tuning options in
     these families are not exceptions: the driver must implement or reject
-    them explicitly. Diagnostic/output/assembler omissions remain separately
-    disclosed by the application adapters; this is not full argv equivalence.
+    them explicitly. Diagnostic requests also reach the driver: dropping
+    -Werror or -pedantic-errors can turn an invalid build into an apparent
+    success. Assembler/linker forwarding has a separate consumer; do not pass
+    those -W prefixes as warnings. Output/transport omissions remain separately
+    disclosed; this is not full argv equivalence or warning implementation.
     """
-    return (value in SUPPORTED_OPTIONS or value in ('-nostdinc', '-undef') or
-            value.startswith(('-std=', '-f', '-m', '-O', '-Wp,')))
+    warning = value.startswith('-W') and not value.startswith(('-Wa,', '-Wl,', '-Wp,'))
+    return (value in SUPPORTED_OPTIONS
+            or value in ('-nostdinc', '-undef', '-w', '-pedantic', '-pedantic-errors')
+            or warning or value.startswith(('-std=', '-f', '-m', '-O', '-Wp,')))
 
 
 # gcc/testsuite/lib/target-supports.exp from the pinned torture source:

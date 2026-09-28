@@ -234,7 +234,17 @@ class EvoccArgvTest(unittest.TestCase):
         self.assertIn(f"-I{self.tree}/lib", argv)
         self.assertEqual(argv[-1], f"{self.tree}/a.c")
         self.assertIn("-O3", argv)
-        self.assertEqual(omitted, ["-Wall"])
+        self.assertIn("-Wall", argv)
+        self.assertEqual(omitted, [])
+
+    def test_diagnostic_contract_is_not_silently_weakened(self):
+        flags = ['-Wall', '-Wextra', '-Werror=unused-variable', '-Wno-error=unused-variable',
+                 '-Werror', '-Wno-error', '-w', '-pedantic', '-pedantic-errors',
+                 '-Wno-unknown-warning-option', '-Wunknown-future-warning']
+        command, omitted = self.command(
+            f"gcc {' '.join(flags)} -Wa,--noexecstack -Wl,--gc-sections -c -o a.o a.c\n")
+        self.assertEqual(command[3:-2], flags)
+        self.assertEqual(omitted, ['-Wa,--noexecstack', '-Wl,--gc-sections'])
 
     def test_supported_target_semantics_are_not_lost_in_projection(self) -> None:
         flags = [

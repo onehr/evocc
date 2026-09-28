@@ -128,8 +128,19 @@ class TranslateCommand(unittest.TestCase):
         command, omitted = mixed.evocc_command(unit, Path("/evocc"), "t", Path("/host"))
         self.assertIn("-DX=1", command)
         self.assertEqual(command[command.index("-U") + 1], "Y")
-        self.assertEqual(omitted, ["-Wall"])
+        self.assertIn("-Wall", command)
+        self.assertEqual(omitted, [])
         self.assertLess(command.index("-O2"), command.index("-fPIC"))
+
+    def test_diagnostic_contract_is_not_silently_weakened(self):
+        flags = ['-Wall', '-Wextra', '-Werror=unused-variable', '-Wno-error=unused-variable',
+                 '-Werror', '-Wno-error', '-w', '-pedantic', '-pedantic-errors',
+                 '-Wno-unknown-warning-option', '-Wunknown-future-warning']
+        command, omitted = mixed.evocc_command(
+            self.unit('-c', 'a.c', *flags, '-Wa,--noexecstack', '-Wl,--gc-sections'),
+            Path('/evocc'), 't', Path('/host/tree'))
+        self.assertEqual(command[4:-1], flags)
+        self.assertEqual(omitted, ['-Wa,--noexecstack', '-Wl,--gc-sections'])
 
     def test_supported_language_and_machine_options_keep_written_overrides(self):
         flags = [
