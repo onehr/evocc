@@ -30,13 +30,16 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use evocc_eqopt::{run_scalar_chain_with_checker, EqualityState, ExtractionPolicy, Verification};
+use evocc_eqopt::{
+    run_scalar_chain_with_checker, ChainResources, EqualityState, ExtractionPolicy,
+    TransactionResult, Verification,
+};
 use evocc_evoir::{
-    interpret_module, parse_section9_module, render_module, validate_module, InterpreterLimits,
-    Module,
+    interpret_module, parse_section9_module, render_module, validate_module, InterpreterError,
+    InterpreterLimits, InterpreterOutcome, Module, RuntimeValue,
 };
 use evocc_proof::sha256_hex;
-use evocc_randgate::{entry_arguments, generate_module, observe, GeneratorConfig, ProofChecker};
+use evocc_randgate::{entry_arguments, generate_module, DefinedRun, GeneratorConfig, ProofChecker};
 
 /// Section 10.4: the diagnostic the interpreter reports when fuel runs out.
 const FUEL_EXHAUSTED: &str = "E3008";
@@ -383,6 +386,8 @@ pub struct ProgramMeasurement {
     pub certificates: u64,
     pub certificates_replayed: u64,
     pub optimizer_wall_nanos: u128,
+    /// None means no chain was attempted, not a measured zero-cost chain.
+    pub chain_resources: Option<ChainResources>,
     pub chain_record: Option<String>,
 }
 
@@ -404,6 +409,7 @@ pub struct Aggregate {
     pub certificates: u64,
     pub certificates_replayed: u64,
     pub optimizer_wall_nanos: u128,
+    pub chain_resources: ChainResources,
 }
 
 impl Aggregate {
@@ -433,6 +439,11 @@ impl Aggregate {
             total.certificates += program.certificates;
             total.certificates_replayed += program.certificates_replayed;
             total.optimizer_wall_nanos += program.optimizer_wall_nanos;
+            if let Some(resources) = program.chain_resources {
+                total.chain_resources.total_wall_nanos += resources.total_wall_nanos;
+                total.chain_resources.checker_wall_nanos += resources.checker_wall_nanos;
+                total.chain_resources.identity_wall_nanos += resources.identity_wall_nanos;
+            }
         }
         total
     }
@@ -473,7 +484,7 @@ impl PolicyReport {
         let schedule = self.policy.schedule();
         let mut text = String::new();
         let _ = writeln!(text, "{{");
-        let _ = writeln!(text, "  \"schema\": \"evocc-policy-report-v2\",");
+        let _ = writeln!(text, "  \"schema\": \"evocc-policy-report-v3\",");
         let _ = writeln!(text, "  \"policy\": {{");
         let _ = writeln!(text, "    \"name\": {},", json_string(self.policy.name()));
         let _ = writeln!(
@@ -564,6 +575,15 @@ impl PolicyReport {
             );
             let _ = writeln!(
                 text,
+                "      \"chainResources\": {},",
+                resources_json(
+                    program.chain_resources,
+                    program.optimizer_wall_nanos,
+                    timing
+                )
+            );
+            let _ = writeln!(
+                text,
                 "      \"chainRecord\": {}",
                 program.chain_record.as_deref().unwrap_or("null")
             );
@@ -604,8 +624,17 @@ impl PolicyReport {
         );
         let _ = writeln!(
             text,
-            "    \"optimizerWallNanos\": {}",
+            "    \"optimizerWallNanos\": {},",
             wall(total.optimizer_wall_nanos)
+        );
+        let _ = writeln!(
+            text,
+            "    \"chainResources\": {}",
+            resources_json(
+                Some(total.chain_resources),
+                total.optimizer_wall_nanos,
+                timing
+            )
         );
         let _ = writeln!(text, "  }}");
         let _ = writeln!(text, "}}");
@@ -621,6 +650,19 @@ impl PolicyReport {
             self.aggregate.certificates,
         )
     }
+}
+
+fn resources_json(resources: Option<ChainResources>, producer: u128, timing: TimingMode) -> String {
+    let Some(resources) = resources else {
+        return "null".into();
+    };
+    let wall = |n: u128| match timing {
+        TimingMode::Measured => n.to_string(),
+        TimingMode::Elided => "null".into(),
+    };
+    format!("{{\"scope\":\"shared-chain-v1\",\"totalWallNanos\":{},\"checkerWallNanos\":{},\"identityWallNanos\":{},\"wrapperWallNanos\":{}}}",
+        wall(resources.total_wall_nanos), wall(resources.checker_wall_nanos),
+        wall(resources.identity_wall_nanos), wall(resources.wrapper_wall_nanos(producer)))
 }
 
 pub(crate) fn json_string(value: &str) -> String {
@@ -709,6 +751,29 @@ fn measure(
     step_budget: u64,
     checker: &ProofChecker,
 ) -> ProgramMeasurement {
+    measure_with_interpreter(
+        policy,
+        program,
+        seed,
+        step_budget,
+        checker,
+        interpret_module,
+    )
+}
+
+fn measure_with_interpreter(
+    policy: &ExtractionPolicy,
+    program: &CorpusProgram,
+    seed: u64,
+    step_budget: u64,
+    checker: &ProofChecker,
+    mut execute: impl FnMut(
+        &Module,
+        &str,
+        &[RuntimeValue],
+        InterpreterLimits,
+    ) -> Result<InterpreterOutcome, InterpreterError>,
+) -> ProgramMeasurement {
     let mut measurement = ProgramMeasurement {
         name: program.name.clone(),
         input_digest: program.digest.clone(),
@@ -723,13 +788,14 @@ fn measure(
         certificates: 0,
         certificates_replayed: 0,
         optimizer_wall_nanos: 0,
+        chain_resources: None,
         chain_record: None,
     };
     let arguments = entry_arguments(&program.module, seed);
     let limits = InterpreterLimits::new(step_budget);
 
-    let before_steps = match interpret_module(&program.module, "main", &arguments, limits) {
-        Ok(outcome) => outcome.steps,
+    let before_run = match execute(&program.module, "main", &arguments, limits) {
+        Ok(outcome) => outcome,
         Err(error) => {
             measurement.outcome = if error.code() == FUEL_EXHAUSTED {
                 ProgramOutcome::FuelExhausted
@@ -741,9 +807,10 @@ fn measure(
             return measurement;
         }
     };
-    measurement.steps_before = before_steps;
-    measurement.steps_after = before_steps;
-    let before_observation = observe(&program.module, &arguments, step_budget);
+    measurement.steps_before = before_run.steps;
+    measurement.steps_after = before_run.steps;
+    let before_observation = DefinedRun::from(&before_run);
+    drop(before_run);
 
     let mut state = match EqualityState::for_module(&program.module) {
         Ok(state) => state,
@@ -763,6 +830,7 @@ fn measure(
                 .filter(|t| t.verification == Verification::Verified)
                 .count() as u64;
             measurement.optimizer_wall_nanos = failure.optimizer_wall_nanos;
+            measurement.chain_resources = Some(failure.resources);
             measurement.chain_record = Some(failure.record_json());
             measurement.outcome = ProgramOutcome::Refused {
                 detail: failure.detail,
@@ -779,13 +847,21 @@ fn measure(
         .map(|t| t.report.optimized_values as u64)
         .sum();
     measurement.optimizer_wall_nanos = chain.optimizer_wall_nanos;
+    measurement.chain_resources = Some(chain.resources);
     measurement.chain_record = Some(chain.record_json());
-    // Preserve per-transaction observation checks, including the terminal no-op.
+    // Every certificate, including the terminal no-op, was independently replayed.
+    // Identical bytes with identical inputs reuse the last execution. Every
+    // changed module still gets its own complete step/observation check.
     for transaction in &chain.transactions {
+        if transaction.result == TransactionResult::Unchanged {
+            debug_assert_eq!(transaction.bundle.before, transaction.bundle.after);
+            debug_assert_eq!(measurement.output_digest, transaction.output_digest);
+            continue;
+        }
         let after = parse_section9_module(transaction.bundle.after.as_bytes())
             .expect("verified chain parses");
-        let after_steps = match interpret_module(&after, "main", &arguments, limits) {
-            Ok(run) => run.steps,
+        let after_run = match execute(&after, "main", &arguments, limits) {
+            Ok(run) => run,
             Err(error) if error.code() == FUEL_EXHAUSTED => {
                 measurement.outcome = ProgramOutcome::FuelExhausted;
                 return measurement;
@@ -801,7 +877,7 @@ fn measure(
                 return measurement;
             }
         };
-        let after_observation = observe(&after, &arguments, step_budget);
+        let after_observation = DefinedRun::from(&after_run);
         if after_observation != before_observation {
             measurement.outcome = ProgramOutcome::Refused {
                 detail: "the optimized module is not observationally equal to the input".to_owned(),
@@ -809,9 +885,105 @@ fn measure(
             return measurement;
         }
 
-        measurement.steps_after = after_steps;
+        measurement.steps_after = after_run.steps;
         measurement.instructions_after = instruction_count(&after);
         measurement.output_digest = transaction.output_digest.clone();
     }
     measurement
+}
+
+#[cfg(test)]
+mod measurement_tests {
+    use super::*;
+
+    fn program() -> CorpusProgram {
+        let module = parse_section9_module(include_bytes!(
+            "../../../tests/fixtures/eqsat-performance/identity-tail.evo"
+        ))
+        .unwrap();
+        let text = render_module(&module);
+        CorpusProgram {
+            name: "identity-tail".into(),
+            digest: sha256_hex(text.as_bytes()),
+            text,
+            module,
+        }
+    }
+
+    fn checker() -> ProofChecker {
+        let checker = ProofChecker::locate().unwrap();
+        let identity = checker.identity_digest().unwrap();
+        checker.with_expected_digest(identity)
+    }
+
+    #[test]
+    fn one_execution_per_distinct_module_but_every_certificate_replayed() {
+        let program = program();
+        for (weights, expected_runs, expected_proofs) in [(1, 2, 2), (0, 1, 1)] {
+            let policy = ExtractionPolicy::default().with_cost(evocc_eqopt::CostFunction::Vector(
+                evocc_eqopt::OperatorWeights::uniform(weights),
+            ));
+            let mut runs = 0;
+            let result = measure_with_interpreter(
+                &policy,
+                &program,
+                7,
+                1000,
+                &checker(),
+                |module, name, args, limits| {
+                    runs += 1;
+                    interpret_module(module, name, args, limits)
+                },
+            );
+            assert_eq!(result.outcome, ProgramOutcome::Measured);
+            assert_eq!(runs, expected_runs);
+            assert_eq!(result.certificates_replayed, expected_proofs);
+            assert_eq!(result.certificates_replayed, result.certificates);
+            let resources = result.chain_resources.unwrap();
+            assert!(resources.checker_wall_nanos > 0);
+            assert!(resources.identity_wall_nanos > 0);
+            assert_eq!(
+                resources.total_wall_nanos,
+                result.optimizer_wall_nanos
+                    + resources.checker_wall_nanos
+                    + resources.identity_wall_nanos
+                    + resources.wrapper_wall_nanos(result.optimizer_wall_nanos)
+            );
+            assert!(result
+                .chain_record
+                .unwrap()
+                .contains("\"result\":\"UNCHANGED\""));
+        }
+    }
+
+    #[test]
+    fn reused_execution_still_checks_the_changed_observation() {
+        let mut runs = 0;
+        let result = measure_with_interpreter(
+            &ExtractionPolicy::default(),
+            &program(),
+            7,
+            1000,
+            &checker(),
+            |module, name, args, limits| {
+                runs += 1;
+                let mut outcome = interpret_module(module, name, args, limits)?;
+                if runs == 2 {
+                    outcome.return_values.clear();
+                }
+                Ok(outcome)
+            },
+        );
+        assert_eq!(runs, 2);
+        assert!(matches!(result.outcome, ProgramOutcome::Refused { .. }));
+    }
+
+    #[test]
+    fn undefined_or_fuel_exhausted_input_never_enters_the_optimizer() {
+        let result = measure(&ExtractionPolicy::default(), &program(), 7, 0, &checker());
+        assert_eq!(result.outcome, ProgramOutcome::FuelExhausted);
+        assert_eq!(result.certificates, 0);
+        assert!(result.chain_record.is_none());
+        assert!(result.chain_resources.is_none());
+    }
 }

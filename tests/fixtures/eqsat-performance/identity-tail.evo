@@ -1,0 +1,8 @@
+func @main(%arg0: bits<32>) -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>):
+    %v1 = const.bits<32> 0
+    %v2 = add.bits<32> %v0, %v1
+    ret %v2
+}

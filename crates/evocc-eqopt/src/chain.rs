@@ -197,6 +197,26 @@ pub struct VerifiedScalarChain {
     pub transactions: Vec<TransactionRecord>,
     /// Measurement only; excluded from the deterministic chain digest.
     pub optimizer_wall_nanos: u128,
+    pub resources: ChainResources,
+}
+
+/// Disjoint wall-clock scopes, deliberately outside certificate/chain identity.
+/// Replay includes process startup and scratch I/O; identity includes both full
+/// executable reads/hashes. The residual is orchestration, not producer work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChainResources {
+    pub total_wall_nanos: u128,
+    pub checker_wall_nanos: u128,
+    pub identity_wall_nanos: u128,
+}
+
+impl ChainResources {
+    pub fn wrapper_wall_nanos(self, producer_wall_nanos: u128) -> u128 {
+        self.total_wall_nanos
+            - producer_wall_nanos
+            - self.checker_wall_nanos
+            - self.identity_wall_nanos
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -211,6 +231,7 @@ pub struct ChainFailure {
     pub verified_prefix: usize,
     pub transactions: Vec<TransactionRecord>,
     pub optimizer_wall_nanos: u128,
+    pub resources: ChainResources,
 }
 
 impl VerifiedScalarChain {
@@ -334,8 +355,37 @@ pub fn run_scalar_chain_with_checker(
     policy: &ExtractionPolicy,
     checker: &evocc_proof::StandaloneProofChecker,
 ) -> Result<VerifiedScalarChain, Box<ChainFailure>> {
-    let identity = checker
-        .admitted_identity()
+    let started = std::time::Instant::now();
+    let mut identity_wall_nanos = 0;
+    let result = run_with_checker(module, state, policy, checker, &mut identity_wall_nanos);
+    finish_resources(result, started, identity_wall_nanos)
+}
+
+fn finish_resources(
+    mut result: Result<VerifiedScalarChain, Box<ChainFailure>>,
+    started: std::time::Instant,
+    identity_wall_nanos: u128,
+) -> Result<VerifiedScalarChain, Box<ChainFailure>> {
+    let resources = match &mut result {
+        Ok(run) => &mut run.resources,
+        Err(failure) => &mut failure.resources,
+    };
+    resources.identity_wall_nanos = identity_wall_nanos;
+    resources.total_wall_nanos = started.elapsed().as_nanos();
+    result
+}
+
+fn run_with_checker(
+    module: &Module,
+    state: &mut EqualityState,
+    policy: &ExtractionPolicy,
+    checker: &evocc_proof::StandaloneProofChecker,
+    identity_wall_nanos: &mut u128,
+) -> Result<VerifiedScalarChain, Box<ChainFailure>> {
+    let identity_started = std::time::Instant::now();
+    let admitted_identity = checker.admitted_identity();
+    *identity_wall_nanos += identity_started.elapsed().as_nanos();
+    let identity = admitted_identity
         .and_then(|identity| {
             if !(1..=300_000).contains(&checker.timeout().as_millis()) {
                 return Err("checker deadline exceeds the admitted 1..300000 ms profile".into());
@@ -356,17 +406,28 @@ pub fn run_scalar_chain_with_checker(
             verified_prefix: 0,
             transactions: Vec::new(),
             optimizer_wall_nanos: 0,
+            resources: ChainResources::default(),
         })?;
-    let mut staged = state.clone();
-    let mut run = run_verified_scalar_chain(module, &mut staged, policy, |b| {
-        RejectionReason::from_checker_outcome(checker.check_typed(&b.before, &b.after, &b.proof))
-    })
+    let (mut run, staged) = run_chain_staged(
+        module,
+        state.clone(),
+        policy,
+        |b| {
+            RejectionReason::from_checker_outcome(
+                checker.check_typed(&b.before, &b.after, &b.proof),
+            )
+        },
+        optimize_scalar_module_certified_persistent_with_policy,
+    )
     .map_err(|mut failure| {
         failure.checker_digest = Some(identity.clone());
         failure.checker_timeout_ms = Some(checker.timeout().as_millis());
         failure
     })?;
-    if checker.identity_digest().as_ref() != Ok(&identity) {
+    let identity_started = std::time::Instant::now();
+    let final_identity = checker.identity_digest();
+    *identity_wall_nanos += identity_started.elapsed().as_nanos();
+    if final_identity.as_ref() != Ok(&identity) {
         return Err(Box::new(ChainFailure {
             detail: "checker executable changed during replay".into(),
             policy: *policy,
@@ -377,6 +438,7 @@ pub fn run_scalar_chain_with_checker(
             verified_prefix: run.transactions.len(),
             transactions: run.transactions,
             optimizer_wall_nanos: run.optimizer_wall_nanos,
+            resources: run.resources,
         }));
     }
     run.checker_digest = Some(identity);
@@ -389,12 +451,31 @@ fn run_chain(
     module: &Module,
     state: &mut EqualityState,
     policy: &ExtractionPolicy,
+    checker: impl FnMut(&ProofBundle) -> Result<(), RejectionReason>,
+    producer: impl FnMut(&Module, &mut EqualityState, &ExtractionPolicy) -> CertifiedScalarEqOutcome,
+) -> Result<VerifiedScalarChain, Box<ChainFailure>> {
+    let started = std::time::Instant::now();
+    let result =
+        run_chain_staged(module, state.clone(), policy, checker, producer).map(|(run, staged)| {
+            *state = staged;
+            run
+        });
+    finish_resources(result, started, 0)
+}
+
+/// Own the single chain staging copy. Return it without committing: production
+/// must still recheck the checker identity after the last successful replay.
+fn run_chain_staged(
+    module: &Module,
+    mut staged: EqualityState,
+    policy: &ExtractionPolicy,
     mut checker: impl FnMut(&ProofBundle) -> Result<(), RejectionReason>,
     mut producer: impl FnMut(&Module, &mut EqualityState, &ExtractionPolicy) -> CertifiedScalarEqOutcome,
-) -> Result<VerifiedScalarChain, Box<ChainFailure>> {
+) -> Result<(VerifiedScalarChain, EqualityState), Box<ChainFailure>> {
     let mut transactions = Vec::new();
     let mut verified_prefix = 0;
     let mut optimizer_wall_nanos = 0;
+    let mut resources = ChainResources::default();
     let input_digest = sha256_hex(render_module(module).as_bytes());
     macro_rules! fail {
         ($message:expr) => {
@@ -417,6 +498,7 @@ fn run_chain(
                 verified_prefix,
                 transactions,
                 optimizer_wall_nanos,
+                resources,
             }));
         };
     }
@@ -431,10 +513,9 @@ fn run_chain(
     if let Err(error) = validate_module(module) {
         fail!(error);
     }
-    if !state.matches_module(module) {
+    if !staged.matches_module(module) {
         fail!("persistent state belongs to another module");
     }
-    let mut staged = state.clone();
     if !staged.is_ingested() {
         if let Err(error) = staged.ingest_module(module) {
             fail!(error);
@@ -491,7 +572,9 @@ fn run_chain(
             transactions.push(record);
             fail!(detail);
         }
+        let checker_started = std::time::Instant::now();
         let verdict = checker(&record.bundle);
+        resources.checker_wall_nanos += checker_started.elapsed().as_nanos();
         match verdict {
             Ok(()) => record.verification = Verification::Verified,
             Err(reason) => {
@@ -540,6 +623,7 @@ fn run_chain(
         stop,
         transactions,
         optimizer_wall_nanos,
+        resources,
     };
     if let Err(detail) = run.validate() {
         return Err(Box::new(ChainFailure {
@@ -552,10 +636,10 @@ fn run_chain(
             verified_prefix,
             transactions: run.transactions,
             optimizer_wall_nanos,
+            resources,
         }));
     }
-    *state = staged;
-    Ok(run)
+    Ok((run, staged))
 }
 
 impl ChainFailure {

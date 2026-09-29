@@ -76,9 +76,9 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. R01a was requalified with the full workspace gate. |
+| AUDIT | T03, R02a | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. R01a was requalified; R02a measurement foundations are active following the EqSat review, not an application performance result. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 6: common-IR checked twins, separate preflights, bounded manual/template admission and final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
+| LATER | R01, R02, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 6: common-IR checked twins, separate preflights, bounded manual/template admission and final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1931,7 +1931,7 @@ record a justified not-needed disposition separately from implementation PASS.
   and code-size reductions are not performance acceptance. Close with the
   roadmap's measured comparison, not an inferred speedup. [Roadmap][roadmap].
 
-  - [ ] **R02a — Performance manifests and measurement runner** — `LATER`, P3.
+  - [ ] **R02a — Performance manifests and measurement runner** — `OPEN`, P3.
     Implement design P1 through `tools/bench.py` and existing adapters/locks.
     Freeze effective UB-check/lowering profiles, shared chain identity, semantic
     flags, scoped budget units/mapping, checked-twin common IR/chain digests,
@@ -1939,11 +1939,19 @@ record a justified not-needed disposition separately from implementation PASS.
     timing boundaries, raw metrics,
     resource caps and separate performance receipts. REDs cover stale/mismatched
     artifacts, missing results, invalid metrics, interference and cleanup ownership.
-    Before timing, resolve the review's remaining overhead work: repeated terminal
-    no-op interpretation, duplicate per-function Admission construction and the
-    extra staged-state clone. Keep checker identity checks intact; replacing full
-    byte checks by unchecked timestamps is not an admissible speedup. Record
-    their actual cost separately from producer time.
+    The September 29 foundation batch removes repeated terminal no-op
+    interpretation, duplicate per-function Admission construction and the extra
+    whole-chain staged-state clone. Every changed module is still interpreted;
+    every certificate, including the terminal no-op, is replayed. Checker
+    identity checks retain both full reads/hashes and the final commit boundary.
+    Policy-report v3 separates producer, checker, identity and wrapper wall time;
+    v2 historical reports remain readable without fabricated timings.
+    The read-only frozen-plan audit now covers checked native A/A calibration
+    declarations and artifact/source identity, not effective-control validation
+    or execution admission. Native collector, artifact/result binding, raw
+    samples/statistics, interference/cleanup tests and checked/unchecked fan-out
+    remain open. No new application/performance claim follows from this batch.
+    [Foundation scope and gates](docs/notebook/eqsat-r02a-foundations-20260929.md).
     September 29 checkpoint: the default-cap diagnostic collector reuses the
     bench entry point and lock, with committed bounded input manifests and
     scoped/unknown counters. Native performance manifests and runners remain

@@ -123,6 +123,44 @@ fn rejected_second_transaction_rolls_back_the_entire_state() {
     assert_eq!(state.audit(), original);
 }
 
+#[cfg(unix)]
+#[test]
+fn successful_replays_cannot_commit_after_checker_identity_changes() {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    let directory =
+        std::env::temp_dir().join(format!("evocc-checker-mutation-{}", std::process::id()));
+    fs::create_dir(&directory).unwrap();
+    let path = directory.join("checker");
+    let real = evocc_proof::StandaloneProofChecker::locate().unwrap();
+    let quoted = real.binary().to_str().unwrap().replace('\'', "'\\''");
+    // Replay with the real checker, then mutate only this test-owned wrapper.
+    fs::write(&path, format!("#!/bin/sh\n'{quoted}' \"$@\"\nstatus=$?\nprintf '\\n# changed\\n' >> \"$0\"\nexit \"$status\"\n")).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+    let checker = evocc_proof::StandaloneProofChecker::new(path, directory.clone());
+    let identity = checker.identity_digest().unwrap();
+    let checker = checker.with_expected_digest(identity);
+    let module = input();
+    let mut state = EqualityState::for_module(&module).unwrap();
+    state.ingest_module(&module).unwrap();
+    let original = state.audit();
+    let failure = evocc_eqopt::run_scalar_chain_with_checker(
+        &module,
+        &mut state,
+        &ExtractionPolicy::default(),
+        &checker,
+    )
+    .unwrap_err();
+    assert_eq!(failure.rejection_reason, RejectionReason::BundleMismatch);
+    assert_eq!(failure.verified_prefix, 2);
+    assert_eq!(state.audit(), original);
+    assert!(failure
+        .transactions
+        .iter()
+        .all(|t| t.verification == Verification::Verified));
+    fs::remove_dir_all(directory).unwrap();
+}
+
 #[test]
 fn legacy_persistent_view_uses_the_same_remap_and_commit_as_certified_path() {
     let module = input();

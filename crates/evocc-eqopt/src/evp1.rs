@@ -158,9 +158,11 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     let mut report = transient.report;
     report.telemetry.search_bridge_nodes = report.graph_nodes;
     report.telemetry.search_rewrite_events = report.epochs;
+    // Inventory and certificate construction consume the same immutable input.
+    // Keep one admission analysis per function for both consumers.
+    let admissions: Vec<_> = module.functions.iter().map(Admission::of).collect();
     // Inventory the entire canonical input, including roots beyond a stop.
-    for function in &module.functions {
-        let admission = Admission::of(function);
+    for (function, admission) in module.functions.iter().zip(&admissions) {
         for inst in function.blocks.iter().flat_map(|b| &b.insts) {
             if let [value] = inst_results(inst).as_slice() {
                 if matches!(value.ty, EvoIRType::Bits(1..=64)) {
@@ -195,15 +197,15 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     'admit: for (function_index, function) in module.functions.iter().enumerate() {
         // Section 8.5: taint and exclusion are computed once per function,
         // before any region is formed, and consulted from there.
-        let admission = Admission::of(function);
+        let admission = &admissions[function_index];
         // Section 8.10: what every edge into a block agrees its arguments
         // carry, computed once for the function before any region is formed.
-        let seed_facts = SeedFacts::of(function, &admission);
+        let seed_facts = SeedFacts::of(function, admission);
         report.seed_fact_work_items += seed_facts.work_items();
         for (block_index, block) in function.blocks.iter().enumerate() {
             let context = Surroundings {
                 shapes: block_shapes(block),
-                admission: &admission,
+                admission,
                 seed_facts: &seed_facts,
             };
             for (instruction_index, instruction) in block.insts.iter().enumerate() {

@@ -111,3 +111,8 @@ The review's duplicate Admission, staged-copy and repeated terminal-interpretati
 work remains explicitly tracked under R02a, before timing. It is separate from
 the four acceptance blockers. Optimization must not remove checker identity
 checks or weaken rollback merely to reduce overhead.
+
+Follow-up: the [R02a foundation batch](eqsat-r02a-foundations-20260929.md)
+addresses those three redundant paths and adds separate chain-cost scopes.
+That later checkpoint has its own gates and does not retroactively change the
+results recorded above.

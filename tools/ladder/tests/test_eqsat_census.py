@@ -39,7 +39,80 @@ def report():
                         'optimizerWallNanos')}))
 
 
+def resource_report():
+    r = report()
+    r['schema'] = 'evocc-policy-report-v3'
+    resources = dict(scope='shared-chain-v1', totalWallNanos=100,
+                     checkerWallNanos=70, identityWallNanos=15, wrapperWallNanos=5)
+    for row in (r['programs'][0], r['aggregate']):
+        row.update(optimizerWallNanos=10, chainResources=copy.deepcopy(resources))
+    return r
+
+
 class CensusTests(unittest.TestCase):
+    def test_v3_separates_producer_replay_identity_and_wrapper_cost(self):
+        r = resource_report()
+        result = report_census(r)
+        self.assertEqual(result['chain_resources'], r['aggregate']['chainResources'])
+        self.assertEqual(result['rows'][0]['chain_resources'], r['programs'][0]['chainResources'])
+        self.assertEqual(result['default_caps_observation'], 'NO_HITS_IN_THIS_POPULATION')
+
+    def test_v3_rejects_overlapping_missing_or_fabricated_resource_cost(self):
+        for mutate in (
+            lambda r: r['programs'][0]['chainResources'].update(checkerWallNanos=101),
+            lambda r: r['programs'][0]['chainResources'].pop('identityWallNanos'),
+            lambda r: r['aggregate']['chainResources'].update(totalWallNanos=99),
+            lambda r: r['programs'][0]['chainResources'].update(wrapperWallNanos=-1),
+            lambda r: r['programs'][0]['chainResources'].update(checkerWallNanos=None),
+            lambda r: r['programs'][0].update(chainResources=None),
+            lambda r: r['programs'][0]['chainResources'].update(scope='cpu-time'),
+        ):
+            r = resource_report()
+            mutate(r)
+            with self.subTest(r=r), self.assertRaises(ValueError):
+                report_census(r)
+
+    def test_v3_elided_resources_are_unknown_not_zero(self):
+        r = resource_report()
+        for row in (r['programs'][0], r['aggregate']):
+            row['optimizerWallNanos'] = None
+            for key in row['chainResources']:
+                if key != 'scope':
+                    row['chainResources'][key] = None
+        result = report_census(r)
+        self.assertIsNone(result['chain_resources']['checkerWallNanos'])
+        self.assertIsNone(result['chain_resources']['identityWallNanos'])
+
+    def test_v3_no_attempt_retains_null_and_cannot_invent_cost(self):
+        r = resource_report()
+        r['stepBudget'] = 0
+        p = r['programs'][0]
+        p.update(outcome='fuelExhausted', chainRecord=None, chainResources=None,
+                 optimizerWallNanos=0, transactions=0, certificates=0, certificatesReplayed=0,
+                 regions=0, outputDigest=p['inputDigest'], stepsBefore=0, stepsAfter=0,
+                 instructionsAfter=p['instructionsBefore'])
+        r['aggregate'].update(measured=0, fuelExhausted=1, programsOptimized=0)
+        r['aggregate']['instructionsAfter'] = p['instructionsAfter']
+        for key in ('optimizerWallNanos', 'transactions', 'certificates', 'certificatesReplayed',
+                    'regions', 'stepsBefore', 'stepsAfter'):
+            r['aggregate'][key] = 0
+        for key in r['aggregate']['chainResources']:
+            if key != 'scope':
+                r['aggregate']['chainResources'][key] = 0
+        result = report_census(r)
+        self.assertEqual(result['default_caps_observation'], 'INCOMPLETE')
+        self.assertEqual(result['rows'][0]['status'], 'NO_CHAIN')
+        self.assertIsNone(result['rows'][0]['chain_resources'])
+        p['chainResources'] = copy.deepcopy(r['aggregate']['chainResources'])
+        with self.assertRaisesRegex(ValueError, 'cost without a chain attempt'):
+            report_census(r)
+
+    def test_zero_fuel_cannot_be_reported_as_a_successful_chain(self):
+        r = resource_report()
+        r['stepBudget'] = 0
+        with self.assertRaisesRegex(ValueError, 'zero-fuel execution'):
+            report_census(r)
+
     def test_retained_real_report_recomputes_without_reclassifying_scope(self):
         directory = FIXTURE.parent.parent / 'cap-census-20260929'
         raw = (directory / 'policy.json').read_bytes()

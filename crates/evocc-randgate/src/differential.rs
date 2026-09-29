@@ -6,7 +6,8 @@ use std::sync::OnceLock;
 
 use evocc_eqopt::{optimize_scalar_module_with_evp1, ScalarEqBudget};
 use evocc_evoir::{
-    interpret_module, render_module, validate_module, InterpreterLimits, Module, RuntimeValue,
+    interpret_module, render_module, validate_module, InterpreterLimits, InterpreterOutcome,
+    Module, RuntimeValue,
 };
 use evocc_memory::{AccessLayout, MemoryState, ObjectOrigin, ObjectOwner, Pointer, VolatileEvent};
 use evocc_mir::{
@@ -55,6 +56,23 @@ pub struct DefinedRun {
     pub statics: Vec<StaticObservation>,
 }
 
+impl From<&InterpreterOutcome> for DefinedRun {
+    /// Project an already completed execution; never execute the module again
+    /// merely to obtain its observable state beside its step count.
+    fn from(outcome: &InterpreterOutcome) -> Self {
+        Self {
+            returns: outcome
+                .return_values
+                .iter()
+                .filter(|value| !matches!(value.ty, EvoIRType::Mem(_) | EvoIRType::World))
+                .cloned()
+                .collect(),
+            volatile: outcome.world.volatile_trace().to_vec(),
+            statics: static_observations(&outcome.memory),
+        }
+    }
+}
+
 /// The result of interpreting one module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Observation {
@@ -79,16 +97,7 @@ pub fn observe(module: &Module, arguments: &[RuntimeValue], step_budget: u64) ->
         arguments,
         InterpreterLimits::new(step_budget),
     ) {
-        Ok(outcome) => Observation::Defined(DefinedRun {
-            returns: outcome
-                .return_values
-                .iter()
-                .filter(|value| !matches!(value.ty, EvoIRType::Mem(_) | EvoIRType::World))
-                .cloned()
-                .collect(),
-            volatile: outcome.world.volatile_trace().to_vec(),
-            statics: static_observations(&outcome.memory),
-        }),
+        Ok(outcome) => Observation::Defined(DefinedRun::from(&outcome)),
         Err(error) => Observation::Undefined {
             code: error.code(),
             detail: error.message(),

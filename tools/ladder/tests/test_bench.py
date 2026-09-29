@@ -22,6 +22,16 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_plan_audit_cannot_write_or_become_a_benchmark_pass(self):
+        expected = dict(status='FROZEN_PLAN_AUDITED_EXECUTION_NOT_RUN', performance='NOT_RUN')
+        with (patch('tools.ladder.eqsat_manifest.audit_manifest', return_value=expected) as audit,
+              patch.object(bench, 'execute', side_effect=AssertionError('read-only')),
+              patch.object(bench, 'save', side_effect=AssertionError('no receipt writes')),
+              redirect_stdout(io.StringIO()) as output):
+            self.assertEqual(bench.main(['--check-eqsat-manifest', 'plan.json']), 0)
+            audit.assert_called_once_with(Path('plan.json'), bench.ROOT)
+            self.assertEqual(json.loads(output.getvalue()), expected)
+
     def test_eqsat_census_is_read_only_and_does_not_start_a_benchmark(self):
         from tools.ladder.tests.test_eqsat_census import report
         with tempfile.TemporaryDirectory() as tmp:
@@ -35,6 +45,9 @@ class BenchmarkEntryTest(unittest.TestCase):
 
     def test_eqsat_diagnostics_cannot_mix_with_campaign_modes(self):
         for args in (
+            ['--check-eqsat-manifest', 'plan.json', 'all'],
+            ['--check-eqsat-manifest', 'plan.json', '--eqsat-cap-smoke', 'manifest.json'],
+            ['--check-eqsat-manifest', 'plan.json', '--jobs', '1'],
             ['--eqsat-cap-smoke', 'manifest.json', 'all'],
             ['--eqsat-cap-smoke', 'manifest.json', '--eqsat-census', 'report.json'],
             ['--eqsat-census', 'report.json', '--verify-eqsat-chain', 'proofs'],

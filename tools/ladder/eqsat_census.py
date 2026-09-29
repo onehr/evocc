@@ -23,6 +23,22 @@ SCOPES = ('search.bridge_nodes', 'search.rewrite_events',
           'admission.accepted_regions', 'admission.proof_nodes')
 BUCKETS = ('proof_successes', 'completed_proof_rejections',
            'bundle_obligation_failures', 'unknown_proof_outcomes', 'not_checked')
+RESOURCE_FIELDS = ('totalWallNanos', 'checkerWallNanos', 'identityWallNanos', 'wrapperWallNanos')
+
+
+def resource_cost(record, producer, attempted):
+    if not attempted:
+        require(record is None and producer in (0, None), 'cost without a chain attempt')
+        return
+    keys(record, 'scope ' + ' '.join(RESOURCE_FIELDS))
+    require(record['scope'] == 'shared-chain-v1', 'unknown timing boundary')
+    if producer is None:
+        require(all(record[k] is None for k in RESOURCE_FIELDS), 'mixed timing collection modes')
+    else:
+        for key in RESOURCE_FIELDS:
+            natural(record[key])
+        require(record['totalWallNanos'] == producer + sum(record[k] for k in RESOURCE_FIELDS[1:]),
+                'overlapping or incomplete chain timing scopes')
 
 
 def chain_census(record):
@@ -65,11 +81,13 @@ def chain_census(record):
 def report_census(report):
     """Reject stale schemas, omitted programs and disagreement with chain IDs."""
     keys(report, 'schema policy corpusSource corpusDigest seed stepBudget programs aggregate')
-    require(report['schema'] == 'evocc-policy-report-v2', 'missing scoped telemetry schema')
+    require(report['schema'] in ('evocc-policy-report-v2', 'evocc-policy-report-v3'),
+            'missing scoped telemetry schema')
+    resources_present = report['schema'] == 'evocc-policy-report-v3'
     require(type(report['corpusSource']) is str and report['corpusSource'], 'missing corpus identity')
     sha256_identity(report['corpusDigest'])
     natural(report['seed'])
-    require(natural(report['stepBudget']) > 0, 'missing interpreter fuel')
+    natural(report['stepBudget'])
     keys(report['policy'], 'name registry costFunction schedule')
     require(report['policy']['name'] == 'instruction-count'
             and report['policy']['registry'] == 'p0.scalar.v4'
@@ -86,10 +104,12 @@ def report_census(report):
                   certificates=0, certificatesReplayed=0)
     wall = 0
     wall_elided = None
+    resource_totals = {field: 0 for field in RESOURCE_FIELDS}
     for p in programs:
         keys(p, 'name inputDigest outputDigest outcome outcomeDetail stepsBefore stepsAfter '
                 'instructionsBefore instructionsAfter regions transactions certificates '
-                'certificatesReplayed optimizerWallNanos chainRecord')
+                'certificatesReplayed optimizerWallNanos chainRecord' +
+                (' chainResources' if resources_present else ''))
         require(type(p['name']) is str and p['name'] and p['name'] not in names, 'duplicate program identity')
         names.add(p['name'])
         for field in ('inputDigest', 'outputDigest'):
@@ -107,13 +127,23 @@ def report_census(report):
         if not elided:
             wall += natural(p['optimizerWallNanos'])
         chain = p['chainRecord']
+        if report['stepBudget'] == 0:
+            require(p['outcome'] == 'fuelExhausted' and chain is None
+                    and p['stepsBefore'] == p['stepsAfter'] == 0,
+                    'zero-fuel execution cannot admit a chain or a measurement')
+        if resources_present:
+            resource_cost(p['chainResources'], p['optimizerWallNanos'], chain is not None)
+            if not elided and p['chainResources'] is not None:
+                for field in RESOURCE_FIELDS:
+                    resource_totals[field] += p['chainResources'][field]
         if chain is None:
             require(p['outcome'] != 'measured', 'measured program has no verified chain')
             require(p['transactions'] == p['certificates'] == p['certificatesReplayed'] == 0,
                     'missing chain hides attempted transactions')
             rows.append(dict(name=p['name'], status='NO_CHAIN', outcome=p['outcome'],
                              input_digest=p['inputDigest'], hit_transactions=None,
-                             chain_limit_hit=None, matching_work=None))
+                             chain_limit_hit=None, matching_work=None,
+                             **({'chain_resources': None} if resources_present else {})))
             continue
         row = chain_census(chain)
         require(chain['input_digest'] == p['inputDigest'], 'wrong chain input')
@@ -129,12 +159,20 @@ def report_census(report):
         else:
             require(p['outcome'] == 'refused', 'rejected chain reported as measured')
         row.update(name=p['name'], outcome=p['outcome'])
+        if resources_present:
+            row['chain_resources'] = p['chainResources']
         if p['outcome'] != 'measured':
             row.update(status='EXECUTION_NOT_ADMITTED', hit_transactions=None, chain_limit_hit=None)
         rows.append(row)
     expected = {**totals, **outcomes, 'optimizerWallNanos': None if wall_elided else wall}
+    if resources_present:
+        expected['chainResources'] = dict(scope='shared-chain-v1', **{
+            field: None if wall_elided else value for field, value in resource_totals.items()})
+        resource_cost(report['aggregate'].get('chainResources'), expected['optimizerWallNanos'], True)
     keys(report['aggregate'], ' '.join(expected))
     for key, value in report['aggregate'].items():
+        if key == 'chainResources':
+            continue
         if key != 'optimizerWallNanos' or value is not None:
             natural(value)
     require(report['aggregate'] == expected, 'aggregate omits or invents program outcomes')
@@ -153,7 +191,8 @@ def report_census(report):
                                       row['chain_limit_hit'] for row in admitted) else
                                   'NO_HITS_IN_THIS_POPULATION'),
         matching_work=None, policy_preflight='NOT_RUN', rule_preflight='NOT_RUN',
-        shortcut_preflight='NOT_RUN', rows=rows)
+        shortcut_preflight='NOT_RUN', rows=rows,
+        **({'chain_resources': expected['chainResources']} if resources_present else {}))
 
 
 def validate_smoke(manifest):
@@ -188,6 +227,21 @@ def validate_smoke(manifest):
     require(natural(r['min_free_bytes']) >= 1024 ** 3, 'insufficient free-space reserve')
 
 
+def check_source_revision(root, commit):
+    """Shared source binding, not proof of a reproducible binary build."""
+    source_paths = ['Cargo.toml', 'Cargo.lock', 'crates', 'vendor', '.cargo', 'rust-toolchain.toml']
+    revision = subprocess.run(['git', 'rev-parse', commit + '^{commit}'],
+                              cwd=root, capture_output=True, check=False)
+    require(revision.returncode == 0 and revision.stdout.decode().strip() == commit,
+            'implementation commit is not a repository commit')
+    diff = subprocess.run(['git', 'diff', '--quiet', commit, '--', *source_paths],
+                          cwd=root, capture_output=True, check=False)
+    untracked = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard', '--', *source_paths],
+                               cwd=root, capture_output=True, check=False)
+    require(diff.returncode == 0 and untracked.returncode == 0 and not untracked.stdout,
+            'implementation commit does not match live build inputs')
+
+
 def run_smoke(manifest_path, root):
     """One frozen diagnostic using the existing evaluator and benchmark lock.
 
@@ -209,17 +263,7 @@ def run_smoke(manifest_path, root):
         # A frozen binary hash is an artifact identity, not a source identity.
         # Check the claimed implementation revision against the live build inputs
         # as well; collector/manifest-only follow-up commits remain permitted.
-        source_paths = ['Cargo.toml', 'Cargo.lock', 'crates', 'vendor', '.cargo', 'rust-toolchain.toml']
-        revision = subprocess.run(['git', 'rev-parse', manifest['implementation_commit'] + '^{commit}'],
-                                  cwd=root, capture_output=True, check=False)
-        require(revision.returncode == 0 and revision.stdout.decode().strip() == manifest['implementation_commit'],
-                'implementation commit is not a repository commit')
-        diff = subprocess.run(['git', 'diff', '--quiet', manifest['implementation_commit'], '--', *source_paths],
-                              cwd=root, capture_output=True, check=False)
-        untracked = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard', '--', *source_paths],
-                                   cwd=root, capture_output=True, check=False)
-        require(diff.returncode == 0 and untracked.returncode == 0 and not untracked.stdout,
-                'implementation commit does not match live build inputs')
+        check_source_revision(root, manifest['implementation_commit'])
         for field in fields:
             item = manifest[field]
             require(digest((root / item['path']).read_bytes()) == item['sha256'], field + ' identity changed')
