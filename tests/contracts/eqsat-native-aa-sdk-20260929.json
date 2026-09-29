@@ -1,0 +1,187 @@
+{
+  "schema": "evocc-performance-plan-v2",
+  "scope": "r02-plan-not-admission",
+  "implementation_commit": "db5c4cc67bbec2a5459eb0e522754261f36b7f10",
+  "tools": {
+    "compiler": {
+      "path": "target/frontend/debug/evocc",
+      "sha256": "610917ac72d53f923e74b5b2705e50dbed3e9d0f2a5e1bbfdd0412b71d126279"
+    },
+    "checker": {
+      "path": "target/frontend/debug/evo-proofcheck",
+      "sha256": "4947c24343cc177387c5a4a7debc4c6bd82acd8e7588c1303b68c3959f4fb1bd"
+    },
+    "ir_backend": {
+      "path": "target/frontend/debug/evo-ir-asm",
+      "sha256": "213cf146bbc5f427dded0a6d9c8279dc06672da97298a122cbec01dc564e40a9"
+    },
+    "collector_python": {
+      "path": "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/bin/python3.9",
+      "sha256": "271143990bc83af0fb2404a255038f5faafb96df1584ed7f085e5018c0f33ffb"
+    },
+    "reference": {
+      "path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+      "sha256": "7def90dd8829726686213a747fc5bff1583df933dae5edc55d755479e0bfe00a"
+    },
+    "assembler": {
+      "path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+      "sha256": "7def90dd8829726686213a747fc5bff1583df933dae5edc55d755479e0bfe00a"
+    },
+    "linker": {
+      "path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+      "sha256": "7def90dd8829726686213a747fc5bff1583df933dae5edc55d755479e0bfe00a"
+    },
+    "link_editor": {
+      "path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld",
+      "sha256": "5897b275efd93b201b6df5832dd541262b3f20f290859ba78f2200a6a66ef38b"
+    }
+  },
+  "specs": {
+    "evoir": {
+      "path": "docs/evoir-spec.md",
+      "sha256": "8d510fdf573dbfc41c20a08a218444e96e122a2925b30f80aa2da4b3d1f9504e"
+    },
+    "evomir": {
+      "path": "docs/evomir-spec.md",
+      "sha256": "3968f30ab2b2fe35fda5c2eb73285657a3d4d8d97beccef045d8595a7c616f43"
+    }
+  },
+  "native": {
+    "adapter": "darwin-p0-aa-v2",
+    "eqsat": "off",
+    "codegen_target": "darwin-arm64",
+    "source_profile": "linux-lp64-header-free-integer",
+    "collector_files": {
+      "tools/bench.py": "8ffcc90385b9abfce4b422c54d82fe124a899d2efce04aaa674ff9879f8c6074",
+      "tools/ladder/eqsat_native.py": "40e72b7353e12d93031078e7575529b7903f9c3eab1f54310185f363b989ce35",
+      "tools/ladder/eqsat_manifest.py": "3e468683225fe8eaf89905877deed4686362fd35dfa5498e26c8c3670c07b2c3",
+      "tools/ladder/eqsat_census.py": "dde77aa4536fc7c232e52ab5035439e7822c75e6a78eace1f75fefde9b8a5dfc",
+      "tools/ladder/eqsat_chain.py": "bb4c722b163b5d735bc2ee8f59ea69eea36cdea1ec0b5063b2ffc1c2d2eea678"
+    },
+    "sdk": {
+      "settings": {
+        "path": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/SDKSettings.json",
+        "sha256": "f8d005f09381389167f9e0aeaa169bc9e7dff162ef22ca2fd8e98df7ff1acafe"
+      },
+      "system_library": {
+        "path": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib/libSystem.tbd",
+        "sha256": "20cfce043f11a083e2eb6111efe3579919a8082fa4cc912a7bd839af2010ec57"
+      }
+    }
+  },
+  "host": {
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64",
+    "runtime": "native",
+    "cpu": "Apple M2 Max",
+    "libc": "libSystem@Darwin-25.6.0",
+    "affinity": "uncontrolled"
+  },
+  "environment": {
+    "PATH": "/usr/bin:/bin",
+    "LANG": "C",
+    "LC_ALL": "C",
+    "SDKROOT": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+  },
+  "controls": {
+    "target": "aarch64-unknown-linux-gnu",
+    "isa": "baseline",
+    "abi": "linux-lp64-source/darwin-arm64-backend",
+    "ub_assume": {
+      "requested": "checked",
+      "effective": "checked"
+    },
+    "semantic_flags": [],
+    "lowering": {
+      "optimization_level": 0,
+      "macros": [],
+      "integer_constant_folding": false,
+      "immutable_global_propagation": false,
+      "pure_value_reuse": false,
+      "constant_edge_pruning": false,
+      "linear_block_joining": false
+    },
+    "optimizer": {
+      "chain": "scalar-chain-v1",
+      "extractor": "selected-pair-v1",
+      "counter_mapping": "legacy-coupled-v1",
+      "registry": "p0.scalar.v4",
+      "max_nodes": 100000,
+      "max_epochs": 1024,
+      "max_transactions": 8,
+      "proof_required": true
+    }
+  },
+  "protocol": {
+    "phase": "calibration",
+    "variants": [
+      "A0",
+      "A1"
+    ],
+    "primary": "process_wall_ns",
+    "boundary": "spawn-to-stdio-drain",
+    "clock": "monotonic_ns",
+    "warmups": 2,
+    "pairs": 12,
+    "seed": 20260929,
+    "order": "balanced-interleaved",
+    "estimator": "paired-median",
+    "claims": "calibration-only",
+    "retries": 0
+  },
+  "resources": {
+    "jobs": 1,
+    "timeout_seconds": 10,
+    "output_bytes": 4194304,
+    "min_free_bytes": 8589934592,
+    "max_retained_bytes": 67108864
+  },
+  "cases": [
+    {
+      "id": "p0-integer-mix",
+      "family": "p0",
+      "split": "development",
+      "source": {
+        "path": "tests/fixtures/eqsat-performance/integer-mix.c",
+        "sha256": "24f22e295985d9ec74612a0db8038c5d2f17ebbd60fb8d3347fa973f73f14c8d"
+      },
+      "inputs": [],
+      "compiler_argv": [
+        "--emit=evoir",
+        "-O0",
+        "--eq-proof-dir={chain}",
+        "{source}"
+      ],
+      "reference_argv": [
+        "-std=gnu11",
+        "-O0",
+        "-c",
+        "{source}",
+        "-o",
+        "{object}"
+      ],
+      "link_argv": [
+        "-fuse-ld={link_editor}",
+        "{object}",
+        "-o",
+        "{executable}"
+      ],
+      "run_argv": [
+        "{executable}"
+      ],
+      "coverage": {
+        "subject_objects": [
+          "program.o"
+        ],
+        "reference_objects": []
+      },
+      "result": {
+        "exit_code": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "regime": "fresh-process-no-cache-claim"
+    }
+  ]
+}
