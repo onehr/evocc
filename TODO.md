@@ -78,7 +78,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R01a, R02, R02a, R02b, R02c, R03, R03a, R03b, R03c, R03d, R04, R05 | Follow the Q2/Q3 design: proof/coverage plumbing, correctness-admitted performance pilot, bounded policy/rule discovery, then final G2/Q2/Q3 gates; x86-64 and release stay separate. |
+| LATER | R01, R01a, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 2: shared verified chain, profile/opportunity preflight before search, bounded manual/template rule admission, then final gates. Conditional extraction/domain/shadow work needs its stated trigger and review; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1872,11 +1872,14 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
 
 ## Later roadmap gates — not substitutes for runtime closure
 
-The September 29 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
+The September 29 revision-2 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
 without closing them. R01a/R02a infrastructure and R02b development measurements
 can proceed on correctness-admitted workloads; final acceptance remains
 R01 → R02 → R03. `LATER` describes roadmap priority, not an implementation or
 live-job status. Keep heavy campaigns serial under the existing ARM64 priorities.
+Effect-ceiling preflight precedes AI search. Conditional tasks below are explicit
+design branches, not newly enabled semantics or required speculative projects;
+record a justified not-needed disposition separately from implementation PASS.
 
 - [ ] **R01 — G2 whole-kernel EqSat reproducibility and certificates** — `LATER`, P3.
   Produce the two required EqSat builds with equal Image hashes and independently
@@ -1884,11 +1887,14 @@ live-job status. Keep heavy campaigns serial under the existing ARM64 priorities
   coverage; existing scalar proofs and unoptimized boot do not satisfy G2. [Gate][roadmap].
 
   - [ ] **R01a — Policy-aware persistent optimization and proof provenance** — `LATER`, P3.
-    Implement design P0: one shared certified persistent entry point for selected
-    policies, driver report/certificate export, explicit no-op/fallback reasons
-    and independent checker-before-install. Test joint rollback, altered IR,
-    certificate chains, wrong policy/object identity and coverage denominators.
-    Close with focused tests and a native small-program proof bundle, not G2.
+    Implement design P0: one driver/evaluator persistent chain runner with policy
+    identity including transaction count, proof/report export and wrapper-owned
+    verification. Separate transaction result, stop reason and root counts;
+    preserve prior accepted regions on budget exhaustion. Any internal/proof/chain
+    failure rejects whole-chain publication and staged state, not a successful
+    prefix or silent baseline. Test chain parity, second-transaction rejection,
+    budget-partial and zero-region cases, artifact identities and denominators.
+    Close with focused tests and a native proof bundle, not G2.
 
 - [ ] **R02 — Q2 fair GCC -O2 performance evaluation** — `LATER`, P3.
   Use the same pinned programs, workloads, machine conditions and result checks;
@@ -1898,21 +1904,41 @@ live-job status. Keep heavy campaigns serial under the existing ARM64 priorities
 
   - [ ] **R02a — Performance manifests and measurement runner** — `LATER`, P3.
     Implement design P1 through `tools/bench.py` and existing adapters/locks.
-    Freeze semantic flags, object coverage, timing boundaries, raw metrics,
+    Freeze effective UB-check/lowering profiles, shared chain identity, semantic
+    flags, object coverage, timing boundaries, raw metrics,
     resource caps and separate performance receipts. REDs cover stale/mismatched
     artifacts, missing results, invalid metrics, interference and cleanup ownership.
 
-  - [ ] **R02b — Correctness-admitted A/A and A/B pilot** — `LATER`, P3.
-    After R01a/R02a, calibrate noise and freeze the small C/IR plus application
-    workload inventory before search. Compare EqSat off/on with the same compiler,
-    source profile and backend; check each timed binary/output and retain failures.
-    Deliver coverage, code-size/runtime/compiler-cost baselines; no speedup assumed.
+  - [ ] **R02b — Opportunity/effect-ceiling preflight and A/A plus A/B pilot** — `LATER`, P3.
+    After R01a/R02a, freeze small C/IR and application inputs; count opportunities
+    after lowering, enumerate feasible weight-gate behavior classes and schedule
+    controls, measure machine materialization and budget interactions. Calibrate
+    A/A and compare matched A/B; zero-weight choices are not globally dominated
+    by assumption. Record searchable, finite-enumeration-sufficient or no-effect
+    per objective, or inconclusive if precision is inadequate. Do not start AI
+    search over an unresolved/degenerate space.
+    Lowering-fold-disabled variants are attribution-only; three pilot families
+    do not establish cross-family generalization. Retain all negative results.
 
   - [ ] **R02c — Frozen native Q2 comparison** — `LATER`, P3.
-    After the pilot and final R01, run admitted original workloads against declared
+    After the pilot, R02d profiles and final R01, run admitted originals against declared
     GCC-14/Clang-19 profiles with paired statistics and per-workload objectives.
     Separate native/VM/emulator claims, mixed links, memory and code size; retain
     regressions and all non-results. Complete measurement need not mean GCC parity.
+
+  - [ ] **R02d — Implement and verify the stated native UB-check profiles** — `LATER`, P3.
+    The MIR spec describes an unchecked driver flag, but the inspected driver/MIR
+    path does not expose it. Implement explicit effective-profile plumbing and
+    receipt identity; do not invent a switch or delete source/IR obligations in
+    the benchmark harness. REDs: ignored flag, missing identity, checked traps,
+    defined-input parity and interpreter contract preservation. Measure checked
+    and unchecked separately; GCC sanitizer coverage is not assumed equivalent.
+
+  - [ ] **R02e — Guard-predicate folding domain, separately reviewed** — `LATER`, P3.
+    If retained guards materially limit Q2, specify and prove total UB-predicate
+    folds plus any independently checked proven-true obligation elimination.
+    Preserve poison, other uses and source definedness; no silent P0 expansion.
+    This conditional semantic/checker change is not required to measure baseline B.
 
 - [ ] **R03 — Q3 measured self-improvement** — `LATER`, P3.
   Freeze the baseline, candidate policy and evaluation protocol, then demonstrate
@@ -1921,29 +1947,64 @@ live-job status. Keep heavy campaigns serial under the existing ARM64 priorities
   e-graph implementation alone do not establish benefit. [Roadmap][roadmap].
 
   - [ ] **R03a — Bounded AI and non-AI policy search** — `LATER`, P3.
-    Implement design P3 after R02b: closed candidate schema over existing weights
-    and budgets, deterministic replay and independent certificate gating. Compare
-    AI proposals with existing evolutionary/random search at declared budgets.
-    Preserve corpus exclusions and track feedback exposure; no model in normal compilation.
+    Implement design P3 only after R02b finds a useful control space, or after
+    R03e and a fresh preflight. Closed candidate schema, deterministic shared-chain
+    replay and checker gating; search seeds are provenance, not optimizer inputs.
+    Compare AI with enumeration/random/evolutionary search using explicit candidate
+    evaluation units, cache/retry accounting and separate model/proof budgets.
+    Use deterministic development fitness, not adaptive native timing; preserve
+    corpus exclusions. A finite/no-effect study may end without R03 improvement.
 
   - [ ] **R03b — Derived rewrite shortcuts** — `LATER`, P3.
-    Implement design P4 over the current pure scalar domain and guard forms.
+    Implement design P4 after R03f over the current scalar domain and guard forms.
     Expand shortcut certificates into existing rules; test substitutions, missing
-    premises, fact scope, poison and mixed-width boundaries. Measure search cost
-    and native effects separately; no unregistered trusted macro rule.
+    before-witness constants, fact scope, poison and mixed-width boundaries.
+    No invented premise or unrecorded extra transaction. Measure actual matcher
+    work and expanded proof cost; shorter spelling is not automatic fuel savings.
 
   - [ ] **R03c — New-rule Lean admission and registry integration** — `LATER`, P3.
-    Implement design P5: qualify pinned-toolchain proof isolation/replay, bind exact
-    semantics/propositions/instance domains, reject sorry/unauthorized axioms and
-    require kernel-only new AI rule proofs. Integrate a reviewed registry revision
-    across producer/checker/spec/tests; keep arbitrary-script admission disabled
-    until its boundary is qualified. Existing native-backed analysis remains explicit.
+    Implement design P5 after R03f: AI supplies only typed data with relation `eq`;
+    trusted fixed templates construct the exact universal `RuleCovered` statement.
+    Reject proof scripts, import/statement injection, sorry and unauthorized axioms;
+    audit actual transitive dependencies, including native-backed analysis.
+    Integrate a bounded manually reviewed registry batch across producer/checker/
+    spec/tests. Finite-width template admission requires R03g; arbitrary scripts
+    are V2, not this task's critical path. R03b completion is not a prerequisite.
 
   - [ ] **R03d — Held-out ablation and measured promotion** — `LATER`, P3.
     After final R02 and the relevant candidate paths, freeze rules/policies before
     held-out A–E/non-AI evaluation. Report correctness, gain/regressions, uncertainty
     and discovery/compilation cost; no tuning on final feedback. Promote only under
     predeclared objectives/bounds. A negative study is not R03 improvement closure.
+
+  - [ ] **R03e — Cost-aware extraction if the initial policy space is degenerate** — `LATER`, P3.
+    First make multiple legal e-class representatives selectable by actual cost,
+    with deterministic ties, bounded cycle handling and existing certificate
+    replay. REDs cover insertion-order bias, overflow, shared nodes and budgets.
+    If justified, separately version rule masks/scheduling controls; no ignored
+    fields or automatic checker expansion. Repeat R02b before any new AI campaign.
+
+  - [ ] **R03f — Rule integration and independent matching gate** — `LATER`, P3.
+    Before R03b/R03c, freeze a small manual integration budget and checklist for
+    spec/digest, Lean, producer, checker and mutation tests; measure human/proof
+    cost. V1 is not automatic high-throughput admission. A generic registry-AST
+    matcher/builder is a separately reviewed A3/A4 change, with independent
+    implementations and wrong-binding/type/guard/constant tests before enabling.
+
+  - [ ] **R03g — Bounded-width proof interface if needed** — `LATER`, P3.
+    Current `RuleCovered` quantifies all Nat width environments; JSON metadata
+    cannot narrow it. If finite-width candidates are needed, first review/version
+    an actual instance predicate, theorem/audit interface and producer/checker
+    coverage map. Test zero, >64 and independently wide shift counts; review
+    fixed-template reflection dependencies. Universal-template V1 can proceed
+    without this extension; 64 individual proofs are not universal coverage.
+
+  - [ ] **R03h — Optional unverified utility screening before proof** — `LATER`, P3.
+    A shadow graph may estimate matches/extraction utility for development inputs;
+    separate its types, caches and artifacts as `UNVERIFIED_DEV`. No proof,
+    installable rule, executable or certified-state mutation can leave this path.
+    Test every installation/codegen boundary against shadow artifacts. Prove and
+    integrate survivors before actual verified metrics; screening is not a gain.
 
 - [ ] **R04 — x86-64 userspace backend/ABI milestone** — `LATER`, P3.
   Implement the gated SysV/backend slice after ARM64 acceptance priorities,

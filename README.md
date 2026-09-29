@@ -438,8 +438,9 @@ entire compiler, or Linux kernel correct**. Reproduce the separate proof gate
 with [`tools/gate-lean.sh`](tools/gate-lean.sh).
 
 The [Q2/Q3 implementation design](docs/framing-draft.md) describes the next
-step: offline AI-proposed rules with fixed semantic proofs, independently
-checked applications, and correctness-gated native performance experiments.
+step: measure the actual optimization/policy opportunity before AI search,
+then admit data-only rule proposals through trusted proof templates and replay
+their application certificates independently before native performance tests.
 It separates rule soundness from measured benefit; this is planned work, not
 an AI optimization or speedup claim.
 
