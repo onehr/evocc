@@ -1,6 +1,6 @@
 # EvoCC: An Equality-Native, Self-Contained C Compiler Architecture and Launch Plan
 
-**Q2/Q3 implementation design, September 29, revision 4:** the maintained
+**Q2/Q3 implementation design, September 29, revision 5:** the maintained
 [verified optimization and performance architecture](framing-draft.md) refines
 the research intentions below into existing-component interfaces, rule-proof
 admission, native measurement, AI/non-AI ablations and R01–R03 child tasks.
@@ -8,8 +8,9 @@ Separate policy and rule/shortcut effect-ceiling preflights precede AI search;
 the present cost weights only accept/reject a preselected replacement, not choose
 a cheaper alternative.
 The plan binds UB/lowering profiles and common-IR/chain checked twins, scoped
-search/certificate/fuel budgets, closed checker rejection/unknown accounting,
-and frozen grammar-lattice termination before discovery claims. Shared verified
+search/certificate/fuel budgets, separate malformed-input/invalid-proof/unknown
+accounting, and frozen grammar-lattice termination with campaign-scale enumeration
+floors before discovery claims. Shared verified
 chains, fixed-template/data-only proof admission and an explicit manual
 integration budget remain prerequisites. Correctness admission precedes
 performance. The design is not a measurement or

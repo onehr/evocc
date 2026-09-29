@@ -1,6 +1,6 @@
 # Lean 4 integration plan for EvoCC (second version)
 
-**September 29 integration note, revision 4 (design only).** The existing L0–L4 plan and its
+**September 29 integration note, revision 5 (design only).** The existing L0–L4 plan and its
 historical evidence below remain scoped to the reviewed scalar semantics,
 registry and analysis modules. The maintained
 [Q2/Q3 implementation architecture](framing-draft.md#4-rule-soundness-and-admission)
@@ -19,7 +19,10 @@ semantic or `simp`-provable rule space.
 The preflight freezes grammar cells and resource/termination rules. A completed
 witness-containing cell supports finite enumeration/efficiency, not a
 beyond-enumeration discovery claim. Template UNKNOWN remains unresolved even
-when syntax enumeration is complete; checker outages are not proof rejections.
+when syntax enumeration is complete. Discovery-qualifying enumeration budgets
+must meet the planned total AI track's evaluation budget (or a factor >= 1),
+not a deliberately smaller exploratory quota. EVP checker outages remain unknown;
+malformed-input exit 2 is a bundle defect, distinct from invalid-claim exit 3.
 Audit actual transitive dependencies: a kernel-only rule can still depend on
 native-backed fact transfer in the complete admission chain. New dependency
 classes need review; no automatic kernel-only end-to-end claim follows.

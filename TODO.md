@@ -78,7 +78,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R01a, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 4: verified chain/state/reason tables, scoped budgets and common-IR checked twins, separate policy/rule/shortcut preflights with frozen termination, bounded manual/template admission, then final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
+| LATER | R01, R01a, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 5: verified chain/state/reason tables preserving checker exits 2/3, scoped budgets and common-IR checked twins, separate preflights with frozen termination and campaign-scale enumeration floors, bounded manual/template admission, then final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1872,7 +1872,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
 
 ## Later roadmap gates — not substitutes for runtime closure
 
-The September 29 revision-4 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
+The September 29 revision-5 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
 without closing them. R01a/R02a infrastructure and R02b development measurements
 can proceed on correctness-admitted workloads; final acceptance remains
 R01 → R02 → R03. `LATER` describes roadmap priority, not an implementation or
@@ -1892,9 +1892,11 @@ record a justified not-needed disposition separately from implementation PASS.
     identity including transaction count, proof/report export and wrapper-owned
     verification. Separate transaction result, stop reason and root counts;
     validate the closed state/rejection-reason tables. Distinguish completed proof
-    rejection, checker resource/infrastructure unknowns and missing/mismatched
-    bundles; fault-inject each reason and missing-proof success versus explicit
-    rollback. Unknown is not proof failure or success. Preserve transient search
+    rejection (PROOF_INVALID, exit 3), malformed bundles (CERTIFICATE_MALFORMED,
+    exit 2), checker resource/infrastructure unknowns and missing/mismatched
+    bundles; fault-inject each reason and merged exit-2/exit-3 accounting, plus
+    missing-proof success versus explicit rollback. Unknown is not proof failure
+    or success. Preserve transient search
     counters before EVP overwrites them; separate admission region/node quotas,
     recorded fuel/markers and actual matcher work, including legacy knob coupling.
     Preserve prior accepted regions on budget exhaustion. Any internal/proof/chain
@@ -1931,7 +1933,12 @@ record a justified not-needed disposition separately from implementation PASS.
     Also census residual misses after lowering/current rules using a pinned,
     semantics-qualified external reference plus a frozen bounded rule enumerator.
     Freeze a finite grammar lattice, visitation order, per-cell/total budgets and
-    termination. Record constants/widths/guards, proof/matcher applicability and
+    termination. Each discovery-qualifying cell needs an enumeration cap at least
+    ceil(k * B_AI), k >= 1, where B_AI is the planned whole-track AI evaluation
+    budget across seeds/restarts in the same suite-evaluation units. Require actual
+    exhaustion at that scale; smaller quotas, wrong units or earlier resource
+    stops cannot qualify SEARCHABLE. Revalidate after increasing B_AI.
+    Record constants/widths/guards, proof/matcher applicability and
     materialization. Fuzz is filtering, not completeness. Beyond-enumeration
     discovery needs a useful template-proved witness in a healthy budget-exhausted
     cell and the same search space for non-AI. A completed witness-containing cell
