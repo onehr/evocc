@@ -638,23 +638,48 @@ fn write_records(
     transactions: &[TransactionRecord],
     record: &str,
 ) -> Result<(), String> {
-    use std::fs;
-    fs::create_dir(destination).map_err(|e| format!("create new proof directory: {e}"))?;
-    let result = (|| -> std::io::Result<()> {
+    write_new_bundle(destination, record, |destination| {
         for t in transactions {
-            fs::write(
+            std::fs::write(
                 destination.join(format!("{:03}.before.evo", t.index)),
                 &t.bundle.before,
             )?;
-            fs::write(
+            std::fs::write(
                 destination.join(format!("{:03}.after.evo", t.index)),
                 &t.bundle.after,
             )?;
-            fs::write(
+            std::fs::write(
                 destination.join(format!("{:03}.proof.evp", t.index)),
                 &t.bundle.proof,
             )?;
         }
+        Ok(())
+    })
+}
+
+/// Variant A provenance: exact identity, zero transactions, no asserted EVP
+/// proof or checker success. It does not disable existing lowering passes.
+pub fn write_identity_chain(module: &Module, destination: &std::path::Path) -> Result<(), String> {
+    validate_module(module)?;
+    let input = render_module(module);
+    let digest = sha256_hex(input.as_bytes());
+    let chain_id = sha256_hex(format!("identity-chain-v1\n{digest}\n").as_bytes());
+    let record = format!("{{\"attempted_transactions\":0,\"chain_id\":\"{chain_id}\",\"input_digest\":\"{digest}\",\"mode\":\"eqsat-off\",\"output_digest\":\"{digest}\",\"publication\":\"IDENTITY_VERIFIED\",\"schema\":\"evocc-identity-chain-v1\",\"transactions\":[]}}");
+    write_new_bundle(destination, &record, |destination| {
+        std::fs::write(destination.join("input.evo"), &input)?;
+        std::fs::write(destination.join("output.evo"), &input)
+    })
+}
+
+fn write_new_bundle(
+    destination: &std::path::Path,
+    record: &str,
+    contents: impl FnOnce(&std::path::Path) -> std::io::Result<()>,
+) -> Result<(), String> {
+    use std::fs;
+    fs::create_dir(destination).map_err(|e| format!("create new proof directory: {e}"))?;
+    let result = (|| -> std::io::Result<()> {
+        contents(destination)?;
         fs::write(destination.join("chain.json.pending"), record)?;
         fs::rename(
             destination.join("chain.json.pending"),

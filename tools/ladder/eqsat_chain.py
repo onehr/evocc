@@ -92,6 +92,7 @@ def proof_bucket(verification, reason):
 
 
 def validate_record(record):
+    require(type(record) is dict, 'chain record must be an object')
     base = ('attempted_transactions chain_id checker_digest checker_timeout_ms input_digest '
             'max_transactions output_digest policy policy_digest publication schema stop transactions verified_prefix')
     rejected = record.get('publication') == 'REJECTED'
@@ -192,9 +193,41 @@ def validate_record(record):
         require(type(record['checker_digest']) is str and 1 <= natural(record['checker_timeout_ms']) <= 300000, 'missing checker identity/deadline')
 
 
-def verify_bundle(directory: Path, checker: Path):
+def verify_identity_bundle(directory: Path, raw: bytes, record):
+    """Identity evidence is not a zero-region EVP certificate or a proof pass."""
+    keys(record, 'attempted_transactions chain_id input_digest mode output_digest publication schema transactions')
+    require(record['schema'] == 'evocc-identity-chain-v1' and record['mode'] == 'eqsat-off'
+            and record['publication'] == 'IDENTITY_VERIFIED', 'invalid identity-chain kind')
+    require(natural(record['attempted_transactions']) == 0 and record['transactions'] == [],
+            'identity chain cannot contain transactions')
+    for key in ('chain_id', 'input_digest', 'output_digest'):
+        sha256_identity(record[key])
+    before = (directory / 'input.evo').read_bytes()
+    after = (directory / 'output.evo').read_bytes()
+    require(before == after and digest(before) == record['input_digest'] == record['output_digest'],
+            'identity chain changed the IR')
+    require(record['chain_id'] == digest(f"identity-chain-v1\n{record['input_digest']}\n".encode()),
+            'identity chain ID mismatch')
+    require(not list(directory.glob('*.evp')), 'identity chain has no EVP proof artifacts')
+    require((directory / 'chain.json').read_bytes() == raw
+            and (directory / 'input.evo').read_bytes() == before
+            and (directory / 'output.evo').read_bytes() == after, 'identity bundle changed during audit')
+    return dict(schema='evocc-chain-audit-v1', accepted=True,
+                chain_record_digest=digest(raw), verified_ir_digest=record['output_digest'],
+                identity_checks=1, evidence='BYTE_IDENTITY_ONLY_NOT_EVP_REPLAY',
+                proof_counts=dict(proof_successes=0, completed_proof_rejections=0,
+                                  bundle_obligation_failures=0, unknown_proof_outcomes=0, not_checked=0),
+                replay=[], measurement_counters='NOT_APPLICABLE')
+
+
+def verify_bundle(directory: Path, checker: Path | None = None):
     raw = (directory / 'chain.json').read_bytes()
     record = json.loads(raw, object_pairs_hook=unique)
+    require(type(record) is dict, 'chain record must be an object')
+    if record.get('schema') == 'evocc-identity-chain-v1':
+        require(checker is None, 'identity chain does not use a proof checker')
+        return verify_identity_bundle(directory, raw, record)
+    require(checker is not None, 'optimized chain requires a standalone checker')
     validate_record(record)
     require(record['publication'] == 'VERIFIED', 'rejected chain cannot enter measurement')
     identity = digest(checker.read_bytes())

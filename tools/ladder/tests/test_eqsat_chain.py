@@ -10,11 +10,109 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location('eqsat_chain', ROOT / 'tools/ladder/eqsat_chain.py')
 chain = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(chain)
+
+
+class IdentityArchive(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.temp = tempfile.TemporaryDirectory(prefix='evocc-identity-contract-')
+        cls.root = Path(cls.temp.name)
+        target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target/frontend'))
+        cls.driver = target / 'debug/evocc'
+        cls.source = ROOT / 'tests/fixtures/verified-eqsat-chain.c'
+        cls.bundle = cls.root / 'identity'
+        out = subprocess.run([str(cls.driver), '--emit=evoir', '-O2',
+                              f'--eq-proof-dir={cls.bundle}', str(cls.source)], capture_output=True, check=False)
+        if out.returncode:
+            raise AssertionError(out.stderr.decode())
+        cls.ir = out.stdout
+        cls.record = json.loads((cls.bundle / 'chain.json').read_bytes())
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.temp.cleanup()
+
+    def test_actual_driver_exports_identity_without_claiming_a_proof(self):
+        with patch.object(chain.subprocess, 'run', side_effect=AssertionError('no checker for identity')):
+            audit = chain.verify_bundle(self.bundle)
+        self.assertTrue(audit['accepted'])
+        self.assertEqual(audit['identity_checks'], 1)
+        self.assertEqual(audit['proof_counts']['proof_successes'], 0)
+        self.assertEqual(audit['replay'], [])
+        self.assertEqual((self.bundle / 'input.evo').read_bytes(), self.ir)
+        self.assertEqual((self.bundle / 'output.evo').read_bytes(), self.ir)
+        out = subprocess.run(['python3', str(ROOT / 'tools/bench.py'), '--verify-eqsat-chain', str(self.bundle)],
+                             capture_output=True, check=False)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(json.loads(out.stdout)['proof_counts']['proof_successes'], 0)
+
+    def test_asm_and_ir_paths_bind_the_same_unoptimized_module(self):
+        directory = self.root / 'assembly'
+        args = [str(self.driver), '--emit=asm', '-O2', str(self.source)]
+        plain = subprocess.run(args, capture_output=True, check=False)
+        retained = subprocess.run([*args, f'--eq-proof-dir={directory}'], capture_output=True, check=False)
+        self.assertEqual(plain.returncode, 0, plain.stderr)
+        self.assertEqual(retained.returncode, 0, retained.stderr)
+        self.assertTrue(plain.stdout)
+        self.assertEqual(plain.stdout, retained.stdout)
+        self.assertEqual((directory / 'input.evo').read_bytes(), self.ir)
+        self.assertEqual((directory / 'chain.json').read_bytes(), (self.bundle / 'chain.json').read_bytes())
+
+    def test_identity_one_field_mutations_and_changed_bytes_are_rejected(self):
+        mutations = dict(mode='eqsat-on', attempted_transactions=True, transactions=[{}],
+                         publication='VERIFIED', schema='evocc-verified-chain-v1',
+                         input_digest='f' * 64, output_digest='f' * 64, chain_id='f' * 64,
+                         checker_digest='f' * 64)
+        for key, value in mutations.items():
+            directory = self.root / ('mutated-' + key)
+            shutil.copytree(self.bundle, directory)
+            record = {**self.record, key: value}
+            (directory / 'chain.json').write_text(json.dumps(record))
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                chain.verify_bundle(directory)
+        directory = self.root / 'changed-bytes'
+        shutil.copytree(self.bundle, directory)
+        changed = self.ir + b'\n'
+        (directory / 'output.evo').write_bytes(changed)
+        (directory / 'chain.json').write_text(json.dumps({**self.record, 'output_digest': chain.digest(changed)}))
+        with self.assertRaisesRegex(ValueError, 'changed the IR'):
+            chain.verify_bundle(directory)
+
+    def test_no_implicit_checker_or_fake_evp_file(self):
+        with self.assertRaisesRegex(ValueError, 'does not use'):
+            chain.verify_bundle(self.bundle, Path('/missing/checker'))
+        directory = self.root / 'fake-proof'
+        shutil.copytree(self.bundle, directory)
+        (directory / '000.proof.evp').write_text('fake')
+        with self.assertRaisesRegex(ValueError, 'no EVP'):
+            chain.verify_bundle(directory)
+
+    def test_malformed_top_level_is_a_contract_error(self):
+        directory = self.root / 'array-record'
+        shutil.copytree(self.bundle, directory)
+        (directory / 'chain.json').write_text('[]')
+        with self.assertRaisesRegex(ValueError, 'must be an object'):
+            chain.verify_bundle(directory)
+
+    def test_existing_directory_and_inactive_flags_refuse_without_stdout(self):
+        for options in ([f'--eq-proof-dir={self.bundle}'],
+                        ['--eq-checker=/missing'], ['--eq-policy=instruction-count']):
+            out = subprocess.run([str(self.driver), '--emit=evoir', *options, str(self.source)],
+                                 capture_output=True, check=False)
+            self.assertNotEqual(out.returncode, 0)
+            self.assertFalse(out.stdout)
+        for mode in ('-E', '--parse-only', '--emit=c-hir', '--interpret-c-hir'):
+            directory = self.root / ('invalid-' + mode.replace('/', '_'))
+            out = subprocess.run([str(self.driver), mode, f'--eq-proof-dir={directory}', str(self.source)],
+                                 capture_output=True, check=False)
+            self.assertNotEqual(out.returncode, 0)
+            self.assertFalse(directory.exists())
 
 
 class ChainArchive(unittest.TestCase):

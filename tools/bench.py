@@ -62,7 +62,7 @@ def parser():
     p.add_argument("--evocc", type=Path, help="measure this existing binary; do not build another one")
     p.add_argument("--no-build", action="store_true", help="reuse the default release binary")
     p.add_argument('--verify-eqsat-chain', type=Path, help='independently audit an existing R01a proof directory; no benchmark campaign')
-    p.add_argument('--checker', type=Path, help='standalone checker matching the retained EqSat chain identity')
+    p.add_argument('--checker', type=Path, help='required for optimized chains; omitted for an EqSat-off identity chain')
     p.add_argument('--eqsat-census', type=Path, help='read a retained policy report and separate default cap scopes; no build, proof admission or performance claim')
     p.add_argument('--eqsat-cap-smoke', type=Path, help='run a committed, bounded generated-IR telemetry manifest; not the application preflight')
     p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
@@ -564,7 +564,7 @@ def main(argv=None):
     def only_options(*allowed):
         return all(name in allowed or value == defaults[name] for name, value in vars(args).items())
     def eqsat_tool(name):
-        package = 'ladder' if __name__ == '__main__' else 'tools.ladder'
+        package = 'ladder' if __name__ == '__main__' and not __package__ else 'tools.ladder'
         return importlib.import_module(package + '.' + name)
     if args.eqsat_cap_smoke:
         if not only_options('eqsat_cap_smoke'):
@@ -592,8 +592,8 @@ def main(argv=None):
             print(f'EqSat census rejected: {error}', file=sys.stderr)
             return 2
     if args.verify_eqsat_chain:
-        if args.benchmarks or args.status or args.dry_run or args.list or not args.checker:
-            print('--verify-eqsat-chain requires --checker and no other mode', file=sys.stderr)
+        if not only_options('verify_eqsat_chain', 'checker'):
+            print('--verify-eqsat-chain cannot be combined with another mode', file=sys.stderr)
             return 2
         verify_bundle = eqsat_tool('eqsat_chain').verify_bundle
         try:

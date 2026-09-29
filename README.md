@@ -372,6 +372,9 @@ them later, use `python3 tools/bench.py --verify-eqsat-chain NEW_DIR --checker P
 An existing proof directory is never overwritten. See the
 [implementation receipt](docs/notebook/verified-eqsat-implementation-20260929.md)
 for tested scope; this does not close whole-kernel G2 or performance milestones.
+Without `-Oeq-scalar`, the same export option records an explicit identity chain
+(zero rewrite transactions). Audit it with `--verify-eqsat-chain NEW_DIR` and
+no checker; byte identity is reported separately from proof replay.
 
 ## Why EvoIR and EvoMIR?
 

@@ -328,13 +328,13 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
             "-Oeq-scalar" => optimize_scalar_evoir = true,
             _ if arg.starts_with("--eq-") => {
-                eq_options = true;
                 let (key, value) = arg
                     .split_once('=')
                     .ok_or("EqSat options require --eq-KEY=VALUE")?;
                 if value.is_empty() {
                     return Err("empty EqSat option".into());
                 }
+                eq_options |= key != "--eq-proof-dir";
                 match key {
                     "--eq-policy" => {
                         let selected =
@@ -594,6 +594,14 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         );
     }
     let schedule = eq_policy.schedule();
+    if eq_proof_dir.is_some()
+        && !matches!(
+            mode,
+            DriverMode::EmitEvoIr | DriverMode::EmitAsm | DriverMode::InterpretEvoIr
+        )
+    {
+        return Err("--eq-proof-dir requires an EvoIR execution or emission mode".into());
+    }
     if (eq_options && !optimize_scalar_evoir)
         || schedule.max_nodes > 100_000
         || schedule.max_epochs > 1_024
@@ -1177,6 +1185,12 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                             }
                         }
                     } else {
+                        if let Some(path) = &options.eq_proof_dir {
+                            if let Err(detail) = evocc_eqopt::write_identity_chain(&module, path) {
+                                eprintln!("evocc: identity-chain publication failed: {detail}");
+                                return ExitCode::from(1);
+                            }
+                        }
                         module
                     };
                     match action {

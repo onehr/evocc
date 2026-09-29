@@ -1932,6 +1932,9 @@ record a justified not-needed disposition separately from implementation PASS.
     bench entry point and lock, with committed bounded input manifests and
     scoped/unknown counters. Native performance manifests and runners remain
     open; the generated-IR collector smoke is not their acceptance.
+    EqSat-off export now records a zero-transaction identity chain over the
+    exact codegen IR. Independent byte-identity audit reports zero EVP proof
+    successes; checked/unchecked fan-out is still open.
     [Scope and protocol](docs/notebook/eqsat-cap-census-20260929.md).
 
   - [ ] **R02b — Opportunity/effect-ceiling preflight and A/A plus A/B pilot** — `LATER`, P3.

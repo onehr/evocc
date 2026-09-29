@@ -74,7 +74,49 @@ not forged compiler performance evidence.
   effective UB/lowering identities; object provenance and fresh result predicates.
 - Native metric collection, result validation for each sample, A/A calibration,
   interleaving/statistics and original application adapters.
-- EqSat-off identity chains and common verified-IR checked/unchecked fan-out;
-  the latter still requires the R02d backend profile.
+- Common verified-IR checked/unchecked fan-out; the unchecked backend profile
+  still requires R02d. The EqSat-off identity-chain prerequisite is described below.
 - Full R02b application cap table and selected-pair, rule and shortcut censuses.
   This collector leaves all three track verdicts NOT_RUN.
+
+## EqSat-off identity-chain prerequisite
+
+`--eq-proof-dir=NEW_DIR` without `-Oeq-scalar` now exports an explicit identity
+chain. The driver validates and renders the same module it then sends to
+interpretation or codegen; it does not rerun lowering or enable EqSat. Existing
+lowering optimizations and source flags are unchanged. Only EvoIR emission,
+assembly emission and EvoIR interpretation accept the export option.
+
+Canonical `evocc-identity-chain-v1` records bind identical `input.evo` and
+`output.evo` bytes, zero attempted transactions and an empty transaction list.
+The publication label is `IDENTITY_VERIFIED`, deliberately distinct from an EVP
+rewrite proof. The shared exclusive-directory publisher refuses overwrite.
+
+```sh
+target/frontend/debug/evocc --emit=evoir -O2 --eq-proof-dir=NEW_DIR source.c
+python3 tools/bench.py --verify-eqsat-chain NEW_DIR
+```
+
+The independent consumer checks byte identity and record hashes, rejects changed
+IR, a fake EVP artifact, nonzero transaction counts, unknown fields and a supplied
+checker. It reports one identity check and **zero proof successes**. Optimized
+chains still require the standalone checker; changing a schema cannot bypass
+the equality-of-bytes requirement. Identity verification is not a C correctness,
+native-code or performance claim. R02's future manifest must additionally bind
+the declared variant/source and actual codegen input; the identity record alone
+does not establish those outer provenance claims.
+
+Tests compare actual driver IR/assembly output with and without export, replay
+both identity and optimized chains, mutate each load-bearing identity field,
+and reject inactive flags and existing destinations. The Darwin ARM64 native
+driver test also lowers/runs the exact identity IR alongside the optimized IR.
+This closes the identity-record prerequisite, not R02a or checked/unchecked
+native twins.
+
+The final identity/chain/census/bench/TODO Python gate passed **100 tests**;
+the Rust verified-chain/driver gate passed **16 tests**, including both Darwin
+native executions. Three affected packages passed all-target Clippy with
+`-D warnings`; formatting, whitespace and 261 local inline Markdown links passed.
+These are overlapping regression gates, not a new application population.
+An actual CLI identity export is retained at `.evidence/eqsat-identity-20260929`;
+its independent audit reported one identity check and zero proof successes.

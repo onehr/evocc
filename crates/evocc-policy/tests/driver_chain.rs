@@ -46,6 +46,33 @@ fn cli_and_evaluator_bind_identical_verified_chain_and_output() {
         "{}",
         String::from_utf8_lossy(&plain.stderr)
     );
+    let identity_dir = root.0.join("identity");
+    let identity = Command::new(&bin)
+        .arg("--emit=evoir")
+        .arg(format!("--eq-proof-dir={}", identity_dir.display()))
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        identity.status.success(),
+        "{}",
+        String::from_utf8_lossy(&identity.stderr)
+    );
+    assert_eq!(
+        identity.stdout, plain.stdout,
+        "identity export must not enable EqSat"
+    );
+    assert_eq!(
+        fs::read(identity_dir.join("input.evo")).unwrap(),
+        plain.stdout
+    );
+    assert_eq!(
+        fs::read(identity_dir.join("output.evo")).unwrap(),
+        plain.stdout
+    );
+    assert!(fs::read_to_string(identity_dir.join("chain.json"))
+        .unwrap()
+        .contains("\"attempted_transactions\":0"));
     fs::write(root.0.join("input.evo"), &plain.stdout).unwrap();
     let corpus = Corpus::from_directory(&root.0, None).unwrap();
     let checker = ProofChecker::locate().unwrap();
@@ -99,6 +126,13 @@ fn cli_and_evaluator_bind_identical_verified_chain_and_output() {
         let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
         let assembly = evocc_mir::compile_module(&module).unwrap();
         let toolchain = evocc_mir::Toolchain::locate().unwrap();
+        let baseline = evocc_evoir::parse_section9_module(&identity.stdout).unwrap();
+        let baseline_assembly = evocc_mir::compile_module(&baseline).unwrap();
+        let baseline_object = toolchain
+            .assemble("identity-chain", &baseline_assembly)
+            .unwrap();
+        let baseline_native = toolchain.link("identity-chain", &baseline_object).unwrap();
+        assert_eq!(toolchain.run(&baseline_native).unwrap(), 0);
         // Optional, explicit retention for the R01a acceptance receipt. An
         // existing destination is never adopted or cleaned by this test.
         let retained = std::env::var_os("EVOCC_R01A_RECEIPT_DIR").map(PathBuf::from);
