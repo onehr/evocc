@@ -9,8 +9,10 @@ implementation of the design. The starting checkout was `a4c5209`.
 Reopened after review: the four-crate Rust gate below omitted proofcheck. The
 sealed-certificate suite failed all three tests because chain/census directories
 were incorrectly placed among certificate triples. These historical scoped
-counts remain valid but do not close R01a. Requalification requires the full
-workspace gate and all four review blockers; no application census is admitted.
+counts remain valid but do not close R01a. The subsequent
+[review corrections and full-workspace requalification](eqsat-review-closure-20260929.md)
+at `31234f5` close all four review blockers and R01a. This does not admit an
+application census without R02a's own manifests and correctness gates.
 
 The driver and policy evaluator now call the same policy-aware persistent
 runner. Policy identity includes all thirteen weights, registry ceiling,
@@ -101,7 +103,7 @@ semantic check, not a rewrite of the historical native/compiler identity.
 
 ## Next dependency
 
-After R01a closes, implement R02a's frozen performance/admission manifests and
+With R01a requalified, implement R02a's frozen performance/admission manifests and
 R02b's default-limit saturation table first. Policy, shortcut and new-rule
 tracks require separate preflight verdicts. No paid AI campaign, expanded
 registry, unchecked native profile, or positive Q2/Q3 claim is authorized by

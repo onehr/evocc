@@ -58,10 +58,41 @@ disabled and Rust test/dev debuginfo disabled. The command was
 contained the package-built `evocc-checker` and no `evo-proofcheck`; no preexisting
 sibling could supply its dependency. The 407 MiB temporary target was removed
 after exit 0; logs and compiler/checker hashes remain in
-`.evidence/eqsat-review-20260929-WesLHU/`.
+`.evidence/eqsat-review-20260929-WesLHU/`. This package check preceded the MIR
+caller follow-up below; the final full-workspace gate qualifies that follow-up.
 
-Full-workspace qualification is in progress. Do not infer PASS from focused
-gates. No real-application census was run during repair;
+The final source subject is commit `31234f5`. With a clean tracked worktree,
+the full-workspace command above exited **0** and printed
+`gate-changed: full workspace green`:
+
+| Gate | Actual result | Scope |
+| --- | --- | --- |
+| Workspace Rust tests and doctests | **2,850 PASS / 0 FAIL / 4 ignored**, 362 suite summaries | No crate selection or test filter; includes the formerly omitted sealed-certificate suite and the MIR native C-corpus caller. |
+| Workspace all-target Clippy | **PASS**, `-D warnings` | Full workspace, not the previous selected crates. |
+| Workspace formatting | **PASS** | `cargo fmt --all -- --check`. |
+| Chain/census/bench/TODO/gate Python tests | **118 PASS** | Includes recovery accounting, bounded capture, wrong checker identity and gate-selection REDs; mocked benchmark outputs are not application results. |
+| Fresh-target package test | **560 PASS**, 58 suite summaries | Checker packaging regression, as qualified above; overlaps the workspace tests. |
+
+The four ignored tests remain NOT_RUN: sealed-container whole-C-corpus,
+extended native campaign, standing four-lane campaign, and extended randomized
+semantic campaign. Environment-gated test returns are not evidence that their
+optional external campaign ran. No Linux target, G2, performance, or new formal
+rule claim follows from this Rust gate. Counts across the rows must not be added
+as unique-case coverage.
+
+`full-workspace-gate.log` retains the complete successful command output;
+`workspace-attempt-1.log` and `workspace-attempt-2.log` retain the failures.
+`python-final.log`, `clean-package.log` and `clean-package-binaries.sha256`
+retain the separate qualification scopes. Final workspace binary SHA-256s:
+
+```text
+a00042e598c7f9550c19c7d7f4a0ecee61a4fcc6ba0ce1842d23c35ce3898a18  evocc
+97ded26308e4c6985559d607cb83f14496da25989ee8a5372c04f402f5dcb269  evocc-checker
+4947c24343cc177387c5a4a7debc4c6bd82acd8e7588c1303b68c3959f4fb1bd  evo-proofcheck
+80ed5f0b680600a3e4e9e4d5911df005703f07998dce1aff35174ba1593684e1  evo-policy-eval
+```
+
+R01a is requalified. No real-application census was run during repair;
 the frozen 32-program generated-IR capture remains unchanged and scoped to its
 original subject. The three effect-ceiling tracks remain NOT_RUN.
 
