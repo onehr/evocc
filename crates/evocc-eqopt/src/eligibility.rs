@@ -51,6 +51,10 @@ impl Admission {
         !self.tainted.contains(&value) && !self.excluded.contains(&value)
     }
 
+    pub(crate) fn is_tainted(&self, value: u32) -> bool {
+        self.tainted.contains(&value)
+    }
+
     /// Section 8.7: `input` for a block argument, `definition` for a value
     /// defined earlier in the function.
     pub(crate) fn origin(&self, value: u32) -> EvpSeedOrigin {

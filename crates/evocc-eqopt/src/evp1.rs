@@ -40,6 +40,15 @@ const REGISTRY_V3_SHA256: &str = "aca1f15b47e602ce18c593e06d77008862947c7c7252a9
 const REGISTRY_V4: &str = "p0.scalar.v4";
 const REGISTRY_V4_SHA256: &str = "1a5391603386e18e18bfb1b2fc61985c9eb252c6e65bcb3259104bd49b2a9d74";
 
+pub(crate) fn registry_ceiling_digest(ceiling: crate::RegistryCeiling) -> &'static str {
+    match ceiling {
+        crate::RegistryCeiling::V1 => REGISTRY_V1_SHA256,
+        crate::RegistryCeiling::V2 => REGISTRY_V2_SHA256,
+        crate::RegistryCeiling::V3 => REGISTRY_V3_SHA256,
+        crate::RegistryCeiling::V4 => REGISTRY_V4_SHA256,
+    }
+}
+
 /// The rules each revision added, which is what makes the narrowest registry a
 /// question about names rather than about numbers: `p1_206` is printed by the
 /// third registry although it sits between two rules of the second.
@@ -147,6 +156,28 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     let input = render_module(module);
     let (transient, applied) = optimize_scalar_module_with_events(module, budget);
     let mut report = transient.report;
+    report.telemetry.search_bridge_nodes = report.graph_nodes;
+    report.telemetry.search_rewrite_events = report.epochs;
+    // Inventory the entire canonical input, including roots beyond a stop.
+    for function in &module.functions {
+        let admission = Admission::of(function);
+        for inst in function.blocks.iter().flat_map(|b| &b.insts) {
+            if let [value] = inst_results(inst).as_slice() {
+                if matches!(value.ty, EvoIRType::Bits(1..=64)) {
+                    report.telemetry.roots_total += 1;
+                    report.telemetry.roots_eligible += usize::from(admission.admits(value.id));
+                    // Disjoint reason precedence; it does not change admission.
+                    if admission.is_tainted(value.id) {
+                        report.telemetry.roots_tainted += 1;
+                    } else if !crate::eligibility::allowlisted(inst) {
+                        report.telemetry.roots_unlisted += 1;
+                    } else if !admission.admits(value.id) {
+                        report.telemetry.roots_excluded_dependency += 1;
+                    }
+                }
+            }
+        }
+    }
     report.receipts.clear();
     report.merges = 0;
     report.optimized_values = 0;
@@ -176,6 +207,11 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                 seed_facts: &seed_facts,
             };
             for (instruction_index, instruction) in block.insts.iter().enumerate() {
+                if let [value] = inst_results(instruction).as_slice() {
+                    if matches!(value.ty, EvoIRType::Bits(1..=64)) {
+                        report.telemetry.roots_visited += 1;
+                    }
+                }
                 let Some(root_event) = applied.iter().find(|event| {
                     event.function == function.name
                         && event.block == block.id
@@ -185,6 +221,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                 }) else {
                     continue;
                 };
+                report.telemetry.roots_proposed += 1;
                 let Some((region, normalized_event, output_replacement, congruent_root)) =
                     build_region(
                         module,
@@ -196,9 +233,11 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                         root_event,
                     )
                 else {
+                    report.telemetry.declined_witness += 1;
                     continue;
                 };
                 if !policy_keeps(policy, instruction, &output_replacement, &region) {
+                    report.telemetry.declined_policy += 1;
                     // Section 7.5 and Section 8.7: a region the policy's own
                     // cost does not make strictly cheaper, or whose rules
                     // reach past the policy's registry, is declined. Declining
@@ -221,6 +260,10 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                     // zero-region certificate is non-conforming, because it
                     // discards work a checker would have verified.
                     report.budget_exhausted = true;
+                    report.telemetry.admission_regions_hit = regions.len() >= budget.max_epochs;
+                    report.telemetry.admission_nodes_hit =
+                        proof_nodes.saturating_add(new_nodes) > budget.max_nodes;
+                    report.telemetry.admission_next_nodes = new_nodes;
                     break 'admit;
                 }
                 proof_nodes += new_nodes;
@@ -233,6 +276,8 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                 });
                 events.push(normalized_event);
                 regions.push(region);
+                report.telemetry.admission_regions = regions.len();
+                report.telemetry.admission_proof_nodes = proof_nodes;
             }
         }
     }
@@ -461,6 +506,9 @@ fn zero_transaction(
 }
 
 fn zero(module: &Module, input: String, mut report: ScalarEqReport) -> CertifiedScalarEqOutcome {
+    report.regions_admitted = 0;
+    report.graph_nodes = 0;
+    report.epochs = 0;
     report.merges = 0;
     report.optimized_values = 0;
     CertifiedScalarEqOutcome {
@@ -668,15 +716,31 @@ fn build_region(
         let derived = region_rewrite(event, &nodes, &value_classes, &classes, &facts, node_id)?;
         let opportunity = derived.opportunity;
         let rule = derived.rule;
+        // The region can derive stronger facts than the transient sweep: an
+        // emitted RHS and congruence participate in its fixed point. Preserve
+        // that environment with the normalized rule, rather than pairing the
+        // region's new rule with the sweep's stale premises. The standalone
+        // checker still independently reconstructs these facts from the EVP
+        // nodes and seeds; this only repairs the persistent history adapter.
+        let mut normalized_known = event.known.clone();
+        let mut normalized_facts = event.facts.clone();
+        for (&value, &class) in &value_classes {
+            let fact = facts.of(class, &classes)?;
+            normalized_known.insert(value, fact);
+            let ty = EvoIRType::Bits(fact.width());
+            if let Some(raw) = class_constant(&nodes, &classes, class, &packed_type(&ty)?) {
+                normalized_facts.insert(value, ScalarFact::Constant { raw, ty });
+            }
+        }
         let normalized_event = AppliedRewrite {
             function: event.function.clone(),
             block: event.block,
             result: event.result.clone(),
             instruction: event.instruction.clone(),
-            facts: event.facts.clone(),
+            facts: normalized_facts,
             twin: None,
             negations: event.negations.clone(),
-            known: event.known.clone(),
+            known: normalized_known,
             rule: opportunity.rule,
             replacement: opportunity.replacement.clone(),
         };

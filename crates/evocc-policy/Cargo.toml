@@ -22,3 +22,6 @@ evocc-eqopt = { path = "../evocc-eqopt" }
 evocc-evoir = { path = "../evocc-evoir" }
 evocc-proof = { path = "../evocc-proof" }
 evocc-randgate = { path = "../evocc-randgate" }
+
+[dev-dependencies]
+evocc-mir = { path = "../evocc-mir" }

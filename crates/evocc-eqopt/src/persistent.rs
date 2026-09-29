@@ -17,7 +17,7 @@ use crate::scalar_eq::{
     ingest_scalar_inst, mask_raw, operator_id, optimize_scalar_module_with_events, scalar_operands,
     scalar_result, AppliedRewrite, EmittedOperand, Replacement, ScalarOperator,
 };
-use crate::{ProofAuthority, ScalarEqBudget, ScalarEqOutcome};
+use crate::{ExtractionPolicy, ProofAuthority, ScalarEqBudget, ScalarEqOutcome};
 
 const FIRST_LEAF_OP: OpId = 20_000;
 const FIRST_INSTANCE_RULE: u32 = 100_000;
@@ -69,6 +69,7 @@ struct HistoryAudit {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EqualityAudit {
     translation_unit_identity: [u8; 32],
+    current_module_identity: [u8; 32],
     target_layout_identity: [u8; 32],
     revision: u64,
     ingested: bool,
@@ -87,6 +88,7 @@ pub struct EqualityAudit {
 #[derive(Clone)]
 pub struct EqualityState {
     translation_unit_identity: [u8; 32],
+    current_module_identity: [u8; 32],
     target_layout_identity: [u8; 32],
     canonical_input: String,
     revision: u64,
@@ -108,6 +110,7 @@ impl EqualityState {
         let translation_unit_identity = sha256(canonical_input.as_bytes());
         Ok(Self {
             translation_unit_identity,
+            current_module_identity: translation_unit_identity,
             target_layout_identity: FROZEN_LAYOUT_IDENTITY,
             canonical_input,
             revision: 0,
@@ -124,6 +127,14 @@ impl EqualityState {
     #[must_use]
     pub const fn revision(&self) -> u64 {
         self.revision
+    }
+
+    pub(crate) fn matches_module(&self, module: &Module) -> bool {
+        self.current_module_identity == sha256(render_module(module).as_bytes())
+    }
+
+    pub(crate) fn is_ingested(&self) -> bool {
+        self.ingested
     }
 
     /// Seed block arguments, constants and P0 operations from the bound input.
@@ -194,6 +205,8 @@ impl EqualityState {
     /// Replay both the exact e-graph certificate and the reviewed P0 semantic
     /// instance behind every optimizer-requested union.
     pub fn verify_history(&mut self) -> Result<(), String> {
+        #[cfg(test)]
+        fault::check(fault::Point::History)?;
         let certificate = self.graph.proof_certificate();
         let context = ProofContext::new(certificate.rules.clone()).map_err(|e| e.to_string())?;
         context.replay(&certificate).map_err(|e| e.to_string())?;
@@ -243,6 +256,7 @@ impl EqualityState {
             .collect();
         EqualityAudit {
             translation_unit_identity: self.translation_unit_identity,
+            current_module_identity: self.current_module_identity,
             target_layout_identity: self.target_layout_identity,
             revision: self.revision,
             ingested: self.ingested,
@@ -346,9 +360,12 @@ impl EqualityState {
     }
 
     fn apply(&mut self, instance: AppliedRewrite) -> Result<bool, String> {
+        #[cfg(test)]
+        fault::check(fault::Point::Apply)?;
         if !instance.is_reviewed_instance() {
             return Err(format!(
-                "optimizer supplied a rewrite outside {REVIEWED_REGISTRY}"
+                "optimizer supplied a rewrite outside {REVIEWED_REGISTRY}: @{} %v{} {:?}",
+                instance.function, instance.result.id, instance.rule
             ));
         }
         let lhs = self
@@ -517,6 +534,25 @@ impl EqualityState {
         self.values = remapped;
         Ok(())
     }
+
+    fn bind_new_definitions(&mut self, module: &Module) -> Result<(), String> {
+        // Emitting RHSs introduce fresh definitions absent from the old-to-new
+        // survivor map. Insert their actual post-extraction shapes using current
+        // operand classes. Hash-consing reconnects them to the already-proved RHS
+        // without a new asserted union or a second equality authority.
+        for function in &module.functions {
+            for inst in function.blocks.iter().flat_map(|block| &block.insts) {
+                if inst_results(inst)
+                    .iter()
+                    .all(|value| !self.values.contains_key(&(function.name.clone(), value.id)))
+                {
+                    self.ingest_instruction(&function.name, inst)?;
+                }
+            }
+        }
+        self.graph.rebuild();
+        Ok(())
+    }
 }
 
 /// Commit one certified scalar optimization and its persistent equality
@@ -527,7 +563,17 @@ pub fn optimize_scalar_module_certified_persistent(
     state: &mut EqualityState,
     budget: ScalarEqBudget,
 ) -> CertifiedScalarEqOutcome {
-    let transaction = optimize_scalar_module_with_evp1_transaction(module, &policy_for(budget));
+    optimize_scalar_module_certified_persistent_with_policy(module, state, &policy_for(budget))
+}
+
+/// Policy-aware transaction used by both the driver and evaluation chain.
+#[must_use]
+pub fn optimize_scalar_module_certified_persistent_with_policy(
+    module: &Module,
+    state: &mut EqualityState,
+    policy: &ExtractionPolicy,
+) -> CertifiedScalarEqOutcome {
+    let transaction = optimize_scalar_module_with_evp1_transaction(module, policy);
     let outcome = transaction.outcome;
     if outcome.report.fell_back {
         return outcome;
@@ -535,17 +581,28 @@ pub fn optimize_scalar_module_certified_persistent(
     if outcome.certificate.regions.len() != transaction.events.len()
         || outcome.report.optimized_values != transaction.events.len()
     {
-        return certified_persistent_fallback(module, outcome);
+        return certified_persistent_fallback(
+            module,
+            outcome,
+            "certificate/event count mismatch".into(),
+        );
     }
     let proof = render_evp1(&outcome.certificate);
     if parse_evp1(proof.as_bytes()).as_ref() != Ok(&outcome.certificate) {
-        return certified_persistent_fallback(module, outcome);
+        return certified_persistent_fallback(module, outcome, "certificate text mismatch".into());
+    }
+    if !state.matches_module(module) {
+        return certified_persistent_fallback(
+            module,
+            outcome,
+            "persistent input identity mismatch".into(),
+        );
     }
     if transaction.events.is_empty() {
         return outcome;
     }
     if !state.ingested {
-        return certified_persistent_fallback(module, outcome);
+        return certified_persistent_fallback(module, outcome, "unseeded persistent state".into());
     }
 
     let mut staged = state.clone();
@@ -553,27 +610,29 @@ pub fn optimize_scalar_module_certified_persistent(
     for event in transaction.events {
         match staged.apply(event) {
             Ok(applied) => changed |= applied,
-            Err(_) => return certified_persistent_fallback(module, outcome),
+            Err(detail) => return certified_persistent_fallback(module, outcome, detail),
         }
     }
     staged.graph.rebuild();
-    if staged
+    if let Err(detail) = staged
         .remap_current_values(&transaction.value_remap)
-        .is_err()
-        || staged.verify_history().is_err()
+        .and_then(|()| staged.bind_new_definitions(&outcome.module))
+        .and_then(|()| staged.verify_history())
     {
-        return certified_persistent_fallback(module, outcome);
+        return certified_persistent_fallback(module, outcome, detail);
     }
     if changed {
         staged.revision = staged.revision.saturating_add(1);
-        *state = staged;
     }
+    staged.current_module_identity = sha256(render_module(&outcome.module).as_bytes());
+    *state = staged;
     outcome
 }
 
 fn certified_persistent_fallback(
     module: &Module,
     mut outcome: CertifiedScalarEqOutcome,
+    detail: String,
 ) -> CertifiedScalarEqOutcome {
     let input = render_module(module);
     let digest = sha256_hex(input.as_bytes());
@@ -583,6 +642,7 @@ fn certified_persistent_fallback(
     outcome.certificate.output_digest = digest;
     outcome.report.proof_replay_failed = true;
     outcome.report.fell_back = true;
+    outcome.report.internal_error = Some(detail);
     outcome.report.regions_admitted = 0;
     outcome.report.graph_nodes = 0;
     outcome.report.epochs = 0;
@@ -633,6 +693,7 @@ pub fn optimize_scalar_module_persistent(
     }
     if changed {
         staged.revision = staged.revision.saturating_add(1);
+        staged.current_module_identity = sha256(render_module(&outcome.module).as_bytes());
         *state = staged;
     }
     outcome
@@ -654,6 +715,42 @@ fn persistent_fallback(
 
 fn type_identity(ty: &EvoIRType) -> String {
     format!("{ty:?}")
+}
+
+/// Test-only, thread-local injection at the real persistent mutation boundary.
+/// No command-line flag, environment variable or release-build hook exists.
+#[cfg(test)]
+pub(crate) mod fault {
+    use std::cell::Cell;
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub enum Point {
+        Apply,
+        History,
+    }
+    thread_local! { static NEXT: Cell<Option<(Point, usize)>> = const { Cell::new(None) }; }
+    pub struct Guard;
+    pub fn after(point: Point, successful_calls: usize) -> Guard {
+        NEXT.with(|next| assert!(next.replace(Some((point, successful_calls))).is_none()));
+        Guard
+    }
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            NEXT.with(|next| next.set(None));
+        }
+    }
+    pub fn check(point: Point) -> Result<(), String> {
+        NEXT.with(|next| match next.get() {
+            Some((p, 0)) if p == point => {
+                next.set(None);
+                Err("injected persistent-state failure".into())
+            }
+            Some((p, remaining)) if p == point => {
+                next.set(Some((p, remaining - 1)));
+                Ok(())
+            }
+            _ => Ok(()),
+        })
+    }
 }
 
 #[cfg(test)]

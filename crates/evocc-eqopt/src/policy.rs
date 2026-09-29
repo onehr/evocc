@@ -397,6 +397,18 @@ pub struct ExtractionPolicy {
 }
 
 impl ExtractionPolicy {
+    /// Semantic policy identity; display names do not affect optimization.
+    /// The shared chain version and the coupled legacy counter mapping are
+    /// explicit so a later extraction/scheduling change cannot reuse receipts.
+    #[must_use]
+    pub fn identity_digest(&self) -> String {
+        evocc_proof::sha256_hex(format!(
+            "scalar-chain-v1\nselected-pair-v1\ncoupled-search-admission-v1\n{}\n{}\n{}\n{}\n{}\n{}\n",
+            self.registry.name(), crate::evp1::registry_ceiling_digest(self.registry), self.cost.weights().render(),
+            self.schedule.max_nodes, self.schedule.max_epochs, self.schedule.max_transactions,
+        ).as_bytes())
+    }
+
     /// A policy assembled from its three parameters.
     #[must_use]
     pub fn new(

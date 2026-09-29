@@ -1,0 +1,20 @@
+func @simplify(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = const.bits<32> 0
+    %v4 = const.bits<32> 1
+    ret %v0, %v1, %v2
+}
+
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: mem<all>, %v1: world):
+    %v2 = const.bits<32> 17
+    (%v3, %v4, %v5) = call @simplify(%v2, %v0, %v1)
+    %v6 = const.bits<32> 17
+    %v7 = icmp.ne %v3, %v6
+    %v8 = zext.bits<32> %v7
+    ret %v8, %v4, %v5
+}

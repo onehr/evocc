@@ -4,6 +4,7 @@
 //! optimizer-independent authority for IR types, validation, text and
 //! interpretation.
 
+mod chain;
 mod eligibility;
 mod evp1;
 pub mod known_bits;
@@ -12,6 +13,7 @@ pub mod policy;
 mod scalar_eq;
 mod seed_facts;
 
+pub use chain::*;
 pub use evp1::*;
 pub use persistent::*;
 pub use policy::{

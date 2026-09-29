@@ -365,6 +365,14 @@ Other flags include `-E`, `--parse-only`, `--emit=c-hir`, `--emit=evoir`,
 certificate; an optimization may remove work without discarding the original
 undefined-behavior obligations.
 
+`-Oeq-scalar` now uses the same policy-aware persistent chain as the policy
+evaluator and independently replays every transaction before emitting output.
+To retain the ordered proof bundles, add `--eq-proof-dir=NEW_DIR`; to recheck
+them later, use `python3 tools/bench.py --verify-eqsat-chain NEW_DIR --checker PATH`.
+An existing proof directory is never overwritten. See the
+[implementation receipt](docs/notebook/verified-eqsat-implementation-20260929.md)
+for tested scope; this does not close whole-kernel G2 or performance milestones.
+
 ## Why EvoIR and EvoMIR?
 
 EvoCC's design goal is **an optimizer whose decisions can be inspected and

@@ -22,7 +22,7 @@ use evocc_cpp::{
     is_arm_neon_header_marker, pragma_pack_action, pragma_visibility_action, PragmaPackAction,
     PragmaVisibilityAction, Preprocessor,
 };
-use evocc_eqopt::{optimize_scalar_module_certified_persistent, EqualityState, ScalarEqBudget};
+use evocc_eqopt::{run_scalar_chain_with_checker, EqualityState, ExtractionPolicy};
 use evocc_evoir::{render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_mir::emit::{CodegenOptions, StackGuard};
@@ -118,6 +118,10 @@ struct DriverOptions {
     macro_actions: Vec<MacroAction>,
     standard_includes: bool,
     optimize_scalar_evoir: bool,
+    eq_policy: ExtractionPolicy,
+    eq_checker: Option<std::path::PathBuf>,
+    eq_proof_dir: Option<std::path::PathBuf>,
+    eq_timeout_ms: u64,
     optimization: u8,
     debug_types: bool,
     signed_wrapping: bool,
@@ -223,6 +227,9 @@ fn main() -> ExitCode {
         eprintln!("       evocc --emit=evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --emit=asm [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
+        eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
+        eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
+        eprintln!("       [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
         eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
@@ -280,6 +287,11 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut macro_actions = Vec::new();
     let mut standard_includes = true;
     let mut optimize_scalar_evoir = false;
+    let mut eq_policy = ExtractionPolicy::default();
+    let mut eq_checker = None;
+    let mut eq_proof_dir = None;
+    let mut eq_timeout_ms = 30_000;
+    let mut eq_options = false;
     let mut optimization = 0;
     let mut debug_types = false;
     let mut signed_wrapping = false;
@@ -315,6 +327,43 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--emit=asm" => set_mode(&mut mode, DriverMode::EmitAsm)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
             "-Oeq-scalar" => optimize_scalar_evoir = true,
+            _ if arg.starts_with("--eq-") => {
+                eq_options = true;
+                let (key, value) = arg
+                    .split_once('=')
+                    .ok_or("EqSat options require --eq-KEY=VALUE")?;
+                if value.is_empty() {
+                    return Err("empty EqSat option".into());
+                }
+                match key {
+                    "--eq-policy" => {
+                        let selected =
+                            evocc_eqopt::policy_by_name(value).ok_or("unknown EqSat policy")?;
+                        eq_policy = selected.with_schedule(eq_policy.schedule());
+                    }
+                    "--eq-weights" => {
+                        eq_policy = eq_policy.with_cost(evocc_eqopt::CostFunction::Vector(
+                            evocc_eqopt::OperatorWeights::parse(value)?,
+                        ))
+                    }
+                    "--eq-checker" => eq_checker = Some(std::path::PathBuf::from(value)),
+                    "--eq-proof-dir" => eq_proof_dir = Some(std::path::PathBuf::from(value)),
+                    "--eq-checker-timeout-ms" => {
+                        eq_timeout_ms = value.parse().map_err(|_| "invalid checker timeout")?
+                    }
+                    "--eq-max-nodes" | "--eq-max-epochs" | "--eq-max-transactions" => {
+                        let number = value.parse().map_err(|_| "invalid EqSat resource limit")?;
+                        let mut schedule = eq_policy.schedule();
+                        match key {
+                            "--eq-max-nodes" => schedule.max_nodes = number,
+                            "--eq-max-epochs" => schedule.max_epochs = number,
+                            _ => schedule.max_transactions = number,
+                        }
+                        eq_policy = eq_policy.with_schedule(schedule);
+                    }
+                    _ => return Err(format!("unknown EqSat option {key}")),
+                }
+            }
             "-O0" => optimization = 0,
             "-O" | "-O1" | "-O2" | "-O3" | "-Og" => optimization = 1,
             "-Os" => optimization = 2,
@@ -544,6 +593,15 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-Oeq-scalar requires --emit=evoir, --emit=asm or --interpret-evoir".to_owned(),
         );
     }
+    let schedule = eq_policy.schedule();
+    if (eq_options && !optimize_scalar_evoir)
+        || schedule.max_nodes > 100_000
+        || schedule.max_epochs > 1_024
+        || !(1..=8).contains(&schedule.max_transactions)
+        || !(1..=300_000).contains(&eq_timeout_ms)
+    {
+        return Err("EqSat options require -Oeq-scalar and admitted resource limits".into());
+    }
     if guard_is_sysreg {
         codegen.stack_guard = StackGuard::SystemRegister {
             register: guard_register.ok_or("sysreg stack guard requires its register")?,
@@ -561,6 +619,10 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         macro_actions,
         standard_includes,
         optimize_scalar_evoir,
+        eq_policy,
+        eq_checker,
+        eq_proof_dir,
+        eq_timeout_ms,
         optimization,
         debug_types,
         signed_wrapping,
@@ -1107,7 +1169,13 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                         }
                     }
                     let module = if options.optimize_scalar_evoir {
-                        optimize_scalar_evoir(module)
+                        match optimize_scalar_evoir(module, options) {
+                            Ok(module) => module,
+                            Err(detail) => {
+                                eprintln!("evocc: verified optimization failed: {detail}");
+                                return ExitCode::from(1);
+                            }
+                        }
                     } else {
                         module
                     };
@@ -1137,15 +1205,32 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     }
 }
 
-fn optimize_scalar_evoir(module: evocc_evoir::Module) -> evocc_evoir::Module {
-    let Ok(mut equality) = EqualityState::for_module(&module) else {
-        return module;
-    };
-    if equality.ingest_module(&module).is_err() {
-        return module;
+fn optimize_scalar_evoir(
+    module: evocc_evoir::Module,
+    options: &DriverOptions,
+) -> Result<evocc_evoir::Module, String> {
+    let checker = match &options.eq_checker {
+        Some(binary) => {
+            evocc_proof::StandaloneProofChecker::new(binary.clone(), std::env::temp_dir())
+        }
+        None => evocc_proof::StandaloneProofChecker::locate()?,
     }
-    optimize_scalar_module_certified_persistent(&module, &mut equality, ScalarEqBudget::default())
-        .module
+    .with_timeout(std::time::Duration::from_millis(options.eq_timeout_ms));
+    let mut equality = EqualityState::for_module(&module)?;
+    match run_scalar_chain_with_checker(&module, &mut equality, &options.eq_policy, &checker) {
+        Ok(run) => {
+            if let Some(path) = &options.eq_proof_dir {
+                run.write_bundle(path)?;
+            }
+            Ok(run.module)
+        }
+        Err(failure) => {
+            if let Some(path) = &options.eq_proof_dir {
+                failure.write_bundle(path)?;
+            }
+            Err(failure.detail)
+        }
+    }
 }
 
 fn interpret_chir(

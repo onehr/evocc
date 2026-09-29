@@ -2,10 +2,6 @@
 //! scalar equality optimizer, judged by the specification's equality criterion.
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
 use evocc_eqopt::{optimize_scalar_module_with_evp1, ScalarEqBudget};
@@ -235,80 +231,9 @@ pub enum Verdict {
     Mismatch(Box<Mismatch>),
 }
 
-static NEXT_CASE: AtomicU64 = AtomicU64::new(0);
-
-/// A handle on the standalone `evo-proofcheck` binary.
-#[derive(Debug)]
-pub struct ProofChecker {
-    binary: PathBuf,
-    scratch: PathBuf,
-}
-
-impl ProofChecker {
-    /// Use an explicit checker binary and scratch directory.
-    #[must_use]
-    pub fn new(binary: PathBuf, scratch: PathBuf) -> Self {
-        Self { binary, scratch }
-    }
-
-    /// Find the checker next to the running test or binary.
-    ///
-    /// Nothing here reaches into the optimizer: the checker is a separate
-    /// process, which is the entire point of replaying certificates through it.
-    pub fn locate() -> Result<Self, String> {
-        let mut directory =
-            std::env::current_exe().map_err(|error| format!("current executable: {error}"))?;
-        directory.pop();
-        if directory.ends_with("deps") {
-            directory.pop();
-        }
-        let binary = directory.join(format!("evo-proofcheck{}", std::env::consts::EXE_SUFFIX));
-        if !binary.is_file() {
-            return Err(format!(
-                "{} does not exist; build the workspace so the standalone checker is present",
-                binary.display()
-            ));
-        }
-        let scratch = std::env::temp_dir().join(format!(
-            "evocc-randgate-{}-{}",
-            std::process::id(),
-            NEXT_CASE.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&scratch)
-            .map_err(|error| format!("create {}: {error}", scratch.display()))?;
-        Ok(Self { binary, scratch })
-    }
-
-    /// The located binary.
-    #[must_use]
-    pub fn binary(&self) -> &PathBuf {
-        &self.binary
-    }
-
-    /// Replay one certificate. `Ok(())` means the checker exited zero.
-    pub fn check(&self, before: &str, after: &str, proof: &str) -> Result<(), String> {
-        let ordinal = NEXT_CASE.fetch_add(1, Ordering::Relaxed);
-        let before_path = self.scratch.join(format!("{ordinal:012}.before.evo"));
-        let after_path = self.scratch.join(format!("{ordinal:012}.after.evo"));
-        let proof_path = self.scratch.join(format!("{ordinal:012}.proof.evp"));
-        fs::write(&before_path, before).map_err(|error| error.to_string())?;
-        fs::write(&after_path, after).map_err(|error| error.to_string())?;
-        fs::write(&proof_path, proof).map_err(|error| error.to_string())?;
-        let output = Command::new(&self.binary)
-            .args([&before_path, &after_path, &proof_path])
-            .output()
-            .map_err(|error| format!("run {}: {error}", self.binary.display()))?;
-        let _ = fs::remove_file(&before_path);
-        let _ = fs::remove_file(&after_path);
-        let _ = fs::remove_file(&proof_path);
-        match output.status.code() {
-            Some(0) => Ok(()),
-            Some(2) => Err("evo-proofcheck reported malformed input (status 2)".to_owned()),
-            Some(3) => Err("evo-proofcheck refused the certificate (status 3)".to_owned()),
-            other => Err(format!("evo-proofcheck exited with {other:?}")),
-        }
-    }
-}
+// Driver, policy evaluator and differential gate share the bounded process
+// adapter. The checker itself still has no dependency on the producer.
+pub use evocc_proof::StandaloneProofChecker as ProofChecker;
 
 /// Section 8.11: a run is a chain of at most this many transactions over one
 /// module. The ceiling exists so a run that never settles still ends.

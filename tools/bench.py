@@ -60,6 +60,8 @@ def parser():
     p.add_argument("--status", action="store_true", help="show retained selected receipts; no build, execution or fresh acceptance claim")
     p.add_argument("--evocc", type=Path, help="measure this existing binary; do not build another one")
     p.add_argument("--no-build", action="store_true", help="reuse the default release binary")
+    p.add_argument('--verify-eqsat-chain', type=Path, help='independently audit an existing R01a proof directory; no benchmark campaign')
+    p.add_argument('--checker', type=Path, help='standalone checker matching the retained EqSat chain identity')
     p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
     p.add_argument("--programs", type=positive, default=500, help="Csmith programs per campaign")
     p.add_argument("--campaign", choices=["all", "base", "bitfields"], default="all")
@@ -555,6 +557,21 @@ def save(summary, directory):
 
 def main(argv=None):
     args = parser().parse_args(argv)
+    if args.verify_eqsat_chain:
+        if args.benchmarks or args.status or args.dry_run or args.list or not args.checker:
+            print('--verify-eqsat-chain requires --checker and no other mode', file=sys.stderr)
+            return 2
+        from ladder.eqsat_chain import verify_bundle
+        try:
+            result = verify_bundle(args.verify_eqsat_chain, args.checker)
+            print(json.dumps(result, sort_keys=True))
+            return 0 if result['accepted'] else 1
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f'EqSat bundle admission failed: {error}', file=sys.stderr)
+            return 2
+    if args.checker:
+        print('--checker requires --verify-eqsat-chain', file=sys.stderr)
+        return 2
     if args.list:
         for name, (rung, adapter, note) in CATALOG.items():
             print(f"{name:18} {rung:16} {'available' if adapter else 'NOT_IMPLEMENTED':16} {note}")

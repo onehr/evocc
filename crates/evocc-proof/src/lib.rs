@@ -1,7 +1,9 @@
 //! Proof-carrying compiler: justifications and independent proof checker
 
+mod checker_process;
 mod evp1;
 
+pub use checker_process::{CheckerOutcome, StandaloneProofChecker};
 pub use evp1::*;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};

@@ -29,14 +29,13 @@ pub use search::{
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::time::Instant;
 
-use evocc_eqopt::{optimize_scalar_module_with_policy, ExtractionPolicy};
+use evocc_eqopt::{run_scalar_chain_with_checker, EqualityState, ExtractionPolicy, Verification};
 use evocc_evoir::{
     interpret_module, parse_section9_module, render_module, validate_module, InterpreterLimits,
     Module,
 };
-use evocc_proof::{render_evp1, sha256_hex};
+use evocc_proof::sha256_hex;
 use evocc_randgate::{entry_arguments, generate_module, observe, GeneratorConfig, ProofChecker};
 
 /// Section 10.4: the diagnostic the interpreter reports when fuel runs out.
@@ -384,6 +383,7 @@ pub struct ProgramMeasurement {
     pub certificates: u64,
     pub certificates_replayed: u64,
     pub optimizer_wall_nanos: u128,
+    pub chain_record: Option<String>,
 }
 
 /// The sums the report closes with.
@@ -473,6 +473,7 @@ impl PolicyReport {
         let schedule = self.policy.schedule();
         let mut text = String::new();
         let _ = writeln!(text, "{{");
+        let _ = writeln!(text, "  \"schema\": \"evocc-policy-report-v2\",");
         let _ = writeln!(text, "  \"policy\": {{");
         let _ = writeln!(text, "    \"name\": {},", json_string(self.policy.name()));
         let _ = writeln!(
@@ -558,8 +559,13 @@ impl PolicyReport {
             );
             let _ = writeln!(
                 text,
-                "      \"optimizerWallNanos\": {}",
+                "      \"optimizerWallNanos\": {},",
                 wall(program.optimizer_wall_nanos)
+            );
+            let _ = writeln!(
+                text,
+                "      \"chainRecord\": {}",
+                program.chain_record.as_deref().unwrap_or("null")
             );
             let _ = writeln!(text, "    }}{comma}");
         }
@@ -717,6 +723,7 @@ fn measure(
         certificates: 0,
         certificates_replayed: 0,
         optimizer_wall_nanos: 0,
+        chain_record: None,
     };
     let arguments = entry_arguments(&program.module, seed);
     let limits = InterpreterLimits::new(step_budget);
@@ -738,43 +745,46 @@ fn measure(
     measurement.steps_after = before_steps;
     let before_observation = observe(&program.module, &arguments, step_budget);
 
-    let mut current = program.module.clone();
-    let mut current_text = program.text.clone();
-    let mut chained_from = program.digest.clone();
-
-    for _ in 0..policy.schedule().max_transactions {
-        let started = Instant::now();
-        let outcome = optimize_scalar_module_with_policy(&current, policy);
-        measurement.optimizer_wall_nanos += started.elapsed().as_nanos();
-        if outcome.certificate.regions.is_empty() {
-            break;
+    let mut state = match EqualityState::for_module(&program.module) {
+        Ok(state) => state,
+        Err(detail) => {
+            measurement.outcome = ProgramOutcome::Refused { detail };
+            return measurement;
         }
-        measurement.transactions += 1;
-        measurement.certificates += 1;
-        measurement.regions += outcome.certificate.regions.len() as u64;
-
-        if outcome.certificate.input_digest != chained_from {
+    };
+    let chain = match run_scalar_chain_with_checker(&program.module, &mut state, policy, checker) {
+        Ok(chain) => chain,
+        Err(failure) => {
+            measurement.transactions = failure.transactions.len() as u64;
+            measurement.certificates = failure.transactions.len() as u64;
+            measurement.certificates_replayed = failure
+                .transactions
+                .iter()
+                .filter(|t| t.verification == Verification::Verified)
+                .count() as u64;
+            measurement.optimizer_wall_nanos = failure.optimizer_wall_nanos;
+            measurement.chain_record = Some(failure.record_json());
             measurement.outcome = ProgramOutcome::Refused {
-                detail: format!(
-                    "the certificate names input digest {} after {chained_from}",
-                    outcome.certificate.input_digest
-                ),
+                detail: failure.detail,
             };
             return measurement;
         }
-        if let Err(detail) = validate_module(&outcome.module) {
-            measurement.outcome = ProgramOutcome::Refused { detail };
-            return measurement;
-        }
-        let after_text = render_module(&outcome.module);
-        let proof_text = render_evp1(&outcome.certificate);
-        if let Err(detail) = checker.check(&current_text, &after_text, &proof_text) {
-            measurement.outcome = ProgramOutcome::Refused { detail };
-            return measurement;
-        }
-        measurement.certificates_replayed += 1;
-
-        let after_steps = match interpret_module(&outcome.module, "main", &arguments, limits) {
+    };
+    measurement.transactions = chain.transactions.len() as u64;
+    measurement.certificates = measurement.transactions;
+    measurement.certificates_replayed = measurement.transactions;
+    measurement.regions = chain
+        .transactions
+        .iter()
+        .map(|t| t.report.optimized_values as u64)
+        .sum();
+    measurement.optimizer_wall_nanos = chain.optimizer_wall_nanos;
+    measurement.chain_record = Some(chain.record_json());
+    // Preserve per-transaction observation checks, including the terminal no-op.
+    for transaction in &chain.transactions {
+        let after = parse_section9_module(transaction.bundle.after.as_bytes())
+            .expect("verified chain parses");
+        let after_steps = match interpret_module(&after, "main", &arguments, limits) {
             Ok(run) => run.steps,
             Err(error) if error.code() == FUEL_EXHAUSTED => {
                 measurement.outcome = ProgramOutcome::FuelExhausted;
@@ -791,7 +801,7 @@ fn measure(
                 return measurement;
             }
         };
-        let after_observation = observe(&outcome.module, &arguments, step_budget);
+        let after_observation = observe(&after, &arguments, step_budget);
         if after_observation != before_observation {
             measurement.outcome = ProgramOutcome::Refused {
                 detail: "the optimized module is not observationally equal to the input".to_owned(),
@@ -799,12 +809,9 @@ fn measure(
             return measurement;
         }
 
-        chained_from = outcome.certificate.output_digest.clone();
         measurement.steps_after = after_steps;
-        measurement.instructions_after = instruction_count(&outcome.module);
-        measurement.output_digest = sha256_hex(after_text.as_bytes());
-        current = outcome.module;
-        current_text = after_text;
+        measurement.instructions_after = instruction_count(&after);
+        measurement.output_digest = transaction.output_digest.clone();
     }
     measurement
 }

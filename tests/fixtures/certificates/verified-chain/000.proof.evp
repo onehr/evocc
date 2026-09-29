@@ -1,0 +1,33 @@
+evp2
+registry p0.scalar.v1 ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9
+input a291ba7a004a90f0b09f32f708100c1678d6960f8ce57adb59d33566c2fb8f46
+budget nodes=6/100000 epochs=2/1024 fuel=2/256 n=4 stop=saturated
+region simplify/entry/1 root %v4 witnesses 2 seeds 1
+witness 0 simplify/entry/0
+witness 1 simplify/entry/1
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=add sort=bits<32> effect=pure attrs=- children=c0,c1
+epoch 1
+rewrite 2 p0_001_add_zero_rhs c2 c0 c0 node:n1 class:c0 bind ?x:c0
+extract 0 c0 seed:0
+root c0
+endregion
+region simplify/entry/3 root %v6 witnesses 4 seeds 1
+witness 0 simplify/entry/0
+witness 1 simplify/entry/1
+witness 2 simplify/entry/2
+witness 3 simplify/entry/3
+seed 0 %v0 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 1 n1 c2 source=before op=add sort=bits<32> effect=pure attrs=- children=c0,c1
+node 2 n2 c3 source=before op=const sort=bits<32> effect=pure attrs=value=1 children=-
+node 3 n3 c4 source=before op=mul sort=bits<32> effect=pure attrs=- children=c2,c3
+epoch 1
+rewrite 4 p0_001_add_zero_rhs c2 c0 c0 node:n1 class:c0 bind ?x:c0
+epoch 2
+rewrite 5 p0_003_mul_one_rhs c4 c0 c0 node:n3 class:c0 bind ?x:c0
+extract 0 c0 seed:0
+root c0
+endregion
+output 1cedcf95770555d62c64d3060317380ececb864179d5a0ae72d06c08e031106c

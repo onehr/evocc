@@ -233,7 +233,32 @@ pub enum ProofAuthority {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ScalarEqTelemetry {
+    pub search_bridge_nodes: usize,
+    pub search_rewrite_events: usize,
+    pub search_nodes_hit: bool,
+    pub search_events_hit: bool,
+    pub admission_regions: usize,
+    pub admission_proof_nodes: usize,
+    pub admission_regions_hit: bool,
+    pub admission_nodes_hit: bool,
+    pub admission_next_nodes: usize,
+    pub roots_total: usize,
+    pub roots_eligible: usize,
+    pub roots_tainted: usize,
+    pub roots_unlisted: usize,
+    pub roots_excluded_dependency: usize,
+    pub roots_visited: usize,
+    pub roots_proposed: usize,
+    pub declined_policy: usize,
+    pub declined_witness: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ScalarEqReport {
+    /// Scoped counters are never overwritten by certificate emission or rollback.
+    /// Admission counts are staged work; `optimized_values` is retained work.
+    pub telemetry: ScalarEqTelemetry,
     /// The authority every receipt in this report was replayed against.
     pub proof_authority: ProofAuthority,
     pub regions_admitted: usize,
@@ -253,6 +278,7 @@ pub struct ScalarEqReport {
     pub budget_exhausted: bool,
     pub proof_replay_failed: bool,
     pub fell_back: bool,
+    pub internal_error: Option<String>,
     pub receipts: Vec<ScalarMergeReceipt>,
 }
 
@@ -600,6 +626,9 @@ pub(crate) fn optimize_scalar_module_with_events(
                 if report.graph_nodes > budget.max_nodes
                     || (opportunity.is_some() && report.epochs >= budget.max_epochs)
                 {
+                    report.telemetry.search_nodes_hit = report.graph_nodes > budget.max_nodes;
+                    report.telemetry.search_events_hit =
+                        opportunity.is_some() && report.epochs >= budget.max_epochs;
                     report.budget_exhausted = true;
                     stopped = true;
                     rewritten.push(inst);

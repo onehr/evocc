@@ -11,6 +11,7 @@ evocc-chir = { path = "../evocc-chir" }
 evocc-lex = { path = "../evocc-lex" }
 evocc-cpp = { path = "../evocc-cpp" }
 evocc-eqopt = { path = "../evocc-eqopt" }
+evocc-proof = { path = "../evocc-proof" }
 evocc-evoir = { path = "../evocc-evoir" }
 evocc-parser = { path = "../evocc-parser" }
 evocc-lower = { path = "../evocc-lower" }
