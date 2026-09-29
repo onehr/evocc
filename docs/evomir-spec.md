@@ -562,6 +562,12 @@ format or approved profile semantics. It does not authorize benchmark-side IR
 deletion, alter the interpreters, or disable any other mandatory runtime check.
 Performance admission additionally requires the matched checked execution in
 the [Q2/Q3 design](framing-draft.md#51-correctness-admission-and-workload-inventory).
+The planned native-profile switch operates only at MIR lowering: checked and
+unchecked twins must consume the same canonical verified EvoIR and immutable
+chain/proof bundle, with identical IR/chain digests in their receipts. Distinct
+native profile/cache identities remain necessary; matching source/argv alone
+does not establish this shared-input invariant. This fan-out is an R02d
+acceptance requirement, not an implemented capability claim.
 
 **Bounded immediate addresses (revision 0.40).** An ordinary typed load/store
 may use the existing `[base, #offset]` form for one preceding constant

@@ -1,6 +1,6 @@
 # Lean 4 integration plan for EvoCC (second version)
 
-**September 29 integration note, revision 3 (design only).** The existing L0–L4 plan and its
+**September 29 integration note, revision 4 (design only).** The existing L0–L4 plan and its
 historical evidence below remain scoped to the reviewed scalar semantics,
 registry and analysis modules. The maintained
 [Q2/Q3 implementation architecture](framing-draft.md#4-rule-soundness-and-admission)
@@ -16,6 +16,10 @@ select a template. Admission records actual attempted/successful templates.
 Rule/shortcut campaigns require their own residual-opportunity preflight, not
 a policy-track pass; bounded enumeration/fuzz is not a proof of the universal
 semantic or `simp`-provable rule space.
+The preflight freezes grammar cells and resource/termination rules. A completed
+witness-containing cell supports finite enumeration/efficiency, not a
+beyond-enumeration discovery claim. Template UNKNOWN remains unresolved even
+when syntax enumeration is complete; checker outages are not proof rejections.
 Audit actual transitive dependencies: a kernel-only rule can still depend on
 native-backed fact transfer in the complete admission chain. New dependency
 classes need review; no automatic kernel-only end-to-end claim follows.

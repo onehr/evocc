@@ -78,7 +78,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R01a, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 3: verified chain/state table, scoped budget and checked-profile controls, separate policy/rule/shortcut preflights, bounded manual/template admission, then final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
+| LATER | R01, R01a, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 4: verified chain/state/reason tables, scoped budgets and common-IR checked twins, separate policy/rule/shortcut preflights with frozen termination, bounded manual/template admission, then final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1872,7 +1872,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
 
 ## Later roadmap gates — not substitutes for runtime closure
 
-The September 29 revision-3 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
+The September 29 revision-4 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
 without closing them. R01a/R02a infrastructure and R02b development measurements
 can proceed on correctness-admitted workloads; final acceptance remains
 R01 → R02 → R03. `LATER` describes roadmap priority, not an implementation or
@@ -1891,7 +1891,10 @@ record a justified not-needed disposition separately from implementation PASS.
     Implement design P0: one driver/evaluator persistent chain runner with policy
     identity including transaction count, proof/report export and wrapper-owned
     verification. Separate transaction result, stop reason and root counts;
-    validate the closed state-combination table. Preserve transient search
+    validate the closed state/rejection-reason tables. Distinguish completed proof
+    rejection, checker resource/infrastructure unknowns and missing/mismatched
+    bundles; fault-inject each reason and missing-proof success versus explicit
+    rollback. Unknown is not proof failure or success. Preserve transient search
     counters before EVP overwrites them; separate admission region/node quotas,
     recorded fuel/markers and actual matcher work, including legacy knob coupling.
     Preserve prior accepted regions on budget exhaustion. Any internal/proof/chain
@@ -1912,7 +1915,8 @@ record a justified not-needed disposition separately from implementation PASS.
   - [ ] **R02a — Performance manifests and measurement runner** — `LATER`, P3.
     Implement design P1 through `tools/bench.py` and existing adapters/locks.
     Freeze effective UB-check/lowering profiles, shared chain identity, semantic
-    flags, scoped budget units/mapping, checked-twin bindings, object coverage,
+    flags, scoped budget units/mapping, checked-twin common IR/chain digests,
+    closed rejection accounting, object coverage,
     timing boundaries, raw metrics,
     resource caps and separate performance receipts. REDs cover stale/mismatched
     artifacts, missing results, invalid metrics, interference and cleanup ownership.
@@ -1920,15 +1924,20 @@ record a justified not-needed disposition separately from implementation PASS.
   - [ ] **R02b — Opportunity/effect-ceiling preflight and A/A plus A/B pilot** — `LATER`, P3.
     After R01a/R02a, first report whether default transient and certificate caps
     actually bind, with separate EVP fuel and chain counts. Freeze inputs and
-    enumerate weight-gate behavior; test expected add/mul/shl byte ties and
+    enumerate acceptance/rejection of transient-selected root/replacement pairs,
+    not weight-driven alternative selection; test expected add/mul/shl byte ties and
     surrounding-code exceptions. Zero-weight certificate reservation only applies
     at a binding admission cap, not to transient work already spent.
     Also census residual misses after lowering/current rules using a pinned,
     semantics-qualified external reference plus a frozen bounded rule enumerator.
-    Record grammar/depth, constants/widths/guards, proof/matcher applicability and
+    Freeze a finite grammar lattice, visitation order, per-cell/total budgets and
+    termination. Record constants/widths/guards, proof/matcher applicability and
     materialization. Fuzz is filtering, not completeness. Beyond-enumeration
-    discovery needs a useful template-proved residual witness and the same expanded
-    search space for non-AI. Allow bounded R03f/c qualification probes, not a bulk
+    discovery needs a useful template-proved witness in a healthy budget-exhausted
+    cell and the same search space for non-AI. A completed witness-containing cell
+    permits finite enumeration/efficiency claims, not discovery; crashes, unresolved
+    evidence and out-of-scope depth cannot justify expansion of this campaign.
+    Allow bounded R03f/c qualification probes, not a bulk
     discovery campaign, to resolve the preflight. Freeze separate policy/rule/
     shortcut searchable, enumeration-sufficient, no-effect or inconclusive verdicts.
     Calibrate A/A and compare matched A/B; no campaign bypasses its track verdict.
@@ -1947,8 +1956,11 @@ record a justified not-needed disposition separately from implementation PASS.
     receipt identity; do not invent a switch or delete source/IR obligations in
     the benchmark harness. REDs: ignored flag, missing identity, checked traps,
     defined-input parity and interpreter contract preservation. Every unchecked
-    variant/input must have a passing no-trap checked twin bound to the same
-    source, input and policy; missing/failed twins block admission. That is not
+    variant/input must have a passing no-trap checked twin. Fan out one canonical
+    verified IR and immutable chain/bundle to both MIR profiles; require exact
+    common digests, not just equal source/input/policy manifests. Reject mismatched
+    IR/chain or missing/failed twins; native profile/cache identities remain
+    separate. Include the EqSat-off identity-chain control. That is not
     proof against unmodeled UB. Measure checked
     and unchecked separately; GCC sanitizer coverage is not assumed equivalent.
 
