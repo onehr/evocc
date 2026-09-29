@@ -28,6 +28,10 @@ fn run(arguments: &[&str]) -> (i32, String, String) {
 
 fn run_binary(name: &str, arguments: &[&str]) -> (i32, String, String) {
     let output = Command::new(binary(name))
+        .env(
+            "EVOCC_CHECKER_SHA256",
+            evocc_proof::sha256_hex(&std::fs::read(binary("evo-proofcheck")).unwrap()),
+        )
         .args(arguments)
         .output()
         .expect("run evo-policy-eval");
@@ -91,6 +95,10 @@ fn the_binary_report_is_deterministic_with_timing_elided() {
     assert_eq!(second_status, 0);
     assert_eq!(first, second);
     assert!(first.contains("\"corpusDigest\""));
+    assert!(
+        first.contains("\"measured\": 6"),
+        "a deterministic refusal is not evaluation: {first}"
+    );
     assert!(first.contains("\"optimizerWallNanos\": null"));
 }
 
@@ -107,6 +115,7 @@ fn a_weight_vector_measures_through_the_same_command() {
         "--elide-timing",
     ]);
     assert_eq!(status, 0, "{stderr}");
+    assert!(report.contains("\"measured\": 6"), "{report}");
     assert!(
         report.contains(evocc_policy::SEARCHED_POLICY_NAME),
         "a searched weighting must name itself in the report: {report}"

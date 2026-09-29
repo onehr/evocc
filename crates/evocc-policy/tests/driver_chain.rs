@@ -76,11 +76,15 @@ fn cli_and_evaluator_bind_identical_verified_chain_and_output() {
     fs::write(root.0.join("input.evo"), &plain.stdout).unwrap();
     let corpus = Corpus::from_directory(&root.0, None).unwrap();
     let checker = ProofChecker::locate().unwrap();
+    let expected = checker.identity_digest().unwrap(); // Trust this test's workspace build.
+    let checker = checker.with_expected_digest(expected);
     let result = evaluate(&ExtractionPolicy::default(), &corpus, 0, 100_000, &checker);
     assert_eq!(result.aggregate.refused, 0);
     let chain = result.programs[0].chain_record.as_ref().unwrap();
     let proof_dir = root.0.join("proofs");
     let output = Command::new(&bin)
+        .env("EVOCC_CHECKER_SHA256", checker.identity_digest().unwrap())
+        .arg(format!("--eq-checker={}", checker.binary().display()))
         .arg("--emit=evoir")
         .arg("-Oeq-scalar")
         .arg(format!("--eq-proof-dir={}", proof_dir.display()))
@@ -171,6 +175,8 @@ fn cli_and_evaluator_bind_identical_verified_chain_and_output() {
             result.programs[0].output_digest, object_digest, executable_digest, toolchain.version());
     }
     let again = Command::new(&bin)
+        .env("EVOCC_CHECKER_SHA256", checker.identity_digest().unwrap())
+        .arg(format!("--eq-checker={}", checker.binary().display()))
         .arg("--emit=evoir")
         .arg("-Oeq-scalar")
         .arg(format!("--eq-proof-dir={}", proof_dir.display()))
@@ -188,6 +194,7 @@ fn cli_and_evaluator_bind_identical_verified_chain_and_output() {
     );
     let failed_dir = root.0.join("missing-checker");
     let missing = Command::new(&bin)
+        .env("EVOCC_CHECKER_SHA256", checker.identity_digest().unwrap())
         .arg("--emit=asm")
         .arg("-Oeq-scalar")
         .arg(format!("--eq-proof-dir={}", failed_dir.display()))

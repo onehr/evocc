@@ -84,3 +84,21 @@ fn identity_cache_compares_contents_not_size_or_path() {
     assert_ne!(first, checker.identity_digest().unwrap());
     assert_eq!(checker.check_typed("b", "a", "p"), O::Invalid);
 }
+
+#[test]
+fn observed_identity_is_not_trust_and_replacement_cannot_self_authorize() {
+    let dir = Temp::new();
+    let checker = dir.checker("exit 3");
+    assert!(checker
+        .admitted_identity()
+        .unwrap_err()
+        .contains("missing trusted"));
+    let expected = checker.identity_digest().unwrap();
+    let checker = checker.with_expected_digest(expected.clone());
+    assert_eq!(checker.admitted_identity().unwrap(), expected);
+    fs::write(checker.binary(), "#!/bin/sh\nexit 0\n").unwrap();
+    assert!(checker
+        .admitted_identity()
+        .unwrap_err()
+        .contains("does not match"));
+}

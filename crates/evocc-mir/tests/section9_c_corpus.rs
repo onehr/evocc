@@ -308,6 +308,15 @@ fn the_c_corpora_reach_the_host_through_the_driver() {
         }
     };
     println!("toolchain={}", toolchain.version());
+    // This gate explicitly trusts the package companion from its workspace build.
+    let checker = driver
+        .binary()
+        .parent()
+        .unwrap()
+        .join(format!("evocc-checker{}", std::env::consts::EXE_SUFFIX));
+    let checker_digest = evocc_proof::sha256_hex(&std::fs::read(checker).unwrap());
+    println!("checker={checker_digest}");
+    let driver = driver.with_checker_digest(checker_digest);
     println!("driver={}", driver.binary().display());
 
     let mut total_ran = 0;

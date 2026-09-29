@@ -35,6 +35,10 @@ impl Drop for TempSource {
 
 fn run(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .env(
+            "EVOCC_CHECKER_SHA256",
+            evocc_proof::sha256_hex(&fs::read(env!("CARGO_BIN_EXE_evocc-checker")).unwrap()),
+        )
         .args(args)
         .output()
         .expect("run evocc")

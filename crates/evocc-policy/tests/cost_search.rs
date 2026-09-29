@@ -26,7 +26,10 @@ const STEPS: u64 = 200_000;
 const PINNED_SEEDS: u64 = 256;
 
 fn checker() -> ProofChecker {
-    ProofChecker::locate().expect("the workspace builds evo-proofcheck next to this test")
+    let checker =
+        ProofChecker::locate().expect("the workspace builds evo-proofcheck next to this test");
+    let expected = checker.identity_digest().unwrap();
+    checker.with_expected_digest(expected)
 }
 
 /// The producer's own output -- the optimized module and the certificate that

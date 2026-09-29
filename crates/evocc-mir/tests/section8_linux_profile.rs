@@ -225,6 +225,14 @@ fn measure_against_gcc(with_scalar: bool) {
         }
     };
     println!("target={}", Target::Linux.mnemonic());
+    let checker = driver
+        .binary()
+        .parent()
+        .unwrap()
+        .join(format!("evocc-checker{}", std::env::consts::EXE_SUFFIX));
+    let checker_digest = evocc_proof::sha256_hex(&std::fs::read(checker).unwrap());
+    println!("checker={checker_digest}");
+    let driver = driver.with_checker_digest(checker_digest);
     println!("image={image}");
     println!("driver={}", driver.binary().display());
 

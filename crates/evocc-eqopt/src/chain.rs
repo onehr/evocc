@@ -32,6 +32,7 @@ labels!(RejectionReason {
     ProofInvalid => "PROOF_INVALID", CheckerTimeout => "CHECKER_TIMEOUT",
     CheckerUnavailable => "CHECKER_UNAVAILABLE", CheckerError => "CHECKER_ERROR",
     CertificateMissing => "CERTIFICATE_MISSING", BundleMismatch => "BUNDLE_MISMATCH",
+    ProducerError => "PRODUCER_ERROR",
 });
 labels!(ChainStop { NoChange => "NO_CHANGE", TransactionLimit => "TRANSACTION_LIMIT", TransactionBudget => "TRANSACTION_BUDGET", Error => "ERROR" });
 
@@ -333,17 +334,29 @@ pub fn run_scalar_chain_with_checker(
     policy: &ExtractionPolicy,
     checker: &evocc_proof::StandaloneProofChecker,
 ) -> Result<VerifiedScalarChain, Box<ChainFailure>> {
-    let identity = checker.identity_digest().map_err(|detail| ChainFailure {
-        detail,
-        policy: *policy,
-        input_digest: sha256_hex(render_module(module).as_bytes()),
-        checker_digest: None,
-        checker_timeout_ms: Some(checker.timeout().as_millis()),
-        rejection_reason: RejectionReason::CheckerUnavailable,
-        verified_prefix: 0,
-        transactions: Vec::new(),
-        optimizer_wall_nanos: 0,
-    })?;
+    let identity = checker
+        .admitted_identity()
+        .and_then(|identity| {
+            if !(1..=300_000).contains(&checker.timeout().as_millis()) {
+                return Err("checker deadline exceeds the admitted 1..300000 ms profile".into());
+            }
+            Ok(identity)
+        })
+        .map_err(|detail| ChainFailure {
+            detail,
+            policy: *policy,
+            input_digest: sha256_hex(render_module(module).as_bytes()),
+            checker_digest: None,
+            checker_timeout_ms: Some(checker.timeout().as_millis()),
+            rejection_reason: if checker.binary().is_file() {
+                RejectionReason::BundleMismatch
+            } else {
+                RejectionReason::CheckerUnavailable
+            },
+            verified_prefix: 0,
+            transactions: Vec::new(),
+            optimizer_wall_nanos: 0,
+        })?;
     let mut staged = state.clone();
     let mut run = run_verified_scalar_chain(module, &mut staged, policy, |b| {
         RejectionReason::from_checker_outcome(checker.check_typed(&b.before, &b.after, &b.proof))
@@ -391,7 +404,16 @@ fn run_chain(
                 input_digest,
                 checker_digest: None,
                 checker_timeout_ms: None,
-                rejection_reason: RejectionReason::None,
+                rejection_reason: transactions.last().map_or(
+                    RejectionReason::ProducerError,
+                    |t: &TransactionRecord| {
+                        if t.rejection_reason != RejectionReason::None {
+                            t.rejection_reason
+                        } else {
+                            RejectionReason::ProducerError
+                        }
+                    },
+                ),
                 verified_prefix,
                 transactions,
                 optimizer_wall_nanos,
@@ -476,7 +498,9 @@ fn run_chain(
                 record.verification = Verification::Rejected;
                 record.rejection_reason = if matches!(
                     reason,
-                    RejectionReason::None | RejectionReason::CertificateMissing
+                    RejectionReason::None
+                        | RejectionReason::CertificateMissing
+                        | RejectionReason::ProducerError
                 ) {
                     RejectionReason::CheckerError
                 } else {
@@ -711,6 +735,8 @@ mod tests {
 }
 "#).unwrap();
         let checker = evocc_proof::StandaloneProofChecker::locate().unwrap();
+        let expected = checker.identity_digest().unwrap(); // Trust this test's workspace build.
+        let checker = checker.with_expected_digest(expected);
         for point in [fault::Point::Apply, fault::Point::History] {
             let mut state = EqualityState::for_module(&module).unwrap();
             let original = state.audit();
@@ -723,6 +749,7 @@ mod tests {
                 &checker,
             )
             .unwrap_err();
+            assert_eq!(failure.rejection_reason, RejectionReason::ProducerError);
             assert_eq!(state.audit(), original);
             assert_eq!(failure.verified_prefix, 0);
             assert_eq!(failure.transactions.len(), 1);

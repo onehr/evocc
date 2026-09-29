@@ -15,6 +15,10 @@ fn run_with_options(source: &str, mode: &str, options: &[&str]) -> Output {
     ));
     fs::write(&path, source).unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .env(
+            "EVOCC_CHECKER_SHA256",
+            evocc_proof::sha256_hex(&fs::read(env!("CARGO_BIN_EXE_evocc-checker")).unwrap()),
+        )
         .args(["--target=aarch64-unknown-linux-gnu", mode])
         .args(options)
         .arg(&path)

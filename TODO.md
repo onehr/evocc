@@ -76,9 +76,9 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. |
+| AUDIT | T03, R01a | Requalify R01a with the full workspace gate before application census. Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 5: build on the R01a shared verified chain; add common-IR checked twins and separate preflights with frozen termination and campaign-scale enumeration floors, bounded manual/template admission, then final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
+| LATER | R01, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 5: common-IR checked twins, separate preflights, bounded manual/template admission and final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1887,7 +1887,11 @@ record a justified not-needed disposition separately from implementation PASS.
   check every optimized translation unit's certificate. Record exact optimization
   coverage; existing scalar proofs and unoptimized boot do not satisfy G2. [Gate][roadmap].
 
-  - [x] **R01a — Policy-aware persistent optimization and proof provenance** — `DONE`, 2026-09-29.
+  - [ ] **R01a — Policy-aware persistent optimization and proof provenance** — `RETEST`, 2026-09-29.
+    Review reproduced three failures in the sealed-certificate suite, omitted by
+    the previous four-crate gate. Before any application census, repair fixture
+    placement, recovery-proof accounting, inherited scratch-file limits and
+    checker packaging/identity admission; require the full workspace gate.
     Implemented design P0: one driver/evaluator persistent chain runner with policy
     identity including transaction count, proof/report export and wrapper-owned
     verification. Separate transaction result, stop reason and root counts;
@@ -1906,13 +1910,13 @@ record a justified not-needed disposition separately from implementation PASS.
     Fault-inject apply/history failure: valid zero proof cannot erase producer
     ROLLED_BACK_ERROR telemetry. An eligible no-rule case remains a legal no-op;
     independent eligibility counts warn but do not certify fallback classification.
-    Closed with 243 Rust tests, 78 Python tests and the retained Darwin ARM64
+    Previously qualified only by 243 scoped Rust tests, 78 Python tests and the retained Darwin ARM64
     native proof bundle (two independently replayed transactions, executable
     exit 0). Three existing long Rust campaigns remain ignored/NOT_RUN. The
     native smoke is not Linux-target or G2 acceptance. Integration also reduced
     and fixed fresh-definition binding and stale normalized-fact failures.
     [Implementation and commands](docs/notebook/verified-eqsat-implementation-20260929.md);
-    [sealed fixture](tests/fixtures/certificates/verified-chain/README.md).
+    [sealed fixture](tests/fixtures/eqsat-chains/verified-chain/README.md).
 
 - [ ] **R02 — Q2 fair GCC -O2 performance evaluation** — `LATER`, P3.
   Use the same pinned programs, workloads, machine conditions and result checks;
@@ -1928,6 +1932,11 @@ record a justified not-needed disposition separately from implementation PASS.
     timing boundaries, raw metrics,
     resource caps and separate performance receipts. REDs cover stale/mismatched
     artifacts, missing results, invalid metrics, interference and cleanup ownership.
+    Before timing, resolve the review's remaining overhead work: repeated terminal
+    no-op interpretation, duplicate per-function Admission construction and the
+    extra staged-state clone. Keep checker identity checks intact; replacing full
+    byte checks by unchecked timestamps is not an admissible speedup. Record
+    their actual cost separately from producer time.
     September 29 checkpoint: the default-cap diagnostic collector reuses the
     bench entry point and lock, with committed bounded input manifests and
     scoped/unknown counters. Native performance manifests and runners remain

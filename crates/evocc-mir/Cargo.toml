@@ -9,3 +9,6 @@ description = "EvoMIR: the machine intermediate representation, its interpreter 
 evocc-evoir = { path = "../evocc-evoir" }
 evocc-memory = { path = "../evocc-memory" }
 evocc-types = { path = "../evocc-types" }
+
+[dev-dependencies]
+evocc-proof = { path = "../evocc-proof" }

@@ -120,6 +120,7 @@ struct DriverOptions {
     optimize_scalar_evoir: bool,
     eq_policy: ExtractionPolicy,
     eq_checker: Option<std::path::PathBuf>,
+    eq_checker_digest: Option<String>,
     eq_proof_dir: Option<std::path::PathBuf>,
     eq_timeout_ms: u64,
     optimization: u8,
@@ -229,7 +230,7 @@ fn main() -> ExitCode {
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
         eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
-        eprintln!("       [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
+        eprintln!("       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
         eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
@@ -289,6 +290,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut optimize_scalar_evoir = false;
     let mut eq_policy = ExtractionPolicy::default();
     let mut eq_checker = None;
+    let mut eq_checker_digest = None;
+    let mut eq_cost_selected = false;
     let mut eq_proof_dir = None;
     let mut eq_timeout_ms = 30_000;
     let mut eq_options = false;
@@ -337,16 +340,25 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 eq_options |= key != "--eq-proof-dir";
                 match key {
                     "--eq-policy" => {
+                        if eq_cost_selected {
+                            return Err("--eq-policy and --eq-weights are exclusive and may appear only once".into());
+                        }
+                        eq_cost_selected = true;
                         let selected =
                             evocc_eqopt::policy_by_name(value).ok_or("unknown EqSat policy")?;
                         eq_policy = selected.with_schedule(eq_policy.schedule());
                     }
                     "--eq-weights" => {
+                        if eq_cost_selected {
+                            return Err("--eq-policy and --eq-weights are exclusive and may appear only once".into());
+                        }
+                        eq_cost_selected = true;
                         eq_policy = eq_policy.with_cost(evocc_eqopt::CostFunction::Vector(
                             evocc_eqopt::OperatorWeights::parse(value)?,
                         ))
                     }
                     "--eq-checker" => eq_checker = Some(std::path::PathBuf::from(value)),
+                    "--eq-checker-sha256" => eq_checker_digest = Some(value.to_owned()),
                     "--eq-proof-dir" => eq_proof_dir = Some(std::path::PathBuf::from(value)),
                     "--eq-checker-timeout-ms" => {
                         eq_timeout_ms = value.parse().map_err(|_| "invalid checker timeout")?
@@ -629,6 +641,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         optimize_scalar_evoir,
         eq_policy,
         eq_checker,
+        eq_checker_digest,
         eq_proof_dir,
         eq_timeout_ms,
         optimization,
@@ -1227,9 +1240,12 @@ fn optimize_scalar_evoir(
         Some(binary) => {
             evocc_proof::StandaloneProofChecker::new(binary.clone(), std::env::temp_dir())
         }
-        None => evocc_proof::StandaloneProofChecker::locate()?,
+        None => evocc_proof::StandaloneProofChecker::locate_named("evocc-checker")?,
     }
-    .with_timeout(std::time::Duration::from_millis(options.eq_timeout_ms));
+    .with_timeout(std::time::Duration::from_millis(options.eq_timeout_ms))
+    .with_expected_digest(options.eq_checker_digest.clone()
+        .or_else(|| std::env::var("EVOCC_CHECKER_SHA256").ok())
+        .ok_or("-Oeq-scalar requires --eq-checker-sha256 or EVOCC_CHECKER_SHA256 from a trusted build/release")?);
     let mut equality = EqualityState::for_module(&module)?;
     match run_scalar_chain_with_checker(&module, &mut equality, &options.eq_policy, &checker) {
         Ok(run) => {
@@ -1240,7 +1256,9 @@ fn optimize_scalar_evoir(
         }
         Err(failure) => {
             if let Some(path) = &options.eq_proof_dir {
-                failure.write_bundle(path)?;
+                if let Err(publication) = failure.write_bundle(path) {
+                    return Err(format!("{}; additionally, {publication}", failure.detail));
+                }
             }
             Err(failure.detail)
         }

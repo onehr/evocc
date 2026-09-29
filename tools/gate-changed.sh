@@ -4,6 +4,8 @@
 # binaries are not rebuilt, so macOS does not re-assess them at launch either.
 #
 # Usage: tools/gate-changed.sh <base-commit> [extra cargo test args...]
+#        tools/gate-changed.sh --full-workspace [extra cargo test args...]
+# R01a/R02 acceptance requires --full-workspace, not a selected-crate gate.
 #   base-commit   the last commit that had a full green gate (usually main's)
 #
 # Prints the crate set it chose, then runs: cargo test -p <set>, cargo clippy
@@ -18,6 +20,27 @@ set -eu
 BASE="${1:?base commit required}"; shift || true
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+if [ "$BASE" = "--full-workspace" ]; then
+    jobs_value=false
+    for option in "$@"; do
+        if [ "$jobs_value" = true ]; then
+            case "$option" in ''|*[!0-9]*) echo "invalid full-workspace job count" >&2; exit 2;; esac
+            jobs_value=false
+        else
+            case "$option" in
+                --offline|--locked|--frozen|-j[0-9]*|--jobs=*) ;;
+                -j|--jobs) jobs_value=true ;;
+                *) echo "full-workspace acceptance forbids selection/filter option: $option" >&2; exit 2 ;;
+            esac
+        fi
+    done
+    if [ "$jobs_value" = true ]; then echo "missing job count" >&2; exit 2; fi
+    cargo test --workspace --no-fail-fast "$@"
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo fmt --all -- --check
+    echo "gate-changed: full workspace green"
+    exit 0
+fi
 changed="$(git diff --name-only "$BASE"...HEAD; git status --short | awk '{print $2}')"
 crates="$(python3 - "$changed" <<'PY'
 import json

@@ -349,6 +349,7 @@ fn run(mut command: Command) -> Result<(), String> {
 #[derive(Debug, Clone)]
 pub struct Driver {
     binary: PathBuf,
+    checker_digest: Option<String>,
 }
 
 impl Driver {
@@ -372,7 +373,10 @@ impl Driver {
         );
         for candidate in candidates {
             if candidate.is_file() {
-                return Ok(Self { binary: candidate });
+                return Ok(Self {
+                    binary: candidate,
+                    checker_digest: None,
+                });
             }
         }
         Err(format!(
@@ -387,6 +391,14 @@ impl Driver {
         &self.binary
     }
 
+    /// Supply a caller-selected trusted build/release checker identity. Never
+    /// infer trust from whichever companion happens to be beside the driver.
+    #[must_use]
+    pub fn with_checker_digest(mut self, digest: String) -> Self {
+        self.checker_digest = Some(digest);
+        self
+    }
+
     /// Compile one C source to canonical EvoIR text, or report the driver's
     /// first diagnostic.
     pub fn emit_evoir(&self, source: &Path, optimize: bool) -> Result<String, String> {
@@ -394,6 +406,9 @@ impl Driver {
         command.arg("--emit=evoir");
         if optimize {
             command.arg("-Oeq-scalar");
+            if let Some(digest) = &self.checker_digest {
+                command.arg(format!("--eq-checker-sha256={digest}"));
+            }
         }
         command.arg(source);
         let output = command

@@ -22,6 +22,7 @@ dependencies = [
  "evocc-mir",
  "evocc-parser",
  "evocc-proof",
+ "evocc-proofcheck",
  "evocc-types",
 ]
 
@@ -114,6 +115,7 @@ version = "0.0.0"
 dependencies = [
  "evocc-evoir",
  "evocc-memory",
+ "evocc-proof",
  "evocc-types",
 ]
 

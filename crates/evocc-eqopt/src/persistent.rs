@@ -14,10 +14,10 @@ use crate::evp1::{
     optimize_scalar_module_with_evp1_transaction, policy_for, CertifiedScalarEqOutcome,
 };
 use crate::scalar_eq::{
-    ingest_scalar_inst, mask_raw, operator_id, optimize_scalar_module_with_events, scalar_operands,
-    scalar_result, AppliedRewrite, EmittedOperand, Replacement, ScalarOperator,
+    ingest_scalar_inst, mask_raw, operator_id, scalar_operands, scalar_result, AppliedRewrite,
+    EmittedOperand, Replacement, ScalarOperator,
 };
-use crate::{ExtractionPolicy, ProofAuthority, ScalarEqBudget, ScalarEqOutcome};
+use crate::{ExtractionPolicy, ScalarEqBudget, ScalarEqOutcome};
 
 const FIRST_LEAF_OP: OpId = 20_000;
 const FIRST_INSTANCE_RULE: u32 = 100_000;
@@ -492,27 +492,6 @@ impl EqualityState {
         Ok(true)
     }
 
-    fn retain_current_values(&mut self, module: &Module) {
-        let current = module
-            .functions
-            .iter()
-            .flat_map(|function| {
-                function.blocks.iter().flat_map(move |block| {
-                    block
-                        .args
-                        .iter()
-                        .map(|argument| (function.name.clone(), argument.value.id))
-                        .chain(block.insts.iter().flat_map(move |inst| {
-                            inst_results(inst)
-                                .into_iter()
-                                .map(|value| (function.name.clone(), value.id))
-                        }))
-                })
-            })
-            .collect::<std::collections::HashSet<_>>();
-        self.values.retain(|key, _| current.contains(key));
-    }
-
     fn remap_current_values(
         &mut self,
         value_remap: &HashMap<(String, u32), u32>,
@@ -652,65 +631,20 @@ fn certified_persistent_fallback(
     outcome
 }
 
-/// Optimize against a compilation-lifetime equality database. Any budget,
-/// graph, or replay failure returns the original module and leaves `state`
-/// byte-for-byte unchanged.
+/// Compatibility view of the same certified persistent transaction. Certificate
+/// creation is not independent replay; callers requiring publication authority
+/// must still use the verified chain. Budget stops retain admitted regions.
 #[must_use]
 pub fn optimize_scalar_module_persistent(
     module: &Module,
     state: &mut EqualityState,
     budget: ScalarEqBudget,
 ) -> ScalarEqOutcome {
-    let (mut outcome, events) = optimize_scalar_module_with_events(module, budget);
-    if outcome.report.fell_back {
-        return outcome;
+    let outcome = optimize_scalar_module_certified_persistent(module, state, budget);
+    ScalarEqOutcome {
+        module: outcome.module,
+        report: outcome.report,
     }
-    if outcome.report.receipts.len() != events.len() {
-        return persistent_fallback(module, outcome, "optimizer event/receipt count diverged");
-    }
-    if events.is_empty() {
-        outcome.report.proof_authority = ProofAuthority::Reviewed {
-            registry: REVIEWED_REGISTRY,
-        };
-        return outcome;
-    }
-    if !state.ingested {
-        return persistent_fallback(module, outcome, "EqualityState was not seeded");
-    }
-
-    let mut staged = state.clone();
-    let mut changed = false;
-    for event in events {
-        match staged.apply(event) {
-            Ok(applied) => changed |= applied,
-            Err(message) => return persistent_fallback(module, outcome, &message),
-        }
-    }
-    staged.graph.rebuild();
-    staged.retain_current_values(&outcome.module);
-    if let Err(message) = staged.verify_history() {
-        return persistent_fallback(module, outcome, &message);
-    }
-    if changed {
-        staged.revision = staged.revision.saturating_add(1);
-        staged.current_module_identity = sha256(render_module(&outcome.module).as_bytes());
-        *state = staged;
-    }
-    outcome
-}
-
-fn persistent_fallback(
-    module: &Module,
-    mut outcome: ScalarEqOutcome,
-    _reason: &str,
-) -> ScalarEqOutcome {
-    outcome.module = module.clone();
-    outcome.report.proof_replay_failed = true;
-    outcome.report.fell_back = true;
-    outcome.report.merges = 0;
-    outcome.report.optimized_values = 0;
-    outcome.report.receipts.clear();
-    outcome
 }
 
 fn type_identity(ty: &EvoIRType) -> String {

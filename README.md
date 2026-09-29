@@ -367,6 +367,14 @@ undefined-behavior obligations.
 
 `-Oeq-scalar` now uses the same policy-aware persistent chain as the policy
 evaluator and independently replays every transaction before emitting output.
+Building/installing the `evocc` package also produces `evocc-checker`, its
+default independent companion (the standalone package still provides
+`evo-proofcheck`). Supply `--eq-checker-sha256=TRUSTED_SHA256` or
+`EVOCC_CHECKER_SHA256`, taken from the build/release you trust. An observed sibling
+binary or a certificate's self-declared digest is not a trust anchor. An explicit
+`--eq-checker=PATH` must match the same pin. Missing/mismatched pins refuse
+compilation; EqSat-off needs no checker. The admitted checker deadline is recorded
+and configurable with `--eq-checker-timeout-ms=1..300000`.
 To retain the ordered proof bundles, add `--eq-proof-dir=NEW_DIR`; to recheck
 them later, use `python3 tools/bench.py --verify-eqsat-chain NEW_DIR --checker PATH`.
 An existing proof directory is never overwritten. See the

@@ -10,7 +10,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
-import resource
+import selectors
 import shutil
 import signal
 import subprocess
@@ -35,7 +35,10 @@ def chain_census(record):
     txs = record['transactions']
     buckets = {bucket: 0 for bucket in BUCKETS}
     for tx in txs:
-        buckets[proof_bucket(tx['verification'], tx['rejection_reason'])] += 1
+        bucket = proof_bucket(tx['verification'], tx['rejection_reason'], tx['result'])
+        # An additive, separately named recovery count preserves historical
+        # no-recovery receipts without rewriting their frozen accounting.
+        buckets[bucket] = buckets.get(bucket, 0) + 1
     rows = []
     for tx in txs:
         counters = tx['scoped_counters']
@@ -49,6 +52,7 @@ def chain_census(record):
             matching_work=counters['matching_work']))
     return dict(
         status='OBSERVED' if observed else 'CHAIN_REJECTED',
+        **({} if observed else {'chain_rejection_reason': record['rejection_reason']}),
         input_digest=record['input_digest'], output_digest=record['output_digest'],
         chain_id=record['chain_id'], policy_digest=record['policy_digest'],
         attempted_transactions=len(txs), verified_prefix=record['verified_prefix'],
@@ -202,6 +206,20 @@ def run_smoke(manifest_path, root):
 
     def stable():
         require(manifest_path.read_bytes() == raw, 'manifest changed during collection')
+        # A frozen binary hash is an artifact identity, not a source identity.
+        # Check the claimed implementation revision against the live build inputs
+        # as well; collector/manifest-only follow-up commits remain permitted.
+        source_paths = ['Cargo.toml', 'Cargo.lock', 'crates', 'vendor', '.cargo', 'rust-toolchain.toml']
+        revision = subprocess.run(['git', 'rev-parse', manifest['implementation_commit'] + '^{commit}'],
+                                  cwd=root, capture_output=True, check=False)
+        require(revision.returncode == 0 and revision.stdout.decode().strip() == manifest['implementation_commit'],
+                'implementation commit is not a repository commit')
+        diff = subprocess.run(['git', 'diff', '--quiet', manifest['implementation_commit'], '--', *source_paths],
+                              cwd=root, capture_output=True, check=False)
+        untracked = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard', '--', *source_paths],
+                                   cwd=root, capture_output=True, check=False)
+        require(diff.returncode == 0 and untracked.returncode == 0 and not untracked.stdout,
+                'implementation commit does not match live build inputs')
         for field in fields:
             item = manifest[field]
             require(digest((root / item['path']).read_bytes()) == item['sha256'], field + ' identity changed')
@@ -242,24 +260,8 @@ def run_smoke(manifest_path, root):
         started = time.monotonic()
         try:
             with (directory / 'policy.json').open('wb') as out, (directory / 'stderr.txt').open('wb') as err:
-                def limit_files():
-                    # The two captured streams together cannot exceed the
-                    # declared retention cap, even between watchdog polls.
-                    cap = r['output_bytes'] // 2
-                    resource.setrlimit(resource.RLIMIT_FSIZE, (cap, cap))
-                child = subprocess.Popen(argv, cwd=root, stdin=subprocess.DEVNULL, stdout=out,
-                                         stderr=err, start_new_session=True, preexec_fn=limit_files)
-                try:
-                    while child.poll() is None:
-                        require(time.monotonic() - started < r['timeout_seconds'], 'watchdog expired')
-                        require(out.tell() + err.tell() <= r['output_bytes'], 'output limit exceeded')
-                        require(shutil.disk_usage(root).free >= r['min_free_bytes'], 'disk reserve exhausted')
-                        time.sleep(0.02)
-                finally:
-                    if child.poll() is None:
-                        os.killpg(child.pid, signal.SIGKILL)
-                        child.wait()
-                receipt['exit_code'] = child.returncode
+                receipt['exit_code'] = bounded_capture(argv, root, out, err, r, started,
+                    {**os.environ, 'EVOCC_CHECKER_SHA256': manifest['checker']['sha256']})
             require((directory / 'policy.json').stat().st_size + (directory / 'stderr.txt').stat().st_size
                     <= r['output_bytes'], 'output limit exceeded')
             require(receipt['exit_code'] == 0, 'evaluator did not complete')
@@ -287,3 +289,45 @@ def run_smoke(manifest_path, root):
             receipt['collector_wall_nanos'] = int((time.monotonic() - started) * 1_000_000_000)
             save()
         return directory, receipt
+
+
+def bounded_capture(argv, root, out, err, resources, started, env):
+    """Bound captured streams only; descendants may write larger proof files.
+
+    Pipes provide backpressure. Never retain more than the shared byte cap;
+    on overflow/deadline/disk failure kill the session even if its leader has
+    exited while a descendant still holds a pipe open.
+    """
+    child = subprocess.Popen(argv, cwd=root, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             start_new_session=True, env=env)
+    retained = 0
+    completed = False
+    try:
+        with selectors.DefaultSelector() as streams:
+            for source, destination in ((child.stdout, out), (child.stderr, err)):
+                os.set_blocking(source.fileno(), False)
+                streams.register(source, selectors.EVENT_READ, destination)
+            while streams.get_map() or child.poll() is None:
+                require(time.monotonic() - started < resources['timeout_seconds'], 'watchdog expired')
+                require(shutil.disk_usage(root).free >= resources['min_free_bytes'], 'disk reserve exhausted')
+                for key, _ in streams.select(timeout=0.02):
+                    data = os.read(key.fd, 65536)
+                    if not data:
+                        streams.unregister(key.fileobj)
+                        continue
+                    remaining = resources['output_bytes'] - retained
+                    key.data.write(data[:remaining])
+                    retained += min(len(data), remaining)
+                    require(len(data) <= remaining, 'output limit exceeded')
+        completed = True
+        return child.wait()
+    finally:
+        if not completed:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        child.wait()
+        child.stdout.close()
+        child.stderr.close()

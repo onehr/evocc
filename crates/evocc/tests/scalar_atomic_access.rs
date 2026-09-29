@@ -14,6 +14,10 @@ fn run(source: &str, mode: &str) -> Output {
     command.args(["--target=aarch64-unknown-linux-gnu", "-O2", mode]);
     if mode != "--interpret-c-hir" {
         command.arg("-Oeq-scalar");
+        command.env(
+            "EVOCC_CHECKER_SHA256",
+            evocc_proof::sha256_hex(&fs::read(env!("CARGO_BIN_EXE_evocc-checker")).unwrap()),
+        );
     }
     let result = command.arg(&file).output().unwrap();
     fs::remove_file(file).unwrap();

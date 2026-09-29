@@ -68,6 +68,8 @@ fn region_normalization_retains_its_own_fact_environment() {
 "#).unwrap();
     let mut state = EqualityState::for_module(&module).unwrap();
     let checker = evocc_proof::StandaloneProofChecker::locate().unwrap();
+    let expected = checker.identity_digest().unwrap(); // Trust this test's workspace build.
+    let checker = checker.with_expected_digest(expected);
     let run = evocc_eqopt::run_scalar_chain_with_checker(
         &module,
         &mut state,
@@ -113,10 +115,72 @@ fn rejected_second_transaction_rolls_back_the_entire_state() {
         .unwrap_err();
     assert_eq!(calls, 2);
     assert_eq!(failure.verified_prefix, 1);
+    assert_eq!(failure.rejection_reason, RejectionReason::ProofInvalid);
     assert_eq!(
         failure.transactions[1].rejection_reason,
         RejectionReason::ProofInvalid
     );
+    assert_eq!(state.audit(), original);
+}
+
+#[test]
+fn legacy_persistent_view_uses_the_same_remap_and_commit_as_certified_path() {
+    let module = input();
+    let mut legacy = EqualityState::for_module(&module).unwrap();
+    legacy.ingest_module(&module).unwrap();
+    let mut certified = legacy.clone();
+    let budget = evocc_eqopt::ScalarEqBudget::new(100_000, 1_024);
+    let a = evocc_eqopt::optimize_scalar_module_persistent(&module, &mut legacy, budget);
+    let b =
+        evocc_eqopt::optimize_scalar_module_certified_persistent(&module, &mut certified, budget);
+    assert_eq!(a.module, b.module);
+    assert_eq!(a.report, b.report);
+    assert_eq!(legacy.audit(), certified.audit());
+    let before = legacy.audit();
+    let second = evocc_eqopt::optimize_scalar_module_persistent(&a.module, &mut legacy, budget);
+    assert!(
+        !second.report.fell_back,
+        "the next public transaction must accept the remapped identity"
+    );
+    assert_eq!(second.module, a.module);
+    assert_eq!(legacy.audit(), before);
+}
+
+#[test]
+fn unpinned_checker_and_out_of_profile_deadline_cannot_commit_state() {
+    let module = input();
+    let mut state = EqualityState::for_module(&module).unwrap();
+    let original = state.audit();
+    let checker = evocc_proof::StandaloneProofChecker::new(
+        evocc_proof::StandaloneProofChecker::locate()
+            .unwrap()
+            .binary()
+            .clone(),
+        std::env::temp_dir(),
+    );
+    let failure = evocc_eqopt::run_scalar_chain_with_checker(
+        &module,
+        &mut state,
+        &ExtractionPolicy::default(),
+        &checker,
+    )
+    .unwrap_err();
+    assert!(failure.detail.contains("missing trusted"));
+    assert!(failure.transactions.is_empty());
+    assert_eq!(state.audit(), original);
+    let expected = checker.identity_digest().unwrap();
+    let checker = checker
+        .with_expected_digest(expected)
+        .with_timeout(std::time::Duration::from_millis(300_001));
+    let failure = evocc_eqopt::run_scalar_chain_with_checker(
+        &module,
+        &mut state,
+        &ExtractionPolicy::default(),
+        &checker,
+    )
+    .unwrap_err();
+    assert!(failure.detail.contains("deadline"));
+    assert!(failure.transactions.is_empty());
     assert_eq!(state.audit(), original);
 }
 
@@ -227,6 +291,14 @@ fn closed_state_reason_product_has_exactly_45_legal_combinations() {
                             }
                             _ => false,
                         };
+                        // Producer failure explains the chain, never a checker verdict.
+                        assert!(!valid_transaction_state(
+                            result,
+                            stop,
+                            cert,
+                            v,
+                            RejectionReason::ProducerError
+                        ));
                         let got = valid_transaction_state(result, stop, cert, v, r);
                         assert_eq!(got, expected, "{result:?} {stop:?} {cert:?} {v:?} {r:?}");
                         count += usize::from(got);
@@ -242,6 +314,8 @@ fn closed_state_reason_product_has_exactly_45_legal_combinations() {
 fn independent_checker_accepts_every_bundle_and_mutations_are_rejected() {
     let module = input();
     let checker = evocc_proof::StandaloneProofChecker::locate().unwrap();
+    let expected = checker.identity_digest().unwrap(); // Trust this test's workspace build.
+    let checker = checker.with_expected_digest(expected);
     let mut state = EqualityState::for_module(&module).unwrap();
     let run = run_verified_scalar_chain(&module, &mut state, &ExtractionPolicy::default(), |b| {
         RejectionReason::from_checker_outcome(checker.check_typed(&b.before, &b.after, &b.proof))
@@ -312,6 +386,8 @@ fn partial_budget_keeps_verified_regions_and_stops_the_chain() {
         ..Default::default()
     });
     let checker = evocc_proof::StandaloneProofChecker::locate().unwrap();
+    let expected = checker.identity_digest().unwrap(); // Trust this test's workspace build.
+    let checker = checker.with_expected_digest(expected);
     let mut state = EqualityState::for_module(&module).unwrap();
     let run =
         evocc_eqopt::run_scalar_chain_with_checker(&module, &mut state, &policy, &checker).unwrap();
@@ -361,6 +437,8 @@ fn emitted_definitions_remain_bound_for_later_congruence() {
     let module = parse_section9_module(original.replace("    %v1 = const.bits<32> 0\n    %v2 = add.bits<32> %v0, %v1\n    ret %v2", "    %v1 = const.bits<32> 2\n    %v2 = mul.bits<32> %v0, %v1\n    %v3 = add.bits<32> %v0, %v0\n    %v4 = xor.bits<32> %v2, %v3\n    ret %v4").as_bytes()).unwrap();
     let mut state = EqualityState::for_module(&module).unwrap();
     let checker = evocc_proof::StandaloneProofChecker::locate().unwrap();
+    let expected = checker.identity_digest().unwrap(); // Trust this test's workspace build.
+    let checker = checker.with_expected_digest(expected);
     let run = evocc_eqopt::run_scalar_chain_with_checker(
         &module,
         &mut state,
@@ -416,6 +494,8 @@ fn known_edge_fact_folds_newly_emitted_root_in_the_next_transaction() {
 "#).unwrap();
     let mut state = EqualityState::for_module(&module).unwrap();
     let checker = evocc_proof::StandaloneProofChecker::locate().unwrap();
+    let expected = checker.identity_digest().unwrap(); // Trust this test's workspace build.
+    let checker = checker.with_expected_digest(expected);
     let run = evocc_eqopt::run_scalar_chain_with_checker(
         &module,
         &mut state,

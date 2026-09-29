@@ -61,7 +61,7 @@ The result is **NO_HITS_IN_THIS_POPULATION**, not FINITE_ENUMERATION_SUFFICIENT
 or NO_OBSERVABLE_EFFECT. All three track preflight verdicts remain NOT_RUN.
 
 The complete raw report and collector receipt are retained in
-[the fixture directory](../../tests/fixtures/certificates/cap-census-20260929/).
+[the fixture directory](../../tests/fixtures/eqsat-chains/cap-census-20260929/).
 All capture files together occupy 224,038 bytes. The collector/bench/chain/TODO
 Python gate passed 93 tests before this run. A new imported-CLI test initially
 exposed a module-path error; fixing package selection made both direct CLI and

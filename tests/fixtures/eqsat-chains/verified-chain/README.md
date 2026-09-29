@@ -17,7 +17,7 @@ under `.evidence/eqsat-r01a-20260929/`, not committed here. To replay this exact
 artifact subject while that checker is retained:
 
 ```sh
-python3 tools/bench.py --verify-eqsat-chain tests/fixtures/certificates/verified-chain \
+python3 tools/bench.py --verify-eqsat-chain tests/fixtures/eqsat-chains/verified-chain \
   --checker .evidence/eqsat-r01a-20260929/tools/evo-proofcheck
 ```
 

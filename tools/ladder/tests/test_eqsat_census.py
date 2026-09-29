@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from tools.ladder.eqsat_census import chain_census, report_census, run_smoke, validate_smoke
 from tools.ladder.eqsat_chain import digest
 
-FIXTURE = Path(__file__).resolve().parents[3] / 'tests/fixtures/certificates/verified-chain/chain.json'
+FIXTURE = Path(__file__).resolve().parents[3] / 'tests/fixtures/eqsat-chains/verified-chain/chain.json'
 
 
 def chain():
@@ -116,6 +116,25 @@ class CensusTests(unittest.TestCase):
         self.assertFalse(row['chain_limit_hit'])
         self.assertIsNone(row['matching_work'])
 
+    def test_verified_recovery_is_separate_from_success_and_never_no_hits(self):
+        c = chain()
+        tx = c['transactions'][-1]
+        tx.update(result='ROLLED_BACK_ERROR', stop='INTERNAL_ERROR')
+        c.update(publication='REJECTED', rejection_reason='PRODUCER_ERROR',
+                 output_digest=None, stop='ERROR', verified_prefix=1)
+        row = chain_census(c)
+        self.assertEqual(row['proof_accounting']['proof_successes'], 1)
+        self.assertEqual(row['proof_accounting']['recovery_proof_successes'], 1)
+        self.assertEqual(row['status'], 'CHAIN_REJECTED')
+        self.assertEqual(row['chain_rejection_reason'], 'PRODUCER_ERROR')
+        self.assertTrue(all(hit is None for hit in row['hit_transactions'].values()))
+        c['rejection_reason'] = 'PROOF_INVALID'
+        with self.assertRaisesRegex(ValueError, 'hides transaction cause'):
+            chain_census(c)
+        c['rejection_reason'] = 'NONE'
+        with self.assertRaisesRegex(ValueError, 'rejected chain'):
+            chain_census(c)
+
     def test_zero_or_omitted_population_cannot_be_clean(self):
         r = report()
         r['programs'] = []
@@ -160,12 +179,19 @@ class SmokeBoundaryTests(unittest.TestCase):
         p.chmod(0o700)
         self.manifest['evaluator']['sha256'] = digest(p.read_bytes())
 
-    def invoke(self, *, committed=True):
+    def invoke(self, *, committed=True, source_matches=True):
         self.path.write_text(json.dumps(self.manifest))
-        # Only git show is mocked. The collector starts/reaps the real fixture
+        # Only source-control queries are mocked. The collector starts/reaps the real fixture
         # child and uses the real shared file lock and bounded capture files.
-        with patch('tools.ladder.eqsat_census.subprocess.run', return_value=SimpleNamespace(
-                returncode=0 if committed else 1, stdout=self.path.read_bytes() if committed else b'')):
+        def git_query(argv, **kwargs):
+            self.assertEqual(argv[0], 'git')
+            if argv[1] == 'show':
+                return SimpleNamespace(returncode=0 if committed else 1,
+                    stdout=self.path.read_bytes() if committed else b'')
+            if argv[1] == 'rev-parse':
+                return SimpleNamespace(returncode=0, stdout=self.manifest['implementation_commit'].encode())
+            return SimpleNamespace(returncode=0 if source_matches else 1, stdout=b'')
+        with patch('tools.ladder.eqsat_census.subprocess.run', side_effect=git_query):
             return run_smoke(self.path, self.root)
 
     def test_completed_diagnostic_retains_the_exact_input_and_output(self):
@@ -182,6 +208,8 @@ class SmokeBoundaryTests(unittest.TestCase):
     def test_uncommitted_manifest_stale_binary_and_missing_subject_refuse(self):
         with self.assertRaisesRegex(ValueError, 'commit'):
             self.invoke(committed=False)
+        with self.assertRaisesRegex(ValueError, 'live build inputs'):
+            self.invoke(source_matches=False)
         self.manifest['checker']['sha256'] = 'f' * 64
         with self.assertRaisesRegex(ValueError, 'identity changed'):
             self.invoke()
@@ -239,6 +267,26 @@ class SmokeBoundaryTests(unittest.TestCase):
         directory, receipt = self.invoke()
         self.assertEqual(receipt['status'], 'COLLECTION_FAILED')
         self.assertLessEqual(sum((directory / name).stat().st_size for name in ('policy.json', 'stderr.txt')), 1024)
+
+    def test_grandchild_scratch_proof_is_not_subject_to_capture_file_limit(self):
+        # Exceeds both the old 4 MiB inherited limit and this test's capture cap.
+        self.command('import subprocess,sys\n'
+                     'subprocess.run([sys.executable,"-c",'
+                     + repr('from pathlib import Path; Path("scratch.evp").write_bytes(b"x" * (8 * 1024 * 1024))')
+                     + '], check=True)\nprint(' + repr(json.dumps(self.output)) + ')')
+        directory, receipt = self.invoke()
+        self.assertEqual(receipt['status'], 'OBSERVED', receipt)
+        self.assertEqual((self.root / 'scratch.evp').stat().st_size, 8 * 1024 * 1024)
+        self.assertLess((directory / 'policy.json').stat().st_size, self.manifest['resources']['output_bytes'])
+
+    def test_exited_leader_with_live_pipe_descendant_is_bounded(self):
+        self.manifest['resources']['timeout_seconds'] = 1
+        self.command('import subprocess,sys\n'
+                     'p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"])\n'
+                     'print(p.pid, flush=True)')
+        _, receipt = self.invoke()
+        self.assertEqual(receipt['status'], 'COLLECTION_FAILED')
+        self.assertIn('watchdog', receipt['error'])
 
 
 if __name__ == '__main__':

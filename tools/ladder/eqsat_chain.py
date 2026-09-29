@@ -16,6 +16,7 @@ AXES = ('add', 'sub', 'mul', 'and', 'or', 'xor', 'shl', 'lshr', 'ashr',
         'zext', 'sext', 'trunc', 'icmp')
 REASONS = {'NONE', 'CERTIFICATE_MALFORMED', 'PROOF_INVALID', 'CHECKER_TIMEOUT',
            'CHECKER_UNAVAILABLE', 'CHECKER_ERROR', 'CERTIFICATE_MISSING', 'BUNDLE_MISMATCH'}
+CHAIN_REASONS = (REASONS - {'NONE'}) | {'PRODUCER_ERROR'}
 REGISTRIES = {
     'p0.scalar.v1': 'ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9',
     'p0.scalar.v2': 'c1691808ebe55a3b2520a0456345e7c38a23fa2732e0827393dcf12523024bce',
@@ -73,16 +74,17 @@ def valid_state(result, stop, certificate, verification, reason):
     return verification == 'REJECTED' and reason not in {'NONE', 'CERTIFICATE_MISSING'}
 
 
-def proof_bucket(verification, reason):
+def proof_bucket(verification, reason, result):
     """Completed rejections deliberately exclude malformed bundles and outages."""
     require(verification in {'NOT_CHECKED', 'VERIFIED', 'REJECTED'} and reason in REASONS,
             'unknown proof-accounting state')
+    require(result in {'CHANGED', 'UNCHANGED', 'ROLLED_BACK_ERROR'}, 'unknown transaction result')
     if verification == 'NOT_CHECKED':
         require(reason == 'NONE', 'unchecked proof has a rejection reason')
         return 'not_checked'
     if verification == 'VERIFIED':
         require(reason == 'NONE', 'verified proof has a rejection reason')
-        return 'proof_successes'
+        return 'recovery_proof_successes' if result == 'ROLLED_BACK_ERROR' else 'proof_successes'
     require(reason != 'NONE', 'rejected proof has no reason')
     if reason == 'PROOF_INVALID':
         return 'completed_proof_rejections'
@@ -184,7 +186,12 @@ def validate_record(record):
         previous = tx['output_digest']
     require(natural(record['verified_prefix']) == prefix, 'incorrect verified prefix')
     if rejected:
-        require(record['stop'] == 'ERROR' and record['output_digest'] is None and record['rejection_reason'] in REASONS, 'invalid rejected chain')
+        require(record['stop'] == 'ERROR' and record['output_digest'] is None and record['rejection_reason'] in CHAIN_REASONS, 'invalid rejected chain')
+        if txs and prefix < len(txs):
+            last = txs[-1]
+            expected_reason = (last['rejection_reason'] if last['verification'] == 'REJECTED'
+                               else 'PRODUCER_ERROR')
+            require(record['rejection_reason'] == expected_reason, 'chain rejection hides transaction cause')
     else:
         require(txs and prefix == len(txs) and previous == record['output_digest'], 'incomplete published chain')
         last = txs[-1]
@@ -266,14 +273,14 @@ def verify_bundle(directory: Path, checker: Path | None = None):
                     reason = 'CHECKER_UNAVAILABLE'
             if reason == 'NONE':
                 proof = frozen[f"{tx['index']:03}.proof.evp"]
-                budget = re.search(rb'^budget nodes=(\d+)/(\d+) epochs=(\d+)/(\d+) fuel=(\d+)/(\d+) n=(\d+) stop=\w+$', proof, re.M)
+                budget = re.search(rb'^budget nodes=(\d+)/(\d+) epochs=(\d+)/(\d+) fuel=(\d+)/(\d+) n=(\d+) stop=[\w-]+$', proof, re.M)
                 expected = None
                 if budget:
                     values = [int(v) for v in budget.groups()]
                     expected = dict(nodes=values[0], epoch_marker=values[2], fuel=values[4], fuel_bound=values[5], n=values[6])
                 require(tx['scoped_counters']['evp'] == expected, 'EVP telemetry differs from replayed certificate')
             verdict = 'VERIFIED' if reason == 'NONE' else 'REJECTED'
-            counts[proof_bucket(verdict, reason)] += 1
+            counts[proof_bucket(verdict, reason, tx['result'])] += 1
             replay.append(dict(index=tx['index'], verification=verdict, rejection_reason=reason))
             if reason != 'NONE':
                 break

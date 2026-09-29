@@ -6,6 +6,12 @@ implementation of the design. The starting checkout was `a4c5209`.
 
 ## R01a shared verification chain
 
+Reopened after review: the four-crate Rust gate below omitted proofcheck. The
+sealed-certificate suite failed all three tests because chain/census directories
+were incorrectly placed among certificate triples. These historical scoped
+counts remain valid but do not close R01a. Requalification requires the full
+workspace gate and all four review blockers; no application census is admitted.
+
 The driver and policy evaluator now call the same policy-aware persistent
 runner. Policy identity includes all thirteen weights, registry ceiling,
 extractor, coupled limit mapping, and transaction ceiling. Every transaction,
@@ -60,7 +66,7 @@ dependencies. Do not create another target tree or kernel workspace.
 
 ```sh
 CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo build --offline -p evocc -p evocc-proofcheck -p evocc-policy
-CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline --no-fail-fast -p evocc-eqopt -p evocc-proof -p evocc-policy -p evocc-randgate -- --nocapture
+CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh --full-workspace --offline
 python3 -m unittest tools.ladder.tests.test_eqsat_chain tools.ladder.tests.test_bench tools.ladder.tests.test_todo_schedule
 ```
 
@@ -88,7 +94,7 @@ The retained two-transaction archive passed independent replay with two proof
 successes and zero rejection/malformed/unknown buckets. Its exact codegen output
 assembled, linked and exited 0 on Darwin ARM64 with Apple clang 21.0.0. The
 small text artifacts and hashes are also tracked in
-[the sealed fixture](../../tests/fixtures/certificates/verified-chain/README.md).
+[the sealed fixture](../../tests/fixtures/eqsat-chains/verified-chain/README.md).
 Original compiler/checker binaries and native object/executable remain local;
 their hashes are in `native.json`. Replaying with a rebuilt checker is a new
 semantic check, not a rewrite of the historical native/compiler identity.

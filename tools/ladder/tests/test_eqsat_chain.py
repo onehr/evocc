@@ -125,6 +125,8 @@ class ChainArchive(unittest.TestCase):
         cls.bundle = cls.root / 'original'
         cls.source = ROOT / 'tests/fixtures/verified-eqsat-chain.c'
         result = subprocess.run([str(cls.driver), '--emit=evoir', '-Oeq-scalar',
+                                 f'--eq-checker={cls.checker}',
+                                 f'--eq-checker-sha256={chain.digest(cls.checker.read_bytes())}',
                                  f'--eq-proof-dir={cls.bundle}', str(cls.source)], capture_output=True, check=False)
         if result.returncode:
             raise AssertionError(result.stderr.decode())
@@ -145,7 +147,7 @@ class ChainArchive(unittest.TestCase):
         self.assertEqual(json.loads(out.stdout), result)
 
     def test_sealed_chain_replays_without_relabeling_its_native_subject(self):
-        directory = ROOT / 'tests/fixtures/certificates/verified-chain'
+        directory = ROOT / 'tests/fixtures/eqsat-chains/verified-chain'
         raw = (directory / 'chain.json').read_bytes()
         record = json.loads(raw, object_pairs_hook=chain.unique)
         chain.validate_record(record)
@@ -234,18 +236,19 @@ class ChainArchive(unittest.TestCase):
 
     def test_outages_are_unknown_not_proof_rejections(self):
         for reason in ('CHECKER_TIMEOUT', 'CHECKER_UNAVAILABLE', 'CHECKER_ERROR'):
-            self.assertEqual(chain.proof_bucket('REJECTED', reason), 'unknown_proof_outcomes')
+            self.assertEqual(chain.proof_bucket('REJECTED', reason, 'UNCHANGED'), 'unknown_proof_outcomes')
         with self.assertRaises(ValueError):
             json.loads('{"x": 1, "x": 2}', object_pairs_hook=chain.unique)
 
     def test_accounting_keeps_not_checked_separate_from_unknown(self):
-        self.assertEqual(chain.proof_bucket('NOT_CHECKED', 'NONE'), 'not_checked')
-        self.assertEqual(chain.proof_bucket('VERIFIED', 'NONE'), 'proof_successes')
-        self.assertEqual(chain.proof_bucket('REJECTED', 'PROOF_INVALID'), 'completed_proof_rejections')
+        self.assertEqual(chain.proof_bucket('NOT_CHECKED', 'NONE', 'UNCHANGED'), 'not_checked')
+        self.assertEqual(chain.proof_bucket('VERIFIED', 'NONE', 'UNCHANGED'), 'proof_successes')
+        self.assertEqual(chain.proof_bucket('VERIFIED', 'NONE', 'ROLLED_BACK_ERROR'), 'recovery_proof_successes')
+        self.assertEqual(chain.proof_bucket('REJECTED', 'PROOF_INVALID', 'UNCHANGED'), 'completed_proof_rejections')
         for state, reason in (('VERIFIED', 'PROOF_INVALID'), ('NOT_CHECKED', 'CHECKER_ERROR'),
                               ('REJECTED', 'NONE'), ('MISSING', 'NONE')):
             with self.assertRaises(ValueError):
-                chain.proof_bucket(state, reason)
+                chain.proof_bucket(state, reason, 'UNCHANGED')
 
     def test_process_outages_are_retained_as_unknown(self):
         # Process stubs exercise the adapter only, not equality soundness.
@@ -273,7 +276,7 @@ class ChainArchive(unittest.TestCase):
             record = copy.deepcopy(self.record)
             record['transactions'] = [record['transactions'][0]]
             record.update(attempted_transactions=1, verified_prefix=0, publication='REJECTED',
-                          rejection_reason='NONE', stop='ERROR', output_digest=None)
+                          rejection_reason='PRODUCER_ERROR' if rollback else 'CERTIFICATE_MISSING', stop='ERROR', output_digest=None)
             tx = record['transactions'][0]
             tx.update(certificate_state='NONE', proof_digest=None)
             if rollback:

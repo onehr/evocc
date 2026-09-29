@@ -14,7 +14,7 @@ GATE = Path(__file__).resolve().parents[2] / "gate-changed.sh"
 
 
 class ChangedGateTest(unittest.TestCase):
-    def run_gate(self, changed="", status="", fail_test=False, sources=None):
+    def run_gate(self, changed="", status="", fail_test=False, sources=None, full=False, extra=()):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "tools").mkdir()
@@ -55,11 +55,29 @@ class ChangedGateTest(unittest.TestCase):
                        GATE_DIFF=changed, GATE_STATUS=status,
                        GATE_CALLS=str(calls), GATE_FAIL_TEST=str(int(fail_test)))
             result = subprocess.run(["sh", str(root / "tools/gate-changed.sh"),
-                                     "baseline", "--offline", "-j", "2"],
+                                     "--full-workspace" if full else "baseline", "--offline", "-j", "2", *extra],
                                     env=env, capture_output=True, text=True, timeout=10)
             commands = [json.loads(line) for line in calls.read_text().splitlines()] \
                 if calls.exists() else []
             return result, commands
+
+    def test_full_workspace_gate_cannot_select_away_unrelated_crates(self):
+        result, calls = self.run_gate(full=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [
+            ['test', '--workspace', '--no-fail-fast', '--offline', '-j', '2'],
+            ['clippy', '--workspace', '--all-targets', '--', '-D', 'warnings'],
+            ['fmt', '--all', '--', '--check']])
+        failed, calls = self.run_gate(full=True, fail_test=True)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual(len(calls), 1)
+
+    def test_full_workspace_cannot_be_relabelled_after_excluding_tests(self):
+        for extra in [('--test', 'only-one'), ('-p', 'leaf'), ('--exclude', 'unrelated'),
+                      ('--', 'a_test_name'), ('--lib',), ('--no-run',)]:
+            result, calls = self.run_gate(full=True, extra=extra)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(calls, [])
 
     def assert_packages(self, calls, names):
         self.assertEqual([call[0] for call in calls], ["metadata", "test", "clippy", "fmt"])
