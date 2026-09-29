@@ -28,6 +28,7 @@ FIXTURES = ('tests/fixtures/verified-eqsat-chain.c',
 FRONTEND = ['--emit=evoir', '-O0', '--eq-proof-dir={chain}', '{source}']
 REFERENCE = ['-std=gnu11', '-O0', '-c', '{source}', '-o', '{object}']
 LINK = ['{object}', '-o', '{executable}']
+SDK_LINK = ['-fuse-ld={link_editor}', *LINK]
 
 
 def host_identity():
@@ -53,7 +54,16 @@ def execution_plan(m, observed_host):
     require(c['optimizer'] == dict(chain='scalar-chain-v1', extractor='selected-pair-v1',
             counter_mapping='legacy-coupled-v1', registry='p0.scalar.v4', max_nodes=100000,
             max_epochs=1024, max_transactions=8, proof_required=True), 'nondefault inactive optimizer settings')
-    require(m['environment'] == dict(PATH='/usr/bin:/bin', LANG='C', LC_ALL='C'),
+    environment = dict(PATH='/usr/bin:/bin', LANG='C', LC_ALL='C')
+    sdk = m['native']['adapter'] == 'darwin-p0-aa-v2'
+    if sdk:
+        settings = Path(m['native']['sdk']['settings']['path'])
+        require(settings.name == 'SDKSettings.json', 'SDK settings identity is not declared')
+        sdk_root = settings.parent.resolve()
+        require(Path(m['native']['sdk']['system_library']['path']).resolve() ==
+                (sdk_root/'usr/lib/libSystem.tbd').resolve(), 'system library is outside the declared SDK')
+        environment['SDKROOT'] = str(sdk_root)
+    require(m['environment'] == environment,
             'native recipe has a closed environment')
     require(m['protocol']['pairs'] % 2 == 0, 'balanced A/A requires an even pair count')
     # Bound the planned process population as well as each child. No implicit retries.
@@ -64,7 +74,7 @@ def execution_plan(m, observed_host):
                 and case['inputs'] == [] and case['run_argv'] == ['{executable}'],
                 'only registered header-free P0 fixtures are implemented')
         require(case['compiler_argv'] == FRONTEND and case['reference_argv'] == REFERENCE
-                and case['link_argv'] == LINK, 'argv differs from implemented native recipe')
+                and case['link_argv'] == (SDK_LINK if sdk else LINK), 'argv differs from implemented native recipe')
         require(case['coverage'] == dict(subject_objects=['program.o'], reference_objects=[]),
                 'native recipe builds one subject C object, no reference substitution')
         require(case['result'] == dict(exit_code=0, stdout_sha256=digest(b''), stderr_sha256=digest(b'')),
@@ -81,6 +91,7 @@ def run_calibration(manifest_path, root):
     execution_plan(m, host)
     pinned = {str((root / item['path']).resolve()): item['sha256'] for item, _ in artifacts(m)}
     tools = {name: (root / item['path']).resolve() for name, item in m['tools'].items()}
+    link_flags = ['-fuse-ld=' + str(tools['link_editor'])] if 'link_editor' in tools else []
     require(Path(sys.executable).resolve() == tools['collector_python'], 'wrong collector interpreter')
 
     def stable():
@@ -152,7 +163,7 @@ def run_calibration(manifest_path, root):
                 pinned[str(assembly.resolve())] = digest(assembly.read_bytes())
                 command('assemble', [tools['assembler'], '-c', '-x', 'assembler', assembly, '-o', obj])
                 pinned[str(obj.resolve())] = digest(obj.read_bytes())
-                command('link', [tools['linker'], obj, '-o', executable])
+                command('link', [tools['linker'], *link_flags, obj, '-o', executable])
                 pinned[str(executable.resolve())] = digest(executable.read_bytes())
                 product.update(assembly_digest=pinned[str(assembly.resolve())],
                                object_digest=pinned[str(obj.resolve())],
@@ -161,7 +172,7 @@ def run_calibration(manifest_path, root):
                                coverage=case['coverage'])
                 ref_obj, reference = work / 'reference.o', work / 'reference'
                 command('reference-compile', [tools['reference'], '-std=gnu11', '-O0', '-c', source, '-o', ref_obj])
-                command('reference-link', [tools['linker'], ref_obj, '-o', reference])
+                command('reference-link', [tools['linker'], *link_flags, ref_obj, '-o', reference])
                 command('reference-result', [reference], case['result'])
                 command('subject-admission', [executable], case['result'])
                 protocol = m['protocol']

@@ -37,6 +37,8 @@ def artifacts(m):
         yield item, False
     for name, identity in m.get('native', {}).get('collector_files', {}).items():
         yield dict(path=name, sha256=identity), False
+    for item in m.get('native', {}).get('sdk', {}).values():
+        yield item, True
     for case in m['cases']:
         yield case['source'], False
         for item in case['inputs']:
@@ -51,15 +53,22 @@ def validate_manifest(m):
             and m['scope'] == 'r02-plan-not-admission', 'unknown plan schema or claim scope')
     require(type(m['implementation_commit']) is str
             and re.fullmatch('[0-9a-f]{40}', m['implementation_commit']), 'missing implementation commit')
-    keys(m['tools'], 'compiler checker reference assembler linker' + (' ir_backend collector_python' if v2 else ''))
+    sdk = v2 and type(m.get('native')) is dict and m['native'].get('adapter') == 'darwin-p0-aa-v2'
+    keys(m['tools'], 'compiler checker reference assembler linker' + (' ir_backend collector_python' if v2 else '')
+         + (' link_editor' if sdk else ''))
     if v2:
-        keys(m['native'], 'adapter eqsat codegen_target source_profile collector_files')
-        require({k: v for k, v in m['native'].items() if k != 'collector_files'} ==
-                dict(adapter='darwin-p0-aa-v1', eqsat='off', codegen_target='darwin-arm64',
+        keys(m['native'], 'adapter eqsat codegen_target source_profile collector_files' + (' sdk' if sdk else ''))
+        require({k: v for k, v in m['native'].items() if k not in ('collector_files', 'sdk')} ==
+                dict(adapter='darwin-p0-aa-v2' if sdk else 'darwin-p0-aa-v1', eqsat='off', codegen_target='darwin-arm64',
                      source_profile='linux-lp64-header-free-integer'),
                 'unknown native recipe or source/backend boundary')
         keys(m['native']['collector_files'], 'tools/bench.py tools/ladder/eqsat_native.py '
              'tools/ladder/eqsat_manifest.py tools/ladder/eqsat_census.py tools/ladder/eqsat_chain.py')
+        if sdk:
+            keys(m['native']['sdk'], 'settings system_library')
+            for item in m['native']['sdk'].values():
+                artifact(item, True)
+                require(Path(item['path']).is_absolute(), 'SDK artifact needs an absolute path')
     keys(m['specs'], 'evoir evomir')
     h = m['host']
     keys(h, 'system release machine runtime cpu libc affinity')

@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from tools.ladder.eqsat_chain import digest
 from tools.ladder.eqsat_native import (Capture, pair_order, summarize, execution_plan,
-                                       run_calibration, FRONTEND, REFERENCE, LINK)
+                                       run_calibration, FRONTEND, REFERENCE, LINK, SDK_LINK)
 from tools.ladder.tests.test_eqsat_manifest import manifest
 
 
@@ -138,7 +138,7 @@ class NativePipelineTests(unittest.TestCase):
         source['sha256'] = digest(p.read_bytes())
         self.tool()
 
-    def tool(self, subject='exit 0'):
+    def tool(self, subject='exit 0', require_sdk=False):
         # This fixture does not assert any C or machine semantics.
         ir = 'unit IR identity only\n'
         ih = digest(ir.encode())
@@ -147,7 +147,7 @@ class NativePipelineTests(unittest.TestCase):
             input_digest=ih, output_digest=ih,
             chain_id=digest(('identity-chain-v1\n'+ih+'\n').encode()))
         text = f'''#!{sys.executable}
-import sys, json
+import sys, json, os
 from pathlib import Path
 a=sys.argv[1:]
 if a[0].startswith('--interpret-'):
@@ -162,6 +162,8 @@ elif a[0]=='darwin-arm64':
 elif '-c' in a:
     Path(a[a.index('-o')+1]).write_text('fixture object')
 else:
+    if {require_sdk!r} and (not os.environ.get('SDKROOT') or not a[0].startswith('-fuse-ld=')):
+        sys.exit(9)
     p=Path(a[a.index('-o')+1])
     body={subject!r} if p.name=='program' else 'exit 0'
     p.write_text('#!/bin/sh\\n'+body+'\\n'); p.chmod(0o700)
@@ -209,6 +211,34 @@ else:
             with self.assertRaisesRegex(ValueError, 'shared lock'):
                 self.run_plan()
         self.assertFalse((self.root/'.evidence').exists())
+
+    def test_sdk_recipe_requires_explicit_pinned_inputs_and_closed_environment(self):
+        self.tool(require_sdk=True)
+        sdk = self.root/'SDK'
+        (sdk/'usr/lib').mkdir(parents=True)
+        settings, system = sdk/'SDKSettings.json', sdk/'usr/lib/libSystem.tbd'
+        settings.write_bytes(b'fixture SDK settings')
+        system.write_bytes(b'fixture system library stub')
+        self.m['native'].update(adapter='darwin-p0-aa-v2', sdk=dict(
+            settings=dict(path=str(settings), sha256=digest(settings.read_bytes())),
+            system_library=dict(path=str(system), sha256=digest(system.read_bytes()))))
+        self.m['tools']['link_editor'] = copy.deepcopy(self.m['tools']['linker'])
+        self.m['environment']['SDKROOT'] = str(sdk.resolve())
+        self.m['cases'][0]['link_argv'] = SDK_LINK.copy()
+        directory, result = self.run_plan()
+        self.assertEqual(result['status'], 'OBSERVED_AA', result)
+        from tools.ladder.eqsat_native_audit import audit_calibration
+        audit_calibration(directory, self.root, digest((directory/'manifest.json').read_bytes()))
+        for change in (
+            lambda p: p['environment'].pop('SDKROOT'),
+            lambda p: p['environment'].update(SDKROOT='/another-sdk'),
+            lambda p: p['native']['sdk']['system_library'].update(path='/another/libSystem.tbd'),
+            lambda p: p['tools'].pop('link_editor'),
+        ):
+            p = copy.deepcopy(self.m)
+            change(p)
+            with self.assertRaises(ValueError):
+                execution_plan(p, p['host'])
 
     def test_read_only_audit_recomputes_population_results_artifacts_and_statistics(self):
         from tools.ladder.eqsat_native_audit import audit_calibration

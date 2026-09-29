@@ -50,6 +50,13 @@ wrapping/FP flags, new source fixtures, held-out inputs, uncontrolled injected
 environment variables and unsupported profiles are refused. A/A labels run the
 same executable; they do not select different compilers or rerun optimization.
 
+The `darwin-p0-aa-v2` recipe additionally freezes the SDK's `SDKSettings.json`
+and `usr/lib/libSystem.tbd`, supplies the corresponding explicit `SDKROOT` in
+the closed child environment, and pins/selects the real link editor with
+`-fuse-ld=ABSOLUTE_PATH`. This avoids relying on the invoking shell's SDK setup.
+Both subject and reference links use that same frozen selection. These pins
+do not attest the entire SDK or every transitive system-library stub.
+
 Execution uses the existing `.build/bench.lock`, one new exclusive evidence
 directory and no deletion of previous runs. The exact plan is retained. Each
 attempt is published as STARTED before launch and is updated even on failure.
@@ -166,9 +173,26 @@ real child timeout/overflow/file-growth, failed output, artifact self-mutation,
 lock exclusion, unique retained runs, paired order and statistical boundaries.
 Fixture-tool tests are harness tests, not native/compiler acceptance.
 
-The full workspace gate and real frozen-plan native run are pending at this
-checkpoint. Their final results must be recorded below before native execution
-is claimed. No application census or AI/model search has been launched.
+The full workspace gate completed: 2,855 PASS, 0 FAIL and four existing ignored
+campaigns, over 364 test-result summaries; workspace all-target Clippy and format
+checking both passed. No Rust build input changed in the subsequent SDK-recipe
+repair. The gate log SHA-256 is
+`271d0f21af3e8e62700648a6df49d654010d00cedc4c75ea99a250e118873bfc`.
+
+The first actual native attempt, `.evidence/eqsat-native/aa-8te9uzww`, is FAILED
+and retained, not erased or retried automatically. Both interpreters returned
+zero; canonical IR export, identity audit, backend emission and assembly passed.
+Attempt 5, the subject link, exited 1 with `ld: library 'System' not found`:
+the closed environment had removed ambient SDK discovery. No subject execution,
+warmup or timing sample ran. The failed receipt SHA-256 is
+`fe57f6ba2e70283e6c16dab521d44ca24fc4fa12fe176cea39d61d6045903625`.
+
+The repair is the explicit SDK/link-editor recipe above, not looser environment
+inheritance or a compiler-semantic change. Its unit RED requires the actual
+SDKROOT environment and explicit link-editor argument; negative cases reject
+missing/mismatched SDK and linker pins. A separate plan must be frozen before
+the repaired run. Native success is not yet claimed at this checkpoint. No
+application census or AI/model search has been launched.
 
 R02a still needs broader effective-profile verification, optimized-chain native
 admission, application builders/inputs, CPU/RSS and section metrics, the complete

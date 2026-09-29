@@ -55,6 +55,7 @@ def audit_calibration(directory, root, expected_manifest_digest):
             and r['runtime_cache'] == 'NOT_CONTROLLED'
             and r['effective_controls'] == 'REGISTERED_RECIPE_ONLY', 'capture claim boundary changed')
     tools = {name: (root / item['path']).resolve() for name, item in m['tools'].items()}
+    link_flags = ['-fuse-ld=' + str(tools['link_editor'])] if 'link_editor' in tools else []
     keys(r['python'], 'executable version')
     require(r['python']['executable'] == str(tools['collector_python'])
             and type(r['python']['version']) is str and r['python']['version'], 'collector identity mismatch')
@@ -119,10 +120,10 @@ def audit_calibration(directory, root, expected_manifest_digest):
                             (executable, 'executable_digest')):
             require(digest(data(path.relative_to(directory))) == product[field], 'codegen artifact changed')
         command('assemble', [tools['assembler'], '-c', '-x', 'assembler', assembly, '-o', obj])
-        command('link', [tools['linker'], obj, '-o', executable])
+        command('link', [tools['linker'], *link_flags, obj, '-o', executable])
         ref_obj, reference = work / 'reference.o', work / 'reference'
         command('reference-compile', [tools['reference'], '-std=gnu11', '-O0', '-c', source, '-o', ref_obj])
-        command('reference-link', [tools['linker'], ref_obj, '-o', reference])
+        command('reference-link', [tools['linker'], *link_flags, ref_obj, '-o', reference])
         command('reference-result', [reference], case['result'])
         command('subject-admission', [executable], case['result'])
         warmups = []
