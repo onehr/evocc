@@ -209,3 +209,39 @@ else:
             with self.assertRaisesRegex(ValueError, 'shared lock'):
                 self.run_plan()
         self.assertFalse((self.root/'.evidence').exists())
+
+    def test_read_only_audit_recomputes_population_results_artifacts_and_statistics(self):
+        from tools.ladder.eqsat_native_audit import audit_calibration
+        directory, r = self.run_plan()
+        expected = digest((directory/'manifest.json').read_bytes())
+        report = audit_calibration(directory, self.root, expected)
+        self.assertEqual(report['status'], 'CAPTURE_CONSISTENT')
+        self.assertEqual(report['timed_executions'], 12)
+        self.assertEqual(report['performance'], 'NOT_CLAIMED')
+        mutations = (
+            lambda x: x.update(status='FAILED'),
+            lambda x: x['attempts'].pop(),
+            lambda x: x['attempts'][-1].update(exit_code=1),
+            lambda x: x['attempts'][-1].update(stdout='../outside'),
+            lambda x: x['attempts'][-1].update(argv=['another-program']),
+            lambda x: x['cases'][0]['samples'][0].update(wall_ns=1),
+            lambda x: x['cases'][0]['samples'][0].update(attempt=0),
+            lambda x: x['cases'][0]['samples'][0].update(pair=False),
+            lambda x: x['cases'][0]['samples'].pop(),
+            lambda x: x['cases'][0]['warmups'].reverse(),
+            lambda x: x['cases'][0]['statistics'].update(paired_median_delta_ns=-999),
+            lambda x: x['cases'][0]['chain'].update(accepted=False),
+            lambda x: x.update(performance='PASS'),
+        )
+        for mutate in mutations:
+            bad = copy.deepcopy(r)
+            mutate(bad)
+            (directory/'receipt.json').write_text(json.dumps(bad))
+            with self.subTest(mutation=mutate), self.assertRaises(ValueError):
+                audit_calibration(directory, self.root, expected)
+        (directory/'receipt.json').write_text(json.dumps(r))
+        with self.assertRaisesRegex(ValueError, 'manifest'):
+            audit_calibration(directory, self.root, '0'*64)
+        (directory/self.m['cases'][0]['id']/'program').write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError, 'artifact'):
+            audit_calibration(directory, self.root, expected)

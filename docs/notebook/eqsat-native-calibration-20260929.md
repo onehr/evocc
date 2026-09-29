@@ -82,6 +82,25 @@ The trusted boundary still includes the selected compiler, backend and system
 toolchain. Hash checks are not reproducible-build attestations or a proof of
 machine semantics. This is not a hermetic linker/SDK or hostile-code sandbox.
 
+### Read-only capture audit
+
+`python3 -m tools.ladder.eqsat_native_audit DIRECTORY --manifest-sha256 SHA256`
+checks a completed capture against an independently supplied frozen-plan digest.
+It launches no child, writes no receipt and never retries an attempt. It checks
+the identity chain and actual codegen artifacts, exact command sequence,
+retained stdout/stderr bytes, every result predicate, the full warmup/sample
+population, deterministic pair ordering and statistics recomputed from attempt
+metrics. It rereads observed files before returning. Changed artifacts, missing
+or extra attempts, forged sample indices, invalid metrics and modified summary
+statistics fail closed. Failed/interrupted captures cannot become successful
+by retaining an earlier sample prefix.
+
+Its positive result is `CAPTURE_CONSISTENT`, not a new run or performance PASS.
+The recorded times, exit statuses and host observations remain trusted collector
+telemetry. This audit neither independently observes historical process execution
+nor reattests compiler build provenance. The underlying measurement implementation
+and frozen plan are unchanged by this separate reader.
+
 ## Measurement and resource boundaries
 
 - Clock: `monotonic_ns`, from immediately before process launch through child
@@ -117,6 +136,28 @@ processes primarily exercise startup/supervision. These limits prevent turning
 this infrastructure check into application performance evidence.
 
 ## Validation checkpoint
+
+The executable plan is
+[`eqsat-native-aa-20260929.json`](../../tests/contracts/eqsat-native-aa-20260929.json),
+committed in `935eb09` before any timing. Its implementation checkpoint is
+`252c5152ae53b9dccc0f041df0f84e5f6dd4df53`. The read-only audit checked 13
+distinct artifact paths; the exact manifest SHA-256 is
+`fafdab8c50f19c1980c1cb79ed95cfb88b5b68bb9d00d5553bee9bfd11dab043`.
+
+| Frozen item | Value |
+| --- | --- |
+| Population | One header-free unsigned integer-mix fixture; 1,000 loop iterations |
+| Host | Darwin 25.6.0 arm64, Apple M2 Max; uncontrolled affinity/interference |
+| Timed population | 12 balanced pairs, 24 executions of one subject executable |
+| Warmup | Two per label, four retained executions excluded from estimates |
+| Order / retry | Seed 20260929; no automatic retries |
+| Resource envelope | One job; 10 seconds per child; 4 MiB combined captured output per attempt; 64 MiB retained work; 8 GiB free-space reserve |
+| Expected attempts | 10 build/admission commands + 4 warmups + 24 timed executions = 38 |
+
+Source/host identity and the entire plan are rechecked immediately before the
+run. The full workspace gate precedes calibration so its build/test workload is
+not an intentional contaminant. Other host activity is not controlled. Passing
+the plan audit itself is not evidence that any native sample has run.
 
 REDs were added before the missing MIR binary and Python capture implementation.
 The owned-descendant test also failed against the previous capture helper before
