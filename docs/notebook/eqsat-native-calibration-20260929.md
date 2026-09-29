@@ -168,7 +168,7 @@ the plan audit itself is not evidence that any native sample has run.
 
 REDs were added before the missing MIR binary and Python capture implementation.
 The owned-descendant test also failed against the previous capture helper before
-its repair. Focused Python integration currently passes 146 tests, including
+its repair. The initial focused Python integration passed 146 tests, including
 real child timeout/overflow/file-growth, failed output, artifact self-mutation,
 lock exclusion, unique retained runs, paired order and statistical boundaries.
 Fixture-tool tests are harness tests, not native/compiler acceptance.
@@ -191,8 +191,83 @@ The repair is the explicit SDK/link-editor recipe above, not looser environment
 inheritance or a compiler-semantic change. Its unit RED requires the actual
 SDKROOT environment and explicit link-editor argument; negative cases reject
 missing/mismatched SDK and linker pins. A separate plan must be frozen before
-the repaired run. Native success is not yet claimed at this checkpoint. No
-application census or AI/model search has been launched.
+the repaired run. That subsequent run is recorded below. No application census
+or AI/model search has been launched.
+
+## SDK-bound native observation
+
+The repaired plan,
+[`eqsat-native-aa-sdk-20260929.json`](../../tests/contracts/eqsat-native-aa-sdk-20260929.json),
+was committed as `7210cac4` before execution. It names implementation
+`db5c4cc67bbec2a5459eb0e522754261f36b7f10`, preserves the original source,
+protocol and resource bounds, and adds explicit SDK/link-editor selection.
+Its 16 declared artifact identities were checked before launch. Plan SHA-256:
+`55a8b266d6bf2b4ea07739272415fd6af744eb5141b82adb49b5d11045803915`.
+
+The new capture is `.evidence/eqsat-native/aa-0kqzmxwm`; it does not overwrite
+`aa-8te9uzww` and is an explicit repair rerun, not an automatic retry. Its
+receipt SHA-256 is
+`3a0759b185f275383de2f504617a7e84bd6049c9c078fec92b01c7b4deef6550`.
+
+| Check | Observed result |
+| --- | --- |
+| Collector outcome | `OBSERVED_AA`, not performance PASS |
+| Attempt population | 38/38 completed: six build/export commands and 32 result-checked executions, including two interpreters |
+| Native sample population | 24/24 timed runs, four retained warmups, one checked subject admission and one checked reference execution |
+| Correctness | Every admitted execution returned its exact expected result and output hashes |
+| Independent capture audit | `CAPTURE_CONSISTENT`; exact argv, files, chain, population, order and recomputed statistics |
+| Proof scope | One EqSat-off identity audit; zero EVP rewrite proof successes |
+| Retained work | 81,070 logical bytes, below the 64 MiB envelope |
+| Performance, Linux and application claims | `NOT_CLAIMED` / `NOT_RUN` |
+
+IR digest: `fca2714408b2445443a0504e8c22f2fac1088d0cd63bb61848d194c1c6fcb163`.
+Assembly digest: `757939d8b37d5e6348fad85507a2019f7f25befbcfef329261a4c7f9596fa6c1`.
+Object digest: `623e7265b033f3e87acff351fb9658a57c9cdb1f512bb0a54d984e284351beb0`.
+Timed executable digest: `eaf6465e082a8caab2be7af4d245f05c71b0807e8c2ef7a4e3a677dfffea0b8a`.
+
+The raw paired process-wall samples, in nanoseconds, are retained here as well
+as in the receipt. No slow sample was removed:
+
+```text
+pair       A0       A1
+   0  5532417  4826834
+   1  5249417  5816791
+   2  4139958  4489584
+   3  4570292  5026792
+   4  4139583  4573125
+   5  4325500  3855917
+   6  4095084  4066166
+   7  4068792  4352250
+   8  4195917  4155208
+   9  4059750  3915167
+  10  4413875  4699791
+  11  5325084  4500500
+```
+
+The paired median A1-minus-A0 difference is 127,270 ns, MAD 289,062.5 ns,
+with nominal 95% interval [-469,583, 433,542] ns. A0 and A1 label medians
+are 4,260,708.5 and 4,495,042 ns. The interval includes zero, but this is not
+proof of equivalence or adequate resolution for optimizer effects: these are
+short fresh processes on an uncontrolled host, dominated by startup/supervision.
+No workload tuning, A/B comparison, candidate selection or promotion followed.
+
+After the SDK repair the Python integration gate passed 148 tests. Its log
+SHA-256 is `83df2cbfb774f0c45e091e2e7e5d37fc2130e45d366e2462421c25eef3d9af34`.
+The Rust gate above covers the same unchanged Rust inputs and binaries. The
+combined commands were:
+
+```sh
+CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true \
+  tools/gate-changed.sh --full-workspace --offline
+python3 -m unittest \
+  tools.ladder.tests.test_eqsat_chain tools.ladder.tests.test_eqsat_census \
+  tools.ladder.tests.test_eqsat_manifest tools.ladder.tests.test_eqsat_native \
+  tools.ladder.tests.test_bench tools.ladder.tests.test_todo_schedule \
+  tools.ladder.tests.test_gate_changed
+python3 tools/bench.py --eqsat-calibrate tests/contracts/eqsat-native-aa-sdk-20260929.json
+python3 -m tools.ladder.eqsat_native_audit .evidence/eqsat-native/aa-0kqzmxwm \
+  --manifest-sha256 55a8b266d6bf2b4ea07739272415fd6af744eb5141b82adb49b5d11045803915
+```
 
 R02a still needs broader effective-profile verification, optimized-chain native
 admission, application builders/inputs, CPU/RSS and section metrics, the complete

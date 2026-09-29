@@ -1950,7 +1950,11 @@ record a justified not-needed disposition separately from implementation PASS.
     artifact/source identity. The next bounded native adapter now implements
     exact-IR MIR transport, registered Darwin P0 A/A execution, per-attempt
     result/artifact checks, owned capture/lock/retention and raw paired statistics.
-    Its native acceptance is pending; it is not a Linux or application result.
+    Its bounded native pipeline was exercised after an explicit SDK/link-editor
+    repair: 38 completed steps, 24 result-checked timed runs and four warmups of
+    one binary; read-only capture audit passed. The earlier link failure is
+    retained with zero timing samples. This is not Linux/application performance
+    acceptance or an EqSat speedup; R02a remains OPEN.
     Broader effective-control/optimized-chain admission, application workloads,
     CPU/RSS/section metrics and checked/unchecked fan-out remain open.
     [Foundation scope and gates](docs/notebook/eqsat-r02a-foundations-20260929.md).
