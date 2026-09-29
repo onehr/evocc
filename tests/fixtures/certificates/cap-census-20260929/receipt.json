@@ -1,0 +1,3538 @@
+{
+  "argv": [
+    "/Users/onehrxn/dev/30days/c30/target/frontend/debug/evo-policy-eval",
+    "--policy",
+    "instruction-count",
+    "--generated",
+    "9300:32",
+    "--seed",
+    "0",
+    "--steps",
+    "200000"
+  ],
+  "census": {
+    "attempted_programs": 32,
+    "attempted_transactions": 74,
+    "corpus_digest": "720089a595a63fea87fd391017b48274b104202a698d31a108d56ddc70f1a788",
+    "corpus_source": "generated:9300:32",
+    "default_caps_observation": "NO_HITS_IN_THIS_POPULATION",
+    "matching_work": null,
+    "observed_programs": 32,
+    "policy_preflight": "NOT_RUN",
+    "programs_at_chain_limit": 0,
+    "programs_with_hits": {
+      "admission.accepted_regions": 0,
+      "admission.proof_nodes": 0,
+      "search.bridge_nodes": 0,
+      "search.rewrite_events": 0
+    },
+    "rows": [
+      {
+        "attempted_transactions": 2,
+        "chain_id": "d24eecb1b727984fbc4f94d5b2d4d170f3d70b07ec4b659359484a08f482415e",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "0c6753893e8fd4bb30004249b5834134deefe570d44140f201641396de412d48",
+        "matching_work": null,
+        "name": "seed-00000000000000009300",
+        "outcome": "measured",
+        "output_digest": "91e1ba33f61ca3e1ad500afec94a09665da6792c655c148d7e203471c8c109d9",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 210,
+            "admitted_regions": 52,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 14,
+              "fuel_bound": 256,
+              "n": 8,
+              "nodes": 210
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 52,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 4
+              },
+              "eligible": 117,
+              "excluded_by_reason": {
+                "dependency": 15,
+                "taint": 0,
+                "unlisted": 33
+              },
+              "proposed": 60,
+              "total": 165,
+              "unvisited": 0,
+              "visited": 165
+            },
+            "search_bridge_nodes": 266,
+            "search_rewrite_events": 60,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 4
+              },
+              "eligible": 94,
+              "excluded_by_reason": {
+                "dependency": 15,
+                "taint": 0,
+                "unlisted": 33
+              },
+              "proposed": 8,
+              "total": 142,
+              "unvisited": 0,
+              "visited": 142
+            },
+            "search_bridge_nodes": 103,
+            "search_rewrite_events": 8,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "8972e72a7ce57e7f200c87c6f75ab8b212404b9a6cb7a4e66b6319196444f182",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "1117eb18b0af5159b0dafd964fd8f30d71a61413ecbd1e3fbd3267188fd6d878",
+        "matching_work": null,
+        "name": "seed-00000000000000009301",
+        "outcome": "measured",
+        "output_digest": "00223a0dc9cc3d0634490157dea9b42cfa0b20fd8a8cf86033596ebdbacaf4d6",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 158,
+            "admitted_regions": 37,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 16,
+              "fuel_bound": 256,
+              "n": 7,
+              "nodes": 158
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 37,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 99,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 23
+              },
+              "proposed": 37,
+              "total": 123,
+              "unvisited": 0,
+              "visited": 123
+            },
+            "search_bridge_nodes": 159,
+            "search_rewrite_events": 37,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 88,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 23
+              },
+              "proposed": 0,
+              "total": 112,
+              "unvisited": 0,
+              "visited": 112
+            },
+            "search_bridge_nodes": 35,
+            "search_rewrite_events": 0,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "0f71d7e282721567a6d5e5d44ec24c90297eade37d2ec42d54fd896fcac9c084",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "6e4b2c47699f588184e20b31ae10ce0890321e8893032628a95ea14bbd7d5e37",
+        "matching_work": null,
+        "name": "seed-00000000000000009302",
+        "outcome": "measured",
+        "output_digest": "512004ba265594cae9b6b8db7bddf85d652ed7d073188b9abde48adc57b8cb28",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 292,
+            "admitted_regions": 74,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 8,
+              "fuel_bound": 256,
+              "n": 7,
+              "nodes": 292
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 74,
+              "declined_by_reason": {
+                "policy": 9,
+                "witness": 31
+              },
+              "eligible": 198,
+              "excluded_by_reason": {
+                "dependency": 40,
+                "taint": 0,
+                "unlisted": 34
+              },
+              "proposed": 114,
+              "total": 272,
+              "unvisited": 0,
+              "visited": 272
+            },
+            "search_bridge_nodes": 455,
+            "search_rewrite_events": 111,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 5,
+            "admitted_regions": 1,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 1,
+              "fuel": 1,
+              "fuel_bound": 256,
+              "n": 4,
+              "nodes": 5
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 1,
+              "declined_by_reason": {
+                "policy": 9,
+                "witness": 30
+              },
+              "eligible": 171,
+              "excluded_by_reason": {
+                "dependency": 40,
+                "taint": 0,
+                "unlisted": 34
+              },
+              "proposed": 40,
+              "total": 245,
+              "unvisited": 0,
+              "visited": 245
+            },
+            "search_bridge_nodes": 215,
+            "search_rewrite_events": 37,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 9,
+                "witness": 30
+              },
+              "eligible": 170,
+              "excluded_by_reason": {
+                "dependency": 40,
+                "taint": 0,
+                "unlisted": 34
+              },
+              "proposed": 39,
+              "total": 244,
+              "unvisited": 0,
+              "visited": 244
+            },
+            "search_bridge_nodes": 215,
+            "search_rewrite_events": 37,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "c10b1c67524c9496613d729d4adfb4b54465c3ffc704891d443c964fb61effdf",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "a82c826442573c58abd6a2c8de6cd76878f3b91622cd5a49b30c88b5eef378c1",
+        "matching_work": null,
+        "name": "seed-00000000000000009303",
+        "outcome": "measured",
+        "output_digest": "431c55f8652d798705e08c2786efe346e2a3fe5b03a6a5e8e464463bdc154452",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 52,
+            "admitted_regions": 15,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 2,
+              "fuel": 5,
+              "fuel_bound": 256,
+              "n": 5,
+              "nodes": 52
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 15,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 1
+              },
+              "eligible": 68,
+              "excluded_by_reason": {
+                "dependency": 8,
+                "taint": 0,
+                "unlisted": 24
+              },
+              "proposed": 16,
+              "total": 100,
+              "unvisited": 0,
+              "visited": 100
+            },
+            "search_bridge_nodes": 122,
+            "search_rewrite_events": 16,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 1
+              },
+              "eligible": 63,
+              "excluded_by_reason": {
+                "dependency": 8,
+                "taint": 0,
+                "unlisted": 24
+              },
+              "proposed": 1,
+              "total": 95,
+              "unvisited": 0,
+              "visited": 95
+            },
+            "search_bridge_nodes": 68,
+            "search_rewrite_events": 1,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "982a4f3bfe3b83cae85f7ced229cb742e2c149305ab98c21aefb0d61091abd88",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "e5c46599c0b3ec0457fb995852235b47346612405ca11f6d926f10479deb7f06",
+        "matching_work": null,
+        "name": "seed-00000000000000009304",
+        "outcome": "measured",
+        "output_digest": "051fc0e52bf44c6ad136be8fb9702dbbe084641c48d4ad9f336d31e49d707ca3",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 331,
+            "admitted_regions": 82,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 5,
+              "fuel": 10,
+              "fuel_bound": 256,
+              "n": 9,
+              "nodes": 331
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 82,
+              "declined_by_reason": {
+                "policy": 8,
+                "witness": 8
+              },
+              "eligible": 188,
+              "excluded_by_reason": {
+                "dependency": 14,
+                "taint": 0,
+                "unlisted": 45
+              },
+              "proposed": 98,
+              "total": 247,
+              "unvisited": 0,
+              "visited": 247
+            },
+            "search_bridge_nodes": 405,
+            "search_rewrite_events": 98,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 7,
+            "admitted_regions": 2,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 1,
+              "fuel": 1,
+              "fuel_bound": 256,
+              "n": 4,
+              "nodes": 7
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 2,
+              "declined_by_reason": {
+                "policy": 8,
+                "witness": 8
+              },
+              "eligible": 146,
+              "excluded_by_reason": {
+                "dependency": 14,
+                "taint": 0,
+                "unlisted": 45
+              },
+              "proposed": 18,
+              "total": 205,
+              "unvisited": 0,
+              "visited": 205
+            },
+            "search_bridge_nodes": 142,
+            "search_rewrite_events": 18,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 8,
+                "witness": 8
+              },
+              "eligible": 145,
+              "excluded_by_reason": {
+                "dependency": 14,
+                "taint": 0,
+                "unlisted": 45
+              },
+              "proposed": 16,
+              "total": 204,
+              "unvisited": 0,
+              "visited": 204
+            },
+            "search_bridge_nodes": 135,
+            "search_rewrite_events": 16,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "04916de5f1a80ebb7f57e5447df9029bfe449f38c3bb505a053746825c3a2a47",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "6244c94eb7ed69779e75568a77f9c9ee1c6b1c7e8cd49d5cbcb30060c0637b44",
+        "matching_work": null,
+        "name": "seed-00000000000000009305",
+        "outcome": "measured",
+        "output_digest": "1762d6b2f6ad0962f772b71d165914e852e6f34bc9eba301d38846c1739e8256",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 283,
+            "admitted_regions": 63,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 5,
+              "fuel": 22,
+              "fuel_bound": 256,
+              "n": 9,
+              "nodes": 283
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 63,
+              "declined_by_reason": {
+                "policy": 7,
+                "witness": 7
+              },
+              "eligible": 135,
+              "excluded_by_reason": {
+                "dependency": 9,
+                "taint": 0,
+                "unlisted": 18
+              },
+              "proposed": 77,
+              "total": 162,
+              "unvisited": 0,
+              "visited": 162
+            },
+            "search_bridge_nodes": 290,
+            "search_rewrite_events": 75,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 4,
+            "admitted_regions": 2,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 2,
+              "nodes": 4
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 2,
+              "declined_by_reason": {
+                "policy": 7,
+                "witness": 5
+              },
+              "eligible": 110,
+              "excluded_by_reason": {
+                "dependency": 9,
+                "taint": 0,
+                "unlisted": 18
+              },
+              "proposed": 14,
+              "total": 137,
+              "unvisited": 0,
+              "visited": 137
+            },
+            "search_bridge_nodes": 93,
+            "search_rewrite_events": 12,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 7,
+                "witness": 5
+              },
+              "eligible": 108,
+              "excluded_by_reason": {
+                "dependency": 9,
+                "taint": 0,
+                "unlisted": 18
+              },
+              "proposed": 12,
+              "total": 135,
+              "unvisited": 0,
+              "visited": 135
+            },
+            "search_bridge_nodes": 93,
+            "search_rewrite_events": 12,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "2d0a30d21ab62016756dd5fec40f45e814645ec9b83ef0d8e969b4f70ece8e1d",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "60f5f2b7f8303642d5b8fda289c13d765dd28e80945a07f5bacbf5c692ccf0b4",
+        "matching_work": null,
+        "name": "seed-00000000000000009306",
+        "outcome": "measured",
+        "output_digest": "c5d48b045bcc2316e1e47e7a62f100780264b439786b2b93c958d9f0af4b22c5",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 125,
+            "admitted_regions": 41,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 5,
+              "fuel_bound": 256,
+              "n": 7,
+              "nodes": 125
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 41,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 3
+              },
+              "eligible": 106,
+              "excluded_by_reason": {
+                "dependency": 5,
+                "taint": 0,
+                "unlisted": 15
+              },
+              "proposed": 48,
+              "total": 126,
+              "unvisited": 0,
+              "visited": 126
+            },
+            "search_bridge_nodes": 185,
+            "search_rewrite_events": 48,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 3
+              },
+              "eligible": 85,
+              "excluded_by_reason": {
+                "dependency": 5,
+                "taint": 0,
+                "unlisted": 15
+              },
+              "proposed": 7,
+              "total": 105,
+              "unvisited": 0,
+              "visited": 105
+            },
+            "search_bridge_nodes": 62,
+            "search_rewrite_events": 7,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "3c9517e9fe9c716bceaaa965c85b1928bba8166b8342fb1d788741c64baaa187",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "ca103296d32848c7a53f5ebeca349825d79e7c7515effd1c6df12dc591494cb6",
+        "matching_work": null,
+        "name": "seed-00000000000000009307",
+        "outcome": "measured",
+        "output_digest": "b2b48d758d3b3569862b7804e77ecf67717e34f895ec963fd3732acdb15db97c",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 411,
+            "admitted_regions": 84,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 15,
+              "fuel_bound": 256,
+              "n": 9,
+              "nodes": 411
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 84,
+              "declined_by_reason": {
+                "policy": 10,
+                "witness": 16
+              },
+              "eligible": 272,
+              "excluded_by_reason": {
+                "dependency": 18,
+                "taint": 0,
+                "unlisted": 49
+              },
+              "proposed": 110,
+              "total": 339,
+              "unvisited": 0,
+              "visited": 339
+            },
+            "search_bridge_nodes": 560,
+            "search_rewrite_events": 109,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 9,
+            "admitted_regions": 2,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 1,
+              "fuel": 1,
+              "fuel_bound": 256,
+              "n": 4,
+              "nodes": 9
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 2,
+              "declined_by_reason": {
+                "policy": 10,
+                "witness": 14
+              },
+              "eligible": 236,
+              "excluded_by_reason": {
+                "dependency": 18,
+                "taint": 0,
+                "unlisted": 49
+              },
+              "proposed": 26,
+              "total": 303,
+              "unvisited": 0,
+              "visited": 303
+            },
+            "search_bridge_nodes": 278,
+            "search_rewrite_events": 25,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 10,
+                "witness": 14
+              },
+              "eligible": 234,
+              "excluded_by_reason": {
+                "dependency": 18,
+                "taint": 0,
+                "unlisted": 49
+              },
+              "proposed": 24,
+              "total": 301,
+              "unvisited": 0,
+              "visited": 301
+            },
+            "search_bridge_nodes": 275,
+            "search_rewrite_events": 24,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "a312c4041622e508e0e9a374eaaf3f038648de31e58839590db7e14a6cc167fe",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "f3018bd51d92c879558ba721a496f2ca67515336451f8b4c7fbf466defde7b7e",
+        "matching_work": null,
+        "name": "seed-00000000000000009308",
+        "outcome": "measured",
+        "output_digest": "1c21059ba9fc26c49175c3860b57b82e31a19052532b3b79fe8d779f8b6bc399",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 25,
+            "admitted_regions": 9,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 2,
+              "fuel": 3,
+              "fuel_bound": 256,
+              "n": 3,
+              "nodes": 25
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 9,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 24,
+              "excluded_by_reason": {
+                "dependency": 0,
+                "taint": 0,
+                "unlisted": 2
+              },
+              "proposed": 9,
+              "total": 26,
+              "unvisited": 0,
+              "visited": 26
+            },
+            "search_bridge_nodes": 36,
+            "search_rewrite_events": 9,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 20,
+              "excluded_by_reason": {
+                "dependency": 0,
+                "taint": 0,
+                "unlisted": 2
+              },
+              "proposed": 0,
+              "total": 22,
+              "unvisited": 0,
+              "visited": 22
+            },
+            "search_bridge_nodes": 8,
+            "search_rewrite_events": 0,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "0592ad9f6588283812f8166531b68ea7b6d99043281ce4b3cf74bd0c2245f946",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "84480ba5a746d39baa9969b80fc52399d5ac4749f7efcaee6e3be75112112ebd",
+        "matching_work": null,
+        "name": "seed-00000000000000009309",
+        "outcome": "measured",
+        "output_digest": "b0ad9ea06713d9d6060e5aaf32b87a889199c6db7b02080c5838b0f6643cef39",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 274,
+            "admitted_regions": 58,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 18,
+              "fuel_bound": 256,
+              "n": 8,
+              "nodes": 274
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 58,
+              "declined_by_reason": {
+                "policy": 6,
+                "witness": 4
+              },
+              "eligible": 167,
+              "excluded_by_reason": {
+                "dependency": 12,
+                "taint": 0,
+                "unlisted": 43
+              },
+              "proposed": 68,
+              "total": 222,
+              "unvisited": 0,
+              "visited": 222
+            },
+            "search_bridge_nodes": 328,
+            "search_rewrite_events": 67,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 3,
+            "admitted_regions": 1,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 3,
+              "nodes": 3
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 1,
+              "declined_by_reason": {
+                "policy": 6,
+                "witness": 3
+              },
+              "eligible": 143,
+              "excluded_by_reason": {
+                "dependency": 12,
+                "taint": 0,
+                "unlisted": 43
+              },
+              "proposed": 10,
+              "total": 198,
+              "unvisited": 0,
+              "visited": 198
+            },
+            "search_bridge_nodes": 139,
+            "search_rewrite_events": 9,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 6,
+                "witness": 3
+              },
+              "eligible": 142,
+              "excluded_by_reason": {
+                "dependency": 12,
+                "taint": 0,
+                "unlisted": 43
+              },
+              "proposed": 9,
+              "total": 197,
+              "unvisited": 0,
+              "visited": 197
+            },
+            "search_bridge_nodes": 139,
+            "search_rewrite_events": 9,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 1,
+        "chain_id": "4d2c0e32172ee9649c51eef02c395ddc7288a7d6cdb9da3258bbe9a7b057ff49",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "b25f7a0539d7e8e6f91022f7bed140dbbca4f46b51464b1f9fb289df17ea1dc1",
+        "matching_work": null,
+        "name": "seed-00000000000000009310",
+        "outcome": "measured",
+        "output_digest": "b25f7a0539d7e8e6f91022f7bed140dbbca4f46b51464b1f9fb289df17ea1dc1",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 1,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 2,
+              "excluded_by_reason": {
+                "dependency": 0,
+                "taint": 0,
+                "unlisted": 0
+              },
+              "proposed": 0,
+              "total": 2,
+              "unvisited": 0,
+              "visited": 2
+            },
+            "search_bridge_nodes": 0,
+            "search_rewrite_events": 0,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 1
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "9cb59dc71b4433d328be4506a7efb53937a633021c2c33cfbd178d681bd8a9b6",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "550a70d6862ed48cae1eec812728e74f1b80724dd68fb0135f8de45d2b49a0c2",
+        "matching_work": null,
+        "name": "seed-00000000000000009311",
+        "outcome": "measured",
+        "output_digest": "cb60776af2c6b00f36b77e94a087602b13405a68e59719bf4a0f2165dd4d46ea",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 96,
+            "admitted_regions": 30,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 7,
+              "fuel_bound": 256,
+              "n": 7,
+              "nodes": 96
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 30,
+              "declined_by_reason": {
+                "policy": 2,
+                "witness": 2
+              },
+              "eligible": 92,
+              "excluded_by_reason": {
+                "dependency": 4,
+                "taint": 0,
+                "unlisted": 17
+              },
+              "proposed": 34,
+              "total": 113,
+              "unvisited": 0,
+              "visited": 113
+            },
+            "search_bridge_nodes": 164,
+            "search_rewrite_events": 34,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 2,
+                "witness": 2
+              },
+              "eligible": 73,
+              "excluded_by_reason": {
+                "dependency": 4,
+                "taint": 0,
+                "unlisted": 17
+              },
+              "proposed": 4,
+              "total": 94,
+              "unvisited": 0,
+              "visited": 94
+            },
+            "search_bridge_nodes": 73,
+            "search_rewrite_events": 4,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "6426e7a6571c3d376f8cc411ec391903aa57055e34ebde567c1d506b21784a6c",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "b6fc3c5ec895493b5abd949bc4b742ae53a3b17a1c9cf70c51209840c3531a48",
+        "matching_work": null,
+        "name": "seed-00000000000000009312",
+        "outcome": "measured",
+        "output_digest": "d3dad00e7364ea51014aaa0a279f47d46d9145f1372b461b4766772e483bffde",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 137,
+            "admitted_regions": 30,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 7,
+              "fuel_bound": 256,
+              "n": 6,
+              "nodes": 137
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 30,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 8
+              },
+              "eligible": 88,
+              "excluded_by_reason": {
+                "dependency": 12,
+                "taint": 0,
+                "unlisted": 20
+              },
+              "proposed": 42,
+              "total": 120,
+              "unvisited": 0,
+              "visited": 120
+            },
+            "search_bridge_nodes": 184,
+            "search_rewrite_events": 41,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 3,
+            "admitted_regions": 1,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 3,
+              "nodes": 3
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 1,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 7
+              },
+              "eligible": 75,
+              "excluded_by_reason": {
+                "dependency": 12,
+                "taint": 0,
+                "unlisted": 20
+              },
+              "proposed": 12,
+              "total": 107,
+              "unvisited": 0,
+              "visited": 107
+            },
+            "search_bridge_nodes": 91,
+            "search_rewrite_events": 11,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 7
+              },
+              "eligible": 74,
+              "excluded_by_reason": {
+                "dependency": 12,
+                "taint": 0,
+                "unlisted": 20
+              },
+              "proposed": 11,
+              "total": 106,
+              "unvisited": 0,
+              "visited": 106
+            },
+            "search_bridge_nodes": 91,
+            "search_rewrite_events": 11,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "4d6e795b258986188ea7aeda99b9ad699d5b4b9561b26cdc412d50ea01ba2270",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "de25f7cef9b8edeab705e3d076fde3b592ec3775f9f822148753e98edc6652dd",
+        "matching_work": null,
+        "name": "seed-00000000000000009313",
+        "outcome": "measured",
+        "output_digest": "d395470898f0a31b45a62cbe7002f04f854e985ba33db1307ea29979b997346d",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 617,
+            "admitted_regions": 101,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 25,
+              "fuel_bound": 256,
+              "n": 14,
+              "nodes": 617
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 101,
+              "declined_by_reason": {
+                "policy": 10,
+                "witness": 9
+              },
+              "eligible": 242,
+              "excluded_by_reason": {
+                "dependency": 22,
+                "taint": 0,
+                "unlisted": 58
+              },
+              "proposed": 120,
+              "total": 322,
+              "unvisited": 0,
+              "visited": 322
+            },
+            "search_bridge_nodes": 518,
+            "search_rewrite_events": 119,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 2,
+            "admitted_regions": 1,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 2,
+              "nodes": 2
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 1,
+              "declined_by_reason": {
+                "policy": 10,
+                "witness": 8
+              },
+              "eligible": 203,
+              "excluded_by_reason": {
+                "dependency": 22,
+                "taint": 0,
+                "unlisted": 58
+              },
+              "proposed": 19,
+              "total": 283,
+              "unvisited": 0,
+              "visited": 283
+            },
+            "search_bridge_nodes": 192,
+            "search_rewrite_events": 18,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 10,
+                "witness": 8
+              },
+              "eligible": 202,
+              "excluded_by_reason": {
+                "dependency": 22,
+                "taint": 0,
+                "unlisted": 58
+              },
+              "proposed": 18,
+              "total": 282,
+              "unvisited": 0,
+              "visited": 282
+            },
+            "search_bridge_nodes": 192,
+            "search_rewrite_events": 18,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "15a0c71ed4b9cedf7ab0d98dfde4db41b61ead8a5cb6e8ea4e0ce3b1ef912782",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "02f6f5def5daf87dffdc680f18f7b4de1be41b1019eaaa856433255e02a6c8d6",
+        "matching_work": null,
+        "name": "seed-00000000000000009314",
+        "outcome": "measured",
+        "output_digest": "e888e2c58df55ccdd010014457f76f10206a6ec43276583249bbdecc6c6213b8",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 271,
+            "admitted_regions": 65,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 5,
+              "fuel": 20,
+              "fuel_bound": 256,
+              "n": 10,
+              "nodes": 271
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 65,
+              "declined_by_reason": {
+                "policy": 6,
+                "witness": 6
+              },
+              "eligible": 152,
+              "excluded_by_reason": {
+                "dependency": 11,
+                "taint": 0,
+                "unlisted": 22
+              },
+              "proposed": 77,
+              "total": 185,
+              "unvisited": 0,
+              "visited": 185
+            },
+            "search_bridge_nodes": 289,
+            "search_rewrite_events": 77,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 6,
+                "witness": 6
+              },
+              "eligible": 129,
+              "excluded_by_reason": {
+                "dependency": 11,
+                "taint": 0,
+                "unlisted": 22
+              },
+              "proposed": 12,
+              "total": 162,
+              "unvisited": 0,
+              "visited": 162
+            },
+            "search_bridge_nodes": 79,
+            "search_rewrite_events": 12,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "e68a9fcc17c0f37db68980795b3f60ff7c937bae8ebfa6c697a9c171e1c93f04",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "4daa64872eefd2af58a1559010ba221b4914874e5c82a7b5593cd6f2eb904159",
+        "matching_work": null,
+        "name": "seed-00000000000000009315",
+        "outcome": "measured",
+        "output_digest": "2f6c51a7af9b9dae15e0eb8744d1578538f592aea6855d1f1374eb72fff2cbcf",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 18,
+            "admitted_regions": 5,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 2,
+              "fuel": 3,
+              "fuel_bound": 256,
+              "n": 5,
+              "nodes": 18
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 5,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 11,
+              "excluded_by_reason": {
+                "dependency": 3,
+                "taint": 0,
+                "unlisted": 3
+              },
+              "proposed": 5,
+              "total": 17,
+              "unvisited": 0,
+              "visited": 17
+            },
+            "search_bridge_nodes": 22,
+            "search_rewrite_events": 5,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 7,
+              "excluded_by_reason": {
+                "dependency": 3,
+                "taint": 0,
+                "unlisted": 3
+              },
+              "proposed": 0,
+              "total": 13,
+              "unvisited": 0,
+              "visited": 13
+            },
+            "search_bridge_nodes": 6,
+            "search_rewrite_events": 0,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "be833e7dce52f8519edb2badb9bc0ace96022ea18809ffc6591ba9256e472368",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "341cdfcf217d30ff95e84c8a9716ca865ef5c90b83a3c9c37c092f29b3594fea",
+        "matching_work": null,
+        "name": "seed-00000000000000009316",
+        "outcome": "measured",
+        "output_digest": "cc22f7000ac4004537446098bb32f4cbec01f728d825c48294a9ead4c04fa8d9",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 156,
+            "admitted_regions": 24,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 8,
+              "fuel_bound": 256,
+              "n": 12,
+              "nodes": 156
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 24,
+              "declined_by_reason": {
+                "policy": 5,
+                "witness": 6
+              },
+              "eligible": 74,
+              "excluded_by_reason": {
+                "dependency": 11,
+                "taint": 0,
+                "unlisted": 14
+              },
+              "proposed": 35,
+              "total": 99,
+              "unvisited": 0,
+              "visited": 99
+            },
+            "search_bridge_nodes": 159,
+            "search_rewrite_events": 34,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 6,
+            "admitted_regions": 1,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 6,
+              "nodes": 6
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 1,
+              "declined_by_reason": {
+                "policy": 5,
+                "witness": 5
+              },
+              "eligible": 61,
+              "excluded_by_reason": {
+                "dependency": 11,
+                "taint": 0,
+                "unlisted": 14
+              },
+              "proposed": 11,
+              "total": 86,
+              "unvisited": 0,
+              "visited": 86
+            },
+            "search_bridge_nodes": 87,
+            "search_rewrite_events": 10,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 5,
+                "witness": 5
+              },
+              "eligible": 60,
+              "excluded_by_reason": {
+                "dependency": 11,
+                "taint": 0,
+                "unlisted": 14
+              },
+              "proposed": 10,
+              "total": 85,
+              "unvisited": 0,
+              "visited": 85
+            },
+            "search_bridge_nodes": 87,
+            "search_rewrite_events": 10,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "ca378ef7055473fc4b381b937e12c5747209be83f97aa318cbda3b07d5fd88e1",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "09a815f68bd43323cfc6caa3df0844b6968ef2c700b3efe267e33fd9d2576351",
+        "matching_work": null,
+        "name": "seed-00000000000000009317",
+        "outcome": "measured",
+        "output_digest": "1c9525392e309748ff6777c18030cde8fd4b77d65272abf84c477865a69f8eba",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 80,
+            "admitted_regions": 20,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 6,
+              "fuel_bound": 256,
+              "n": 7,
+              "nodes": 80
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 20,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 8
+              },
+              "eligible": 90,
+              "excluded_by_reason": {
+                "dependency": 17,
+                "taint": 0,
+                "unlisted": 23
+              },
+              "proposed": 28,
+              "total": 130,
+              "unvisited": 0,
+              "visited": 130
+            },
+            "search_bridge_nodes": 159,
+            "search_rewrite_events": 28,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 8
+              },
+              "eligible": 77,
+              "excluded_by_reason": {
+                "dependency": 17,
+                "taint": 0,
+                "unlisted": 23
+              },
+              "proposed": 8,
+              "total": 117,
+              "unvisited": 0,
+              "visited": 117
+            },
+            "search_bridge_nodes": 99,
+            "search_rewrite_events": 8,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "1adfb0ed657cff2edec50541f0f11a398c9c88656ea290f47ae47b1ab51d6634",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "4356f3387b29a17d9f9f61058dde887d4b3fe8d3777d88fa7d02a143aa7f6ab8",
+        "matching_work": null,
+        "name": "seed-00000000000000009318",
+        "outcome": "measured",
+        "output_digest": "d2407a2c1c4672694224ed62966d1d59fee323401d52a301fcabc96fc331dfd3",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 215,
+            "admitted_regions": 48,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 13,
+              "fuel_bound": 256,
+              "n": 7,
+              "nodes": 215
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 48,
+              "declined_by_reason": {
+                "policy": 2,
+                "witness": 1
+              },
+              "eligible": 93,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 6
+              },
+              "proposed": 51,
+              "total": 100,
+              "unvisited": 0,
+              "visited": 100
+            },
+            "search_bridge_nodes": 214,
+            "search_rewrite_events": 51,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 2,
+                "witness": 1
+              },
+              "eligible": 79,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 6
+              },
+              "proposed": 3,
+              "total": 86,
+              "unvisited": 0,
+              "visited": 86
+            },
+            "search_bridge_nodes": 51,
+            "search_rewrite_events": 3,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "013f33adcf761fe36ed1d82ef703a2f98d44a1debdd162947d94667511c0d155",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "f2b60c94a5f911f680de15211439a3d30fa06f18b3c9895fc1729861eaa0627c",
+        "matching_work": null,
+        "name": "seed-00000000000000009319",
+        "outcome": "measured",
+        "output_digest": "b39ec59e71f60a38620aa8a7fb6f12a98be70456a3a02b4e2c6552de00694e91",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 177,
+            "admitted_regions": 37,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 5,
+              "fuel": 13,
+              "fuel_bound": 256,
+              "n": 13,
+              "nodes": 177
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 37,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 80,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 9
+              },
+              "proposed": 37,
+              "total": 90,
+              "unvisited": 0,
+              "visited": 90
+            },
+            "search_bridge_nodes": 138,
+            "search_rewrite_events": 37,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 64,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 9
+              },
+              "proposed": 0,
+              "total": 74,
+              "unvisited": 0,
+              "visited": 74
+            },
+            "search_bridge_nodes": 21,
+            "search_rewrite_events": 0,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "ceffbea9a87219e940ffdd59a90d51cc888c42bdd89b0dca658a57360ecd6c77",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "df57041e3f56547f6b179f0e850df60c3250da7235ff391f6b7cd9cdd58f82c0",
+        "matching_work": null,
+        "name": "seed-00000000000000009320",
+        "outcome": "measured",
+        "output_digest": "8769ad74676cac1dc4856a18c3e559952a7f2ecb117dc5fc800db134c3dd87dd",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 230,
+            "admitted_regions": 60,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 12,
+              "fuel_bound": 256,
+              "n": 7,
+              "nodes": 230
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 60,
+              "declined_by_reason": {
+                "policy": 1,
+                "witness": 4
+              },
+              "eligible": 143,
+              "excluded_by_reason": {
+                "dependency": 10,
+                "taint": 0,
+                "unlisted": 23
+              },
+              "proposed": 65,
+              "total": 176,
+              "unvisited": 0,
+              "visited": 176
+            },
+            "search_bridge_nodes": 288,
+            "search_rewrite_events": 65,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 1,
+                "witness": 4
+              },
+              "eligible": 116,
+              "excluded_by_reason": {
+                "dependency": 10,
+                "taint": 0,
+                "unlisted": 23
+              },
+              "proposed": 5,
+              "total": 149,
+              "unvisited": 0,
+              "visited": 149
+            },
+            "search_bridge_nodes": 93,
+            "search_rewrite_events": 5,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "c9dd6333ee48957efcca59cb1229bbb74099678029396d9fd56c012314c91fe4",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "2571fe5e70513a3d360745718904b62dc2238eea0f4c413766066a578568aaf3",
+        "matching_work": null,
+        "name": "seed-00000000000000009321",
+        "outcome": "measured",
+        "output_digest": "f58198bccf53540f672240291a5eb2aa48ab4712ed00c4da2515a6d8b3ff8438",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 96,
+            "admitted_regions": 26,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 2,
+              "fuel": 6,
+              "fuel_bound": 256,
+              "n": 7,
+              "nodes": 96
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 26,
+              "declined_by_reason": {
+                "policy": 2,
+                "witness": 8
+              },
+              "eligible": 82,
+              "excluded_by_reason": {
+                "dependency": 18,
+                "taint": 0,
+                "unlisted": 16
+              },
+              "proposed": 36,
+              "total": 116,
+              "unvisited": 0,
+              "visited": 116
+            },
+            "search_bridge_nodes": 183,
+            "search_rewrite_events": 36,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 2,
+                "witness": 8
+              },
+              "eligible": 66,
+              "excluded_by_reason": {
+                "dependency": 18,
+                "taint": 0,
+                "unlisted": 16
+              },
+              "proposed": 10,
+              "total": 100,
+              "unvisited": 0,
+              "visited": 100
+            },
+            "search_bridge_nodes": 102,
+            "search_rewrite_events": 10,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "a3c861055480ec75c1d79b52fbef7c22f37bf779e3d1c6473d58ea10b11b348f",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "fd0de2f61296ada41a68413f98db6a097418ac358ae3b743e6124f896b9ff4f2",
+        "matching_work": null,
+        "name": "seed-00000000000000009322",
+        "outcome": "measured",
+        "output_digest": "d30fdcd364439b795fd3a25ab6435da7b951cfa29d3974545cd749583fcd6a97",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 328,
+            "admitted_regions": 83,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 29,
+              "fuel_bound": 256,
+              "n": 8,
+              "nodes": 328
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 83,
+              "declined_by_reason": {
+                "policy": 9,
+                "witness": 10
+              },
+              "eligible": 231,
+              "excluded_by_reason": {
+                "dependency": 22,
+                "taint": 0,
+                "unlisted": 65
+              },
+              "proposed": 102,
+              "total": 318,
+              "unvisited": 0,
+              "visited": 318
+            },
+            "search_bridge_nodes": 455,
+            "search_rewrite_events": 101,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 2,
+            "admitted_regions": 1,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 2,
+              "nodes": 2
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 1,
+              "declined_by_reason": {
+                "policy": 9,
+                "witness": 9
+              },
+              "eligible": 204,
+              "excluded_by_reason": {
+                "dependency": 22,
+                "taint": 0,
+                "unlisted": 65
+              },
+              "proposed": 19,
+              "total": 291,
+              "unvisited": 0,
+              "visited": 291
+            },
+            "search_bridge_nodes": 182,
+            "search_rewrite_events": 18,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 9,
+                "witness": 9
+              },
+              "eligible": 203,
+              "excluded_by_reason": {
+                "dependency": 22,
+                "taint": 0,
+                "unlisted": 65
+              },
+              "proposed": 18,
+              "total": 290,
+              "unvisited": 0,
+              "visited": 290
+            },
+            "search_bridge_nodes": 182,
+            "search_rewrite_events": 18,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "be02470fa7b59cfeba837cf2b2c71c9b9399aa022f0dc8057e89da5b16b5f8ad",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "562e60bc210d8eafe1a490554dc66930e4974401d119ec98c29a0ab7aeb09713",
+        "matching_work": null,
+        "name": "seed-00000000000000009323",
+        "outcome": "measured",
+        "output_digest": "719071952c825f270a17d8b340c4edf2be72244a4afb772132c5a1252be4a92d",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 282,
+            "admitted_regions": 74,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 23,
+              "fuel_bound": 256,
+              "n": 6,
+              "nodes": 282
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 74,
+              "declined_by_reason": {
+                "policy": 5,
+                "witness": 15
+              },
+              "eligible": 189,
+              "excluded_by_reason": {
+                "dependency": 33,
+                "taint": 0,
+                "unlisted": 63
+              },
+              "proposed": 94,
+              "total": 285,
+              "unvisited": 0,
+              "visited": 285
+            },
+            "search_bridge_nodes": 423,
+            "search_rewrite_events": 94,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 5,
+                "witness": 15
+              },
+              "eligible": 160,
+              "excluded_by_reason": {
+                "dependency": 33,
+                "taint": 0,
+                "unlisted": 63
+              },
+              "proposed": 20,
+              "total": 256,
+              "unvisited": 0,
+              "visited": 256
+            },
+            "search_bridge_nodes": 183,
+            "search_rewrite_events": 20,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "e719820c09830502112c99b1d7a37a3837a1512ebabaeb8beba1981f1d96bfb3",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "08d4bb3d2616d9f340ca973510f384edb3e223047431405bebdc1ad09372705d",
+        "matching_work": null,
+        "name": "seed-00000000000000009324",
+        "outcome": "measured",
+        "output_digest": "b22ee3d9dbc8d07e0d75dac675200b1612760e0be19cdb9e0ad93759fe33e097",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 170,
+            "admitted_regions": 31,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 6,
+              "fuel_bound": 256,
+              "n": 9,
+              "nodes": 170
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 31,
+              "declined_by_reason": {
+                "policy": 6,
+                "witness": 2
+              },
+              "eligible": 98,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 11
+              },
+              "proposed": 39,
+              "total": 110,
+              "unvisited": 0,
+              "visited": 110
+            },
+            "search_bridge_nodes": 190,
+            "search_rewrite_events": 38,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 6,
+                "witness": 1
+              },
+              "eligible": 78,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 11
+              },
+              "proposed": 7,
+              "total": 90,
+              "unvisited": 0,
+              "visited": 90
+            },
+            "search_bridge_nodes": 96,
+            "search_rewrite_events": 7,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "4b7a0106e11fc8f7c7a9ea407eb7682e12d40e1be0736053a2a902334e1b2cd3",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "827597d1662098318e882499a4f31098198a387af2fb9bfe2cf139a8c90289a8",
+        "matching_work": null,
+        "name": "seed-00000000000000009325",
+        "outcome": "measured",
+        "output_digest": "29bebc874e254fc436a29763ec4ee88cb40f4fa84b521e03baa77d5c3eb12831",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 459,
+            "admitted_regions": 103,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 30,
+              "fuel_bound": 256,
+              "n": 10,
+              "nodes": 459
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 103,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 4
+              },
+              "eligible": 204,
+              "excluded_by_reason": {
+                "dependency": 14,
+                "taint": 0,
+                "unlisted": 47
+              },
+              "proposed": 111,
+              "total": 265,
+              "unvisited": 0,
+              "visited": 265
+            },
+            "search_bridge_nodes": 429,
+            "search_rewrite_events": 111,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 4
+              },
+              "eligible": 160,
+              "excluded_by_reason": {
+                "dependency": 14,
+                "taint": 0,
+                "unlisted": 47
+              },
+              "proposed": 8,
+              "total": 221,
+              "unvisited": 0,
+              "visited": 221
+            },
+            "search_bridge_nodes": 97,
+            "search_rewrite_events": 8,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "5a713d0f93ddaf96e717a3e77d69da276a543cb1c043080d86eb7b6219c18237",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "591f088b974b61be06fd6a03c89ebf19fef528130b0ea3d2a2cf8452760e87a4",
+        "matching_work": null,
+        "name": "seed-00000000000000009326",
+        "outcome": "measured",
+        "output_digest": "137bb4c9751610a956e9ae911927f6b9b9a2212a35168ba97051adf85f0d25fc",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 192,
+            "admitted_regions": 50,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 10,
+              "fuel_bound": 256,
+              "n": 8,
+              "nodes": 192
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 50,
+              "declined_by_reason": {
+                "policy": 1,
+                "witness": 2
+              },
+              "eligible": 146,
+              "excluded_by_reason": {
+                "dependency": 12,
+                "taint": 0,
+                "unlisted": 32
+              },
+              "proposed": 53,
+              "total": 190,
+              "unvisited": 0,
+              "visited": 190
+            },
+            "search_bridge_nodes": 265,
+            "search_rewrite_events": 53,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 2,
+            "admitted_regions": 1,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 1,
+              "fuel": 1,
+              "fuel_bound": 256,
+              "n": 1,
+              "nodes": 2
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 1,
+              "declined_by_reason": {
+                "policy": 1,
+                "witness": 2
+              },
+              "eligible": 121,
+              "excluded_by_reason": {
+                "dependency": 12,
+                "taint": 0,
+                "unlisted": 32
+              },
+              "proposed": 4,
+              "total": 165,
+              "unvisited": 0,
+              "visited": 165
+            },
+            "search_bridge_nodes": 104,
+            "search_rewrite_events": 4,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 1,
+                "witness": 2
+              },
+              "eligible": 121,
+              "excluded_by_reason": {
+                "dependency": 12,
+                "taint": 0,
+                "unlisted": 32
+              },
+              "proposed": 3,
+              "total": 165,
+              "unvisited": 0,
+              "visited": 165
+            },
+            "search_bridge_nodes": 101,
+            "search_rewrite_events": 3,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "1b922216bdfa2a3d1759ba63c8ddd2f27c93c9dac85a6f066bcd7f3c6fa09fe2",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "916b88bfc4a1e21c1cdcc988c1e6143777666f406af49c6456a7c9b65e4fa7ea",
+        "matching_work": null,
+        "name": "seed-00000000000000009327",
+        "outcome": "measured",
+        "output_digest": "e19324e9eea2d47673044b604d160c61cf6daa79083d075070232be6556c4e9e",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 79,
+            "admitted_regions": 13,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 8,
+              "fuel_bound": 256,
+              "n": 6,
+              "nodes": 79
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 13,
+              "declined_by_reason": {
+                "policy": 1,
+                "witness": 1
+              },
+              "eligible": 31,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 3
+              },
+              "proposed": 15,
+              "total": 35,
+              "unvisited": 0,
+              "visited": 35
+            },
+            "search_bridge_nodes": 66,
+            "search_rewrite_events": 15,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 1,
+                "witness": 1
+              },
+              "eligible": 28,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 3
+              },
+              "proposed": 2,
+              "total": 32,
+              "unvisited": 0,
+              "visited": 32
+            },
+            "search_bridge_nodes": 19,
+            "search_rewrite_events": 2,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 3,
+        "chain_id": "060161cc0091f71da29631ce1dedfcfadb8ab4879b9f219f4b811ce5114a40d7",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "b053990ac7126ec55426887d4fc882785d3ae616c9511b2036a2459353636a85",
+        "matching_work": null,
+        "name": "seed-00000000000000009328",
+        "outcome": "measured",
+        "output_digest": "f7b998fa03f1bcbef3d75c035a046492a0770eda88fa517e6f6759a9111ba120",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 3,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 404,
+            "admitted_regions": 100,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 33,
+              "fuel_bound": 256,
+              "n": 10,
+              "nodes": 404
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 100,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 18
+              },
+              "eligible": 248,
+              "excluded_by_reason": {
+                "dependency": 30,
+                "taint": 0,
+                "unlisted": 69
+              },
+              "proposed": 122,
+              "total": 347,
+              "unvisited": 0,
+              "visited": 347
+            },
+            "search_bridge_nodes": 511,
+            "search_rewrite_events": 121,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 2,
+            "admitted_regions": 1,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 2,
+              "nodes": 2
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 1,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 17
+              },
+              "eligible": 198,
+              "excluded_by_reason": {
+                "dependency": 30,
+                "taint": 0,
+                "unlisted": 69
+              },
+              "proposed": 22,
+              "total": 297,
+              "unvisited": 0,
+              "visited": 297
+            },
+            "search_bridge_nodes": 190,
+            "search_rewrite_events": 21,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 2,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 4,
+                "witness": 17
+              },
+              "eligible": 197,
+              "excluded_by_reason": {
+                "dependency": 30,
+                "taint": 0,
+                "unlisted": 69
+              },
+              "proposed": 21,
+              "total": 296,
+              "unvisited": 0,
+              "visited": 296
+            },
+            "search_bridge_nodes": 190,
+            "search_rewrite_events": 21,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 3
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "3e22d8a729c3ae4af12b119a6371bdc189e4e211f92ba3bfdfb23ce81d41c061",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "8c564d3c937ec3fd725fdad8f788418d07d4d28bec1f7fb089e3508b68a8175a",
+        "matching_work": null,
+        "name": "seed-00000000000000009329",
+        "outcome": "measured",
+        "output_digest": "3a94440befb0782150f30c8ee1c5baaa58e92a716d9c79e71f02c0672063c66e",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 20,
+            "admitted_regions": 7,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 2,
+              "fuel": 2,
+              "fuel_bound": 256,
+              "n": 4,
+              "nodes": 20
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 7,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 27,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 5
+              },
+              "proposed": 7,
+              "total": 33,
+              "unvisited": 0,
+              "visited": 33
+            },
+            "search_bridge_nodes": 41,
+            "search_rewrite_events": 7,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 25,
+              "excluded_by_reason": {
+                "dependency": 1,
+                "taint": 0,
+                "unlisted": 5
+              },
+              "proposed": 0,
+              "total": 31,
+              "unvisited": 0,
+              "visited": 31
+            },
+            "search_bridge_nodes": 18,
+            "search_rewrite_events": 0,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "95d402430a34706ffde297ad0d631666171373be962b523623e918a703b3b95f",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "883b7ae1b4366d3ab014ca5d3ae249689c46ddbe0fbcb7c1060f61eff373cf77",
+        "matching_work": null,
+        "name": "seed-00000000000000009330",
+        "outcome": "measured",
+        "output_digest": "4fe9b844e123873c15d19e777f202fd493889f9886959780b782295701f0bf33",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 22,
+            "admitted_regions": 4,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 3,
+              "fuel": 3,
+              "fuel_bound": 256,
+              "n": 6,
+              "nodes": 22
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 4,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 9,
+              "excluded_by_reason": {
+                "dependency": 0,
+                "taint": 0,
+                "unlisted": 2
+              },
+              "proposed": 4,
+              "total": 11,
+              "unvisited": 0,
+              "visited": 11
+            },
+            "search_bridge_nodes": 14,
+            "search_rewrite_events": 4,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 0,
+                "witness": 0
+              },
+              "eligible": 8,
+              "excluded_by_reason": {
+                "dependency": 0,
+                "taint": 0,
+                "unlisted": 2
+              },
+              "proposed": 0,
+              "total": 10,
+              "unvisited": 0,
+              "visited": 10
+            },
+            "search_bridge_nodes": 0,
+            "search_rewrite_events": 0,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      },
+      {
+        "attempted_transactions": 2,
+        "chain_id": "436c535609ad9f23a01557fc340218fef772518061372ca71cd608390f1a0116",
+        "chain_limit_hit": false,
+        "hit_transactions": {
+          "admission.accepted_regions": 0,
+          "admission.proof_nodes": 0,
+          "search.bridge_nodes": 0,
+          "search.rewrite_events": 0
+        },
+        "input_digest": "663f759009043a0815fe00c64a4aef0d09a61c05be8ec22e20eeee9f75630bbc",
+        "matching_work": null,
+        "name": "seed-00000000000000009331",
+        "outcome": "measured",
+        "output_digest": "dc047f2ccb933ec84f2535e561227dbae0743c281ea6599c63df43eb4c4bcfdd",
+        "policy_digest": "3c02d768ad2f955e471ba334b256eaddfcecbd63278d92ae06be332ae569f38a",
+        "proof_accounting": {
+          "bundle_obligation_failures": 0,
+          "completed_proof_rejections": 0,
+          "not_checked": 0,
+          "proof_successes": 2,
+          "unknown_proof_outcomes": 0
+        },
+        "status": "OBSERVED",
+        "transactions": [
+          {
+            "admitted_proof_nodes": 133,
+            "admitted_regions": 40,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 4,
+              "fuel": 13,
+              "fuel_bound": 256,
+              "n": 7,
+              "nodes": 133
+            },
+            "index": 0,
+            "matching_work": null,
+            "result": "CHANGED",
+            "roots": {
+              "accepted": 40,
+              "declined_by_reason": {
+                "policy": 1,
+                "witness": 3
+              },
+              "eligible": 89,
+              "excluded_by_reason": {
+                "dependency": 9,
+                "taint": 0,
+                "unlisted": 16
+              },
+              "proposed": 44,
+              "total": 114,
+              "unvisited": 0,
+              "visited": 114
+            },
+            "search_bridge_nodes": 171,
+            "search_rewrite_events": 44,
+            "stop": "NORMAL"
+          },
+          {
+            "admitted_proof_nodes": 0,
+            "admitted_regions": 0,
+            "budget_hits": [],
+            "evp": {
+              "epoch_marker": 0,
+              "fuel": 0,
+              "fuel_bound": 256,
+              "n": 0,
+              "nodes": 0
+            },
+            "index": 1,
+            "matching_work": null,
+            "result": "UNCHANGED",
+            "roots": {
+              "accepted": 0,
+              "declined_by_reason": {
+                "policy": 1,
+                "witness": 3
+              },
+              "eligible": 80,
+              "excluded_by_reason": {
+                "dependency": 9,
+                "taint": 0,
+                "unlisted": 16
+              },
+              "proposed": 4,
+              "total": 105,
+              "unvisited": 0,
+              "visited": 105
+            },
+            "search_bridge_nodes": 43,
+            "search_rewrite_events": 4,
+            "stop": "NORMAL"
+          }
+        ],
+        "verified_prefix": 2
+      }
+    ],
+    "rule_preflight": "NOT_RUN",
+    "schema": "evocc-cap-census-v1",
+    "scope": "producer-telemetry-not-performance-admission",
+    "shortcut_preflight": "NOT_RUN",
+    "unavailable_programs": 0
+  },
+  "collector_files": {
+    "eqsat_census.py": "085c9e55cefdadd414943ccdd2b67f78c3a3e1519955f9300304dc18d72ca43b",
+    "eqsat_chain.py": "84c3119e581335c2800e1f0e0e447de57ad6b35d48ce3cbce03710adb86c416d"
+  },
+  "collector_wall_nanos": 4313826917,
+  "exit_code": 0,
+  "implementation_commit": "6cae30608a058c43f1563c82f0b34192e336befc",
+  "manifest_digest": "f6ba88c1ef1b2c1a7df6ae8f5157c6d172ad3deb5b259c1781a04ee69111e672",
+  "native": "NOT_RUN",
+  "pipeline": "generated-EvoIR/shared-chain/standalone-checker/EvoIR-interpreter",
+  "policy_report_digest": "6a83c3bf75652334dd63a90a005aa1b7ac9140e349405063987ddd6a812bfb1c",
+  "schema": "evocc-cap-smoke-receipt-v1",
+  "scope": "generated-ir-regression-only",
+  "source_lowering": "NOT_APPLICABLE",
+  "status": "OBSERVED"
+}

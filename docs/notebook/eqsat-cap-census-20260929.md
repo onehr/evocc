@@ -36,8 +36,37 @@ performance admission. Missing/rejected chains and execution failures have
 unknown cap-hit results, not zero hits. Exit-2 malformed bundles remain separate
 from exit-3 proof rejection; matcher work remains null/NOT_MEASURED.
 
-Initial status: **NOT RUN**. Commit this protocol before collection. The
-frozen population has no AI candidates and authorizes no paid search.
+The protocol was committed as `33e49db` **before** collection. The frozen
+population has no AI candidates and authorizes no paid search.
+
+## Observed collector smoke
+
+Capture `.evidence/eqsat-cap-smoke/20260929T045519Z-1790657719371114000` completed:
+**32/32 interpreted observations agreed; 74/74 transaction proofs replayed**.
+No undefined input, interpreter fuel stop or refused chain was reported.
+Thirty-one programs changed IR; the 1,480 retained regions are summed across
+transaction inputs, not unique-source coverage or native instruction savings.
+
+| Scope | Default limit | Largest transaction observation | Programs hitting cap |
+| --- | ---: | ---: | ---: |
+| Transient bridge nodes | 100,000 | 560 | 0/32 |
+| Transient rewrite events | 1,024 | 121 | 0/32 |
+| Admitted regions | 1,024 | 103 | 0/32 |
+| Admitted proof nodes | 100,000 | 617 | 0/32 |
+| Chain transactions | 8 | See per-program retained record | 0/32 |
+
+Maximum recorded EVP firing fuel was 33 (bound 256), maximum epoch marker 5,
+and maximum before-witness `n` 14. Actual matcher work remains NOT_MEASURED.
+The result is **NO_HITS_IN_THIS_POPULATION**, not FINITE_ENUMERATION_SUFFICIENT
+or NO_OBSERVABLE_EFFECT. All three track preflight verdicts remain NOT_RUN.
+
+The complete raw report and collector receipt are retained in
+[the fixture directory](../../tests/fixtures/certificates/cap-census-20260929/).
+All capture files together occupy 224,038 bytes. The collector/bench/chain/TODO
+Python gate passed 93 tests before this run. A new imported-CLI test initially
+exposed a module-path error; fixing package selection made both direct CLI and
+imported entry-point tests pass. Failure tests use synthetic child processes,
+not forged compiler performance evidence.
 
 ## Remaining R02 implementation
 

@@ -40,6 +40,13 @@ def report():
 
 
 class CensusTests(unittest.TestCase):
+    def test_retained_real_report_recomputes_without_reclassifying_scope(self):
+        directory = FIXTURE.parent.parent / 'cap-census-20260929'
+        raw = (directory / 'policy.json').read_bytes()
+        receipt = json.loads((directory / 'receipt.json').read_bytes())
+        self.assertEqual(digest(raw), receipt['policy_report_digest'])
+        self.assertEqual(report_census(json.loads(raw)), receipt['census'])
+
     def test_no_hit_is_scoped_and_never_a_preflight_verdict(self):
         got = report_census(report())
         self.assertEqual(got['default_caps_observation'], 'NO_HITS_IN_THIS_POPULATION')
