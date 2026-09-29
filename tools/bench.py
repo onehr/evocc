@@ -15,6 +15,7 @@ from collections import Counter, deque
 from datetime import datetime, timezone
 import fcntl
 import hashlib
+import importlib
 import json
 import os
 from pathlib import Path
@@ -62,6 +63,8 @@ def parser():
     p.add_argument("--no-build", action="store_true", help="reuse the default release binary")
     p.add_argument('--verify-eqsat-chain', type=Path, help='independently audit an existing R01a proof directory; no benchmark campaign')
     p.add_argument('--checker', type=Path, help='standalone checker matching the retained EqSat chain identity')
+    p.add_argument('--eqsat-census', type=Path, help='read a retained policy report and separate default cap scopes; no build, proof admission or performance claim')
+    p.add_argument('--eqsat-cap-smoke', type=Path, help='run a committed, bounded generated-IR telemetry manifest; not the application preflight')
     p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
     p.add_argument("--programs", type=positive, default=500, help="Csmith programs per campaign")
     p.add_argument("--campaign", choices=["all", "base", "bitfields"], default="all")
@@ -557,11 +560,42 @@ def save(summary, directory):
 
 def main(argv=None):
     args = parser().parse_args(argv)
+    defaults = vars(parser().parse_args([]))
+    def only_options(*allowed):
+        return all(name in allowed or value == defaults[name] for name, value in vars(args).items())
+    def eqsat_tool(name):
+        package = 'ladder' if __name__ == '__main__' else 'tools.ladder'
+        return importlib.import_module(package + '.' + name)
+    if args.eqsat_cap_smoke:
+        if not only_options('eqsat_cap_smoke'):
+            print('--eqsat-cap-smoke is a separate frozen diagnostic', file=sys.stderr)
+            return 2
+        run_smoke = eqsat_tool('eqsat_census').run_smoke
+        try:
+            directory, receipt = run_smoke(args.eqsat_cap_smoke, ROOT)
+            print(f"EqSat cap smoke: {receipt['status']}; {directory.relative_to(ROOT)}/receipt.json")
+            return 0 if receipt['status'] == 'OBSERVED' else 1
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f'EqSat cap smoke rejected: {error}', file=sys.stderr)
+            return 2
+    if args.eqsat_census:
+        if not only_options('eqsat_census'):
+            print('--eqsat-census is a read-only standalone mode', file=sys.stderr)
+            return 2
+        report_census = eqsat_tool('eqsat_census').report_census
+        unique = eqsat_tool('eqsat_chain').unique
+        try:
+            report = json.loads(args.eqsat_census.read_bytes(), object_pairs_hook=unique)
+            print(json.dumps(report_census(report), sort_keys=True))
+            return 0
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f'EqSat census rejected: {error}', file=sys.stderr)
+            return 2
     if args.verify_eqsat_chain:
         if args.benchmarks or args.status or args.dry_run or args.list or not args.checker:
             print('--verify-eqsat-chain requires --checker and no other mode', file=sys.stderr)
             return 2
-        from ladder.eqsat_chain import verify_bundle
+        verify_bundle = eqsat_tool('eqsat_chain').verify_bundle
         try:
             result = verify_bundle(args.verify_eqsat_chain, args.checker)
             print(json.dumps(result, sort_keys=True))

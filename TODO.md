@@ -1928,6 +1928,11 @@ record a justified not-needed disposition separately from implementation PASS.
     timing boundaries, raw metrics,
     resource caps and separate performance receipts. REDs cover stale/mismatched
     artifacts, missing results, invalid metrics, interference and cleanup ownership.
+    September 29 checkpoint: the default-cap diagnostic collector reuses the
+    bench entry point and lock, with committed bounded input manifests and
+    scoped/unknown counters. Native performance manifests and runners remain
+    open; the generated-IR collector smoke is not their acceptance.
+    [Scope and protocol](docs/notebook/eqsat-cap-census-20260929.md).
 
   - [ ] **R02b — Opportunity/effect-ceiling preflight and A/A plus A/B pilot** — `LATER`, P3.
     After R01a/R02a, first report whether default transient and certificate caps

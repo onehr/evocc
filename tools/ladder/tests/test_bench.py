@@ -22,6 +22,28 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_eqsat_census_is_read_only_and_does_not_start_a_benchmark(self):
+        from tools.ladder.tests.test_eqsat_census import report
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'report.json'
+            path.write_text(json.dumps(report()))
+            with (patch.object(bench, 'execute', side_effect=AssertionError('read-only')),
+                  patch.object(bench, 'save', side_effect=AssertionError('no historical receipt writes')),
+                  redirect_stdout(io.StringIO()) as output):
+                self.assertEqual(bench.main(['--eqsat-census', str(path)]), 0)
+            self.assertEqual(json.loads(output.getvalue())['policy_preflight'], 'NOT_RUN')
+
+    def test_eqsat_diagnostics_cannot_mix_with_campaign_modes(self):
+        for args in (
+            ['--eqsat-cap-smoke', 'manifest.json', 'all'],
+            ['--eqsat-cap-smoke', 'manifest.json', '--eqsat-census', 'report.json'],
+            ['--eqsat-census', 'report.json', '--verify-eqsat-chain', 'proofs'],
+            ['--eqsat-cap-smoke', 'manifest.json', '--jobs', '1'],
+            ['--eqsat-census', 'report.json', '--evocc', '/different/compiler'],
+        ):
+            with self.subTest(args=args), redirect_stderr(io.StringIO()):
+                self.assertEqual(bench.main(args), 2)
+
     def test_doom_is_separate_from_the_frozen_fifteen_application_lanes(self):
         args = bench.parser().parse_args(['doom', '--no-build'])
         command, _ = bench.command('doom', args, Path('/compiler'))

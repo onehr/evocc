@@ -1,0 +1,27 @@
+{
+  "schema": "evocc-cap-smoke-manifest-v1",
+  "scope": "generated-ir-regression-only",
+  "implementation_commit": "6cae30608a058c43f1563c82f0b34192e336befc",
+  "evaluator": {
+    "path": "target/frontend/debug/evo-policy-eval",
+    "sha256": "006ffcb4a4781bcdd7d9c9e7b4123a55f0ead61a530c7d570e1a87b7f878dd81"
+  },
+  "checker": {
+    "path": "target/frontend/debug/evo-proofcheck",
+    "sha256": "f1b64ae6247ee4c1407fe26cdbc1d9d2eb643ed962880f231a749961fe2d6c66"
+  },
+  "generator": {
+    "path": "crates/evocc-randgate/src/generate.rs",
+    "sha256": "3f9ac9dd23386423e02b2fe256f9e4bb965c2ea27a922ab5398131a41db8c968"
+  },
+  "generated": {"first": 9300, "count": 32},
+  "seed": 0,
+  "step_budget": 200000,
+  "policy": "instruction-count",
+  "resources": {
+    "timeout_seconds": 180,
+    "output_bytes": 8388608,
+    "min_free_bytes": 1073741824
+  },
+  "claim_boundary": "not-R02-performance-or-track-admission"
+}
