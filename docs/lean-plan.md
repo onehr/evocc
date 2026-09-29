@@ -1,6 +1,6 @@
 # Lean 4 integration plan for EvoCC (second version)
 
-**September 29 integration note, revision 2 (design only).** The existing L0–L4 plan and its
+**September 29 integration note, revision 3 (design only).** The existing L0–L4 plan and its
 historical evidence below remain scoped to the reviewed scalar semantics,
 registry and analysis modules. The maintained
 [Q2/Q3 implementation architecture](framing-draft.md#4-rule-soundness-and-admission)
@@ -11,6 +11,11 @@ which currently quantifies all natural width environments, not a JSON-selected
 1–64 domain. Finite-width admission needs R03g's explicit predicate/theorem/audit
 extension first; it cannot be inferred from existing enumerated analysis proofs.
 Universal templates and derived existing-rule steps can proceed without it.
+The trusted runner selects a fixed-order template ladder; candidates cannot
+select a template. Admission records actual attempted/successful templates.
+Rule/shortcut campaigns require their own residual-opportunity preflight, not
+a policy-track pass; bounded enumeration/fuzz is not a proof of the universal
+semantic or `simp`-provable rule space.
 Audit actual transitive dependencies: a kernel-only rule can still depend on
 native-backed fact transfer in the complete admission chain. New dependency
 classes need review; no automatic kernel-only end-to-end claim follows.

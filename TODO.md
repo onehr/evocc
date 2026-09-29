@@ -78,7 +78,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R01a, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 2: shared verified chain, profile/opportunity preflight before search, bounded manual/template rule admission, then final gates. Conditional extraction/domain/shadow work needs its stated trigger and review; x86-64 and release stay separate. |
+| LATER | R01, R01a, R02, R02a, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 3: verified chain/state table, scoped budget and checked-profile controls, separate policy/rule/shortcut preflights, bounded manual/template admission, then final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1872,12 +1872,13 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
 
 ## Later roadmap gates — not substitutes for runtime closure
 
-The September 29 revision-2 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
+The September 29 revision-3 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
 without closing them. R01a/R02a infrastructure and R02b development measurements
 can proceed on correctness-admitted workloads; final acceptance remains
 R01 → R02 → R03. `LATER` describes roadmap priority, not an implementation or
 live-job status. Keep heavy campaigns serial under the existing ARM64 priorities.
-Effect-ceiling preflight precedes AI search. Conditional tasks below are explicit
+Each policy/rule/shortcut track needs its own effect-ceiling preflight before
+AI search. Conditional tasks below are explicit
 design branches, not newly enabled semantics or required speculative projects;
 record a justified not-needed disposition separately from implementation PASS.
 
@@ -1890,10 +1891,16 @@ record a justified not-needed disposition separately from implementation PASS.
     Implement design P0: one driver/evaluator persistent chain runner with policy
     identity including transaction count, proof/report export and wrapper-owned
     verification. Separate transaction result, stop reason and root counts;
-    preserve prior accepted regions on budget exhaustion. Any internal/proof/chain
+    validate the closed state-combination table. Preserve transient search
+    counters before EVP overwrites them; separate admission region/node quotas,
+    recorded fuel/markers and actual matcher work, including legacy knob coupling.
+    Preserve prior accepted regions on budget exhaustion. Any internal/proof/chain
     failure rejects whole-chain publication and staged state, not a successful
     prefix or silent baseline. Test chain parity, second-transaction rejection,
     budget-partial and zero-region cases, artifact identities and denominators.
+    Fault-inject apply/history failure: valid zero proof cannot erase producer
+    ROLLED_BACK_ERROR telemetry. An eligible no-rule case remains a legal no-op;
+    independent eligibility counts warn but do not certify fallback classification.
     Close with focused tests and a native proof bundle, not G2.
 
 - [ ] **R02 — Q2 fair GCC -O2 performance evaluation** — `LATER`, P3.
@@ -1905,18 +1912,26 @@ record a justified not-needed disposition separately from implementation PASS.
   - [ ] **R02a — Performance manifests and measurement runner** — `LATER`, P3.
     Implement design P1 through `tools/bench.py` and existing adapters/locks.
     Freeze effective UB-check/lowering profiles, shared chain identity, semantic
-    flags, object coverage, timing boundaries, raw metrics,
+    flags, scoped budget units/mapping, checked-twin bindings, object coverage,
+    timing boundaries, raw metrics,
     resource caps and separate performance receipts. REDs cover stale/mismatched
     artifacts, missing results, invalid metrics, interference and cleanup ownership.
 
   - [ ] **R02b — Opportunity/effect-ceiling preflight and A/A plus A/B pilot** — `LATER`, P3.
-    After R01a/R02a, freeze small C/IR and application inputs; count opportunities
-    after lowering, enumerate feasible weight-gate behavior classes and schedule
-    controls, measure machine materialization and budget interactions. Calibrate
-    A/A and compare matched A/B; zero-weight choices are not globally dominated
-    by assumption. Record searchable, finite-enumeration-sufficient or no-effect
-    per objective, or inconclusive if precision is inadequate. Do not start AI
-    search over an unresolved/degenerate space.
+    After R01a/R02a, first report whether default transient and certificate caps
+    actually bind, with separate EVP fuel and chain counts. Freeze inputs and
+    enumerate weight-gate behavior; test expected add/mul/shl byte ties and
+    surrounding-code exceptions. Zero-weight certificate reservation only applies
+    at a binding admission cap, not to transient work already spent.
+    Also census residual misses after lowering/current rules using a pinned,
+    semantics-qualified external reference plus a frozen bounded rule enumerator.
+    Record grammar/depth, constants/widths/guards, proof/matcher applicability and
+    materialization. Fuzz is filtering, not completeness. Beyond-enumeration
+    discovery needs a useful template-proved residual witness and the same expanded
+    search space for non-AI. Allow bounded R03f/c qualification probes, not a bulk
+    discovery campaign, to resolve the preflight. Freeze separate policy/rule/
+    shortcut searchable, enumeration-sufficient, no-effect or inconclusive verdicts.
+    Calibrate A/A and compare matched A/B; no campaign bypasses its track verdict.
     Lowering-fold-disabled variants are attribution-only; three pilot families
     do not establish cross-family generalization. Retain all negative results.
 
@@ -1931,7 +1946,10 @@ record a justified not-needed disposition separately from implementation PASS.
     path does not expose it. Implement explicit effective-profile plumbing and
     receipt identity; do not invent a switch or delete source/IR obligations in
     the benchmark harness. REDs: ignored flag, missing identity, checked traps,
-    defined-input parity and interpreter contract preservation. Measure checked
+    defined-input parity and interpreter contract preservation. Every unchecked
+    variant/input must have a passing no-trap checked twin bound to the same
+    source, input and policy; missing/failed twins block admission. That is not
+    proof against unmodeled UB. Measure checked
     and unchecked separately; GCC sanitizer coverage is not assumed equivalent.
 
   - [ ] **R02e — Guard-predicate folding domain, separately reviewed** — `LATER`, P3.
@@ -1956,7 +1974,9 @@ record a justified not-needed disposition separately from implementation PASS.
     corpus exclusions. A finite/no-effect study may end without R03 improvement.
 
   - [ ] **R03b — Derived rewrite shortcuts** — `LATER`, P3.
-    Implement design P4 after R03f over the current scalar domain and guard forms.
+    Implement design P4 after R03f and the R02b shortcut-specific verdict, over
+    the current scalar domain and guard forms. Compare enumerated compositions;
+    native-size opportunity is not evidence of actual search/proof savings.
     Expand shortcut certificates into existing rules; test substitutions, missing
     before-witness constants, fact scope, poison and mixed-width boundaries.
     No invented premise or unrecorded extra transaction. Measure actual matcher
@@ -1964,7 +1984,11 @@ record a justified not-needed disposition separately from implementation PASS.
 
   - [ ] **R03c — New-rule Lean admission and registry integration** — `LATER`, P3.
     Implement design P5 after R03f: AI supplies only typed data with relation `eq`;
-    trusted fixed templates construct the exact universal `RuleCovered` statement.
+    trusted code tries a frozen fixed-order template ladder for the exact universal
+    `RuleCovered` statement. Candidates cannot select templates; retain actual
+    attempts/success in admission identity. Run only bounded qualification probes
+    until R02b's rule-specific preflight is resolved; campaign admission cannot
+    inherit a successful policy preflight.
     Reject proof scripts, import/statement injection, sorry and unauthorized axioms;
     audit actual transitive dependencies, including native-backed analysis.
     Integrate a bounded manually reviewed registry batch across producer/checker/
@@ -1973,7 +1997,8 @@ record a justified not-needed disposition separately from implementation PASS.
 
   - [ ] **R03d — Held-out ablation and measured promotion** — `LATER`, P3.
     After final R02 and the relevant candidate paths, freeze rules/policies before
-    held-out A–E/non-AI evaluation. Report correctness, gain/regressions, uncertainty
+    held-out A–E/non-AI evaluation. Match per-track grammar/limits and separate
+    certificate quota, transient search and matching work. Report correctness, gain/regressions, uncertainty
     and discovery/compilation cost; no tuning on final feedback. Promote only under
     predeclared objectives/bounds. A negative study is not R03 improvement closure.
 
