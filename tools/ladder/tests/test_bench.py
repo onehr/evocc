@@ -22,6 +22,16 @@ if PATH.exists():
 
 
 class BenchmarkEntryTest(unittest.TestCase):
+    def test_native_calibration_keeps_its_own_receipt_and_no_performance_pass(self):
+        directory = bench.ROOT / '.evidence/unit-aa'
+        with (patch('tools.ladder.eqsat_native.run_calibration',
+                    return_value=(directory, dict(status='OBSERVED_AA'))) as run,
+              patch.object(bench, 'execute', side_effect=AssertionError('separate mode')),
+              patch.object(bench, 'save', side_effect=AssertionError('no historical writes')),
+              redirect_stdout(io.StringIO()) as output):
+            self.assertEqual(bench.main(['--eqsat-calibrate', 'plan.json']), 0)
+            run.assert_called_once_with(Path('plan.json'), bench.ROOT)
+            self.assertNotIn('PASS', output.getvalue())
     def test_plan_audit_cannot_write_or_become_a_benchmark_pass(self):
         expected = dict(status='FROZEN_PLAN_AUDITED_EXECUTION_NOT_RUN', performance='NOT_RUN')
         with (patch('tools.ladder.eqsat_manifest.audit_manifest', return_value=expected) as audit,
@@ -45,6 +55,8 @@ class BenchmarkEntryTest(unittest.TestCase):
 
     def test_eqsat_diagnostics_cannot_mix_with_campaign_modes(self):
         for args in (
+            ['--eqsat-calibrate', 'plan.json', '--jobs', '1'],
+            ['--eqsat-calibrate', 'plan.json', '--check-eqsat-manifest', 'plan.json'],
             ['--check-eqsat-manifest', 'plan.json', 'all'],
             ['--check-eqsat-manifest', 'plan.json', '--eqsat-cap-smoke', 'manifest.json'],
             ['--check-eqsat-manifest', 'plan.json', '--jobs', '1'],

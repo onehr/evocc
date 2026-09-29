@@ -1946,12 +1946,15 @@ record a justified not-needed disposition separately from implementation PASS.
     identity checks retain both full reads/hashes and the final commit boundary.
     Policy-report v3 separates producer, checker, identity and wrapper wall time;
     v2 historical reports remain readable without fabricated timings.
-    The read-only frozen-plan audit now covers checked native A/A calibration
-    declarations and artifact/source identity, not effective-control validation
-    or execution admission. Native collector, artifact/result binding, raw
-    samples/statistics, interference/cleanup tests and checked/unchecked fan-out
-    remain open. No new application/performance claim follows from this batch.
+    The frozen-plan audit covers checked native A/A declarations and
+    artifact/source identity. The next bounded native adapter now implements
+    exact-IR MIR transport, registered Darwin P0 A/A execution, per-attempt
+    result/artifact checks, owned capture/lock/retention and raw paired statistics.
+    Its native acceptance is pending; it is not a Linux or application result.
+    Broader effective-control/optimized-chain admission, application workloads,
+    CPU/RSS/section metrics and checked/unchecked fan-out remain open.
     [Foundation scope and gates](docs/notebook/eqsat-r02a-foundations-20260929.md).
+    [Native pipeline and limits](docs/notebook/eqsat-native-calibration-20260929.md).
     September 29 checkpoint: the default-cap diagnostic collector reuses the
     bench entry point and lock, with committed bounded input manifests and
     scoped/unknown counters. Native performance manifests and runners remain

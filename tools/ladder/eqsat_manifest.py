@@ -35,6 +35,8 @@ def artifacts(m):
         yield item, True
     for item in m['specs'].values():
         yield item, False
+    for name, identity in m.get('native', {}).get('collector_files', {}).items():
+        yield dict(path=name, sha256=identity), False
     for case in m['cases']:
         yield case['source'], False
         for item in case['inputs']:
@@ -42,12 +44,22 @@ def artifacts(m):
 
 
 def validate_manifest(m):
-    keys(m, 'schema scope implementation_commit tools specs host environment controls protocol resources cases')
-    require(m['schema'] == 'evocc-performance-plan-v1'
+    v2 = m.get('schema') == 'evocc-performance-plan-v2'
+    keys(m, 'schema scope implementation_commit tools specs host environment controls protocol resources cases'
+         + (' native' if v2 else ''))
+    require(m['schema'] in ('evocc-performance-plan-v1', 'evocc-performance-plan-v2')
             and m['scope'] == 'r02-plan-not-admission', 'unknown plan schema or claim scope')
     require(type(m['implementation_commit']) is str
             and re.fullmatch('[0-9a-f]{40}', m['implementation_commit']), 'missing implementation commit')
-    keys(m['tools'], 'compiler checker reference assembler linker')
+    keys(m['tools'], 'compiler checker reference assembler linker' + (' ir_backend collector_python' if v2 else ''))
+    if v2:
+        keys(m['native'], 'adapter eqsat codegen_target source_profile collector_files')
+        require({k: v for k, v in m['native'].items() if k != 'collector_files'} ==
+                dict(adapter='darwin-p0-aa-v1', eqsat='off', codegen_target='darwin-arm64',
+                     source_profile='linux-lp64-header-free-integer'),
+                'unknown native recipe or source/backend boundary')
+        keys(m['native']['collector_files'], 'tools/bench.py tools/ladder/eqsat_native.py '
+             'tools/ladder/eqsat_manifest.py tools/ladder/eqsat_census.py tools/ladder/eqsat_chain.py')
     keys(m['specs'], 'evoir evomir')
     h = m['host']
     keys(h, 'system release machine runtime cpu libc affinity')

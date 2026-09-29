@@ -1,0 +1,136 @@
+# R02a bounded native A/A pipeline
+
+Date: 2026-09-29. This extends the
+[measurement foundations](eqsat-r02a-foundations-20260929.md), not the Q2/Q3
+claim ceiling. R02a remains OPEN. The initial implementation is a Darwin arm64
+P0 pipeline check; it is not Linux performance, an application campaign, an
+EqSat speedup or a release benchmark.
+
+## Exact-input backend adapter
+
+`evo-ir-asm`, built by the existing `evocc-mir` package, accepts:
+
+```text
+evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo
+```
+
+It reads one snapshot, checks the exact digest, parses and validates the module,
+requires canonical text, and calls the existing checked PIC MIR backend and
+allocation verifier. It does not run C lowering, EqSat or a second ABI path.
+Malformed/noncanonical input, a wrong digest or unsupported target emits no
+assembly. A digest match is transport binding, not proof admission: the caller
+must check the identity or verified chain before invoking it. No unchecked
+profile is exposed by this adapter.
+
+The full C driver still targets Linux. The initial native wrapper explicitly
+records `linux-lp64-header-free-integer` source semantics and Darwin arm64
+code generation. It permits only two reviewed, header-free integer fixtures,
+no foreign dependencies, no arguments and empty output with exit zero. This
+bounded overlap does not establish a general Darwin C frontend or Linux-native
+execution. Linux code generation in the thin adapter is tested as assembly
+emission, not misreported as Linux execution on this host.
+
+## Frozen native plan and publication
+
+`evocc-performance-plan-v2` adds an `ir_backend` executable pin, the collector's
+Python executable and five source-file hashes, and a closed `native` recipe to
+the earlier read-only plan. V1 remains readable but cannot
+be executed. The bench entry point is:
+
+```sh
+python3 tools/bench.py --eqsat-calibrate tests/contracts/NAME.json
+```
+
+The plan must be committed before execution. It binds exact source/spec/tool
+hashes, source revision, source/backend profiles, effective recipe argv, host
+identity, closed environment, result predicate, sample order/seed and resource
+bounds. Only native Darwin arm64, `-O0`, EqSat off, checked PIC lowering and a
+single subject object are implemented here. Modified argv, optimization,
+wrapping/FP flags, new source fixtures, held-out inputs, uncontrolled injected
+environment variables and unsupported profiles are refused. A/A labels run the
+same executable; they do not select different compilers or rerun optimization.
+
+Execution uses the existing `.build/bench.lock`, one new exclusive evidence
+directory and no deletion of previous runs. The exact plan is retained. Each
+attempt is published as STARTED before launch and is updated even on failure.
+The wrapper performs:
+
+```text
+C-HIR and EvoIR source execution (expected full return value 0)
+ -> one canonical EvoIR export + explicit EqSat-off identity chain
+ -> independent byte-identity audit
+ -> exact-digest MIR assembly -> subject object -> subject executable
+ -> reference build/result + checked subject result admission
+ -> retained warmups -> balanced paired A/A samples
+ -> final source/artifact identity check -> OBSERVED_AA
+```
+
+Every timed execution checks its own exit status and complete stdout/stderr
+digests. The source, tools, chain, assembly, object and exact timed executable
+are checked for changes outside each measured interval. A changed artifact or
+wrong result stops the run without publishing an eligible measurement. The
+receipt retains earlier attempts and any partial sample prefix, but its global
+FAILED/INTERRUPTED status prevents promotion of that prefix. Replays append new
+owned directories, never overwrite history. There are no automatic retries.
+
+The reference object/executable is separate and never substitutes for the
+subject object. The receipt records all actual commands and the emitted
+IR/chain/assembly/object/executable digests. EqSat-off identity is labeled
+`IDENTITY_ONLY_NO_EVP_REWRITE`, not counted as a rewrite proof success.
+
+The trusted boundary still includes the selected compiler, backend and system
+toolchain. Hash checks are not reproducible-build attestations or a proof of
+machine semantics. This is not a hermetic linker/SDK or hostile-code sandbox.
+
+## Measurement and resource boundaries
+
+- Clock: `monotonic_ns`, from immediately before process launch through child
+  exit and captured stream draining; process startup and capture supervision
+  are included. File hashing, result comparisons and receipt writes are outside
+  the successful interval. This is not steady-state kernel time.
+- The existing bounded pipe capture controls combined stdout/stderr bytes,
+  watchdog and free-space reserve. No inherited `RLIMIT_FSIZE` can truncate
+  checker scratch proofs. An additional owned-directory size watcher bounds
+  retained work files; it is polling/backpressure, not a filesystem hard quota.
+- On failure, the owned process group is killed and the leader reaped. A
+  same-group descendant surviving an otherwise completed leader is a failed
+  attempt, not successful completion. Detached hostile processes are outside
+  this registered-fixture runner's isolation claim.
+- Planned process count times per-child deadline cannot exceed one hour.
+  Runtime is one job; output/retention/reserve caps remain separately recorded.
+  Another cooperating benchmark owning the common lock prevents launch.
+- Every pair runs one A0 and one A1. The frozen seed shuffles an exactly balanced
+  set of A0-first/A1-first pairs; odd pair counts are rejected. Warmups are
+  retained but excluded from statistics. Slow samples are never discarded.
+- Raw samples bind attempt indices and one executable digest. Statistics include
+  paired median A1-minus-A0 nanoseconds, median absolute deviation and a
+  distribution-free 95% median interval from binomial order-statistic ranks.
+  That nominal coverage assumes independent, identically distributed paired
+  differences; uncontrolled host interference may violate the assumption.
+  Small populations without a finite 95% interval report null, not invented
+  precision. There is no speedup or promotion verdict.
+
+The host is recorded, not controlled: affinity, cache and thermal/interference
+conditions are not established. CPU/RSS, executable-section decomposition,
+retired instructions and steady-state throughput are NOT_MEASURED. Short P0
+processes primarily exercise startup/supervision. These limits prevent turning
+this infrastructure check into application performance evidence.
+
+## Validation checkpoint
+
+REDs were added before the missing MIR binary and Python capture implementation.
+The owned-descendant test also failed against the previous capture helper before
+its repair. Focused Python integration currently passes 146 tests, including
+real child timeout/overflow/file-growth, failed output, artifact self-mutation,
+lock exclusion, unique retained runs, paired order and statistical boundaries.
+Fixture-tool tests are harness tests, not native/compiler acceptance.
+
+The full workspace gate and real frozen-plan native run are pending at this
+checkpoint. Their final results must be recorded below before native execution
+is claimed. No application census or AI/model search has been launched.
+
+R02a still needs broader effective-profile verification, optimized-chain native
+admission, application builders/inputs, CPU/RSS and section metrics, the complete
+measurement/rejection ledger and cross-profile binding with R02d. R02b's first
+application result remains the scoped default-limit saturation table; this A/A
+plumbing test is not that table or a track verdict.

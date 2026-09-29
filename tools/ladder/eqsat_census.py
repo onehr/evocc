@@ -335,7 +335,7 @@ def run_smoke(manifest_path, root):
         return directory, receipt
 
 
-def bounded_capture(argv, root, out, err, resources, started, env):
+def bounded_capture(argv, root, out, err, resources, started, env, watch=None):
     """Bound captured streams only; descendants may write larger proof files.
 
     Pipes provide backpressure. Never retain more than the shared byte cap;
@@ -355,6 +355,8 @@ def bounded_capture(argv, root, out, err, resources, started, env):
             while streams.get_map() or child.poll() is None:
                 require(time.monotonic() - started < resources['timeout_seconds'], 'watchdog expired')
                 require(shutil.disk_usage(root).free >= resources['min_free_bytes'], 'disk reserve exhausted')
+                if watch is not None:
+                    watch()
                 for key, _ in streams.select(timeout=0.02):
                     data = os.read(key.fd, 65536)
                     if not data:
@@ -364,8 +366,13 @@ def bounded_capture(argv, root, out, err, resources, started, env):
                     key.data.write(data[:remaining])
                     retained += min(len(data), remaining)
                     require(len(data) <= remaining, 'output limit exceeded')
-        completed = True
-        return child.wait()
+        code = child.wait()
+        try:
+            os.killpg(child.pid, 0)
+        except ProcessLookupError:
+            completed = True
+        require(completed, 'descendants survived the process leader')
+        return code
     finally:
         if not completed:
             try:
