@@ -135,3 +135,18 @@ rebuildable Rust incremental state in `target/debug/incremental`. No `cargo` or
 `rustc` was running, and this cache is not a frozen campaign input. Only that
 exact cache directory was removed; compiler binaries, source, partial captures
 and kernel build inputs were preserved. This cleanup is not an acceptance result.
+
+Before freezing the next timing build, header REDs exposed an integration defect:
+the producer emits `OBSERVED_BUILD`, while the outer auditor expected
+`OBSERVED_build` from the lowercase plan mode. The auditor now uses the canonical
+uppercase stage status. Both valid build-stage admission and refusal of the
+noncanonical spelling were failing before the repair. The two REDs are retained
+in `python-steady-build-header-red-valid-fixture.log`, SHA-256
+`b121b1c7c1d600df1e984690dc7bcdbd73a0a9946cf8cd341cde35f2c051f647`.
+The deliberately incomplete fixtures still fail command replay; they cannot
+establish native acceptance. The focused steady gate passes 12/12. Full ladder
+discovery passes 482 with zero failures and nine optional capture tests skipped
+(491 total), `python-build-stage-final.log`, SHA-256
+`9914fff5f1792dab24d65fafa74a248160f653b023fe75e87f846833a9c627a9`.
+The current deterministic collector does not consume this steady auditor, so
+its pinned inputs, bounds and running capture are unchanged.

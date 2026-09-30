@@ -26,7 +26,7 @@ def audit_capture(directory, root, manifest_digest):
     tools = {k: (root/v['path']).resolve() for k, v in m['tools'].items()}
     r = load(directory/'receipt.json')
     require(r['schema'] == 'evocc-r02-steady-capture-v1' and r['mode'] == mode
-        and r['manifest_digest'] == manifest_digest and r['status'] == 'OBSERVED_'+mode
+        and r['manifest_digest'] == manifest_digest and r['status'] == 'OBSERVED_'+mode.upper()
         and r['cleanup']['exit_code'] == 0 and r['pmu'] == 'NOT_MEASURED', 'incomplete steady capture')
     pinned = {}
     def read(name):

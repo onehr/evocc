@@ -7,7 +7,7 @@ from tools.ladder.eqsat_chain import digest
 from tools.ladder.eqsat_native import pair_order
 from tools.ladder.eqsat_steady import (FILES, GUEST_TOOLS, RESOURCES, TASKS, admitted_calibration,
                                      check_build_inputs, validate_plan)
-from tools.ladder.eqsat_steady_audit import audit_guest
+from tools.ladder.eqsat_steady_audit import audit_capture, audit_guest
 from tools.ladder.eqsat_steady_guest import PROTOCOL, aa_order, interval, next_iterations, result_value
 from tools.ladder.eqsat_steady_plan import owned_files
 from tools.ladder.eqsat_twins import admit_unchecked, canonical, native_identity
@@ -80,6 +80,41 @@ def synthetic(mode='AA'):
                 c['looks'].append(dict(pairs=12, statistics=c['statistics'], duration_gate=True))
             g['comparisons'].append(c)
     return g, request, streams
+
+
+class SteadyCaptureHeaderTests(unittest.TestCase):
+    def header(self, mode, status):
+        """An incomplete capture tests header admission, not native acceptance."""
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temp:
+            root = Path(temp); directory = root/'capture'; directory.mkdir()
+            contracts = root/'tests/contracts'; contracts.mkdir(parents=True)
+            raw = canonical(dict(mode=mode))+b'\n'
+            (contracts/'steady.json').write_bytes(raw)
+            (directory/'manifest.json').write_bytes(raw)
+            (directory/'receipt.json').write_bytes(canonical(dict(
+                schema='evocc-r02-steady-capture-v1', mode=mode, status=status,
+                manifest_digest=digest(raw), cleanup=dict(exit_code=0),
+                pmu='NOT_MEASURED', attempts=[]))+b'\n')
+            plan = dict(tools=dict(container=dict(path='container')), image=dict(name='fixture'))
+            with patch('tools.ladder.eqsat_steady_audit.audit_plan', return_value=(plan, raw)):
+                return audit_capture(directory, root, digest(raw))
+
+    def test_uppercase_stage_status_reaches_command_replay(self):
+        for mode, status in (('build', 'OBSERVED_BUILD'), ('AA', 'OBSERVED_AA'), ('AB', 'OBSERVED_AB')):
+            # There is deliberately no image command. A valid header must
+            # reach independent command replay and still refuse this fixture.
+            with self.subTest(mode=mode), self.assertRaisesRegex(KeyError, 'image-identity'):
+                self.header(mode, status)
+
+    def test_wrong_stage_or_unfinished_status_fails_header_admission(self):
+        for mode, expected in (('build', 'OBSERVED_BUILD'), ('AA', 'OBSERVED_AA'), ('AB', 'OBSERVED_AB')):
+            for status in ('OBSERVED_build', 'OBSERVED_BUILD', 'OBSERVED_AA', 'OBSERVED_AB', 'STARTED', 'FAILED'):
+                if status == expected:
+                    continue
+                with self.subTest(mode=mode, status=status), self.assertRaisesRegex(ValueError, 'incomplete steady'):
+                    self.header(mode, status)
 
 
 class SteadyProtocolTests(unittest.TestCase):
