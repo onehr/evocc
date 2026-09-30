@@ -43,7 +43,16 @@ emission is memoized by verified IR digest and UB profile. The retained-byte cap
 counts unique inodes, not repeated links. No AI run, new rule installation or
 unchecked runtime result is authorized by this census.
 
-Execution and independent capture audit are **NOT RUN** at this checkpoint.
+The first committed completion plan stopped at its initial Linux zombie RED:
+the sealed image has no `ps`. No policy evaluation or template attempt ran.
+Capture `complete-mxd1qlnf` and its failed receipt remain retained. Linux process
+observation now reads kernel `/proc/<pid>/stat`, handling parentheses in `comm`
+and process disappearance without depending on procps. Malformed/unavailable
+snapshots still fail closed. The added parser REDs and the full Python gate
+pass: 468 passed, 0 failed, 1 skipped (`python-proc-final.log`, SHA-256
+`cc16cec84f7ddd8f0bb93ff0a792c619b1c6fb58b3643c17c37283ecf13fbeae`).
+
+Successful completion execution and independent capture audit are **NOT RUN**.
 The completion plan must be committed before running. The Linux zombie-only
 regression is the first guest execution before any policy census result.
 

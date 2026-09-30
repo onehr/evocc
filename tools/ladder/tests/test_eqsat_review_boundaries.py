@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from tools.ladder.eqsat_pilot import ub_guard_sites
 from tools.ladder.eqsat_pilot_audit import audited_guard_sites
-from tools.ladder.eqsat_census import live_process_group
+from tools.ladder.eqsat_census import live_process_group, proc_group_snapshot
 from tools.ladder.eqsat_preflight_run import fixed_template_attempt
 from tools.ladder.eqsat_native import CommandExitError
 
@@ -22,6 +22,27 @@ class GuardSiteTests(unittest.TestCase):
 
 
 class ProcessGroupTests(unittest.TestCase):
+    def test_kernel_snapshot_handles_comm_parentheses_and_needs_no_ps(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            for pid, comm, state in ((10, 'name ) with (spaces)', 'Z'), (11, 'live', 'S')):
+                (root/str(pid)).mkdir()
+                (root/str(pid)/'stat').write_text(f'{pid} ({comm}) {state} 1 20 20 0\n')
+            (root/'12').mkdir()  # Vanished process: no stat entry.
+            self.assertEqual(live_process_group(proc_group_snapshot(root), 20), [11])
+
+    def test_empty_or_malformed_kernel_snapshot_is_not_completion(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaises(ValueError):
+                proc_group_snapshot(root)
+            (root/'10').mkdir()
+            (root/'10'/'stat').write_text('10 (comm) Z 1 invalid\n')
+            with self.assertRaises(ValueError):
+                proc_group_snapshot(root)
+
     def test_zombies_do_not_make_a_completed_group_appear_live(self):
         self.assertEqual(live_process_group('10 20 Z\n11 20 Zs\n12 20 X\n13 21 S\n', 20), [])
 

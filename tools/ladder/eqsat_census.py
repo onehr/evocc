@@ -350,9 +350,35 @@ def live_process_group(snapshot, group):
     return members
 
 
+def proc_group_snapshot(root=Path('/proc')):
+    """Kernel process state on Linux; do not depend on optional procps tools."""
+    rows = []
+    for entry in root.iterdir():
+        if not entry.name.isdecimal():
+            continue
+        try:
+            raw = (entry/'stat').read_text()
+        except FileNotFoundError:
+            continue  # A process may disappear while the snapshot is read.
+        # comm can contain spaces and parentheses. Only the final ')' delimits
+        # the fixed state/ppid/pgrp fields; comm is never retained or displayed.
+        prefix, separator, tail = raw.rpartition(')')
+        fields = tail.split()
+        require(separator and prefix.partition('(')[0].strip() == entry.name
+                and len(fields) >= 3 and len(fields[0]) == 1
+                and fields[2].isdecimal(), 'invalid kernel process-group snapshot')
+        rows.append(f'{entry.name} {fields[2]} {fields[0]}')
+    snapshot = '\n'.join(rows)+'\n'
+    require(rows and len(snapshot) <= 4*1024**2, 'process-group snapshot unavailable/unbounded')
+    return snapshot
+
+
 def process_group_snapshot():
     # Do not trust killpg(group, 0): a guest PID 1 may retain dead orphans.
     # No shell, caller arguments or process command lines enter this snapshot.
+    import platform
+    if platform.system() == 'Linux':
+        return proc_group_snapshot()
     probe = subprocess.Popen(['/bin/ps', '-A', '-o', 'pid=,pgid=,stat='],
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
