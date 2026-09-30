@@ -270,3 +270,43 @@ uncommitted supplements, changed original manifests/receipts and a declared
 revision lacking the repaired code are rejected. All nine focused completion
 tests pass. The live replay still uses the same frozen two-file repair; this
 additional test does not modify its code or supplement identities.
+
+## Independent completion acceptance
+
+The versioned re-audit passes all eight actual-capture tests, no failures,
+errors or skips (1,751.035 seconds). Its stdout SHA-256 is
+`465af758d4114582610457240077b0e16ba8f21e1df5d0e359818578ddb91ff9`; stderr is
+`fe26ed77c27acbd7c4fc77cad18ab6efea277190ad1f7a3d62ba2937717d9f79`.
+The exact successful report is published as the capture's `audit.json`, SHA-256
+`3a7f1ea800af56ce2e4d591a67fdb5cf38392c708fc00c8588720624fd97f77d`.
+It binds the original manifest and the committed
+[audit supplement](../../tests/contracts/eqsat-completion-reaudit-20260930.json).
+
+Independent replay confirms 1,024 suite evaluations, 6,144 policy chains,
+8,854 proof successes, 380 code classes and 966 backend objects. All 1,222
+fixed-template candidates were attempted: 1,174 successes, 48 UNKNOWN and zero
+unattempted. Template success is not rule installation or useful-rule closure.
+All three search tracks remain INCONCLUSIVE and AI remains NOT_ADMITTED.
+
+The following counts derive from the independently validated raw chain records:
+
+| Transaction schedule | Evaluations | Chains | Transient/certificate cap-hit chains | Chain-limit stops | NO_CHANGE stops |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 512 | 3,072 | 0 | 2,326 | 746 |
+| 8 | 512 | 3,072 | 0 | 0 | 3,072 |
+
+Chain limits and the legacy coupled transient/certificate caps are distinct;
+the deliberate one-transaction limit must not disappear into the zero-cap
+headline. These are canonical policy witnesses, not a substitute for the exact
+all-one default vector. The forthcoming steady build explicitly replays that
+default and records its five library-TU chains separately. Zero-weight quota
+reservation has no demonstrated benefit at the unhit admission caps in this
+population. The observed new `(add, shl)` pair prevents a finite-closure claim
+for the original signature vocabulary; no budget or grammar was expanded.
+
+R02b1's implementation and measurement task is closed with those negative
+research conclusions retained. R02a1 proceeds using the separately committed
+[steady build plan](../../tests/contracts/eqsat-steady-build-20260930.json),
+which pins 236 actual inputs and fresh fixed-default B code. Native timing is
+still NOT RUN at this checkpoint; no historical millisecond observation is
+promoted to acceptance.

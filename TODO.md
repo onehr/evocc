@@ -2031,7 +2031,18 @@ record a justified not-needed disposition separately from implementation PASS.
     Lowering-fold-disabled variants are attribution-only; three pilot families
     do not establish cross-family generalization. Retain all negative results.
 
-  - [ ] **R02b1 — Complete deterministic preflight and close review boundaries** — `OPEN`, P3.
+  - [x] **R02b1 — Complete deterministic preflight and close review boundaries** — `DONE`, P3, 2026-09-30.
+    The completed retained capture and committed audit-only supplement pass
+    independent replay plus all eight real-capture mutation tests: 1,024 suite
+    evaluations, 6,144 chains, 8,854 proof successes, 380 code classes and 966
+    backend objects. All 1,222 templates were attempted: 1,174 proved, 48 UNKNOWN,
+    none installed. Transient/certificate cap hits are zero at both schedules;
+    the one-transaction schedule has 2,326 chain-limit stops, while all 3,072
+    eight-transaction chains stop at NO_CHANGE. The new `(add, shl)` comparison
+    leaves policy closure INCONCLUSIVE; rule/shortcut utility also remains
+    INCONCLUSIVE. No AI or native timing claim follows. The original failed
+    auditor, raw experiment and historical timing pilot are retained unchanged.
+    [Repair, versioned replay and cap table](docs/notebook/eqsat-r02-review-repair-20260930.md#independent-completion-acceptance).
     First close the four September 30 REDs: integrity/resource failures cannot
     become template UNKNOWN, zombie-only process groups cannot count as live,
     every UB diagnostic guard is counted independently, and inconsistent public
@@ -2044,6 +2055,10 @@ record a justified not-needed disposition separately from implementation PASS.
     installation. Unresolved grammar/matcher/shortcut utility stays explicit.
 
   - [ ] **R02a1 — Calibrate and freeze a Linux steady-state timing protocol** — `OPEN`, P3.
+    The protocol, typed/mutation gates and default-control composition are
+    implemented. R02b1 is independently accepted; the committed build plan
+    now pins the exact all-one eight-transaction control, followed by separately
+    frozen A/A and admission-gated A/B. Real build/calibration remain pending.
     After R02b1, make each measured process repeat internally for at least 1–2
     seconds with setup/startup excluded. Pin a guest CPU, keep host capture/hash
     work outside measured intervals, and retain every correctness result. Freeze
