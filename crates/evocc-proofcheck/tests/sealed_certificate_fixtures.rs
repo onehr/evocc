@@ -5,8 +5,12 @@
 //! regression in the format shows up only as a corpus that stopped replaying.
 //! `tests/fixtures/certificates/` keeps a handful of triples as bytes instead.
 //! Two properties are worth having and this file asserts both: the checker
-//! accepts every sealed triple, and every sealed `after.evo` and `proof.evp`
-//! is still what the current optimizer produces from the sealed `before.evo`.
+//! accepts every sealed triple, and the current optimizer reproduces its output
+//! and semantic certificate from the sealed `before.evo`. Three historical
+//! proof hashes have one explicit telemetry exception: their fuel consumption
+//! summed equal rule/epoch pairs across regions. The corrected per-region count
+//! is independently reconstructed below; no other field may change, and both
+//! the original and newly generated proofs must pass the standalone checker.
 //! Without the second, a sealed fixture would be a snapshot of a producer
 //! nobody runs any more, and a hand-repaired one would look exactly like a
 //! passing one. `before.evo` itself is provenance: its README names the front
@@ -14,13 +18,15 @@
 //! differently later without changing what the certificate is about, so the
 //! sealed module is parsed under Section 9 rather than lowered again.
 
+use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use evocc_eqopt::{optimize_scalar_module_with_policy, ExtractionPolicy};
 use evocc_evoir::{parse_pre_fenv_module, render_pre_fenv_module, validate_module};
-use evocc_proof::{render_evp1, sha256_hex, EvpCertificate, EvpEvent};
+use evocc_proof::{parse_evp1, render_evp1, sha256_hex, EvpCertificate, EvpEvent};
 
 /// The smallest corpus the reviewed plan asks to be sealed. A run that found
 /// fewer directories has lost fixtures rather than passed.
@@ -115,6 +121,54 @@ fn premises(certificate: &EvpCertificate) -> usize {
         .sum()
 }
 
+/// Independently count the corrected maximum (region, rule, epoch) and the
+/// historical aggregate (rule, epoch). Only the latter crossed region bounds.
+fn fuel_counts(certificate: &EvpCertificate) -> (u64, u64) {
+    let mut regional = BTreeMap::new();
+    let mut aggregate = BTreeMap::new();
+    for (index, region) in certificate.regions.iter().enumerate() {
+        let mut epoch = 0;
+        for event in &region.events {
+            match event {
+                EvpEvent::Epoch(marker) => epoch = *marker,
+                EvpEvent::Rewrite(rewrite) => {
+                    *regional
+                        .entry((index, rewrite.rule.as_str(), epoch))
+                        .or_insert(0_u64) += 1;
+                    *aggregate
+                        .entry((rewrite.rule.as_str(), epoch))
+                        .or_insert(0_u64) += 1;
+                }
+                _ => {}
+            }
+        }
+    }
+    (
+        regional.values().copied().max().unwrap_or(0),
+        aggregate.values().copied().max().unwrap_or(0),
+    )
+}
+
+fn corrected_historical_proof(label: &str, sealed: &str) -> String {
+    // Frozen evidence stays byte-for-byte intact. This is not permission to
+    // normalize an arbitrary new proof, budget, event or fixture alteration.
+    let historical_digest = match label {
+        "shift-and-width-facts" => {
+            "83f5e987f5939c68d5a2a260772544a644cd45e96fecc8a11200040567ea7b97"
+        }
+        "tier-a-identities" => "827709f3a843aafd224342c0266a5388b0f8a654fff12a0f8683b4227f7debb9",
+        "tier-b-known-bits" => "8d89e0aadf7bd41ed7aa1385113cca0fb0d1d0a0484a0bd5bd0dc3dbb2a5406a",
+        _ => return sealed.to_owned(),
+    };
+    assert_eq!(sha256_hex(sealed.as_bytes()), historical_digest, "{label}");
+    let mut certificate = parse_evp1(sealed.as_bytes()).expect("parse sealed proof");
+    let (regional, aggregate) = fuel_counts(&certificate);
+    let budget = certificate.budget.as_mut().expect("historical evp2 budget");
+    assert_eq!(budget.fuel.consumed, aggregate, "{label}: legacy fuel");
+    budget.fuel.consumed = regional;
+    render_evp1(&certificate)
+}
+
 #[test]
 fn every_sealed_triple_replays_in_the_standalone_checker() {
     let triples = triples();
@@ -143,7 +197,7 @@ fn every_sealed_triple_replays_in_the_standalone_checker() {
 }
 
 #[test]
-fn every_sealed_triple_is_what_the_current_optimizer_produces() {
+fn current_producer_recreates_sealed_semantics_and_correct_region_local_fuel() {
     for triple in triples() {
         let label = name(&triple);
         let sealed_before = read(&triple.join("before.evo"));
@@ -153,8 +207,8 @@ fn every_sealed_triple_is_what_the_current_optimizer_produces() {
         let mut outcome = optimize_scalar_module_with_policy(&before, &ExtractionPolicy::default());
         validate_module(&outcome.module).expect("the optimized fixture is valid EvoIR");
         let legacy_after = render_pre_fenv_module(&outcome.module).unwrap();
-        // The semantic certificate is unchanged; only the two whole-module
-        // byte bindings depend on the explicitly selected historical grammar.
+        // The two whole-module byte bindings depend on the explicitly selected
+        // historical grammar; fuel is checked separately below.
         // Never edit the sealed input, output or certificate on disk.
         outcome.certificate.input_digest = sha256_hex(sealed_before.as_bytes());
         outcome.certificate.output_digest = sha256_hex(legacy_after.as_bytes());
@@ -169,10 +223,41 @@ fn every_sealed_triple_is_what_the_current_optimizer_produces() {
             legacy_after,
             "{label}: after.evo is not what the current optimizer produces"
         );
+        let current_proof = render_evp1(&outcome.certificate);
+        let (regional, _) = fuel_counts(&outcome.certificate);
         assert_eq!(
-            read(&triple.join("proof.evp")),
-            render_evp1(&outcome.certificate),
-            "{label}: proof.evp is not what the current producer certifies"
+            outcome.certificate.budget.unwrap().fuel.consumed,
+            regional,
+            "{label}: current fuel must not accumulate across regions"
+        );
+        assert_eq!(
+            corrected_historical_proof(&label, &read(&triple.join("proof.evp"))),
+            current_proof,
+            "{label}: a field other than the documented fuel correction changed"
+        );
+        let proof_path = std::env::temp_dir().join(format!(
+            "evocc-sealed-current-{}-{label}.evp",
+            std::process::id()
+        ));
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&proof_path)
+            .expect("create a test-owned current certificate without overwriting");
+        file.write_all(current_proof.as_bytes()).unwrap();
+        drop(file);
+        let output = run_checker(
+            &triple.join("before.evo"),
+            &triple.join("after.evo"),
+            &proof_path,
+        );
+        fs::remove_file(&proof_path).unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{label}: current standalone replay: stdout={}, stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
         );
 
         let counts = read(&triple.join("counts.json"));
