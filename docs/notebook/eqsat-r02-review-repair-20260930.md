@@ -129,3 +129,9 @@ is 478 passed, 0 failed, 9 optional real-capture tests skipped (487 total);
 The first sandboxed invocation failed only because macOS denied `/bin/ps` in
 the surviving-descendant test; that unsuccessful log is retained and excluded
 from the PASS count.
+
+During the independent completion run, a storage check found 4,184,140 KiB of
+rebuildable Rust incremental state in `target/debug/incremental`. No `cargo` or
+`rustc` was running, and this cache is not a frozen campaign input. Only that
+exact cache directory was removed; compiler binaries, source, partial captures
+and kernel build inputs were preserved. This cleanup is not an acceptance result.
