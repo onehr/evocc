@@ -1,0 +1,325 @@
+{
+  "cases": [
+    {
+      "flags": [],
+      "harness": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "id": "p0",
+      "modes": [
+        []
+      ],
+      "result": {
+        "exit_code": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "source_root": "",
+      "sources": [
+        "tests/fixtures/eqsat-performance/integer-mix.c"
+      ],
+      "subject_sources": [
+        "tests/fixtures/eqsat-performance/integer-mix.c"
+      ]
+    },
+    {
+      "flags": [
+        "-D_LARGEFILE64_SOURCE=1",
+        "-DHAVE_HIDDEN"
+      ],
+      "harness": "tests/fixtures/eqsat-performance/compression-workload.c",
+      "id": "zlib",
+      "modes": [
+        [
+          "compress"
+        ],
+        [
+          "decompress"
+        ]
+      ],
+      "result": {
+        "exit_code": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "6e5c9f59aba7414a82b994e233d206a94bf800874e84dae12556e0719c47844e"
+      },
+      "source_root": ".build/ladder/zlib/zlib-1.3.2",
+      "sources": [
+        "adler32.c",
+        "crc32.c",
+        "deflate.c",
+        "infback.c",
+        "inffast.c",
+        "inflate.c",
+        "inftrees.c",
+        "trees.c",
+        "zutil.c",
+        "compress.c",
+        "uncompr.c"
+      ],
+      "subject_sources": [
+        "deflate.c",
+        "inflate.c"
+      ]
+    },
+    {
+      "flags": [
+        "-DZSTD_DISABLE_ASM",
+        "-DZSTD_LEGACY_SUPPORT=0",
+        "-DXXH_NAMESPACE=ZSTD_"
+      ],
+      "harness": "tests/fixtures/eqsat-performance/compression-workload.c",
+      "id": "zstd",
+      "modes": [
+        [
+          "compress"
+        ],
+        [
+          "decompress"
+        ]
+      ],
+      "result": {
+        "exit_code": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "6e5c9f59aba7414a82b994e233d206a94bf800874e84dae12556e0719c47844e"
+      },
+      "source_root": ".build/ladder/zstd/zstd-1.5.7",
+      "sources": [
+        "lib/common/debug.c",
+        "lib/common/entropy_common.c",
+        "lib/common/error_private.c",
+        "lib/common/fse_decompress.c",
+        "lib/common/pool.c",
+        "lib/common/threading.c",
+        "lib/common/xxhash.c",
+        "lib/common/zstd_common.c",
+        "lib/compress/fse_compress.c",
+        "lib/compress/hist.c",
+        "lib/compress/huf_compress.c",
+        "lib/compress/zstd_compress.c",
+        "lib/compress/zstd_compress_literals.c",
+        "lib/compress/zstd_compress_sequences.c",
+        "lib/compress/zstd_compress_superblock.c",
+        "lib/compress/zstd_double_fast.c",
+        "lib/compress/zstd_fast.c",
+        "lib/compress/zstd_lazy.c",
+        "lib/compress/zstd_ldm.c",
+        "lib/compress/zstd_opt.c",
+        "lib/compress/zstd_preSplit.c",
+        "lib/compress/zstdmt_compress.c",
+        "lib/decompress/huf_decompress.c",
+        "lib/decompress/zstd_ddict.c",
+        "lib/decompress/zstd_decompress.c",
+        "lib/decompress/zstd_decompress_block.c"
+      ],
+      "subject_sources": [
+        "lib/compress/zstd_compress.c",
+        "lib/decompress/zstd_decompress.c"
+      ]
+    },
+    {
+      "flags": [],
+      "harness": "tests/fixtures/eqsat-performance/cjson-workload.c",
+      "id": "cjson",
+      "modes": [
+        []
+      ],
+      "result": {
+        "exit_code": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "02a2e18dee1ffc4c3173d9c72904b0ca7d15931a3bfef1076dde96b0df0aff7f"
+      },
+      "source_root": ".build/ladder/cjson/cJSON-1.7.19",
+      "sources": [
+        "cJSON.c"
+      ],
+      "subject_sources": [
+        "cJSON.c"
+      ]
+    }
+  ],
+  "controls": {
+    "coverage": "DECLARED_MIXED_LINK_NO_FALLBACK",
+    "eqsat": "shared-scalar-chain-v1/default-v4",
+    "interpreter": "P0_BOTH_ONLY_LIBC_APPLICATIONS_NATIVE",
+    "lowering": "O2-default-fold-reuse-join-prune-immutable-globals",
+    "native_profiles": [
+      "checked",
+      "unchecked"
+    ],
+    "optimization": 2,
+    "reference": "gcc-14-O2/PIC",
+    "relocation": "PIC",
+    "runtime": "hardware-VM-not-bare-metal",
+    "source_semantics": "GNU11/default-no-fast-math",
+    "target": "linux-aarch64",
+    "variants": [
+      "A",
+      "B"
+    ]
+  },
+  "files": {
+    "docs/evoir-spec.md": "8d510fdf573dbfc41c20a08a218444e96e122a2925b30f80aa2da4b3d1f9504e",
+    "docs/evomir-spec.md": "3770a28680e0a5f4988153f1db067a718d6dc92c920f8a6be3194523f5bc5e0d",
+    "lean/.lake/build/lib/lean/EvoIR/Fact.olean": "059cf39981b3b24fc5e1fc3b22183ed3011a66606040e903403e422dd47d9cac",
+    "lean/.lake/build/lib/lean/EvoIR/Proofs/Bits.olean": "e760e114362d65f88b2a01d5c2fd6f6f19f0d865054a7cc8b16e68d7532841f2",
+    "lean/.lake/build/lib/lean/EvoIR/Proofs/Lattice.olean": "145e4d85242be91226535213e946bf9e409fa38c1929e10f2ee70327792114dc",
+    "lean/.lake/build/lib/lean/EvoIR/Proofs/Rules.olean": "46543f5bdc4c1969ed0260fc132670fc3249abd80590535dc3482e7403660691",
+    "lean/.lake/build/lib/lean/EvoIR/Registry.olean": "1e2945e939651872fca6d46cd76439b7ff29a04ccc8a87d6419fd02feb95748b",
+    "lean/.lake/build/lib/lean/EvoIR/Rule.olean": "6a3f78562b0fcdd6934ff20bbb7a6df2e526a303f11948fc3c636f76114ed5ed",
+    "lean/.lake/build/lib/lean/EvoIR/Sem.olean": "ee61edfbe6497d8482cb01298e7ef23338a91d625b3d7f4c91505c6acf557b6c",
+    "lean/.lake/build/lib/lean/EvoIR/Term.olean": "209fccfab5914b4ff345d96eb164185b748f995d91b28416ea4f1ac3c6b9291f",
+    "lean/EvoIR/Fact.lean": "af76906e20ad54a12a936fb68d6d7f39a2fc5b53d7fe2963058ba8590042f68a",
+    "lean/EvoIR/Proofs/Bits.lean": "6621ab392e20cbf65e6e47605b7e041b45bcffd3064c6286e00d96814716b873",
+    "lean/EvoIR/Proofs/Lattice.lean": "e7676f429fc5c5c0c9eb2aabffb5e807081815b457dcaf3204564f7772093aa6",
+    "lean/EvoIR/Proofs/Rules.lean": "bbe36e74f328809806687627446a0253ae55743abc22721723c7159db826c10e",
+    "lean/EvoIR/Registry.lean": "74133adec48b560b776d7fc07f8036192502f9582e40de342db94689e747f44c",
+    "lean/EvoIR/Rule.lean": "06bce8bace7c8b700d4f7720e418b0f8a1e4236daca224ed6c72dc09c21b92c9",
+    "lean/EvoIR/Sem.lean": "16eb1793da3e2a92e5f3630c5fd361f9cbfe73d5cc4ba77651528ff2dcc3ac94",
+    "lean/EvoIR/Term.lean": "8cdcab7e401312d0f2ab9da271b0c973016281a0e823a502805f0b703cd31f09",
+    "lean/lake-manifest.json": "edf9238b5e66b352d8be3195a403bfaf98c6ef0fe87ef378a01c440617d036a7",
+    "lean/lakefile.toml": "95e111220e07f2f1e60ecf46cba0aebb36801ddc35f5f427187ff9b749ea8e56",
+    "lean/lean-toolchain": "2bdc48adfa58d0017e538a0ad117c5d73d35deec879978f909406a80c8037273",
+    "tests/fixtures/eqsat-performance/cjson-workload.c": "8b716992fd47b34447a8803d195ade2cd715e3a6d81c2b82534135c45e68fb9b",
+    "tests/fixtures/eqsat-performance/compression-workload.c": "6286e10b5603e6331f6708263ae2da5aeb8b0024a21821d2c42fb962de5e5a2d",
+    "tests/fixtures/eqsat-performance/integer-mix.c": "24f22e295985d9ec74612a0db8038c5d2f17ebbd60fb8d3347fa973f73f14c8d",
+    "tools/bench.py": "ca6b5f9aac41fe9fec8a0ed2db7e074d1ea0677e7b0a09a70728f53a25abca87",
+    "tools/ladder/eqsat_census.py": "3bf1a3f2f66bbd8de1944c2056bd9fba14c9cf3fc2eb2a58d4935ebfe637edd3",
+    "tools/ladder/eqsat_chain.py": "bb4c722b163b5d735bc2ee8f59ea69eea36cdea1ec0b5063b2ffc1c2d2eea678",
+    "tools/ladder/eqsat_elf.py": "396900123d76c035d45bfba66c39a68b81262e1a695a6be160297d7305d10a3a",
+    "tools/ladder/eqsat_guest.py": "f1ea299254e23b2b885acd164d44472649ab34df606fb07cbec729608adfc396",
+    "tools/ladder/eqsat_manifest.py": "3e468683225fe8eaf89905877deed4686362fd35dfa5498e26c8c3670c07b2c3",
+    "tools/ladder/eqsat_native.py": "d4aad6285f71bfc44fe876c357e6f46bad12f931f72943d911cb26782ae45f37",
+    "tools/ladder/eqsat_opportunities.py": "cec97b5b333f4474f7141567667d95e8b80c6af8e152711ae6a9da1acadf9fc0",
+    "tools/ladder/eqsat_pilot.py": "4a226f71c5bcf420a1efef57cd741690b6409dae3f7dd98dbad692a651007b8c",
+    "tools/ladder/eqsat_pilot_audit.py": "ad2e5a10fe98c17dc6d7ab856fc641c620e7db40207ccfe6e8d0bfdf2dd59451",
+    "tools/ladder/eqsat_preflight.py": "ea25834c1042f3b7319413f875e18356a5ecd3fd7617607775027269e8cc9852",
+    "tools/ladder/eqsat_preflight_run.py": "9f6cc743d5219b70ea588af59b897e9f441980bcdfa2517040d85ad96831646d",
+    "tools/ladder/eqsat_template.py": "f7b14d7e18c48622f896fe4aa55b81d84809ed123cd118c3695d22f84d56fe7e",
+    "tools/ladder/eqsat_twins.py": "b9c8c13423f89fe0e656d3497b377131f84e93e53735d8ce8b90e22a084dc492"
+  },
+  "guest_tools": {
+    "/usr/bin/as": "6d47317c37bd8596c9dcf0e3dd03185065dc6dd58cdc61e861fda7b9150e720a",
+    "/usr/bin/clang-19": "8bba5d733f54ada0cc50ba7646a87ddc798d5de73f67e397cdefada07297bb65",
+    "/usr/bin/gcc-14": "fb051a6c58961fb6aec758acf50d7d0375eecff740d0706388092829e3fb7a41",
+    "/usr/bin/ld": "5a284e435cdf41bc05d93f0683da12b8a42608b93c79e187e7d03fab6a22ddf4",
+    "/usr/bin/opt-19": "baf5577557b788b5a86e48c26fe790e7d68aa0e2e00ab36a5447625a3b57441d",
+    "/usr/bin/python3": "bd241b38381974ae27d7d5098a6d0e6dda0a744b5e9fdd6fe3a1ae632588961e",
+    "/usr/bin/strip": "480ddd3ebd9c715e554b522e91cdc725bcff9e465b19a490a7379504844b0d5d",
+    "/usr/lib/aarch64-linux-gnu/libc.so.6": "9a325944115b36e74077786b29531963d96cd55cd6c82f11750a352cdb58fab0"
+  },
+  "host": {
+    "affinity": "uncontrolled",
+    "cpu": "Apple M2 Max",
+    "libc": "libSystem@Darwin-25.6.0",
+    "machine": "arm64",
+    "release": "25.6.0",
+    "runtime": "native",
+    "system": "Darwin"
+  },
+  "image": {
+    "digest": "2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "name": "evo-flight-lab:sealed"
+  },
+  "implementation_commit": "d716f39ab763703158c768c280c2e92962da6ab4",
+  "preflight": {
+    "ai_budget": 16,
+    "diagnostic_nodes": 3,
+    "diagnostic_patterns": 4096,
+    "enumeration_multiplier": 1,
+    "evaluation_unit": "ONE_CANONICAL_CANDIDATE_ON_FULL_FROZEN_SUITE",
+    "new_rule_installation": "NOT_AUTHORIZED_BY_OPPORTUNITY_ORACLE",
+    "proof_attempts": 16,
+    "rule_cells": [
+      1,
+      2
+    ],
+    "rule_grammar": "ORDERED_TREE_ONE_VARIABLE_CONST_0_1_SIX_BITWISE_ARITHMETIC_OPS_RHS_LEAF",
+    "schedules": [
+      1,
+      8
+    ],
+    "schema": "evocc-preflight-bounds-v1",
+    "signature_visits": 1024,
+    "stop": "FROZEN_ORDER_NO_RETRY_NO_ADAPTIVE_NATIVE_FITNESS",
+    "syntax_visits_per_cell": 6000,
+    "template": "UNIVERSAL_RULE_ONE_SIMP_V1",
+    "template_heartbeats": 200000,
+    "template_selection": "OBSERVED_RESIDUALS_THEN_ADD_ZERO_AND_MUL_ONE_CONTROLS_DIGEST_ORDER",
+    "whole_suite_evaluations": 32
+  },
+  "protocol": {
+    "comparisons": [
+      "AA",
+      "AB"
+    ],
+    "effect_floor_percent": 5,
+    "metric": "guest-fresh-process-spawn-to-stdio-drain",
+    "multiple_comparisons": "BONFERRONI_ALL_PILOT_COMPARISONS",
+    "pairs": 12,
+    "precision_percent": 5,
+    "retries": 0,
+    "seed": 20260930,
+    "warmups": 1
+  },
+  "resources": {
+    "campaign_seconds": 14400,
+    "jobs": 1,
+    "max_retained_bytes": 1073741824,
+    "min_free_bytes": 8589934592,
+    "output_bytes": 16777216,
+    "timeout_seconds": 300,
+    "vm_cpus": 2,
+    "vm_memory": "3G"
+  },
+  "schema": "evocc-r02-linux-pilot-v1",
+  "tools": {
+    "census": {
+      "path": "target/frontend/debug/examples/opportunity_census",
+      "sha256": "a005a4a184686ae4948d2ba6c2cb16b94aa73a148f64e6cb01473091c1a742f7"
+    },
+    "checker": {
+      "path": "target/frontend/debug/evo-proofcheck",
+      "sha256": "4947c24343cc177387c5a4a7debc4c6bd82acd8e7588c1303b68c3959f4fb1bd"
+    },
+    "collector_python": {
+      "path": "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/bin/python3.9",
+      "sha256": "271143990bc83af0fb2404a255038f5faafb96df1584ed7f085e5018c0f33ffb"
+    },
+    "compiler": {
+      "path": "target/frontend/debug/evocc",
+      "sha256": "0afab32171d021d9e921995e98b4614e213b707162c4291528700b187d90a70e"
+    },
+    "container": {
+      "path": "/usr/local/bin/container",
+      "sha256": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43"
+    },
+    "ir_backend": {
+      "path": "target/frontend/debug/evo-ir-asm",
+      "sha256": "1a06f34e7afffc68b22e1a08afcba661ead99c5da84a7aeb4fad21bb22cac4af"
+    },
+    "lean": {
+      "path": "/Users/onehrxn/.elan/toolchains/leanprover--lean4---v4.32.2/bin/lean",
+      "sha256": "1b370cfcbf44e80d1b004ab1b1ab9a4c73951f9f7c242140bcff9bc577576554"
+    }
+  },
+  "trees": {
+    "cjson": {
+      "files": 99,
+      "path": ".build/ladder/cjson/cJSON-1.7.19",
+      "sha256": "fb7b8abb6c3dcd4ba81be888a4e54b71b927cebd4d56d7279e7f7c5130c95fb7"
+    },
+    "sysroot": {
+      "files": 3445,
+      "path": ".build/k7-coverage/case/ladder-sysroot",
+      "sha256": "e129ad00f04bb0a1ac9c7f0bcb968738db703aa72e3ebe96089c5112591854c1"
+    },
+    "zlib": {
+      "files": 74,
+      "path": ".build/ladder/zlib/zlib-1.3.2",
+      "sha256": "49dcf271db5824ee694a17cac1486dc83cf39878505a2f649fc7a2cf47619168"
+    },
+    "zstd": {
+      "files": 262,
+      "path": ".build/ladder/zstd/zstd-1.5.7",
+      "sha256": "f77657ba1fb97db93af9df29fd5af24a7c79d7568decd007f826b300cae3bc7e"
+    }
+  }
+}
