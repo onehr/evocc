@@ -52,6 +52,32 @@ const MAX_REGISTER_ARGUMENTS: usize = 8;
 /// results in `x0` to `x7` in order ... A ninth result is `E4013`."
 const MAX_REGISTER_RESULTS: usize = 8;
 
+/// Native-only obligation lowering. Neither choice changes EvoIR or C semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum UbCheckProfile {
+    #[default]
+    Checked,
+    Unchecked,
+}
+
+impl UbCheckProfile {
+    pub fn parse(value: &str) -> Result<Self, &'static str> {
+        match value {
+            "checked" => Ok(Self::Checked),
+            "unchecked" => Ok(Self::Unchecked),
+            _ => Err("UB-check profile must be checked or unchecked"),
+        }
+    }
+
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Checked => "checked",
+            Self::Unchecked => "unchecked",
+        }
+    }
+}
+
 /// Lower a whole module, or report every refusal it contains.
 pub fn lower_module(module: &Module) -> Result<MModule, Vec<Refusal>> {
     lower_module_with(module, &|_| false)
@@ -92,6 +118,16 @@ pub fn lower_module_for(
     module: &Module,
     external: &dyn Fn(&str) -> bool,
 ) -> Result<MModule, Vec<Refusal>> {
+    lower_module_for_profile(target, module, external, UbCheckProfile::Checked)
+}
+
+/// The native profile is applied here, after proof replay, without editing IR.
+pub fn lower_module_for_profile(
+    target: Target,
+    module: &Module,
+    external: &dyn Fn(&str) -> bool,
+    ub_checks: UbCheckProfile,
+) -> Result<MModule, Vec<Refusal>> {
     let mut refusals = Vec::new();
     for function in &module.functions {
         scan_function(target, module, function, &mut refusals);
@@ -114,7 +150,7 @@ pub fn lower_module_for(
 
     let mut functions = Vec::new();
     for function in &module.functions {
-        match lower_function(target, &signatures, function, &crosses) {
+        match lower_function(target, &signatures, function, &crosses, ub_checks) {
             Ok(lowered) => functions.push(lowered),
             Err(detail) => refusals.push(Refusal {
                 function: function.name.clone(),
@@ -813,6 +849,7 @@ fn unsupported_access(ty: &EvoIRType) -> Option<String> {
 // ---------------------------------------------------------------------------
 
 struct Lowerer {
+    ub_checks: UbCheckProfile,
     dynamic_addresses: HashSet<u32>,
     access_alignments: HashMap<u32, u32>,
     function_name: String,
@@ -1542,6 +1579,7 @@ fn lower_function(
     signatures: &Signatures<'_>,
     function: &Function,
     external: &dyn Fn(&str) -> bool,
+    ub_checks: UbCheckProfile,
 ) -> Result<MFunction, String> {
     let entry = function
         .blocks
@@ -1556,6 +1594,7 @@ fn lower_function(
     let _ = entry;
 
     let mut lowerer = Lowerer {
+        ub_checks,
         dynamic_addresses: dynamic_addresses(function),
         access_alignments: HashMap::new(),
         function_name: function.name.clone(),
@@ -1846,6 +1885,9 @@ fn lower_block(
             continue;
         }
         if let Inst::UbAssume(condition, reason) = inst {
+            if lowerer.ub_checks == UbCheckProfile::Unchecked {
+                continue;
+            }
             // Section 5: the guard still branches to its reason's trap. An
             // adjacent, single-use CSET can give its flags directly to that
             // branch; otherwise test the materialized boolean's low bit.
@@ -2270,7 +2312,9 @@ fn lower_block(
             lower_compared_selection(lowerer, &mut insts, block, &use_counts, index)?
         {
             selected_until = index + length;
-        } else if lower_checked_result(lowerer, &mut insts, block, index)? {
+        } else if lowerer.ub_checks == UbCheckProfile::Checked
+            && lower_checked_result(lowerer, &mut insts, block, index)?
+        {
             computed_result = Some(index + 2);
         } else {
             lower_inst(target, signatures, lowerer, &mut insts, inst, external)?;

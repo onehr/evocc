@@ -267,7 +267,14 @@ impl VerifiedScalarChain {
                 "standalone checker identity and deadline are required for publication".into(),
             );
         }
-        write_records(destination, &self.transactions, &self.record_json())
+        write_records(
+            destination,
+            &self.transactions,
+            &self.record_json(),
+            self.resources,
+            self.optimizer_wall_nanos,
+            true,
+        )
     }
 
     /// Structural publication checks supplement (never replace) independent EVP
@@ -665,7 +672,14 @@ impl ChainFailure {
         format!("{{\"attempted_transactions\":{},\"chain_id\":\"{chain_id}\",\"checker_digest\":{checker},\"checker_timeout_ms\":{timeout},\"input_digest\":\"{}\",\"max_transactions\":{},\"output_digest\":null,\"policy\":{policy},\"policy_digest\":\"{policy_digest}\",\"publication\":\"REJECTED\",\"rejection_reason\":\"{}\",\"schema\":\"evocc-verified-chain-v1\",\"stop\":\"ERROR\",\"transactions\":[{txs}],\"verified_prefix\":{}}}",self.transactions.len(),self.input_digest,self.policy.schedule().max_transactions,self.rejection_reason.label(),self.verified_prefix)
     }
     pub fn write_bundle(&self, destination: &std::path::Path) -> Result<(), String> {
-        write_records(destination, &self.transactions, &self.record_json())
+        write_records(
+            destination,
+            &self.transactions,
+            &self.record_json(),
+            self.resources,
+            self.optimizer_wall_nanos,
+            false,
+        )
     }
 }
 
@@ -745,8 +759,21 @@ fn write_records(
     destination: &std::path::Path,
     transactions: &[TransactionRecord],
     record: &str,
+    resources: ChainResources,
+    producer_wall_nanos: u128,
+    published: bool,
 ) -> Result<(), String> {
     write_new_bundle(destination, record, |destination| {
+        if published {
+            if let (Some(first), Some(last)) = (transactions.first(), transactions.last()) {
+                std::fs::write(destination.join("input.evo"), &first.bundle.before)?;
+                std::fs::write(destination.join("output.evo"), &last.bundle.after)?;
+            }
+        }
+        std::fs::write(destination.join("resources.json"), format!(
+            "{{\"schema\":\"evocc-chain-resources-v1\",\"producer_wall_ns\":{},\"checker_wall_ns\":{},\"identity_wall_ns\":{},\"wrapper_wall_ns\":{},\"total_wall_ns\":{}}}",
+            producer_wall_nanos, resources.checker_wall_nanos, resources.identity_wall_nanos,
+            resources.wrapper_wall_nanos(producer_wall_nanos), resources.total_wall_nanos))?;
         for t in transactions {
             std::fs::write(
                 destination.join(format!("{:03}.before.evo", t.index)),
@@ -760,6 +787,14 @@ fn write_records(
                 destination.join(format!("{:03}.proof.evp", t.index)),
                 &t.bundle.proof,
             )?;
+            // Additive diagnostics do not change EVP/chain semantics. A
+            // measurement consumer must pin this file separately as telemetry.
+            let decisions = t.report.policy_decisions.iter().map(|d| {
+                let axis = |a: Option<crate::CostAxis>| a.map_or("null".into(), |a| format!("\"{}\"", a.name()));
+                format!("{{\"function_index\":{},\"block\":{},\"root\":{},\"root_axis\":{},\"replacement_axis\":{},\"root_cost\":{},\"replacement_cost\":{},\"registry_admitted\":{},\"kept\":{}}}", d.function_index,d.block,d.root,axis(d.root_axis),axis(d.replacement_axis),d.root_cost,d.replacement_cost,d.registry_admitted,d.kept)
+            }).collect::<Vec<_>>().join(",");
+            std::fs::write(destination.join(format!("{:03}.policy.json", t.index)),
+                format!("{{\"schema\":\"evocc-selected-pairs-v1\",\"authority\":\"PRODUCER_TELEMETRY_NOT_PROVED\",\"input_digest\":\"{}\",\"decisions\":[{decisions}]}}",t.input_digest))?;
         }
         Ok(())
     })

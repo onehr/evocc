@@ -238,7 +238,13 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
                     report.telemetry.declined_witness += 1;
                     continue;
                 };
-                if !policy_keeps(policy, instruction, &output_replacement, &region) {
+                let mut decision = policy_keeps(policy, instruction, &output_replacement, &region);
+                decision.function_index = function_index;
+                decision.block = block.id;
+                decision.root = root_event.result.id;
+                let kept = decision.kept;
+                report.policy_decisions.push(decision);
+                if !kept {
                     report.telemetry.declined_policy += 1;
                     // Section 7.5 and Section 8.7: a region the policy's own
                     // cost does not make strictly cheaper, or whose rules
@@ -346,10 +352,11 @@ fn policy_keeps(
     instruction: &Inst,
     replacement: &Replacement,
     region: &EvpRegion,
-) -> bool {
-    let Ok(operator) = ingest_scalar_inst(instruction) else {
-        return false;
-    };
+) -> crate::PolicyDecision {
+    // build_region admitted this instruction before the gate is consulted.
+    // A non-admitted form remains unselectable (constant/root cost zero),
+    // including if a future producer accidentally calls the gate on it.
+    let operator = ingest_scalar_inst(instruction).unwrap_or(ScalarOperator::Const);
     let root_cost = policy.cost().operator_cost(operator);
     // An alias names a value the block already computes and a constant costs
     // zero by Section 7.5's semantic convention; an emitting right-hand side
@@ -378,13 +385,24 @@ fn policy_keeps(
                 .saturating_add(operands)
         }
     };
-    if replacement_cost >= root_cost {
-        return false;
-    }
-    region.events.iter().all(|event| match event {
+    let registry_admitted = region.events.iter().all(|event| match event {
         EvpEvent::Rewrite(rewrite) => rule_within(rewrite.rule.as_str(), policy.registry()),
         _ => true,
-    })
+    });
+    crate::PolicyDecision {
+        function_index: 0,
+        block: 0,
+        root: 0,
+        root_axis: crate::CostAxis::of(operator),
+        replacement_axis: match replacement {
+            Replacement::Emit(term) => crate::CostAxis::of(term.operator),
+            _ => None,
+        },
+        root_cost,
+        replacement_cost,
+        registry_admitted,
+        kept: replacement_cost < root_cost && registry_admitted,
+    }
 }
 
 /// Whether `rule` belongs to the registry `ceiling` names or to one it

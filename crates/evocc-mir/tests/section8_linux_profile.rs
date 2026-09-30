@@ -441,8 +441,19 @@ func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = ta
     assert!(hidden.contains(":lo12:counter"), "{hidden}");
     assert!(!hidden.contains(":got:counter"), "{hidden}");
     // The section names.
-    assert!(darwin.starts_with(".section __TEXT,__text"), "{darwin}");
-    assert!(linux.starts_with(".text\n"), "{linux}");
+    let profile_header = "// evocc-native-ub-checks=checked\n";
+    assert!(
+        darwin
+            .strip_prefix(profile_header)
+            .is_some_and(|assembly| assembly.starts_with(".section __TEXT,__text")),
+        "{darwin}"
+    );
+    assert!(
+        linux
+            .strip_prefix(profile_header)
+            .is_some_and(|assembly| assembly.starts_with(".text\n")),
+        "{linux}"
+    );
     assert!(darwin.contains(".section __DATA,__data"), "{darwin}");
     assert!(linux.contains("\n.data\n"), "{linux}");
     // The local-label prefix.

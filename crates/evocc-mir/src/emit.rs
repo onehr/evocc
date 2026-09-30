@@ -27,6 +27,7 @@ pub enum RelocationModel {
 /// Native instrumentation selected by the effective target command.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CodegenOptions {
+    pub ub_checks: crate::UbCheckProfile,
     pub tiny_addresses: bool,
     pub function_sections: bool,
     pub data_sections: bool,

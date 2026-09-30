@@ -48,6 +48,28 @@ fn chain_checks_the_terminal_zero_region_certificate() {
 }
 
 #[test]
+fn selected_pair_telemetry_records_rejected_gates_before_admission_caps() {
+    for weight in [0, 1, 5] {
+        let module = input();
+        let policy = ExtractionPolicy::default()
+            .with_cost(CostFunction::Vector(OperatorWeights::uniform(weight)));
+        let mut state = EqualityState::for_module(&module).unwrap();
+        let run = run_verified_scalar_chain(&module, &mut state, &policy, |_| Ok(())).unwrap();
+        let report = &run.transactions[0].report;
+        assert_eq!(report.policy_decisions.len(), 1);
+        let decision = &report.policy_decisions[0];
+        assert_eq!(decision.root_axis, Some(evocc_eqopt::CostAxis::Add));
+        assert_eq!(decision.replacement_axis, None);
+        assert_eq!(decision.root_cost, weight);
+        assert_eq!(decision.replacement_cost, 0);
+        assert_eq!(decision.kept, weight != 0);
+        assert_eq!(decision.function_index, 0);
+        assert_eq!(decision.root, 2);
+        assert_eq!(report.telemetry.declined_policy, usize::from(weight == 0));
+    }
+}
+
+#[test]
 fn region_normalization_retains_its_own_fact_environment() {
     let module = parse_section9_module(br#"func @main() -> (bits<64>) cc = target_default
     effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }

@@ -4,9 +4,16 @@ use std::io::Write;
 use std::process::ExitCode;
 
 fn emit(args: &[String]) -> Result<String, String> {
-    if args.len() != 3 {
-        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo".into());
+    if !matches!(args.len(), 3 | 4) {
+        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo [--ub-checks=checked|unchecked]".into());
     }
+    let profile = match args.get(3) {
+        Some(flag) => evocc_mir::UbCheckProfile::parse(
+            flag.strip_prefix("--ub-checks=")
+                .ok_or("expected --ub-checks=PROFILE")?,
+        )?,
+        None => evocc_mir::UbCheckProfile::Checked,
+    };
     let target = match args[0].as_str() {
         "darwin-arm64" => evocc_mir::Target::Darwin,
         "linux-aarch64" => evocc_mir::Target::Linux,
@@ -21,9 +28,19 @@ fn emit(args: &[String]) -> Result<String, String> {
     if evocc_evoir::render_module(&module).as_bytes() != bytes {
         return Err("codegen input is not canonical EvoIR".into());
     }
-    // The existing checked, PIC backend and allocation verifier are unchanged.
+    // Only obligation branch emission varies. PIC and allocation checks remain.
     // This adapter never reruns frontend lowering or EqSat.
-    evocc_mir::compile_module_for(target, &module, &|_| true).map_err(|e| format!("{e:?}"))
+    evocc_mir::compile_module_with_options(
+        target,
+        &module,
+        &|_| true,
+        evocc_mir::RelocationModel::PositionIndependent,
+        &evocc_mir::emit::CodegenOptions {
+            ub_checks: profile,
+            ..Default::default()
+        },
+    )
+    .map_err(|e| format!("{e:?}"))
 }
 
 fn main() -> ExitCode {

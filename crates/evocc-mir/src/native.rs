@@ -18,7 +18,7 @@ use evocc_types::EvoIRType;
 
 use crate::lane::is_register_type;
 use crate::{
-    allocate_for, emitted_functions, lower_module_for, out_of_ssa, verify_allocation,
+    allocate_for, emitted_functions, lower_module_for_profile, out_of_ssa, verify_allocation,
     RelocationModel, Target,
 };
 
@@ -160,12 +160,14 @@ pub fn compile_module_with_options(
     // either refuse or leave an undefined symbol in the object.
     let emitted = emitted_functions(module);
     let keep = &move |name: &str| keep(name) && emitted.contains(name);
-    let lowered = lower_module_for(target, module, &|name| !keep(name)).map_err(|refusals| {
-        let mut codes: Vec<&'static str> = refusals.iter().map(|refusal| refusal.code).collect();
-        codes.sort_unstable();
-        codes.dedup();
-        NativeStop::Lowering(codes)
-    })?;
+    let lowered = lower_module_for_profile(target, module, &|name| !keep(name), options.ub_checks)
+        .map_err(|refusals| {
+            let mut codes: Vec<&'static str> =
+                refusals.iter().map(|refusal| refusal.code).collect();
+            codes.sort_unstable();
+            codes.dedup();
+            NativeStop::Lowering(codes)
+        })?;
     let mut functions = Vec::new();
     for function in &lowered.functions {
         if !keep(&function.name) {
@@ -198,8 +200,10 @@ pub fn compile_module_with_options(
         })?;
         functions.push(allocated);
     }
-    Ok(crate::emit::emit_linked_module(
-        target, &functions, module, relocation, options,
+    let assembly = crate::emit::emit_linked_module(target, &functions, module, relocation, options);
+    Ok(format!(
+        "// evocc-native-ub-checks={}\n{assembly}",
+        options.ub_checks.name()
     ))
 }
 

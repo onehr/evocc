@@ -256,6 +256,8 @@ pub struct ScalarEqTelemetry {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ScalarEqReport {
+    /// Producer telemetry for the selected-pair gate, not proof authority.
+    pub policy_decisions: Vec<PolicyDecision>,
     /// Scoped counters are never overwritten by certificate emission or rollback.
     /// Admission counts are staged work; `optimized_values` is retained work.
     pub telemetry: ScalarEqTelemetry,
@@ -280,6 +282,19 @@ pub struct ScalarEqReport {
     pub fell_back: bool,
     pub internal_error: Option<String>,
     pub receipts: Vec<ScalarMergeReceipt>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PolicyDecision {
+    pub function_index: usize,
+    pub block: u32,
+    pub root: u32,
+    pub root_axis: Option<crate::CostAxis>,
+    pub replacement_axis: Option<crate::CostAxis>,
+    pub root_cost: u64,
+    pub replacement_cost: u64,
+    pub registry_admitted: bool,
+    pub kept: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

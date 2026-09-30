@@ -541,7 +541,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `br.indirect %p [^b(args), ...]` | `br %p [^b(args), ...]`, retaining the complete ordered CFG and address arguments; effect ordering is preserved as above, and Section 7 implements simultaneous entry bindings |
 | `ret v...` | `ret` listing the results |
 | `trap.<reason>` | `brk` with the reason's number |
-| `ub.assume.<reason> %c` | checked profile: `tbz %c, #0, ^trap_reason(), ^continue(live...)` (or the equivalent adjacent-flags selection below), where `^continue` is a fresh block whose arguments are exactly the registers the rest of the source block still reads, ordered by register number, and `^trap_reason` holds `brk` for the reason; one trap block per reason, appended after the source blocks in order of first use. Specified unchecked profile: nothing. Selection must be an explicit driver profile recorded in the receipt, default checked; unchecked selection is **not implemented in the inspected 0.54 path**, as noted below |
+| `ub.assume.<reason> %c` | checked profile: `tbz %c, #0, ^trap_reason(), ^continue(live...)` (or the equivalent adjacent-flags selection below), where `^continue` is a fresh block whose arguments are exactly the registers the rest of the source block still reads, ordered by register number, and `^trap_reason` holds `brk` for the reason; one trap block per reason, appended after the source blocks in order of first use. Unchecked profile: nothing. Selection is the explicit native-only `--ub-checks=checked\|unchecked` driver profile recorded in the receipt, default checked |
 | `call @f(args, %m, %w)` / `call %p(...)` | `bl`/`blr` with explicit argument and result registers (Section 6) |
 | `uninitialized.bits<N>` | `mov #0` (any value is permitted; zero is chosen so the output is deterministic) |
 | `ptr.to_int`, `ptr.from_int.*` | nothing: the value is the same 64-bit register (revision 0.12) |
@@ -550,24 +550,29 @@ in the table is refused with the diagnostic named in Section 10.
 | `frame_address` | `mov rd, x29` (revision 0.17) |
 | `ctlz`, `cttz`, `ctpop`, `bswap` (revision 0.14) | `ctlz`: zero-extend per Section 3, `clz` at the register width, then subtract `32 - N` or `64 - N` for a narrower `N`; `cttz`: `rbit` then `clz`, and for a narrower `N` the result capped at `N` with `cmp`/`csel`, since the unspecified upper bits may hold a set bit; `ctpop`: the general-register sequence both oracles use without SIMD (`p39.out`, Clang-19; GCC-14 calls `__popcountdi2`, which the kernel does not provide): `x - ((x >> 1) & 0x5555...)`, `(x & 0x3333...) + ((x >> 2) & 0x3333...)`, `(x + (x >> 4)) & 0x0f0f...`, multiply by `0x0101...` and `lsr` by the register width minus 8, after zero extension; `bswap`: `rev16` (16, upper bits unspecified per Section 3), `rev` at 32 or 64 |
 
-**Implementation-status correction (2026-09-29; source audit at `6be4796`).**
+**Native UB-check profiles (2026-09-29; R02d).**
 Revision 0.54 specifies the unchecked alternative above, but the inspected
-`crates/evocc/src/main.rs` has no UB-check-profile option and
-`crates/evocc-mir/src/lower.rs` lowers `UbAssume` only through the checked path.
-The former wording "The profile is a driver flag" described a requirement as if
-already implemented. Only checked behavior is currently available; unchecked
-native runs remain NOT_RUN until [TODO R02d](../TODO.md) implements and verifies
-the option, propagation and receipt identity. This annotation changes no opcode,
-format or approved profile semantics. It does not authorize benchmark-side IR
-deletion, alter the interpreters, or disable any other mandatory runtime check.
+path at `6be4796` did not implement it. The R02d implementation adds
+`--ub-checks=checked|unchecked` to the C driver and exact-input `evo-ir-asm`
+adapter, and an explicit `UbCheckProfile` to native lowering. Omission defaults
+to checked; unknown values and duplicate C-driver selections are rejected.
+The assembly header records the effective profile. Native artifact/cache and
+measurement identities must additionally bind the profile; an assembly comment
+alone is not proof of effective guard selection. The unchecked path omits only
+the lowering of `UbAssume`; predicates with other consumers, explicit traps,
+FP environment admission and all other mandatory checks remain unchanged.
+It does not authorize benchmark-side IR deletion or alter either interpreter.
+The flag is accepted by interpretation/IR-emission modes but has no semantic
+effect there: source obligations and interpreter failures are preserved.
 Performance admission additionally requires the matched checked execution in
 the [Q2/Q3 design](framing-draft.md#51-correctness-admission-and-workload-inventory).
-The planned native-profile switch operates only at MIR lowering: checked and
+The native-profile switch operates only at MIR lowering: checked and
 unchecked twins must consume the same canonical verified EvoIR and immutable
 chain/proof bundle, with identical IR/chain digests in their receipts. Distinct
 native profile/cache identities remain necessary; matching source/argv alone
-does not establish this shared-input invariant. This fan-out is an R02d
-acceptance requirement, not an implemented capability claim.
+does not establish this shared-input invariant. Full R02d acceptance still
+requires native execution, forged-twin rejection and the full workspace gate;
+the driver option by itself is not completion evidence.
 
 **Bounded immediate addresses (revision 0.40).** An ordinary typed load/store
 may use the existing `[base, #offset]` form for one preceding constant

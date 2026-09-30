@@ -41,7 +41,10 @@ pub use linkage::emitted_functions;
 pub use linscan::{
     allocate, allocate_for, render_allocated, Allocated, CALLEE_SAVED, CALLER_SAVED,
 };
-pub use lower::{lower_module, lower_module_for, lower_module_with, Refusal};
+pub use lower::{
+    lower_module, lower_module_for, lower_module_for_profile, lower_module_with, Refusal,
+    UbCheckProfile,
+};
 pub use native::{
     compile_module, compile_module_for, compile_module_with, compile_module_with_options,
     compile_module_with_relocation, native_corpus_entry, Driver, NativeStop, Toolchain,

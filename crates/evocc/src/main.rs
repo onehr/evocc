@@ -229,6 +229,7 @@ fn main() -> ExitCode {
         eprintln!("       evocc --emit=asm [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
+        eprintln!("       --ub-checks=checked|unchecked (native only; default checked)");
         eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
         eprintln!("       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
         eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
@@ -308,6 +309,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut patchable_entry = None;
     let mut minimum_function_alignment = 4;
     let mut codegen = CodegenOptions::default();
+    let mut ub_checks_selected = false;
     let mut guard_is_sysreg = false;
     let mut guard_register = None;
     let mut guard_offset = None;
@@ -330,6 +332,14 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--emit=asm" => set_mode(&mut mode, DriverMode::EmitAsm)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
             "-Oeq-scalar" => optimize_scalar_evoir = true,
+            _ if arg.starts_with("--ub-checks=") => {
+                if ub_checks_selected {
+                    return Err("--ub-checks may appear only once".into());
+                }
+                ub_checks_selected = true;
+                codegen.ub_checks =
+                    evocc_mir::UbCheckProfile::parse(arg.strip_prefix("--ub-checks=").unwrap())?;
+            }
             _ if arg.starts_with("--eq-") => {
                 let (key, value) = arg
                     .split_once('=')
