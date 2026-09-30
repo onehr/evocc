@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from tools.ladder.eqsat_pilot import (ROOTS, GUEST_TOOLS, COLLECTORS, LEAN_SOURCES, LEAN_IMPORTS, recipes, validate_plan,
-                                     tree_identity, composite_binding, pilot_statistics)
+                                     tree_identity, composite_binding, pilot_statistics, admit_pilot_timing)
 from tools.ladder.eqsat_preflight_run import CONTRACT
 
 
@@ -37,6 +37,23 @@ def plan(root):
 
 
 class PilotTests(unittest.TestCase):
+    def test_failed_preflight_never_admits_native_timing(self):
+        preflight = dict(status='BOUNDED_PREFLIGHT_COMPLETED',
+            policy=dict(verdict='INCONCLUSIVE', evaluations=[dict(status='OBSERVED')]),
+            rule=dict(verdict='INCONCLUSIVE', proofs=[dict(status='UNKNOWN')]))
+        # An honest bounded/unknown track verdict is not an execution failure.
+        admit_pilot_timing(preflight)
+        for mutate in (
+            lambda p: p.update(status='INCOMPLETE'),
+            lambda p: p['policy']['evaluations'][0].update(status='FAILED'),
+            lambda p: p['policy']['evaluations'][0].update(status='STARTED'),
+            lambda p: p['policy'].update(evaluations=[]),
+        ):
+            failed = copy.deepcopy(preflight)
+            mutate(failed)
+            with self.assertRaisesRegex(ValueError, 'timing is not admitted'):
+                admit_pilot_timing(failed)
+
     def test_wide_or_underpowered_intervals_are_inconclusive(self):
         protocol = dict(effect_floor_percent=5, precision_percent=5)
         flat = [dict(A0=100, A1=100) for _ in range(12)]

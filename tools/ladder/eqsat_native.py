@@ -13,6 +13,7 @@ from pathlib import Path
 import platform
 import random
 import shutil
+import stat
 import statistics
 import subprocess
 import sys
@@ -245,7 +246,22 @@ class Capture:
         self.measure_resources = measure_resources
 
     def watch(self):
-        size = sum(p.stat().st_size for p in self.directory.rglob('*') if p.is_file())
+        require(self.directory.is_dir(), 'capture directory missing')
+        def scan_error(error):
+            # A waited checker may remove its owned scratch tree concurrently.
+            # Permission/I/O errors are not disappearance and must fail closed.
+            if not isinstance(error, FileNotFoundError):
+                raise error
+        size = 0
+        for folder, _, names in os.walk(self.directory, onerror=scan_error):
+            for name in names:
+                try:
+                    value = (Path(folder) / name).stat()
+                except FileNotFoundError:
+                    continue
+                if stat.S_ISREG(value.st_mode):
+                    size += value.st_size
+        require(self.directory.is_dir(), 'capture directory missing')
         require(size <= self.resources['max_retained_bytes'], 'retention limit exceeded')
 
     def run(self, stage, argv, expected=None):

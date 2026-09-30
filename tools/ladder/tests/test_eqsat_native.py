@@ -3,7 +3,9 @@ import io
 import copy
 import fcntl
 import json
+import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -88,6 +90,47 @@ class NativePrimitivesTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'retention'):
             self.run_code('from pathlib import Path; import time; Path("big").write_bytes(b"x"*4096); time.sleep(1)')
         self.assertEqual((self.root / 'big').stat().st_size, 4096)
+
+    def test_checker_scratch_disappearing_during_scan_is_not_a_failed_attempt(self):
+        scratch = self.root / 'evocc-proof-owned'
+        scratch.mkdir()
+        proof = scratch / 'proof.evp'
+        proof.write_bytes(b'transient')
+        original = Path.stat
+        def concurrent_cleanup(path, *args, **kwargs):
+            value = original(path, *args, **kwargs)
+            if path == proof:
+                shutil.rmtree(scratch)
+            return value
+        with patch.object(Path, 'stat', concurrent_cleanup):
+            self.runner.watch()
+        self.assertFalse(scratch.exists())
+        # A disappeared scratch entry never licenses an oversized retained file.
+        (self.root / 'retained').write_bytes(b'x' * 2048)
+        self.resources['max_retained_bytes'] = 1024
+        with self.assertRaisesRegex(ValueError, 'retention'):
+            self.runner.watch()
+
+    def test_retention_scan_cannot_hide_permission_errors_or_missing_capture_root(self):
+        with patch('os.scandir', side_effect=PermissionError('unreadable capture')):
+            with self.assertRaises(PermissionError):
+                self.runner.watch()
+        self.runner.directory = self.root / 'missing-root'
+        with self.assertRaisesRegex(ValueError, 'capture directory'):
+            self.runner.watch()
+
+    def test_scratch_directory_vanishing_before_scandir_is_tolerated(self):
+        scratch = self.root / 'evocc-proof-owned'
+        scratch.mkdir()
+        (scratch / 'proof.evp').write_bytes(b'transient')
+        original = os.scandir
+        def concurrent_cleanup(path):
+            if not isinstance(path, int) and Path(path) == scratch and scratch.exists():
+                shutil.rmtree(scratch)
+            return original(path)
+        with patch('os.scandir', side_effect=concurrent_cleanup):
+            self.runner.watch()
+        self.assertFalse(scratch.exists())
 
     def test_pair_order_and_statistics_are_frozen_and_complete(self):
         order = pair_order(6, 7)

@@ -17,7 +17,7 @@ from .eqsat_preflight import selected_pairs, enumerate_policies
 from .eqsat_twins import bind_bundle, canonical, native_identity, admit_unchecked
 
 CONTRACT = dict(schema='evocc-preflight-bounds-v1', schedules=[1, 8],
-    signature_visits=1024, whole_suite_evaluations=32,
+    signature_visits=1024, whole_suite_evaluations=16,
     diagnostic_nodes=3, diagnostic_patterns=4096, rule_cells=[1, 2],
     syntax_visits_per_cell=6000, proof_attempts=16, ai_budget=16, enumeration_multiplier=1,
     evaluation_unit='ONE_CANONICAL_CANDIDATE_ON_FULL_FROZEN_SUITE',
@@ -251,7 +251,8 @@ def run_preflight(m, receipt, directory, root, tools, command, guest, guest_path
         dict(case=p['case'], profiles={k: v['code_digest'] for k, v in p['profiles'].items()})
         for p in e['programs']]))
         for e in report['policy']['evaluations'] if e['status'] == 'OBSERVED'})
-    report.update(status='BOUNDED_PREFLIGHT_COMPLETED',
+    failed = any(e['status'] != 'OBSERVED' for e in report['policy']['evaluations'])
+    report.update(status='INCOMPLETE' if failed else 'BOUNDED_PREFLIGHT_COMPLETED',
                   campaign_admission='NO_AI_CAMPAIGN_AUTHORIZED_BY_THIS_CAPTURE')
     artifact('report.json', report)
     save()

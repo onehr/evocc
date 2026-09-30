@@ -169,6 +169,15 @@ def composite_binding(bindings):
             for field in ('ir_digest', 'chain_record_digest', 'bundle_digest')}
 
 
+def admit_pilot_timing(preflight):
+    require(preflight.get('status') == 'BOUNDED_PREFLIGHT_COMPLETED',
+            'preflight execution incomplete; native timing is not admitted')
+    evaluations = preflight.get('policy', {}).get('evaluations')
+    require(type(evaluations) is list and evaluations
+            and all(e.get('status') == 'OBSERVED' for e in evaluations),
+            'failed/missing policy preflight; native timing is not admitted')
+
+
 def pilot_statistics(pairs, protocol, family_size):
     """Fixed-sample, simultaneous median intervals, never search fitness.
 
@@ -473,6 +482,7 @@ def run_pilot(path, root):
             if all(p['status'] == 'OBSERVED' for p in receipt['cases']):
                 from .eqsat_preflight_run import run_preflight
                 run_preflight(m, receipt, directory, root, tools, command, guest, guest_path, pin, save)
+                admit_pilot_timing(receipt['preflight'])
                 for case, product in zip(m['cases'], receipt['cases']):
                     measure_case(case, product, directory/case['id'], m, guest, guest_path, save)
             stable()
