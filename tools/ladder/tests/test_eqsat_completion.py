@@ -1,13 +1,15 @@
 """Finite completion and immutable deduplication, not a new AI campaign."""
 import copy
+import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 
 from tools.ladder.eqsat_chain import AXES, digest
 from tools.ladder.eqsat_completion import (BOUNDS, FILES, REAUDIT_FILES, REAUDIT_PURPOSE,
-    deduplicate, deduplicate_one, validate_plan, validate_reaudit)
+    deduplicate, deduplicate_one, reaudit_files, validate_plan, validate_reaudit)
 from tools.ladder.eqsat_completion_audit import require_comparisons
 from tools.ladder.eqsat_native import Capture
 from tools.ladder.eqsat_opportunities import enumerate_rule_cell
@@ -70,6 +72,52 @@ class ComparisonTelemetryTests(unittest.TestCase):
 
 
 class ReauditContractTests(unittest.TestCase):
+    def test_public_binding_requires_committed_supplement_and_both_code_revisions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            def git(*args):
+                return subprocess.check_output(['git', '-c', 'user.name=Fixture', '-c',
+                    'user.email=fixture@example.invalid', *args], cwd=root, stderr=subprocess.DEVNULL)
+            def commit():
+                git('add', '.'); git('commit', '-qm', 'fixture')
+                return git('rev-parse', 'HEAD').decode().strip()
+            git('init', '-q')
+            m = plan(); raw = b'original manifest'; receipt = b'original receipt'
+            for name in REAUDIT_FILES:
+                path = root/name; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'original code')
+                m['files'][name] = digest(path.read_bytes())
+            m['implementation_commit'] = commit()
+            for name in REAUDIT_FILES:
+                (root/name).write_bytes(b'repaired code')
+            revision = commit()
+            capture = root/'.evidence/original'; capture.mkdir(parents=True)
+            (capture/'manifest.json').write_bytes(raw); (capture/'receipt.json').write_bytes(receipt)
+            path = root/'tests/contracts/reaudit.json'; path.parent.mkdir(parents=True)
+            s = dict(schema='evocc-r02-completion-reaudit-v1', purpose=REAUDIT_PURPOSE,
+                implementation_commit=revision, manifest_sha256=digest(raw),
+                capture=dict(directory='.evidence/original', receipt_sha256=digest(receipt)),
+                repairs={name: dict(before_sha256=m['files'][name], after_sha256=digest(b'repaired code'))
+                         for name in REAUDIT_FILES})
+            path.write_text(json.dumps(s))
+            with self.assertRaisesRegex(ValueError, 'commit the re-audit supplement'):
+                reaudit_files(path, root, m, raw, capture)
+            commit()
+            self.assertEqual(reaudit_files(path, root, m, raw, capture),
+                             {name: digest(b'repaired code') for name in REAUDIT_FILES})
+            (capture/'receipt.json').write_bytes(b'changed receipt')
+            with self.assertRaisesRegex(ValueError, 'capture identity changed'):
+                reaudit_files(path, root, m, raw, capture)
+            (capture/'receipt.json').write_bytes(receipt)
+            (capture/'manifest.json').write_bytes(b'changed manifest')
+            with self.assertRaisesRegex(ValueError, 'manifest differs'):
+                reaudit_files(path, root, m, raw, capture)
+            (capture/'manifest.json').write_bytes(raw)
+            s['implementation_commit'] = m['implementation_commit']
+            path.write_text(json.dumps(s)); commit()
+            with self.assertRaisesRegex(ValueError, 'declared commit'):
+                reaudit_files(path, root, m, raw, capture)
+
     def test_supplement_binds_original_manifest_capture_and_exact_repair_files(self):
         m = plan()
         s = dict(schema='evocc-r02-completion-reaudit-v1', purpose=REAUDIT_PURPOSE,

@@ -265,3 +265,8 @@ capture skips (498 total), `python-completion-reaudit-unsandboxed.log`, SHA-256
 `8177b1f306f6570761aa1accfbbb720018c10858426f1b3547081653a6a7b4a9`.
 The eight focused completion tests pass as well. These are code/admission
 regressions; they do not yet accept the actual completed capture.
+An additional real temporary-Git fixture checks the public supplement binder:
+uncommitted supplements, changed original manifests/receipts and a declared
+revision lacking the repaired code are rejected. All nine focused completion
+tests pass. The live replay still uses the same frozen two-file repair; this
+additional test does not modify its code or supplement identities.
