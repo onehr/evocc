@@ -16,12 +16,23 @@ these mixed-link compositions, not full libraries, bare metal or GCC parity.
 
 A is the original EqSat-off verified identity chain. B is the all-one-weight,
 eight-transaction default policy, not a policy selected by native timings.
-The release backend objects are reused by verified IR digest and UB profile.
+Canonical signature representatives need not contain that exact weight vector:
+the current finite census's positive representative has `mul=2`, while the
+compiler default has `mul=1`. The build therefore replays the exact fixed default
+on A's canonical IR with the pinned census adapter and independent checker.
+It neither substitutes a representative nor chooses a census winner. The plan's
+`optimizer` field fixes all thirteen weights, registry, extractor, counter
+mapping and all three schedule caps. A's backend objects are reused by verified
+IR digest and UB profile; B's two profiles are emitted from that newly verified
+default chain. The build auditor replays B and reconstructs its backend and
+assembler commands before accepting the resulting binaries.
 Both profiles bind the same IR, chain record and bundle. A freshly GCC-built,
 non-LTO harness invokes the unchanged libraries. Reference-composition result
 checks precede EvoCC timing. Sources, headers, objects, proofs, executables,
 tools, image, collectors and exact command recipes are pinned in committed
-build, A/A and A/B manifests.
+build, A/A and A/B manifests. The historical source-composition manifest is also
+pinned: its recipe is consumed even when source objects are reused. The build
+plan contains only already-existing A inputs, not paths to future B bundles.
 
 ## Clock and isolation
 
@@ -109,3 +120,13 @@ Real build,
 Linux A/A and A/B are **NOT RUN** at this checkpoint. R02b1 deterministic
 completion must finish and pass independent audit first; the historical timing
 capture remains immutable and cannot substitute for this admission.
+
+The default-control integration gate adds isolated REDs for the missing exact
+default and for a build-plan `KeyError` that expected B before B existed.
+The producer owns creation of each new B bundle, matching the Rust writer's
+new-directory contract. Focused steady tests pass 16/16. Full ladder discovery
+passes 486 tests, with zero failures and nine optional real-capture tests skipped
+(495 total), `python-steady-default-plan-final.log`, SHA-256
+`6f11d9ac2338476528955210b5f1468d383525058f01736f0bae1f2fbf493adc`.
+Those results establish collector/planning behavior, not real build or timing
+qualification. The running deterministic capture and its pins remain unchanged.

@@ -8,7 +8,7 @@ import subprocess
 
 from .eqsat_chain import digest, require
 from .eqsat_native import host_identity
-from .eqsat_steady import (FILES, PROTOCOL, RESOURCES, admitted_calibration,
+from .eqsat_steady import (DEFAULT_CONTROL, FILES, PROTOCOL, RESOURCES, admitted_calibration,
                           build_population, check_build_inputs, load, validate_plan)
 from .eqsat_twins import canonical
 
@@ -34,19 +34,21 @@ def make_plan(root, mode, source):
     if mode == 'build':
         require(sr['status'] == 'OBSERVED_DETERMINISTIC_COMPLETION' and sa['status'] ==
                 'DETERMINISTIC_CAPTURE_CONSISTENT', 'incomplete/unaudited deterministic preflight')
-        tools = {k: sm['tools'][k] for k in ('container', 'collector_python', 'checker', 'historical_checker', 'ir_backend')}
+        tools = {k: sm['tools'][k] for k in ('container', 'collector_python', 'checker', 'historical_checker', 'ir_backend', 'census')}
         # Pin only artifacts the steady composition actually consumes, not all
         # thousands of nonselected policy bundles a second time.
         for name in ('manifest.json', 'receipt.json', 'audit.json'):
             files[(source/name).relative_to(root).as_posix()] = digest((source/name).read_bytes())
+        historical_manifest = root/sm['source']['directory']/'manifest.json'
+        files[historical_manifest.relative_to(root).as_posix()] = digest(historical_manifest.read_bytes())
         provisional = dict(source=dict(directory=source.relative_to(root).as_posix()), tools=tools)
         programs = build_population(provisional, root)
         for program in programs:
             for name in program['reference_objects']:
                 files[name] = digest((root/name).read_bytes())
             for unit in program['units']:
-                for variant in ('A', 'B'):
-                    chain = root/unit['chains'][variant]
+                for variant, relative in unit['chains'].items():
+                    chain = root/relative
                     files.update(owned_files(chain, root))
                     for name in unit['objects'][variant].values():
                         files[name] = digest((root/name).read_bytes())
@@ -72,7 +74,7 @@ def make_plan(root, mode, source):
             directory=source.relative_to(root).as_posix(), files=files),
         tools=tools, files={p: digest((root/p).read_bytes()) for p in FILES}, image=sm['image'],
         guest_tools=sm['guest_tools'], host=host_identity(), guest_kernel='6.18.15',
-        resources=RESOURCES, protocol=PROTOCOL)
+        resources=RESOURCES, protocol=PROTOCOL, optimizer=DEFAULT_CONTROL)
     validate_plan(plan, mode)
     if mode == 'build':
         check_build_inputs(plan, root, programs)

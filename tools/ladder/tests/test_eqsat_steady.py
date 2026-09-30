@@ -5,11 +5,11 @@ from unittest.mock import patch
 
 from tools.ladder.eqsat_chain import digest
 from tools.ladder.eqsat_native import pair_order
-from tools.ladder.eqsat_steady import (FILES, GUEST_TOOLS, RESOURCES, TASKS, admitted_calibration,
-                                     check_build_inputs, validate_plan)
+from tools.ladder.eqsat_steady import (DEFAULT_CONTROL, FILES, GUEST_TOOLS, RESOURCES, TASKS,
+                                     admitted_calibration, build_population, check_build_inputs, validate_plan)
 from tools.ladder.eqsat_steady_audit import audit_capture, audit_guest
 from tools.ladder.eqsat_steady_guest import PROTOCOL, aa_order, interval, next_iterations, result_value
-from tools.ladder.eqsat_steady_plan import owned_files
+from tools.ladder.eqsat_steady_plan import make_plan, owned_files
 from tools.ladder.eqsat_twins import admit_unchecked, canonical, native_identity
 
 
@@ -129,6 +129,79 @@ class SteadyCaptureHeaderTests(unittest.TestCase):
 
 
 class SteadyProtocolTests(unittest.TestCase):
+    def test_build_plan_pins_baseline_before_the_fresh_default_exists(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from tools.ladder.eqsat_pilot import ROOTS
+        with TemporaryDirectory() as temp:
+            root = Path(temp); complete = root/'complete'; complete.mkdir()
+            historical = root/'historical'; historical.mkdir()
+            tools = {k: dict(path='tool', sha256='0'*64) for k in
+                ('container', 'collector_python', 'checker', 'historical_checker', 'ir_backend', 'census')}
+            (complete/'manifest.json').write_bytes(canonical(dict(source=dict(directory='historical'),
+                tools=tools, image=dict(name='synthetic', digest='0'*64),
+                guest_tools=dict.fromkeys(GUEST_TOOLS, '0'*64))))
+            (complete/'receipt.json').write_bytes(canonical(dict(status='OBSERVED_DETERMINISTIC_COMPLETION')))
+            (complete/'audit.json').write_bytes(canonical(dict(status='DETERMINISTIC_CAPTURE_CONSISTENT')))
+            (historical/'manifest.json').write_bytes(b'{}')
+            programs, inputs = [], []
+            for case in ('zlib', 'zstd', 'cjson'):
+                chain = 'historical/'+case+'/A-chain'
+                objects = {p: 'complete/'+case+'-'+p+'.o' for p in ('checked', 'unchecked')}
+                reference = 'historical/'+case+'/ref.o'
+                programs.append(dict(case=case, reference_objects=[reference],
+                    units=[dict(chains=dict(A=chain), objects=dict(A=objects))]))
+                inputs.extend([chain+'/output.evo', reference, *objects.values(), ROOTS[case]+'/public.h'])
+            for name in (*FILES, *inputs):
+                p = root/name; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(name.encode())
+            with patch('tools.ladder.eqsat_steady_plan.build_population', return_value=programs), \
+                 patch('tools.ladder.eqsat_steady_plan.subprocess.check_output', return_value='0'*40), \
+                 patch('tools.ladder.eqsat_steady_plan.host_identity', return_value={'host': 'test'}), \
+                 patch('tools.ladder.eqsat_steady.host_identity', return_value={'host': 'test'}):
+                plan = make_plan(root, 'build', complete)
+            self.assertEqual(plan['optimizer'], DEFAULT_CONTROL)
+            self.assertEqual(plan['tools']['census'], tools['census'])
+            self.assertTrue(set(inputs) <= set(plan['source']['files']))
+            self.assertIn('historical/manifest.json', plan['source']['files'])
+            self.assertFalse(any('B-chain' in p for p in plan['source']['files']))
+
+    def test_default_control_does_not_substitute_a_signature_representative(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temp:
+            root = Path(temp); complete = root/'complete'; complete.mkdir()
+            historical = root/'historical'; historical.mkdir()
+            (complete/'manifest.json').write_bytes(canonical(dict(source=dict(directory='historical'))))
+            (complete/'audit.json').write_bytes(canonical(dict(status='DETERMINISTIC_CAPTURE_CONSISTENT',
+                policy_evaluations=1024, verified_chains=6144, unattempted_templates=0)))
+            code, cases, bindings = {}, [], {}
+            for case in ('zlib', 'zstd', 'cjson'):
+                source = case+'.c'; cases.append(dict(id=case, sources=[source], subject_sources=[source]))
+                chain = historical/case/'00-A-chain'; chain.mkdir(parents=True)
+                (chain/'output.evo').write_bytes(case.encode())
+                binding = dict(ir_digest=digest(case.encode()), chain_record_digest=digest((case+'chain').encode()),
+                               bundle_digest=digest((case+'bundle').encode()))
+                bindings[chain] = binding
+                for profile in ('checked', 'unchecked'):
+                    obj = complete/(case+'-'+profile+'.o'); obj.write_bytes(b'synthetic object')
+                    key = digest(canonical((binding['ir_digest'], profile)))
+                    code[key] = dict(ir_digest=binding['ir_digest'], profile=profile,
+                                     object=obj.name, object_digest=digest(obj.read_bytes()))
+            (historical/'manifest.json').write_bytes(canonical(dict(cases=cases)))
+            # The minimal positive representative has mul=2. It is not the
+            # compiler's all-one default, even if old consulted gates agree.
+            (complete/'receipt.json').write_bytes(canonical(dict(status='OBSERVED_DETERMINISTIC_COMPLETION',
+                ai_campaign='NOT_ADMITTED', code=code,
+                policy=dict(evaluations=[dict(weights=[1, 1, 2]+[1]*10, max_transactions=8)]))))
+            m = dict(source=dict(directory='complete'), tools=dict(historical_checker=dict(path='checker')))
+            with patch('tools.ladder.eqsat_steady.bind_bundle', side_effect=lambda p, _: bindings[Path(p)]):
+                programs = build_population(m, root)
+            self.assertEqual([p['case'] for p in programs], ['zlib', 'zstd', 'cjson'])
+            for program in programs:
+                self.assertEqual(program['variants']['B'], {})
+                self.assertEqual(set(program['units'][0]['chains']), {'A'})
+            self.assertEqual(DEFAULT_CONTROL['cost_weights'], [1]*13)
+
     def test_shared_resource_auditor_has_a_frozen_source_identity(self):
         import inspect
         from pathlib import Path
@@ -142,10 +215,11 @@ class SteadyProtocolTests(unittest.TestCase):
         from tempfile import TemporaryDirectory
         with TemporaryDirectory() as temp:
             root = Path(temp)
-            paths = ('complete/manifest.json', 'complete/receipt.json', 'complete/audit.json',
+            paths = ('complete/manifest.json', 'complete/receipt.json', 'complete/audit.json', 'historical/manifest.json',
                      'ref.o', 'chain/output.evo', 'subject.o', 'include/public.h')
             for p in paths:
                 file = root/p; file.parent.mkdir(exist_ok=True); file.write_bytes(p.encode())
+            (root/'complete/manifest.json').write_bytes(canonical(dict(source=dict(directory='historical'))))
             m = dict(source=dict(directory='complete', files={p: digest((root/p).read_bytes()) for p in paths}))
             programs = [dict(case='cjson', reference_objects=['ref.o'], units=[dict(
                 chains=dict(A='chain', B='chain'), objects=dict(A=dict(checked='subject.o', unchecked='subject.o')))])]
@@ -201,14 +275,18 @@ class SteadyProtocolTests(unittest.TestCase):
         m = dict(schema='evocc-r02-steady-plan-v1', mode='AA', implementation_commit='0'*40,
             source=dict(kind='STEADY_BUILD', directory='build', files={'artifact': '0'*64}),
             files=dict.fromkeys(FILES, '0'*64), tools=dict.fromkeys(
-                ('container', 'collector_python', 'checker', 'historical_checker', 'ir_backend'), {}),
+                ('container', 'collector_python', 'checker', 'historical_checker', 'ir_backend', 'census'), {}),
             image={}, guest_tools=dict.fromkeys(GUEST_TOOLS, '0'*64), host={'host': 'test'}, guest_kernel='6.18.15',
-            resources=copy.deepcopy(RESOURCES), protocol=copy.deepcopy(PROTOCOL))
+            resources=copy.deepcopy(RESOURCES), protocol=copy.deepcopy(PROTOCOL),
+            optimizer=copy.deepcopy(DEFAULT_CONTROL))
         validate_plan(m, 'AA')
         for mutate in (lambda x: x['protocol'].update(cpu=1), lambda x: x['protocol'].update(minimum_ns=0),
                        lambda x: x['protocol'].update(retries=1), lambda x: x['resources'].update(jobs=True),
                        lambda x: x['files'].pop('tools/ladder/eqsat_steady_audit.py'),
-                       lambda x: x['files'].pop('tools/ladder/eqsat_pilot_audit.py')):
+                       lambda x: x['files'].pop('tools/ladder/eqsat_pilot_audit.py'),
+                       lambda x: x['optimizer']['cost_weights'].__setitem__(2, 2),
+                       lambda x: x['optimizer']['schedule'].update(max_transactions=1),
+                       lambda x: x['tools'].pop('census')):
             changed = copy.deepcopy(m); mutate(changed)
             with self.assertRaises(ValueError):
                 validate_plan(changed, 'AA')

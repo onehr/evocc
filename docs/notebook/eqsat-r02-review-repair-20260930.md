@@ -168,3 +168,33 @@ failures and nine optional real-capture tests skipped (493 total),
 `3435808b71f22f2ad40583da4a5e2ff8b4e28786597bcd1f1463bbbf941479f9`.
 These are admission/plumbing tests, not native performance measurements. No
 already-frozen campaign inputs or measurements are changed.
+
+The next build also exposed a genuine default-control mismatch: canonical
+policy witnesses do not include `[1; 13]`; their fully positive representative
+uses `mul=2`. Selecting it as the compiler default would change the experiment.
+The steady build now explicitly runs the existing census adapter with all-one
+weights and the fixed eight-transaction schedule, independently checks its
+chain, and emits both native profiles from that same verified output. Its plan
+pins the adapter, exact optimizer control and historical composition manifest;
+the build auditor reconstructs those commands and binds the resulting objects.
+No candidate is selected by code-size or timing results.
+
+The minimal missing-default RED is `python-steady-default-red.log`, SHA-256
+`d4219cd47a0b8d222584754f840694e05226064f45707c0e23c559e5aa11435c`.
+A second RED caught the plan's attempt to inventory a future B bundle before
+the producer created it (`python-steady-default-plan-red.log`, SHA-256
+`489b74d9e05fbeb0d0b0963faf893f399bc24d708bd5e821967fa1e92bb3a3e8`).
+The repaired plan inventories existing A inputs only; bundle creation stays
+with the Rust writer, whose public contract requires a new directory. Focused
+steady tests pass 16/16. The full Python ladder gate passes 486, zero failures
+and nine optional capture tests skipped (495 total),
+`python-steady-default-plan-final.log`, SHA-256
+`6f11d9ac2338476528955210b5f1468d383525058f01736f0bae1f2fbf493adc`.
+These gates do not substitute for the forthcoming real build/audit/A/A.
+
+The running deterministic producer has observed all 1,024 policy evaluations,
+380 object-code classes and a new consulted `(add, shl)` pair outside its frozen
+comparison vocabulary. Its policy label is therefore `INCONCLUSIVE`, not
+finite-closure success. These are still producer observations until template
+completion and independent replay; the census is neither rewritten nor given
+an expanded budget, and AI remains unadmitted.

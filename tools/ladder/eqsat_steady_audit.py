@@ -5,14 +5,14 @@ import argparse
 import json
 from pathlib import Path
 
-from .eqsat_chain import digest, require
+from .eqsat_chain import AXES, digest, require
 from .eqsat_elf import inspect_elf
 from .eqsat_native import pair_order
 from .eqsat_pilot_audit import audit_usage
-from .eqsat_steady import (GUEST_TOOLS, PROTOCOL, RESOURCES, TASKS, admitted_calibration,
+from .eqsat_steady import (DEFAULT_CONTROL, GUEST_TOOLS, PROTOCOL, RESOURCES, TASKS, admitted_calibration,
                           audit_plan, build_population, check_build_inputs, load, timing_tasks)
 from .eqsat_steady_guest import aa_order, interval, next_iterations, result_value
-from .eqsat_twins import admit_unchecked, canonical, native_identity
+from .eqsat_twins import admit_unchecked, bind_bundle, canonical, native_identity
 
 
 def audit_capture(directory, root, manifest_digest):
@@ -75,11 +75,49 @@ def audit_capture(directory, root, manifest_digest):
         expected = build_population(m, root)
         check_build_inputs(m, root, expected)
         require(len(r['programs']) == len(expected), 'steady build population changed')
-        from .eqsat_pilot import ROOTS
+        from .eqsat_pilot import ROOTS, composite_binding
         for actual, original in zip(r['programs'], expected):
             name = original['case']; folder = directory/name
-            for field in ('case', 'units', 'dependencies', 'reference_objects'):
+            for field in ('case', 'dependencies', 'reference_objects'):
                 require(actual[field] == original[field], 'steady source/chain composition changed')
+            require(len(actual['units']) == len(original['units']), 'default control TU coverage changed')
+            for unit, before in zip(actual['units'], original['units']):
+                require(unit['source'] == before['source'] and unit['number'] == before['number']
+                    and set(unit['chains']) == set(unit['bindings']) == set(unit['objects']) == {'A', 'B'}
+                    and all(unit[k]['A'] == before[k]['A'] for k in ('chains', 'bindings', 'objects')),
+                    'default control source/baseline changed')
+                bundle = folder/f"{unit['number']:02}-B-chain"
+                identity = before['bindings']['A']['ir_digest']
+                weights = ','.join(f'{axis}=1' for axis in AXES)
+                row = one(f"default:{name}:{unit['number']}", [tools['census'], 'policy', identity,
+                    root/before['chains']['A']/'output.evo', tools['checker'], m['tools']['checker']['sha256'],
+                    weights, '8', bundle])
+                binding = bind_bundle(bundle, tools['checker'])
+                require(unit['chains']['B'] == bundle.relative_to(root).as_posix()
+                    and unit['bindings']['B'] == binding and read(row['stdout']) ==
+                    read((bundle/'output.evo').relative_to(directory)), 'unverified default control output')
+                for artifact in bundle.iterdir():
+                    require(artifact.is_file(), 'unexpected default bundle member')
+                    read(artifact.relative_to(directory))
+                record = json.loads(read((bundle/'chain.json').relative_to(directory)))
+                require(record['input_digest'] == identity and canonical({k: record['policy'][k]
+                    for k in DEFAULT_CONTROL}) == canonical(DEFAULT_CONTROL), 'not the frozen default policy')
+                require(set(unit['objects']['B']) == {'checked', 'unchecked'}, 'missing default native twin')
+                for profile in ('checked', 'unchecked'):
+                    stem = folder/f"{unit['number']:02}-B-{profile}"
+                    asm, obj = stem.with_suffix('.s'), stem.with_suffix('.o')
+                    row = one(f"default-backend:{name}:{unit['number']}:{profile}",
+                        [tools['ir_backend'], 'linux-aarch64', binding['ir_digest'],
+                         bundle/'output.evo', '--ub-checks='+profile])
+                    require(read(asm.relative_to(directory)) == read(row['stdout']), 'default assembly changed')
+                    guest(f"default-assemble:{name}:{unit['number']}:{profile}",
+                        ['/usr/bin/gcc-14', '-c', '-x', 'assembler',
+                         '/runwork/'+asm.relative_to(directory).as_posix(),
+                         '-o', '/runwork/'+obj.relative_to(directory).as_posix()])
+                    require(unit['objects']['B'][profile] == obj.relative_to(root).as_posix(), 'default object swapped')
+                    inspect_elf(read(obj.relative_to(directory)))
+            bindings = dict(A=original['variants']['A']['checked']['binding'],
+                B=composite_binding({u['source']: u['bindings']['B'] for u in actual['units']}))
             header = root/ROOTS[name]/('lib' if name == 'zstd' else '')
             define = ['-DUSE_CJSON'] if name == 'cjson' else ['-DUSE_ZSTD'] if name == 'zstd' else []
             harness = folder/'harness.o'
@@ -90,7 +128,7 @@ def audit_capture(directory, root, manifest_digest):
                 and actual['harness_digest'] == digest(read(harness.relative_to(directory))), 'harness object changed')
             for variant in ('A', 'B', 'reference'):
                 for profile in (('checked', 'unchecked') if variant != 'reference' else ('reference',)):
-                    objects = ([root/u['objects'][variant][profile] for u in original['units']]+
+                    objects = ([root/u['objects'][variant][profile] for u in actual['units']]+
                         [root/p for p in original['dependencies']]) if variant != 'reference' else [
                         root/p for p in original['reference_objects']]
                     exe = folder/(variant+'-'+profile)
@@ -103,7 +141,7 @@ def audit_capture(directory, root, manifest_digest):
                         and value['executable_digest'] == metrics['file_digest'] and value['metrics'] == metrics,
                         'steady executable/metrics changed')
                     if variant != 'reference':
-                        require(value['binding'] == original['variants'][variant][profile]['binding'],
+                        require(value['binding'] == bindings[variant],
                                 'steady twins do not share their verified input chain')
             for _, work in [t for t in TASKS if t[0] == name]:
                 row = guest('reference:'+name+':'+work, [mounted(root/actual['reference']['executable']), work, '1'])

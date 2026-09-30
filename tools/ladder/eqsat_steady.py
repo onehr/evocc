@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 
-from .eqsat_chain import digest, keys, require, unique
+from .eqsat_chain import AXES, digest, keys, require, unique
 from .eqsat_census import check_source_revision
 from .eqsat_elf import inspect_elf
 from .eqsat_native import Capture, host_identity
@@ -34,6 +34,9 @@ RESOURCES = dict(jobs=1, timeout_seconds=300, output_bytes=16*1024**2,
     batch_timeout_seconds=7200, vm_cpus=2, vm_memory='3G')
 TASKS = [('zlib', 'compress'), ('zlib', 'decompress'), ('zstd', 'compress'),
          ('zstd', 'decompress'), ('cjson', 'json')]
+DEFAULT_CONTROL = dict(cost_weights=[1]*13, registry='p0.scalar.v4',
+    extractor='selected-pair-v1', counter_mapping='legacy-coupled-v1',
+    schedule=dict(max_transactions=8, max_nodes=100000, max_epochs=1024))
 
 
 def load(path):
@@ -41,7 +44,7 @@ def load(path):
 
 
 def validate_plan(m, mode):
-    keys(m, 'schema mode implementation_commit source tools files image guest_tools host guest_kernel resources protocol')
+    keys(m, 'schema mode implementation_commit source tools files image guest_tools host guest_kernel resources protocol optimizer')
     require(mode in ('build', 'AA', 'AB') and m['schema'] == 'evocc-r02-steady-plan-v1'
             and m['mode'] == mode, 'wrong steady-state plan/mode')
     keys(m['source'], 'kind directory files')
@@ -49,9 +52,10 @@ def validate_plan(m, mode):
         'AB': 'ADMITTED_STEADY_AA'}[mode], 'wrong prerequisite stage')
     require(canonical(m['resources']) == canonical(RESOURCES) and
             canonical(m['protocol']) == canonical(PROTOCOL), 'unregistered timing bounds/controls')
+    require(canonical(m['optimizer']) == canonical(DEFAULT_CONTROL), 'not the fixed compiler-default control')
     require(set(m['files']) == set(FILES) and set(m['guest_tools']) == set(GUEST_TOOLS),
             'missing timing collector/harness/runtime identity')
-    keys(m['tools'], 'container collector_python checker historical_checker ir_backend')
+    keys(m['tools'], 'container collector_python checker historical_checker ir_backend census')
     require(m['source']['files'], 'unbound timing prerequisite')
     require(m['host'] == host_identity() and m['guest_kernel'] == '6.18.15',
             'host/guest identity differs from the registered Linux lane')
@@ -83,7 +87,7 @@ def audit_plan(path, root, mode):
 
 
 def build_population(m, root):
-    """Use the default policy, never a winner selected from native timing."""
+    """Declare a fresh default control, not a signature representative/winner."""
     completion = root/m['source']['directory']
     r, cm = load(completion/'receipt.json'), load(completion/'manifest.json')
     audit = load(completion/'audit.json')
@@ -91,45 +95,35 @@ def build_population(m, root):
         'DETERMINISTIC_CAPTURE_CONSISTENT' and audit['policy_evaluations'] == 1024
         and audit['verified_chains'] == 6144 and audit['unattempted_templates'] == 0
         and r['ai_campaign'] == 'NOT_ADMITTED', 'deterministic prerequisite incomplete/unaudited')
-    selected = [e for e in r['policy']['evaluations'] if e['weights'] == [1]*13
-                and e['max_transactions'] == 8]
-    require(len(selected) == 1, 'default-policy composition missing/ambiguous')
     historical = root/cm['source']['directory']
     old = load(historical/'manifest.json')
     programs = []
     for case in old['cases']:
         if case['id'] == 'p0':
             continue  # P0 is a no-change plumbing control, not a timed library.
-        units = [u for u in selected[0]['units'] if u['case'] == case['id']]
-        require([u['source'] for u in units] == case['subject_sources'], 'steady subject coverage changed')
         program = dict(case=case['id'], units=[], dependencies=[], reference_objects=[], variants={})
         for n, source in enumerate(case['sources']):
             obj = historical/case['id']/f'ref-{n:02}.o'
             program['reference_objects'].append(obj.relative_to(root).as_posix())
             if source not in case['subject_sources']:
                 program['dependencies'].append(obj.relative_to(root).as_posix())
-        for unit in units:
-            number = case['sources'].index(unit['source'])
-            chains = dict(A=historical/case['id']/f'{number:02}-A-chain', B=completion/unit['bundle'])
-            bindings = {v: bind_bundle(chain, root/m['tools']['historical_checker' if v == 'A' else 'checker']['path'])
-                        for v, chain in chains.items()}
-            require(bindings['A']['ir_digest'] == load(chains['B']/'chain.json')['input_digest']
-                    and bindings['B']['ir_digest'] == unit['binding']['ir_digest'], 'A/B verified inputs changed')
+        for source in case['subject_sources']:
+            number = case['sources'].index(source)
+            chain = historical/case['id']/f'{number:02}-A-chain'
+            binding = bind_bundle(chain, root/m['tools']['historical_checker']['path'])
             objects = {}
-            for variant, binding in bindings.items():
-                objects[variant] = {}
-                for profile in ('checked', 'unchecked'):
-                    key = digest(canonical((binding['ir_digest'], profile)))
-                    code = r['code'][key]
-                    obj = completion/code['object']
-                    require(code['ir_digest'] == binding['ir_digest'] and code['profile'] == profile
-                        and code['object_digest'] == digest(obj.read_bytes()), 'wrong steady backend object')
-                    objects[variant][profile] = obj.relative_to(root).as_posix()
-            program['units'].append(dict(source=unit['source'], chains={v: p.relative_to(root).as_posix()
-                for v, p in chains.items()}, bindings=bindings, objects=objects))
-        for variant in ('A', 'B'):
-            binding = composite_binding({u['source']: u['bindings'][variant] for u in program['units']})
-            program['variants'][variant] = {p: dict(binding=binding) for p in ('checked', 'unchecked')}
+            for profile in ('checked', 'unchecked'):
+                key = digest(canonical((binding['ir_digest'], profile)))
+                code = r['code'][key]; obj = completion/code['object']
+                require(code['ir_digest'] == binding['ir_digest'] and code['profile'] == profile
+                    and code['object_digest'] == digest(obj.read_bytes()), 'wrong steady baseline object')
+                objects[profile] = obj.relative_to(root).as_posix()
+            program['units'].append(dict(source=source, number=number,
+                chains=dict(A=chain.relative_to(root).as_posix()), bindings=dict(A=binding),
+                objects=dict(A=objects)))
+        binding = composite_binding({u['source']: u['bindings']['A'] for u in program['units']})
+        program['variants']['A'] = {p: dict(binding=binding) for p in ('checked', 'unchecked')}
+        program['variants']['B'] = {}
         programs.append(program)
     require([p['case'] for p in programs] == ['zlib', 'zstd', 'cjson'], 'wrong library population')
     return programs
@@ -140,6 +134,8 @@ def check_build_inputs(m, root, programs):
     root = Path(root).resolve(); required = set()
     source = root/m['source']['directory']
     required.update(source/name for name in ('manifest.json', 'receipt.json', 'audit.json'))
+    historical = root/load(source/'manifest.json')['source']['directory']
+    required.add(historical/'manifest.json')
     for program in programs:
         required.update(root/p for p in program['reference_objects'])
         for unit in program['units']:
@@ -229,6 +225,39 @@ def run_plan(path, root, mode):
                 check_build_inputs(m, root, receipt['programs'])
                 for program in receipt['programs']:
                     name = program['case']; folder = directory/name; folder.mkdir()
+                    # Canonical signature witnesses need not contain the
+                    # compiler's default vector. Replay that fixed control
+                    # explicitly; never substitute a measured representative.
+                    for unit in program['units']:
+                        bundle = folder/f"{unit['number']:02}-B-chain"
+                        input_file = root/unit['chains']['A']/'output.evo'
+                        identity = unit['bindings']['A']['ir_digest']
+                        weights = ','.join(f'{axis}=1' for axis in AXES)
+                        row = runner.run(f"default:{name}:{unit['number']}", [tools['census'], 'policy',
+                            identity, input_file, tools['checker'], m['tools']['checker']['sha256'],
+                            weights, '8', bundle])
+                        binding = bind_bundle(bundle, tools['checker'])
+                        record = load(bundle/'chain.json')
+                        require(record['input_digest'] == identity and canonical({k: record['policy'][k]
+                            for k in DEFAULT_CONTROL}) == canonical(DEFAULT_CONTROL)
+                            and (directory/row['stdout']).read_bytes() == (bundle/'output.evo').read_bytes(),
+                            'default control input/policy/output changed')
+                        unit['chains']['B'] = bundle.relative_to(root).as_posix()
+                        unit['bindings']['B'] = binding; unit['objects']['B'] = {}
+                        for profile in ('checked', 'unchecked'):
+                            stem = folder/f"{unit['number']:02}-B-{profile}"
+                            asm, obj = stem.with_suffix('.s'), stem.with_suffix('.o')
+                            row = runner.run(f"default-backend:{name}:{unit['number']}:{profile}",
+                                [tools['ir_backend'], 'linux-aarch64', binding['ir_digest'],
+                                 bundle/'output.evo', '--ub-checks='+profile])
+                            asm.write_bytes((directory/row['stdout']).read_bytes())
+                            guest(f"default-assemble:{name}:{unit['number']}:{profile}",
+                                ['/usr/bin/gcc-14', '-c', '-x', 'assembler',
+                                 '/runwork/'+asm.relative_to(directory).as_posix(),
+                                 '-o', '/runwork/'+obj.relative_to(directory).as_posix()])
+                            unit['objects']['B'][profile] = obj.relative_to(root).as_posix()
+                    binding = composite_binding({u['source']: u['bindings']['B'] for u in program['units']})
+                    program['variants']['B'] = {p: dict(binding=binding) for p in ('checked', 'unchecked')}
                     header = root/ROOTS[name]/('lib' if name == 'zstd' else '')
                     harness = folder/'harness.o'
                     define = ['-DUSE_CJSON'] if name == 'cjson' else ['-DUSE_ZSTD'] if name == 'zstd' else []
