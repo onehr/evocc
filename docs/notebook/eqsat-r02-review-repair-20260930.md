@@ -213,3 +213,11 @@ failures and nine optional capture tests skipped (495 total),
 `6a6ad7e8e04b35d84c2d97dbc0d72487b1c98c3e2b3e507ba1b9522419e81bca`.
 All ten A-profile backend objects are present in the running completion's cache;
 that read-only inventory observation is not native timing admission.
+
+A further reserve check found 5,807,168 KiB (about 5.54 GiB) of idle incremental
+state in `target/frontend/debug/incremental`. Two process checks found no
+`cargo`/`rustc`; the exact target was a normal directory and is not a frozen
+input. Only this rebuildable cache was removed. The release checker, IR backend
+and census executable hashes were identical before and after deletion. Debug
+and release binaries, retained captures, library sources and kernel builds are
+unchanged. This is storage maintenance, not a compiler or timing result.
