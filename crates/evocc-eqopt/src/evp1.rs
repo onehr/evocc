@@ -456,10 +456,14 @@ fn scheduler_record(regions: &[EvpRegion], exhausted: bool) -> EvpBudget {
     let mut nodes = 0_u64;
     let mut widest = 0_u64;
     let mut epochs = 0_u64;
+    let mut fuel = 0_u64;
     // Fuel is per rule per epoch, so a rule that fires in two epochs has not
     // spent twice the fuel of one; the consumption is the busiest single pair.
     let mut firings: HashMap<(&str, u64), u64> = HashMap::new();
     for region in regions {
+        // Section 8.11 grants fuel independently to each region. Equal rule
+        // and epoch names in different regions must not share consumption.
+        firings.clear();
         let mut before = 0_u64;
         let mut epoch = 0_u64;
         for event in &region.events {
@@ -481,6 +485,7 @@ fn scheduler_record(regions: &[EvpRegion], exhausted: bool) -> EvpBudget {
             }
         }
         widest = widest.max(before);
+        fuel = fuel.max(firings.values().copied().max().unwrap_or(0));
     }
     EvpBudget {
         nodes: EvpQuantity {
@@ -492,7 +497,7 @@ fn scheduler_record(regions: &[EvpRegion], exhausted: bool) -> EvpBudget {
             bound: MAX_EPOCHS,
         },
         fuel: EvpQuantity {
-            consumed: firings.values().copied().max().unwrap_or(0),
+            consumed: fuel,
             bound: FUEL_FLOOR.max(widest.saturating_mul(8)),
         },
         n: widest,

@@ -10,7 +10,7 @@ from tools.ladder.eqsat_twins import canonical
 from tools.ladder.eqsat_opportunities import enumerate_rule_cell, lean_candidate
 from tools.ladder.eqsat_preflight import enumerate_policies
 from tools.ladder.eqsat_preflight_run import CONTRACT, shortcut_census, section_identity
-from tools.ladder.eqsat_pilot_audit import audit_preflight, audit_pilot
+from tools.ladder.eqsat_pilot_audit import audit_preflight, audit_pilot, audit_usage
 
 
 def control_capture():
@@ -86,6 +86,17 @@ def audit_fixture(f):
 
 
 class PilotAuditTests(unittest.TestCase):
+    def test_resource_units_and_invalid_measurements_fail_closed(self):
+        usage = dict(user_ns=1, system_ns=2, peak_rss_bytes=3072, peak_rss_raw=3,
+            rss_unit='bytes', scope='wait4-direct-child-including-waited-descendants',
+            wall_scope='spawn-to-stdio-drain')
+        audit_usage(usage, 'Linux')
+        audit_usage(dict(usage, peak_rss_bytes=3), 'Darwin')
+        for invalid in (dict(usage, user_ns=True), dict(usage, system_ns=-1),
+                        dict(usage, peak_rss_bytes=3), dict(usage, scope='heap-only')):
+            with self.assertRaises(ValueError):
+                audit_usage(invalid, 'Linux')
+
     def test_failed_template_is_unknown_not_a_proof_success(self):
         result = audit_fixture(control_capture())
         self.assertEqual(result['template_proofs'], 0)

@@ -70,6 +70,63 @@ fn selected_pair_telemetry_records_rejected_gates_before_admission_caps() {
 }
 
 #[test]
+fn repeated_rule_firings_in_distinct_regions_do_not_share_fuel() {
+    // Reduced from zstd_compress.c: 300 independent two-node regions each
+    // fire known_sext once. They are not 300 firings in one region.
+    let mut source = String::from(
+        "func @many() -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry():\n",
+    );
+    for i in 0..300 {
+        source.push_str(&format!(
+            "    %v{} = const.bits<32> {}\n    %v{} = sext.bits<64> %v{}\n",
+            2 * i,
+            i + 1,
+            2 * i + 1,
+            2 * i
+        ));
+    }
+    source.push_str("    ret %v599\n}\n");
+    let module = parse_section9_module(source.as_bytes()).unwrap();
+    let outcome = evocc_eqopt::optimize_scalar_module_with_evp1(
+        &module,
+        evocc_eqopt::ScalarEqBudget::default(),
+    );
+    assert_eq!(outcome.certificate.regions.len(), 300);
+    let budget = outcome.certificate.budget.unwrap();
+    assert_eq!(budget.n, 2);
+    assert_eq!(budget.fuel.consumed, 1);
+    assert_eq!(budget.fuel.bound, 256);
+    let checker = evocc_proof::StandaloneProofChecker::locate().unwrap();
+    let expected = checker.identity_digest().unwrap(); // This test's workspace checker.
+    let checker = checker.with_expected_digest(expected);
+    let mut state = EqualityState::for_module(&module).unwrap();
+    let run = evocc_eqopt::run_scalar_chain_with_checker(
+        &module,
+        &mut state,
+        &ExtractionPolicy::default(),
+        &checker,
+    )
+    .unwrap_or_else(|error| panic!("{}", error.detail));
+    assert_eq!(run.transactions[0].report.optimized_values, 300);
+    for candidate in [&module, &run.module] {
+        let result = evocc_evoir::interpret_module(
+            candidate,
+            "many",
+            &[],
+            evocc_evoir::InterpreterLimits::new(10_000),
+        )
+        .unwrap();
+        assert_eq!(
+            result.return_values,
+            vec![evocc_evoir::RuntimeValue::new(
+                evocc_evoir::EvoIRType::Bits(64),
+                300
+            )]
+        );
+    }
+}
+
+#[test]
 fn region_normalization_retains_its_own_fact_environment() {
     let module = parse_section9_module(br#"func @main() -> (bits<64>) cc = target_default
     effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }

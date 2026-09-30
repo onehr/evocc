@@ -23,6 +23,16 @@ from .eqsat_preflight_run import section_identity, shortcut_census
 import re
 
 
+def audit_usage(usage, system):
+    require(type(usage) is dict and system in ('Darwin', 'Linux'), 'missing resource telemetry')
+    for field in ('user_ns', 'system_ns', 'peak_rss_bytes', 'peak_rss_raw'):
+        natural(usage[field])
+    factor = 1 if system == 'Darwin' else 1024
+    require(usage['peak_rss_bytes'] == factor*usage['peak_rss_raw']
+        and usage['rss_unit'] == 'bytes' and usage['scope'] == 'wait4-direct-child-including-waited-descendants'
+        and usage['wall_scope'] == 'spawn-to-stdio-drain', 'resource units/scope changed')
+
+
 def audit_pilot(directory, root, expected_manifest_digest):
     directory, root = Path(directory).resolve(), Path(root).resolve()
     observed = {}
@@ -61,6 +71,7 @@ def audit_pilot(directory, root, expected_manifest_digest):
     unknown_templates = {p.get('attempt_stdout') for p in
         r.get('preflight', {}).get('rule', {}).get('proofs', []) if p['status'] == 'UNKNOWN'}
     attempts, guests, stages = {}, {}, {}
+    used_stages = set()
     for index, row in enumerate(r['attempts']):
         template_unknown = row['stdout'] in unknown_templates and row['stage'].startswith('preflight:template:')
         require(natural(row['wall_ns']) > 0 and
@@ -71,7 +82,12 @@ def audit_pilot(directory, root, expected_manifest_digest):
         for stream in ('stdout', 'stderr'):
             require(row[stream] == f'{index:03}.{stream}', 'attempt output order mismatch')
             raw = read(row[stream])
-            require(digest(raw) == row[stream+'_sha256'] and len(raw) == row[stream+'_bytes'], 'output changed')
+            require(digest(raw) == row[stream+'_sha256'] and len(raw) == row[stream+'_bytes']
+                    and len(raw) <= m['resources']['output_bytes'], 'output changed or exceeds its bound')
+        if 'resources' in row:
+            audit_usage(row['resources'], 'Darwin')
+        else:
+            require(template_unknown and row['status'] == 'FAILED', 'successful attempt lacks CPU/RSS')
         attempts[row['stdout']] = row
         if 'guest_receipt' in row:
             raw = read(row['guest_receipt'])
@@ -84,11 +100,7 @@ def audit_pilot(directory, root, expected_manifest_digest):
                     and g['executable_digest'] == row['guest_executable_digest']
                     and child['wall_ns'] == row['guest_wall_ns']
                     and child['resources'] == row['guest_resources'], 'guest metric mismatch')
-            usage = child['resources']
-            for field in ('user_ns', 'system_ns', 'peak_rss_bytes'):
-                natural(usage[field])
-            require(usage['peak_rss_bytes'] > 0 and usage['peak_rss_bytes'] == usage['peak_rss_raw']*1024
-                    and usage['scope'] == 'wait4-direct-child-including-waited-descendants', 'guest resource units changed')
+            audit_usage(child['resources'], 'Linux')
             for stream in ('stdout', 'stderr'):
                 raw = read(str(Path(row['guest_receipt']).parent/child[stream]))
                 require(digest(raw) == child[stream+'_sha256'] == row[stream+'_sha256'], 'guest output changed')
@@ -97,6 +109,7 @@ def audit_pilot(directory, root, expected_manifest_digest):
 
     def one(stage):
         require(stage in stages and len(stages[stage]) == 1, 'missing/duplicate required stage: '+stage)
+        used_stages.add(stage)
         return stages[stage][0]
     def result(row, expected):
         require(row['status'] == 'RESULT_CHECKED' and all(row[k] == expected[k] for k in expected),
@@ -298,6 +311,7 @@ def audit_pilot(directory, root, expected_manifest_digest):
                             and row['guest_executable_digest'] == executable['executable_digest'], 'sample identity mismatch')
                     require(row['stage'] not in used_timed, 'sample reused')
                     used_timed.add(row['stage'])
+                    used_stages.add(row['stage'])
                     expected_samples.append(dict(pair=pair, label=label, variant=variant,
                         guest_receipt=row['guest_receipt'], guest_wall_ns=row['guest_wall_ns'],
                         guest_resources=row['guest_resources'], executable_digest=executable['executable_digest']))
@@ -311,6 +325,13 @@ def audit_pilot(directory, root, expected_manifest_digest):
     require(used_timed == {s for s in stages if ':sample:' in s or ':warmup:' in s},
             'unaccounted timed sample or warmup')
     preflight = audit_preflight(m, r, directory, root, read, load, one, result, guest_command, guest_path, checker, guests)
+    require(used_stages == set(stages), 'unaccounted command in the capture ledger')
+    timing_indices = [i for i, row in enumerate(r['attempts']) if row['stage'] in used_timed]
+    preflight_indices = [i for i, row in enumerate(r['attempts']) if row['stage'].startswith('preflight:')]
+    require(timing_indices and preflight_indices and min(timing_indices) > max(preflight_indices),
+            'native timing preceded the frozen preflight')
+    require(sum(p.stat().st_size for p in directory.rglob('*') if p.is_file()) <=
+            m['resources']['max_retained_bytes'], 'capture exceeds frozen retention cap')
     for name in tuple(observed):
         read(name)
     return dict(schema='evocc-r02-linux-pilot-audit-v1', status='CAPTURE_CONSISTENT',

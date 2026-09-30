@@ -115,7 +115,7 @@ def validate_plan(m, root):
     p = m['protocol']
     keys(p, 'warmups pairs seed retries metric comparisons effect_floor_percent precision_percent multiple_comparisons')
     require(0 <= natural(p['warmups']) <= 4 and 6 <= natural(p['pairs']) <= 40
-            and p['pairs'] % 2 == 0 and p['retries'] == 0
+            and p['pairs'] % 2 == 0 and natural(p['retries']) == 0
             and p['metric'] == 'guest-fresh-process-spawn-to-stdio-drain'
             and p['comparisons'] == ['AA', 'AB'] and natural(p['effect_floor_percent']) >= 1,
             'invalid frozen protocol')
