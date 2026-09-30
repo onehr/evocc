@@ -26,6 +26,7 @@ from .eqsat_twins import bind_bundle, canonical
 FILES = ('tools/bench.py', 'tools/ladder/eqsat_steady.py', 'tools/ladder/eqsat_steady_guest.py',
     'tools/ladder/eqsat_steady_audit.py', 'tools/ladder/eqsat_native.py', 'tools/ladder/eqsat_census.py',
     'tools/ladder/eqsat_chain.py', 'tools/ladder/eqsat_twins.py', 'tools/ladder/eqsat_pilot.py',
+    'tools/ladder/eqsat_pilot_audit.py',
     'tools/ladder/eqsat_elf.py', 'tests/fixtures/eqsat-performance/steady-workload.c',
     'docs/evoir-spec.md', 'docs/evomir-spec.md')
 RESOURCES = dict(jobs=1, timeout_seconds=300, output_bytes=16*1024**2,

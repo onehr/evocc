@@ -83,7 +83,7 @@ def synthetic(mode='AA'):
 
 
 class SteadyCaptureHeaderTests(unittest.TestCase):
-    def header(self, mode, status):
+    def header(self, mode, status, **fields):
         """An incomplete capture tests header admission, not native acceptance."""
         from pathlib import Path
         from tempfile import TemporaryDirectory
@@ -93,10 +93,14 @@ class SteadyCaptureHeaderTests(unittest.TestCase):
             raw = canonical(dict(mode=mode))+b'\n'
             (contracts/'steady.json').write_bytes(raw)
             (directory/'manifest.json').write_bytes(raw)
-            (directory/'receipt.json').write_bytes(canonical(dict(
+            receipt = dict(
                 schema='evocc-r02-steady-capture-v1', mode=mode, status=status,
                 manifest_digest=digest(raw), cleanup=dict(exit_code=0),
-                pmu='NOT_MEASURED', attempts=[]))+b'\n')
+                pmu='NOT_MEASURED', attempts=[],
+                scope='THREE_LIBRARIES_FIVE_MODES_MIXED_LINK_LINUX_HARDWARE_VM_NO_AI',
+                native_timing='NOT_RUN' if mode == 'build' else PROTOCOL['metric'])
+            receipt.update(fields)
+            (directory/'receipt.json').write_bytes(canonical(receipt)+b'\n')
             plan = dict(tools=dict(container=dict(path='container')), image=dict(name='fixture'))
             with patch('tools.ladder.eqsat_steady_audit.audit_plan', return_value=(plan, raw)):
                 return audit_capture(directory, root, digest(raw))
@@ -116,8 +120,23 @@ class SteadyCaptureHeaderTests(unittest.TestCase):
                 with self.subTest(mode=mode, status=status), self.assertRaisesRegex(ValueError, 'incomplete steady'):
                     self.header(mode, status)
 
+    def test_receipt_cannot_promote_scope_or_change_the_registered_timing_metric(self):
+        for mode, status in (('build', 'OBSERVED_BUILD'), ('AA', 'OBSERVED_AA'), ('AB', 'OBSERVED_AB')):
+            for field, forged in (('scope', 'ALL_COMPILER_AND_AI_ACCEPTED'),
+                                  ('native_timing', 'QUALIFIED_SEARCH_WINNER'), ('pmu', 'MEASURED')):
+                with self.subTest(mode=mode, field=field), self.assertRaisesRegex(ValueError, 'incomplete steady'):
+                    self.header(mode, status, **{field: forged})
+
 
 class SteadyProtocolTests(unittest.TestCase):
+    def test_shared_resource_auditor_has_a_frozen_source_identity(self):
+        import inspect
+        from pathlib import Path
+        from tools.ladder.eqsat_pilot_audit import audit_usage
+        root = Path(__file__).resolve().parents[3]
+        source = Path(inspect.getsourcefile(audit_usage)).resolve().relative_to(root).as_posix()
+        self.assertIn(source, FILES)
+
     def test_unpinned_link_object_proof_or_header_is_not_a_complete_build_plan(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory
@@ -188,7 +207,8 @@ class SteadyProtocolTests(unittest.TestCase):
         validate_plan(m, 'AA')
         for mutate in (lambda x: x['protocol'].update(cpu=1), lambda x: x['protocol'].update(minimum_ns=0),
                        lambda x: x['protocol'].update(retries=1), lambda x: x['resources'].update(jobs=True),
-                       lambda x: x['files'].pop('tools/ladder/eqsat_steady_audit.py')):
+                       lambda x: x['files'].pop('tools/ladder/eqsat_steady_audit.py'),
+                       lambda x: x['files'].pop('tools/ladder/eqsat_pilot_audit.py')):
             changed = copy.deepcopy(m); mutate(changed)
             with self.assertRaises(ValueError):
                 validate_plan(changed, 'AA')

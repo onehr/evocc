@@ -27,7 +27,10 @@ def audit_capture(directory, root, manifest_digest):
     r = load(directory/'receipt.json')
     require(r['schema'] == 'evocc-r02-steady-capture-v1' and r['mode'] == mode
         and r['manifest_digest'] == manifest_digest and r['status'] == 'OBSERVED_'+mode.upper()
-        and r['cleanup']['exit_code'] == 0 and r['pmu'] == 'NOT_MEASURED', 'incomplete steady capture')
+        and r['cleanup']['exit_code'] == 0 and r['pmu'] == 'NOT_MEASURED'
+        and r['scope'] == 'THREE_LIBRARIES_FIVE_MODES_MIXED_LINK_LINUX_HARDWARE_VM_NO_AI'
+        and r['native_timing'] == ('NOT_RUN' if mode == 'build' else PROTOCOL['metric']),
+        'incomplete steady capture')
     pinned = {}
     def read(name):
         file = directory/name

@@ -150,3 +150,21 @@ discovery passes 482 with zero failures and nine optional capture tests skipped
 `9914fff5f1792dab24d65fafa74a248160f653b023fe75e87f846833a9c627a9`.
 The current deterministic collector does not consume this steady auditor, so
 its pinned inputs, bounds and running capture are unchanged.
+
+The same integration review found that the steady auditor calls the shared
+`audit_usage` validator without pinning its defining file. That file is now a
+required code-identity input of every steady plan; omission is rejected. The
+source-identity RED is retained in `python-steady-auditor-pin-red.log`, SHA-256
+`59ae11149fee7c3da015433c58556cb881630e17d582ce0046fdb46ec4d7a818`.
+Outer receipt scope and the claimed timing metric are also checked against the
+registered stage rather than passed through or ignored. A one-field RED exposed
+six accepted forged scope/metric headers across build, A/A and A/B; the repaired
+header rejects them, while the earlier PMU rejection remains intact. That RED is
+`python-steady-scope-red.log`, SHA-256
+`cc56b0d78ddd27d2e0c16378d5b98e9dd8dd74b744d31ad3085691354bc98ade`.
+The focused steady gate passes 14/14; full ladder discovery passes 484, zero
+failures and nine optional real-capture tests skipped (493 total),
+`python-steady-integration-final.log`, SHA-256
+`3435808b71f22f2ad40583da4a5e2ff8b4e28786597bcd1f1463bbbf941479f9`.
+These are admission/plumbing tests, not native performance measurements. No
+already-frozen campaign inputs or measurements are changed.
