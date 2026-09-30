@@ -91,6 +91,22 @@ optional capture tests skipped (489 total), `python-retention-final.log`, SHA-25
 The separate Lean-tool Python gate passes 15/15. No Rust implementation changed
 in this repair; the earlier full-workspace gate is not relabeled as a new run.
 
+The repaired foreground capture `complete-slksjlzi` was then safely stopped at
+185 complete evaluations (zero templates), with `INTERRUPTED` and cleanup exit
+0, before moving this long test out of the interactive daemon's process tree.
+Receipt SHA-256:
+`a30e2cf22a60a7532cc91f97b04fe86c251bea7c45778f7260a9de5deffaff06`.
+It is retained separately, not resumed or merged. An empty bounded subprocess
+probe and the real worker both verified independent sessions with PPID 1 and
+closed inherited stdio. Actual daemon-restart survival is not separately tested.
+
+Capture `complete-9bjq0w16` uses the same committed repaired manifest, SHA-256
+`2272bf7bbb10ecc47543a20346ee58fa8eb51052fd59687656a8f9ce2db1ee29`,
+from an independent bounded worker (initial PID 20740). Its launch argv and log
+are recorded in `.evidence/eqsat-r02-review-20260930/detached-completion-owner.json`.
+The worker still owns the bench lock and the same four-hour/3-GiB limits. Its
+completion, independent replay and steady timing admission remain unclaimed.
+
 R02a1 remains separate: in-process steady-state work, guest CPU pinning, a quiet
 host collector, Linux A/A calibration and a separately frozen A/B plan are
 required. The runner and independent auditor are now implemented, including
