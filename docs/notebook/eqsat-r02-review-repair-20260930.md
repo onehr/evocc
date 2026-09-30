@@ -221,3 +221,47 @@ input. Only this rebuildable cache was removed. The release checker, IR backend
 and census executable hashes were identical before and after deletion. Debug
 and release binaries, retained captures, library sources and kernel builds are
 unchanged. This is storage maintenance, not a compiler or timing result.
+
+## Completed census and audit-only repair
+
+The owned deterministic worker completed `complete-9bjq0w16` and exited its VM
+cleanly. The original receipt has SHA-256
+`7b57a622e5adae8dc6de9a654ace597f2fd1a08fa34a050e268f8bc796ec5ae5`:
+1,024/1,024 policy evaluations, 1,222/1,222 template attempts, 1,174 producer
+template successes and 48 UNKNOWN outcomes. It observed 380 object-code classes,
+966 backend objects and the previously unseen `(add, shl)` comparison. The
+policy track remains INCONCLUSIVE: finite closure of the originally consulted
+comparison vocabulary was not established. No rule was installed and no AI or
+native timing was performed.
+
+The first actual independent gate failed: seven adversarial tests passed but
+the positive replay raised `gate/cap telemetry changed`. Its retained stderr
+is `audit-completion-9bjq0w16.stderr`, SHA-256
+`3263f6aca999b4a26a18ad81250ab260a77c0a39e7e464dc56a0d619ca04f56a`.
+Recorded JSON pairs are arrays; the recomputed pairs are Python tuples. The
+contents, ordering and null operands matched, but Python container equality
+did not. A small regression reproduced that error. The auditor now converts
+only the recomputed pairs to arrays; wrong values, order or multiplicity still
+fail. The same repair covers the final new-comparison check.
+
+The completed manifest and capture are not rewritten, and the four-hour
+experiment is not repeated to repair its reader. A separately committed
+`evocc-r02-completion-reaudit-v1` supplement binds the original manifest and
+receipt, the original committed collector/auditor hashes and the new committed
+audit-only code hashes. Only those two files can change; every other original
+tool, source, semantic file and budget is still checked unchanged. This is an
+explicit versioned re-audit, not a claim that the original auditor passed.
+Independent acceptance and steady build/A/A/A/B remain pending until their
+actual gates run.
+
+The first full Python gate encountered the sandbox's denial of `/bin/ps`, not
+EMFILE: 498 tests, one process-table permission error and nine optional capture
+skips. The failed log is preserved as `python-completion-reaudit-final.log`,
+SHA-256 `376845e32186bad2ac79c9489d286eb13cc51f9e80b6e49dfd2fd5fab4459e00`.
+The process cleanup test requires read-only process-table access; its complete
+gate is rerun with that permission, without skipping the test.
+The complete authorized gate passes 489 tests, zero failures and nine optional
+capture skips (498 total), `python-completion-reaudit-unsandboxed.log`, SHA-256
+`8177b1f306f6570761aa1accfbbb720018c10858426f1b3547081653a6a7b4a9`.
+The eight focused completion tests pass as well. These are code/admission
+regressions; they do not yet accept the actual completed capture.

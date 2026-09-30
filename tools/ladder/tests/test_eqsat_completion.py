@@ -6,7 +6,9 @@ import tempfile
 import unittest
 
 from tools.ladder.eqsat_chain import AXES, digest
-from tools.ladder.eqsat_completion import BOUNDS, FILES, deduplicate, deduplicate_one, validate_plan
+from tools.ladder.eqsat_completion import (BOUNDS, FILES, REAUDIT_FILES, REAUDIT_PURPOSE,
+    deduplicate, deduplicate_one, validate_plan, validate_reaudit)
+from tools.ladder.eqsat_completion_audit import require_comparisons
 from tools.ladder.eqsat_native import Capture
 from tools.ladder.eqsat_opportunities import enumerate_rule_cell
 from tools.ladder.eqsat_pilot import GUEST_TOOLS
@@ -51,6 +53,47 @@ class CompletionContractTests(unittest.TestCase):
             mutate(changed)
             with self.assertRaises(ValueError):
                 validate_plan(changed)
+
+
+class ComparisonTelemetryTests(unittest.TestCase):
+    def test_json_arrays_match_recomputed_pairs_including_null(self):
+        require_comparisons([['icmp', None], ['mul', 'add']], [('icmp', None), ('mul', 'add')])
+        require_comparisons([['add', 'shl']], [('add', 'shl')])
+        require_comparisons([], [])
+
+    def test_a_changed_order_value_or_multiplicity_is_rejected(self):
+        original = [('icmp', None), ('mul', 'add')]
+        for changed in ([['mul', 'add'], ['icmp', None]], [['icmp', None], ['mul', 'shl']],
+                        [['icmp', None]], [['icmp', None], ['mul', 'add'], ['mul', 'add']]):
+            with self.assertRaises(ValueError):
+                require_comparisons(changed, original)
+
+
+class ReauditContractTests(unittest.TestCase):
+    def test_supplement_binds_original_manifest_capture_and_exact_repair_files(self):
+        m = plan()
+        s = dict(schema='evocc-r02-completion-reaudit-v1', purpose=REAUDIT_PURPOSE,
+            implementation_commit='1'*40, manifest_sha256='2'*64,
+            capture=dict(directory='.evidence/original', receipt_sha256='3'*64),
+            repairs={name: dict(before_sha256=m['files'][name], after_sha256='4'*64)
+                     for name in REAUDIT_FILES})
+        validate_reaudit(s, m, '2'*64, '.evidence/original', '3'*64)
+        for mutate in (
+            lambda x: x.update(manifest_sha256='5'*64),
+            lambda x: x['capture'].update(directory='.evidence/other'),
+            lambda x: x['capture'].update(receipt_sha256='5'*64),
+            lambda x: x.update(bounds={}),
+            lambda x: x.update(purpose='NEW_EXPERIMENT'),
+            lambda x: x['repairs'].update({'tools/ladder/eqsat_chain.py':
+                dict(before_sha256='0'*64, after_sha256='4'*64)}),
+            lambda x: x['repairs'].pop(REAUDIT_FILES[0]),
+            lambda x: x['repairs'][REAUDIT_FILES[0]].update(before_sha256='5'*64),
+            lambda x: x['repairs'][REAUDIT_FILES[0]].update(after_sha256='0'*64),
+            lambda x: x['repairs'][REAUDIT_FILES[0]].update(after_sha256='not-a-digest'),
+        ):
+            changed = copy.deepcopy(s); mutate(changed)
+            with self.assertRaises(ValueError):
+                validate_reaudit(changed, m, '2'*64, '.evidence/original', '3'*64)
 
 
 class ContentAddressedEvidenceTests(unittest.TestCase):

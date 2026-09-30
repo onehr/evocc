@@ -15,14 +15,20 @@ from .eqsat_preflight_run import section_identity
 from .eqsat_twins import bind_bundle, canonical
 
 
-def audit_completion(directory, root, expected_manifest):
+def require_comparisons(recorded, recomputed):
+    """Compare recorded selected pairs without changing their order or values."""
+    require(recorded == [list(pair) for pair in recomputed], 'selected-pair telemetry changed')
+
+
+def audit_completion(directory, root, expected_manifest, *, audit_supplement=None):
     directory, root = Path(directory).resolve(), Path(root).resolve()
     raw = (directory/'manifest.json').read_bytes()
     require(digest(raw) == expected_manifest, 'wrong completion manifest')
     # The committed manifest copy, not the capture's status label, is authority.
     paths = [p for p in (root/'tests/contracts').glob('*.json') if p.read_bytes() == raw]
     require(len(paths) == 1, 'completion manifest is not uniquely committed')
-    m, _, source, original, previous, units, space, candidates = audit_plan(paths[0], root)
+    m, _, source, original, previous, units, space, candidates = audit_plan(
+        paths[0], root, audit_supplement=audit_supplement, capture=directory)
     tools = {name: str((root/item['path']).resolve()) for name, item in m['tools'].items()}
     r = load(directory/'receipt.json')
     require(r['schema'] == m['schema'] and r['manifest_digest'] == expected_manifest
@@ -120,7 +126,8 @@ def audit_completion(directory, root, expected_manifest):
                 actual_pairs.extend(selected_pairs(bundle/f"{tx['index']:03}.policy.json", tx,
                                                    candidate['weights'])['comparisons'])
             hits = [h for t in record['transactions'] for h in t['budget_hits']]
-            require(detail['hits'] == hits and detail['comparisons'] == actual_pairs, 'gate/cap telemetry changed')
+            require(detail['hits'] == hits, 'gate/cap telemetry changed')
+            require_comparisons(detail['comparisons'], actual_pairs)
             pairs.update(map(tuple, actual_pairs)); caps += bool(hits)
             proofs += binding['audit']['proof_counts']['proof_successes']
             for profile in ('checked', 'unchecked'):
@@ -148,7 +155,8 @@ def audit_completion(directory, root, expected_manifest):
         require(evaluation['programs'] == programs, 'suite object-size fitness forged')
     new_pairs = sorted(pairs-set(map(tuple, space['comparisons'])), key=str)
     classes = len({digest(canonical(e['programs'])) for e in evaluations})
-    require(r['policy']['observed_new_comparisons'] == new_pairs and r['policy']['code_classes'] == classes
+    require_comparisons(r['policy']['observed_new_comparisons'], new_pairs)
+    require(r['policy']['code_classes'] == classes
         and r['policy']['verdict'] == ('INCONCLUSIVE' if new_pairs else 'FINITE_ENUMERATION_SUFFICIENT'),
         'policy ceiling exceeds finite census')
     require(set(r['code']) == code_keys, 'unreferenced/missing code classes')
@@ -180,8 +188,10 @@ def audit_completion(directory, root, expected_manifest):
     require(used == set(attempts), 'unexpected or unused completion command')
     for name, expected in observed.items():
         require(digest((directory/name).read_bytes()) == expected, 'completion mutated during audit')
-    audit_plan(paths[0], root)
+    audit_plan(paths[0], root, audit_supplement=audit_supplement, capture=directory)
     return dict(status='DETERMINISTIC_CAPTURE_CONSISTENT', policy_evaluations=len(evaluations),
+        manifest_sha256=expected_manifest,
+        audit_supplement_sha256=None if audit_supplement is None else digest(Path(audit_supplement).read_bytes()),
         verified_chains=len(evaluations)*len(units), proof_successes=proofs, code_classes=classes,
         unique_backend_objects=len(code_keys), cap_hit_chains=caps, template_proofs=len(proved),
         template_unknowns=len(candidates)-len(proved), unattempted_templates=0,
@@ -195,8 +205,10 @@ def main():
     parser.add_argument('directory', type=Path)
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--manifest-sha256', required=True)
+    parser.add_argument('--audit-supplement', type=Path)
     args = parser.parse_args()
-    print(json.dumps(audit_completion(args.directory, args.root, args.manifest_sha256), sort_keys=True))
+    print(json.dumps(audit_completion(args.directory, args.root, args.manifest_sha256,
+                                     audit_supplement=args.audit_supplement), sort_keys=True))
 
 
 if __name__ == '__main__':

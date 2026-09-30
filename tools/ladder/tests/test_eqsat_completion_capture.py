@@ -21,9 +21,11 @@ class CompletionCaptureTests(unittest.TestCase):
         cls.directory = Path(os.environ['EVOCC_EQSAT_COMPLETION_CAPTURE']).resolve()
         cls.identity = digest((cls.directory/'manifest.json').read_bytes())
         cls.receipt = auditor.load(cls.directory/'receipt.json')
+        cls.supplement = os.environ.get('EVOCC_EQSAT_COMPLETION_AUDIT_SUPPLEMENT')
 
     def test_actual_complete_capture_replays(self):
-        result = auditor.audit_completion(self.directory, self.root, self.identity)
+        result = auditor.audit_completion(self.directory, self.root, self.identity,
+                                          audit_supplement=self.supplement)
         self.assertEqual(result['policy_evaluations'], 1024)
         self.assertEqual(result['verified_chains'], 6144)
         self.assertEqual(result['unattempted_templates'], 0)
@@ -62,7 +64,8 @@ class CompletionCaptureTests(unittest.TestCase):
         def altered(path):
             return candidate if Path(path).resolve() == self.directory/'receipt.json' else original(path)
         with patch.object(auditor, 'load', side_effect=altered), self.assertRaises((ValueError, KeyError)):
-            auditor.audit_completion(self.directory, self.root, self.identity)
+            auditor.audit_completion(self.directory, self.root, self.identity,
+                                      audit_supplement=self.supplement)
 
 
 if __name__ == '__main__':

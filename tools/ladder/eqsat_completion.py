@@ -17,7 +17,7 @@ import sys
 import tempfile
 import time
 
-from .eqsat_chain import AXES, digest, keys, require, unique, validate_record
+from .eqsat_chain import AXES, digest, keys, require, sha256_identity, unique, validate_record
 from .eqsat_census import check_source_revision
 from .eqsat_elf import inspect_elf
 from .eqsat_native import Capture
@@ -117,7 +117,51 @@ def validate_plan(m):
     require(set(m['guest_tools']) == set(GUEST_TOOLS), 'missing guest tool identities')
 
 
-def audit_plan(path, root):
+REAUDIT_FILES = ('tools/ladder/eqsat_completion.py', 'tools/ladder/eqsat_completion_audit.py')
+REAUDIT_PURPOSE = 'JSON_ARRAY_TELEMETRY_REPAIR_NO_NEW_EXPERIMENT'
+
+
+def validate_reaudit(s, m, manifest_digest, capture, receipt_digest):
+    """A code repair cannot change the frozen experiment or its captured bytes."""
+    keys(s, 'schema purpose implementation_commit manifest_sha256 capture repairs')
+    require(s['schema'] == 'evocc-r02-completion-reaudit-v1' and s['purpose'] == REAUDIT_PURPOSE,
+            'unsupported completion re-audit')
+    keys(s['capture'], 'directory receipt_sha256')
+    require(s['manifest_sha256'] == manifest_digest and s['capture'] ==
+            dict(directory=capture, receipt_sha256=receipt_digest), 're-audit capture identity changed')
+    require(type(s['repairs']) is dict and set(s['repairs']) == set(REAUDIT_FILES),
+            're-audit cannot change experiment tools, inputs or bounds')
+    for name, repair in s['repairs'].items():
+        keys(repair, 'before_sha256 after_sha256')
+        sha256_identity(repair['before_sha256']); sha256_identity(repair['after_sha256'])
+        require(repair['before_sha256'] == m['files'][name]
+                and repair['before_sha256'] != repair['after_sha256'], 'wrong original audit code identity')
+
+
+def reaudit_files(path, root, m, raw, capture):
+    path, capture = Path(path).resolve(), Path(capture).resolve()
+    require(path.is_relative_to(root/'tests/contracts') and capture.is_relative_to(root),
+            'unowned completion re-audit manifest/capture')
+    supplement_raw, s = path.read_bytes(), load(path)
+    validate_reaudit(s, m, digest(raw), capture.relative_to(root).as_posix(),
+                     digest((capture/'receipt.json').read_bytes()))
+    require((capture/'manifest.json').read_bytes() == raw, 're-audit manifest differs from original capture')
+    committed = subprocess.run(['git', 'show', 'HEAD:'+path.relative_to(root).as_posix()],
+                               cwd=root, capture_output=True, check=False)
+    require(committed.returncode == 0 and committed.stdout == supplement_raw,
+            'commit the re-audit supplement before replay')
+    check_source_revision(root, s['implementation_commit'])
+    for name, repair in s['repairs'].items():
+        for revision, field in ((m['implementation_commit'], 'before_sha256'),
+                                (s['implementation_commit'], 'after_sha256')):
+            original = subprocess.run(['git', 'show', revision+':'+name], cwd=root,
+                                      capture_output=True, check=False)
+            require(original.returncode == 0 and digest(original.stdout) == repair[field],
+                    're-audit code is not bound to its declared commit')
+    return {name: repair['after_sha256'] for name, repair in s['repairs'].items()}
+
+
+def audit_plan(path, root, *, audit_supplement=None, capture=None):
     path, root = Path(path).resolve(), Path(root).resolve()
     raw, m = path.read_bytes(), load(path)
     validate_plan(m)
@@ -130,7 +174,11 @@ def audit_plan(path, root):
             'wrong collector interpreter')
     for item in m['tools'].values():
         require(digest((root/item['path']).read_bytes()) == item['sha256'], 'completion tool changed')
-    for name, expected in m['files'].items():
+    effective_files = dict(m['files'])
+    if audit_supplement is not None:
+        require(capture is not None, 'a re-audit must bind an existing capture')
+        effective_files.update(reaudit_files(audit_supplement, root, m, raw, capture))
+    for name, expected in effective_files.items():
         require(digest((root/name).read_bytes()) == expected, 'completion input changed: '+name)
     source = root/m['source']['directory']
     manifest, receipt, units, policy, candidates = populations(source)
