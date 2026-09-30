@@ -198,3 +198,18 @@ comparison vocabulary. Its policy label is therefore `INCONCLUSIVE`, not
 finite-closure success. These are still producer observations until template
 completion and independent replay; the census is neither rewritten nor given
 an expanded budget, and AI remains unadmitted.
+
+Direct inspection of the five historical library A bundles confirmed that all
+use `evocc-identity-chain-v1`. The steady composer still passed a checker to
+their byte-identity verifier, which correctly refuses that incompatible API
+combination. Replacing the mocked baseline in the missing-default RED with
+actual identity-bundle bytes reproduced the failure. A now uses the existing
+identity binding with no asserted EVP proof; B still requires independent
+checker replay. The RED is `python-steady-identity-baseline-red.log`, SHA-256
+`573d74c326aca160a8760811034ccd3ae7b5f46e28f04fa585a3647aa970274b`.
+The steady/twin gate passes 19/19 and the complete ladder gate passes 486, zero
+failures and nine optional capture tests skipped (495 total),
+`python-steady-identity-baseline-final.log`, SHA-256
+`6a6ad7e8e04b35d84c2d97dbc0d72487b1c98c3e2b3e507ba1b9522419e81bca`.
+All ten A-profile backend objects are present in the running completion's cache;
+that read-only inventory observation is not native timing admission.

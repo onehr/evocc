@@ -130,3 +130,11 @@ passes 486 tests, with zero failures and nine optional real-capture tests skippe
 `6f11d9ac2338476528955210b5f1468d383525058f01736f0bae1f2fbf493adc`.
 Those results establish collector/planning behavior, not real build or timing
 qualification. The running deterministic capture and its pins remain unchanged.
+
+The baseline RED now constructs and binds real identity-bundle bytes instead
+of mocking that boundary. The five original library A bundles are EqSat-off
+identity chains: no checker or EVP proof is asserted for A. The repaired
+steady/twin tests pass 19/19; full ladder discovery passes 486 with zero failures
+and nine optional capture tests skipped (495 total),
+`python-steady-identity-baseline-final.log`, SHA-256
+`6a6ad7e8e04b35d84c2d97dbc0d72487b1c98c3e2b3e507ba1b9522419e81bca`.

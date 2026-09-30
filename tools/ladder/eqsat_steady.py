@@ -110,7 +110,7 @@ def build_population(m, root):
         for source in case['subject_sources']:
             number = case['sources'].index(source)
             chain = historical/case['id']/f'{number:02}-A-chain'
-            binding = bind_bundle(chain, root/m['tools']['historical_checker']['path'])
+            binding = bind_bundle(chain)  # EqSat-off has byte identity, not an EVP proof.
             objects = {}
             for profile in ('checked', 'unchecked'):
                 key = digest(canonical((binding['ir_digest'], profile)))

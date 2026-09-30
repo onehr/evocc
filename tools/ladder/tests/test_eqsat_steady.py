@@ -10,7 +10,7 @@ from tools.ladder.eqsat_steady import (DEFAULT_CONTROL, FILES, GUEST_TOOLS, RESO
 from tools.ladder.eqsat_steady_audit import audit_capture, audit_guest
 from tools.ladder.eqsat_steady_guest import PROTOCOL, aa_order, interval, next_iterations, result_value
 from tools.ladder.eqsat_steady_plan import make_plan, owned_files
-from tools.ladder.eqsat_twins import admit_unchecked, canonical, native_identity
+from tools.ladder.eqsat_twins import admit_unchecked, bind_bundle, canonical, native_identity
 
 
 def synthetic(mode='AA'):
@@ -174,14 +174,19 @@ class SteadyProtocolTests(unittest.TestCase):
             (complete/'manifest.json').write_bytes(canonical(dict(source=dict(directory='historical'))))
             (complete/'audit.json').write_bytes(canonical(dict(status='DETERMINISTIC_CAPTURE_CONSISTENT',
                 policy_evaluations=1024, verified_chains=6144, unattempted_templates=0)))
-            code, cases, bindings = {}, [], {}
+            code, cases = {}, []
             for case in ('zlib', 'zstd', 'cjson'):
                 source = case+'.c'; cases.append(dict(id=case, sources=[source], subject_sources=[source]))
                 chain = historical/case/'00-A-chain'; chain.mkdir(parents=True)
-                (chain/'output.evo').write_bytes(case.encode())
-                binding = dict(ir_digest=digest(case.encode()), chain_record_digest=digest((case+'chain').encode()),
-                               bundle_digest=digest((case+'bundle').encode()))
-                bindings[chain] = binding
+                ir = case.encode(); identity = digest(ir)
+                record = dict(schema='evocc-identity-chain-v1', mode='eqsat-off',
+                    publication='IDENTITY_VERIFIED', attempted_transactions=0, transactions=[],
+                    input_digest=identity, output_digest=identity,
+                    chain_id=digest(f'identity-chain-v1\n{identity}\n'.encode()))
+                (chain/'chain.json').write_bytes(canonical(record))
+                for name in ('input.evo', 'output.evo'):
+                    (chain/name).write_bytes(ir)
+                binding = bind_bundle(chain)
                 for profile in ('checked', 'unchecked'):
                     obj = complete/(case+'-'+profile+'.o'); obj.write_bytes(b'synthetic object')
                     key = digest(canonical((binding['ir_digest'], profile)))
@@ -194,8 +199,7 @@ class SteadyProtocolTests(unittest.TestCase):
                 ai_campaign='NOT_ADMITTED', code=code,
                 policy=dict(evaluations=[dict(weights=[1, 1, 2]+[1]*10, max_transactions=8)]))))
             m = dict(source=dict(directory='complete'), tools=dict(historical_checker=dict(path='checker')))
-            with patch('tools.ladder.eqsat_steady.bind_bundle', side_effect=lambda p, _: bindings[Path(p)]):
-                programs = build_population(m, root)
+            programs = build_population(m, root)
             self.assertEqual([p['case'] for p in programs], ['zlib', 'zstd', 'cjson'])
             for program in programs:
                 self.assertEqual(program['variants']['B'], {})
