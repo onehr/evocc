@@ -9,7 +9,7 @@ import subprocess
 from .eqsat_chain import digest, require
 from .eqsat_native import host_identity
 from .eqsat_steady import (FILES, PROTOCOL, RESOURCES, admitted_calibration,
-                          build_population, load, validate_plan)
+                          build_population, check_build_inputs, load, validate_plan)
 from .eqsat_twins import canonical
 
 
@@ -74,6 +74,8 @@ def make_plan(root, mode, source):
         guest_tools=sm['guest_tools'], host=host_identity(), guest_kernel='6.18.15',
         resources=RESOURCES, protocol=PROTOCOL)
     validate_plan(plan, mode)
+    if mode == 'build':
+        check_build_inputs(plan, root, programs)
     return plan
 
 

@@ -72,6 +72,12 @@ def audit_plan(path, root, mode):
         for name, expected in files.items():
             require((root/name).resolve().is_relative_to(root) and
                     digest((root/name).read_bytes()) == expected, 'timing input changed: '+name)
+    if mode in ('AA', 'AB'):
+        previous = root/m['source']['directory']
+        required = {p.relative_to(root).as_posix() for p in previous.rglob('*') if p.is_file()}
+        inherited = load(previous/'manifest.json')['source']['files']
+        require(required <= set(m['source']['files']) and all(m['source']['files'].get(k) == v
+                for k, v in inherited.items()), 'timing prerequisite inventory omitted/changed')
     return m, raw
 
 
@@ -126,6 +132,30 @@ def build_population(m, root):
         programs.append(program)
     require([p['case'] for p in programs] == ['zlib', 'zstd', 'cjson'], 'wrong library population')
     return programs
+
+
+def check_build_inputs(m, root, programs):
+    """Every recipe read/link/include must have a predeclared immutable pin."""
+    root = Path(root).resolve(); required = set()
+    source = root/m['source']['directory']
+    required.update(source/name for name in ('manifest.json', 'receipt.json', 'audit.json'))
+    for program in programs:
+        required.update(root/p for p in program['reference_objects'])
+        for unit in program['units']:
+            for chain in unit['chains'].values():
+                required.update(p for p in (root/chain).iterdir() if p.is_file())
+            for profiles in unit['objects'].values():
+                required.update(root/p for p in profiles.values())
+        header_root = root/ROOTS[program['case']]
+        require(header_root.is_dir(), 'missing declared library headers')
+        headers = list(header_root.rglob('*.h'))
+        require(headers, 'empty declared header inventory')
+        required.update(headers)
+    pins = m['source']['files']
+    for p in required:
+        require(p.resolve().is_relative_to(root) and not p.is_symlink(), 'unowned steady build input')
+        name = p.relative_to(root).as_posix()
+        require(name in pins and pins[name] == digest(p.read_bytes()), 'unbound steady build input: '+name)
 
 
 def timing_tasks(build, root):
@@ -195,6 +225,7 @@ def run_plan(path, root, mode):
                     m['guest_tools'], 'timing guest tools changed')
             if mode == 'build':
                 receipt['programs'] = build_population(m, root)
+                check_build_inputs(m, root, receipt['programs'])
                 for program in receipt['programs']:
                     name = program['case']; folder = directory/name; folder.mkdir()
                     header = root/ROOTS[name]/('lib' if name == 'zstd' else '')

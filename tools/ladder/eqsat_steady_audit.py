@@ -10,7 +10,7 @@ from .eqsat_elf import inspect_elf
 from .eqsat_native import pair_order
 from .eqsat_pilot_audit import audit_usage
 from .eqsat_steady import (GUEST_TOOLS, PROTOCOL, RESOURCES, TASKS, admitted_calibration,
-                          audit_plan, build_population, load, timing_tasks)
+                          audit_plan, build_population, check_build_inputs, load, timing_tasks)
 from .eqsat_steady_guest import aa_order, interval, next_iterations, result_value
 from .eqsat_twins import admit_unchecked, canonical, native_identity
 
@@ -70,6 +70,7 @@ def audit_capture(directory, root, manifest_digest):
         return '/work/'+Path(file).resolve().relative_to(root).as_posix()
     if mode == 'build':
         expected = build_population(m, root)
+        check_build_inputs(m, root, expected)
         require(len(r['programs']) == len(expected), 'steady build population changed')
         from .eqsat_pilot import ROOTS
         for actual, original in zip(r['programs'], expected):

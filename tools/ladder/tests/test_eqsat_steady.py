@@ -5,7 +5,8 @@ from unittest.mock import patch
 
 from tools.ladder.eqsat_chain import digest
 from tools.ladder.eqsat_native import pair_order
-from tools.ladder.eqsat_steady import FILES, GUEST_TOOLS, RESOURCES, TASKS, admitted_calibration, validate_plan
+from tools.ladder.eqsat_steady import (FILES, GUEST_TOOLS, RESOURCES, TASKS, admitted_calibration,
+                                     check_build_inputs, validate_plan)
 from tools.ladder.eqsat_steady_audit import audit_guest
 from tools.ladder.eqsat_steady_guest import PROTOCOL, aa_order, interval, next_iterations, result_value
 from tools.ladder.eqsat_steady_plan import owned_files
@@ -82,6 +83,25 @@ def synthetic(mode='AA'):
 
 
 class SteadyProtocolTests(unittest.TestCase):
+    def test_unpinned_link_object_proof_or_header_is_not_a_complete_build_plan(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            paths = ('complete/manifest.json', 'complete/receipt.json', 'complete/audit.json',
+                     'ref.o', 'chain/output.evo', 'subject.o', 'include/public.h')
+            for p in paths:
+                file = root/p; file.parent.mkdir(exist_ok=True); file.write_bytes(p.encode())
+            m = dict(source=dict(directory='complete', files={p: digest((root/p).read_bytes()) for p in paths}))
+            programs = [dict(case='cjson', reference_objects=['ref.o'], units=[dict(
+                chains=dict(A='chain', B='chain'), objects=dict(A=dict(checked='subject.o', unchecked='subject.o')))])]
+            with patch('tools.ladder.eqsat_steady.ROOTS', dict(cjson='include')):
+                check_build_inputs(m, root, programs)
+                for p in paths:
+                    changed = copy.deepcopy(m); changed['source']['files'].pop(p)
+                    with self.subTest(path=p), self.assertRaisesRegex(ValueError, 'unbound'):
+                        check_build_inputs(changed, root, programs)
+
     def test_plan_snapshot_retains_exact_owned_artifacts_and_refuses_pending_publish(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory

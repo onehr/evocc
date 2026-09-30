@@ -53,12 +53,25 @@ pass: 468 passed, 0 failed, 1 skipped (`python-proc-final.log`, SHA-256
 `cc16cec84f7ddd8f0bb93ff0a792c619b1c6fb58b3643c17c37283ecf13fbeae`).
 
 Successful completion execution and independent capture audit are **NOT RUN**.
-The completion plan must be committed before running. The Linux zombie-only
-regression is the first guest execution before any policy census result.
+The committed kernel-state plan started capture `complete-fxbm__9o`, but the
+Codex daemon restart terminated its collector. Its unchanged receipt ends at
+423 complete policy evaluations and a partially started 424th evaluation;
+zero template proofs ran. Receipt SHA-256:
+`ae6d72b89adcf2f8973033285f8bdc72a2a6fc2247dfd722c4192dbf2d1e3eeb`.
+The exact owned orphan VM was subsequently stopped. This interrupted capture is
+retained, not promoted, and will not be merged into the next run or given a
+reset campaign budget. A fresh capture uses the same committed manifest and
+the same limits. The Linux zombie-only regression precedes every policy census.
 
 R02a1 remains separate: in-process steady-state work, guest CPU pinning, a quiet
 host collector, Linux A/A calibration and a separately frozen A/B plan are
-required. The existing steady-mode entry points deliberately fail closed until
-that runner is implemented and qualified. The historical 576 timing samples
-remain retained but are **NOT QUALIFIED** for latency claims. R03 remains closed
-to AI activity until the preflight verdicts justify its admission.
+required. The runner and independent auditor are now implemented, including
+pinning every consumed proof, object and header and inheriting predecessor
+inventories. The latest Python gate is 477 passed, 0 failed, 9 skipped
+(`python-inventory-final.log`, SHA-256
+`d4c3473f7cbd8288e7b48b92bffc269639f4d2fc931552217ebfd2586ddd78dd`).
+The skips are the optional historical capture lane and eight new real-completion
+audit/mutation tests; they are not claims of native qualification. New Linux
+steady build, A/A and A/B executions remain **NOT RUN**. The historical 576
+timing samples remain retained but are **NOT QUALIFIED** for latency claims.
+R03 remains closed to AI activity until the preflight verdicts justify admission.
