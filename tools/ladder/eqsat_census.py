@@ -335,7 +335,7 @@ def run_smoke(manifest_path, root):
         return directory, receipt
 
 
-def bounded_capture(argv, root, out, err, resources, started, env, watch=None):
+def bounded_capture(argv, root, out, err, resources, started, env, watch=None, usage=None):
     """Bound captured streams only; descendants may write larger proof files.
 
     Pipes provide backpressure. Never retain more than the shared byte cap;
@@ -347,12 +347,26 @@ def bounded_capture(argv, root, out, err, resources, started, env, watch=None):
                              start_new_session=True, env=env)
     retained = 0
     completed = False
+
+    def poll():
+        if usage is None:
+            return child.poll()
+        if child.returncode is None:
+            pid, status, rusage = os.wait4(child.pid, os.WNOHANG)
+            if pid:
+                child.returncode = os.waitstatus_to_exitcode(status)
+                usage.update(user_ns=round(rusage.ru_utime * 1_000_000_000),
+                             system_ns=round(rusage.ru_stime * 1_000_000_000),
+                             peak_rss_raw=rusage.ru_maxrss,
+                             scope='wait4-direct-child-including-waited-descendants')
+        return child.returncode
+
     try:
         with selectors.DefaultSelector() as streams:
             for source, destination in ((child.stdout, out), (child.stderr, err)):
                 os.set_blocking(source.fileno(), False)
                 streams.register(source, selectors.EVENT_READ, destination)
-            while streams.get_map() or child.poll() is None:
+            while streams.get_map() or poll() is None:
                 require(time.monotonic() - started < resources['timeout_seconds'], 'watchdog expired')
                 require(shutil.disk_usage(root).free >= resources['min_free_bytes'], 'disk reserve exhausted')
                 if watch is not None:

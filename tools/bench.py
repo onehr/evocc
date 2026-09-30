@@ -67,6 +67,7 @@ def parser():
     p.add_argument('--eqsat-cap-smoke', type=Path, help='run a committed, bounded generated-IR telemetry manifest; not the application preflight')
     p.add_argument('--check-eqsat-manifest', type=Path, help='read-only frozen R02 calibration-plan audit; never proof/correctness/performance admission')
     p.add_argument('--eqsat-calibrate', type=Path, help='run a frozen, bounded native A/A plumbing plan; not Q2/Q3 or application performance acceptance')
+    p.add_argument('--eqsat-pilot', type=Path, help='run a frozen Linux hardware-VM A/A, A/B and checked-twin pilot; not final Q2/Q3 acceptance')
     p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
     p.add_argument("--programs", type=positive, default=500, help="Csmith programs per campaign")
     p.add_argument("--campaign", choices=["all", "base", "bitfields"], default="all")
@@ -568,6 +569,17 @@ def main(argv=None):
     def eqsat_tool(name):
         package = 'ladder' if __name__ == '__main__' and not __package__ else 'tools.ladder'
         return importlib.import_module(package + '.' + name)
+    if args.eqsat_pilot:
+        if not only_options('eqsat_pilot'):
+            print('--eqsat-pilot is a separate frozen mode', file=sys.stderr)
+            return 2
+        try:
+            directory, receipt = eqsat_tool('eqsat_pilot').run_pilot(args.eqsat_pilot, ROOT)
+            print(json.dumps(dict(directory=str(directory), status=receipt['status']), sort_keys=True))
+            return 0 if receipt['status'] == 'OBSERVED' else 1
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f'pilot rejected: {error}', file=sys.stderr)
+            return 1
     if args.eqsat_calibrate:
         if not only_options('eqsat_calibrate'):
             print('--eqsat-calibrate is a separate frozen mode', file=sys.stderr)

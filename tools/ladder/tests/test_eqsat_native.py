@@ -52,6 +52,14 @@ class NativePrimitivesTests(unittest.TestCase):
         row = self.run_code('print("result")', dict(exit_code=0,
             stdout_sha256=digest(b'result\n'), stderr_sha256=digest(b'')))
         self.assertEqual(row['status'], 'RESULT_CHECKED')
+
+    def test_waited_child_cpu_and_peak_rss_are_observed_not_parent_deltas(self):
+        self.runner.measure_resources = True
+        row = self.run_code('sum(i*i for i in range(100000))')
+        usage = row['resources']
+        self.assertGreater(usage['user_ns'] + usage['system_ns'], 0)
+        self.assertGreater(usage['peak_rss_bytes'], 0)
+        self.assertEqual(usage['scope'], 'wait4-direct-child-including-waited-descendants')
         self.assertGreater(row['wall_ns'], 0)
         self.assertEqual(row['argv'][0], sys.executable)
         self.assertEqual(self.receipt['attempts'], [row])

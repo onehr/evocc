@@ -239,9 +239,10 @@ def summarize(pairs):
 
 class Capture:
     """Own only this run's new directory; never delete caller-owned artifacts."""
-    def __init__(self, directory, resources, env, receipt, save):
+    def __init__(self, directory, resources, env, receipt, save, measure_resources=False):
         self.directory = directory
         self.resources, self.env, self.receipt, self.save = resources, env, receipt, save
+        self.measure_resources = measure_resources
 
     def watch(self):
         size = sum(p.stat().st_size for p in self.directory.rglob('*') if p.is_file())
@@ -259,12 +260,18 @@ class Capture:
         start_ns = time.monotonic_ns()
         try:
             self.watch()
+            usage = {} if self.measure_resources else None
             with out.open('xb') as o, err.open('xb') as e:
                 started = time.monotonic()
                 start_ns = time.monotonic_ns()
                 row['exit_code'] = bounded_capture(row['argv'], self.directory, o, e,
-                    self.resources, started, self.env, watch=self.watch)
+                    self.resources, started, self.env, watch=self.watch, usage=usage)
                 row['wall_ns'] = time.monotonic_ns() - start_ns
+            if usage is not None:
+                require(usage, 'missing child resource observation')
+                row['resources'] = dict(**usage, peak_rss_bytes=usage['peak_rss_raw'] *
+                    (1 if platform.system() == 'Darwin' else 1024),
+                    rss_unit='bytes', wall_scope='spawn-to-stdio-drain')
             self.watch()
             row.update(stdout_sha256=digest(out.read_bytes()), stderr_sha256=digest(err.read_bytes()))
             if expected is not None:
