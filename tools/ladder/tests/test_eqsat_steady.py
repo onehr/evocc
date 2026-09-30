@@ -8,6 +8,7 @@ from tools.ladder.eqsat_native import pair_order
 from tools.ladder.eqsat_steady import FILES, GUEST_TOOLS, RESOURCES, TASKS, admitted_calibration, validate_plan
 from tools.ladder.eqsat_steady_audit import audit_guest
 from tools.ladder.eqsat_steady_guest import PROTOCOL, aa_order, interval, next_iterations, result_value
+from tools.ladder.eqsat_steady_plan import owned_files
 from tools.ladder.eqsat_twins import admit_unchecked, canonical, native_identity
 
 
@@ -81,6 +82,17 @@ def synthetic(mode='AA'):
 
 
 class SteadyProtocolTests(unittest.TestCase):
+    def test_plan_snapshot_retains_exact_owned_artifacts_and_refuses_pending_publish(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temp:
+            root = Path(temp); source = root/'capture'; source.mkdir()
+            (source/'receipt.json').write_bytes(b'complete\n')
+            self.assertEqual(owned_files(source, root), {'capture/receipt.json': digest(b'complete\n')})
+            (source/'receipt.json.pending').write_bytes(b'incomplete\n')
+            with self.assertRaisesRegex(ValueError, 'published'):
+                owned_files(source, root)
+
     def test_every_allowed_calibration_look_is_balanced(self):
         for n in PROTOCOL['pair_counts']:
             order = aa_order(20260930)[:n]
