@@ -124,13 +124,13 @@ class NativePrimitivesTests(unittest.TestCase):
         scratch.mkdir()
         proof = scratch / 'proof.evp'
         proof.write_bytes(b'transient')
-        original = Path.stat
+        original = os.stat
         def concurrent_cleanup(path, *args, **kwargs):
             value = original(path, *args, **kwargs)
-            if path == proof:
+            if Path(path) == proof:
                 shutil.rmtree(scratch)
             return value
-        with patch.object(Path, 'stat', concurrent_cleanup):
+        with patch('os.stat', concurrent_cleanup):
             self.runner.watch()
         self.assertFalse(scratch.exists())
         # A disappeared scratch entry never licenses an oversized retained file.
@@ -159,6 +159,37 @@ class NativePrimitivesTests(unittest.TestCase):
         with patch('os.scandir', side_effect=concurrent_cleanup):
             self.runner.watch()
         self.assertFalse(scratch.exists())
+
+    def test_scan_duration_does_not_immediately_trigger_another_retention_scan(self):
+        self.runner.watch_interval_seconds = 1
+        clock = [10.0]
+        original = os.scandir
+        def expensive_scan(path):
+            clock[0] += 2.0
+            return original(path)
+        with (patch('tools.ladder.eqsat_native.time.monotonic', side_effect=lambda: clock[0]),
+              patch('os.scandir', side_effect=expensive_scan) as scan):
+            self.runner.watch()
+            first = scan.call_count
+            clock[0] = 12.5
+            self.runner.watch()
+            self.assertEqual(scan.call_count, first,
+                'a slow completed scan must not create a continuous rescan loop')
+            clock[0] = 13.1
+            self.runner.watch()
+            self.assertGreater(scan.call_count, first)
+
+    def test_retention_scan_does_not_reparse_a_path_object_for_every_file(self):
+        proof = self.root / 'proof.evp'
+        proof.write_bytes(b'retained proof')
+        original, parsed = Path.stat, []
+        def count_paths(path, *args, **kwargs):
+            parsed.append(path)
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'stat', count_paths):
+            self.runner.watch()
+        self.assertNotIn(proof, parsed,
+            'large captures must stat walk names without rebuilding Path objects')
 
     def test_pair_order_and_statistics_are_frozen_and_complete(self):
         order = pair_order(6, 7)

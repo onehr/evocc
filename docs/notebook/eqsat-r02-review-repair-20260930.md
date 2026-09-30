@@ -63,6 +63,34 @@ retained, not promoted, and will not be merged into the next run or given a
 reset campaign budget. A fresh capture uses the same committed manifest and
 the same limits. The Linux zombie-only regression precedes every policy census.
 
+That fresh capture, `complete-kz95w4d2`, was safely interrupted after 509 complete
+policy evaluations and zero template attempts. Its receipt is `INTERRUPTED`,
+not a completed census; owned VM cleanup exited 0. Receipt SHA-256:
+`9e6a01e7bd174271fc1a254f611642e6818be185842d180f1566f11b35920954`.
+The interruption preserved all 47,037 files (751,883,936 unique-inode bytes).
+No partial evaluations are merged into another run.
+
+The collector's cooldown began at the start of a retention scan. Once scans
+took longer than one second, the next pipe poll immediately began another full
+scan. An actual one-second collector stack sample and two isolated REDs exposed
+the rescan feedback and per-file `Path` reconstruction. The repair starts the
+cooldown at scan completion and uses `os.stat` on the existing walk names. Full
+unique-inode counting, permission-error refusal, disappearing scratch handling,
+the byte ceiling and the mandatory final scan remain intact. The retention
+label now explicitly states the minimum completion-to-next-scan interval; a new
+manifest must pin this collector before restarting. The optimizer, checker,
+policy/template populations and all resource limits are unchanged.
+
+On the stable interrupted capture, three diagnostic scans measured median times
+of 1.133 seconds before and 0.844 seconds after the per-file repair. The new
+scanner accepts the exact old byte ceiling and rejects one byte less. This is
+collector diagnostics, **not** compiler-performance evidence. The focused gate
+passes 36/36; full ladder discovery passes 480 with zero failures and nine
+optional capture tests skipped (489 total), `python-retention-final.log`, SHA-256
+`0da9e585601a50e0092d124e4ffb2f1bf40cd477c37b2b209f4359401c9f630d`.
+The separate Lean-tool Python gate passes 15/15. No Rust implementation changed
+in this repair; the earlier full-workspace gate is not relabeled as a new run.
+
 R02a1 remains separate: in-process steady-state work, guest CPU pinning, a quiet
 host collector, Linux A/A calibration and a separately frozen A/B plan are
 required. The runner and independent auditor are now implemented, including

@@ -271,7 +271,7 @@ class Capture:
         for folder, _, names in os.walk(self.directory, onerror=scan_error):
             for name in names:
                 try:
-                    value = (Path(folder) / name).stat()
+                    value = os.stat(os.path.join(folder, name))
                 except FileNotFoundError:
                     continue
                 if stat.S_ISREG(value.st_mode):
@@ -281,7 +281,9 @@ class Capture:
                     size += value.st_size
         require(self.directory.is_dir(), 'capture directory missing')
         require(size <= self.resources['max_retained_bytes'], 'retention limit exceeded')
-        self.last_watch = now
+        # A scan slower than the interval must not immediately trigger another
+        # full scan at the next pipe poll. Cool down from its completion time.
+        self.last_watch = time.monotonic()
 
     def run(self, stage, argv, expected=None, quiet=False):
         index = len(self.receipt['attempts'])

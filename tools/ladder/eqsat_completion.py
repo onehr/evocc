@@ -35,7 +35,7 @@ BOUNDS = dict(signature_visits=1024, whole_suite_evaluations=1024, schedules=[1,
     order='POLICY_SIGNATURE_THEN_SCHEDULE_AND_TEMPLATE_DIGEST', retries=0,
     fitness='ALLOCATABLE_AND_RELOCATION_BYTES_ONLY', native_timing='NOT_RUN',
     rule_installation='NOT_AUTHORIZED', candidate_budget_unit=CONTRACT['evaluation_unit'],
-    retention='UNIQUE_INODE_BYTES_SAMPLED_EVERY_SECOND_AND_FINAL_SCAN')
+    retention='UNIQUE_INODE_FULL_SCAN_MINIMUM_COMPLETION_INTERVAL_1S_AND_FINAL_SCAN')
 FILES = (*COLLECTORS, 'tools/ladder/eqsat_completion.py',
     'tools/ladder/eqsat_completion_audit.py', *LEAN_SOURCES, *LEAN_IMPORTS,
     'docs/evoir-spec.md', 'docs/evomir-spec.md',
