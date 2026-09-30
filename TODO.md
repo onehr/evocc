@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-09-29**, initially audited against `a83d803`; current clauses are
+Updated **2026-09-30**, initially audited against `a83d803`; current clauses are
 EvoIR **1.9.115** and EvoMIR **0.54**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -76,9 +76,9 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | T03, R02a | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. R01a was requalified; R02a measurement foundations are active following the EqSat review, not an application performance result. |
+| AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. R01a is requalified; R02a/b/d's bounded Linux pilot is qualified, not final Q2/G2/Q3 acceptance. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R02b, R02c, R02d, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 6: common-IR checked twins, separate preflights, bounded manual/template admission and final gates. Conditional extensions need evidence and review; x86-64 and release stay separate. |
+| LATER | R01, R02, R02c, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 6: R02a/b/d's pilot is complete, but all three search ceilings are INCONCLUSIVE and no AI campaign is admitted. Resolve useful opportunity and calibration before final gates; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1872,9 +1872,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
 
 ## Later roadmap gates — not substitutes for runtime closure
 
-The September 29 revision-5 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
+The September 29 revision-6 [Q2/Q3 implementation architecture][eqsat-plan] refines R01–R03
 without closing them. R01a/R02a infrastructure and R02b development measurements
-can proceed on correctness-admitted workloads; final acceptance remains
+can proceed on correctness-admitted workloads. September 30's R02a/b/d
+implementation and bounded Linux pilot are qualified; all three opportunity
+ceilings and all A/B latency comparisons remain INCONCLUSIVE. Final acceptance remains
 R01 → R02 → R03. `LATER` describes roadmap priority, not an implementation or
 live-job status. Keep heavy campaigns serial under the existing ARM64 priorities.
 Each policy/rule/shortcut track needs its own effect-ceiling preflight before
@@ -1931,15 +1933,29 @@ record a justified not-needed disposition separately from implementation PASS.
   and code-size reductions are not performance acceptance. Close with the
   roadmap's measured comparison, not an inferred speedup. [Roadmap][roadmap].
 
-  - [ ] **R02a — Performance manifests and measurement runner** — `OPEN`, P3.
-    Implement design P1 through `tools/bench.py` and existing adapters/locks.
+  - [x] **R02a — Performance manifests and measurement runner** — `DONE`, 2026-09-30, bounded registered Linux pilot.
+    Design P1 is implemented through `tools/bench.py` and existing adapters/locks.
+    The frozen P0/zlib/zstd/cJSON pilot completed 576/576 timed executions and
+    48 warmups; CPU/RSS, ELF sections/stripped files, compiler/checker costs and
+    every output are retained with explicit measurement scope. The independent
+    auditor replays 138 certificates across 102 optimized chains and verifies
+    all 108 checked-twin admissions. Ten read-only capture mutations are rejected;
+    the full Rust workspace passes 2,861 tests (four historical ignores),
+    Clippy and formatting; full Python ladder discovery passes 449/450 tests,
+    with the real-capture skip executed separately (6/6 tests pass).
+    Mixed-link coverage and host-debug compile costs
+    are explicit: this is not a timed GCC comparison or whole-library PASS.
+    [Qualified protocol, failures and claim ceiling](docs/notebook/eqsat-r02-linux-pilot-20260930.md);
+    [tracked checkpoint](tests/contracts/eqsat-r02-pilot-receipt-20260930.json).
+    Implemented requirements:
     Freeze effective UB-check/lowering profiles, shared chain identity, semantic
     flags, scoped budget units/mapping, checked-twin common IR/chain digests,
     closed rejection accounting, object coverage,
     timing boundaries, raw metrics,
     resource caps and separate performance receipts. REDs cover stale/mismatched
     artifacts, missing results, invalid metrics, interference and cleanup ownership.
-    The September 29 foundation batch removes repeated terminal no-op
+    Historical September 29 foundations (superseded by the qualification above):
+    the foundation batch removes repeated terminal no-op
     interpretation, duplicate per-function Admission construction and the extra
     whole-chain staged-state clone. Every changed module is still interpreted;
     every certificate, including the terminal no-op, is replayed. Checker
@@ -1954,21 +1970,34 @@ record a justified not-needed disposition separately from implementation PASS.
     repair: 38 completed steps, 24 result-checked timed runs and four warmups of
     one binary; read-only capture audit passed. The earlier link failure is
     retained with zero timing samples. This is not Linux/application performance
-    acceptance or an EqSat speedup; R02a remains OPEN.
-    Broader effective-control/optimized-chain admission, application workloads,
-    CPU/RSS/section metrics and checked/unchecked fan-out remain open.
+    acceptance or an EqSat speedup; R02a was OPEN at that checkpoint. The broader
+    pilot requirements named there are now exercised within the registered scope above.
     [Foundation scope and gates](docs/notebook/eqsat-r02a-foundations-20260929.md).
     [Native pipeline and limits](docs/notebook/eqsat-native-calibration-20260929.md).
     September 29 checkpoint: the default-cap diagnostic collector reuses the
     bench entry point and lock, with committed bounded input manifests and
-    scoped/unknown counters. Native performance manifests and runners remain
-    open; the generated-IR collector smoke is not their acceptance.
+    scoped/unknown counters. Native performance manifests and runners were still
+    open at that checkpoint; the generated-IR collector smoke was not their acceptance.
     EqSat-off export now records a zero-transaction identity chain over the
     exact codegen IR. Independent byte-identity audit reports zero EVP proof
-    successes; checked/unchecked fan-out is still open.
+    successes; checked/unchecked fan-out was still open then and is now closed by R02d.
     [Scope and protocol](docs/notebook/eqsat-cap-census-20260929.md).
 
-  - [ ] **R02b — Opportunity/effect-ceiling preflight and A/A plus A/B pilot** — `LATER`, P3.
+  - [x] **R02b — Opportunity/effect-ceiling preflight and A/A plus A/B pilot** — `DONE`, 2026-09-30, bounded pilot with negative/inconclusive outcomes.
+    The first default-limit table covers six subject TUs and twelve transactions:
+    no transient, admission or chain cap hits. Actual matching work remains
+    NOT_MEASURED. The selected-pair census enumerates 512 feasible signatures;
+    16 fixed-order suite evaluations at schedules 1/8 observe eight code classes.
+    Two bounded rule syntax cells complete (5,994 visits, 1,222 fuzz survivors);
+    two universal template controls prove, but no new rule is installed or
+    qualified for utility. LLVM19's 34 reduced-node hints are not equations.
+    Thirteen multi-rewrite regions expose eleven shortcut compositions without
+    demonstrated fuel/matcher savings. Policy/rule/shortcut verdicts are all
+    INCONCLUSIVE; no AI campaign is admitted. All 24 timing comparisons are
+    complete: only 2/12 A/A are within the frozen effect floor and 12/12 A/B
+    are inconclusive. Code-section reductions are real, not latency evidence.
+    [Results, resource stops and retained failures](docs/notebook/eqsat-r02-linux-pilot-20260930.md).
+    Implemented preflight contract, with every unresolved measurement retained:
     After R01a/R02a, first report whether default transient and certificate caps
     actually bind, with separate EVP fuel and chain counts. Freeze inputs and
     enumerate acceptance/rejection of transient-selected root/replacement pairs,
@@ -2002,11 +2031,19 @@ record a justified not-needed disposition separately from implementation PASS.
     Separate native/VM/emulator claims, mixed links, memory and code size; retain
     regressions and all non-results. Complete measurement need not mean GCC parity.
 
-  - [ ] **R02d — Implement and verify the stated native UB-check profiles** — `LATER`, P3.
-    The MIR spec describes an unchecked driver flag, but the inspected driver/MIR
-    path does not expose it. Implement explicit effective-profile plumbing and
-    receipt identity; do not invent a switch or delete source/IR obligations in
-    the benchmark harness. REDs: ignored flag, missing identity, checked traps,
+  - [x] **R02d — Implement and verify the stated native UB-check profiles** — `DONE`, 2026-09-30.
+    `--ub-checks=checked|unchecked` now reaches the driver and MIR; only native
+    UbAssume enforcement is omitted in unchecked mode. Source obligations,
+    interpreter diagnostics, other predicate users, explicit traps and FP checks
+    remain. Real native trap/defined-parity tests and both interpreter profiles
+    pass. The Linux pilot has 108/108 admitted twins (baseline twelve + policy
+    96), each bound to the same canonical verified IR, chain and bundle, with
+    a passing checked execution for that input before unchecked use. Profile
+    identities stay separate; EqSat-off uses a zero-proof identity chain.
+    [Native evidence, exact boundaries and mutations](docs/notebook/eqsat-r02-linux-pilot-20260930.md).
+    Implemented explicit effective-profile plumbing and receipt identity;
+    no switch or source/IR obligation is invented/deleted by the harness.
+    REDs: ignored flag, missing identity, checked traps,
     defined-input parity and interpreter contract preservation. Every unchecked
     variant/input must have a passing no-trap checked twin. Fan out one canonical
     verified IR and immutable chain/bundle to both MIR profiles; require exact

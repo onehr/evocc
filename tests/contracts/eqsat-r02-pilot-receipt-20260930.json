@@ -1,0 +1,182 @@
+{
+  "schema": "evocc-r02-pilot-receipt-v1",
+  "date": "2026-09-30",
+  "status": "QUALIFIED",
+  "scope": "BOUNDED_REGISTERED_LINUX_PILOT",
+  "completed_tasks": ["R02a", "R02b", "R02d"],
+  "performance": "PILOT_NOT_FINAL_Q2",
+  "ai_campaign": "NOT_ADMITTED",
+  "provenance": {
+    "implementation_commit": "b27e5e230eabd899459a429c7e172f4ba8077590",
+    "manifest_commit": "2d39a968",
+    "manifest": "tests/contracts/eqsat-linux-pilot-20260930-scratch-fix.json",
+    "manifest_sha256": "9d21b5838ed38129248bdd898b8bf70e327680349068fb8f13d66f9e84740cc2",
+    "capture": ".evidence/eqsat-pilot/pilot-xb4aobn_",
+    "raw_receipt_sha256": "aee9f7ff20cc06b5cc7410c884e2a1074a2ed316dce9ad577710ab6891c16530",
+    "preflight_sha256": "fb804a94f557d70ef19dd226a2df3eb0548458a4611a19f128d57e82fffe6b75",
+    "compiler_sha256": "dea6efe19d9fc9ba8caea205ade32b84c630d5232d156868c1511b73cce6a69d",
+    "checker_sha256": "4947c24343cc177387c5a4a7debc4c6bd82acd8e7588c1303b68c3959f4fb1bd",
+    "ir_backend_sha256": "1a06f34e7afffc68b22e1a08afcba661ead99c5da84a7aeb4fad21bb22cac4af",
+    "image_digest": "2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2"
+  },
+  "audit": {
+    "status": "CAPTURE_CONSISTENT",
+    "execution_telemetry": "TRUSTED_COLLECTOR_NOT_EXECUTION_ATTESTATION",
+    "log": ".evidence/eqsat-r02-gates/pilot-scratch-audit-20260930.log",
+    "log_sha256": "05dceb15f471087c853e982efac5b9536d5aa69aa402d017e6be8b1bb477cf3c"
+  },
+  "coverage": {
+    "cases": ["p0", "zlib", "zstd", "cjson"],
+    "input_modes": 6,
+    "subject_units": 6,
+    "native_profiles": ["checked", "unchecked"],
+    "linkage": "DECLARED_MIXED_LINK_NO_FALLBACK",
+    "interpreter": "P0_BOTH_ONLY_LIBC_APPLICATIONS_NATIVE",
+    "runtime": "HARDWARE_LINUX_AARCH64_VM_NOT_BARE_METAL",
+    "guest_cpus": 2,
+    "guest_memory": "3G"
+  },
+  "proof_accounting": {
+    "baseline_chains": 6,
+    "baseline_certificates": 12,
+    "policy_chains": 96,
+    "policy_certificates": 126,
+    "proof_successes": 138,
+    "completed_proof_rejections": 0,
+    "bundle_obligation_failures": 0,
+    "unknown_proof_outcomes": 0,
+    "eqsat_off": "IDENTITY_CHAIN_ZERO_EVP_SUCCESSES"
+  },
+  "checked_twins": {
+    "baseline": 12,
+    "policy": 96,
+    "admitted": 108,
+    "expected": 108,
+    "identity": "SAME_VERIFIED_IR_CHAIN_AND_BUNDLE_PER_VARIANT",
+    "limitation": "OBSERVED_NECESSARY_DEFINEDNESS_NOT_UNIVERSAL_C_UB_PROOF"
+  },
+  "default_caps": {
+    "units": 6,
+    "transactions": 12,
+    "transient_hit_transactions": 0,
+    "admission_hit_transactions": 0,
+    "chain_limit_hits": 0,
+    "matching_work": "NOT_MEASURED",
+    "fuel_scope": "MAXIMUM_PER_REGION_RULE_EPOCH_FIRINGS_NOT_MATCHER_WORK"
+  },
+  "preflight": {
+    "policy": {
+      "verdict": "INCONCLUSIVE",
+      "feasible_gate_signatures": 512,
+      "signature_enumeration": "COMPLETE",
+      "whole_suite_evaluations": 16,
+      "observed_evaluations": 16,
+      "transaction_schedules": [1, 8],
+      "machine_code_classes": 8,
+      "newly_consulted_pairs": 0,
+      "scope": "SELECTED_PAIR_ACCEPTANCE_NOT_COST_AWARE_EXTRACTION"
+    },
+    "rule": {
+      "verdict": "INCONCLUSIVE",
+      "cells": [
+        {"lhs_operator_nodes": 1, "syntax_visits": 162, "counterexamples": 123, "fuzz_survivors": 39, "stop": "ENUM_COMPLETE"},
+        {"lhs_operator_nodes": 2, "syntax_visits": 5832, "counterexamples": 4649, "fuzz_survivors": 1183, "stop": "ENUM_COMPLETE"}
+      ],
+      "fuzz_survivors": 1222,
+      "unattempted_templates": 1220,
+      "template_control_proofs": 2,
+      "template_unknowns": 0,
+      "new_rules_installed": 0,
+      "new_rule_utility_evaluations": 0,
+      "llvm_hint_patterns": 335,
+      "llvm_reduced_node_hints": 34,
+      "scope": "FIXED_ONE_VARIABLE_GRAMMAR_NOT_COMPLETE_P0_RULE_SPACE",
+      "reason": "NO_BOUNDED_NEW_RULE_INSTALLATION_OR_UTILITY_PROOF"
+    },
+    "shortcut": {
+      "verdict": "INCONCLUSIVE",
+      "verified_regions": 1480,
+      "multi_rewrite_regions": 13,
+      "composition_kinds": 11,
+      "fuel_saving": "NOT_MEASURED",
+      "matching_work": "NOT_MEASURED"
+    }
+  },
+  "timing": {
+    "metric": "GUEST_FRESH_PROCESS_SPAWN_TO_STDIO_DRAIN",
+    "seed": 20260930,
+    "comparisons": 24,
+    "pairs_per_comparison": 12,
+    "timed_executions": 576,
+    "expected_executions": 576,
+    "warmups": 48,
+    "retries": 0,
+    "aa_comparisons": 12,
+    "aa_within_effect_floor": 2,
+    "ab_comparisons": 12,
+    "ab_inconclusive": 12,
+    "effect_floor_percent": 5,
+    "multiple_comparisons": "BONFERRONI_ALL_24_COMPARISONS",
+    "cpu_rss": "WAIT4_RAW_PER_ATTEMPT_AND_GUEST_EXECUTION",
+    "compile_cost": "HOST_DEBUG_BUILD_DIAGNOSTIC_NOT_FAIR_GCC_COMPARISON",
+    "rss_limit": "INCLUDES_INHERITED_COLLECTOR_FLOOR_NOT_HEAP_ONLY"
+  },
+  "materialization": {
+    "changed_ir_units": 5,
+    "changed_unit_profile_pairs": 10,
+    "expected_changed_unit_profile_pairs": 10,
+    "object_identity": "ALLOCATABLE_AND_RELOCATION_SECTIONS",
+    "instruction_padding_pool_split": "NOT_MEASURED"
+  },
+  "linked_sizes": [
+    {"case": "p0", "profile": "checked", "text_a": 424, "text_b": 424, "stripped_a": 67544, "stripped_b": 67544},
+    {"case": "p0", "profile": "unchecked", "text_a": 424, "text_b": 424, "stripped_a": 67544, "stripped_b": 67544},
+    {"case": "zlib", "profile": "checked", "text_a": 77996, "text_b": 77516, "stripped_a": 133216, "stripped_b": 133216},
+    {"case": "zlib", "profile": "unchecked", "text_a": 74764, "text_b": 74252, "stripped_a": 133216, "stripped_b": 133216},
+    {"case": "zstd", "profile": "checked", "text_a": 525988, "text_b": 524548, "stripped_a": 592112, "stripped_b": 592112},
+    {"case": "zstd", "profile": "unchecked", "text_a": 523364, "text_b": 521924, "stripped_a": 592112, "stripped_b": 592112},
+    {"case": "cjson", "profile": "checked", "text_a": 30844, "text_b": 30112, "stripped_a": 67680, "stripped_b": 67680},
+    {"case": "cjson", "profile": "unchecked", "text_a": 30732, "text_b": 30000, "stripped_a": 67680, "stripped_b": 67680}
+  ],
+  "gates": {
+    "rust_workspace": {
+      "status": "PASS",
+      "suites": 366,
+      "passed": 2861,
+      "failed": 0,
+      "ignored": 4,
+      "clippy": "PASS",
+      "format": "PASS",
+      "log": ".evidence/eqsat-r02-gates/workspace-fuel-fixtures-20260930.log",
+      "log_sha256": "9a6b3bb4944d9b66d8ed8cfee3a2039c37ad2e258d7176b2c4f5aa18e5debb1d"
+    },
+    "python_collector": {
+      "status": "PASS",
+      "scope": "FULL_TOOLS_LADDER_TEST_DISCOVERY",
+      "tests": 450,
+      "passed": 449,
+      "skipped": 1,
+      "skip_scope": "REAL_CAPTURE_TEST_EXECUTED_SEPARATELY_BELOW",
+      "log": ".evidence/eqsat-r02-gates/python-ladder-final-20260930.log",
+      "log_sha256": "f83dd43cd51facf093b9d69162a1197a25ca773c1233cf1b3aa207042a9a9b41"
+    },
+    "real_capture_mutations": {
+      "status": "PASS",
+      "tests": 6,
+      "passed": 6,
+      "read_only_mutations_rejected": 10,
+      "evidence_unchanged": true,
+      "log": ".evidence/eqsat-r02-gates/pilot-capture-mutations-20260930.log",
+      "log_sha256": "90de5403db0081af4399530294b8759a82344b529bb05bb8be1029e485ab1e0d"
+    }
+  },
+  "retention": {
+    "capture_mib_approx": 640,
+    "capture_cap_bytes": 1073741824,
+    "minimum_free_bytes": 8589934592,
+    "owned_vm_cleanup_exit_code": 0,
+    "raw_capture_tracked_in_git": false,
+    "failed_attempts_preserved": ["pilot-wdm6xhwh", "pilot-cm5sr2ke"]
+  },
+  "not_accepted": ["R01/G2", "R02/Q2", "R02c", "R03/Q3", "AI_SEARCH_BENEFIT", "ALL_LIBRARY_OBJECT_PERFORMANCE"]
+}

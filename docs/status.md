@@ -66,6 +66,10 @@ ARCHITECTURE / REMAINING ROADMAP GATES (bounded evidence, not a completion perce
   Rust/Lean model differential: 1325045 vectors; 0 differences
   FP: scalar/strict and hosted f128 implemented; jq PASS; full musl and FP complex/vector open
   R06 Doom PASS: 81/81 TU; 12 x 350 matching headless frames; wrap/video-init profile, not audio/window
+  R02a/b/d bounded Linux pilot: QUALIFIED; 576 timed; 138 EVP certificates; 108 checked twins
+    Default caps: 6 TU / 12 transactions; transient hits=0, admission hits=0, chain hits=0
+    Policy / rule / shortcut: INCONCLUSIVE / INCONCLUSIVE / INCONCLUSIVE; AI campaign NOT_ADMITTED
+    Latency: 2/12 A/A within floor; 12/12 A/B inconclusive; not final Q2
   G2 EqSat whole-kernel reproducibility + every optimized TU proof: NOT_ACCEPTED
   Q2 GCC -O2 same-task performance comparison: NOT_ACCEPTED
   Q3 measured self-improvement benefit: NOT_ACCEPTED
@@ -101,6 +105,10 @@ PASS is limited to the lane's recorded configuration, installed objects and orig
 - F3/F4 surveys and the old mixed-kernel `kernel` bench row are historical measurements of different populations. They are not the current compiler's lowering ceiling. Current full compositions are reported separately above.
 - A Rust-built compiler is not C self-hosting. Kernel target-C coverage does not establish complete HOSTCC coverage.
 - Doom: PASS: 81/81 TU; 12 x 350 matching headless frames; wrap/video-init profile, not audio/window. See the [separate receipt](../tests/contracts/ladder-doom-receipt.json). This integration does not change the frozen 15-lane application denominator.
+
+## Bounded EqSat measurement checkpoint
+
+R02a/b/d's registered Linux pilot is separate from final R02/Q2, G2 and Q3 acceptance. Its summary never promotes these gates. See the [tracked checkpoint receipt](../tests/contracts/eqsat-r02-pilot-receipt-20260930.json) and [protocol, negative results and reproduction](notebook/eqsat-r02-linux-pilot-20260930.md). The raw capture auditor, not this renderer, independently replays the proofs. Timing is collector telemetry, not execution attestation. Code-section reductions are not a latency claim; all three search-track verdicts remain separate.
 
 ## Kernel evidence and remaining work
 

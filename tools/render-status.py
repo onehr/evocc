@@ -35,7 +35,7 @@ RECEIPTS = (
     "kernel-expanded-kunit-receipt.json", "semantic-gate-contract.json",
     "kernel-kunit-bench-receipt.json",
     "lean-p0-receipt.json", "lean-correspondence-receipt.json",
-    "ladder-doom-receipt.json",
+    "ladder-doom-receipt.json", "eqsat-r02-pilot-receipt-20260930.json",
 )
 OUTCOMES = ("PASS", "FAIL", "SKIP", "TIMEOUT", "INVALID_OUTPUT", "INCOMPLETE", "NOT_RUN")
 
@@ -134,6 +134,99 @@ def doom_status(receipts):
             and data.get('unitsInPassingBuild') == 81 and data.get('executions') == 12):
         return 'PASS: 81/81 TU; 12 x 350 matching headless frames; wrap/video-init profile, not audio/window'
     return data.get('status', 'NOT_RUN') + ': no complete headless acceptance'
+
+
+def eqsat_pilot_status(receipts) -> list[str]:
+    """Display a bounded checkpoint, not a new proof replay or Q2 acceptance.
+
+    Reject inconsistent summary denominators instead of hiding a failed gate
+    behind QUALIFIED. The independent raw-capture auditor remains authoritative.
+    """
+    data = receipts.get('eqsat-r02-pilot-receipt-20260930.json', {})
+    if not data:
+        return ['R02a/b/d bounded Linux pilot: NOT_RUN']
+
+    def count(row, name):
+        value = row[name]
+        if type(value) is not int or value < 0:
+            raise ValueError('invalid pilot counter: ' + name)
+        return value
+
+    try:
+        if (data['schema'] != 'evocc-r02-pilot-receipt-v1'
+                or data['status'] != 'QUALIFIED'
+                or data['scope'] != 'BOUNDED_REGISTERED_LINUX_PILOT'
+                or sorted(data['completed_tasks']) != ['R02a', 'R02b', 'R02d']
+                or data['performance'] != 'PILOT_NOT_FINAL_Q2'
+                or data['ai_campaign'] != 'NOT_ADMITTED'
+                or data['audit']['status'] != 'CAPTURE_CONSISTENT'):
+            raise ValueError('pilot is not qualified for the stated scope')
+        coverage, timing = data['coverage'], data['timing']
+        proofs, twins, caps = data['proof_accounting'], data['checked_twins'], data['default_caps']
+        if coverage['native_profiles'] != ['checked', 'unchecked']:
+            raise ValueError('missing native profile')
+        for identity in ('manifest_sha256', 'raw_receipt_sha256', 'preflight_sha256',
+                         'compiler_sha256', 'checker_sha256', 'ir_backend_sha256'):
+            if not re.fullmatch('[0-9a-f]{64}', data['provenance'][identity]):
+                raise ValueError('missing checkpoint identity')
+        executions = count(timing, 'timed_executions')
+        comparisons = count(timing, 'comparisons')
+        aa, ab = count(timing, 'aa_comparisons'), count(timing, 'ab_comparisons')
+        if (not executions or executions != count(timing, 'expected_executions')
+                or executions != comparisons * count(timing, 'pairs_per_comparison') * 2
+                or comparisons != aa + ab or not aa or not ab
+                or count(timing, 'aa_within_effect_floor') > aa
+                or count(timing, 'ab_inconclusive') > ab):
+            raise ValueError('incomplete or inconsistent timing population')
+        successes = count(proofs, 'proof_successes')
+        if (not successes or successes != count(proofs, 'baseline_certificates')
+                + count(proofs, 'policy_certificates')
+                or any(count(proofs, key) for key in ('completed_proof_rejections',
+                           'bundle_obligation_failures', 'unknown_proof_outcomes'))):
+            raise ValueError('unqualified proof population')
+        admitted = count(twins, 'admitted')
+        if (not admitted or admitted != count(twins, 'expected')
+                or admitted != count(twins, 'baseline') + count(twins, 'policy')
+                or twins['identity'] != 'SAME_VERIFIED_IR_CHAIN_AND_BUNDLE_PER_VARIANT'):
+            raise ValueError('unchecked measurements lack matching checked twins')
+        tracks = data['preflight']
+        verdicts = [tracks[key]['verdict'] for key in ('policy', 'rule', 'shortcut')]
+        if any(v not in ('SEARCHABLE', 'FINITE_ENUMERATION_SUFFICIENT',
+                         'NO_OBSERVABLE_EFFECT', 'INCONCLUSIVE') for v in verdicts):
+            raise ValueError('unknown track verdict')
+        policy = tracks['policy']
+        if (not count(policy, 'whole_suite_evaluations')
+                or policy['whole_suite_evaluations'] != count(policy, 'observed_evaluations')):
+            raise ValueError('failed or missing policy evaluation')
+        gates = data['gates']
+        rust, python = gates['rust_workspace'], gates['python_collector']
+        mutation = gates['real_capture_mutations']
+        if (any(g['status'] != 'PASS' for g in (rust, python, mutation))
+                or count(rust, 'failed') or not count(rust, 'passed')
+                or rust['clippy'] != 'PASS' or rust['format'] != 'PASS'
+                or count(python, 'tests') != count(python, 'passed') + count(python, 'skipped')
+                or not count(mutation, 'tests')
+                or mutation['tests'] != count(mutation, 'passed')
+                or not count(mutation, 'read_only_mutations_rejected')
+                or mutation['evidence_unchanged'] is not True):
+            raise ValueError('missing or failed qualification gate')
+        units, transactions = count(caps, 'units'), count(caps, 'transactions')
+        transient, admission, chains = (count(caps, name) for name in
+            ('transient_hit_transactions', 'admission_hit_transactions', 'chain_limit_hits'))
+        if not units or not transactions or data['retention']['owned_vm_cleanup_exit_code'] != 0:
+            raise ValueError('missing census or cleanup')
+    except (KeyError, TypeError, ValueError):
+        return ['R02a/b/d bounded Linux pilot: UNVERIFIED; inconsistent/missing checkpoint fields']
+
+    return [
+        f'R02a/b/d bounded Linux pilot: QUALIFIED; {executions} timed; '
+        f'{successes} EVP certificates; {admitted} checked twins',
+        f'  Default caps: {units} TU / {transactions} transactions; '
+        f'transient hits={transient}, admission hits={admission}, chain hits={chains}',
+        '  Policy / rule / shortcut: ' + ' / '.join(verdicts) + '; AI campaign NOT_ADMITTED',
+        f"  Latency: {timing['aa_within_effect_floor']}/{aa} A/A within floor; "
+        f"{timing['ab_inconclusive']}/{ab} A/B inconclusive; not final Q2",
+    ]
 
 
 def revision(path: Path) -> str:
@@ -396,6 +489,7 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
     lines += [
         "  FP: scalar/strict and hosted f128 implemented; jq PASS; full musl and FP complex/vector open",
         "  R06 Doom " + doom_status(receipts),
+        *("  " + line for line in eqsat_pilot_status(receipts)),
         "  G2 EqSat whole-kernel reproducibility + every optimized TU proof: NOT_ACCEPTED",
         "  Q2 GCC -O2 same-task performance comparison: NOT_ACCEPTED",
         "  Q3 measured self-improvement benefit: NOT_ACCEPTED",
@@ -456,6 +550,16 @@ def render_document(receipts: dict[str, dict], *, evoir: str, evomir: str) -> st
     )
     text += "- Doom: " + doom_status(receipts) + ". See the [separate receipt](../tests/contracts/ladder-doom-receipt.json). "
     text += "This integration does not change the frozen 15-lane application denominator.\n"
+    text += (
+        "\n## Bounded EqSat measurement checkpoint\n\n"
+        "R02a/b/d's registered Linux pilot is separate from final R02/Q2, G2 and "
+        "Q3 acceptance. Its summary never promotes these gates. See the "
+        "[tracked checkpoint receipt](../tests/contracts/eqsat-r02-pilot-receipt-20260930.json) "
+        "and [protocol, negative results and reproduction](notebook/eqsat-r02-linux-pilot-20260930.md). "
+        "The raw capture auditor, not this renderer, independently replays the proofs. "
+        "Timing is collector telemetry, not execution attestation. Code-section reductions "
+        "are not a latency claim; all three search-track verdicts remain separate.\n"
+    )
     expanded = receipts.get("kernel-expanded-kunit-receipt.json", {})
     text += "\n## Kernel evidence and remaining work\n\n"
     if expanded.get("compositionNote"):
