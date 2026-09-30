@@ -1,0 +1,20 @@
+{
+  "schema": "evocc-r02-completion-reaudit-v1",
+  "purpose": "JSON_ARRAY_TELEMETRY_REPAIR_NO_NEW_EXPERIMENT",
+  "implementation_commit": "67012c72af9fadc464ed03a546f8e8fb347515ec",
+  "manifest_sha256": "2272bf7bbb10ecc47543a20346ee58fa8eb51052fd59687656a8f9ce2db1ee29",
+  "capture": {
+    "directory": ".evidence/eqsat-completion/complete-9bjq0w16",
+    "receipt_sha256": "7b57a622e5adae8dc6de9a654ace597f2fd1a08fa34a050e268f8bc796ec5ae5"
+  },
+  "repairs": {
+    "tools/ladder/eqsat_completion.py": {
+      "before_sha256": "876fe85f78daaabfe73f5c9903dd95a8c4909e752bc842d0a1544f9afd4f48bd",
+      "after_sha256": "57f3377a9663c142b064ac435825873a61edadeb1d05ba766d507ce2273715e9"
+    },
+    "tools/ladder/eqsat_completion_audit.py": {
+      "before_sha256": "7265ab55e08b99fc1c34776de0afda452f6f30fbcd95f5d5494a46b4e6a8296d",
+      "after_sha256": "f317818bc4ea44989f8deec8ad18f3a48d6a25e3eb0326b4ce337b3a3229c1a0"
+    }
+  }
+}
