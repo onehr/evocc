@@ -19,6 +19,29 @@ fn input() -> Module {
 }
 
 #[test]
+fn inconsistent_public_wall_scopes_must_not_panic() {
+    let resources = evocc_eqopt::ChainResources {
+        total_wall_nanos: 10,
+        checker_wall_nanos: 2,
+        identity_wall_nanos: 1,
+    };
+    assert_eq!(resources.wrapper_wall_nanos(3).unwrap(), 4);
+    for producer in [8, 9, 11, u128::MAX] {
+        let result = std::panic::catch_unwind(|| resources.wrapper_wall_nanos(producer));
+        assert!(result
+            .unwrap()
+            .unwrap_err()
+            .contains("inconsistent chain wall scopes"));
+    }
+    let overflowing_scopes = evocc_eqopt::ChainResources {
+        total_wall_nanos: u128::MAX,
+        checker_wall_nanos: u128::MAX,
+        identity_wall_nanos: 1,
+    };
+    assert!(overflowing_scopes.wrapper_wall_nanos(1).is_err());
+}
+
+#[test]
 fn chain_checks_the_terminal_zero_region_certificate() {
     let module = input();
     let mut state = EqualityState::for_module(&module).unwrap();

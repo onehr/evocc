@@ -50,6 +50,13 @@ GUEST_TOOLS = ('/usr/bin/gcc-14', '/usr/bin/clang-19', '/usr/bin/as', '/usr/bin/
 ZLIB = 'adler32.c crc32.c deflate.c infback.c inffast.c inflate.c inftrees.c trees.c zutil.c compress.c uncompr.c'.split()
 
 
+def ub_guard_sites(assembly):
+    """Count native sites for the explicit EvoIR UB diagnostic family."""
+    reasons = {3002, 3003, 3004, 3005, 3006, 3022, 3063}
+    return sum(int(value) in reasons for value in re.findall(
+        rb'^\s*brk\s+#([0-9]+)\s*(?://[^\n]*)?$', assembly, re.M))
+
+
 def tree_identity(directory):
     path = Path(directory)
     require(path.is_dir(), 'missing frozen source/header tree')
@@ -278,7 +285,7 @@ def build_case(case, product, work, m, root, tools, command, guest, guest_path, 
                 subject_objects[variant][profile].append(obj)
                 detail['native'][profile] = dict(object=obj.name, metrics=inspect_elf(obj.read_bytes()),
                     assembly_digest=digest(raw_asm), native_ub_profile=profile,
-                    ub_brk_sites=len(re.findall(rb'\bbrk #(?:300[2456]|3063)\b', raw_asm)))
+                    ub_brk_sites=ub_guard_sites(raw_asm))
             save()
         unit['status'] = 'OBSERVED'
 

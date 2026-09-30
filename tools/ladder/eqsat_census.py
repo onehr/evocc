@@ -335,13 +335,54 @@ def run_smoke(manifest_path, root):
         return directory, receipt
 
 
-def bounded_capture(argv, root, out, err, resources, started, env, watch=None, usage=None):
+def live_process_group(snapshot, group):
+    """Return live group members; unreaped zombies are not executing descendants."""
+    members = []
+    for line in snapshot.splitlines():
+        fields = line.split()
+        require(len(fields) == 3 and fields[0].isdecimal() and fields[1].isdecimal(),
+                'invalid process-group snapshot')
+        pid, pgid = map(int, fields[:2])
+        # Darwin can briefly report '?' for an unrelated exiting process.
+        # Unknown states are conservatively live, never evidence of completion.
+        if pgid == group and fields[2][0] not in 'ZX':
+            members.append(pid)
+    return members
+
+
+def process_group_snapshot():
+    # Do not trust killpg(group, 0): a guest PID 1 may retain dead orphans.
+    # No shell, caller arguments or process command lines enter this snapshot.
+    probe = subprocess.Popen(['/bin/ps', '-A', '-o', 'pid=,pgid=,stat='],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        stdout, stderr = probe.communicate(timeout=5)
+        require(probe.returncode == 0 and not stderr and len(stdout) <= 4*1024**2,
+                'process-group snapshot failed')
+        return stdout.decode('ascii')
+    finally:
+        if probe.poll() is None:
+            probe.kill()
+        probe.wait()
+        probe.stdout.close()
+        probe.stderr.close()
+
+
+def bounded_capture(argv, root, out, err, resources, started, env, watch=None, usage=None, quiet=False):
     """Bound captured streams only; descendants may write larger proof files.
 
     Pipes provide backpressure. Never retain more than the shared byte cap;
     on overflow/deadline/disk failure kill the session even if its leader has
     exited while a descendant still holds a pipe open.
+
+    Quiet timing batches require a preregistered bounded guest artifact envelope.
+    Their storage checks are at batch boundaries, while deadline/pipe limits
+    remain active. They do not use recursive scans during measured intervals.
     """
+    if quiet:
+        require(shutil.disk_usage(root).free >= resources['min_free_bytes'], 'disk reserve exhausted')
+        if watch is not None:
+            watch()
     child = subprocess.Popen(argv, cwd=root, stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              start_new_session=True, env=env)
@@ -368,10 +409,12 @@ def bounded_capture(argv, root, out, err, resources, started, env, watch=None, u
                 streams.register(source, selectors.EVENT_READ, destination)
             while streams.get_map() or poll() is None:
                 require(time.monotonic() - started < resources['timeout_seconds'], 'watchdog expired')
-                require(shutil.disk_usage(root).free >= resources['min_free_bytes'], 'disk reserve exhausted')
-                if watch is not None:
-                    watch()
-                for key, _ in streams.select(timeout=0.02):
+                if not quiet:
+                    require(shutil.disk_usage(root).free >= resources['min_free_bytes'], 'disk reserve exhausted')
+                    if watch is not None:
+                        watch()
+                remaining_time = resources['timeout_seconds']-(time.monotonic()-started)
+                for key, _ in streams.select(timeout=min(1 if quiet else 0.02, max(0, remaining_time))):
                     data = os.read(key.fd, 65536)
                     if not data:
                         streams.unregister(key.fileobj)
@@ -385,7 +428,13 @@ def bounded_capture(argv, root, out, err, resources, started, env, watch=None, u
             os.killpg(child.pid, 0)
         except ProcessLookupError:
             completed = True
+        else:
+            completed = not live_process_group(process_group_snapshot(), child.pid)
         require(completed, 'descendants survived the process leader')
+        if quiet:
+            require(shutil.disk_usage(root).free >= resources['min_free_bytes'], 'disk reserve exhausted')
+            if watch is not None:
+                watch()
         return code
     finally:
         if not completed:

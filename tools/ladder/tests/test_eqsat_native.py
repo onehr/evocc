@@ -13,7 +13,8 @@ from unittest.mock import patch
 
 from tools.ladder.eqsat_chain import digest
 from tools.ladder.eqsat_native import (Capture, pair_order, summarize, execution_plan,
-                                       run_calibration, FRONTEND, REFERENCE, LINK, SDK_LINK)
+                                       run_calibration, FRONTEND, REFERENCE, LINK, SDK_LINK,
+                                       CommandExitError)
 from tools.ladder.tests.test_eqsat_manifest import manifest
 
 
@@ -78,6 +79,33 @@ class NativePrimitivesTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'watchdog'):
             self.run_code('import time; time.sleep(10)')
         self.assertEqual(self.receipt['attempts'][-1]['status'], 'FAILED')
+
+    def test_only_a_completed_nonzero_exit_is_a_template_unknown_candidate(self):
+        with self.assertRaises(CommandExitError):
+            self.run_code('raise SystemExit(1)')
+        row = self.receipt['attempts'][-1]
+        self.assertEqual(row['failure_kind'], 'COMMAND_EXIT')
+        self.assertEqual(row['exit_code'], 1)
+        self.assertEqual(row['stdout_sha256'], digest(b''))
+        self.resources['max_retained_bytes'] = 1
+        with self.assertRaises(ValueError) as raised:
+            self.run_code('print("too big"); raise SystemExit(1)')
+        self.assertNotIsInstance(raised.exception, CommandExitError)
+        self.assertNotIn('failure_kind', self.receipt['attempts'][-1])
+
+    def test_quiet_batch_checks_storage_only_before_and_after_the_child(self):
+        import time
+        observations = []
+        def watch():
+            observations.append(time.monotonic())
+        start = time.monotonic()
+        with patch.object(self.runner, 'watch', side_effect=watch):
+            row = self.runner.run('quiet', [sys.executable, '-c', 'import time; time.sleep(0.2)'], quiet=True)
+        self.assertEqual(row['status'], 'COMPLETED')
+        # Capture and transport both check boundaries, never every 20 ms.
+        self.assertEqual(len(observations), 4)
+        self.assertGreaterEqual(observations[1], start)
+        self.assertGreater(observations[2]-observations[1], 0.2)
 
     def test_surviving_same_group_descendant_is_not_a_completed_run(self):
         with self.assertRaisesRegex(ValueError, 'descendants'):

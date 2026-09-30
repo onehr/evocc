@@ -238,21 +238,36 @@ def summarize(pairs):
                 inference='A/A_CALIBRATION_ONLY_NO_SPEEDUP_CLAIM')
 
 
+class CommandExitError(ValueError):
+    """A waited command exited nonzero, with its capture/integrity bounds intact.
+
+    A fixed proof template may classify only this failure as UNKNOWN. Launch,
+    watchdog, output, retention, result and artifact failures are not proofs.
+    """
+
+
 class Capture:
     """Own only this run's new directory; never delete caller-owned artifacts."""
-    def __init__(self, directory, resources, env, receipt, save, measure_resources=False):
+    def __init__(self, directory, resources, env, receipt, save, measure_resources=False,
+                 unique_inodes=False, watch_interval_seconds=0):
         self.directory = directory
         self.resources, self.env, self.receipt, self.save = resources, env, receipt, save
         self.measure_resources = measure_resources
+        self.unique_inodes = unique_inodes
+        self.watch_interval_seconds = watch_interval_seconds
+        self.last_watch = float('-inf')
 
     def watch(self):
         require(self.directory.is_dir(), 'capture directory missing')
+        now = time.monotonic()
+        if now-self.last_watch < self.watch_interval_seconds:
+            return
         def scan_error(error):
             # A waited checker may remove its owned scratch tree concurrently.
             # Permission/I/O errors are not disappearance and must fail closed.
             if not isinstance(error, FileNotFoundError):
                 raise error
-        size = 0
+        size, inodes = 0, set()
         for folder, _, names in os.walk(self.directory, onerror=scan_error):
             for name in names:
                 try:
@@ -260,16 +275,22 @@ class Capture:
                 except FileNotFoundError:
                     continue
                 if stat.S_ISREG(value.st_mode):
+                    if self.unique_inodes and (value.st_dev, value.st_ino) in inodes:
+                        continue
+                    inodes.add((value.st_dev, value.st_ino))
                     size += value.st_size
         require(self.directory.is_dir(), 'capture directory missing')
         require(size <= self.resources['max_retained_bytes'], 'retention limit exceeded')
+        self.last_watch = now
 
-    def run(self, stage, argv, expected=None):
+    def run(self, stage, argv, expected=None, quiet=False):
         index = len(self.receipt['attempts'])
         out = self.directory / f'{index:03}.stdout'
         err = self.directory / f'{index:03}.stderr'
         row = dict(stage=stage, argv=[str(a) for a in argv], status='STARTED',
                    stdout=out.name, stderr=err.name)
+        if quiet:
+            row['storage_watch'] = 'BATCH_BOUNDARIES_ONLY_PREDECLARED_CHILD_ENVELOPE'
         self.receipt['attempts'].append(row)
         self.save()
         started = time.monotonic()
@@ -281,7 +302,7 @@ class Capture:
                 started = time.monotonic()
                 start_ns = time.monotonic_ns()
                 row['exit_code'] = bounded_capture(row['argv'], self.directory, o, e,
-                    self.resources, started, self.env, watch=self.watch, usage=usage)
+                    self.resources, started, self.env, watch=self.watch, usage=usage, quiet=quiet)
                 row['wall_ns'] = time.monotonic_ns() - start_ns
             if usage is not None:
                 require(usage, 'missing child resource observation')
@@ -294,7 +315,9 @@ class Capture:
                 require(all(row[k] == expected[k] for k in
                             ('exit_code', 'stdout_sha256', 'stderr_sha256')), 'result mismatch')
             else:
-                require(row['exit_code'] == 0, 'command failed')
+                if row['exit_code'] != 0:
+                    row['failure_kind'] = 'COMMAND_EXIT'
+                    raise CommandExitError('command exited with status ' + str(row['exit_code']))
             row['status'] = 'RESULT_CHECKED' if expected is not None else 'COMPLETED'
         except BaseException as error:
             row.update(status='FAILED', error=str(error))

@@ -12,6 +12,21 @@ The [compact tracked receipt](../../tests/contracts/eqsat-r02-pilot-receipt-2026
 indexes the raw capture, hashes, gates and denominators. It is a checkpoint;
 replay the raw evidence to requalify it, rather than trusting its status label.
 
+## September 30 review correction
+
+The capture's artifact/result accounting is reproducible, but **its timing
+protocol is not qualified**. Linux inherited the Darwin pair count without a
+Linux A/A duration/sample calibration; individual executions lasted only about
+0.8–20 ms, guest affinity was uncontrolled and host scans/hashing ran concurrently.
+The original manifest/capture and negative results are preserved, not repaired
+in place. Code-section reductions, certificate replay and twin identity are
+separate evidence and are not invalidated by this timing defect.
+
+Mandatory follow-ups are tracked as R02b1 (typed failure boundaries, complete
+deterministic enumeration/templates) and R02a1 (in-process steady-state work,
+guest CPU affinity, silent host collector, Linux A/A then a separately frozen
+A/B plan). No R03 activity or latency acceptance inherits this capture.
+
 ## Frozen subject and measurement boundary
 
 - Implementation: `b27e5e230eabd899459a429c7e172f4ba8077590`; manifest commit:

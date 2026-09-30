@@ -219,13 +219,14 @@ def eqsat_pilot_status(receipts) -> list[str]:
         return ['R02a/b/d bounded Linux pilot: UNVERIFIED; inconsistent/missing checkpoint fields']
 
     return [
-        f'R02a/b/d bounded Linux pilot: QUALIFIED; {executions} timed; '
+        f'R02a/b/d historical Linux pilot: ARTIFACT_AUDIT_PASS; {executions} timed; '
         f'{successes} EVP certificates; {admitted} checked twins',
         f'  Default caps: {units} TU / {transactions} transactions; '
         f'transient hits={transient}, admission hits={admission}, chain hits={chains}',
         '  Policy / rule / shortcut: ' + ' / '.join(verdicts) + '; AI campaign NOT_ADMITTED',
         f"  Latency: {timing['aa_within_effect_floor']}/{aa} A/A within floor; "
         f"{timing['ab_inconclusive']}/{ab} A/B inconclusive; not final Q2",
+        '  Timing protocol: NOT_QUALIFIED; Linux steady-state A/A and deterministic completion required (R02a1/R02b1)',
     ]
 
 

@@ -14,6 +14,7 @@ from .eqsat_elf import inspect_elf
 from .eqsat_opportunities import (diagnostic_expressions, enumerate_rule_cell, lean_candidate,
                                   llvm_function, llvm_functions, residual_candidate)
 from .eqsat_preflight import selected_pairs, enumerate_policies
+from .eqsat_native import CommandExitError
 from .eqsat_twins import bind_bundle, canonical, native_identity, admit_unchecked
 
 CONTRACT = dict(schema='evocc-preflight-bounds-v1', schedules=[1, 8],
@@ -53,6 +54,20 @@ def shortcut_census(proofs):
         verdict='INCONCLUSIVE' if multi else 'NO_OBSERVABLE_EFFECT',
         reason='NO_SHORTCUT_INTEGRATION_COST_MEASUREMENT' if multi else 'NO_MULTI_REWRITE_PROOF_IN_THIS_POPULATION',
         scope='OBSERVED_VERIFIED_BASELINE_COMPOSITIONS_NOT_ALL_POSSIBLE_SHORTCUTS')
+
+
+def fixed_template_attempt(identity, template, argv, directory, command):
+    """Classify a completed proof attempt without catching integrity failures."""
+    proof = dict(candidate=identity, status='STARTED', template=template)
+    try:
+        row = command('preflight:template:'+identity, argv)
+    except CommandExitError as error:
+        return dict(proof, status='UNKNOWN', reason=str(error))
+    output = (directory/row['stdout']).read_text()
+    require('EvoIR.preflight_sound' in output and 'RuleCovered preflight_candidate' in output
+            and 'sorryAx' not in output and 'ofReduceBool' not in output,
+            'template output lacks exact theorem/axiom admission')
+    return dict(proof, status='PROVED_TEMPLATE_ONLY_NOT_INSTALLED', output=row['stdout'])
 
 
 def run_preflight(m, receipt, directory, root, tools, command, guest, guest_path, pin, save):
@@ -190,19 +205,16 @@ def run_preflight(m, receipt, directory, root, tools, command, guest, guest_path
         source = work/(identity+'.lean')
         source.write_text(lean_candidate(candidate['lhs'], candidate['rhs']))
         pin(source)
-        proof = dict(candidate=identity, status='UNKNOWN', template=bounds['template'])
+        proof = dict(candidate=identity, status='STARTED', template=bounds['template'])
         report['rule']['proofs'].append(proof)
         try:
-            row = command('preflight:template:'+identity,
+            proof.update(fixed_template_attempt(identity, bounds['template'],
                 [tools['collector_python'], root/'tools/ladder/eqsat_template.py',
-                 tools['lean'], root/'lean', source])
-            output = (directory/row['stdout']).read_text()
-            require('EvoIR.preflight_sound' in output and 'RuleCovered preflight_candidate' in output
-                    and 'sorryAx' not in output and 'ofReduceBool' not in output,
-                    'template output lacks exact theorem/axiom admission')
-            proof.update(status='PROVED_TEMPLATE_ONLY_NOT_INSTALLED', output=row['stdout'])
+                 tools['lean'], root/'lean', source], directory, command))
         except (OSError, ValueError) as error:
-            proof['reason'] = str(error)
+            proof.update(status='FAILED_INTEGRITY', reason=str(error))
+            save()
+            raise
         stage = 'preflight:template:'+identity
         attempt = next((a for a in reversed(receipt['attempts']) if a['stage'] == stage), None)
         if attempt is not None:

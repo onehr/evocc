@@ -68,6 +68,10 @@ def parser():
     p.add_argument('--check-eqsat-manifest', type=Path, help='read-only frozen R02 calibration-plan audit; never proof/correctness/performance admission')
     p.add_argument('--eqsat-calibrate', type=Path, help='run a frozen, bounded native A/A plumbing plan; not Q2/Q3 or application performance acceptance')
     p.add_argument('--eqsat-pilot', type=Path, help='run a frozen Linux hardware-VM A/A, A/B and checked-twin pilot; not final Q2/Q3 acceptance')
+    p.add_argument('--eqsat-preflight-complete', type=Path, help='complete a frozen deterministic policy/template census; no timing fitness or AI campaign')
+    p.add_argument('--eqsat-steady-build', type=Path, help='build a frozen Linux steady-state harness composition; no performance sampling')
+    p.add_argument('--eqsat-steady-calibrate', type=Path, help='run a frozen Linux steady-state A/A calibration; no A/B data or speedup claim')
+    p.add_argument('--eqsat-steady-ab', type=Path, help='run a separately frozen steady-state A/B plan after Linux A/A admission')
     p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
     p.add_argument("--programs", type=positive, default=500, help="Csmith programs per campaign")
     p.add_argument("--campaign", choices=["all", "base", "bitfields"], default="all")
@@ -569,6 +573,29 @@ def main(argv=None):
     def eqsat_tool(name):
         package = 'ladder' if __name__ == '__main__' and not __package__ else 'tools.ladder'
         return importlib.import_module(package + '.' + name)
+    for option, mode in (('eqsat_steady_build', 'build'), ('eqsat_steady_calibrate', 'AA'), ('eqsat_steady_ab', 'AB')):
+        if getattr(args, option):
+            if not only_options(option):
+                print('--'+option.replace('_', '-')+' is a separate frozen mode', file=sys.stderr)
+                return 2
+            try:
+                directory, receipt = eqsat_tool('eqsat_steady').run_plan(getattr(args, option), ROOT, mode)
+                print(json.dumps(dict(directory=str(directory), status=receipt['status']), sort_keys=True))
+                return 0 if receipt['status'].startswith('OBSERVED') else 1
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                print(f'steady-state {mode} rejected: {error}', file=sys.stderr)
+                return 1
+    if args.eqsat_preflight_complete:
+        if not only_options('eqsat_preflight_complete'):
+            print('--eqsat-preflight-complete is a separate frozen mode', file=sys.stderr)
+            return 2
+        try:
+            directory, receipt = eqsat_tool('eqsat_completion').run_completion(args.eqsat_preflight_complete, ROOT)
+            print(json.dumps(dict(directory=str(directory), status=receipt['status']), sort_keys=True))
+            return 0 if receipt['status'] == 'OBSERVED_DETERMINISTIC_COMPLETION' else 1
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f'completion rejected: {error}', file=sys.stderr)
+            return 1
     if args.eqsat_pilot:
         if not only_options('eqsat_pilot'):
             print('--eqsat-pilot is a separate frozen mode', file=sys.stderr)

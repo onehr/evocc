@@ -28,7 +28,8 @@ class PilotStatusTests(unittest.TestCase):
 
     def test_qualified_pilot_does_not_promote_parent_gates(self):
         output = status.render_ascii({NAME: checkpoint()}, evoir='1.9.115', evomir='0.54')
-        self.assertIn('QUALIFIED; 576 timed; 138 EVP certificates; 108 checked twins', output)
+        self.assertIn('ARTIFACT_AUDIT_PASS; 576 timed; 138 EVP certificates; 108 checked twins', output)
+        self.assertIn('Timing protocol: NOT_QUALIFIED', output)
         self.assertIn('6 TU / 12 transactions', output)
         self.assertIn('INCONCLUSIVE / INCONCLUSIVE / INCONCLUSIVE', output)
         self.assertIn('2/12 A/A within floor; 12/12 A/B inconclusive', output)

@@ -33,6 +33,25 @@ def audit_usage(usage, system):
         and usage['wall_scope'] == 'spawn-to-stdio-drain', 'resource units/scope changed')
 
 
+def completed_template_failure(row):
+    """UNKNOWN is a completed nonzero template exit, never an integrity waiver."""
+    require(row['status'] == 'FAILED' and row.get('failure_kind') == 'COMMAND_EXIT'
+        and type(row.get('exit_code')) is int and row['exit_code'] != 0,
+        'template UNKNOWN is not a completed command failure')
+
+
+def audited_guard_sites(assembly):
+    # Parse instruction lines independently of the collector's regular expression.
+    count = 0
+    for line in assembly.decode('utf-8').splitlines():
+        instruction = line.split('//', 1)[0].strip().split()
+        if len(instruction) == 2 and instruction[0] == 'brk':
+            immediate = instruction[1]
+            if immediate.startswith('#') and immediate[1:].isdecimal():
+                count += int(immediate[1:]) in {3002, 3003, 3004, 3005, 3006, 3022, 3063}
+    return count
+
+
 def audit_pilot(directory, root, expected_manifest_digest):
     directory, root = Path(directory).resolve(), Path(root).resolve()
     observed = {}
@@ -74,6 +93,8 @@ def audit_pilot(directory, root, expected_manifest_digest):
     used_stages = set()
     for index, row in enumerate(r['attempts']):
         template_unknown = row['stdout'] in unknown_templates and row['stage'].startswith('preflight:template:')
+        if template_unknown:
+            completed_template_failure(row)
         require(natural(row['wall_ns']) > 0 and
                 (template_unknown or (row['status'] in ('COMPLETED', 'RESULT_CHECKED')
                  and type(row['exit_code']) is int and row['exit_code'] == 0)), 'unfinished/unclassified attempt')
@@ -84,10 +105,7 @@ def audit_pilot(directory, root, expected_manifest_digest):
             raw = read(row[stream])
             require(digest(raw) == row[stream+'_sha256'] and len(raw) == row[stream+'_bytes']
                     and len(raw) <= m['resources']['output_bytes'], 'output changed or exceeds its bound')
-        if 'resources' in row:
-            audit_usage(row['resources'], 'Darwin')
-        else:
-            require(template_unknown and row['status'] == 'FAILED', 'successful attempt lacks CPU/RSS')
+        audit_usage(row.get('resources'), 'Darwin')
         attempts[row['stdout']] = row
         if 'guest_receipt' in row:
             raw = read(row['guest_receipt'])
@@ -227,8 +245,7 @@ def audit_pilot(directory, root, expected_manifest_digest):
                             'backend profile/input mismatch')
                     require(native['object'] == f'{number:02}-{variant}-{profile}.o'
                             and native['native_ub_profile'] == profile
-                            and native['ub_brk_sites'] == len(re.findall(
-                                rb'\bbrk #(?:300[2456]|3063)\b', assembly)), 'UB profile metrics changed')
+                            and native['ub_brk_sites'] == audited_guard_sites(assembly), 'UB profile metrics changed')
                     guest_command(case+':assemble:'+unit['source']+':'+variant+':'+profile,
                         ['/usr/bin/gcc-14', '-c', '-x', 'assembler', guest_path(directory/backend['stdout']),
                          '-o', guest_path(directory/case/native['object'])])
@@ -462,6 +479,7 @@ def audit_preflight(m, r, directory, root, read, load, one, result, guest_comman
             require(proof['output'] == row['stdout'], 'wrong proof output')
             proved += 1
         else:
+            completed_template_failure(row)
             require(type(proof.get('reason')) is str and proof['reason'], 'unknown proof lacks reason')
             unknown += 1
     require(rule['unattempted_templates'] == len(survivors)-len(rule['proofs'])

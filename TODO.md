@@ -76,9 +76,9 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | T03 | Check each repaired shared path against spec, text, effects, proof and negative tests as batches land. R01a is requalified; R02a/b/d's bounded Linux pilot is qualified, not final Q2/G2/Q3 acceptance. |
+| AUDIT | T03, R02b1, R02a1 | Check shared semantic/proof boundaries; complete deterministic R02 preflight, then qualify a Linux-specific steady-state timing protocol. Historical pilot artifact audit is not timing admission. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R02c, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 6: R02a/b/d's pilot is complete, but all three search ceilings are INCONCLUSIVE and no AI campaign is admitted. Resolve useful opportunity and calibration before final gates; x86-64 and release stay separate. |
+| LATER | R01, R02, R02c, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 6: preserve the historical pilot and resolve the separate search ceilings before final gates. No AI campaign is admitted; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1984,6 +1984,12 @@ record a justified not-needed disposition separately from implementation PASS.
     [Scope and protocol](docs/notebook/eqsat-cap-census-20260929.md).
 
   - [x] **R02b — Opportunity/effect-ceiling preflight and A/A plus A/B pilot** — `DONE`, 2026-09-30, bounded pilot with negative/inconclusive outcomes.
+    **Review correction:** DONE here describes the historical bounded implementation
+    and capture, not a qualified timing protocol. The Linux lane reused Darwin's
+    sample count without its own calibration and ran millisecond fresh processes.
+    Its timing conclusions remain INCONCLUSIVE and cannot be used as latency
+    acceptance. R02a1 and R02b1 below are mandatory follow-ups; the original raw
+    capture/manifest remain unchanged. Code-size and checked-twin evidence stands.
     The first default-limit table covers six subject TUs and twelve transactions:
     no transient, admission or chain cap hits. Actual matching work remains
     NOT_MEASURED. The selected-pair census enumerates 512 feasible signatures;
@@ -2024,6 +2030,27 @@ record a justified not-needed disposition separately from implementation PASS.
     Calibrate A/A and compare matched A/B; no campaign bypasses its track verdict.
     Lowering-fold-disabled variants are attribution-only; three pilot families
     do not establish cross-family generalization. Retain all negative results.
+
+  - [ ] **R02b1 — Complete deterministic preflight and close review boundaries** — `OPEN`, P3.
+    First close the four September 30 REDs: integrity/resource failures cannot
+    become template UNKNOWN, zombie-only process groups cannot count as live,
+    every UB diagnostic guard is counted independently, and inconsistent public
+    wall scopes report an error without panic/wraparound. Then freeze the same
+    canonical six-TU population, all 512 selected-pair signatures at schedules
+    1/8 and all 1,222 universal fixed-template candidates. Reuse content-addressed
+    evidence, not another source/workspace clone. Recompute code-size classes,
+    caps, proved/UNKNOWN counts and residual applicability with an independent
+    audit. No native-time search fitness, arbitrary tactic scripts or new-rule
+    installation. Unresolved grammar/matcher/shortcut utility stays explicit.
+
+  - [ ] **R02a1 — Calibrate and freeze a Linux steady-state timing protocol** — `OPEN`, P3.
+    After R02b1, make each measured process repeat internally for at least 1–2
+    seconds with setup/startup excluded. Pin a guest CPU, keep host capture/hash
+    work outside measured intervals, and retain every correctness result. Freeze
+    a separate Linux A/A plan first; choose workload repeats and pair count from
+    that calibration alone, then commit a new A/B manifest. A/A must satisfy its
+    declared precision gate before A/B. Failed calibration is a measured limit,
+    not permission to tune against A/B or retry the old millisecond protocol.
 
   - [ ] **R02c — Frozen native Q2 comparison** — `LATER`, P3.
     After the pilot, R02d profiles and final R01, run admitted originals against declared

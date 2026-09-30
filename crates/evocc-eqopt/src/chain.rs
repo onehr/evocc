@@ -211,11 +211,20 @@ pub struct ChainResources {
 }
 
 impl ChainResources {
-    pub fn wrapper_wall_nanos(self, producer_wall_nanos: u128) -> u128 {
+    pub fn wrapper_wall_nanos(self, producer_wall_nanos: u128) -> Result<u128, String> {
         self.total_wall_nanos
-            - producer_wall_nanos
-            - self.checker_wall_nanos
-            - self.identity_wall_nanos
+            .checked_sub(producer_wall_nanos)
+            .and_then(|remaining| remaining.checked_sub(self.checker_wall_nanos))
+            .and_then(|remaining| remaining.checked_sub(self.identity_wall_nanos))
+            .ok_or_else(|| {
+                format!(
+                    "inconsistent chain wall scopes: total={}, producer={}, checker={}, identity={}",
+                    self.total_wall_nanos,
+                    producer_wall_nanos,
+                    self.checker_wall_nanos,
+                    self.identity_wall_nanos
+                )
+            })
     }
 }
 
@@ -763,6 +772,8 @@ fn write_records(
     producer_wall_nanos: u128,
     published: bool,
 ) -> Result<(), String> {
+    // Validate public telemetry before creating a supposedly complete bundle.
+    let wrapper_wall_nanos = resources.wrapper_wall_nanos(producer_wall_nanos)?;
     write_new_bundle(destination, record, |destination| {
         if published {
             if let (Some(first), Some(last)) = (transactions.first(), transactions.last()) {
@@ -773,7 +784,7 @@ fn write_records(
         std::fs::write(destination.join("resources.json"), format!(
             "{{\"schema\":\"evocc-chain-resources-v1\",\"producer_wall_ns\":{},\"checker_wall_ns\":{},\"identity_wall_ns\":{},\"wrapper_wall_ns\":{},\"total_wall_ns\":{}}}",
             producer_wall_nanos, resources.checker_wall_nanos, resources.identity_wall_nanos,
-            resources.wrapper_wall_nanos(producer_wall_nanos), resources.total_wall_nanos))?;
+            wrapper_wall_nanos, resources.total_wall_nanos))?;
         for t in transactions {
             std::fs::write(
                 destination.join(format!("{:03}.before.evo", t.index)),

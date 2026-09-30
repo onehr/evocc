@@ -656,13 +656,23 @@ fn resources_json(resources: Option<ChainResources>, producer: u128, timing: Tim
     let Some(resources) = resources else {
         return "null".into();
     };
+    let wrapper_wall_nanos = match resources.wrapper_wall_nanos(producer) {
+        Ok(value) => value,
+        Err(error) => {
+            // Never manufacture a duration for malformed public telemetry.
+            return format!(
+                "{{\"scope\":\"shared-chain-v1\",\"error\":{}}}",
+                json_string(&error)
+            );
+        }
+    };
     let wall = |n: u128| match timing {
         TimingMode::Measured => n.to_string(),
         TimingMode::Elided => "null".into(),
     };
     format!("{{\"scope\":\"shared-chain-v1\",\"totalWallNanos\":{},\"checkerWallNanos\":{},\"identityWallNanos\":{},\"wrapperWallNanos\":{}}}",
         wall(resources.total_wall_nanos), wall(resources.checker_wall_nanos),
-        wall(resources.identity_wall_nanos), wall(resources.wrapper_wall_nanos(producer)))
+        wall(resources.identity_wall_nanos), wall(wrapper_wall_nanos))
 }
 
 pub(crate) fn json_string(value: &str) -> String {
@@ -896,6 +906,20 @@ fn measure_with_interpreter(
 mod measurement_tests {
     use super::*;
 
+    #[test]
+    fn inconsistent_wall_telemetry_is_an_explicit_error_in_both_modes() {
+        let resources = ChainResources {
+            total_wall_nanos: 10,
+            checker_wall_nanos: 2,
+            identity_wall_nanos: 1,
+        };
+        for timing in [TimingMode::Measured, TimingMode::Elided] {
+            let json = resources_json(Some(resources), 11, timing);
+            assert!(json.contains("inconsistent chain wall scopes"));
+            assert!(!json.contains("wrapperWallNanos"));
+        }
+    }
+
     fn program() -> CorpusProgram {
         let module = parse_section9_module(include_bytes!(
             "../../../tests/fixtures/eqsat-performance/identity-tail.evo"
@@ -947,7 +971,9 @@ mod measurement_tests {
                 result.optimizer_wall_nanos
                     + resources.checker_wall_nanos
                     + resources.identity_wall_nanos
-                    + resources.wrapper_wall_nanos(result.optimizer_wall_nanos)
+                    + resources
+                        .wrapper_wall_nanos(result.optimizer_wall_nanos)
+                        .unwrap()
             );
             assert!(result
                 .chain_record

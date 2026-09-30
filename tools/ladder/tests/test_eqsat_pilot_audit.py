@@ -40,7 +40,7 @@ def control_capture():
         output = f'{n:03}.stdout'
         artifacts[output] = b''
         stage = 'preflight:template:'+identity
-        attempts[stage] = dict(stdout=output, status='FAILED', exit_code=1,
+        attempts[stage] = dict(stdout=output, status='FAILED', exit_code=1, failure_kind='COMMAND_EXIT',
             argv=['/unit/collector_python', str(root/'tools/ladder/eqsat_template.py'),
                   '/unit/lean', str(root/'lean'), str(source)])
         proofs.append(dict(candidate=identity, status='UNKNOWN', template=bounds['template'],
@@ -103,6 +103,15 @@ class PilotAuditTests(unittest.TestCase):
         self.assertEqual(result['template_unknowns'], 2)
         self.assertEqual(result['rule_verdict'], 'INCONCLUSIVE')
         self.assertEqual(result['ai_campaign'], 'NOT_ADMITTED')
+
+    def test_integrity_or_resource_failure_cannot_be_laundered_as_template_unknown(self):
+        for reason in ('RETENTION_LIMIT', 'ARTIFACT_CHANGED', 'OUTPUT_LIMIT',
+                       'WATCHDOG', 'DESCENDANT_LIVE', 'PROCESS_LAUNCH'):
+            fixture = control_capture()
+            for row in fixture[-1].values():
+                row.update(failure_kind=reason, error=reason)
+            with self.subTest(reason=reason), self.assertRaises(ValueError):
+                audit_fixture(fixture)
 
     def test_mutating_summary_and_matching_json_does_not_bypass_recomputation(self):
         for change in (

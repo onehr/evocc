@@ -66,10 +66,11 @@ ARCHITECTURE / REMAINING ROADMAP GATES (bounded evidence, not a completion perce
   Rust/Lean model differential: 1325045 vectors; 0 differences
   FP: scalar/strict and hosted f128 implemented; jq PASS; full musl and FP complex/vector open
   R06 Doom PASS: 81/81 TU; 12 x 350 matching headless frames; wrap/video-init profile, not audio/window
-  R02a/b/d bounded Linux pilot: QUALIFIED; 576 timed; 138 EVP certificates; 108 checked twins
+  R02a/b/d historical Linux pilot: ARTIFACT_AUDIT_PASS; 576 timed; 138 EVP certificates; 108 checked twins
     Default caps: 6 TU / 12 transactions; transient hits=0, admission hits=0, chain hits=0
     Policy / rule / shortcut: INCONCLUSIVE / INCONCLUSIVE / INCONCLUSIVE; AI campaign NOT_ADMITTED
     Latency: 2/12 A/A within floor; 12/12 A/B inconclusive; not final Q2
+    Timing protocol: NOT_QUALIFIED; Linux steady-state A/A and deterministic completion required (R02a1/R02b1)
   G2 EqSat whole-kernel reproducibility + every optimized TU proof: NOT_ACCEPTED
   Q2 GCC -O2 same-task performance comparison: NOT_ACCEPTED
   Q3 measured self-improvement benefit: NOT_ACCEPTED
