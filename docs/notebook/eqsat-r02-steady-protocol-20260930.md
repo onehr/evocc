@@ -138,3 +138,44 @@ steady/twin tests pass 19/19; full ladder discovery passes 486 with zero failure
 and nine optional capture tests skipped (495 total),
 `python-steady-identity-baseline-final.log`, SHA-256
 `6a6ad7e8e04b35d84c2d97dbc0d72487b1c98c3e2b3e507ba1b9522419e81bca`.
+
+## Real build and admitted A/A (later September 30 checkpoint)
+
+The earlier NOT_RUN statements above describe their historical checkpoint.
+Build `build-9t8d1etw` is independently accepted: three fixed mixed-link library
+compositions and five reference-result modes, with fresh exact-default B chains.
+A/A `aa-f9dcv13a` completed once: 312 timed samples, ten admitted comparisons,
+guest CPU 0, unchanged 5% effect/precision gates. Selected pair counts are
+12/12 for each zlib mode, 24/12 for each zstd mode and 24/12 for cJSON
+(checked/unchecked). Repeats are 7,168 / 16,896 for zlib compress/decompress,
+33,024 / 222,976 for zstd and 762,624 for cJSON. Timed samples span
+1.195674709--2.627673418 seconds; startup is excluded.
+
+The first Python 3.9 audit is retained as a failure: the exact diagnostic
+`sample_cv` equality differs from Python 3.13 by one final-bit rounding
+(0.008000266907678558 versus 0.008000266907678556). No interval or qualification
+gate differs. No frozen source, sample, manifest, comparison or threshold was
+changed. Read-only replay uses the **unchanged** `audit_capture` in its pinned
+Python 3.9 for outer artifact/command/manifest checks and delegates its full
+**unchanged** `audit_guest` to Python 3.13 for raw guest reconstruction. All raw
+guest streams are also read/pinned by the outer checker; both runtime identities
+are recorded, and the helper binary is checked before/after execution. This is
+a split-runtime audit, not a passing claim about the original Python 3.9-only
+CLI. It changes no audit logic and adds no audit tool or retry.
+
+- A/A manifest SHA-256:
+  `58c37ca9d24c7e7d02c079d52dbdb17c364909119c959d85d869111fdef66d38`.
+- A/A accepted `audit.json` SHA-256:
+  `9b73506caa92bc07e8f83ef315c6e161b832dbcc928445216d441014502d09af`.
+- Accepted split-runtime stdout:
+  `.evidence/eqsat-r02-review-20260930/steady-aa-split-audit-20260930.stdout`,
+  SHA-256 `a46cfa8d773eca8080db53bc4567214d7f79803cc287d69099aa993ad573c7fa`.
+- Original failed audit stderr SHA-256:
+  `9436459220f7dbaffc92b6cc7605bb496e29c9434daa6b148e811193cd9f0213`.
+
+The separately committed [A/B plan](../../tests/contracts/eqsat-steady-ab-20260930.json)
+has SHA-256 `84a5dc34affb06189e29c558b5a444600aaaef9ea8794fa30ce08585ab5b7713`.
+It pins 1,120 prerequisite artifacts and the same all-one eight-transaction
+control. Execute it once, with zero retries and no native-result selection.
+Freeze its result even if it is inconclusive or a regression. No new census,
+auditor framework or R03 search follows automatically.
