@@ -144,7 +144,8 @@ def audit_guest(g, request, read):
             'guest workload population/order changed')
     require(g['schema'] == 'evocc-r02-steady-guest-v1' and g['status'] == 'OBSERVED_'+mode
         and g['mode'] == mode and g['request_digest'] == digest(canonical(request)+b'\n')
-        and g['cpu_affinity'] == [PROTOCOL['cpu']] and g['kernel'] == request['guest_kernel']
+        and canonical(g['cpu_affinity']) == canonical([PROTOCOL['cpu']])
+        and g['kernel'] == request['guest_kernel']
         and canonical(g['protocol']) == canonical(PROTOCOL) and g['pmu'] == 'NOT_MEASURED'
         and len(g['comparisons']) == 10, 'incomplete/unpinned guest timing')
     checked = set()

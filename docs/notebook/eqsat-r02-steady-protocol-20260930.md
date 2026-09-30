@@ -77,7 +77,8 @@ admissions, stopping rules, intervals and qualification independently from the
 receipt's labels. Raw attempt indices must follow the frozen chronology,
 including duration probes, checked admissions and every ordered sample.
 Rearranging attempts cannot be legitimized by internally consistent pairs or
-statistics. Mutation tests cover CPU mask, quiet mode, incorrect inputs,
+statistics. CPU affinity is compared with its canonical JSON type; boolean
+`false` is not accepted as CPU number zero. Mutation tests cover CPU mask, quiet mode, incorrect inputs,
 duration/value substitution, statistics, ordering and missing admissions.
 
 Report improvement/regression only when the declared interval clears the 5%
@@ -101,6 +102,9 @@ swapped raw A/A execution order (`steady-chronology-red.log`, SHA-256
 `4fbac31de98f395e199c895e060bff176db0be851e41e92c100af980de1f6afb`).
 The sandboxed gate's macOS `/bin/ps` permission error is retained separately;
 it is an infrastructure failure, not counted as a compiler defect or PASS.
+The additional boolean-affinity RED is retained in
+`steady-boolean-affinity-red.log`; steady/completion focused tests pass 15/15
+in `steady-completion-typed-final.log`.
 Real build,
 Linux A/A and A/B are **NOT RUN** at this checkpoint. R02b1 deterministic
 completion must finish and pass independent audit first; the historical timing

@@ -187,6 +187,7 @@ class SteadyAuditMutationTests(unittest.TestCase):
         g, request, streams = synthetic()
         for mutate in (
             lambda x: x.update(cpu_affinity=[0, 1]),
+            lambda x: x.update(cpu_affinity=[False]),
             lambda x: x['attempts'][0].pop('storage_watch'),
             lambda x: x['attempts'][0].update(exit_code=1),
             lambda x: x['attempts'][0]['argv'].__setitem__(2, '999'),
