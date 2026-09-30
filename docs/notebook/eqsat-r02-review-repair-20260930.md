@@ -310,3 +310,72 @@ research conclusions retained. R02a1 proceeds using the separately committed
 which pins 236 actual inputs and fresh fixed-default B code. Native timing is
 still NOT RUN at this checkpoint; no historical millisecond observation is
 promoted to acceptance.
+
+## Formal three-track adjudication and stop decision
+
+This is analysis of the already completed, independently accepted capture,
+not another census, proof campaign or implementation phase. The experimental
+scope and all original manifests, samples, failures and UNKNOWN outcomes stay
+frozen. Verdicts use framing revision 6 Section 5.2; an administrative stop is
+not a proof that AI or every future optimization is ineffective.
+
+| Track | Frozen evidence | Formal verdict | Admission decision |
+| --- | --- | --- | --- |
+| Selected-pair policy | All 512 registered signatures at schedules 1/8: 1,024 suite evaluations, 6,144 independently checked chains, 380 object-code classes. Zero transient/certificate cap hits; eight-transaction chains all end at NO_CHANGE. A newly consulted `(add, shl)` pair lies outside the frozen comparison vocabulary. | **INCONCLUSIVE**, fixed registered grid complete but behavioral closure not established. Neither SEARCHABLE nor whole-space FINITE_ENUMERATION_SUFFICIENT follows. | **R03a NOT_ADMITTED.** Do not expand the vocabulary or rerun to turn this result positive. |
+| New rules | Both registered syntax cells are ENUM_COMPLETE: 5,994 syntax visits; all 1,222 surviving fixed-template candidates attempted, 1,174 proved and 48 UNKNOWN. The pinned opportunity oracle has 34 reduced patterns at 40 occurrences. All 34 are outside the candidate grammar: 30 operator failures and four constant-vocabulary failures; zero proved residual matches, integrated new rules or suite-level new-rule utility evaluations. No campaign-scale budget-exhausted cell exists. | **INCONCLUSIVE**, completed syntax/proof attempts without useful integrated-rule closure. UNKNOWN is not nonexistence; out-of-scope residuals are not discovery-SEARCHABLE. | **R03c NOT_ADMITTED.** Preserve the empty measured residual/template intersection, not an assertion that every richer grammar is useless. |
+| Derived shortcuts | 1,480 verified baseline regions; 13 multi-rewrite regions and 11 observed composition kinds, retaining original before-witness premises. No shortcut integration, measured matcher work, fuel saving or expanded-proof saving. | **INCONCLUSIVE_NO_NEW_SHORTCUT_COST_EVIDENCE** (the contract's INCONCLUSIVE bucket). | **R03b NOT_ADMITTED.** Shorter rule spelling is not a measured compiler/search benefit. |
+
+The completed policy grid has genuine code differences, not a NO_OBSERVABLE_EFFECT
+result. Subject-object `.text` extrema below aggregate the already retained
+evaluations; they are not new measurements, linked executable sizes, a selected
+production policy or latency evidence. P0 is 128 bytes in every profile/evaluation.
+
+| Subject family | Checked min--max bytes | Unchecked min--max bytes |
+| --- | ---: | ---: |
+| zlib selected TUs | 58,448--58,924 | 55,184--55,676 |
+| zstd selected TUs | 156,268--157,724 | 153,640--155,104 |
+| cJSON TU | 29,496--30,228 | 29,384--30,116 |
+
+The zero-weight certificate-quota rationale has no observed support in this
+population because **every** evaluated policy avoids that cap. The deliberately
+one-transaction schedule still stops 2,326 chains; this is not a certificate
+cap. Weights gate a transient-selected pair rather than choosing an alternative
+representative. Native A/B characterizes only the fixed all-one default versus
+EqSat off; it cannot repair policy closure or establish AI superiority.
+
+### Three owner decisions (recommendations, not automatic authorization)
+
+1. **Open a bounded R02e guard-folding slice: recommended.** It addresses a
+   demonstrated control-plane limit: current P0 excludes UB predicates and
+   UbAssume while checked native code retains their enforcement. Start with a
+   small separately reviewed total-predicate/proven-true-guard contract, with
+   poison, source-definedness and other predicate users preserved. Unchecked
+   code is only a diagnostic comparison, not proof that those guards can be
+   removed. This is the highest-priority next semantic expansion under the
+   current checked profile, not a promise of a 5% gain or a theorem that no
+   other compiler improvement can matter. Do not start it in this close-out.
+2. **Start R03e cost-aware extraction now: defer.** The census confirms the
+   selected-pair limitation, but gives no independently qualified useful
+   alternative-selection witness. Isolated add/mul/shl byte ties and the
+   outside-grammar residuals do not justify another extraction/search project
+   on their own. R03e requires a separate owner decision and bounded benefit
+   witness; it is not a repair of these frozen results.
+3. **Freeze current R03 V1 as a negative-admission study: recommended.** The
+   precise conclusion is that this completed preflight admits no policy,
+   shortcut or new-rule AI campaign. R03's positive improvement milestone is
+   **NOT ACHIEVED**. Do not rename INCONCLUSIVE to "AI cannot help," launch a
+   held-out search, or enlarge budgets/grammar to obtain a desired conclusion.
+   Any future R02e/R03e scope gets a separately reviewed contract and its own
+   admission; it does not overwrite this study.
+
+### Audit-tool cap
+
+No new audit framework, registry matcher, external-IR importer, census control
+surface or telemetry project is authorized by this close-out. Existing capture
+replay and compact result/doc updates are the limit. The steady A/A diagnostic
+rounding discrepancy is handled by documented read-only replay of unchanged
+checkers under their respective runtime versions, not a source/schema change
+or a relaxed acceptance gate. Preserve that initial failure as well.
+The only remaining execution is the single preregistered steady A/B; its result
+is frozen whatever the outcome. Owner decisions, not more audit engineering,
+follow the final timing receipt.

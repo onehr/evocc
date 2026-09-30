@@ -76,9 +76,9 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | T03, R02b1, R02a1 | Check shared semantic/proof boundaries; complete deterministic R02 preflight, then qualify a Linux-specific steady-state timing protocol. Historical pilot artifact audit is not timing admission. |
+| AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R02c, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Follow Q2/Q3 revision 6: preserve the historical pilot and resolve the separate search ceilings before final gates. No AI campaign is admitted; x86-64 and release stay separate. |
+| LATER | R01, R02, R02c, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Current EqSat preflight is frozen, all three tracks INCONCLUSIVE/NOT_ADMITTED. Owner decisions: bounded R02e, deferred R03e, negative-admission R03 V1 freeze. No implicit search or audit expansion; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2054,11 +2054,21 @@ record a justified not-needed disposition separately from implementation PASS.
     audit. No native-time search fitness, arbitrary tactic scripts or new-rule
     installation. Unresolved grammar/matcher/shortcut utility stays explicit.
 
-  - [ ] **R02a1 — Calibrate and freeze a Linux steady-state timing protocol** — `OPEN`, P3.
+  - [x] **R02a1 — Calibrate and freeze a Linux steady-state timing protocol** — `DONE`, P3, 2026-09-30, bounded measurement with a frozen inconclusive result.
     The protocol, typed/mutation gates and default-control composition are
-    implemented. R02b1 is independently accepted; the committed build plan
-    now pins the exact all-one eight-transaction control, followed by separately
-    frozen A/A and admission-gated A/B. Real build/calibration remain pending.
+    implemented. Real mixed-link build and A/A pass independent audit: ten
+    A/A comparisons admitted, 312 timed samples. The separately preregistered
+    A/B ran once at the frozen 5% gates: ten comparisons, 312 timed samples
+    and ten prior checked admissions, all result checks pass, but all ten
+    latency outcomes are INCONCLUSIVE. The owned VM exited normally. The
+    Python-version diagnostic rounding failure is retained; unchanged
+    split-runtime replay verifies the original samples without a gate change.
+    [Frozen result and receipt identities](docs/notebook/eqsat-r02-steady-protocol-20260930.md#frozen-single-ab-result).
+    No rerun or larger budget follows. Final R02/Q2/G2 is not accepted by this
+    bounded task. Formal policy/rule/shortcut verdicts remain INCONCLUSIVE,
+    with all R03 activities NOT_ADMITTED; audit tooling is capped.
+    [Adjudication and three owner decisions](docs/notebook/eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision).
+    Implemented protocol retained for reproducibility:
     After R02b1, make each measured process repeat internally for at least 1–2
     seconds with setup/startup excluded. Pin a guest CPU, keep host capture/hash
     work outside measured intervals, and retain every correctness result. Freeze
@@ -2096,12 +2106,21 @@ record a justified not-needed disposition separately from implementation PASS.
     and unchecked separately; GCC sanitizer coverage is not assumed equivalent.
 
   - [ ] **R02e — Guard-predicate folding domain, separately reviewed** — `LATER`, P3.
+    **OWNER_DECISION_PENDING:** recommended next bounded semantic slice after
+    the frozen close-out; not started or authorized automatically. Preserve
+    all source-definedness, poison and other predicate uses; native unchecked
+    comparisons are not proof that a guard can be folded.
     If retained guards materially limit Q2, specify and prove total UB-predicate
     folds plus any independently checked proven-true obligation elimination.
     Preserve poison, other uses and source definedness; no silent P0 expansion.
     This conditional semantic/checker change is not required to measure baseline B.
 
 - [ ] **R03 — Q3 measured self-improvement** — `LATER`, P3.
+  **OWNER_DECISION_PENDING:** recommend freezing current V1 as a completed
+  negative-admission study, not marking the positive improvement milestone done.
+  All three tracks are formally INCONCLUSIVE/NOT_ADMITTED; do not start R03a/b/c/d
+  or expand the census/auditors to force an affirmative result. See the
+  [formal stop and decision record](docs/notebook/eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision).
   Freeze the baseline, candidate policy and evaluation protocol, then demonstrate
   validated improvement on the declared workloads without correctness regression.
   Close with measured results and independent checking; more rewrites or an
@@ -2146,6 +2165,10 @@ record a justified not-needed disposition separately from implementation PASS.
     predeclared objectives/bounds. A negative study is not R03 improvement closure.
 
   - [ ] **R03e — Cost-aware extraction if the initial policy space is degenerate** — `LATER`, P3.
+    **OWNER_DECISION_PENDING:** recommend deferral. Selected-pair limitations
+    are observed, but a qualified useful alternative-selection witness is not.
+    This would be a separately scoped optimizer change, not an extension of
+    the frozen negative preflight or its audit tools.
     First make multiple legal e-class representatives selectable by actual cost,
     with deterministic ties, bounded cycle handling and existing certificate
     replay. REDs cover insertion-order bias, overflow, shared nodes and budgets.

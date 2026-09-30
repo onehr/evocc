@@ -179,3 +179,69 @@ It pins 1,120 prerequisite artifacts and the same all-one eight-transaction
 control. Execute it once, with zero retries and no native-result selection.
 Freeze its result even if it is inconclusive or a regression. No new census,
 auditor framework or R03 search follows automatically.
+
+## Frozen single A/B result
+
+The committed A/B plan was executed **once** after A/A admission. Capture
+`ab-01ws6896` completed all ten comparisons, 312 timed samples and ten prior
+checked admissions, then cleaned up its owned VM with exit code zero. All
+322 child executions passed the typed result contract. The independently
+reconstructed report is STEADY_CAPTURE_CONSISTENT, not a performance PASS.
+Timed samples span 1.214653876--4.258964502 seconds. Both admitted native
+profiles bind the same verified IR/chain/bundle; CPU affinity, hot-loop clock,
+quiet host collection, chosen repeats/pair counts and the 5% gates are unchanged.
+
+The auditor uses the same unchanged split-runtime checks documented above.
+Its Python 3.13 helper must exactly match the runtime identity in the frozen
+A/A audit; the pinned Python 3.9 outer checker verifies all original manifest,
+artifact, command and cleanup identities. No auditor source was modified.
+
+| Workload | Profile | Pairs | Simultaneous median-delta CI (% of A median) | Precision gate | Frozen outcome |
+| --- | --- | ---: | ---: | --- | --- |
+| zlib compress | checked | 12 | -4.01 to +5.34 | Met | INCONCLUSIVE |
+| zlib compress | unchecked | 12 | -5.80 to +21.43 | Not met | INCONCLUSIVE |
+| zlib decompress | checked | 12 | -78.11 to +70.33 | Not met | INCONCLUSIVE |
+| zlib decompress | unchecked | 12 | -19.18 to +24.91 | Not met | INCONCLUSIVE |
+| zstd compress | checked | 24 | -10.03 to +15.44 | Not met | INCONCLUSIVE |
+| zstd compress | unchecked | 12 | -23.35 to +27.03 | Not met | INCONCLUSIVE |
+| zstd decompress | checked | 24 | -20.91 to +4.89 | Not met | INCONCLUSIVE |
+| zstd decompress | unchecked | 12 | -14.97 to +10.16 | Not met | INCONCLUSIVE |
+| cJSON parse/print | checked | 24 | -10.05 to +13.85 | Not met | INCONCLUSIVE |
+| cJSON parse/print | unchecked | 12 | -9.67 to +10.33 | Not met | INCONCLUSIVE |
+
+Negative delta means B is faster. Rounding in this table is display-only;
+raw gates use the unrounded captured values and simultaneous ten-comparison
+intervals. Even zlib checked compression's sufficiently narrow interval crosses
+the +5% boundary, so it cannot claim no material effect. The other nine fail
+precision. No comparison establishes material improvement, regression or
+absence of a material effect. A/A admission does not guarantee stability of
+the subsequent A/B window; host affinity/interference remains uncontrolled.
+This is retained uncertainty, not a new diagnosis of a compiler bug, and does
+not justify retuning or another run in this study.
+
+The exact default B still reduces linked `.text` relative to A:
+zlib 480/512 bytes, zstd 1,440/1,440 bytes and cJSON 736/736 bytes
+(checked/unchecked). These are the **fresh steady-harness composition** sizes,
+including layout effects, not edits to the earlier pilot's 732-byte cJSON
+observation. Code-size benefit is distinct from the inconclusive latency result.
+
+- Manifest SHA-256:
+  `84a5dc34affb06189e29c558b5a444600aaaef9ea8794fa30ce08585ab5b7713`;
+  preregistration commit `4e25506f`.
+- Outer receipt SHA-256:
+  `cbed2b185b4c9c2a2f349fca8f4d4ab10c9f2e15d995255969e8ad2f9cf9241f`.
+- Raw guest receipt SHA-256:
+  `a5f9a45e32244512aa5c927e5676423afdb7ac4b0d719b259075b7fd85244e07`.
+- Accepted `audit.json` SHA-256:
+  `677cfc09e4d17d46880ade3b1cf4932fc6b5d3b262345dad78544d16ff217b41`.
+- Independent audit stdout:
+  `.evidence/eqsat-r02-review-20260930/steady-ab-split-audit-20260930.stdout`,
+  SHA-256 `cbcfc78f3949ec01bce35f6e95f10a244e3668c4f9a65b8d15ca2c05a69c5b8c`;
+  stderr is empty. All captures remain retained locally, not duplicated in Git.
+
+**Stop:** R02a1's bounded build/calibration/one-run measurement task is complete.
+Its frozen latency outcome is 10/10 INCONCLUSIVE; final R02/Q2/G2 and R03's
+positive improvement milestone remain NOT_ACCEPTED/NOT_ACHIEVED. There is no
+retry, larger census, new AI campaign or audit-tool expansion. The
+[three-track adjudication and owner decisions](eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision)
+are the next handoff, not another engineering phase.
