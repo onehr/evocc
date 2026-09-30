@@ -159,8 +159,12 @@ def audit_guest(g, request, read):
             require(digest(content) == row[stream+'_sha256'] and len(content) == row[stream+'_bytes'],
                     'guest raw output changed')
         require(row['stderr_bytes'] == 0, 'timed child diagnostic')
-    def execution(task, variant, profile, count, value, stage):
+    chronology = []
+    def execution(task, variant, profile, count, value, stage, chronological=True):
         n = value['attempt']; require(type(n) is int and 0 <= n < len(g['attempts']), 'missing guest attempt')
+        if chronological:
+            require(n == len(chronology), 'raw attempt chronology contradicts the frozen execution order')
+            chronology.append(n)
         row = g['attempts'][n]; p = task['variants'][variant][profile]
         actual = result_value(read('guest/'+row['stdout']), task['work'], count)
         identity = native_identity(p['binding'], profile, 'linux-aarch64', request['backend_digest'],
@@ -180,7 +184,7 @@ def audit_guest(g, request, read):
         count, variant = a['iterations'], a['variant']
         row = g['attempts'][a['checked']['attempt']]
         # The probe/admit stage is also checked below in its chronological slot.
-        execution(task, variant, 'checked', count, a['checked'], row['stage'])
+        execution(task, variant, 'checked', count, a['checked'], row['stage'], chronological=False)
         p = task['variants'][variant]['unchecked']
         identity = native_identity(p['binding'], 'unchecked', 'linux-aarch64', request['backend_digest'],
             p['executable_digest'], a['checked']['identity']['input_digest'])
@@ -251,7 +255,8 @@ def audit_guest(g, request, read):
                 and c['duration_gate'] == duration and c['status'] == status, 'timing statistics/qualification forged')
             sample_count += len(c['samples']); outcomes.append(dict(task=c['task'], profile=profile,
                 pairs=len(pairs), iterations=count, status=status, statistics=stat))
-    require(checked == set(range(len(g['attempts']))) and (mode != 'AB' or not g['probes']),
+    require(chronology == list(range(len(g['attempts']))) and
+            checked == set(range(len(g['attempts']))) and (mode != 'AB' or not g['probes']),
             'unaccounted guest attempt/probe')
     return dict(status='STEADY_CAPTURE_CONSISTENT', mode=mode, timed_samples=sample_count,
         comparisons=outcomes, admitted_aa=(all(o['status'] == 'ADMITTED_AA' for o in outcomes) if mode == 'AA' else None),

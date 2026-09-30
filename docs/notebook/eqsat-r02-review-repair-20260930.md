@@ -75,3 +75,13 @@ audit/mutation tests; they are not claims of native qualification. New Linux
 steady build, A/A and A/B executions remain **NOT RUN**. The historical 576
 timing samples remain retained but are **NOT QUALIFIED** for latency claims.
 R03 remains closed to AI activity until the preflight verdicts justify admission.
+
+A further steady-audit RED swapped the raw execution chronology while retaining
+valid A/A hashes, paired values and statistics. The auditor now requires every
+attempt index in the frozen probe/admission/sample order. The full Python gate
+is 478 passed, 0 failed, 9 optional real-capture tests skipped (487 total);
+`python-chronology-unsandboxed.log`, SHA-256
+`5fad7bdbb4b2fc1e678623ac95d55f17e4983a8f9d396bca0c22201944f83d62`.
+The first sandboxed invocation failed only because macOS denied `/bin/ps` in
+the surviving-descendant test; that unsuccessful log is retained and excluded
+from the PASS count.

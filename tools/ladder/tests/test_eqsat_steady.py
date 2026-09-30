@@ -160,6 +160,22 @@ class SteadyProtocolTests(unittest.TestCase):
 
 
 class SteadyAuditMutationTests(unittest.TestCase):
+    def test_raw_attempt_chronology_must_match_the_frozen_pair_order(self):
+        g, request, streams = synthetic()
+        samples = g['comparisons'][0]['samples'][:2]
+        a, b = [s['attempt'] for s in samples]
+        g['attempts'][a], g['attempts'][b] = g['attempts'][b], g['attempts'][a]
+        for n in (a, b):
+            row = g['attempts'][n]
+            row.update(stdout=f'{n:03}.stdout', stderr=f'{n:03}.stderr')
+        for s in samples:
+            s['attempt'] = b if s['attempt'] == a else a
+        # Outputs are identical A/A observations; hashes, stages, identities,
+        # pairs and statistics all remain internally consistent. Only the raw
+        # execution order now contradicts the preregistered pair order.
+        with self.assertRaisesRegex(ValueError, 'chronology'):
+            audit_guest(g, request, streams.__getitem__)
+
     def test_synthetic_raw_aa_and_ab_are_fully_accounted_for(self):
         for mode in ('AA', 'AB'):
             g, request, streams = synthetic(mode)

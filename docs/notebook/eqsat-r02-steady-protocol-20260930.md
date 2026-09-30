@@ -74,7 +74,10 @@ and repeat count, bound to the same verified input chain. The native admission
 uses a typed harness-result predicate, not exit-zero alone. Audit reconstructs
 raw C elapsed values, output hashes, input/native identities, ordering, checked
 admissions, stopping rules, intervals and qualification independently from the
-receipt's labels. Mutation tests cover CPU mask, quiet mode, incorrect inputs,
+receipt's labels. Raw attempt indices must follow the frozen chronology,
+including duration probes, checked admissions and every ordered sample.
+Rearranging attempts cannot be legitimized by internally consistent pairs or
+statistics. Mutation tests cover CPU mask, quiet mode, incorrect inputs,
 duration/value substitution, statistics, ordering and missing admissions.
 
 Report improvement/regression only when the declared interval clears the 5%
@@ -89,6 +92,15 @@ collector gate passes: 475 passed, 0 failed, 1 skipped (`python-steady-final.log
 SHA-256 `72b36666ceaa4ad919d7e55db4e2fdd0e5a8291ec3c762bd2ee414e973ed27e3`).
 The seven new test methods include independently constructed A/A and A/B records
 and eleven one-field negative mutations; they are not actual timing samples.
+The later input-inventory and raw-chronology gates pass 478 tests, with zero
+failures and nine optional capture tests skipped (487 total;
+`python-chronology-unsandboxed.log`, SHA-256
+`5fad7bdbb4b2fc1e678623ac95d55f17e4983a8f9d396bca0c22201944f83d62`).
+The ten steady-specific methods pass, including a RED that previously accepted
+swapped raw A/A execution order (`steady-chronology-red.log`, SHA-256
+`4fbac31de98f395e199c895e060bff176db0be851e41e92c100af980de1f6afb`).
+The sandboxed gate's macOS `/bin/ps` permission error is retained separately;
+it is an infrastructure failure, not counted as a compiler defect or PASS.
 Real build,
 Linux A/A and A/B are **NOT RUN** at this checkpoint. R02b1 deterministic
 completion must finish and pass independent audit first; the historical timing
