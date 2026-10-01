@@ -7,6 +7,8 @@ docs/*
 !docs/evomir-spec.md
 !docs/lean-plan.md
 !docs/framing-draft.md
+!docs/codegen-quality-plan.md
+!docs/target-spec.md
 !docs/eqsat-guard-folding-draft.md
 !docs/status.md
 !docs/notebook/

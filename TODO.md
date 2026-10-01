@@ -78,7 +78,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N01, N02, N03, N03a, N03b, N03c, N03d, N03e, N03f, N04, N05, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The codegen quality track N01–N07 is the active roadmap work: N01's size-gap census and N02's validation harness first, N03a layering before any other backend slice; the paused R items wait on it. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1884,6 +1884,13 @@ AI search. Conditional tasks below are explicit
 design branches, not newly enabled semantics or required speculative projects;
 record a justified not-needed disposition separately from implementation PASS.
 
+**Paused on 2026-10-01** by the owner decision recorded in the
+[codegen quality plan](docs/codegen-quality-plan.md): the latency half of R02,
+any second slice of R02e, and R03 with R03a–R03h. They keep their `LATER`
+state and all retained evidence; nothing is relabeled. R01/G2 continues on the
+kernel track, `g0.ub.v1` stays shipped as opt-in and `p0.scalar.v4` is frozen.
+Reopening any of them needs a new owner decision after the N03 slices land.
+
 - [ ] **R01 — G2 whole-kernel EqSat reproducibility and certificates** — `LATER`, P3.
   Produce the two required EqSat builds with equal Image hashes and independently
   check every optimized translation unit's certificate. Record exact optimization
@@ -2237,6 +2244,106 @@ record a justified not-needed disposition separately from implementation PASS.
   expansion was necessary. Window/audio/live input, all maps and other ports
   are not covered. [Receipt](tests/contracts/ladder-doom-receipt.json),
   [profile and checks](tests/fixtures/doom-headless.out).
+
+## Codegen quality track — next quarter
+
+Authority: [codegen quality plan](docs/codegen-quality-plan.md) and the
+[internal target description contract](docs/target-spec.md). The frozen S5
+comparison puts unchecked EvoCC object text at 2.04–2.43× GCC-14 `-O2` on the
+six subject units, while verified rewrites and the certified guard slice move
+about 1–2.5%. This track closes that gap with standard passes under
+translation validation and builds the tooling around the compiler. Size under
+the S1 contract is the objective; no latency, parity or verified-optimization
+claim follows from these items. `LATER` is the tracker's roadmap state, not a
+statement that the work is idle. Follow the plan's working agreement: frozen
+plan, RED, flag, gates, one-page note, TODO update in the same commit.
+
+- [ ] **N01 — Size-gap attribution census** — `LATER`, P3.
+  Before any optimization work, disassemble EvoCC, GCC-14 and Clang-19 `-O2`
+  objects of the six S5 units and classify every instruction with the frozen
+  13-category rule table in the plan; record TU-local inlining evidence
+  separately. Totals must equal S1 instruction bytes. Deliver a frozen table
+  under `tests/contracts/` and a ranked list of levers with estimated bytes.
+  Read-only tooling; no compiler change. One week.
+
+- [ ] **N02 — Pass framework, translation validation and pass telemetry** — `LATER`, P3.
+  An EvoIR pass interface with before/after hooks; a validation runner that
+  reuses the two interpreters, the random corpus, ladder inputs and the
+  four-lane native differential; per-pass telemetry (seen, taken,
+  declined by reason, bytes); receipt field for pass class `VERIFIED`,
+  `VALIDATED` or `LOWERING`. RED: a deliberately wrong pass must be caught on
+  the corpus. Default output unchanged while no pass is enabled. Two weeks.
+
+- [ ] **N03 — Codegen improvements, ordered by N01** — `LATER`, P3.
+  Parent of the slices below. Product target declared before measurement:
+  unchecked object text at or below 1.4× GCC-14 `-O2` per S5 unit by the end
+  of the quarter. Each slice lands behind a flag, is measured on the six units
+  and the ladder, and enters `-O2` only with validation green and the size,
+  compile-time and interpreter-step bounds met. The order of N03b–N03f is
+  provisional until N01 replaces it.
+
+  - [ ] **N03a — Backend layering, behavior-preserving** — `LATER`, P3.
+    Separate the target-independent allocator, out-of-SSA, spill placement and
+    verifier from AArch64 facts: instruction operand descriptors read by both
+    allocator and verifier, an ABI interface with Darwin and Linux
+    implementations, the boundary test against ISA names in generic modules,
+    and a synthetic test ISA for unit tests. Includes target-description
+    steps 1–3 (`regfile`, `insts`, ABI tables). Exit: byte-identical objects
+    for the six units and the native corpora, verifier verdicts unchanged,
+    full workspace gate. No size change may ride along. Two weeks, before any
+    other backend slice.
+
+  - [ ] **N03b — TU-local inlining** — `LATER`, P3.
+    Size-aware inliner at EvoIR level for TU-local callees, as a validated
+    pass under N02. The certificate chain runs after inlining and must still
+    verify. A size increase on any unit is a recorded regression.
+
+  - [ ] **N03c — Register allocation improvements** — `LATER`, P3.
+    Coalescing and spill placement in the generic layer first; a different
+    allocator only if N01 shows allocation dominates. The allocation verifier
+    is the gate. After N03a.
+
+  - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
+    Addressing modes, immediates, shifted operands, conditional select and
+    compare forms, extension elimination. New rules enter through the target
+    description's pattern table with EvoMIR revision text; existing match arms
+    migrate only when touched. After N03a.
+
+  - [ ] **N03e — EvoIR mid-level passes** — `LATER`, P3.
+    GVN/CSE, SCCP, dead-code elimination and simple loop-invariant motion on
+    the integer and control subset, each a validated pass under N02. EqSat
+    stays the verified path for what it covers.
+
+  - [ ] **N03f — Frame and call overhead** — `LATER`, P3.
+    Leaf-frame elision, callee-saved minimization and argument shuffling
+    through the ABI interface, with EvoMIR revision text and ABI corpora.
+    After N03a.
+
+- [ ] **N04 — The C checker as a product** — `LATER`, P3.
+  One command that runs the EvoIR interpreter as a precise undefined-behavior
+  detector with the existing diagnostic codes; `--explain` pages generated
+  from the specification's diagnostic table; JSON diagnostics; ui tests with
+  blessed output. No interpreter semantics change. Parallel lane, three weeks.
+
+- [ ] **N05 — Measurement automation and bisect** — `LATER`, P3.
+  On each push: S1 sizes for the six units, compile time, a ladder subset and
+  interpreter steps, appended as trend receipts; a receipt-driven bisect over
+  commits. RED: an injected size regression is flagged and bisected to its
+  commit. Lands before the first N03 slice. Parallel lane, two weeks.
+
+- [ ] **N06 — EqSat memory and effect domain** — `LATER`, P3.
+  Not scheduled. The place where equality saturation has real value (CSE,
+  dead code, alias-aware forwarding) needs a state and effect model and its
+  own proof design. Reopen only after the N03 slices land, with a separate
+  design and owner decision.
+
+- [ ] **N07 — Target description and ISA-model oracles** — `LATER`, P3.
+  Make the internal target description the only place a target fact is
+  written. Steps 1–3 run inside N03a. Then: encoding legality with the
+  assembler round trip; a pinned slice of the vendor ISA model with its
+  emulator as a differential lane; bounded SMT verdicts for every existing
+  lowering rule. Lean statements for patterns start on RISC-V and only after
+  those steps. No hand-written ISA specification, no full-ISA proofs.
 
 ## Benchmark coverage index
 
