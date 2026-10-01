@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate register facts from the reviewed, canonical target description."""
+"""Generate register and instruction facts from canonical target descriptions."""
 
 from __future__ import annotations
 
@@ -314,20 +314,403 @@ def render_evoir_primitives(description: Description) -> str:
     return "".join(out)
 
 
+
+# The structural shapes below mirror only the fields present in the current
+# enums. Operand roles and ordering live in insts, not in these field types.
+INSTRUCTION_SHAPES = {
+    "Floating": "dst:r args:v",
+    "Aes": "dst:r args:v",
+    "AtomicRmw": "dst:r base:r value:r expected:o",
+    "Vector": "dst:r args:v",
+    "Atomic": "load:b value:r base:r",
+    "Mov": "dst:r src:r",
+    "MovImm": "dst:r",
+    "Adrp": "dst:r",
+    "AddPageOff": "dst:r src:r",
+    "Adr": "dst:r",
+    "Load": "dst:r base:r",
+    "Store": "src:r base:r",
+    "Binary": "dst:r lhs:r rhs:r",
+    "BinaryImm": "dst:r lhs:r",
+    "FlagBinary": "dst:r flags:r lhs:r rhs:r",
+    "WideMultiply": "dst:r lhs:r rhs:r",
+    "Msub": "dst:r n:r m:r a:r",
+    "Madd": "dst:r n:r m:r a:r",
+    "CarryBinary": "dst:r flags:r lhs:r rhs:r",
+    "AddCarryFlags": "dst:r flags_in:r lhs:r rhs:r",
+    "SubCarryFlags": "dst:r flags_in:r lhs:r rhs:r",
+    "TstImm": "dst:r lhs:r",
+    "Unary": "dst:r src:r",
+    "Extend": "dst:r src:r",
+    "Bfx": "dst:r src:r",
+    "Cmp": "dst:r lhs:r rhs:r",
+    "CmpImm": "dst:r lhs:r",
+    "Cset": "dst:r flags:r",
+    "Csel": "dst:r flags:r lhs:r rhs:r",
+    "Bl": "args:v results:v",
+    "Blr": "target:r args:v results:v",
+    "Ldp": "rt1:r rt2:r base:r",
+    "Stp": "rt1:r rt2:r base:r",
+    "SpillStore": "src:r",
+    "SpillReload": "dst:r",
+    "IncomingArg": "dst:r",
+    "OutgoingArg": "src:r",
+    "MemCopy": "dst:r src:r",
+    "FrameSlot": "dst:r",
+    "StackAlloc": "dst:r size:r",
+    "StackRelease": "address:r",
+    "FrameAddress": "dst:r",
+    "IndirectResult": "",
+    "FpEnvCheck": "",
+    "VaSaveArea": "",
+    "Asm": "body:a",
+}
+TERMINATOR_SHAPES = {
+    "Indirect": "target:r edges:e",
+    "B": "target:t args:v",
+    "BCond": "flags:r taken:t taken_args:v untaken:t untaken_args:v",
+    "Cb": "src:r taken:t taken_args:v untaken:t untaken_args:v",
+    "Tb": "src:r taken:t taken_args:v untaken:t untaken_args:v",
+    "Ret": "values:v",
+    "Brk": "",
+    "AsmGoto": "body:a labels:e fallthrough:t fallthrough_args:v",
+}
+INST_COLUMNS = ("defs", "uses", "rewrite_defs", "rewrite_uses", "flags", "discardable", "call")
+TERM_COLUMNS = ("uses", "rewrite_uses", "edges", "exit")
+ASSEMBLY_FILTERS = {
+    "reg": None,
+    "nonmemory": "!matches!(operand.constraint, AsmConstraint::Memory { .. })",
+    "read": (
+        "matches!(operand.constraint, AsmConstraint::Memory { .. })"
+        " || operand.constraint.direction() == AsmDirection::ReadWrite"
+    ),
+    "definition": (
+        "!matches!(operand.constraint, AsmConstraint::Memory { .. })"
+        " && operand.constraint.direction().writes()"
+    ),
+    "nondefinition": (
+        "matches!(operand.constraint, AsmConstraint::Memory { .. })"
+        " || !operand.constraint.direction().writes()"
+    ),
+}
+
+
+@dataclass
+class InstructionDescription:
+    digest: str
+    instructions: dict[str, dict[str, str]] = field(default_factory=dict)
+    terminators: dict[str, dict[str, str]] = field(default_factory=dict)
+
+
+def parse_instructions(source: bytes) -> InstructionDescription:
+    # Keep the same canonical byte envelope as the register component.
+    try:
+        text = source.decode("ascii")
+    except UnicodeDecodeError as error:
+        raise TargetDescriptionError("description must be canonical ASCII") from error
+    lines = text.splitlines()
+    if not text.endswith("\n") or "\r" in text or "\t" in text:
+        raise TargetDescriptionError("description requires canonical LF lines")
+    if len(lines) < 3 or lines[:2] != ["version insts.v1", "target aarch64"]:
+        raise TargetDescriptionError("unsupported instruction version or target")
+    digest_rows = [line for line in lines if line.startswith("sha256 ")]
+    if len(digest_rows) != 1 or lines[2] != digest_rows[0]:
+        raise TargetDescriptionError("expected one canonical digest row")
+    digest = digest_rows[0].removeprefix("sha256 ")
+    payload = "".join(line + "\n" for line in lines if not line.startswith("sha256 "))
+    if not re.fullmatch(r"[0-9a-f]{64}", digest) or hashlib.sha256(payload.encode()).hexdigest() != digest:
+        raise TargetDescriptionError("instruction description digest mismatch")
+    description = InstructionDescription(digest)
+    for line in lines[3:]:
+        parts = line.split(" ")
+        if any(not part for part in parts) or len(parts) < 3:
+            raise TargetDescriptionError("noncanonical instruction fact")
+        kind, name, *values = parts
+        if kind == "inst":
+            columns, destination = INST_COLUMNS, description.instructions
+        elif kind == "term":
+            columns, destination = TERM_COLUMNS, description.terminators
+        else:
+            raise TargetDescriptionError(f"unknown instruction fact: {kind}")
+        if len(values) != len(columns):
+            raise TargetDescriptionError(f"wrong descriptor arity: {name}")
+        fields = {}
+        for column, token in zip(columns, values):
+            key, equals, value = token.partition("=")
+            if key != column or equals != "=" or not value:
+                raise TargetDescriptionError(f"expected descriptor column {column}: {name}")
+            fields[column] = value
+        insert(destination, identifier(name), fields, "instruction family")
+    return description
+
+
+def operand_parts(selector: str) -> list[str]:
+    return [] if selector == "-" else selector.split(",")
+
+
+def validate_operand(selector: str, shape: dict[str, str]):
+    for item in operand_parts(selector):
+        if item.startswith("body."):
+            pieces = item.split(".")
+            if (len(pieces) != 3 or shape.get("body") != "a"
+                    or pieces[1] not in ("outputs", "inputs") or pieces[2] not in ASSEMBLY_FILTERS):
+                raise TargetDescriptionError(f"invalid operand selector: {item}")
+        elif item.endswith(".args*"):
+            if shape.get(item.removesuffix(".args*")) != "e":
+                raise TargetDescriptionError(f"invalid operand selector shape: {item}")
+        elif "@" in item:
+            field_name, condition = item.split("@", 1)
+            if shape.get(field_name) != "r" or shape.get("load") != "b" or condition not in ("load", "store"):
+                raise TargetDescriptionError(f"invalid conditional operand selector: {item}")
+        else:
+            suffix = item[-1:] if item[-1:] in ("*", "?") else ""
+            field_name = item[:-1] if suffix else item
+            expected = {"": "r", "*": "v", "?": "o"}[suffix]
+            if shape.get(field_name) != expected:
+                raise TargetDescriptionError(f"invalid operand field or selector shape: {item}")
+
+
+def validate_edges(selector: str, shape: dict[str, str]):
+    for item in operand_parts(selector):
+        if item.endswith("*"):
+            valid = shape.get(item[:-1]) == "e"
+        else:
+            parts = item.split(":")
+            valid = len(parts) == 2 and shape.get(parts[0]) == "t" and shape.get(parts[1]) == "v"
+        if not valid:
+            raise TargetDescriptionError(f"invalid edge selector: {item}")
+
+
+def validate_instructions(description: InstructionDescription):
+    for rows, shapes in (
+        (description.instructions, INSTRUCTION_SHAPES),
+        (description.terminators, TERMINATOR_SHAPES),
+    ):
+        if set(rows) != set(shapes):
+            raise TargetDescriptionError("missing or unexpected instruction family")
+        if list(rows) != list(shapes):
+            raise TargetDescriptionError("noncanonical instruction family order")
+        for name, row in rows.items():
+            shape = dict(token.split(":") for token in shapes[name].split())
+            for key in ("defs", "uses", "rewrite_defs", "rewrite_uses"):
+                if key in row:
+                    validate_operand(row[key], shape)
+            for key in ("discardable", "call", "exit"):
+                if key in row and row[key] not in ("true", "false"):
+                    raise TargetDescriptionError(f"invalid {key} fact: {name}")
+            if "flags" in row and row["flags"] not in ("true", "false"):
+                if row["flags"] != "body.flags" or shape.get("body") != "a":
+                    raise TargetDescriptionError(f"invalid flags fact: {name}")
+            if "edges" in row:
+                validate_edges(row["edges"], shape)
+
+
+def bound_fields(selector: str) -> set[str]:
+    fields = set()
+    for item in operand_parts(selector):
+        if item.startswith("body."):
+            fields.add("body")
+        elif "@" in item:
+            fields.update((item.split("@", 1)[0], "load"))
+        elif ":" in item:
+            fields.update(item.split(":"))
+        else:
+            fields.add(item.split(".", 1)[0].rstrip("*?"))
+    return fields
+
+
+def inst_pattern(name: str, fields: set[str], enum: str = "Self") -> str:
+    if name == "Asm":
+        return f"{enum}::Asm({'body' if fields else '_'})"
+    if name == "IndirectResult":
+        return f"{enum}::IndirectResult"
+    members = "".join(name + ", " for name in sorted(fields))
+    return f"{enum}::{name} {{ {members}.. }}"
+
+
+def operand_iterator(item: str, mutable: bool) -> str:
+    if item.startswith("body."):
+        _, collection, mode = item.split(".")
+        iterator = f"body.{collection}.iter" + ("_mut()" if mutable else "()")
+        predicate = ASSEMBLY_FILTERS[mode]
+        if predicate:
+            iterator += f".filter(|operand| {predicate})"
+        if mutable:
+            return iterator + ".filter_map(|operand| match &mut operand.value { AsmValue::Reg(reg) => Some(reg), _ => None })"
+        return iterator + ".filter_map(AsmOperand::register)"
+    if item.endswith(".args*"):
+        field_name = item.removesuffix(".args*")
+        if mutable:
+            return f"{field_name}.iter_mut().flat_map(|(_, args)| args.iter_mut())"
+        return f"{field_name}.iter().flat_map(|(_, args)| args.iter().copied())"
+    if "@" in item:
+        field_name, condition = item.split("@", 1)
+        test = "*load" if condition == "load" else "!*load"
+        value = field_name if mutable else "*" + field_name
+        return f"({test}).then_some({value})"
+    if item.endswith(("*", "?")):
+        field_name = item[:-1]
+        return f"{field_name}.iter_mut()" if mutable else f"{field_name}.iter().copied()"
+    return f"std::iter::once({item if mutable else '*' + item})"
+
+
+def collection_name(stem: str, selector: str) -> str:
+    """Keep generated temporaries disjoint from the matched enum fields."""
+    fields = bound_fields(selector)
+    while stem in fields:
+        stem += "_"
+    return stem
+
+
+def operand_expression(selector: str, mutable: bool, indent: str = "            ") -> str:
+    parts = operand_parts(selector)
+    if not parts:
+        return "Vec::new()"
+    if all(re.fullmatch("[a-z][a-z0-9_]*", part) for part in parts):
+        return "vec![" + ", ".join(part if mutable else "*" + part for part in parts) + "]"
+    # Stable generated formatting avoids invoking a host formatter as part of
+    # generation. The item carrying this expression is rustfmt::skip.
+    inner = indent + "    "
+    collected = collection_name("collected_operands", selector)
+    lines = ["{", inner + f"let mut {collected} = Vec::new();"]
+    for item in parts:
+        lines.append(inner + f"{collected}.extend({operand_iterator(item, mutable)});")
+    lines.extend((inner + collected, indent + "}"))
+    return "\n".join(lines)
+
+
+def render_operand_method(name: str, column: str, rows: dict, mutable: bool, enum: str) -> str:
+    receiver = "&mut self" if mutable else "&self"
+    ty = "&mut Self::Reg" if mutable else "Self::Reg"
+    out = [f"    fn {name}({receiver}) -> Vec<{ty}> {{\n        match self {{\n"]
+    for family, row in rows.items():
+        selector = row[column]
+        pattern = inst_pattern(family, bound_fields(selector), enum)
+        if family == "Asm":
+            helper = {"defs": "assembly_defs", "uses": "assembly_uses",
+                      "rewrite_defs": "assembly_rewrite_defs", "rewrite_uses": "assembly_rewrite_uses"}[column]
+            expression = f"{helper}(body)"
+        else:
+            expression = operand_expression(selector, mutable)
+        out.append(f"            {pattern} => {expression},\n")
+    out.append("        }\n    }\n")
+    return "".join(out)
+
+
+def render_slot_method(rows: dict) -> str:
+    out = ["    fn operand_slots(&mut self, definitions: bool) -> Vec<&mut Self::Reg> {\n"
+           "        if definitions {\n            match self {\n"]
+    for column in ("rewrite_defs", "rewrite_uses"):
+        for family, row in rows.items():
+            selector = row[column]
+            pattern = inst_pattern(family, bound_fields(selector))
+            helper = "assembly_rewrite_defs" if column == "rewrite_defs" else "assembly_rewrite_uses"
+            expression = f"{helper}(body)" if family == "Asm" else operand_expression(selector, True, "                ")
+            out.append(f"                {pattern} => {expression},\n")
+        out.append("            }\n")
+        if column == "rewrite_defs":
+            out.append("        } else {\n            match self {\n")
+    out.append("        }\n    }\n")
+    return "".join(out)
+
+
+def render_bool_method(name: str, column: str, rows: dict) -> str:
+    if all(row[column] in ("true", "false") for row in rows.values()):
+        variants = [inst_pattern(family, set()) for family, row in rows.items() if row[column] == "true"]
+        expression = "matches!(self, " + " | ".join(variants) + ")" if variants else "false"
+        return f"    fn {name}(&self) -> bool {{\n        {expression}\n    }}\n"
+    out = [f"    fn {name}(&self) -> bool {{\n        match self {{\n"]
+    for family, row in rows.items():
+        value = row[column]
+        pattern = inst_pattern(family, {"body"} if value == "body.flags" else set())
+        expression = "assembly_writes_flags(body)" if value == "body.flags" else value
+        out.append(f"            {pattern} => {expression},\n")
+    out.append("        }\n    }\n")
+    return "".join(out)
+
+
+def render_instructions(description: InstructionDescription) -> str:
+    out = [
+        "// Generated by tools/generate-target.py; do not edit.\n",
+        f"// Source: targets/aarch64/insts; sha256 {description.digest}.\n\n",
+        "use crate::generic::machine::{MachInst, MachTerm};\n",
+        "use crate::{\n    AsmBody, AsmClobber, AsmConstraint, AsmDirection, AsmOperand, AsmValue, MInst, MTerm, VReg,\n};\n\n",
+        constant("DESCRIPTION_DIGEST", "&str", f'"{description.digest}"'),
+    ]
+    for name, rows in (("INST_FAMILIES", description.instructions), ("TERM_FAMILIES", description.terminators)):
+        out.append(f'\n#[rustfmt::skip]\npub const {name}: &[&str] = &[\n')
+        out.extend(f'    "{family}",\n' for family in rows)
+        out.append("];\n")
+    assembly = description.instructions["Asm"]
+    for helper, column, mutable in (
+        ("assembly_defs", "defs", False), ("assembly_uses", "uses", False),
+        ("assembly_rewrite_defs", "rewrite_defs", True), ("assembly_rewrite_uses", "rewrite_uses", True),
+    ):
+        receiver = "&mut AsmBody" if mutable else "&AsmBody"
+        ty = "&mut VReg" if mutable else "VReg"
+        expression = operand_expression(assembly[column], mutable, "    ")
+        out.append(f"\n#[rustfmt::skip]\npub(crate) fn {helper}(body: {receiver}) -> Vec<{ty}> {{\n    {expression}\n}}\n")
+    flags = assembly["flags"]
+    flags_expr = "body.clobbers.contains(&AsmClobber::Flags)" if flags == "body.flags" else flags
+    flags_parameter = "body" if flags == "body.flags" else "_body"
+    out.append(f"\npub(crate) fn assembly_writes_flags({flags_parameter}: &AsmBody) -> bool {{\n    {flags_expr}\n}}\n")
+    out.append("\n#[rustfmt::skip]\nimpl MachInst for MInst {\n    type Reg = VReg;\n\n")
+    out.append(render_operand_method("defs", "defs", description.instructions, False, "Self"))
+    out.append("\n" + render_operand_method("uses", "uses", description.instructions, False, "Self"))
+    out.append("\n" + render_slot_method(description.instructions))
+    for name, column in (("writes_flags", "flags"), ("is_call", "call"), ("discardable", "discardable")):
+        out.append("\n" + render_bool_method(name, column, description.instructions))
+    out.append("}\n")
+    out.append("\n#[rustfmt::skip]\nimpl MachTerm for MTerm {\n    type Reg = VReg;\n\n")
+    out.append(render_operand_method("uses", "uses", description.terminators, False, "Self"))
+    out.append("\n" + render_operand_method("operand_slots", "rewrite_uses", description.terminators, True, "Self"))
+    out.append("\n    fn edges(&self) -> Vec<(u32, &[Self::Reg])> {\n        match self {\n")
+    for family, row in description.terminators.items():
+        selector = row["edges"]
+        pattern = inst_pattern(family, bound_fields(selector))
+        parts = operand_parts(selector)
+        if not parts:
+            expression = "Vec::new()"
+        elif all(":" in part for part in parts):
+            values = [f"(*{target}, {args}.as_slice())" for target, args in (part.split(":") for part in parts)]
+            expression = "vec![" + ", ".join(values) + "]"
+        else:
+            collected = collection_name("collected_edges", selector)
+            lines = ["{", f"                let mut {collected} = Vec::new();"]
+            for item in parts:
+                if item.endswith("*"):
+                    lines.append(f"                {collected}.extend({item[:-1]}.iter().map(|(target, args)| (*target, args.as_slice())));")
+                else:
+                    target, args = item.split(":")
+                    lines.append(f"                {collected}.push((*{target}, {args}.as_slice()));")
+            lines.extend((f"                {collected}", "            }"))
+            expression = "\n".join(lines)
+        out.append(f"            {pattern} => {expression},\n")
+    out.append("        }\n    }\n\n    fn is_exit(&self) -> bool {\n        is_exit(self)\n    }\n}\n")
+    exits = [inst_pattern(family, set(), "MTerm") for family, row in description.terminators.items() if row["exit"] == "true"]
+    expression = "matches!(term, " + " | ".join(exits) + ")" if exits else "false"
+    out.append(f"\n#[rustfmt::skip]\npub const fn is_exit(term: &MTerm) -> bool {{\n    {expression}\n}}\n")
+    return "".join(out)
+
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=root / "targets/aarch64/regfile")
     parser.add_argument("--output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/regfile.rs")
     parser.add_argument("--evoir-output", type=Path, default=root / "crates/evocc-evoir/src/assembly_registers.rs")
+    parser.add_argument("--insts-input", type=Path, default=root / "targets/aarch64/insts")
+    parser.add_argument("--insts-output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/insts.rs")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     try:
         description = parse_description(args.input.read_bytes())
         validate(description)
+        instructions = parse_instructions(args.insts_input.read_bytes())
+        validate_instructions(instructions)
         outputs = {
             args.output: render_mir(description).encode("utf-8"),
             args.evoir_output: render_evoir_primitives(description).encode("utf-8"),
+            args.insts_output: render_instructions(instructions).encode("utf-8"),
         }
         if args.check:
             for path, expected in outputs.items():

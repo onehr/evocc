@@ -482,7 +482,7 @@ fn transfer(state: &State, block: &crate::MBlock, register: &impl Fn(VReg) -> Op
 
 fn apply(state: &mut State, inst: &MInst, register: &impl Fn(VReg) -> Option<u8>) {
     // A call destroys every caller-saved register before its results arrive.
-    if matches!(inst, MInst::Bl { .. } | MInst::Blr { .. }) {
+    if crate::generic::machine::MachInst::is_call(inst) {
         for number in regfile::GPR_CALL_CLOBBERS
             .into_iter()
             .chain(regfile::SIMD_CALL_CLOBBERS)
@@ -503,7 +503,7 @@ fn apply(state: &mut State, inst: &MInst, register: &impl Fn(VReg) -> Option<u8>
 /// Whether a terminator ends the function.
 #[must_use]
 pub const fn is_exit(term: &MTerm) -> bool {
-    matches!(term, MTerm::Ret { .. } | MTerm::Brk { .. })
+    crate::isa::aarch64::insts::is_exit(term)
 }
 
 /// The virtual registers a function reads before writing: its arguments.

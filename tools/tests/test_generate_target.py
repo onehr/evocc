@@ -121,5 +121,78 @@ class RegisterDescriptionTest(unittest.TestCase):
             self.decoded(mutated)
 
 
+class InstructionDescriptionTest(unittest.TestCase):
+    def setUp(self):
+        self.path = ROOT / "targets/aarch64/insts"
+        self.generated = ROOT / "crates/evocc-mir/src/isa/aarch64/insts.rs"
+        self.original = self.path.read_bytes()
+
+    def decoded(self, source):
+        description = gen.parse_instructions(source)
+        gen.validate_instructions(description)
+        return description
+
+    def mutate_row(self, prefix, change):
+        rows = [row for row in self.original.splitlines(keepends=True) if row.startswith(prefix)]
+        self.assertEqual(len(rows), 1)
+        return replace_one(self.original, rows[0], change(rows[0]))
+
+    def assert_structural_rejection(self, source, reason):
+        # These mutations must pass the digest boundary before testing facts.
+        payload = b"".join(row for row in source.splitlines(keepends=True) if not row.startswith(b"sha256 "))
+        stated = [row for row in source.splitlines() if row.startswith(b"sha256 ")]
+        self.assertEqual(stated, [b"sha256 " + hashlib.sha256(payload).hexdigest().encode("ascii")])
+        with self.assertRaisesRegex(gen.TargetDescriptionError, reason) as caught:
+            self.decoded(source)
+        self.assertNotIn("digest", str(caught.exception).lower())
+
+    def test_instruction_dispatch_regenerates_byte_for_byte(self):
+        self.assertEqual(gen.render_instructions(self.decoded(self.original)).encode(), self.generated.read_bytes())
+        self.assertTrue(self.generated.read_bytes().startswith(b"// Generated"))
+
+    def test_duplicate_instruction_family_is_rejected_with_valid_digest(self):
+        changed = self.mutate_row(b"inst Mov ", lambda row: row + row)
+        self.assert_structural_rejection(changed, "duplicate.*family")
+
+    def test_missing_terminator_family_is_rejected_with_valid_digest(self):
+        changed = self.mutate_row(b"term Indirect ", lambda row: b"")
+        self.assert_structural_rejection(changed, "missing.*family")
+
+    def test_unknown_operand_field_is_rejected_with_valid_digest(self):
+        changed = self.mutate_row(b"inst Mov ", lambda row: row.replace(b"uses=src ", b"uses=missing ", 1))
+        self.assert_structural_rejection(changed, "operand.*(field|selector)")
+
+    def test_scalar_operand_cannot_be_treated_as_a_vector(self):
+        changed = self.mutate_row(b"inst Mov ", lambda row: row.replace(b"defs=dst ", b"defs=dst* ", 1))
+        self.assert_structural_rejection(changed, "operand.*(shape|selector)")
+
+    def test_unsupported_flag_fact_is_rejected_with_valid_digest(self):
+        changed = self.mutate_row(b"inst Mov ", lambda row: row.replace(b"flags=false ", b"flags=maybe ", 1))
+        self.assert_structural_rejection(changed, "flags")
+
+    def test_dce_fact_mutation_changes_the_generated_consumer(self):
+        # A syntactically valid changed fact is not hidden by a handwritten
+        # duplicate. Rust's frozen conformance vectors reject its old meaning.
+        changed = self.mutate_row(b"inst Mov ", lambda row: row.replace(b"discardable=true ", b"discardable=false ", 1))
+        before = gen.render_instructions(self.decoded(self.original))
+        after = gen.render_instructions(self.decoded(changed))
+        def body(rendered):
+            return rendered.split("fn discardable(&self) -> bool {", 1)[1].split("\n    }", 1)[0]
+        self.assertNotEqual(body(before), body(after))
+
+    def test_return_operand_collection_does_not_shadow_the_values_field(self):
+        rendered = gen.render_instructions(self.decoded(self.original))
+        self.assertFalse("let mut values =" in rendered, "temporary shadows the Ret.values field")
+        self.assertTrue("collected_operands.extend(values.iter().copied());" in rendered)
+        self.assertTrue("collected_operands.extend(values.iter_mut());" in rendered)
+        self.assertNotEqual(gen.collection_name("values", "values*"), "values")
+
+    def test_indirect_edge_collection_does_not_shadow_the_edges_field(self):
+        rendered = gen.render_instructions(self.decoded(self.original))
+        self.assertFalse("let mut edges =" in rendered, "temporary shadows the Indirect.edges field")
+        self.assertTrue("collected_edges.extend(edges.iter().map(" in rendered)
+        self.assertNotEqual(gen.collection_name("edges", "edges*"), "edges")
+
+
 if __name__ == "__main__":
     unittest.main()

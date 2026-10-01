@@ -292,31 +292,7 @@ fn forwarded_parameters(function: &MFunction) -> BTreeMap<u32, VReg> {
 /// memory access (even nonvolatile), call, assembly, allocation, ABI marker
 /// and lifetime action stays. UB guards are control flow and stay as well.
 fn discardable_computation(inst: &MInst) -> bool {
-    matches!(
-        inst,
-        MInst::Mov { .. }
-            | MInst::MovImm { .. }
-            | MInst::Adrp { .. }
-            | MInst::AddPageOff { .. }
-            | MInst::Adr { .. }
-            | MInst::Binary { .. }
-            | MInst::BinaryImm { .. }
-            | MInst::FlagBinary { .. }
-            | MInst::WideMultiply { .. }
-            | MInst::Msub { .. }
-            | MInst::Madd { .. }
-            | MInst::CarryBinary { .. }
-            | MInst::AddCarryFlags { .. }
-            | MInst::SubCarryFlags { .. }
-            | MInst::TstImm { .. }
-            | MInst::Unary { .. }
-            | MInst::Extend { .. }
-            | MInst::Bfx { .. }
-            | MInst::Cmp { .. }
-            | MInst::CmpImm { .. }
-            | MInst::Cset { .. }
-            | MInst::Csel { .. }
-    )
+    crate::generic::machine::MachInst::discardable(inst)
 }
 
 /// Follow value demand through pure computations and ALL incoming edges.

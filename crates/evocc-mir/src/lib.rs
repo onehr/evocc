@@ -1516,11 +1516,7 @@ impl AsmBody {
     /// names, and the register itself only carries the address.
     #[must_use]
     pub fn defined(&self) -> Vec<VReg> {
-        self.outputs
-            .iter()
-            .filter(|operand| !matches!(operand.constraint, AsmConstraint::Memory { .. }))
-            .filter_map(AsmOperand::register)
-            .collect()
+        crate::isa::aarch64::insts::assembly_defs(self)
     }
 
     /// The registers the instruction reads: every input that occupies one, the
@@ -1528,19 +1524,7 @@ impl AsmBody {
     /// it writes through it, and a read-write register output.
     #[must_use]
     pub fn read(&self) -> Vec<VReg> {
-        let mut registers: Vec<VReg> = self
-            .inputs
-            .iter()
-            .filter_map(AsmOperand::register)
-            .collect();
-        for operand in &self.outputs {
-            if matches!(operand.constraint, AsmConstraint::Memory { .. })
-                || operand.constraint.direction() == AsmDirection::ReadWrite
-            {
-                registers.extend(operand.register());
-            }
-        }
-        registers
+        crate::isa::aarch64::insts::assembly_uses(self)
     }
 
     /// The general-purpose physical registers the clobber list names.
@@ -1559,7 +1543,7 @@ impl AsmBody {
     /// Whether the clobber list names the flags.
     #[must_use]
     pub fn clobbers_flags(&self) -> bool {
-        self.clobbers.contains(&AsmClobber::Flags)
+        crate::isa::aarch64::insts::assembly_writes_flags(self)
     }
 }
 /// One EvoMIR terminator.
@@ -1647,265 +1631,29 @@ pub struct MModule {
 /// Every virtual register an instruction defines.
 #[must_use]
 pub fn inst_defs(inst: &MInst) -> Vec<VReg> {
-    match inst {
-        MInst::AtomicRmw { dst, .. } => vec![*dst],
-        MInst::Vector { dst, .. } | MInst::Aes { dst, .. } | MInst::Floating { dst, .. } => {
-            vec![*dst]
-        }
-        MInst::Atomic { load, value, .. } => {
-            if *load {
-                vec![*value]
-            } else {
-                Vec::new()
-            }
-        }
-        MInst::Mov { dst, .. }
-        | MInst::MovImm { dst, .. }
-        | MInst::Adrp { dst, .. }
-        | MInst::AddPageOff { dst, .. }
-        | MInst::Adr { dst, .. }
-        | MInst::Load { dst, .. }
-        | MInst::Binary { dst, .. }
-        | MInst::BinaryImm { dst, .. }
-        | MInst::Msub { dst, .. }
-        | MInst::Madd { dst, .. }
-        | MInst::CarryBinary { dst, .. }
-        | MInst::AddCarryFlags { dst, .. }
-        | MInst::SubCarryFlags { dst, .. }
-        | MInst::TstImm { dst, .. }
-        | MInst::Extend { dst, .. }
-        | MInst::Unary { dst, .. }
-        | MInst::Bfx { dst, .. }
-        | MInst::Cmp { dst, .. }
-        | MInst::CmpImm { dst, .. }
-        | MInst::Cset { dst, .. }
-        | MInst::Csel { dst, .. }
-        | MInst::FrameSlot { dst, .. }
-        | MInst::StackAlloc { dst, .. }
-        | MInst::SpillReload { dst, .. }
-        | MInst::IncomingArg { dst, .. }
-        | MInst::FrameAddress { dst, .. }
-        | MInst::WideMultiply { dst, .. } => vec![*dst],
-        MInst::Ldp { rt1, rt2, .. } => vec![*rt1, *rt2],
-        MInst::FlagBinary { dst, flags, .. } => vec![*dst, *flags],
-        MInst::Store { .. }
-        | MInst::StackRelease { .. }
-        | MInst::MemCopy { .. }
-        | MInst::SpillStore { .. }
-        | MInst::OutgoingArg { .. }
-        | MInst::VaSaveArea { .. }
-        | MInst::IndirectResult
-        | MInst::FpEnvCheck { .. }
-        | MInst::Stp { .. } => Vec::new(),
-        MInst::Bl { results, .. } | MInst::Blr { results, .. } => results.clone(),
-        MInst::Asm(body) => body.defined(),
-    }
+    crate::generic::machine::MachInst::defs(inst)
 }
 
 /// Every virtual register an instruction reads, in operand order.
 #[must_use]
 pub fn inst_uses(inst: &MInst) -> Vec<VReg> {
-    match inst {
-        MInst::AtomicRmw {
-            base,
-            value,
-            expected,
-            ..
-        } => {
-            let mut values = vec![*base, *value];
-            values.extend(expected.iter().copied());
-            values
-        }
-        MInst::Vector { args, .. } | MInst::Aes { args, .. } | MInst::Floating { args, .. } => {
-            args.clone()
-        }
-        MInst::Atomic {
-            load, value, base, ..
-        } => {
-            if *load {
-                vec![*base]
-            } else {
-                vec![*value, *base]
-            }
-        }
-        MInst::Mov { src, .. }
-        | MInst::AddPageOff { src, .. }
-        | MInst::Extend { src, .. }
-        | MInst::Unary { src, .. } => {
-            vec![*src]
-        }
-        MInst::MovImm { .. }
-        | MInst::Adrp { .. }
-        | MInst::Adr { .. }
-        | MInst::FrameSlot { .. }
-        | MInst::FrameAddress { .. }
-        | MInst::IndirectResult
-        | MInst::FpEnvCheck { .. }
-        | MInst::VaSaveArea { .. } => Vec::new(),
-        MInst::Load { base, .. } => vec![*base],
-        MInst::StackRelease { address } => vec![*address],
-        MInst::StackAlloc { size, .. } => vec![*size],
-        MInst::Store { src, base, .. } => vec![*src, *base],
-        MInst::Binary { lhs, rhs, .. }
-        | MInst::Cmp { lhs, rhs, .. }
-        | MInst::FlagBinary { lhs, rhs, .. }
-        | MInst::WideMultiply { lhs, rhs, .. } => vec![*lhs, *rhs],
-        MInst::MemCopy { dst, src, .. } => vec![*dst, *src],
-        MInst::SpillStore { src, .. } | MInst::OutgoingArg { src, .. } => vec![*src],
-        MInst::SpillReload { .. } | MInst::IncomingArg { .. } => Vec::new(),
-        MInst::Ldp { base, .. } => vec![*base],
-        MInst::Stp { rt1, rt2, base, .. } => vec![*rt1, *rt2, *base],
-        MInst::BinaryImm { lhs, .. } | MInst::CmpImm { lhs, .. } | MInst::Bfx { src: lhs, .. } => {
-            vec![*lhs]
-        }
-        MInst::Msub { n, m, a, .. } | MInst::Madd { n, m, a, .. } => vec![*n, *m, *a],
-        MInst::CarryBinary {
-            flags, lhs, rhs, ..
-        }
-        | MInst::AddCarryFlags {
-            flags_in: flags,
-            lhs,
-            rhs,
-            ..
-        }
-        | MInst::SubCarryFlags {
-            flags_in: flags,
-            lhs,
-            rhs,
-            ..
-        } => vec![*flags, *lhs, *rhs],
-        MInst::TstImm { lhs, .. } => vec![*lhs],
-        MInst::Cset { flags, .. } => vec![*flags],
-        MInst::Csel {
-            flags, lhs, rhs, ..
-        } => vec![*flags, *lhs, *rhs],
-        MInst::Bl { args, .. } => args.clone(),
-        MInst::Blr { target, args, .. } => {
-            let mut uses = vec![*target];
-            uses.extend(args.iter().copied());
-            uses
-        }
-        MInst::Asm(body) => body.read(),
-    }
+    crate::generic::machine::MachInst::uses(inst)
 }
 
 /// Every virtual register a terminator reads, in operand order.
 #[must_use]
 pub fn term_uses(term: &MTerm) -> Vec<VReg> {
-    match term {
-        MTerm::Indirect { target, edges } => std::iter::once(*target)
-            .chain(edges.iter().flat_map(|(_, args)| args.iter().copied()))
-            .collect(),
-        MTerm::B { args, .. } => args.clone(),
-        MTerm::BCond {
-            flags,
-            taken_args,
-            untaken_args,
-            ..
-        } => {
-            let mut uses = vec![*flags];
-            uses.extend(taken_args.iter().copied());
-            uses.extend(untaken_args.iter().copied());
-            uses
-        }
-        MTerm::Cb {
-            src,
-            taken_args,
-            untaken_args,
-            ..
-        }
-        | MTerm::Tb {
-            src,
-            taken_args,
-            untaken_args,
-            ..
-        } => {
-            let mut uses = vec![*src];
-            uses.extend(taken_args.iter().copied());
-            uses.extend(untaken_args.iter().copied());
-            uses
-        }
-        MTerm::Ret { values } => values.clone(),
-        MTerm::Brk { .. } => Vec::new(),
-        MTerm::AsmGoto {
-            body,
-            labels,
-            fallthrough_args,
-            ..
-        } => {
-            let mut uses = body.read();
-            for (_, args) in labels {
-                uses.extend(args.iter().copied());
-            }
-            uses.extend(fallthrough_args.iter().copied());
-            uses
-        }
-    }
+    crate::generic::machine::MachTerm::uses(term)
 }
 
 /// The outgoing edges of a terminator: target block and the arguments passed.
 #[must_use]
 pub fn term_edges(term: &MTerm) -> Vec<(u32, &[VReg])> {
-    match term {
-        MTerm::Indirect { edges, .. } => edges
-            .iter()
-            .map(|(target, args)| (*target, args.as_slice()))
-            .collect(),
-        MTerm::B { target, args } => vec![(*target, args.as_slice())],
-        MTerm::BCond {
-            taken,
-            taken_args,
-            untaken,
-            untaken_args,
-            ..
-        }
-        | MTerm::Cb {
-            taken,
-            taken_args,
-            untaken,
-            untaken_args,
-            ..
-        }
-        | MTerm::Tb {
-            taken,
-            taken_args,
-            untaken,
-            untaken_args,
-            ..
-        } => vec![
-            (*taken, taken_args.as_slice()),
-            (*untaken, untaken_args.as_slice()),
-        ],
-        MTerm::Ret { .. } | MTerm::Brk { .. } => Vec::new(),
-        MTerm::AsmGoto {
-            labels,
-            fallthrough,
-            fallthrough_args,
-            ..
-        } => {
-            let mut edges: Vec<(u32, &[VReg])> = labels
-                .iter()
-                .map(|(target, args)| (*target, args.as_slice()))
-                .collect();
-            edges.push((*fallthrough, fallthrough_args.as_slice()));
-            edges
-        }
-    }
+    crate::generic::machine::MachTerm::edges(term)
 }
 
 /// Whether an instruction writes the flags register.
 #[must_use]
 pub fn writes_flags(inst: &MInst) -> bool {
-    match inst {
-        MInst::Cmp { .. }
-        | MInst::CmpImm { .. }
-        | MInst::FlagBinary { .. }
-        | MInst::AddCarryFlags { .. }
-        | MInst::SubCarryFlags { .. }
-        | MInst::TstImm { .. } => true,
-        // Section 7: "`cc` clobbers the flags, which ends any `flags` value's
-        // adjacency".
-        MInst::Asm(body) => body.clobbers_flags(),
-        _ => false,
-    }
+    crate::generic::machine::MachInst::writes_flags(inst)
 }
