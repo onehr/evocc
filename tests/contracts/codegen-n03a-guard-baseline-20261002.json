@@ -1,0 +1,75 @@
+{
+  "schema": "evocc-codegen-object-regression-plan-v1",
+  "package": "N03a",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "date": "2026-10-02",
+  "authority": "tests/contracts/codegen-n03a-20261002.json: certified g0 separately labeled regression control",
+  "subject_source_commit": "856dfcd3935c37b1a4f70b5670697feadaa38fa0",
+  "baseline_capture": ".evidence/eqsat-size/g0-dbzfkkrm/receipt.json",
+  "baseline_capture_sha256": "d7192637a21283b4d303d03f0a9d5c3f5bcfc19f9d681b8b0a499e8236d3299d",
+  "tools": {
+    "backend": {
+      "path": "target/frontend/debug/evo-ir-asm",
+      "sha256": "73a577d49c0bb50fc951938b9ba0d97bb8519bbff9d6561b881c6d40d120b208"
+    },
+    "checker": {
+      "path": "target/frontend/debug/evo-proofcheck",
+      "sha256": "f3cf32ef11afe4bd622918fd39387b50b31d816f46f1650d220abea4f7f63630"
+    },
+    "assembler": {
+      "path": "/usr/bin/clang",
+      "sha256": "44a68ddc1983d6cff3fd35ba3f9ba5f82004216f1dcde69892b3d1b06e408698"
+    }
+  },
+  "units": [
+    {
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "chain": ".evidence/eqsat-size/g0-dbzfkkrm/00-chain",
+      "ir_sha256": "c7eced159e802424e3334d0fdf90a6d80dea350d4c57749142f5a8208a5f7dd0"
+    },
+    {
+      "source": "deflate.c",
+      "chain": ".evidence/eqsat-size/g0-dbzfkkrm/01-chain",
+      "ir_sha256": "02eeb1c840795535ff4beb640e82835d38bc9145bfc5270db07df25bc75f2d60"
+    },
+    {
+      "source": "inflate.c",
+      "chain": ".evidence/eqsat-size/g0-dbzfkkrm/02-chain",
+      "ir_sha256": "6d3dc6f6dd6278f651bae6ef1e8e4a0b4aa1ab2f7188f650eb216956c2b3c543"
+    },
+    {
+      "source": "lib/compress/zstd_compress.c",
+      "chain": ".evidence/eqsat-size/g0-dbzfkkrm/03-chain",
+      "ir_sha256": "7c7a4f8b4b283dd0f8641043ca5d607f9fc5115214595327cf9af31bed8fba27"
+    },
+    {
+      "source": "lib/decompress/zstd_decompress.c",
+      "chain": ".evidence/eqsat-size/g0-dbzfkkrm/04-chain",
+      "ir_sha256": "fa580db46e5781e520cf8da496f62dc597c39bcaa0c986ec28257cd0de3e000a"
+    },
+    {
+      "source": "cJSON.c",
+      "chain": ".evidence/eqsat-size/g0-dbzfkkrm/05-chain",
+      "ir_sha256": "d677bac415e2a647820c3bf1fa2a383fcff10faf4b3a65fef2ace24e1cd2e178"
+    }
+  ],
+  "profiles": [
+    "checked",
+    "unchecked"
+  ],
+  "procedure": [
+    "Independently bind/replay each existing g0 chain with the current checker; verify retained output digest. Do not regenerate rules or claim fresh source compilation.",
+    "Compile each exact retained g0 output IR twice using evo-ir-asm linux-aarch64 with the explicit UB profile; assemble with /usr/bin/clang --target=aarch64-linux-gnu -c -x assembler under identical paths.",
+    "Require complete object twin identity and report existing S1 section metrics. Retain only first objects and compact command/hash receipts for later cross-revision byte comparison. Delete second objects and assembly after measurement.",
+    "After the behavior-preserving refactor, repeat on the same IR and tools, compare complete object bytes with these retained first objects. No metadata normalization."
+  ],
+  "resources": {
+    "min_start_free_bytes": 26843545600,
+    "min_free_bytes": 16106127360,
+    "max_retained_bytes": 524288000,
+    "output_bytes": 33554432,
+    "timeout_seconds": 300,
+    "jobs": 1
+  },
+  "claim_ceiling": "Six certified-g0 retained-IR backend regression controls only; not new guard savings, fresh source/application acceptance, a registry change or a latency experiment."
+}
