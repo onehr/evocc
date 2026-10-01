@@ -359,6 +359,17 @@ target/frontend/release/evocc --interpret-evoir demo.c
 target/frontend/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm demo.c > demo.s
 ```
 
+To check one executed path without producing a native executable:
+
+```sh
+target/frontend/release/evocc --check --error-format=json demo.c
+target/frontend/release/evocc --explain E3002
+```
+
+Completion is bounded by the existing interpreter and its execution budget;
+unsupported calls and exhausted fuel are incomplete checks, not passes. See
+the [C checker workflow](docs/checker.md) for diagnostics and scope.
+
 Other flags include `-E`, `--parse-only`, `--emit=c-hir`, `--emit=evoir`,
 `-Oeq-scalar` and `--survey`. The standalone
 `target/frontend/release/evo-proofcheck before.evoir after.evoir proof.evp2` checks a scalar rewrite
@@ -531,6 +542,7 @@ crates/evocc-types      types and layout            crates/evocc-policy      cos
 crates/evocc-chir       checked IR, interpreter     crates/evocc-randgate    randomized semantic gate
 crates/evocc-lower      C-HIR -> EvoIR              crates/evocc-mir         allocation and emission
 crates/evocc-evoir      EvoIR, validator, interp    crates/evocc-memory      object and provenance model
+crates/evocc-passes     opt-in execution-validated pass framework
 lean/                  Lean 4 proofs               tools/lean/             proof audit, vectors
 tools/bench.py         benchmark entry point       tools/k1/               kernel build/runtime lanes
 docs/                  specifications and status   tests/contracts/        corpora and receipts

@@ -249,6 +249,7 @@ pub use evocc_proof::StandaloneProofChecker as ProofChecker;
 pub const MAX_TRANSACTIONS: usize = 8;
 
 /// One complete before/after judgement of a single module.
+#[derive(Default)]
 struct Trial {
     before_text: String,
     after_text: String,
@@ -288,6 +289,68 @@ struct Trial {
     /// did not.
     native_run: bool,
     native_skipped: Option<&'static str>,
+}
+
+/// The existing machine/native tail, reused by execution-validated passes.
+/// This carries no certificate or proof verdict. A skipped native run and a
+/// lowering refusal remain explicit and are never promoted to comparisons.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownstreamValidation {
+    pub machine_compared: bool,
+    pub lowering_refusals: Vec<&'static str>,
+    pub native_run: bool,
+    pub native_skipped: Option<&'static str>,
+}
+
+/// Execute an already transformed module through the same EvoMIR/native tail
+/// as the randomized gate, without applying EqSat or constructing a proof.
+/// `native_case` selects the already-defined native-main admission profile;
+/// `None` requests only the machine interpreter. Both EvoIR modules and every
+/// complete Section 7 observation are checked before native execution.
+pub fn validate_lowered_transformation(
+    before: &Module,
+    after: &Module,
+    arguments: &[RuntimeValue],
+    step_budget: u64,
+    native_case: Option<u64>,
+) -> Result<DownstreamValidation, String> {
+    validate_module(before).map_err(|error| format!("invalid input: {error}"))?;
+    validate_module(after).map_err(|error| format!("invalid output: {error}"))?;
+    let Observation::Defined(before_run) = observe(before, arguments, step_budget) else {
+        return Err("input execution is not defined within the step budget".into());
+    };
+    let after_run = observe(after, arguments, step_budget);
+    if let Some((kind, detail)) = compare(&before_run, &after_run) {
+        return Err(format!("{kind:?}: {detail}"));
+    }
+    let trial = finish(
+        Trial::default(),
+        &before_run,
+        after,
+        arguments,
+        GateBudget {
+            step_budget,
+            ..GateBudget::default()
+        },
+        native_case.unwrap_or(0),
+        if native_case.is_some() {
+            GeneratorMode::NativeMain
+        } else {
+            GeneratorMode::Standard
+        },
+    );
+    if let Some((kind, detail)) = trial.refusal {
+        return Err(format!("{kind:?}: {detail}"));
+    }
+    if trial.machine_budget_exhausted {
+        return Err("machine interpreter fuel exhausted".into());
+    }
+    Ok(DownstreamValidation {
+        machine_compared: trial.machine_compared,
+        lowering_refusals: trial.refusal_codes,
+        native_run: trial.native_run,
+        native_skipped: trial.native_skipped,
+    })
 }
 
 /// The one place that recognises a fuel stop, so both sides answer alike.

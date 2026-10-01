@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N01, N02, N03, N03a, N03b, N03c, N03d, N03e, N03f, N04, N05, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The codegen quality track N01–N07 is the active roadmap work: N01's size-gap census and N02's validation harness first, N03a layering before any other backend slice; the paused R items wait on it. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N02, N03, N03a, N03b, N03c, N03d, N03e, N03f, N05, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01's census and N04's bounded checker interface are complete. Finish N02/N05 admission and measurement, then N03a layering before any other backend slice; the paused R items wait on the codegen track. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2285,13 +2285,19 @@ claim follows from these items. `LATER` is the tracker's roadmap state, not a
 statement that the work is idle. Follow the plan's working agreement: frozen
 plan, RED, flag, gates, one-page note, TODO update in the same commit.
 
-- [ ] **N01 — Size-gap attribution census** — `LATER`, P3.
+- [x] **N01 — Size-gap attribution census** — `DONE`, P3.
   Before any optimization work, disassemble EvoCC, GCC-14 and Clang-19 `-O2`
   objects of the six S5 units and classify every instruction with the frozen
   13-category rule table in the plan; record TU-local inlining evidence
   separately. Totals must equal S1 instruction bytes. Deliver a frozen table
   under `tests/contracts/` and a ranked list of levers with estimated bytes.
   Read-only tooling; no compiler change. One week.
+  Implementation and retained-object census are complete. Full workspace:
+  2,915 PASS / 0 FAIL / 4 ignored; Clippy and formatting PASS; shared Python 135 PASS.
+  [Receipt](tests/contracts/codegen-n01-20261002-receipt.json): 42 arm rows,
+  37 distinct objects, exact S1 reconciliation; 647 of 2,210 additional
+  historical ladder records classified. Library TU ratios remain 1.986–2.668,
+  not a size improvement or target attainment.
 
 - [ ] **N02 — Pass framework, translation validation and pass telemetry** — `LATER`, P3.
   An EvoIR pass interface with before/after hooks; a validation runner that
@@ -2300,6 +2306,16 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   declined by reason, bytes); receipt field for pass class `VERIFIED`,
   `VALIDATED` or `LOWERING`. RED: a deliberately wrong pass must be caught on
   the corpus. Default output unchanged while no pass is enabled. Two weeks.
+  Bounded identity framework implemented; [receipt](tests/contracts/codegen-n02-20261002-receipt.json).
+  6,274/21,000 generated inputs admitted to TV; 14,726 opaque inputs only
+  measured. A separate native-main population admits and runs 72/256.
+  Bounded framework full gate: 2,915 PASS / 0 FAIL / 4 ignored, Clippy/fmt PASS.
+  Optimization-admission size/compile-cost bounds remain unmeasured.
+  **Unclosed source bridge:** the unchanged
+  integer-mix control records 1,001 C-HIR versus 1,002 EvoIR volatile events
+  (local initialization store), despite matching returns. [Minimal input](tests/fixtures/codegen/volatile-initializer-observation.c).
+  Keep `MISMATCH_NOT_VALIDATED`; do not normalize the event away, alter
+  interpreter semantics in this slice, or admit an optimizing default pass.
 
 - [ ] **N03 — Codegen improvements, ordered by N01** — `LATER`, P3.
   Parent of the slices below. Product target declared before measurement:
@@ -2346,17 +2362,28 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     through the ABI interface, with EvoMIR revision text and ABI corpora.
     After N03a.
 
-- [ ] **N04 — The C checker as a product** — `LATER`, P3.
+- [x] **N04 — The C checker as a product** — `DONE`, P3.
   One command that runs the EvoIR interpreter as a precise undefined-behavior
   detector with the existing diagnostic codes; `--explain` pages generated
   from the specification's diagnostic table; JSON diagnostics; ui tests with
   blessed output. No interpreter semantics change. Parallel lane, three weeks.
+  Implemented: [workflow](docs/checker.md), 8 blessed UI pairs, 12 focused tests
+  PASS, 89 authority explanations and 78 explicit explanation TODOs.
+  [Receipt](tests/contracts/codegen-n04-20261002-receipt.json); full workspace
+  2,915 PASS / 0 FAIL / 4 ignored, Clippy/fmt PASS. Existing supported execution
+  only; no whole-program absence-of-UB or complete system-model claim.
 
 - [ ] **N05 — Measurement automation and bisect** — `LATER`, P3.
   On each push: S1 sizes for the six units, compile time, a ladder subset and
   interpreter steps, appended as trend receipts; a receipt-driven bisect over
   commits. RED: an injected size regression is flagged and bisected to its
   commit. Lands before the first N03 slice. Parallel lane, two weeks.
+  Real Git/ELF injection 8→24→24 bytes correctly located `ff5b17a0`;
+  [receipt](tests/contracts/codegen-n05-20261002-receipt.json). Fresh six-TU
+  collection and pre-push activation/exercise remain pending. Full workspace
+  2,915 PASS / 0 FAIL / 4 ignored, Clippy/fmt PASS; shared Python 135 PASS.
+  The integer-mix source-bridge mismatch is retained independently of its
+  measurable unchanged-EvoIR step count; observation is not TV acceptance.
 
 - [ ] **N06 — EqSat memory and effect domain** — `LATER`, P3.
   Not scheduled. The place where equality saturation has real value (CSE,

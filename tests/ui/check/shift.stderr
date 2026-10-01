@@ -1,0 +1,1 @@
+tests/ui/check/shift.c: error[E3005]: invalid-shift-count

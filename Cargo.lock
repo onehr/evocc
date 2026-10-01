@@ -21,6 +21,7 @@ dependencies = [
  "evocc-lower",
  "evocc-mir",
  "evocc-parser",
+ "evocc-passes",
  "evocc-proof",
  "evocc-proofcheck",
  "evocc-types",
@@ -128,6 +129,21 @@ dependencies = [
  "evocc-cpp",
  "evocc-lex",
  "evocc-memory",
+ "evocc-types",
+]
+
+[[package]]
+name = "evocc-passes"
+version = "0.0.0"
+dependencies = [
+ "evocc-chir",
+ "evocc-common",
+ "evocc-evoir",
+ "evocc-lex",
+ "evocc-lower",
+ "evocc-parser",
+ "evocc-proof",
+ "evocc-randgate",
  "evocc-types",
 ]
 

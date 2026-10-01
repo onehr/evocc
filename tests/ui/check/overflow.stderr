@@ -1,0 +1,1 @@
+tests/ui/check/overflow.c: error[E3004]: signed-integer-overflow

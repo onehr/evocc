@@ -1,0 +1,127 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03b",
+  "date": "2026-10-02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "ae4df414f7074d467fffccdee0733a1ebcef5a7e",
+  "baseline_qualification": "Inspected pre-implementation HEAD only. The bounded N02 dependency will be the implementation co-committed with this plan; record that containing commit before the first N03b RED or measurement. Full optimization admission remains separate. This plan is not a clean-build receipt.",
+  "implementation_commit": null,
+  "authority": [
+    "docs/codegen-quality-plan.md sections 3, 4, 4a, 5, 10",
+    "docs/evoir-spec.md sections 2.1-2.4, 3.6, 3.9-3.10, 4.6, 5.2, 10.1.9",
+    "tests/contracts/codegen-n02-20261002.json",
+    "docs/framing-draft.md section 5.5: V1 size contract S1"
+  ],
+  "scope": "One small target-independent EvoIR direct-call inliner behind --opt-pass=inline-local. Execution-validated, never proof-certified. No IR, interpreter, registry, source-language or calling-convention change; no default O2 admission in this first slice.",
+  "dependencies": {
+    "N01": "Use retained local-body and direct-call evidence as prioritization, not proof of recoverable bytes or fresh correctness.",
+    "N02": "Require the bounded pass framework, full-workspace gate, staged validation and downstream runner integration. Preserve all opaque exclusions and the pending volatile-initializer source-bridge mismatch.",
+    "N05": "Reuse existing size/compile-time/steps collection before claiming a measured improvement.",
+    "N03a": "No dependency for this Layer 1 pass. Do not edit MIR allocation, target rules or ABI while the backend layering slice owns them."
+  },
+  "prior_evidence": {
+    "receipt": "tests/contracts/codegen-n01-20261002-receipt.json",
+    "summary": ".evidence/codegen/n01-20261002/summary-final.json",
+    "summary_sha256": "a94ec27bb9a9249a255938f24cbdbb041693d71d7c8ce0445393e048da993860",
+    "units": [
+      {"case": "integer-mix", "local_bodies": 0, "called_local_bodies": 0, "direct_call_sites": 0},
+      {"case": "zlib-deflate", "local_bodies": 12, "called_local_bodies": 10, "direct_call_sites": 55},
+      {"case": "zlib-inflate", "local_bodies": 3, "called_local_bodies": 3, "direct_call_sites": 20},
+      {"case": "zstd-compress", "local_bodies": 117, "called_local_bodies": 116, "direct_call_sites": 253},
+      {"case": "zstd-decompress", "local_bodies": 30, "called_local_bodies": 30, "direct_call_sites": 81},
+      {"case": "cJSON", "local_bodies": 31, "called_local_bodies": 31, "direct_call_sites": 113}
+    ],
+    "candidate_observations": [
+      {"tu": "zstd-compress", "symbol": "ZSTD_nextInputSizeHint_MTorST", "body_bytes": 20, "direct_calls": 1},
+      {"tu": "zstd-compress", "symbol": "ZSTD_blockSplitterEnabled", "body_bytes": 32, "direct_calls": 1},
+      {"tu": "zstd-compress", "symbol": "ZSTD_useTargetCBlockSize", "body_bytes": 32, "direct_calls": 1},
+      {"tu": "cJSON", "symbol": "print_string", "body_bytes": 24, "direct_calls": 1}
+    ],
+    "qualification": "Examples are residual native symbols, not pre-admitted IR candidates. A wrapper may contain a call; a small body may allocate or be opaque. Missing reference bodies alone do not prove inlining. No byte ceilings are summed."
+  },
+  "preflight": {
+    "mutation": false,
+    "method": "Inspect the six already-selected lowered modules after existing C-HIR substitution and baseline lowering. Count direct call sites, preserved source barriers, actual residual callee shapes and N02 executable input admission before implementing substitutions.",
+    "required_counts": ["direct_call_sites", "source_policy_unknown", "barrier_rejected", "internal_strong_single_site", "leaf_no_frame_objects", "structural_budget_admitted", "whole_module_tv_admitted", "admitted_execution_inputs"],
+    "stop_rule": "If no residual call survives the frozen source/structural/TV conditions, record NO_ADMITTED_OPPORTUNITY and stop this slice. Do not enlarge the callee subset or weaken TV to manufacture a positive result. Library modules rejected by the existing whole-module TV profile remain NOT_ADMITTED."
+  },
+  "source_permission": {
+    "existing_path": "crates/evocc-chir/src/inline.rs: complete-declaration-chain no_optional_substitution; private_leaf <=48 syntax nodes; existing hinted and mandatory substitutions stay unchanged.",
+    "missing_ir_field": "evocc_evoir::Function has no noinline/noipa/noclone representation. Absence in EvoIR is not permission to inline.",
+    "carrier": "Collect a conservative symbol-name admission context from the exact resolved C-HIR inventory passed by lower_unit_with_source, using its linkage mapping and every relevant redeclaration. Pass that context to the ordinary ModulePass implementation; do not serialize a new IR field or build another metadata framework.",
+    "rules": "Any noinline, noipa or noclone in the complete declaration chain rejects the callee. Unavailable or ambiguous source inventory rejects it. The raw EvoIR-only path does not infer source permission. Standalone IR RED fixtures explicitly supply their test permission context.",
+    "red": "A barrier only on an earlier or later prototype must prevent substitution. Required always_inline/GNU extern-inline behavior remains solely on the existing C-HIR path."
+  },
+  "admission": {
+    "candidate": "Direct Inst::Call to a defined, strong, visibility=Internal function in the same module, with exactly one direct call site in the frozen input graph and no other symbol references. No aliases, function addresses, relocations, registration roots, assembly mentions or unknown reference kinds may name the callee.",
+    "caller": "Original module and caller must pass unchanged N02 admission. Source entry must have a frozen executable input; a library TU without one does not become validated by assembling it.",
+    "poison_boundary": "Section 6.2 makes ordinary call arguments and returns poison-consuming operations, unlike branch-edge transport. Reject every module containing Uninitialized SSA in this first slice, including definitions outside the selected callee. Also reject any other admitted operation that can manufacture poison without trapping. Do not replace a consuming call/return with a transport edge unless this conservative no-poison precondition holds; do not silently infer definedness from one TV input.",
+    "callee": "Nonvariadic leaf; at most 4 reachable basic blocks and 32 nonterminator instructions; acyclic CFG using only br, cond_br and ret terminators. Ordinary arguments/results are existing integer bits or generic pointers, with the normal trailing mem<all>/world pair. No aggregate parameter marks or hidden byval/sret protocol.",
+    "recursion": "Compute SCCs of the original direct call graph and reject every cyclic component, including self recursion. Leaf admission also excludes direct/indirect calls in cloned bodies. Never rescan newly cloned code in this pass invocation.",
+    "opaque": "Keep N02's whole-module assembly/lifecycle/TLS/external-object and volatile/atomic/io/fenv/may_unwind exclusions. Unknown/external/indirect calls, floating/vector/complex operations, variadics, block addresses, indirect branches, trap terminators, return-address and frame-address instructions reject the callee.",
+    "frame_boundary": "Reject all Alloca, DynamicAlloca and LifetimeEnd in a callee. Do not extend callee automatic lifetimes into the caller, invent frame tokens, or claim escaped pointers remain valid. Existing caller allocations are unaffected. Object-origin metadata and all module data remain unchanged.",
+    "memory_and_guards": "Ordinary loads/stores through already supplied pointers or existing globals, pointer/access checks, and integer UB predicates/ub.assume may remain in an admitted leaf. Preserve their order and operands exactly; do not remove, fold or weaken an obligation in this pass. may_trap alone is not an optimization permission or an instruction to delete the check."
+  },
+  "algorithm": {
+    "staging": "Implement in evocc-passes behind the existing ModulePass API; stage the whole candidate output and use the existing before/after execution validation. Publish no transformed module on validation failure.",
+    "schedule": "Scan original module function order, block order and instruction order once. Record each examined direct call as one eligible-site denominator entry, then taken or a single deterministic declined reason. No profile-guided, random, recursive or repeated fixed-point expansion.",
+    "limits": {"callee_blocks": 4, "callee_nonterminators": 32, "sites_per_callee": 1, "sites_per_module": 32, "added_nonterminators_absolute": 1024, "added_nonterminators_fraction": 0.25},
+    "cost": "The instruction/block caps are structural growth limits, not machine-byte estimates. Keep estimated_bytes null until a existing target cost table actually supplies it; no AArch64 instruction-size constants in Layer 1. Apply both absolute and floor(input_nonterminators/4) growth bounds. Existing native dead-internal-body retention may remove an unreferenced body, but the pass itself preserves the function table.",
+    "remapping": [
+      "Validate the input. Allocate fresh function-unique Value IDs and fresh BlockIds with checked arithmetic; never derive IDs from parameter positions or reuse callee IDs across sites.",
+      "Split the caller block at the call into a prefix and a continuation. Clone admitted callee blocks. Bind actuals plus the currently live mem/world to cloned entry block arguments positionally, exactly once; argument computations remain before the original call site.",
+      "Compute caller-prefix ordinary values used by the suffix or its terminator. Carry those live-across values explicitly as added block arguments through cloned edges to the continuation. No hidden cross-block SSA references; no duplicate stale mem/world in this carry set.",
+      "Rename every instruction result/operand and every direct edge destination/argument using one exhaustive remapping path. Preserve duplicate ordinary arguments, mutually exclusive edges, UB obligations, global symbols and exact instruction payloads.",
+      "Replace each cloned ret with br to the continuation, passing its ordinary returns, current mem/world and carried caller values. Bind the original call's result IDs to new continuation arguments or a consistent fresh renaming; do not give an ID two definitions. Every edge must satisfy local SSA, token linearity and positional arity.",
+      "The original caller suffix and terminator execute once after the selected return. Recompute module effect summaries using the existing least-fixed-point implementation, then run the existing module validator before TV. Never copy the old summary as authority."
+    ],
+    "retention": "Keep original callee definitions and all globals/aliases/registrations untouched; existing backend reference analysis decides native retention. No simultaneous new DCE, promotion, constant folding, GVN or call-graph cleanup pass.",
+    "certificates": "Run the existing independent EqSat chain after the validated pass, just as N02's driver hook does. Certificates bind the post-inline module; they do not certify inlining. No certificate splice across the transform and no registry/checker changes."
+  },
+  "red_cases": [
+    "No flag and zero admitted sites preserve canonical EvoIR and emitted assembly bytes; identity/no-op reporting stays explicit.",
+    "Scalar one-block and two-return diamond callees; repeated actual argument; two independent sites in different callees; fresh IDs after repeated invocation; caller loop and multiple calls sharing a block.",
+    "Caller value defined before the call used after it and in its outgoing edge; cloned branch arguments are permuted; every return forwards memory/world exactly once. Intentionally stale or duplicated tokens and cross-block references fail the existing validator.",
+    "Pointer-backed ordinary store/load and global mutation return the same value but change memory; the wrong-inline injection must be rejected by existing DefinedRun comparison. Preserve checked diagnostics. An unused poison actual and a poison return whose call result is discarded must remain uninlined and retain E3001; a selected-branch guard remains in the cloned CFG.",
+    "Direct and mutual recursion, multi-use/addressed/aliased/registered functions, noinline/noipa/noclone redeclarations, weak/hidden/external symbols, unknown source policy, variadics and aggregate marks all decline with named reasons.",
+    "Callee local/dynamic allocation, escaped automatic address, lifetime.end, frame/return address and computed-goto owners remain unmodified. Do not change interpreter semantics to make these cases pass.",
+    "Opaque effects and unknown calls retain N02 rejection. The recorded volatile-initializer bridge mismatch remains visible, never a validated positive input.",
+    "A deliberately wrong argument permutation, omitted store, wrong return edge and missing UB guard are rejected on discriminating defined/diagnostic inputs before publication.",
+    "Structural caps and integer-overflow boundaries produce deterministic decline or failure without partial publication. Two independent compilations with identical inputs choose identical sites and emit identical object bytes."
+  ],
+  "evaluation": {
+    "correctness": "Run focused pass/source/driver REDs, the existing frozen 21000-program population with admission counts, the existing source and admitted native differential populations, then the full-workspace gate. Do not convert opaque exclusions into passes or construct synthetic call wrappers and relabel them original application replay.",
+    "affected_sources": "Use the six S5 source/argv pairs and unchanged admitted application inputs already retained by N01/N05. A TU that cannot execute under current TV is NOT_ADMITTED, not an unchecked optimized product. Do not rerun latency experiments.",
+    "metric": "Existing S1 object .text+.text.* bytes, static instruction slots, padding, literal pools and rodata separately; checked/unchecked and each TU/family separately. No cross-family mean, no attribution of existing C-HIR inlining/DCE to N03b.",
+    "bounds": {"size_regression_bytes_per_admitted_tu": 0, "compile_time_ratio": 1.25, "interpreter_steps_ratio": 1.05},
+    "measurement": "Use unchanged N05 consumers for compilation including pass/TV cost, pass/validation timing breakdown and measured bytes. Interpreter steps may change but observations may not. Bounds unmet means TRADEOFF or NOT_ADMITTED, not improvement.",
+    "repetition": "Two byte-identical object builds per admitted measured TU. Reuse sealed source/argv and existing tools; no new timing calibration, corpus grammar or audit layer.",
+    "gate": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+    "lean": "NOT_REQUIRED unless a later separately approved semantic/registry change is proposed; this slice proposes none."
+  },
+  "unresolved_boundaries": [
+    "Current N02 rejects an entire module with opaque effects and the driver supplies only main's frozen no-ordinary-argument input. The library TUs may therefore have zero N03b-admitted executions despite native size opportunities. A broader function-scoped TV or external-call model would require separate approval; do not introduce either in this plan.",
+    "Source optimization barriers are absent from EvoIR. Implementation must demonstrate correct complete-chain permission extraction from the exact resolved C-HIR inventory before any source candidate is accepted; missing information fails closed.",
+    "The no-callee-allocation boundary may remove most residual source opportunities. It is intentional because ret finalizes the callee frame. Expanding to allocation cloning/lifetime cleanup is not authorized here, even if the first slice is negative.",
+    "The no-Uninitialized module boundary is intentionally conservative. If another admitted instruction can produce poison, reject it too rather than dropping the call/return consume point. A new general definedness analysis or explicit consume instruction is not part of this slice."
+  ],
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "cargo_serial": true,
+    "heavy_lane_jobs": 1,
+    "retention": "Existing trees only. Retain compact counts/hashes, classification and minimal failed inputs; remove intermediate objects after hash/measurement. No new target/workspace/kernel/VM tree; preserve standing contracts, fixtures, open evidence and Lean caches."
+  },
+  "acceptance": [
+    "Commit this plan before RED/measurement with the bounded N02 implementation, and record that containing commit as the actual dependency before execution.",
+    "Preflight admits a nonzero residual population under the frozen conditions, or freeze a negative NO_ADMITTED_OPPORTUNITY result without implementation expansion.",
+    "If preflight admits implementation, all stated REDs, observations, native-admitted lanes and the full-workspace gate pass without bypass; independent EqSat replay remains green for post-inline subjects. A negative preflight does not claim those unexecuted implementation tests passed.",
+    "For an admitted transform, actual measured per-TU size, compile-time and steps bounds are met; two builds byte-identical; exclusions and every regression retained. A negative preflight instead records zero admitted transformations and no optimization gain.",
+    "One compact receipt and a <=1-page note with commit, gate, table, claim ceiling and disk net delta; TODO updated in the same bounded commit."
+  ],
+  "stop_rule": "Two-week slice. Stop on no admitted residual opportunities, an unresolved source-permission mapping, frame/opaque semantics beyond this scope, a failing existing gate outside this slice, or resource limits. Do not change IR/interpreters/registry or add another audit/benchmark framework.",
+  "claim_ceiling": "A bounded, opt-in, target-independent inline transform validated only on named executable inputs. No universal equivalence theorem, certified inline-byte claim, whole-program coverage, latency gain, or default O2 admission. Negative admission is an acceptable frozen result."
+}

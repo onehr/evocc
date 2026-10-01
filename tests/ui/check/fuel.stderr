@@ -1,0 +1,1 @@
+tests/ui/check/fuel.c: error[E3008]: interpreter-fuel-exhausted

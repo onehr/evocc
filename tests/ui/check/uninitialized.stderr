@@ -1,0 +1,1 @@
+tests/ui/check/uninitialized.c: error[E3001]: read-of-uninitialized-object

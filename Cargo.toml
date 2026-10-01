@@ -31,6 +31,7 @@ members = [
     "crates/evocc-parser",
     "crates/evocc-lower",
     "crates/evocc-policy",
+    "crates/evocc-passes",
 ]
 
 [workspace.package]

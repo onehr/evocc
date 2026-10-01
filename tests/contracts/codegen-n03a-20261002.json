@@ -22,7 +22,7 @@
     "assembly": "AsmBody::read includes read-write outputs; operand_slots treats their mutable occurrence as a definition. Preserve the distinction between semantic roles and once-per-occurrence rewriting until a separate semantic defect is demonstrated.",
     "out_of_ssa": "regalloc.rs already performs parameter forwarding, critical-edge splitting, indirect union copies, cycle breaking and baseline DCE. Preserve their order and the exact discardable_computation set.",
     "allocation": "linscan.rs pin_boundaries, scan, spill insertion and frame-slot compaction currently inspect concrete MInst/MTerm. Preserve numbering, iteration order, tie breaks, fresh-register ranges and retry limits.",
-    "verification": "allocverify.rs derives its own physical-register dataflow and constraints. Sharing generated target facts does not authorize sharing allocator intervals, pins, liveness conclusions or spill decisions.",
+    "verification": "allocverify.rs derives its own physical-register dataflow and constraints. Sharing generated target facts does not authorize sharing allocator intervals, pins, liveness conclusions or spill decisions. Its general assignment admission checks physical bank membership, not membership of the allocator pool; preserve this existing verdict boundary rather than introducing a new reserved-register rejection.",
     "abi_frame": "ArgumentCursor in linscan.rs, classification in lower.rs and frame_of in emit.rs split the existing ABI. The frame printer, condition codes and symbol/section syntax remain ISA-specific; frame layout and placement algorithms become generic."
   },
   "interfaces": {
@@ -45,7 +45,7 @@
       ],
       "focused_reds": [
         "Duplicate register/view IDs, inconsistent alias bank and allocatable/reserved overlap reject during generation.",
-        "Call-clobbered-but-not-allocatable registers remain distinct; corrupt assignment to a reserved scratch register is rejected.",
+        "Call-clobbered-but-not-allocatable registers remain distinct; generated allocatable pools exclude reserved scratch. Existing fixed-assembly rejections remain unchanged; general assignment admission retains its existing bank-membership rule.",
         "Regeneration produces no diff; the first migrated generic module has no ISA names."
       ],
       "exit": "Fresh six-unit object twins equal the pre-migration baseline; focused allocation/native tests retain their verdicts."

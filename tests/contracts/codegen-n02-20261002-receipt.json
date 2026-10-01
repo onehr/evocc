@@ -1,0 +1,106 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N02",
+  "status": "BOUNDED_IDENTITY_FRAMEWORK_ACCEPTED",
+  "date": "2026-10-02",
+  "plan": "tests/contracts/codegen-n02-20261002.json",
+  "plan_commit": "917f8955",
+  "implementation_commit": null,
+  "red": {
+    "framework": {"passed": 0, "failed": 7, "exit_code": 101},
+    "driver": {"passed": 2, "failed": 3, "exit_code": 101}
+  },
+  "gates": {
+    "focused": {
+      "status": "PASS",
+      "framework_passed": 14,
+      "source_bridge_passed": 3,
+      "driver_passed": 5,
+      "failed": 0
+    },
+    "full_workspace": {
+      "status": "PASS",
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "suites": 377,
+      "passed": 2915,
+      "failed": 0,
+      "ignored": 4,
+      "clippy": "PASS",
+      "fmt": "PASS",
+      "log": ".evidence/codegen/full-workspace-20261002.log",
+      "log_sha256": "1b7f2da7fd9f6dff1acfe685bf74e0176d819ed5f93c4d77eeca6ce4092a221f"
+    },
+    "lean": "NOT_REQUIRED_NO_SEMANTIC_OR_REGISTRY_CHANGE"
+  },
+  "generated_corpus": {
+    "command": "target/frontend/debug/examples/corpus full",
+    "capture": ".evidence/codegen/n02-20261002/full.json",
+    "capture_sha256": "738e5dab2e7d13e0b5c423bcc917ba808032068008e7db4c18752ed8f383436b",
+    "programs": 21000,
+    "identity_tv_admitted": 6274,
+    "identity_tv_ineligible_opaque": 14726,
+    "defined_measurements": 21000,
+    "before_steps": 3884440,
+    "after_steps": 3884440,
+    "observations_sha256": "5045924e7f8aea36944cf74e448fc1a6bdfd079f8a5e84af3a99a136bcba0770",
+    "claim": "6274 identity validations, not 21000 TV passes. Excluded modules were only measured unchanged."
+  },
+  "native_corpus": {
+    "command": "target/frontend/debug/examples/corpus native",
+    "capture": ".evidence/codegen/n02-20261002/native.json",
+    "capture_sha256": "0890a76b79835274d7192632b5c36d243ba063261e33b8a2f9197f37ed68d4cc",
+    "population": "Existing native-main generator: 256 seeds starting at 0x4E4154000001",
+    "programs": 256,
+    "identity_tv_admitted": 72,
+    "identity_tv_ineligible_opaque": 184,
+    "machine_compared": 72,
+    "native_compared": 72,
+    "native_skipped": {},
+    "claim": "Existing downstream runner integration on the admitted identity subset; not the separate 384 C-source gate."
+  },
+  "small_measurement": {
+    "command": "target/frontend/debug/examples/corpus small",
+    "capture": ".evidence/codegen/n02-20261002/small-measurement.json",
+    "capture_sha256": "f6adab0aec4d65c61265efb121a8fa8f967d4ae0718b709a6b6557439b2b3605",
+    "programs": 257,
+    "identity_tv_admitted": 70,
+    "identity_tv_ineligible_opaque": 187,
+    "defined_measurements": 257,
+    "before_steps": 52825,
+    "after_steps": 52825,
+    "observations_sha256": "728378828602f3b62e8e5b67e593b553fb41e43c9ec28d9bcc8909eb4d24f33d",
+    "claim": "256 frozen generated inputs plus unchanged integer-mix measurement. Process completion does not close the separately recorded source-bridge mismatch."
+  },
+  "integer_mix": {
+    "status": "MISMATCH_NOT_VALIDATED",
+    "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+    "minimal_repro": "tests/fixtures/codegen/volatile-initializer-observation.c",
+    "chir_return": 0,
+    "evoir_return": 0,
+    "chir_volatile_events": 1001,
+    "evoir_volatile_events": 1002,
+    "first_difference": 0,
+    "cause": "C-HIR store_initialized_value uses unqualified initialization; EvoIR lower_initializer_at emits a volatile scalar initialization store.",
+    "disposition": "Existing source-bridge gap remains open. No interpreter or lowering change and no event erasure. Unchanged EvoIR steps may be measured, but this input is opaque to TV and cannot establish cross-interpreter agreement.",
+    "measurement_capture": ".evidence/codegen/n02-20261002/small-measurement.json",
+    "measurement_validation": "NOT_ADMITTED_OPAQUE",
+    "before_evoir_steps": 11017,
+    "after_evoir_steps": 11017
+  },
+  "claims": {
+    "pass_class": "VALIDATED",
+    "new_optimizing_passes": 0,
+    "default_output_changed": false,
+    "verified_eqsat_claim": false,
+    "actual_bytes": null,
+    "compile_time_bound_evaluated": false,
+    "whole_n02_source_bridge_closed": false
+  },
+  "disk": {
+    "capture_limit_bytes": 524288000,
+    "net_slice_bytes": null,
+    "owned_capture_bytes": 127627,
+    "note": "Net owned capture retention +127627 bytes, plus the small pass source and fixture. Shared driver/README/Cargo changes are not separable by lane; the N01 receipt records the combined target/frontend gate checkpoint (+4.12 GiB). Native temporary products were cleaned by the existing runner. No new target/workspace/kernel tree."
+  },
+  "claim_ceiling": "Per-instance execution validation on named admitted inputs, not universal equivalence, complete language coverage, a speed or size improvement, or proof-certified optimization. The legacy volatile initializer source-bridge mismatch remains pending."
+}

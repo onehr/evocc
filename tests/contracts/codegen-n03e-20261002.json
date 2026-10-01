@@ -1,0 +1,100 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03e",
+  "date": "2026-10-02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "slice": "Cross-edge reuse of an already transported integer expression result",
+  "source_baseline": "ae4df414f7074d467fffccdee0733a1ebcef5a7e",
+  "baseline_qualification": "Inspected HEAD with uncommitted N02/N04/N05 work. Co-commit this plan with the bounded N02 framework, then record that containing commit before the first RED or measurement. This is not an implementation receipt or a claim that N02's remaining optimization-admission bounds and source-bridge gap are closed.",
+  "implementation_commit": null,
+  "authority": [
+    "docs/codegen-quality-plan.md sections 3, 4, 4a, 5 and 10",
+    "docs/evoir-spec.md sections 2.3-2.4, 3.3, 3.9, 4.6, 6.2 and 8.5",
+    "docs/framing-draft.md section 5.5: S1 size contract",
+    "tests/contracts/codegen-n02-20261002.json"
+  ],
+  "scope": "One opt-in target-independent ModulePass, --opt-pass=reuse-edge-integer. Replace a repeated integer computation only with an existing same-block parameter whose incoming value was computed identically on every predecessor edge. No new block arguments, code motion, CFG changes, arithmetic identities, memory forwarding, IR/interpreter/registry changes or default O2 admission.",
+  "existing_optimizations_not_reimplemented": [
+    {"path": "crates/evocc-lower/src/constants.rs:prune_constant_edges", "behavior": "Bounded integer/global facts cross CFG edges, but the transform changes conditional edges and delegates a specific private-memory optimization. It does not substitute general arithmetic with a value carried from a predecessor."},
+    {"path": "crates/evocc-lower/src/cfg.rs:join_linear_blocks", "behavior": "Join unconditional single-predecessor continuations while preserving label identity. Do not count opportunities this already exposes to local reuse."},
+    {"path": "crates/evocc-lower/src/reuse.rs:reuse_pure_block_values", "behavior": "Structural value reuse inside one block only; no cross-block available-expression reuse."},
+    {"path": "crates/evocc-mir/src/regalloc.rs:out_of_ssa_with_dce", "behavior": "Existing shared S2 baseline dead-computation deletion and edge forwarding. Do not add a competing DCE or attribute its existing savings to this slice."},
+    {"path": "docs/evoir-spec.md section 8.5", "behavior": "The verified P0 witness closure handles same-block duplicates and stops at block parameters. This slice is not an extension of that registry or its certificate authority."}
+  ],
+  "preflight": {
+    "mutation": false,
+    "population": "Existing N02 frozen generated population and the same six original S5 source/argv pairs. Inspect modules after all unchanged baseline C-HIR substitution/lowering and before EqSat; also identify which roots remain in the current B output, without changing B or its proof records.",
+    "method": "Count only the exact edge pattern below, using existing IR enumeration and source/receipt inputs. The abstract pattern being absent from existing code is not evidence that a real corpus contains it.",
+    "required_counts": ["candidate_integer_operations", "existing_result_parameter", "all_edge_structural_matches", "producer_roots_protected", "structural_budget_declined", "opaque_module_declined", "admitted_execution_sites", "residual_sites_in_current_B"],
+    "stop_rule": "If no sites survive baseline lowering and N02 execution admission, freeze NO_ADMITTED_OPPORTUNITY and stop. If only synthetic/generated sites survive, report only that finite scope; original application optimization remains NOT_ADMITTED. Do not add new phi arguments, expand the operator list or weaken opacity to obtain a positive result."
+  },
+  "pattern": {
+    "operations": ["add", "sub", "mul", "and", "or", "xor"],
+    "types": "Operands and result have the same existing bits<N> type, with 1<=N<=64. No shift, comparison, conversion, division/remainder, UB predicate, pointer, vector, floating or token operation is a rewrite root in this slice.",
+    "destination": "A non-entry block B contains root r = OP(a,b), where a and b are B's existing block parameters. B also has a distinct same-typed parameter p that can replace r. The match is exact typed structural equality, including operand order, not a mathematical rewrite or commutativity search.",
+    "incoming_edge": "For every syntactic edge E from predecessor P into B, let E map B's a,b,p positions to values A,Bval,R in P. R must be the result of an original instruction R = OP(A,Bval) in P, executed before that exact edge's terminator. R cannot merely be an opaque predecessor argument, a recursively assumed alias or an instruction only executed on another path.",
+    "all_edges": "Index edge occurrences, not distinct predecessor blocks. Both cond_br alternatives targeting B are checked separately with their own bindings; even currently unreachable incoming edges must satisfy the pattern. Missing/indirect/assembly edges decline. Reject matches whose destination or source predecessor belongs to a CFG cycle in this first slice.",
+    "transport": "The useful result is already transported as p. No added parameters, edge arguments, loads, copies, hoisting or live-range extension is authorized. Replace r's subsequent local instruction/terminator uses by p using existing remap_inst_uses, then remove only the redundant root instruction.",
+    "example": "P: R=mul X,Y; cond_br C,B(X,Y,R),Other(...). B(a,b,p): r=mul a,b; use(p,r). Each additional predecessor must independently supply the same relation. This pattern survives only if unchanged baseline lowering has not already eliminated it."
+  },
+  "semantic_constraints": {
+    "poison": "The original predecessor producer remains at its original position and consumes the identical operands before any execution reaches B. If an operand is poison, that original computation still reports E3001 before the edge; replacing the later duplicate does not suppress the first consumption. Do not infer non-poison from one test input, an unreachable-edge assumption or a newly synthesized operation. Poison-only and missing-producer edges must decline.",
+    "producer_retention": "Discover candidates from the frozen input, then protect the union of every matched predecessor producer from deletion during this invocation. A root that is also a supporting producer is declined. No recursive reuse, fixpoint, implicit alias closure or cross-iteration proof.",
+    "ub": "Wrapping integer operation semantics are unchanged. Every original UB predicate, ub.assume, trap and access/lifetime guard remains byte-for-byte as an instruction. No arithmetic identity, signed-overflow assumption or removal of a diagnostic obligation is licensed. Signed source arithmetic keeps its original guards even if the repeated arithmetic is removed.",
+    "effects": "Apply unchanged N02 whole-module admission first. Preserve memory/world operands, result identities, edge positions, all allocations and all module metadata. Do not compare loads or use aliasing facts. Recompute effect summaries through the existing least-fixed-point API and validate the output independently.",
+    "control": "No branch/return replacement or code motion; branch conditions continue to execute and consume poison in the original position. All remaining operands obey local SSA and every edge retains its original simultaneous binding, token count and type.",
+    "opaque": "Assembly, lifecycle, TLS, external objects and volatile/atomic/io/fenv/may_unwind effects keep N02's existing refusal. The volatile initializer source-bridge mismatch stays MISMATCH_NOT_VALIDATED. No hidden single-function extraction or native-only substitute for TV."
+  },
+  "implementation": {
+    "location": "evocc-passes, using ModulePass and the current run_pipeline staging/telemetry. No evocc-eqopt or interpreter changes.",
+    "schedule": "One original-order scan of functions, blocks and instructions. Count each listed integer instruction as one eligible-site denominator entry and record exactly one taken/declined result. Select the lowest block-parameter index when multiple existing result parameters satisfy all incoming edges.",
+    "budgets": {"max_blocks_per_function": 128, "max_instructions_per_function": 4096, "max_edge_binding_checks_per_function": 16384, "max_replacements_per_module": 64},
+    "exhaustion": "On the scan/check budget, decline the affected function without transforming it. Stage the module and publish only after all selected replacements pass ordinary validation and every frozen execution. No partially validated publication.",
+    "cost": "No target mnemonics or byte constants in Layer 1. estimated_bytes remains null; measured S1 bytes determine materialization and regressions. Deleting an EvoIR operation is not automatically a machine-byte improvement.",
+    "ordering": "Run after unchanged baseline lowering and before the existing independent EqSat chain. That chain starts from the post-pass module and retains its ordinary standalone replay. Any certified EqSat savings are separate; this pass remains VALIDATED. Do not use pre-pass certificates to certify the changed module.",
+    "other_passes": "Evaluate this pass alone in the first slice, not combined with planned N03b inlining. No new DCE/CSE/constant-folding cleanup is added; existing shared backend passes remain symmetric in baseline and subject."
+  },
+  "red_cases": [
+    "A residual conditional predecessor passes both operands and their previously computed result; a used repeated destination computation is removed and full observations match. Also show baseline local reuse/linear joining alone leaves this exact pattern.",
+    "Two predecessor blocks carry equivalent operations under different local IDs; both paths pass. Two edges from the same cond_br to one target are checked independently; swapping one edge's operand or result mapping declines.",
+    "Missing result parameter, one unmatched predecessor, reversed sub operands, wrong width/opcode, source result only available in another block, self edge/backedge and indirect entry all decline without changing canonical bytes.",
+    "Uninitialized predecessor operand preserves the original E3001; an edge transporting poison instead of a producer result cannot justify replacement. An unreachable unmatched edge is not ignored.",
+    "Signed arithmetic guards and a later independently failing guard remain present and preserve diagnostic behavior. Return values may stay equal while global memory differs in a deliberately wrong replacement; N02 must reject it.",
+    "A supporting producer that is itself a candidate is protected, preventing deletion of the semantic consumption relied upon by another candidate. Bounded deterministic selection never uses a newly rewritten instruction as evidence.",
+    "Inject a wrong substitute parameter and show existing TV rejects the result before publication; malformed local SSA and forged effects are rejected by existing module validation.",
+    "Empty/no-match/opaque requests retain existing behavior; no flag gives exact legacy output. Telemetry totals match taken plus declined, and actual_bytes is never filled from IR instruction counts."
+  ],
+  "evaluation": {
+    "correctness": "Focused REDs through existing N02 framework/source/CLI paths, then the frozen 21000-program population with explicit admitted/excluded counts, existing admitted native differential and full-workspace gate. Newly generated discriminators remain test cases, not a relabeled application population.",
+    "original_inputs": "Replay unchanged admitted inputs from the six S5 units and existing N05 ladder subset. Record NOT_ADMITTED if a source TU has no current N02 consumer; do not introduce external-call semantics or relax whole-module refusal.",
+    "measurements": "Reuse N05 for per-TU S1 .text+.text.* bytes, instruction slots, padding/literal pools/rodata, host compilation including TV, and deterministic interpreter steps. Checked and unchecked remain separate. Keep zero-machine-byte materialization and worst regression; no cross-family average or VM timing campaign.",
+    "bounds": {"size_regression_bytes_per_admitted_tu": 0, "compile_time_ratio": 1.25, "interpreter_steps_ratio": 1.05},
+    "identity": "Two byte-identical builds for each admitted measured TU under the existing S1 procedure. Unsupported or unmeasured cases are not zero-cost successes.",
+    "gate": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+    "lean": "NOT_REQUIRED_NO_SEMANTIC_OR_REGISTRY_CHANGE"
+  },
+  "meaningful_slice_constraints": [
+    "Existing lowering can remove the transported parameter or collapse the CFG before this pass. The admitted pattern requires a useful result already carried, so it may be rare or absent; a measured negative result closes this slice without inventing a broader GVN project.",
+    "Whole-module N02 opacity excludes many original library TUs, even when they contain structurally matching integer blocks. Finite generated/source TV is not original-application optimization acceptance.",
+    "Additional register pressure is avoided by forbidding new transport, but the existing backend may already eliminate the native repeated work. Report no observable size effect when that happens; IR operation count alone is not an improvement."
+  ],
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "cargo_serial": true,
+    "heavy_lane_jobs": 1,
+    "retention": "Only compact opportunity/measurement counts, hashes and minimal failed cases. Existing trees and runners only; delete intermediate objects after hashing/measurement. Preserve contracts, fixtures, open evidence and Lean caches."
+  },
+  "acceptance": [
+    "Commit this plan and record the bounded N02 framework dependency before RED or measurement; retain its existing opacity and outstanding source-bridge disposition.",
+    "No-transform preflight establishes residual executable sites, or freezes NO_ADMITTED_OPPORTUNITY without scope expansion.",
+    "If preflight admits a transformation slice, every focused RED, admitted differential and full-workspace gate passes without bypass; post-pass EqSat certificates independently replay with zero completed rejection/bundle failure. A negative preflight does not claim unrun transform tests or resource bounds passed.",
+    "Actual per-TU size/compile-time/steps bounds pass and byte-identical repeated builds close, or a negative/tradeoff result is frozen without improvement/default-admission claims.",
+    "One compact receipt, <=1-page note and TODO update in a bounded commit, including gate, table, claim ceiling and disk net delta."
+  ],
+  "stop_rule": "Two-week first slice. Stop for no admitted residual opportunity, effects/CFG facts beyond the exact pattern, gates failing outside the slice or resource thresholds. Do not replace this with an unplanned optimizer, new audit layer or wider semantic domain.",
+  "claim_ceiling": "Opt-in execution-validated cross-edge integer reuse on named admitted inputs only. No universal proof, new certified domain, original-application coverage from microtests, latency claim or default O2 admission."
+}

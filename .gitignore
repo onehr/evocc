@@ -9,6 +9,7 @@ docs/*
 !docs/framing-draft.md
 !docs/codegen-quality-plan.md
 !docs/target-spec.md
+!docs/checker.md
 !docs/eqsat-guard-folding-draft.md
 !docs/status.md
 !docs/notebook/

@@ -15,10 +15,19 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
 
 
+class BundleReplayRejected(ValueError):
+    """Preserve the existing replay verdict when refusing native admission."""
+
+    def __init__(self, audit):
+        super().__init__('chain replay did not admit output')
+        self.audit = audit
+
+
 def bind_bundle(directory, checker=None):
     directory = Path(directory)
     audit = verify_bundle(directory, checker)
-    require(audit['accepted'], 'chain replay did not admit output')
+    if not audit['accepted']:
+        raise BundleReplayRejected(audit)
     record = json.loads((directory / 'chain.json').read_bytes(), object_pairs_hook=unique)
     names = {'chain.json', 'input.evo', 'output.evo'}
     for tx in record['transactions']:

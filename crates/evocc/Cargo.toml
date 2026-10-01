@@ -20,6 +20,7 @@ evocc-proof = { path = "../evocc-proof" }
 evocc-proofcheck = { path = "../evocc-proofcheck" }
 evocc-evoir = { path = "../evocc-evoir" }
 evocc-parser = { path = "../evocc-parser" }
+evocc-passes = { path = "../evocc-passes" }
 evocc-lower = { path = "../evocc-lower" }
 evocc-mir = { path = "../evocc-mir" }
 evocc-types = { path = "../evocc-types" }

@@ -1,0 +1,1 @@
+tests/ui/check/external.c: error[E3039]: external-call-not-executable

@@ -30,6 +30,7 @@ use evocc_mir::{compile_module_with_options, NativeStop, RelocationModel, Target
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
+mod diagnostics;
 mod dwarf;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -41,6 +42,7 @@ enum DriverMode {
     EmitEvoIr,
     EmitAsm,
     InterpretEvoIr,
+    Check,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -109,6 +111,7 @@ impl LanguageMode {
 
 struct DriverOptions {
     mode: DriverMode,
+    error_format: diagnostics::Format,
     target: DriverTarget,
     input: String,
     include_paths: Vec<String>,
@@ -118,6 +121,8 @@ struct DriverOptions {
     macro_actions: Vec<MacroAction>,
     standard_includes: bool,
     optimize_scalar_evoir: bool,
+    opt_passes: Vec<String>,
+    pass_report: Option<std::path::PathBuf>,
     eq_policy: ExtractionPolicy,
     eq_checker: Option<std::path::PathBuf>,
     eq_checker_digest: Option<String>,
@@ -150,6 +155,41 @@ struct DriverOptions {
 }
 
 impl DriverOptions {
+    fn emit_error(&self, file: &str, line: u32, column: u32, code: &str, message: &str) {
+        let location = (line != 0 && column != 0)
+            .then_some((line, column))
+            .or_else(|| (self.error_format == diagnostics::Format::Text).then_some((1, 1)));
+        self.error_format.error(
+            file,
+            location,
+            code,
+            message,
+            diagnostics::phase(code),
+            "compilation",
+        );
+    }
+
+    fn emit_execution_error(
+        &self,
+        file: &str,
+        location: Option<(u32, u32)>,
+        code: &str,
+        message: &str,
+    ) {
+        let location = location.or_else(|| {
+            (self.mode != DriverMode::Check && self.error_format == diagnostics::Format::Text)
+                .then_some((1, 1))
+        });
+        self.error_format.error(
+            file,
+            location,
+            code,
+            message,
+            "execution",
+            diagnostics::execution_category(code),
+        );
+    }
+
     fn target_layout(&self) -> TargetDataLayout {
         match self.target {
             DriverTarget::Aarch64UnknownLinuxGnu => TargetDataLayout::aarch64_unknown_linux_gnu()
@@ -219,6 +259,28 @@ fn is_probe(args: &[String]) -> bool {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let error_format = diagnostics::Format::for_usage(&args);
+
+    if args.iter().any(|arg| arg == "--explain") {
+        if args.len() != 2 || args[0] != "--explain" {
+            error_format
+                .usage("--explain requires exactly one diagnostic code and no other options");
+            return ExitCode::from(1);
+        }
+        return match diagnostics::explain(&args[1]) {
+            Ok(text) => {
+                if std::io::stdout().lock().write_all(text.as_bytes()).is_ok() {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::from(1)
+                }
+            }
+            Err(message) => {
+                error_format.usage(&message);
+                ExitCode::from(1)
+            }
+        };
+    }
 
     if args.is_empty() {
         eprintln!("usage: evocc <{}> --probe", CAPABILITIES.join("|"));
@@ -228,8 +290,11 @@ fn main() -> ExitCode {
         eprintln!("       evocc --emit=evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --emit=asm [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
+        eprintln!("       evocc --check [--error-format=text|json] <file>");
+        eprintln!("       evocc --explain E3xxx");
         eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
         eprintln!("       --ub-checks=checked|unchecked (native only; default checked)");
+        eprintln!("       --opt-pass=identity [--pass-report NEW_JSON_PATH] (development TV)");
         eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
         eprintln!("       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
         eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
@@ -263,7 +328,7 @@ fn main() -> ExitCode {
     let options = match parse_options(&args) {
         Ok(options) => options,
         Err(message) => {
-            eprintln!("evocc: {message}");
+            error_format.usage(&message);
             return ExitCode::from(1);
         }
     };
@@ -275,11 +340,13 @@ fn main() -> ExitCode {
         DriverMode::EmitEvoIr => run_parsed(&options, ParsedAction::EmitEvoIr),
         DriverMode::EmitAsm => run_parsed(&options, ParsedAction::EmitAsm),
         DriverMode::InterpretEvoIr => run_parsed(&options, ParsedAction::InterpretEvoIr),
+        DriverMode::Check => run_parsed(&options, ParsedAction::InterpretEvoIr),
     }
 }
 
 fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut mode = None;
+    let mut error_format = None;
     let mut target = None;
     let mut input = None;
     let mut include_paths = Vec::new();
@@ -289,6 +356,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut macro_actions = Vec::new();
     let mut standard_includes = true;
     let mut optimize_scalar_evoir = false;
+    let mut opt_passes = Vec::new();
+    let mut pass_report = None;
     let mut eq_policy = ExtractionPolicy::default();
     let mut eq_checker = None;
     let mut eq_checker_digest = None;
@@ -331,7 +400,45 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--emit=evoir" => set_mode(&mut mode, DriverMode::EmitEvoIr)?,
             "--emit=asm" => set_mode(&mut mode, DriverMode::EmitAsm)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
+            "--check" => set_mode(&mut mode, DriverMode::Check)?,
+            _ if arg.starts_with("--error-format=") => {
+                let selected =
+                    diagnostics::Format::parse(arg.strip_prefix("--error-format=").unwrap())?;
+                if error_format.replace(selected).is_some() {
+                    return Err("--error-format may appear only once".into());
+                }
+            }
             "-Oeq-scalar" => optimize_scalar_evoir = true,
+            _ if arg.starts_with("--opt-pass=") => {
+                let name = arg.strip_prefix("--opt-pass=").unwrap();
+                if name != "identity" {
+                    return Err(format!(
+                        "unknown development pass `{name}`; supported: identity"
+                    ));
+                }
+                opt_passes.push(name.to_owned());
+            }
+            "--pass-report" => {
+                index += 1;
+                let path = args.get(index).ok_or("--pass-report requires a path")?;
+                if path.is_empty()
+                    || pass_report
+                        .replace(std::path::PathBuf::from(path))
+                        .is_some()
+                {
+                    return Err("--pass-report requires one nonempty path".into());
+                }
+            }
+            _ if arg.starts_with("--pass-report=") => {
+                let path = arg.strip_prefix("--pass-report=").unwrap();
+                if path.is_empty()
+                    || pass_report
+                        .replace(std::path::PathBuf::from(path))
+                        .is_some()
+                {
+                    return Err("--pass-report requires one nonempty path".into());
+                }
+            }
             _ if arg.starts_with("--ub-checks=") => {
                 if ub_checks_selected {
                     return Err("--ub-checks may appear only once".into());
@@ -608,18 +715,38 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     if optimize_scalar_evoir
         && !matches!(
             mode,
-            DriverMode::EmitEvoIr | DriverMode::EmitAsm | DriverMode::InterpretEvoIr
+            DriverMode::EmitEvoIr
+                | DriverMode::EmitAsm
+                | DriverMode::InterpretEvoIr
+                | DriverMode::Check
         )
     {
         return Err(
             "-Oeq-scalar requires --emit=evoir, --emit=asm or --interpret-evoir".to_owned(),
         );
     }
+    if (!opt_passes.is_empty() || pass_report.is_some())
+        && !matches!(
+            mode,
+            DriverMode::EmitEvoIr
+                | DriverMode::EmitAsm
+                | DriverMode::InterpretEvoIr
+                | DriverMode::Check
+        )
+    {
+        return Err(
+            "development passes and --pass-report require an EvoIR execution or emission mode"
+                .into(),
+        );
+    }
     let schedule = eq_policy.schedule();
     if eq_proof_dir.is_some()
         && !matches!(
             mode,
-            DriverMode::EmitEvoIr | DriverMode::EmitAsm | DriverMode::InterpretEvoIr
+            DriverMode::EmitEvoIr
+                | DriverMode::EmitAsm
+                | DriverMode::InterpretEvoIr
+                | DriverMode::Check
         )
     {
         return Err("--eq-proof-dir requires an EvoIR execution or emission mode".into());
@@ -638,8 +765,12 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             offset: guard_offset.ok_or("sysreg stack guard requires its byte offset")?,
         };
     }
+    if mode == DriverMode::Check && ub_checks_selected {
+        return Err("--ub-checks is native-only and cannot weaken --check".into());
+    }
     Ok(DriverOptions {
         mode,
+        error_format: error_format.unwrap_or_default(),
         target: target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu),
         input: input.ok_or_else(|| "an input file is required".to_string())?,
         include_paths,
@@ -649,6 +780,8 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         macro_actions,
         standard_includes,
         optimize_scalar_evoir,
+        opt_passes,
+        pass_report,
         eq_policy,
         eq_checker,
         eq_checker_digest,
@@ -703,7 +836,7 @@ fn set_mode(slot: &mut Option<DriverMode>, mode: DriverMode) -> Result<(), Strin
 }
 
 fn run_preprocess(options: &DriverOptions) -> ExitCode {
-    let (src, tokens) = match read_and_lex(&options.input, options.language) {
+    let (src, tokens) = match read_and_lex(options) {
         Ok(value) => value,
         Err(code) => return code,
     };
@@ -711,14 +844,14 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
     let mut pp = match configured_preprocessor(options) {
         Ok(pp) => pp,
         Err(message) => {
-            emit_error(&options.input, 1, 1, "E0101", &message);
+            options.emit_error(&options.input, 0, 0, "E0101", &message);
             return ExitCode::from(1);
         }
     };
     let result = pp.process_bytes(evocc_cpp::TokenStream::new(tokens), &src);
     if pp.has_errors() {
         for error in pp.errors() {
-            emit_error(
+            options.emit_error(
                 pp.source_path(error.span.file)
                     .unwrap_or(options.input.as_str()),
                 error.span.line_start.max(1),
@@ -733,7 +866,7 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
     let rendered = match render_preprocessed(&result.into_vec(), &src) {
         Ok(rendered) => rendered,
         Err(message) => {
-            emit_error(&options.input, 1, 1, "E0003", &message);
+            options.emit_error(&options.input, 0, 0, "E0003", &message);
             return ExitCode::from(1);
         }
     };
@@ -744,14 +877,13 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn read_and_lex(
-    file: &str,
-    language: LanguageMode,
-) -> Result<(Vec<u8>, Vec<evocc_lex::Token>), ExitCode> {
+fn read_and_lex(options: &DriverOptions) -> Result<(Vec<u8>, Vec<evocc_lex::Token>), ExitCode> {
+    let file = options.input.as_str();
+    let language = options.language;
     let bytes = match fs::read(file) {
         Ok(s) => s,
         Err(e) => {
-            emit_error(file, 1, 1, "E0003", &format!("cannot read source: {e}"));
+            options.emit_error(file, 0, 0, "E0003", &format!("cannot read source: {e}"));
             return Err(ExitCode::from(1));
         }
     };
@@ -762,7 +894,7 @@ fn read_and_lex(
     lex.set_legacy_literal_prefixes(language.legacy_literal_prefixes());
     while let Some(token) = lex.next() {
         if matches!(token.kind, TokenKind::Error | TokenKind::EncodingError) {
-            emit_error(
+            options.emit_error(
                 file,
                 token.span.line_start.max(1),
                 token.span.column_start.max(1),
@@ -1108,7 +1240,7 @@ fn can_concatenate(group: &[(TokenKind, String)], kind: TokenKind, text: &str) -
 }
 
 fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
-    let (src, tokens) = match read_and_lex(&options.input, options.language) {
+    let (src, tokens) = match read_and_lex(options) {
         Ok(value) => value,
         Err(code) => return code,
     };
@@ -1116,14 +1248,14 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     let mut pp = match configured_preprocessor(options) {
         Ok(pp) => pp,
         Err(message) => {
-            emit_error(&options.input, 1, 1, "E0101", &message);
+            options.emit_error(&options.input, 0, 0, "E0101", &message);
             return ExitCode::from(1);
         }
     };
     let result = pp.process_bytes(evocc_cpp::TokenStream::new(tokens), &src);
     if pp.has_errors() {
         for error in pp.errors() {
-            emit_error(
+            options.emit_error(
                 pp.source_path(error.span.file)
                     .unwrap_or(options.input.as_str()),
                 error.span.line_start.max(1),
@@ -1168,7 +1300,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         };
         if !reported.is_empty() {
             for diagnostic in reported {
-                emit_error(
+                options.emit_error(
                     pp.source_path(diagnostic.span.file)
                         .unwrap_or(options.input.as_str()),
                     diagnostic.span.line_start.max(1),
@@ -1178,7 +1310,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                 );
             }
         } else {
-            emit_error(&options.input, 1, 1, "E1001", "expected-declaration");
+            options.emit_error(&options.input, 0, 0, "E1001", "expected-declaration");
         }
         return ExitCode::from(1);
     }
@@ -1199,18 +1331,33 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                             function.patchable_entry = options.patchable_entry;
                         }
                     }
+                    // Validated passes run before the independently certified
+                    // EqSat chain. The default path performs no TV executions.
+                    let module = match apply_development_passes(module, options) {
+                        Ok(module) => module,
+                        Err(detail) => {
+                            options
+                                .error_format
+                                .usage(&format!("translation validation failed: {detail}"));
+                            return ExitCode::from(1);
+                        }
+                    };
                     let module = if options.optimize_scalar_evoir {
                         match optimize_scalar_evoir(module, options) {
                             Ok(module) => module,
                             Err(detail) => {
-                                eprintln!("evocc: verified optimization failed: {detail}");
+                                options
+                                    .error_format
+                                    .usage(&format!("verified optimization failed: {detail}"));
                                 return ExitCode::from(1);
                             }
                         }
                     } else {
                         if let Some(path) = &options.eq_proof_dir {
                             if let Err(detail) = evocc_eqopt::write_identity_chain(&module, path) {
-                                eprintln!("evocc: identity-chain publication failed: {detail}");
+                                options
+                                    .error_format
+                                    .usage(&format!("identity-chain publication failed: {detail}"));
                                 return ExitCode::from(1);
                             }
                         }
@@ -1227,11 +1374,11 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                 Ok(result) => result,
                 Err(error) => {
                     let span = error.span();
-                    emit_error(
+                    options.emit_error(
                         span.and_then(|span| pp.source_path(span.file))
                             .unwrap_or(options.input.as_str()),
-                        span.map_or(1, |span| span.line_start.max(1)),
-                        span.map_or(1, |span| span.column_start.max(1)),
+                        span.map_or(0, |span| span.line_start.max(1)),
+                        span.map_or(0, |span| span.column_start.max(1)),
                         error.code(),
                         &error.message(),
                     );
@@ -1240,6 +1387,38 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
             }
         }
     }
+}
+
+fn apply_development_passes(module: Module, options: &DriverOptions) -> Result<Module, String> {
+    if options.opt_passes.is_empty() && options.pass_report.is_none() {
+        return Ok(module);
+    }
+    let identity = evocc_passes::IdentityPass;
+    let passes = options
+        .opt_passes
+        .iter()
+        .map(|_| &identity as &dyn evocc_passes::ModulePass)
+        .collect::<Vec<_>>();
+    let inputs = if passes.is_empty() {
+        Vec::new()
+    } else {
+        let (arguments, _) = evoir_main_contract(&module)?;
+        vec![evocc_passes::ExecutionInput::main(
+            "main", arguments, 100_000,
+        )]
+    };
+    let output =
+        evocc_passes::run_pipeline(&module, &passes, &inputs).map_err(|error| error.to_string())?;
+    if let Some(path) = &options.pass_report {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|error| format!("cannot create pass report {}: {error}", path.display()))?;
+        file.write_all(output.report.render_json().as_bytes())
+            .map_err(|error| format!("cannot write pass report {}: {error}", path.display()))?;
+    }
+    Ok(output.module)
 }
 
 fn optimize_scalar_evoir(
@@ -1288,10 +1467,9 @@ fn interpret_chir(
         }
         _ => None,
     }) else {
-        emit_error(
+        options.emit_execution_error(
             &options.input,
-            1,
-            1,
+            None,
             "E3007",
             "interpreter-entry-function-not-found: main",
         );
@@ -1307,11 +1485,10 @@ fn interpret_chir(
         Ok(outcome) => outcome,
         Err(error) => {
             let span = error.span();
-            emit_error(
+            options.emit_execution_error(
                 span.and_then(|span| pp.source_path(span.file))
                     .unwrap_or(options.input.as_str()),
-                span.map_or(1, |span| span.line_start.max(1)),
-                span.map_or(1, |span| span.column_start.max(1)),
+                span.map(|span| (span.line_start.max(1), span.column_start.max(1))),
                 error.code(),
                 &error.message(),
             );
@@ -1319,10 +1496,9 @@ fn interpret_chir(
         }
     };
     let Some(value) = outcome.return_value else {
-        emit_error(
+        options.emit_execution_error(
             &options.input,
-            1,
-            1,
+            None,
             "E3007",
             "interpreter-main-returned-no-value",
         );
@@ -1334,10 +1510,9 @@ fn interpret_chir(
             value.raw_bits.to_string()
         }
         Err(_) => {
-            emit_error(
+            options.emit_execution_error(
                 &options.input,
-                1,
-                1,
+                None,
                 "E3007",
                 "interpreter-main-return-type-is-not-scalar-integer",
             );
@@ -1390,13 +1565,13 @@ fn emit_asm(options: &DriverOptions, module: &Module, unit: &evocc_chir::CHirUni
             match &stop {
                 NativeStop::Lowering(codes) => {
                     for code in codes {
-                        emit_error(&options.input, 1, 1, code, "evomir-lowering-refused");
+                        options.emit_error(&options.input, 0, 0, code, "evomir-lowering-refused");
                     }
                 }
-                other => emit_error(
+                other => options.emit_error(
                     &options.input,
-                    1,
-                    1,
+                    0,
+                    0,
                     "E0004",
                     &format!(
                         "native-emission-stopped: {}: {}",
@@ -1412,10 +1587,10 @@ fn emit_asm(options: &DriverOptions, module: &Module, unit: &evocc_chir::CHirUni
         match dwarf::type_information(unit, module, &options.target_layout(), &options.input) {
             Ok(debug) => text.push_str(&debug),
             Err(error) => {
-                emit_error(
+                options.emit_error(
                     &options.input,
-                    1,
-                    1,
+                    0,
+                    0,
                     "E0004",
                     &format!("debug-type-emission: {error}"),
                 );
@@ -1434,7 +1609,7 @@ fn interpret_evoir(options: &DriverOptions, module: &Module) -> ExitCode {
     let (arguments, declared_results) = match evoir_main_contract(module) {
         Ok(contract) => contract,
         Err(message) => {
-            emit_error(&options.input, 1, 1, "E3007", message);
+            options.emit_execution_error(&options.input, None, "E3007", message);
             return ExitCode::from(1);
         }
     };
@@ -1442,7 +1617,7 @@ fn interpret_evoir(options: &DriverOptions, module: &Module) -> ExitCode {
         match evocc_evoir::interpret_program(module, &arguments, EvoIrLimits::new(100_000)) {
             Ok(outcome) => outcome,
             Err(error) => {
-                emit_error(&options.input, 1, 1, error.code(), &error.message());
+                options.emit_execution_error(&options.input, None, error.code(), &error.message());
                 return ExitCode::from(1);
             }
         };
@@ -1453,20 +1628,18 @@ fn interpret_evoir(options: &DriverOptions, module: &Module) -> ExitCode {
             .zip(&declared_results)
             .any(|(value, declared)| &value.ty != declared)
     {
-        emit_error(
+        options.emit_execution_error(
             &options.input,
-            1,
-            1,
+            None,
             "E3007",
             "evoir-main-result-does-not-match-declaration",
         );
         return ExitCode::from(1);
     }
     let Some(value) = outcome.return_values.first() else {
-        emit_error(
+        options.emit_execution_error(
             &options.input,
-            1,
-            1,
+            None,
             "E3007",
             "evoir-main-returned-no-value",
         );
@@ -1475,12 +1648,17 @@ fn interpret_evoir(options: &DriverOptions, module: &Module) -> ExitCode {
     let mathematical = match signed_scalar(value) {
         Ok(value) => value,
         Err(message) => {
-            emit_error(&options.input, 1, 1, "E3007", message);
+            options.emit_execution_error(&options.input, None, "E3007", message);
             return ExitCode::from(1);
         }
     };
     let mut stdout = std::io::stdout().lock();
-    if writeln!(stdout, "{mathematical}").is_err() {
+    let output = if options.mode == DriverMode::Check {
+        options.error_format.completion(mathematical)
+    } else {
+        format!("{mathematical}\n")
+    };
+    if stdout.write_all(output.as_bytes()).is_err() {
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS
@@ -1533,10 +1711,6 @@ fn signed_scalar(value: &RuntimeValue) -> Result<i128, &'static str> {
     } else {
         i128::from(raw) - (1_i128 << width)
     })
-}
-
-fn emit_error(file: &str, line: u32, column: u32, code: &str, message: &str) {
-    eprintln!("{file}:{line}:{column}: error[{code}]: {message}");
 }
 
 fn predefined_timestamp() -> (String, String) {

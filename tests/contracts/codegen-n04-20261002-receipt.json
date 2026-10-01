@@ -1,0 +1,63 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N04",
+  "status": "ACCEPTED_BOUNDED_CHECKER_INTERFACE",
+  "date": "2026-10-02",
+  "plan": "tests/contracts/codegen-n04-20261002.json",
+  "plan_commit": "917f8955",
+  "implementation_commit": null,
+  "red": {
+    "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline -p evocc --test check_product",
+    "exit_code": 101,
+    "passed": 0,
+    "failed": 9,
+    "observed": "The check/explain actions and JSON interface were absent."
+  },
+  "gates": {
+    "focused": {
+      "status": "PASS",
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline -p evocc --test check_product --bin evocc",
+      "passed": 12,
+      "failed": 0
+    },
+    "full_workspace": {
+      "status": "PASS",
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "suites": 377,
+      "passed": 2915,
+      "failed": 0,
+      "ignored": 4,
+      "clippy": "PASS",
+      "fmt": "PASS",
+      "log": ".evidence/codegen/full-workspace-20261002.log",
+      "log_sha256": "1b7f2da7fd9f6dff1acfe685bf74e0176d819ed5f93c4d77eeca6ce4092a221f"
+    },
+    "lean": "NOT_REQUIRED_NO_SEMANTIC_OR_REGISTRY_CHANGE"
+  },
+  "metrics": {
+    "authoritative_explanations": 89,
+    "explicit_explanation_todos": 78,
+    "catalogue_codes": 167,
+    "blessed_ui_pairs": 8,
+    "public_path_tests": 10,
+    "diagnostic_unit_tests": 2
+  },
+  "semantic_review": {
+    "interpreter_changes": false,
+    "lowering_changes": false,
+    "same_program_entry_and_lifecycle": true,
+    "existing_step_limit": 100000,
+    "unknown_externals_fail_closed": true,
+    "fuel_exhaustion_is_not_pass": true,
+    "runtime_source_locations": "Unavailable; JSON null, new check text omits a fabricated position.",
+    "legacy_text_compatibility": "Covered by public-path comparisons and existing full-workspace diagnostic tests; the complete gate passed."
+  },
+  "disk": {
+    "capture_limit_bytes": 524288000,
+    "raw_capture_bytes_created": 0,
+    "temporary_runtime_outputs_created": 0,
+    "net_slice_bytes": null,
+    "note": "Approximately +31 KiB exclusive sources, UI fixtures and documentation; no raw capture/runtime output retention. Shared driver/README edits are not separable by lane. The N01 receipt records the combined target/frontend gate checkpoint (+4.12 GiB); unrelated host free-space changes are not attributed."
+  },
+  "claim_ceiling": "Product access to existing interpreter diagnostics on supported executed paths. No whole-program absence-of-UB proof, complete libc/system/thread modeling, native sanitizer equivalence, optimization gain, or new verified claim."
+}

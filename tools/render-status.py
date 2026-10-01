@@ -5,12 +5,14 @@ Usage: python3 tools/render-status.py           # update docs/status.md
        python3 tools/render-status.py --ascii   # read-only terminal overview
        python3 tools/render-status.py --todo    # read-only validated TODO queues
        python3 tools/render-status.py --check   # compare with docs/status.md
+       python3 tools/render-status.py --codegen-trend <jsonl>  # read-only N05 trend
 """
 
 from __future__ import annotations
 
 import argparse
 from collections import Counter
+import importlib
 import json
 from pathlib import Path
 import re
@@ -598,7 +600,17 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument("--ascii", action="store_true", help="print ASCII only; do not write any file")
     modes.add_argument("--todo", action="store_true", help="validate/print TODO queues; no receipts, tests or writes")
     modes.add_argument("--check", action="store_true", help="compare generated Markdown with docs/status.md")
+    modes.add_argument("--codegen-trend", type=Path, help="print compact N05 observations; no tests or writes")
     args = parser.parse_args(argv)
+    if args.codegen_trend:
+        package = "ladder" if __name__ == "__main__" else "tools.ladder"
+        trend = importlib.import_module(package + ".codegen_trend")
+        try:
+            print(trend.render_trend(trend.read_observations(args.codegen_trend)), end="")
+        except (ValueError, OSError) as error:
+            print(f"Codegen trend invalid: {error}", file=sys.stderr)
+            return 1
+        return 0
     if args.todo:
         try:
             print(render_todo((ROOT / 'TODO.md').read_text()), end='')

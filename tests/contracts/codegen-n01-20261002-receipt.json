@@ -1,0 +1,1223 @@
+{
+  "schema": "evocc-codegen-n01-receipt-v1",
+  "status": "COMPLETED_RETAINED_OBJECT_CENSUS",
+  "plan": "tests/contracts/codegen-n01-20261002.json",
+  "ladder_plan": "tests/contracts/codegen-n01-ladder-20261002.json",
+  "source_baseline": "a58d28aa95ebd22436be5b06eb0a11b55d3d57e7",
+  "unique_objects": 37,
+  "two_builds": "BYTE_IDENTICAL_42_ARM_ROWS_37_UNIQUE_OBJECTS",
+  "s1_reconciliation": "ALL_CATEGORY_TOTALS_EQUAL_INSTRUCTION_BYTES",
+  "focused_tests": {
+    "census": 8,
+    "s1": 7,
+    "failures": 0
+  },
+  "full_workspace": {
+    "status": "PASS",
+    "suites": 377,
+    "passed": 2915,
+    "failed": 0,
+    "ignored": 4,
+    "clippy": "PASS",
+    "fmt": "PASS",
+    "log": ".evidence/codegen/full-workspace-20261002.log",
+    "log_sha256": "1b7f2da7fd9f6dff1acfe685bf74e0176d819ed5f93c4d77eeca6ce4092a221f"
+  },
+  "captures": {
+    "summary-final.json": {
+      "path": ".evidence/codegen/n01-20261002/summary-final.json",
+      "sha256": "a94ec27bb9a9249a255938f24cbdbb041693d71d7c8ce0445393e048da993860",
+      "bytes": 124292
+    },
+    "ladder.json": {
+      "path": ".evidence/codegen/n01-20261002/ladder.json",
+      "sha256": "ebdd33941034c07b71c1d44195a8b49423a2158c5e5e3759ed9ebc640626d31f",
+      "bytes": 1681315
+    }
+  },
+  "units": [
+    {
+      "case": "p0",
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "eligible_roots": 13,
+      "ratio_to_gcc_o2": 1.3333333333333333,
+      "target_ratio": 1.4,
+      "top_three_positive_category_excess": [
+        {
+          "category": "move",
+          "estimated_byte_ceiling": 16
+        },
+        {
+          "category": "prologue_epilogue",
+          "estimated_byte_ceiling": 12
+        },
+        {
+          "category": "memory",
+          "estimated_byte_ceiling": 8
+        }
+      ],
+      "arms": {
+        "A-checked": {
+          "text_bytes": 128,
+          "instruction_bytes": 128,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363",
+          "category_bytes": {
+            "address": 0,
+            "branch": 16,
+            "call": 0,
+            "compare_select": 8,
+            "compute": 12,
+            "const_materialize": 44,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 8,
+            "move": 16,
+            "other": 0,
+            "prologue_epilogue": 24,
+            "stack_access": 0
+          },
+          "attribution_limits": {}
+        },
+        "A-unchecked": {
+          "text_bytes": 128,
+          "instruction_bytes": 128,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363",
+          "category_bytes": {
+            "address": 0,
+            "branch": 16,
+            "call": 0,
+            "compare_select": 8,
+            "compute": 12,
+            "const_materialize": 44,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 8,
+            "move": 16,
+            "other": 0,
+            "prologue_epilogue": 24,
+            "stack_access": 0
+          },
+          "attribution_limits": {}
+        },
+        "B-checked": {
+          "text_bytes": 128,
+          "instruction_bytes": 128,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363",
+          "category_bytes": {
+            "address": 0,
+            "branch": 16,
+            "call": 0,
+            "compare_select": 8,
+            "compute": 12,
+            "const_materialize": 44,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 8,
+            "move": 16,
+            "other": 0,
+            "prologue_epilogue": 24,
+            "stack_access": 0
+          },
+          "attribution_limits": {}
+        },
+        "B-unchecked": {
+          "text_bytes": 128,
+          "instruction_bytes": 128,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363",
+          "category_bytes": {
+            "address": 0,
+            "branch": 16,
+            "call": 0,
+            "compare_select": 8,
+            "compute": 12,
+            "const_materialize": 44,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 8,
+            "move": 16,
+            "other": 0,
+            "prologue_epilogue": 24,
+            "stack_access": 0
+          },
+          "attribution_limits": {}
+        },
+        "G-checked": {
+          "text_bytes": 128,
+          "instruction_bytes": 128,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363",
+          "category_bytes": {
+            "address": 0,
+            "branch": 16,
+            "call": 0,
+            "compare_select": 8,
+            "compute": 12,
+            "const_materialize": 44,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 8,
+            "move": 16,
+            "other": 0,
+            "prologue_epilogue": 24,
+            "stack_access": 0
+          },
+          "attribution_limits": {}
+        },
+        "clang-19-O2": {
+          "text_bytes": 100,
+          "instruction_bytes": 100,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "4366b14dde3bd6b582e3c4ea128914e77944a6b8602687f7fbcffa5a69a7fdea",
+          "category_bytes": {
+            "address": 0,
+            "branch": 8,
+            "call": 0,
+            "compare_select": 12,
+            "compute": 8,
+            "const_materialize": 36,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 0,
+            "move": 4,
+            "other": 0,
+            "prologue_epilogue": 20,
+            "stack_access": 12
+          },
+          "attribution_limits": {}
+        },
+        "gcc-14-O2": {
+          "text_bytes": 96,
+          "instruction_bytes": 96,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "69c82ea3371e702b18158f3218f1ea7971d1c5842ba888a691dace722af9179a",
+          "category_bytes": {
+            "address": 0,
+            "branch": 12,
+            "call": 0,
+            "compare_select": 12,
+            "compute": 8,
+            "const_materialize": 40,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 0,
+            "move": 0,
+            "other": 0,
+            "prologue_epilogue": 12,
+            "stack_access": 12
+          },
+          "attribution_limits": {}
+        }
+      },
+      "local_functions": {
+        "evo_b_count": 0,
+        "absent_in_gcc": 0,
+        "absent_in_clang": 0
+      }
+    },
+    {
+      "case": "zlib",
+      "source": "deflate.c",
+      "eligible_roots": 2013,
+      "ratio_to_gcc_o2": 1.9864190687361418,
+      "target_ratio": 1.4,
+      "top_three_positive_category_excess": [
+        {
+          "category": "prologue_epilogue",
+          "estimated_byte_ceiling": 3748
+        },
+        {
+          "category": "const_materialize",
+          "estimated_byte_ceiling": 2464
+        },
+        {
+          "category": "compute",
+          "estimated_byte_ceiling": 1852
+        }
+      ],
+      "arms": {
+        "A-checked": {
+          "text_bytes": 30516,
+          "instruction_bytes": 30516,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "e8e76d5ece558ba7516f74d1bdd3ae901698fb507041306e8ac616b98d14cbba",
+          "category_bytes": {
+            "address": 216,
+            "branch": 4308,
+            "call": 556,
+            "compare_select": 2464,
+            "compute": 4068,
+            "const_materialize": 3584,
+            "extend_mask": 1648,
+            "guard": 72,
+            "memory": 6440,
+            "move": 2316,
+            "other": 76,
+            "prologue_epilogue": 4608,
+            "stack_access": 160
+          },
+          "attribution_limits": {}
+        },
+        "A-unchecked": {
+          "text_bytes": 29012,
+          "instruction_bytes": 29012,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "df57c1c673c9626811ca2d45955457762ba1992df61597835befc89de7cbafd0",
+          "category_bytes": {
+            "address": 216,
+            "branch": 3388,
+            "call": 556,
+            "compare_select": 2252,
+            "compute": 4068,
+            "const_materialize": 3368,
+            "extend_mask": 1640,
+            "guard": 0,
+            "memory": 6440,
+            "move": 2316,
+            "other": 0,
+            "prologue_epilogue": 4608,
+            "stack_access": 160
+          },
+          "attribution_limits": {}
+        },
+        "B-checked": {
+          "text_bytes": 30184,
+          "instruction_bytes": 30184,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "0e933d68c8fa076781dbfd2ecee032cf8ac62adf68e8bbc51cd7e3b154fbfc61",
+          "category_bytes": {
+            "address": 216,
+            "branch": 4308,
+            "call": 556,
+            "compare_select": 2464,
+            "compute": 3980,
+            "const_materialize": 3532,
+            "extend_mask": 1496,
+            "guard": 72,
+            "memory": 6440,
+            "move": 2288,
+            "other": 76,
+            "prologue_epilogue": 4608,
+            "stack_access": 148
+          },
+          "attribution_limits": {}
+        },
+        "B-unchecked": {
+          "text_bytes": 28668,
+          "instruction_bytes": 28668,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "66cedd07afb17aa2658fefe7ed455100b479192c7f939a10cb16241efe319499",
+          "category_bytes": {
+            "address": 216,
+            "branch": 3388,
+            "call": 556,
+            "compare_select": 2252,
+            "compute": 3976,
+            "const_materialize": 3308,
+            "extend_mask": 1488,
+            "guard": 0,
+            "memory": 6440,
+            "move": 2288,
+            "other": 0,
+            "prologue_epilogue": 4608,
+            "stack_access": 148
+          },
+          "attribution_limits": {}
+        },
+        "G-checked": {
+          "text_bytes": 29960,
+          "instruction_bytes": 29960,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "278b15bb8783e38c94285d89c9acf76f9ffeff8f0c0a51a2a3730ca3984fbd5a",
+          "category_bytes": {
+            "address": 216,
+            "branch": 4196,
+            "call": 556,
+            "compare_select": 2424,
+            "compute": 3972,
+            "const_materialize": 3488,
+            "extend_mask": 1496,
+            "guard": 60,
+            "memory": 6440,
+            "move": 2288,
+            "other": 68,
+            "prologue_epilogue": 4608,
+            "stack_access": 148
+          },
+          "attribution_limits": {}
+        },
+        "clang-19-O2": {
+          "text_bytes": 17300,
+          "instruction_bytes": 17300,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "39871c90d06ea6791e75ee2bbc25f8223a99459195bbe807d2175fcfc749213e",
+          "category_bytes": {
+            "address": 136,
+            "branch": 2516,
+            "call": 596,
+            "compare_select": 1612,
+            "compute": 2832,
+            "const_materialize": 812,
+            "extend_mask": 28,
+            "guard": 0,
+            "memory": 6580,
+            "move": 1332,
+            "other": 0,
+            "prologue_epilogue": 624,
+            "stack_access": 232
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 50
+          }
+        },
+        "gcc-14-O2": {
+          "text_bytes": 14432,
+          "instruction_bytes": 14360,
+          "padding_bytes": 72,
+          "intext_data_bytes": 0,
+          "object_sha256": "c410630e6f15f69808ac3cfa10052086c0a87143dc5ce5fbbe692f64fc41b6cd",
+          "category_bytes": {
+            "address": 128,
+            "branch": 1968,
+            "call": 560,
+            "compare_select": 1440,
+            "compute": 2124,
+            "const_materialize": 844,
+            "extend_mask": 48,
+            "guard": 0,
+            "memory": 5188,
+            "move": 816,
+            "other": 68,
+            "prologue_epilogue": 860,
+            "stack_access": 316
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 74
+          }
+        }
+      },
+      "local_functions": {
+        "evo_b_count": 12,
+        "absent_in_gcc": 3,
+        "absent_in_clang": 3
+      }
+    },
+    {
+      "case": "zlib",
+      "source": "inflate.c",
+      "eligible_roots": 1343,
+      "ratio_to_gcc_o2": 2.6680080482897384,
+      "target_ratio": 1.4,
+      "top_three_positive_category_excess": [
+        {
+          "category": "stack_access",
+          "estimated_byte_ceiling": 6712
+        },
+        {
+          "category": "move",
+          "estimated_byte_ceiling": 2052
+        },
+        {
+          "category": "branch",
+          "estimated_byte_ceiling": 1904
+        }
+      ],
+      "arms": {
+        "A-checked": {
+          "text_bytes": 28404,
+          "instruction_bytes": 28404,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "3bc3707c469e6d289d08fded93db74abfa3dcc1e5161dbe8b138205491324a59",
+          "category_bytes": {
+            "address": 192,
+            "branch": 4876,
+            "call": 276,
+            "compare_select": 1864,
+            "compute": 2604,
+            "const_materialize": 2588,
+            "extend_mask": 864,
+            "guard": 60,
+            "memory": 3016,
+            "move": 2512,
+            "other": 28,
+            "prologue_epilogue": 2100,
+            "stack_access": 7424
+          },
+          "attribution_limits": {}
+        },
+        "A-unchecked": {
+          "text_bytes": 26664,
+          "instruction_bytes": 26664,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "494b58af2ff1e5e6f35c9c3b1155d2fd2d03147182e74a4acdb538df8c7d6b71",
+          "category_bytes": {
+            "address": 192,
+            "branch": 3712,
+            "call": 276,
+            "compare_select": 1528,
+            "compute": 2612,
+            "const_materialize": 2456,
+            "extend_mask": 864,
+            "guard": 0,
+            "memory": 3016,
+            "move": 2512,
+            "other": 0,
+            "prologue_epilogue": 2100,
+            "stack_access": 7396
+          },
+          "attribution_limits": {}
+        },
+        "B-checked": {
+          "text_bytes": 28264,
+          "instruction_bytes": 28264,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "3e74cc20a007af4e08a2847974fc6d7eeb0edad0d08208074c474941de05468b",
+          "category_bytes": {
+            "address": 192,
+            "branch": 4876,
+            "call": 276,
+            "compare_select": 1864,
+            "compute": 2560,
+            "const_materialize": 2596,
+            "extend_mask": 784,
+            "guard": 60,
+            "memory": 3016,
+            "move": 2488,
+            "other": 28,
+            "prologue_epilogue": 2100,
+            "stack_access": 7424
+          },
+          "attribution_limits": {}
+        },
+        "B-unchecked": {
+          "text_bytes": 26520,
+          "instruction_bytes": 26520,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "a8bfb5ad49e6154d757a4d84aa080271bbb76f298ceb78a6322090b46fe92741",
+          "category_bytes": {
+            "address": 192,
+            "branch": 3712,
+            "call": 276,
+            "compare_select": 1528,
+            "compute": 2568,
+            "const_materialize": 2460,
+            "extend_mask": 784,
+            "guard": 0,
+            "memory": 3016,
+            "move": 2488,
+            "other": 0,
+            "prologue_epilogue": 2100,
+            "stack_access": 7396
+          },
+          "attribution_limits": {}
+        },
+        "G-checked": {
+          "text_bytes": 28232,
+          "instruction_bytes": 28232,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "31e6fb9992c4a5b708ce11e5f72886cc6182e6c135eb7bb2f9aafb7e40ff70d6",
+          "category_bytes": {
+            "address": 192,
+            "branch": 4868,
+            "call": 276,
+            "compare_select": 1860,
+            "compute": 2560,
+            "const_materialize": 2592,
+            "extend_mask": 784,
+            "guard": 48,
+            "memory": 3016,
+            "move": 2488,
+            "other": 24,
+            "prologue_epilogue": 2100,
+            "stack_access": 7424
+          },
+          "attribution_limits": {}
+        },
+        "clang-19-O2": {
+          "text_bytes": 11656,
+          "instruction_bytes": 11656,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "f419cd3c0f7efeb35d5839e06e5ef1f7e2ebfca9bdab59de69242deed7e065db",
+          "category_bytes": {
+            "address": 344,
+            "branch": 2160,
+            "call": 200,
+            "compare_select": 916,
+            "compute": 2144,
+            "const_materialize": 836,
+            "extend_mask": 16,
+            "guard": 0,
+            "memory": 2648,
+            "move": 1572,
+            "other": 0,
+            "prologue_epilogue": 320,
+            "stack_access": 500
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 68
+          }
+        },
+        "gcc-14-O2": {
+          "text_bytes": 9940,
+          "instruction_bytes": 9888,
+          "padding_bytes": 52,
+          "intext_data_bytes": 0,
+          "object_sha256": "7d2bf4e8d63126eeee0e93de43b2f8a16cf3c02a8bd4e89cb52ba13fd2499848",
+          "category_bytes": {
+            "address": 200,
+            "branch": 1808,
+            "call": 232,
+            "compare_select": 800,
+            "compute": 1816,
+            "const_materialize": 1068,
+            "extend_mask": 20,
+            "guard": 0,
+            "memory": 2376,
+            "move": 436,
+            "other": 56,
+            "prologue_epilogue": 392,
+            "stack_access": 684
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 45
+          }
+        }
+      },
+      "local_functions": {
+        "evo_b_count": 3,
+        "absent_in_gcc": 1,
+        "absent_in_clang": 2
+      }
+    },
+    {
+      "case": "zstd",
+      "source": "lib/compress/zstd_compress.c",
+      "eligible_roots": 8363,
+      "ratio_to_gcc_o2": 2.473174733388023,
+      "target_ratio": 1.4,
+      "top_three_positive_category_excess": [
+        {
+          "category": "prologue_epilogue",
+          "estimated_byte_ceiling": 23492
+        },
+        {
+          "category": "const_materialize",
+          "estimated_byte_ceiling": 13448
+        },
+        {
+          "category": "memory",
+          "estimated_byte_ceiling": 11272
+        }
+      ],
+      "arms": {
+        "A-checked": {
+          "text_bytes": 124024,
+          "instruction_bytes": 124024,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "e35ee3b2be14571f86abcddb2e001a4cf556c7a04f4aafb7f77ad26d33fa3a89",
+          "category_bytes": {
+            "address": 296,
+            "branch": 13208,
+            "call": 2380,
+            "compare_select": 10452,
+            "compute": 12252,
+            "const_materialize": 15548,
+            "extend_mask": 4484,
+            "guard": 384,
+            "memory": 20604,
+            "move": 11928,
+            "other": 148,
+            "prologue_epilogue": 28228,
+            "stack_access": 4112
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 40
+          }
+        },
+        "A-unchecked": {
+          "text_bytes": 121652,
+          "instruction_bytes": 121652,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "34e9ecbab8d549431482bdcbc6e2c931af6a4b7a1adf941a0bc50bdabbaba2d5",
+          "category_bytes": {
+            "address": 296,
+            "branch": 12120,
+            "call": 2380,
+            "compare_select": 9964,
+            "compute": 12280,
+            "const_materialize": 15260,
+            "extend_mask": 4480,
+            "guard": 0,
+            "memory": 20604,
+            "move": 11928,
+            "other": 0,
+            "prologue_epilogue": 28228,
+            "stack_access": 4112
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 40
+          }
+        },
+        "B-checked": {
+          "text_bytes": 122972,
+          "instruction_bytes": 122972,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "2f96c7d15c24ca6f26833e40f74e88b40342bb7f28e8df63fa2ec19e54e063a2",
+          "category_bytes": {
+            "address": 296,
+            "branch": 13208,
+            "call": 2380,
+            "compare_select": 10444,
+            "compute": 12140,
+            "const_materialize": 18020,
+            "extend_mask": 1224,
+            "guard": 384,
+            "memory": 20604,
+            "move": 11860,
+            "other": 148,
+            "prologue_epilogue": 28164,
+            "stack_access": 4100
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 40
+          }
+        },
+        "B-unchecked": {
+          "text_bytes": 120592,
+          "instruction_bytes": 120592,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "1a757ab021420055bc6ef9ca22c54751dbedce2e5b3174678115cfd13c41241c",
+          "category_bytes": {
+            "address": 296,
+            "branch": 12120,
+            "call": 2380,
+            "compare_select": 9956,
+            "compute": 12176,
+            "const_materialize": 17716,
+            "extend_mask": 1220,
+            "guard": 0,
+            "memory": 20604,
+            "move": 11860,
+            "other": 0,
+            "prologue_epilogue": 28164,
+            "stack_access": 4100
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 40
+          }
+        },
+        "G-checked": {
+          "text_bytes": 121988,
+          "instruction_bytes": 121988,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "c58024c8f8e086cea42cf064ab2139950fc2d067918d9058e8b55012dc891d2c",
+          "category_bytes": {
+            "address": 296,
+            "branch": 12696,
+            "call": 2380,
+            "compare_select": 10188,
+            "compute": 12124,
+            "const_materialize": 17888,
+            "extend_mask": 1224,
+            "guard": 372,
+            "memory": 20604,
+            "move": 11860,
+            "other": 92,
+            "prologue_epilogue": 28164,
+            "stack_access": 4100
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 40
+          }
+        },
+        "clang-19-O2": {
+          "text_bytes": 51816,
+          "instruction_bytes": 51816,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "516fe649ead8f1efec8ff8dd00cb4b1df4266802119f0c48c47ac5c63dca1f3f",
+          "category_bytes": {
+            "address": 568,
+            "branch": 7596,
+            "call": 1296,
+            "compare_select": 6960,
+            "compute": 7536,
+            "const_materialize": 4012,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 10376,
+            "move": 5992,
+            "other": 24,
+            "prologue_epilogue": 3448,
+            "stack_access": 4008
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 267
+          }
+        },
+        "gcc-14-O2": {
+          "text_bytes": 48760,
+          "instruction_bytes": 48344,
+          "padding_bytes": 416,
+          "intext_data_bytes": 0,
+          "object_sha256": "d70fdc8807e1ea6d5d1b24ffa6b512814f3023ff5e36c8bc96196b93bc8f035c",
+          "category_bytes": {
+            "address": 308,
+            "branch": 6572,
+            "call": 1756,
+            "compare_select": 5868,
+            "compute": 5992,
+            "const_materialize": 4268,
+            "extend_mask": 60,
+            "guard": 0,
+            "memory": 9332,
+            "move": 5348,
+            "other": 172,
+            "prologue_epilogue": 4672,
+            "stack_access": 3996
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 275
+          }
+        }
+      },
+      "local_functions": {
+        "evo_b_count": 117,
+        "absent_in_gcc": 85,
+        "absent_in_clang": 88
+      }
+    },
+    {
+      "case": "zstd",
+      "source": "lib/decompress/zstd_decompress.c",
+      "eligible_roots": 1935,
+      "ratio_to_gcc_o2": 2.2807065967430304,
+      "target_ratio": 1.4,
+      "top_three_positive_category_excess": [
+        {
+          "category": "prologue_epilogue",
+          "estimated_byte_ceiling": 8944
+        },
+        {
+          "category": "const_materialize",
+          "estimated_byte_ceiling": 4104
+        },
+        {
+          "category": "memory",
+          "estimated_byte_ceiling": 1548
+        }
+      ],
+      "arms": {
+        "A-checked": {
+          "text_bytes": 33688,
+          "instruction_bytes": 33688,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "d53c80515265b8ddafe774a42195a1551e8598824985b6f1d717ae2f832cac83",
+          "category_bytes": {
+            "address": 112,
+            "branch": 3020,
+            "call": 848,
+            "compare_select": 2556,
+            "compute": 2848,
+            "const_materialize": 4788,
+            "extend_mask": 1416,
+            "guard": 60,
+            "memory": 3876,
+            "move": 2924,
+            "other": 16,
+            "prologue_epilogue": 10688,
+            "stack_access": 536
+          },
+          "attribution_limits": {}
+        },
+        "A-unchecked": {
+          "text_bytes": 33440,
+          "instruction_bytes": 33440,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "3bbf0c403b52e166baab83f4ba0b40af46dbfa372a2b1a5eb1398f63901036f6",
+          "category_bytes": {
+            "address": 112,
+            "branch": 2924,
+            "call": 848,
+            "compare_select": 2516,
+            "compute": 2856,
+            "const_materialize": 4744,
+            "extend_mask": 1416,
+            "guard": 0,
+            "memory": 3876,
+            "move": 2924,
+            "other": 0,
+            "prologue_epilogue": 10688,
+            "stack_access": 536
+          },
+          "attribution_limits": {}
+        },
+        "B-checked": {
+          "text_bytes": 33300,
+          "instruction_bytes": 33300,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "8ce98ea2cd34c647bb2a81640dc8796f68bcb5d19eb93f363c39833695646fe6",
+          "category_bytes": {
+            "address": 112,
+            "branch": 3020,
+            "call": 848,
+            "compare_select": 2552,
+            "compute": 2768,
+            "const_materialize": 5716,
+            "extend_mask": 192,
+            "guard": 60,
+            "memory": 3876,
+            "move": 2916,
+            "other": 16,
+            "prologue_epilogue": 10688,
+            "stack_access": 536
+          },
+          "attribution_limits": {}
+        },
+        "B-unchecked": {
+          "text_bytes": 33052,
+          "instruction_bytes": 33052,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "303490884e1c8fd40d02692bc35c6d41dada3dd9865647f23c12841fbd5053fd",
+          "category_bytes": {
+            "address": 112,
+            "branch": 2924,
+            "call": 848,
+            "compare_select": 2512,
+            "compute": 2776,
+            "const_materialize": 5672,
+            "extend_mask": 192,
+            "guard": 0,
+            "memory": 3876,
+            "move": 2916,
+            "other": 0,
+            "prologue_epilogue": 10688,
+            "stack_access": 536
+          },
+          "attribution_limits": {}
+        },
+        "G-checked": {
+          "text_bytes": 33300,
+          "instruction_bytes": 33300,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "8ce98ea2cd34c647bb2a81640dc8796f68bcb5d19eb93f363c39833695646fe6",
+          "category_bytes": {
+            "address": 112,
+            "branch": 3020,
+            "call": 848,
+            "compare_select": 2552,
+            "compute": 2768,
+            "const_materialize": 5716,
+            "extend_mask": 192,
+            "guard": 60,
+            "memory": 3876,
+            "move": 2916,
+            "other": 16,
+            "prologue_epilogue": 10688,
+            "stack_access": 536
+          },
+          "attribution_limits": {}
+        },
+        "clang-19-O2": {
+          "text_bytes": 15220,
+          "instruction_bytes": 15220,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "84d539bf85c068f59f30d7b01416150183b822c60ece4bb78f528f6a4d9b0b25",
+          "category_bytes": {
+            "address": 196,
+            "branch": 2264,
+            "call": 636,
+            "compare_select": 1560,
+            "compute": 1452,
+            "const_materialize": 1784,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 2812,
+            "move": 1980,
+            "other": 0,
+            "prologue_epilogue": 1532,
+            "stack_access": 1004
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 96
+          }
+        },
+        "gcc-14-O2": {
+          "text_bytes": 14492,
+          "instruction_bytes": 14312,
+          "padding_bytes": 180,
+          "intext_data_bytes": 0,
+          "object_sha256": "bd89dfa48b949d62c0b2a25689cd466ab6acbca4c10a825db86a82adea7099d9",
+          "category_bytes": {
+            "address": 112,
+            "branch": 2116,
+            "call": 720,
+            "compare_select": 1496,
+            "compute": 1516,
+            "const_materialize": 1568,
+            "extend_mask": 0,
+            "guard": 0,
+            "memory": 2328,
+            "move": 1484,
+            "other": 20,
+            "prologue_epilogue": 1744,
+            "stack_access": 1208
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 130
+          }
+        }
+      },
+      "local_functions": {
+        "evo_b_count": 30,
+        "absent_in_gcc": 24,
+        "absent_in_clang": 25
+      }
+    },
+    {
+      "case": "cjson",
+      "source": "cJSON.c",
+      "eligible_roots": 1787,
+      "ratio_to_gcc_o2": 2.0405555555555557,
+      "target_ratio": 1.4,
+      "top_three_positive_category_excess": [
+        {
+          "category": "prologue_epilogue",
+          "estimated_byte_ceiling": 6592
+        },
+        {
+          "category": "const_materialize",
+          "estimated_byte_ceiling": 1816
+        },
+        {
+          "category": "branch",
+          "estimated_byte_ceiling": 1656
+        }
+      ],
+      "arms": {
+        "A-checked": {
+          "text_bytes": 30228,
+          "instruction_bytes": 30228,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "4d8895319f377e770029f8044ac53309375e397acc9e4fcc24607eec75160865",
+          "category_bytes": {
+            "address": 688,
+            "branch": 4016,
+            "call": 964,
+            "compare_select": 2796,
+            "compute": 1964,
+            "const_materialize": 3308,
+            "extend_mask": 1080,
+            "guard": 48,
+            "memory": 3580,
+            "move": 3248,
+            "other": 72,
+            "prologue_epilogue": 8388,
+            "stack_access": 76
+          },
+          "attribution_limits": {}
+        },
+        "A-unchecked": {
+          "text_bytes": 30116,
+          "instruction_bytes": 30116,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "6c7ef69e61a8c1dad77c0a0a28ab6e22a7d239847dffc13717156abf0422812b",
+          "category_bytes": {
+            "address": 688,
+            "branch": 3984,
+            "call": 964,
+            "compare_select": 2788,
+            "compute": 1968,
+            "const_materialize": 3288,
+            "extend_mask": 1080,
+            "guard": 0,
+            "memory": 3580,
+            "move": 3248,
+            "other": 64,
+            "prologue_epilogue": 8388,
+            "stack_access": 76
+          },
+          "attribution_limits": {}
+        },
+        "B-checked": {
+          "text_bytes": 29496,
+          "instruction_bytes": 29496,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "ae98c5766419459083d4f62800833f995a804333f0b9bb52eb40fb51d09922bc",
+          "category_bytes": {
+            "address": 688,
+            "branch": 4016,
+            "call": 964,
+            "compare_select": 2796,
+            "compute": 1936,
+            "const_materialize": 3076,
+            "extend_mask": 664,
+            "guard": 48,
+            "memory": 3580,
+            "move": 3244,
+            "other": 72,
+            "prologue_epilogue": 8336,
+            "stack_access": 76
+          },
+          "attribution_limits": {}
+        },
+        "B-unchecked": {
+          "text_bytes": 29384,
+          "instruction_bytes": 29384,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "6c9111d63e3b9c1b961e09b77202393e51a0acd56b6c42ecdd6b1b63bba59a26",
+          "category_bytes": {
+            "address": 688,
+            "branch": 3984,
+            "call": 964,
+            "compare_select": 2788,
+            "compute": 1940,
+            "const_materialize": 3056,
+            "extend_mask": 664,
+            "guard": 0,
+            "memory": 3580,
+            "move": 3244,
+            "other": 64,
+            "prologue_epilogue": 8336,
+            "stack_access": 76
+          },
+          "attribution_limits": {}
+        },
+        "G-checked": {
+          "text_bytes": 29468,
+          "instruction_bytes": 29468,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "b8bc4e9e511ebf003a02d3537a0b8b08dcef332f93bc29afe556393b34249bec",
+          "category_bytes": {
+            "address": 688,
+            "branch": 4000,
+            "call": 964,
+            "compare_select": 2796,
+            "compute": 1936,
+            "const_materialize": 3068,
+            "extend_mask": 664,
+            "guard": 48,
+            "memory": 3580,
+            "move": 3244,
+            "other": 68,
+            "prologue_epilogue": 8336,
+            "stack_access": 76
+          },
+          "attribution_limits": {}
+        },
+        "clang-19-O2": {
+          "text_bytes": 17796,
+          "instruction_bytes": 17796,
+          "padding_bytes": 0,
+          "intext_data_bytes": 0,
+          "object_sha256": "d146aa6d713817fb51fedc028d1f1ce5128b6cc03e0bbfb3b4857836276409b2",
+          "category_bytes": {
+            "address": 384,
+            "branch": 3680,
+            "call": 988,
+            "compare_select": 1352,
+            "compute": 1336,
+            "const_materialize": 1344,
+            "extend_mask": 16,
+            "guard": 0,
+            "memory": 3820,
+            "move": 2428,
+            "other": 0,
+            "prologue_epilogue": 1984,
+            "stack_access": 464
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 66
+          }
+        },
+        "gcc-14-O2": {
+          "text_bytes": 14400,
+          "instruction_bytes": 14144,
+          "padding_bytes": 256,
+          "intext_data_bytes": 0,
+          "object_sha256": "e618e049a6671f27f1fca736a3fa4ddda8c01fa196cd7649df93793663cd2ec0",
+          "category_bytes": {
+            "address": 380,
+            "branch": 2328,
+            "call": 888,
+            "compare_select": 1144,
+            "compute": 944,
+            "const_materialize": 1240,
+            "extend_mask": 88,
+            "guard": 0,
+            "memory": 2320,
+            "move": 1760,
+            "other": 68,
+            "prologue_epilogue": 1744,
+            "stack_access": 1240
+          },
+          "attribution_limits": {
+            "callee_register_stack_sites_outside_entry_exit_pattern": 264
+          }
+        }
+      },
+      "local_functions": {
+        "evo_b_count": 31,
+        "absent_in_gcc": 23,
+        "absent_in_clang": 20
+      }
+    }
+  ],
+  "ladder": {
+    "records": 2210,
+    "dispositions": {
+      "CLASSIFIED_HISTORICAL_OBJECT": 647,
+      "NO_RECORDED_OBJECT_IDENTITY": 1282,
+      "ORIGINAL_NOT_ASSEMBLED": 68,
+      "REPLACED_OBJECT": 203,
+      "UNCLASSIFIED_OR_OVERSIZE_OBJECT": 10
+    }
+  },
+  "claim_ceiling": "Retained-object syntactic attribution, not fresh compiler correctness or causal savings. Historical ladder objects lack retained two-build evidence.",
+  "disk": {
+    "retained_capture_limit_bytes": 524288000,
+    "net_bytes": "Approximately +1.81 MiB of owned sources, plans, results and retained capture after removing superseded summaries; no object or disassembly copies.",
+    "owned_capture_bytes": 1806307,
+    "shared_cargo_checkpoint_before_kib": 16599888,
+    "shared_cargo_checkpoint_after_kib": 20923760,
+    "shared_cargo_note": "Approximately +4.12 GiB across the completed combined gate since its recorded checkpoint, not attributable separately to N01/N02/N04/N05 or a whole-slice host free-space delta."
+  }
+}

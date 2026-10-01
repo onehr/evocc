@@ -1,0 +1,1 @@
+tests/ui/check/division.c: error[E3002]: integer-division-by-zero

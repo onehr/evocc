@@ -14,15 +14,294 @@ import shutil
 import subprocess
 import tempfile
 
-from .eqsat_chain import digest, require, unique
+from .eqsat_chain import digest, proof_bucket, require, unique, validate_record
 from .eqsat_elf import inspect_object_size, inspect_elf, require_identical_objects
 from .eqsat_native import Capture
-from .eqsat_twins import bind_bundle, canonical, stable_bundle
+from .eqsat_twins import BundleReplayRejected, bind_bundle, canonical, stable_bundle
 from .eqsat_pilot import recipes
 
 
 def load(path):
     return json.loads(Path(path).read_bytes(), object_pairs_hook=unique)
+
+
+def codegen_compile_argv(compiler, checker, checker_hash, case, source, root, profile, chain,
+                         extra_flags=()):
+    """Fresh original C to assembly; never label frozen old IR as new frontend work."""
+    from .eqsat_pilot import ROOTS
+    root = Path(root)
+    folder = root / case['source_root']
+    includes = [root / ROOTS['sysroot'] / p for p in
+                ('usr/lib/gcc/aarch64-linux-gnu/14/include', 'usr/include/aarch64-linux-gnu', 'usr/include')]
+    if case['id'] != 'p0':
+        includes = [folder, folder / 'lib', *includes]
+    return [compiler, '--emit=asm', '-std=gnu11', '-O2', '-fPIC', *case['flags'],
+            '-nostdinc', *['-I' + str(p) for p in includes], '-Oeq-scalar',
+            '--eq-checker=' + str(checker), '--eq-checker-sha256=' + checker_hash,
+            '--eq-checker-timeout-ms=300000', '--eq-proof-dir=' + str(chain),
+            '--ub-checks=' + profile, *extra_flags, folder / source]
+
+
+def codegen_disk_preflight(root, resources, *, start):
+    require(resources['jobs'] == 1 and resources['min_free_bytes'] >= 25 * 1024**3 and
+            resources['max_retained_bytes'] <= 500 * 1024**2, 'N05 disk/job envelope')
+    floor = resources['min_free_bytes'] if start else 15 * 1024**3
+    require(shutil.disk_usage(root).free >= floor,
+            'N05 requires 25 GiB free before starting' if start else 'N05 free space below stop reserve')
+
+
+def cleanup_codegen_products(directory, products):
+    """Only the explicitly owned new outputs; never reference dependencies."""
+    directory = Path(directory).resolve()
+    paths = [Path(path) for path in products]
+    require(all(path.resolve().is_relative_to(directory) for path in paths),
+            'N05 cleanup target is outside this capture')
+    for path in paths:
+        path.unlink(missing_ok=True)
+
+
+def codegen_proof_failure(receipt, chain, error, phase):
+    """Classify failures using existing dispositions, without replaying again."""
+    event = dict(phase=phase, chain=Path(chain).name)
+    if isinstance(error, BundleReplayRejected):
+        audit = error.audit
+        receipt['proof']['completed_rejections'] += audit['proof_counts']['completed_proof_rejections']
+        receipt['proof']['bundle_failures'] += audit['proof_counts']['bundle_obligation_failures']
+        event.update(evidence='INDEPENDENT_REPLAY', replay=audit['replay'],
+                     proof_counts=audit['proof_counts'])
+    elif phase == 'compile':
+        try:
+            record = load(Path(chain) / 'chain.json')
+            validate_record(record)
+        except FileNotFoundError:
+            # A frontend/driver failure before the chain exists is not evidence
+            # of either an invalid equation or a malformed certificate.
+            event.update(evidence='NOT_AVAILABLE', reason='CHAIN_NOT_EMITTED')
+        except (OSError, ValueError, TypeError, KeyError) as malformed:
+            receipt['proof']['bundle_failures'] += 1
+            event.update(evidence='UNREADABLE_CHAIN_RECORD', reason='BUNDLE_MISMATCH', detail=str(malformed))
+        else:
+            transactions = []
+            for tx in record['transactions']:
+                bucket = proof_bucket(tx['verification'], tx['rejection_reason'], tx['result'])
+                receipt['proof']['completed_rejections'] += int(bucket == 'completed_proof_rejections')
+                receipt['proof']['bundle_failures'] += int(bucket == 'bundle_obligation_failures')
+                transactions.append(dict(index=tx['index'], result=tx['result'], bucket=bucket,
+                                         reason=tx['rejection_reason']))
+            event.update(evidence='PRODUCER_TELEMETRY_NOT_PROVED', publication=record['publication'],
+                         reason=record.get('rejection_reason', 'COMPILE_FAILED_AFTER_VERIFIED_CHAIN'),
+                         transactions=transactions)
+    else:
+        receipt['proof']['bundle_failures'] += 1
+        event.update(evidence='BUNDLE_ADMISSION_FAILURE', reason='BUNDLE_MISMATCH', detail=str(error))
+    receipt['failure_events'].append(event)
+
+
+def run_codegen_measurement(plan, root):
+    """N05 fresh six-TU capture through the existing Capture/S1/S5 paths.
+
+    This entry point consumes an already built release compiler. The pre-push
+    orchestrator builds once, serially. VM execution stays under bench.lock.
+    N02 step commands may be absent during integration, which returns NOT_RUN,
+    never a completed N05 observation.
+    """
+    from .codegen_trend import (UNITS, PROFILES, append_observation, coverage,
+                               object_row, steps_from_reports)
+    root, plan = Path(root).resolve(), Path(plan).resolve()
+    raw, m = plan.read_bytes(), load(plan)
+    require(m['schema'] == 'evocc-codegen-measure-plan-v1', 'not an N05 live measurement plan')
+    require(subprocess.check_output(['git', 'show', 'HEAD:' + plan.relative_to(root).as_posix()], cwd=root) == raw,
+            'commit the N05 live plan before execution')
+    require(not subprocess.check_output(['git', 'status', '--porcelain'], cwd=root),
+            'N05 current-commit measurement requires a clean worktree')
+    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
+    tools = {name: (root / path).resolve() for name, path in m['tools'].items()}
+    require(all(tools[name].is_relative_to(root / 'target/frontend/release')
+                for name in ('compiler', 'checker')), 'N05 requires the shared release target')
+    tool_hashes = {name: digest(path.read_bytes()) for name, path in tools.items()}
+    for path, expected in m['inputs'].items():
+        require(digest((root / path).read_bytes()) == expected, 'N05 input changed: ' + path)
+    require(m['source_plan'] in m['inputs'], 'N05 S5 source plan must be frozen')
+    for path, expected in load(root / m['source_plan'])['inputs'].items():
+        if path.endswith(('.c', '.h')):
+            require(digest((root / path).read_bytes()) == expected, 'N05 source/header changed: ' + path)
+    require(tool_hashes['container'] == m['container_sha256'], 'N05 container tool changed')
+    require(all(path in m['inputs'] for path in (m['program_plan'], m['reference_receipt'])),
+            'N05 reused program/reference receipts must be frozen inputs')
+    programs = load(root / m['program_plan'])['programs']
+    reference = load(root / m['reference_receipt'])
+    resources = m['resources']
+    codegen_disk_preflight(root, resources, start=True)
+    cases = {case['id']: case for case in recipes(root)}
+    expected = [case['id'] + ':' + source for case in cases.values() for source in case['subject_sources']]
+    require(expected == list(UNITS), 'N05 six-unit recipe changed')
+    require(all((Path(case['source_root']) / source).as_posix() in m['inputs']
+                for case in cases.values() for source in case['subject_sources']),
+            'N05 original source files must be frozen inputs')
+    require(all(path in m['inputs'] for program in programs for path in
+                program['dependencies'] + ([program['harness']] if program['harness'] else [])),
+            'N05 reference dependencies must be frozen inputs')
+    with (root / '.build/bench.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        parent = root / '.evidence/codegen-trend'
+        parent.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix='measure-', dir=parent))
+        (directory / 'manifest.json').write_bytes(raw)
+        free_before = shutil.disk_usage(root).free
+        receipt = dict(schema='evocc-codegen-capture-v1', status='STARTED', source_commit=head,
+                       manifest_sha256=digest(raw), tools=tool_hashes, attempts=[], units=[], ladder=[],
+                       bindings={}, failure_events=[],
+                       proof=dict(completed_rejections=0, bundle_failures=0), timing='NOT_RUN',
+                       scope='SIX_SELECTED_TUS_WITH_REFERENCE_DEPENDENCIES_NOT_FULL_APPLICATIONS')
+
+        def save():
+            (directory / 'receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+
+        runner = Capture(directory, resources, dict(os.environ), receipt, save, watch_interval_seconds=1)
+        vm, started = directory.name.lower(), False
+        trend = None
+        owned_objects, owned_executables = [], []
+
+        def run(stage, argv, expected=None):
+            codegen_disk_preflight(root, resources, start=False)
+            return runner.run(stage, argv, expected=expected)
+
+        def guest_path(path):
+            path = Path(path).resolve()
+            return '/runwork/' + path.relative_to(directory).as_posix() if path.is_relative_to(directory) else \
+                   '/work/' + path.relative_to(root).as_posix()
+
+        def guest(stage, argv, expected=None):
+            return run(stage, [tools['container'], 'exec', vm, *argv], expected)
+
+        try:
+            image = run('image', [tools['container'], 'image', 'inspect', m['image']['name']])
+            require(load(directory / image['stdout'])[0]['id'] == m['image']['digest'], 'N05 sealed image changed')
+            run('start-size-vm', [tools['container'], 'run', '--rm', '-d', '--name', vm,
+                '--cpus', '2', '--memory', '3G', '--read-only', '--tmpfs', '/tmp', '--no-dns',
+                '--mount', f'type=bind,source={root},target=/work,readonly',
+                '--mount', f'type=bind,source={directory},target=/runwork', m['image']['name'], '/bin/sleep', '3600'])
+            started = True
+            live_objects, frozen_bindings = {}, {}
+            for number, name in enumerate(UNITS):
+                family, source = name.split(':', 1)
+                case = cases[family]
+                ref = next(row for row in reference['units'] if row['case'] == family and row['source'] == source)
+                gcc_size = ref['references']['gcc-14-O2']['metrics']['text_bytes']
+                for profile in PROFILES:
+                    objects, compile_times, assembly_hashes = [], [], []
+                    for repeat in range(3):
+                        chain = directory / f'{number}-{profile}-{repeat}-chain'
+                        argv = codegen_compile_argv(tools['compiler'], tools['checker'], tool_hashes['checker'],
+                            case, source, root, profile, chain, m.get('extra_flags', []))
+                        try:
+                            result = run(f'compile:{name}:{profile}:{repeat}', argv)
+                        except Exception as error:
+                            codegen_proof_failure(receipt, chain, error, 'compile')
+                            raise
+                        compile_times.append(result['wall_ns'])
+                        asm = directory / result['stdout']
+                        assembly_hashes.append(result['stdout_sha256'])
+                        try:
+                            binding = bind_bundle(chain, tools['checker'])
+                        except Exception as error:
+                            codegen_proof_failure(receipt, chain, error, 'replay')
+                            raise
+                        compact_binding = {field: binding[field] for field in
+                                           ('ir_digest', 'chain_record_digest', 'bundle_digest')}
+                        if name in frozen_bindings:
+                            require(frozen_bindings[name] == compact_binding,
+                                    'N05 checked/unchecked compilations do not share the same verified IR/bundle')
+                        else:
+                            frozen_bindings[name] = compact_binding
+                            receipt['bindings'][name] = compact_binding
+                        if repeat < 2:
+                            obj = directory / f'{number}-{profile}-{repeat}.o'
+                            guest(f'assemble:{name}:{profile}:{repeat}', ['/usr/bin/gcc-14', '-c', '-x',
+                                  'assembler', guest_path(asm), '-o', guest_path(obj)])
+                            objects.append(obj)
+                            owned_objects.append(obj)
+                        # Commands and hashes are retained. The same fresh source
+                        # compilation recreates the now-replayed intermediate bundle.
+                        shutil.rmtree(chain)
+                        asm.unlink()
+                    require(len(set(assembly_hashes)) == 1, 'N05 three source compilations differ')
+                    row = object_row(name, profile, objects[0].read_bytes(), objects[1].read_bytes(),
+                                     gcc_o2_text_bytes=gcc_size, compile_wall_ns=compile_times)
+                    receipt['units'].append(row)
+                    live_objects[name, profile] = objects[0]
+                    objects[1].unlink()
+                    save()
+            for program in programs:
+                for profile in PROFILES:
+                    objs = [live_objects[name, profile] for name in UNITS if name.startswith(program['case'] + ':')]
+                    objs += [root / path for path in program['dependencies']]
+                    if program['harness']:
+                        objs.append(root / program['harness'])
+                    exe = directory / (program['case'] + '-' + profile)
+                    owned_executables.append(exe)
+                    guest('link:' + exe.name, ['/usr/bin/gcc-14', *map(guest_path, objs), '-Wl,--build-id=none', '-lm',
+                                               '-o', guest_path(exe)])
+                    for mode in program['modes']:
+                        case_name = {'p0': 'integer-mix', 'cjson': 'cjson-roundtrip'}.get(program['case'])
+                        if case_name is None:
+                            case_name = program['case'] + '-' + mode[0]
+                        result = guest('correctness:' + case_name + ':' + profile,
+                                       [guest_path(exe), *mode], program['result'])
+                        # Both profiles ran; the stable output identity is shared.
+                        entry = dict(case=case_name, status='PASS', result_sha256=digest(canonical({
+                            k: result[k] for k in ('exit_code', 'stdout_sha256', 'stderr_sha256')})))
+                        prior = next((r for r in receipt['ladder'] if r['case'] == case_name), None)
+                        require(prior is None or prior == entry, 'checked/unchecked replay differs')
+                        if prior is None:
+                            receipt['ladder'].append(entry)
+                    exe.unlink()
+                    save()
+            reports = []
+            steps_plan = m.get('steps')
+            if steps_plan:
+                for number, command in enumerate(steps_plan['commands']):
+                    report = directory / f'n02-{number}.json'
+                    args = []
+                    for arg in command:
+                        arg = str(arg).replace('{report}', str(report)).replace('{root}', str(root))
+                        for name, tool in tools.items():
+                            arg = arg.replace('{' + name + '}', str(tool))
+                        args.append(arg)
+                    result = run('n02-steps:' + str(number), args)
+                    reports.append(load(report if report.exists() else directory / result['stdout']))
+            steps = steps_from_reports(reports, steps_plan['plan_sha256'], steps_plan['expected_cases'],
+                                       steps_plan.get('aliases')) if steps_plan else None
+            require(subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip() == head,
+                    'N05 source commit changed during run')
+            require(all(digest(path.read_bytes()) == tool_hashes[name] for name, path in tools.items()),
+                    'N05 measured binary changed during run')
+            receipt.update(status='OBSERVED', steps=steps)
+            trend = dict(schema='evocc-codegen-trend-v1', source_commit=head,
+                compiler_sha256=tool_hashes['compiler'], plan_sha256=digest(raw),
+                inputs_sha256=digest(canonical(m['inputs'])), capture_sha256='0' * 64,
+                variant=m['variant'], units=receipt['units'], ladder=receipt['ladder'], steps=steps, proof=receipt['proof'])
+            receipt['coverage'] = coverage(trend)
+            receipt['status'] = 'OBSERVED' if receipt['coverage']['status'] == 'OBSERVED' else 'NOT_RUN'
+        except BaseException as error:
+            receipt.update(status='FAILED', error=str(error))
+            raise
+        finally:
+            try:
+                if started:
+                    runner.run('stop-size-vm', [tools['container'], 'stop', vm])
+            except BaseException as error:
+                receipt.update(status='FAILED', cleanup_error=str(error))
+                raise
+            finally:
+                cleanup_codegen_products(directory, owned_objects + owned_executables)
+                receipt['owned_retained_bytes'] = sum(p.stat().st_size for p in directory.rglob('*') if p.is_file())
+                receipt['disk_free_delta_bytes'] = shutil.disk_usage(root).free - free_before
+                save()
+        if trend is not None:
+            trend['capture_sha256'] = digest((directory / 'receipt.json').read_bytes())
+            append_observation(root / m['history'], trend)
+        return directory, receipt
 
 
 def run_guard_certification(plan, root):

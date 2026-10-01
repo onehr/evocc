@@ -1,0 +1,92 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N05",
+  "status": "ACCEPTANCE_PENDING",
+  "date": "2026-10-02",
+  "plan": "tests/contracts/codegen-n05-20261002.json",
+  "plan_commit": "917f8955",
+  "plan_sha256": "87d353b0e311994536c9b4b7dcfac2bf34fb400c832106473d378f99d1c2658d",
+  "implementation_commit": null,
+  "live_plan": "tests/contracts/codegen-n05-live-20261002.json",
+  "live_plan_status": "FROZEN_IN_CONTAINING_COMMIT_NOT_EXECUTED",
+  "red": {
+    "initial": "The frozen plan preceded the missing codegen_trend import RED.",
+    "failure_accounting": {
+      "command": "python3 -m unittest tools.ladder.tests.test_codegen_trend.TrendTests.test_failed_compile_keeps_rejection_and_rollback_buckets tools.ladder.tests.test_codegen_trend.TrendTests.test_replay_rejection_preserves_existing_audit_without_second_replay",
+      "exit_code": 1,
+      "errors": 2,
+      "observed": "Capture failure classification and retained replay verdict interfaces were missing."
+    }
+  },
+  "gates": {
+    "focused_python": {
+      "status": "PASS",
+      "command": "python3 -m unittest tools.ladder.tests.test_codegen_trend tools.ladder.tests.test_eqsat_twins tools.ladder.tests.test_bench tools.ladder.tests.test_eqsat_elf tools.ladder.tests.test_eqsat_pilot_status tools.ladder.tests.test_import_isolation tools.ladder.tests.test_todo_schedule",
+      "passed": 127,
+      "failed": 0,
+      "scope": "Unit and adapter tests. Mock bench output is not a live campaign."
+    },
+    "full_workspace": {
+      "status": "PASS",
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "suites": 377,
+      "passed": 2915,
+      "failed": 0,
+      "ignored": 4,
+      "clippy": "PASS",
+      "fmt": "PASS",
+      "log": ".evidence/codegen/full-workspace-20261002.log",
+      "log_sha256": "1b7f2da7fd9f6dff1acfe685bf74e0176d819ed5f93c4d77eeca6ce4092a221f"
+    },
+    "six_tu_live_capture": {
+      "status": "NOT_RUN",
+      "command": "python3 tools/bench.py --codegen-measure tests/contracts/codegen-n05-live-20261002.json",
+      "receipt": null,
+      "unit_profiles_measured": 0,
+      "ladder_cases_measured": 0,
+      "steps_inputs_measured": 0
+    },
+    "pre_push": {
+      "implementation": "PRESENT_UNIT_TESTED",
+      "activation": "NOT_ACTIVATED",
+      "live_exercise": "NOT_RUN",
+      "historical_missing": "Blocks with exact missing commits; never checks out a different revision or fabricates historical measurements."
+    },
+    "lean": "NOT_REQUIRED_NO_SEMANTIC_OR_REGISTRY_CHANGE"
+  },
+  "injected_regression": {
+    "status": "DETECTOR_LOCALIZER_PASS",
+    "capture": ".evidence/codegen-trend/injection-yu9yd2yl/receipt.json",
+    "capture_sha256": "a2480fc4d21a29f9c49e9974ff1f18178b07d83ba09c71cd435d6a428e44481f",
+    "trend_sha256": "5bf6b90ce38abdfa6c8ce9f696666bc0583c3afc43e36b793bf8f47059ed353a",
+    "branch": "refs/heads/n05-injected-size-regression-20261002-scoped",
+    "unit": "test:n05_regression_probe",
+    "assembler_sha256": "44a68ddc1983d6cff3fd35ba3f9ba5f82004216f1dcde69892b3d1b06e408698",
+    "assembler_command": "/usr/bin/clang --target=aarch64-linux-gnu -c -x assembler",
+    "measurements": [
+      {"commit": "34a9b56de201663e7caf529d2849bcd018235448", "text_bytes": 8, "twin": "BYTE_IDENTICAL"},
+      {"commit": "ff5b17a0665d4013ff6e18e88947789a0b0d3372", "text_bytes": 24, "twin": "BYTE_IDENTICAL"},
+      {"commit": "41509ab8e36feca096ac508c06cb64290e178879", "text_bytes": 24, "twin": "BYTE_IDENTICAL"}
+    ],
+    "first_bad": "ff5b17a0665d4013ff6e18e88947789a0b0d3372",
+    "rebuilds_needed": 0,
+    "main_head_unchanged": true,
+    "main_index_unchanged": true,
+    "scope": "Actual Git objects and AArch64 ELF assembly; not fresh EvoCC compilation, GCC comparison or six-TU acceptance."
+  },
+  "steps_consumer_boundary": {
+    "same_ir_steps": "OBSERVED does not imply source bridge or translation validation passed.",
+    "retained_fields": ["validation", "source_bridge", "source_bridge_detail"],
+    "mismatch_regression_test": "The known integer-mix source-bridge mismatch remains MISMATCH_NOT_VALIDATED, with event counts and first differing index preserved in the compact trend and visible in render-status.",
+    "live_evidence": "Pending the current N02 executable and fresh N05 capture."
+  },
+  "disk": {
+    "capture_limit_bytes": 524288000,
+    "injection_retained_allocated_bytes": 81920,
+    "injection_host_free_delta_bytes": -18911232,
+    "temporary_index_and_objects": "REMOVED",
+    "net_slice_bytes": null,
+    "note": "The free-space delta includes concurrent work and is not attributed to this slice. Final combined source/build/capture net delta remains pending shared cleanup."
+  },
+  "claim_ceiling": "Regression detector/localizer and adapters are implemented and locally tested. N05 remains unaccepted until current-source six-TU twin sizes, compile time, ladder and steps, the real pre-push path and the full workspace gate complete. No latency, codegen improvement or verified-rewrite claim."
+}

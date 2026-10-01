@@ -1,0 +1,6 @@
+#!/bin/sh
+# Opt-in N05 hook. Existing hooks must be composed, never overwritten.
+# Configure evocc.codegenPlan only after committing the live measurement plan.
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+exec python3 -m tools.ladder.codegen_push
