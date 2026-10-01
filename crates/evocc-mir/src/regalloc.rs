@@ -37,6 +37,15 @@ pub const SCRATCH_LIMIT: u32 = 1 << 25;
 /// same rule keeps that from arising.
 #[must_use]
 pub fn out_of_ssa(function: &MFunction) -> MFunction {
+    out_of_ssa_with_dce(function, true)
+}
+
+/// Attribution control for the existing baseline DCE, not an EqSat pass.
+/// Production callers use `out_of_ssa`; disabling deletion also keeps the edge
+/// transports needed by the retained computations, rather than leaving uses of
+/// dropped block arguments. No memory/effect/control operation is discarded.
+#[must_use]
+pub fn out_of_ssa_with_dce(function: &MFunction, eliminate_dead: bool) -> MFunction {
     let forwarding = forwarded_parameters(function);
     let source = |reg: VReg| forwarding.get(&reg.id).copied().unwrap_or(reg);
     let split = split_critical_edges(function);
@@ -45,7 +54,7 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
         .iter()
         .map(|block| (block.id, block.args.clone()))
         .collect();
-    let needed = needed_edge_values(&split, &parameters);
+    let needed = needed_edge_values(&split, &parameters, !eliminate_dead);
     let mut predecessors: BTreeMap<u32, usize> = BTreeMap::new();
     for block in &split.blocks {
         for (target, _) in term_edges(&block.term) {
@@ -140,7 +149,8 @@ pub fn out_of_ssa(function: &MFunction) -> MFunction {
                 .insts
                 .iter()
                 .filter(|inst| {
-                    !discardable_computation(inst)
+                    !eliminate_dead
+                        || !discardable_computation(inst)
                         || inst_defs(inst).iter().any(|dst| needed.contains(&dst.id))
                 })
                 .cloned(),
@@ -316,6 +326,7 @@ fn discardable_computation(inst: &MInst) -> bool {
 fn needed_edge_values(
     function: &MFunction,
     parameters: &BTreeMap<u32, Vec<VReg>>,
+    retain_dead: bool,
 ) -> BTreeSet<u32> {
     let mut incoming: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     let mut needed = BTreeSet::new();
@@ -343,7 +354,7 @@ fn needed_edge_values(
         }
         for inst in &block.insts {
             let uses = inst_uses(inst);
-            if discardable_computation(inst) {
+            if discardable_computation(inst) && !retain_dead {
                 for dst in inst_defs(inst) {
                     incoming
                         .entry(dst.id)
@@ -388,10 +399,30 @@ pub(crate) fn unused_parameters(function: &MFunction) -> Vec<bool> {
         .iter()
         .map(|b| (b.id, b.args.clone()))
         .collect();
-    let needed = needed_edge_values(function, &parameters);
+    let needed = needed_edge_values(function, &parameters, false);
     function.blocks.first().map_or_else(Vec::new, |entry| {
         entry.args.iter().map(|a| !needed.contains(&a.id)).collect()
     })
+}
+
+/// Instructions the existing baseline demand analysis can discard. This is
+/// producer telemetry, not an independent semantic or native-code audit.
+#[must_use]
+pub fn dead_computation_count(function: &MFunction) -> usize {
+    let parameters = function
+        .blocks
+        .iter()
+        .map(|b| (b.id, b.args.clone()))
+        .collect();
+    let needed = needed_edge_values(function, &parameters, false);
+    function
+        .blocks
+        .iter()
+        .flat_map(|b| &b.insts)
+        .filter(|i| {
+            discardable_computation(i) && inst_defs(i).iter().all(|dst| !needed.contains(&dst.id))
+        })
+        .count()
 }
 
 fn clear_edge_args(term: &mut MTerm) {

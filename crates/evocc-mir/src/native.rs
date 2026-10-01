@@ -186,7 +186,12 @@ pub fn compile_module_with_options(
         {
             return Err(NativeStop::Lowering(vec!["E4002"]));
         }
-        let mut allocated = allocate_for(target, &out_of_ssa(function))
+        let destroyed = if options.retain_dead_computations {
+            crate::regalloc::out_of_ssa_with_dce(function, false)
+        } else {
+            out_of_ssa(function)
+        };
+        let mut allocated = allocate_for(target, &destroyed)
             .map_err(|detail| NativeStop::Allocation(format!("@{}: {detail}", function.name)))?;
         allocated.internal = module.functions.iter().any(|source| {
             source.name == function.name

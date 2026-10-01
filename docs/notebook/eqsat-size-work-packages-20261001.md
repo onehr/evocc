@@ -12,8 +12,8 @@ bytes enter the verified-EqSat numerator. No cross-family averages.
 
 | Package | Contract / input | State and claim ceiling |
 | --- | --- | --- |
-| S1 | [framing revision 7 §5.5](../framing-draft.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE in this commit. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
-| S2 | Same A/B verified IR; common backend DCE | Pending S1. Residue and each arm's DCE delta are separate from B–A. |
+| S1 | [framing revision 7 §5.5](../framing-draft.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `04fec0d7`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
+| S2 | Same A/B verified IR; common backend DCE | In progress. Existing baseline confirmed; attribution-control RED → GREEN. Measurement and full-workspace pending. |
 | S3 | Existing 1,024-evaluation capture, no new evaluation | Pending S2. Size verdict only FINITE_ENUMERATION_SUFFICIENT or NO_OBSERVABLE_EFFECT; does not reopen R03a. |
 | S4 | Existing guard forms / known bits, MIR diagnostic first | Pending S3. UNVERIFIED_DIAGNOSTIC is non-installable and never PASS. Stop if its ceiling is below the order of post-S2 EqSat savings; otherwise submit the independent semantic/checker/Lean delta. |
 | S5 | Six original TUs and full applications, GCC14/Clang19 `-Os`/`-O2` | Pending S4. Honest size gap, not parity or latency. |
@@ -44,4 +44,31 @@ The synthetic partition is 32 text bytes = 16 instruction bytes (4 slots) +
 8 inter-function padding + 8 in-text data. Moving that pool gives 24 text bytes
 and 8 rodata bytes, still 4 slots and 32 combined bytes. These are contract
 fixtures, **not application savings**. Implementation commit: the S1 commit
-containing this record (its hash is recorded by the next package).
+containing this record: `04fec0d7`.
+
+## S2 — existing common DCE, not a newly added optimization
+
+The reviewed premise that no baseline DCE exists is false in this checkout.
+`crates/evocc-mir/src/regalloc.rs::out_of_ssa` already calls the all-edge
+`needed_edge_values` analysis and filters `discardable_computation` before
+allocation. `native.rs` applies it to both A and B. It preserves every access,
+call, assembly, allocation/lifetime/ABI action, FP operation and guard control
+flow. Flags producer/consumer bundles remain legal. No new deletion semantics
+or EqSat rule is added by S2.
+
+The attribution control disables that existing deletion and retains the
+necessary edge transports too. It is available only through the exact-IR
+backend adapter; the production driver retains its previous default. The RED
+for the missing control/counters fails to compile before implementation; the
+focused SSA suite now passes **12/12**, including three dead computations removed
+only by the ON arm and a dead-result nonvolatile load preserved in both arms.
+
+The committed [S2 plan](../../tests/contracts/eqsat-size-dce-20261001.json) binds
+the original six TUs, A/B chains, existing checker binaries, native tool and
+original correctness harnesses. It uses the existing bench lock/Capture/native
+pipeline, two complete backend/assembly builds per object and no timing workload.
+The IR residue count is direct-unreferenced P0-shape results (not a transitive
+dead-subgraph estimate); the MIR residue is the existing demand-analysis count.
+Both are producer diagnostics, not independent proof claims. Native text deltas
+are measured separately for A/B and checked/unchecked. No DONE or new size-gain
+claim precedes the actual capture and full-workspace gate.

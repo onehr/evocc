@@ -72,6 +72,7 @@ def parser():
     p.add_argument('--eqsat-steady-build', type=Path, help='build a frozen Linux steady-state harness composition; no performance sampling')
     p.add_argument('--eqsat-steady-calibrate', type=Path, help='run a frozen Linux steady-state A/A calibration; no A/B data or speedup claim')
     p.add_argument('--eqsat-steady-ab', type=Path, help='run a separately frozen steady-state A/B plan after Linux A/A admission')
+    p.add_argument('--eqsat-size-dce', type=Path, help='S2 object-size attribution with existing baseline DCE on/off; no timing experiment')
     p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
     p.add_argument("--programs", type=positive, default=500, help="Csmith programs per campaign")
     p.add_argument("--campaign", choices=["all", "base", "bitfields"], default="all")
@@ -573,6 +574,17 @@ def main(argv=None):
     def eqsat_tool(name):
         package = 'ladder' if __name__ == '__main__' and not __package__ else 'tools.ladder'
         return importlib.import_module(package + '.' + name)
+    if args.eqsat_size_dce:
+        if not only_options('eqsat_size_dce'):
+            print('--eqsat-size-dce is a separate size-only mode', file=sys.stderr)
+            return 2
+        try:
+            directory, receipt = eqsat_tool('eqsat_size').run_dce_attribution(args.eqsat_size_dce, ROOT)
+            print(json.dumps(dict(directory=str(directory), status=receipt['status']), sort_keys=True))
+            return 0 if receipt['status'] == 'OBSERVED_SIZE_ATTRIBUTION' else 1
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f'size attribution rejected: {error}', file=sys.stderr)
+            return 1
     for option, mode in (('eqsat_steady_build', 'build'), ('eqsat_steady_calibrate', 'AA'), ('eqsat_steady_ab', 'AB')):
         if getattr(args, option):
             if not only_options(option):

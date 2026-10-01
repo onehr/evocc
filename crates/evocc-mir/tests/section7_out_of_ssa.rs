@@ -28,6 +28,58 @@ fn moves(block: &MBlock) -> Vec<(u32, u32)> {
 }
 
 #[test]
+fn dce_attribution_retains_the_same_dead_witnesses_only_in_the_off_control() {
+    let function = MFunction {
+        name: "dce_control".into(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: vec![w(0), VReg::new(1, RegClass::Gpr64)],
+            insts: vec![
+                MInst::MovImm { dst: w(2), imm: 7 },
+                MInst::Binary {
+                    op: BinOp::Add,
+                    dst: w(3),
+                    lhs: w(0),
+                    rhs: w(2),
+                    width: Width::W,
+                },
+                MInst::Binary {
+                    op: BinOp::Eor,
+                    dst: w(4),
+                    lhs: w(3),
+                    rhs: w(2),
+                    width: Width::W,
+                },
+                MInst::Load {
+                    dst: w(5),
+                    base: VReg::new(1, RegClass::Gpr64),
+                    offset: 0,
+                    kind: evocc_mir::LoadKind::W,
+                    volatile: false,
+                    align: 4,
+                },
+            ],
+            term: MTerm::Ret { values: vec![w(0)] },
+        }],
+    };
+    assert_eq!(evocc_mir::regalloc::dead_computation_count(&function), 3);
+    let on = out_of_ssa(&function);
+    let off = evocc_mir::regalloc::out_of_ssa_with_dce(&function, false);
+    assert_eq!(on.blocks[0].insts.len(), 1);
+    assert_eq!(off.blocks[0].insts.len(), 4);
+    assert_eq!(evocc_mir::regalloc::dead_computation_count(&on), 0);
+    assert_eq!(evocc_mir::regalloc::dead_computation_count(&off), 3);
+    for lowered in [on, off] {
+        let allocated = evocc_mir::allocate(&lowered).unwrap();
+        evocc_mir::verify_allocation(&allocated).unwrap();
+        assert!(matches!(
+            lowered.blocks[0].insts.last(),
+            Some(MInst::Load { .. })
+        ));
+    }
+}
+
+#[test]
 fn unused_loop_carried_parameters_do_not_create_copy_pressure() {
     let width = 64;
     let mut blocks = vec![MBlock {

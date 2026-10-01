@@ -28,6 +28,8 @@ pub enum RelocationModel {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CodegenOptions {
     pub ub_checks: crate::UbCheckProfile,
+    /// S2 attribution only. The driver always leaves common baseline DCE on.
+    pub retain_dead_computations: bool,
     pub tiny_addresses: bool,
     pub function_sections: bool,
     pub data_sections: bool,
