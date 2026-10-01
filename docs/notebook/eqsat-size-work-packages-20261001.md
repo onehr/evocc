@@ -13,7 +13,7 @@ bytes enter the verified-EqSat numerator. No cross-family averages.
 | Package | Contract / input | State and claim ceiling |
 | --- | --- | --- |
 | S1 | [framing revision 7 §5.5](../framing-draft.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `04fec0d7`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
-| S2 | Same A/B verified IR; common backend DCE | In progress. Existing baseline confirmed; attribution-control RED → GREEN. Measurement and full-workspace pending. |
+| S2 | [DCE attribution plan](../../tests/contracts/eqsat-size-dce-20261001.json), same A/B verified IR; common backend DCE | DONE. Implementation `e625b89c`; measurement closeout is this record's commit. Existing baseline confirmed, not newly credited to EqSat. Final allocated MIR retains the separately disclosed unused-parameter copies. |
 | S3 | Existing 1,024-evaluation capture, no new evaluation | Pending S2. Size verdict only FINITE_ENUMERATION_SUFFICIENT or NO_OBSERVABLE_EFFECT; does not reopen R03a. |
 | S4 | Existing guard forms / known bits, MIR diagnostic first | Pending S3. UNVERIFIED_DIAGNOSTIC is non-installable and never PASS. Stop if its ceiling is below the order of post-S2 EqSat savings; otherwise submit the independent semantic/checker/Lean delta. |
 | S5 | Six original TUs and full applications, GCC14/Clang19 `-Os`/`-O2` | Pending S4. Honest size gap, not parity or latency. |
@@ -70,5 +70,56 @@ pipeline, two complete backend/assembly builds per object and no timing workload
 The IR residue count is direct-unreferenced P0-shape results (not a transitive
 dead-subgraph estimate); the MIR residue is the existing demand-analysis count.
 Both are producer diagnostics, not independent proof claims. Native text deltas
-are measured separately for A/B and checked/unchecked. No DONE or new size-gain
-claim precedes the actual capture and full-workspace gate.
+are measured separately for A/B and checked/unchecked.
+
+Actual capture: `.evidence/eqsat-size/S2-cdgrncjl/receipt.json`, digest
+`d5cefa723ec49923d461f6eaecce77b701f1bf3bb9208dbb5e687e6a3b12a7fc`.
+There are 96 object builds, **48/48 byte-identical pairs**, 32 linked variants
+and **48/48 original correctness executions**. All six A/B chain bindings were
+rechecked: **12 verified proofs, zero completed rejections, zero bundle failures,
+zero unknowns**; identity chains are not counted as proofs. All ON object sizes
+match the earlier retained default-policy objects. No timing experiment ran.
+
+Primary subject-object `.text` bytes (sums only within each family):
+
+| Family | UB profile | A DCE OFF | A DCE ON | B DCE OFF | B DCE ON | B minus A, DCE ON |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| P0 | checked | 132 | 128 | 132 | 128 | 0 |
+| P0 | unchecked | 132 | 128 | 132 | 128 | 0 |
+| zlib | checked | 71,240 | 58,920 | 71,340 | 58,448 | -472 |
+| zlib | unchecked | 70,196 | 55,676 | 70,292 | 55,188 | -488 |
+| zstd | checked | 186,600 | 157,712 | 193,164 | 156,272 | -1,440 |
+| zstd | unchecked | 185,832 | 155,092 | 192,396 | 153,644 | -1,448 |
+| cJSON | checked | 36,808 | 30,228 | 37,044 | 29,496 | -732 |
+| cJSON | unchecked | 36,764 | 30,116 | 37,000 | 29,384 | -732 |
+
+OFF minus ON is **baseline DCE attribution**, not verified EqSat savings. The
+large B/OFF witness expansion is not a regression of the released pipeline.
+Object totals differ from linked text deltas because linking/alignment changes
+the denominator. Eligible-root denominators are 13 / 3,356 / 10,298 / 1,787 for
+P0 / zlib / zstd / cJSON; changed TUs are 0/1, 2/2, 2/2 and 1/1 respectively.
+No changed TU regresses with DCE ON.
+
+| TU | Direct unused P0-shape IR results A / B | Demand-dead pre-SSA MIR A / B (checked) | After SSA A / B | After allocation A / B |
+| --- | ---: | ---: | ---: | ---: |
+| integer-mix.c | 0 / 0 | 1 / 1 | 0 / 0 | 0 / 0 |
+| deflate.c | 82 / 136 | 1,813 / 1,912 | 0 / 0 | 0 / 0 |
+| inflate.c | 42 / 62 | 1,208 / 1,244 | 0 / 0 | 1 / 1 |
+| zstd_compress.c | 691 / 1,531 | 6,072 / 7,111 | 0 / 0 | 2 / 2 |
+| zstd_decompress.c | 106 / 395 | 984 / 1,371 | 0 / 0 | 0 / 0 |
+| cJSON.c | 246 / 399 | 1,613 / 1,838 | 0 / 0 | 0 / 0 |
+
+The [allocated-MIR supplement](../../tests/contracts/eqsat-size-dce-residue-20261001.json)
+records both profiles. Its 24 assemblies are byte-identical to the actual capture.
+The nonzero final counts are newly introduced ABI-entry `Mov` copies for unused
+parameters of `inflateUndermine`, `ZSTD_checkBufferStability`, and
+`ZSTD_transferSequences_noDelim`, not surviving EqSat witnesses. They are retained
+and disclosed; S2 does **not** claim an entirely residue-free backend. The counts
+use the existing producer demand analysis, not an independent disassembler or
+proof. Memory/FP/ABI effects remain outside its discardable-computation scope.
+
+Acceptance: full workspace **2,864 PASS / 0 FAIL / 4 ignored**, 366 Rust suites,
+Clippy with warnings denied and formatting PASS:
+`.evidence/eqsat-size/full-workspace-S2.log`. S2's claim ceiling is reproducible
+baseline-DCE attribution and tested native correctness for the six mixed-link
+subjects; it is not whole-application EvoCC coverage or a new verified domain.

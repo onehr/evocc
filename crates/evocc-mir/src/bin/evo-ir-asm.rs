@@ -90,6 +90,7 @@ fn emit(args: &[String]) -> Result<String, String> {
         let mut dead_before = 0;
         let mut after = 0;
         let mut dead_after = 0;
+        let mut dead_allocated = 0;
         for f in &lowered.functions {
             if !keep.contains(&f.name) {
                 continue;
@@ -99,8 +100,14 @@ fn emit(args: &[String]) -> Result<String, String> {
             let lowered = evocc_mir::regalloc::out_of_ssa_with_dce(f, !retain_dead);
             after += lowered.blocks.iter().map(|b| b.insts.len()).sum::<usize>();
             dead_after += evocc_mir::regalloc::dead_computation_count(&lowered);
+            let allocated = evocc_mir::allocate_for(target, &lowered)?;
+            evocc_mir::verify_allocation(&allocated).map_err(|e| format!("{e:?}"))?;
+            dead_allocated += evocc_mir::regalloc::dead_computation_count(&evocc_mir::MFunction {
+                name: allocated.name,
+                blocks: allocated.blocks,
+            });
         }
-        eprintln!("{{\"schema\":\"evocc-dce-attribution-v1\",\"baseline_dce\":{},\"ir_direct_unused_p0_results\":{direct_unused},\"mir_instructions_before_ssa\":{before},\"mir_dead_before_ssa\":{dead_before},\"mir_instructions_after_ssa\":{after},\"mir_dead_after_ssa\":{dead_after},\"claim\":\"PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT\"}}", !retain_dead);
+        eprintln!("{{\"schema\":\"evocc-dce-attribution-v1\",\"baseline_dce\":{},\"ir_direct_unused_p0_results\":{direct_unused},\"mir_instructions_before_ssa\":{before},\"mir_dead_before_ssa\":{dead_before},\"mir_instructions_after_ssa\":{after},\"mir_dead_after_ssa\":{dead_after},\"mir_dead_after_allocation\":{dead_allocated},\"claim\":\"PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT\"}}", !retain_dead);
     }
     // Only obligation branch emission varies. PIC and allocation checks remain.
     // This adapter never reruns frontend lowering or EqSat.

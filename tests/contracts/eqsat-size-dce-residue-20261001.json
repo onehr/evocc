@@ -1,0 +1,442 @@
+{
+  "backend_digest": "ad8a24a9bf3fbb459ae7e43fecdb8a99e19c9e86b6a517368c33d1a95f16488a",
+  "capture": ".evidence/eqsat-size/S2-cdgrncjl/receipt.json",
+  "capture_digest": "d5cefa723ec49923d461f6eaecce77b701f1bf3bb9208dbb5e687e6a3b12a7fc",
+  "claim": "Existing demand-analysis residual counts at final allocated MIR, not a disassembler or independent proof",
+  "rows": [
+    {
+      "arm": "A",
+      "assembly_digest": "99533c33375efdc9f7538302a7535a1c374eb7b2ae4d817b2e266643474652e5",
+      "case": "p0",
+      "profile": "checked",
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 0,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1,
+        "mir_instructions_after_ssa": 22,
+        "mir_instructions_before_ssa": 17,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "e77ae9e12336c266bd975829c968d1dba7aa5f0d29a245235bc4752edb4cf559",
+      "case": "p0",
+      "profile": "unchecked",
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 0,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1,
+        "mir_instructions_after_ssa": 22,
+        "mir_instructions_before_ssa": 17,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "99533c33375efdc9f7538302a7535a1c374eb7b2ae4d817b2e266643474652e5",
+      "case": "p0",
+      "profile": "checked",
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 0,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1,
+        "mir_instructions_after_ssa": 22,
+        "mir_instructions_before_ssa": 17,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "e77ae9e12336c266bd975829c968d1dba7aa5f0d29a245235bc4752edb4cf559",
+      "case": "p0",
+      "profile": "unchecked",
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 0,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1,
+        "mir_instructions_after_ssa": 22,
+        "mir_instructions_before_ssa": 17,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "1d7ee13a2f4e8bd2087bf9a2976aea75f117e9220a3d729416e3bfaad8c4e965",
+      "case": "zlib",
+      "profile": "checked",
+      "source": "deflate.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 82,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1813,
+        "mir_instructions_after_ssa": 5288,
+        "mir_instructions_before_ssa": 6557,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "3831cbcd8a73ea5587b49f76d40bf0641b70e4ce184b2bc617935a6526256d3b",
+      "case": "zlib",
+      "profile": "unchecked",
+      "source": "deflate.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 82,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 2113,
+        "mir_instructions_after_ssa": 5173,
+        "mir_instructions_before_ssa": 6742,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "6294809d49800bbb446e46da3c40e70486e8500d5ff06a288b18e80ce5b4bb20",
+      "case": "zlib",
+      "profile": "checked",
+      "source": "deflate.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 136,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1912,
+        "mir_instructions_after_ssa": 5201,
+        "mir_instructions_before_ssa": 6569,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "513da2a5a673e6686346cf688c7ff0bf51a0adee499b8c3530e55b6cd8b2c6a4",
+      "case": "zlib",
+      "profile": "unchecked",
+      "source": "deflate.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 136,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 2214,
+        "mir_instructions_after_ssa": 5083,
+        "mir_instructions_before_ssa": 6753,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "ff449363b9f43c7e62d96456e5f1dccc5db53f32c86cc7b0d526e126227e7999",
+      "case": "zlib",
+      "profile": "checked",
+      "source": "inflate.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 42,
+        "mir_dead_after_allocation": 1,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1208,
+        "mir_instructions_after_ssa": 4097,
+        "mir_instructions_before_ssa": 4044,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "78a7afc9d2697f13f407d5b91c4962af993780e4ebf6ab74b0fcb0184a416de5",
+      "case": "zlib",
+      "profile": "unchecked",
+      "source": "inflate.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 42,
+        "mir_dead_after_allocation": 1,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1451,
+        "mir_instructions_after_ssa": 3977,
+        "mir_instructions_before_ssa": 4167,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "a051f7eda8428e2fb3657c1bd45c33f5796d516b90816b44ce1493bb6654cfe4",
+      "case": "zlib",
+      "profile": "checked",
+      "source": "inflate.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 62,
+        "mir_dead_after_allocation": 1,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1244,
+        "mir_instructions_after_ssa": 4062,
+        "mir_instructions_before_ssa": 4045,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "5f730ef2a995a484b3069bd2d329c478160c803e043773ece75c185174002c33",
+      "case": "zlib",
+      "profile": "unchecked",
+      "source": "inflate.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 62,
+        "mir_dead_after_allocation": 1,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1488,
+        "mir_instructions_after_ssa": 3941,
+        "mir_instructions_before_ssa": 4168,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "757b1e7d72917065e493231e050522141f1ce5f69cc1d3ec16035136dfdfbfdf",
+      "case": "zstd",
+      "profile": "checked",
+      "source": "lib/compress/zstd_compress.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 691,
+        "mir_dead_after_allocation": 2,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 6072,
+        "mir_instructions_after_ssa": 15926,
+        "mir_instructions_before_ssa": 20501,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "955b5e8d1a0dde2055ae283032ebaf1857b31200f615561451f83758a3afd550",
+      "case": "zstd",
+      "profile": "unchecked",
+      "source": "lib/compress/zstd_compress.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 691,
+        "mir_dead_after_allocation": 2,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 6486,
+        "mir_instructions_after_ssa": 15710,
+        "mir_instructions_before_ssa": 20699,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "e71a223e3b61fe9fa3049bb2aa06f2da621eaa6886ede07d7c70a11c8e27b7a2",
+      "case": "zstd",
+      "profile": "checked",
+      "source": "lib/compress/zstd_compress.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 1531,
+        "mir_dead_after_allocation": 2,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 7111,
+        "mir_instructions_after_ssa": 14929,
+        "mir_instructions_before_ssa": 20543,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "b9e43d5ddcd6f464e372918e5dee3f7ab1896630137632cf1004d7f3d4788b7c",
+      "case": "zstd",
+      "profile": "unchecked",
+      "source": "lib/compress/zstd_compress.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 1531,
+        "mir_dead_after_allocation": 2,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 7527,
+        "mir_instructions_after_ssa": 14711,
+        "mir_instructions_before_ssa": 20741,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "c8b585c0e4863f7a9de36140232d3ebfa623bf3c384f1e44cd4bb64c2d1bae81",
+      "case": "zstd",
+      "profile": "checked",
+      "source": "lib/decompress/zstd_decompress.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 106,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 984,
+        "mir_instructions_after_ssa": 3941,
+        "mir_instructions_before_ssa": 4665,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "9a40c90f5391b71745d42afe0dd11b376622a5f7bcf2cc2128f54741df035e75",
+      "case": "zstd",
+      "profile": "unchecked",
+      "source": "lib/decompress/zstd_decompress.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 106,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1029,
+        "mir_instructions_after_ssa": 3917,
+        "mir_instructions_before_ssa": 4686,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "9470d0e39934c70e0501126222be829b0dc099830ee54e0ed0f4828a8a6af5f6",
+      "case": "zstd",
+      "profile": "checked",
+      "source": "lib/decompress/zstd_decompress.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 395,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1371,
+        "mir_instructions_after_ssa": 3554,
+        "mir_instructions_before_ssa": 4665,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "2aef8c464c85ac3a2d5c03ffc0d97069eba5eb11ecb26dcf30c9883b0bda77fe",
+      "case": "zstd",
+      "profile": "unchecked",
+      "source": "lib/decompress/zstd_decompress.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 395,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1416,
+        "mir_instructions_after_ssa": 3530,
+        "mir_instructions_before_ssa": 4686,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "f3820155fae656270bea6069e4a0bb7fcab7a32559fd1557a714be4fcdfc2658",
+      "case": "cjson",
+      "profile": "checked",
+      "source": "cJSON.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 246,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1613,
+        "mir_instructions_after_ssa": 3995,
+        "mir_instructions_before_ssa": 5117,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "A",
+      "assembly_digest": "6d4014e02daf22f0179a5fc0c4a23475e4ce509d76d76aad1118f8c2dd8e1f49",
+      "case": "cjson",
+      "profile": "unchecked",
+      "source": "cJSON.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 246,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1630,
+        "mir_instructions_after_ssa": 3987,
+        "mir_instructions_before_ssa": 5126,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "e859c7f3bcd7794b91269d92466e5ade946088df7ebc3a6d0fa80e3659c4ce6a",
+      "case": "cjson",
+      "profile": "checked",
+      "source": "cJSON.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 399,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1838,
+        "mir_instructions_after_ssa": 3825,
+        "mir_instructions_before_ssa": 5172,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    },
+    {
+      "arm": "B",
+      "assembly_digest": "1d59bca9bdeb533b5f1c33e2a2239f6bc0bd8706cfe42238eaf102f61159d593",
+      "case": "cjson",
+      "profile": "unchecked",
+      "source": "cJSON.c",
+      "telemetry": {
+        "baseline_dce": true,
+        "claim": "PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT",
+        "ir_direct_unused_p0_results": 399,
+        "mir_dead_after_allocation": 0,
+        "mir_dead_after_ssa": 0,
+        "mir_dead_before_ssa": 1855,
+        "mir_instructions_after_ssa": 3817,
+        "mir_instructions_before_ssa": 5181,
+        "schema": "evocc-dce-attribution-v1"
+      }
+    }
+  ],
+  "schema": "evocc-s2-allocated-residue-v1",
+  "status": "OBSERVED_UNCHANGED_ASSEMBLY"
+}
