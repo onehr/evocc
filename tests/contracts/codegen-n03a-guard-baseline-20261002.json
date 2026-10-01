@@ -58,7 +58,7 @@
     "unchecked"
   ],
   "procedure": [
-    "Independently bind/replay each existing g0 chain with the current checker; verify retained output digest. Do not regenerate rules or claim fresh source compilation.",
+    "Replay every retained before/after/proof triple directly with the current standalone checker and capture each exit status; verify each final retained IR digest. This is certificate compatibility replay, not admission of the historical chain under a substituted checker identity. Do not call the chain binder with a different checker or modify historical records.",
     "Compile each exact retained g0 output IR twice using evo-ir-asm linux-aarch64 with the explicit UB profile; assemble with /usr/bin/clang --target=aarch64-linux-gnu -c -x assembler under identical paths.",
     "Require complete object twin identity and report existing S1 section metrics. Retain only first objects and compact command/hash receipts for later cross-revision byte comparison. Delete second objects and assembly after measurement.",
     "After the behavior-preserving refactor, repeat on the same IR and tools, compare complete object bytes with these retained first objects. No metadata normalization."
@@ -71,5 +71,11 @@
     "timeout_seconds": 300,
     "jobs": 1
   },
-  "claim_ceiling": "Six certified-g0 retained-IR backend regression controls only; not new guard savings, fresh source/application acceptance, a registry change or a latency experiment."
+  "claim_ceiling": "Six certified-g0 retained-IR backend regression controls only; not new guard savings, fresh source/application acceptance, a registry change or a latency experiment.",
+  "revision": 2,
+  "prior_attempt": {
+    "receipt": ".evidence/codegen/n03a-g0-tw0shb9t/receipt.json",
+    "status": "FAILED_BEFORE_CHECKER_EXECUTION",
+    "reason": "The existing chain binder correctly rejects a current checker whose digest differs from the historical chain's checker. Historical records are not rewritten."
+  }
 }
