@@ -1,0 +1,180 @@
+{
+  "arms": {
+    "A": {
+      "baseline_byte_matches": 12,
+      "coverage": {
+        "failures": [],
+        "missing": [],
+        "status": "OBSERVED"
+      },
+      "object_twins": 12,
+      "path": ".evidence/codegen-trend/measure-xo1a4ax7/receipt.json",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 390224,
+      "sha256": "5a20698fdc9906c41b9cadacf40a1cce8aa0d999f9fa81821dfa6045e2f39181",
+      "status": "OBSERVED",
+      "tools": {
+        "checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+        "compiler": "77533b223093a7d9adedd7a8d84de47f2e3863b3047a06e331282afe1d539bf1",
+        "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+        "steps": "ad21b7c2a047b82a6ef4c3115759bd58dfcf4e0231de5c6c0cacceac20b524a7"
+      }
+    },
+    "B": {
+      "baseline_byte_matches": 12,
+      "coverage": {
+        "failures": [],
+        "missing": [],
+        "status": "OBSERVED"
+      },
+      "object_twins": 12,
+      "path": ".evidence/codegen-trend/measure-93zqt0_g/receipt.json",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 399386,
+      "sha256": "f478c34bc4a7c0f5d74851bdbf770b726508cf0ec3ab0cc7af1dc85a612015d9",
+      "status": "OBSERVED",
+      "tools": {
+        "checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+        "compiler": "77533b223093a7d9adedd7a8d84de47f2e3863b3047a06e331282afe1d539bf1",
+        "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+        "steps": "ad21b7c2a047b82a6ef4c3115759bd58dfcf4e0231de5c6c0cacceac20b524a7"
+      }
+    },
+    "g0": {
+      "baseline_byte_matches": 12,
+      "certificate_compatibility_replays": 10,
+      "historical_chain_admission": "NOT_CLAIMED_DIFFERENT_CHECKER_IDENTITY",
+      "native_execution": "NOT_RUN_RETAINED_IR_BACKEND_CONTROL",
+      "object_twins": 12,
+      "path": ".evidence/codegen/n03a-g0-3gqop3nw/receipt.json",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0,
+        "unknowns": 0
+      },
+      "retained_bytes": 67635,
+      "sha256": "d4832ea739a323224675d6c52e1a195680cccbf6cdaa0cb041ef9d89ad314d23",
+      "status": "OBSERVED",
+      "tools": {
+        "assembler": "44a68ddc1983d6cff3fd35ba3f9ba5f82004216f1dcde69892b3d1b06e408698",
+        "backend": "24676215168066200b7157ea3d34c64599c186254809c6b8be3d7168f5dd2706",
+        "checker": "eb1b0919d8531fff55f9fcd95d95277fd87de48ba853e66d3a23d701a24c154a"
+      }
+    }
+  },
+  "baseline_receipt": "tests/contracts/codegen-n03a-baseline-20261002-receipt.json",
+  "build_invocation_correction": {
+    "corrected": {
+      "path": ".evidence/codegen/n03a-regfile-g0-build-corrected-20261002.log",
+      "sha256": "6dc18e4bf71a6a63a973730408ce92393d382d48c0aa52bde28b7a7b608a6a48"
+    },
+    "corrected_exit_code": 0,
+    "first": {
+      "path": ".evidence/codegen/n03a-regfile-g0-build-20261002.log",
+      "sha256": "18ec99a9660bd585519a99c48a8d166409ae1e594f81c507b4bae6668bdffcfc"
+    },
+    "first_exit_code": 101,
+    "reason": "evo-ir-asm belongs to evocc-mir, not evocc; no compilation or capture occurred"
+  },
+  "claim_ceiling": "Generated register facts and behavior-preserving step-1 object comparisons only. Exactly zero changed target-object bytes. No optimization, new allocation policy, complete generic backend, synthetic-ISA algorithm acceptance, fresh g0 source acceptance, or final N03a full-workspace claim. Instruction and ABI extraction remain pending.",
+  "date": "2026-10-02",
+  "disk": {
+    "baseline_objects": "RETAINED_FOR_N03A_STEPS_2_AND_3",
+    "cache_scope": "Since the preparation receipt checkpoint, measured after the step-1 native captures; final focused rerun uses this same target",
+    "capture_limit_bytes": 524288000,
+    "free_bytes_at_record": 160459874304,
+    "native_candidate_objects_retained_bytes": 0,
+    "new_captures_retained_bytes": 857245,
+    "shared_target_after_captures_bytes": 22576099328,
+    "shared_target_before_bytes": 22292795392,
+    "shared_target_delta_bytes": 283303936
+  },
+  "gates": {
+    "diff_check": "PASS",
+    "focused_clippy": {
+      "path": ".evidence/codegen/n03a-regfile-final-clippy-20261002.log",
+      "sha256": "8c233a54790c4800d3dd585436af679aa838da259bfdb129412e2d51cdb75cdc",
+      "status": "PASS"
+    },
+    "focused_rust": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 43,
+      "path": ".evidence/codegen/n03a-regfile-final-focused-20261002.log",
+      "sha256": "bd98f57b24a1578bce67771e06ee0b58b580a3f81e7f27a67eb9d4d87b3f72f5",
+      "status": "PASS",
+      "suites": 7
+    },
+    "formatting": "PASS",
+    "full_workspace": "PENDING_FINAL_N03A_GATE_PRIOR_FAILED_ATTEMPT_PRESERVED_IN_BASELINE_RECEIPT",
+    "generated_files": "PASS",
+    "python": {
+      "failed": 0,
+      "passed": 24,
+      "path": ".evidence/codegen/n03a-regfile-final-python-20261002.log",
+      "sha256": "1a265aebd691fdd5fd31da6c9503c1f18d7a1f644221b4447b1877c45cf123a7",
+      "status": "PASS"
+    }
+  },
+  "implementation_commit": "42a003d2a312553b715ea0f8191dd474bec2e64d",
+  "native_corpora": {
+    "darwin": {
+      "agreeing": 384,
+      "baseline_byte_matches": 384,
+      "executed": 384,
+      "object_bytes": 193392,
+      "objects": 384,
+      "path": ".evidence/codegen/n03a-regfile-corpus-darwin-20261002.log",
+      "refused": 0,
+      "sha256": "e54f377b4892eb9427f28bcf0bd47d7a727389b4b891811e5f04162c462a055c",
+      "two_builds": "BYTE_IDENTICAL"
+    },
+    "linux": {
+      "agreeing": 384,
+      "baseline_byte_matches": 384,
+      "executed": 384,
+      "object_bytes": 383344,
+      "objects": 384,
+      "path": ".evidence/codegen/n03a-regfile-corpus-linux-20261002.log",
+      "refused": 0,
+      "sha256": "97952999e4656c77ffcc7db2d345a13d274b1e7d1d9b686d2485ccc28469b661",
+      "two_builds": "BYTE_IDENTICAL"
+    }
+  },
+  "package": "N03a step 1",
+  "plans": [
+    "tests/contracts/codegen-n03a-20261002.json",
+    "tests/contracts/codegen-n03a-regression-a-20261002.json",
+    "tests/contracts/codegen-n03a-regression-b-20261002.json",
+    "tests/contracts/codegen-n03a-guard-baseline-20261002.json"
+  ],
+  "red": [
+    {
+      "exit_code": 101,
+      "kind": "MISSING_DESCRIPTION_AND_INTERFACE",
+      "path": ".evidence/codegen/n03a-regfile-red-20261002.log",
+      "sha256": "76b6b51a11ae62dbc644ffb94556c0956b298252ffe5c8675c88250566629d79"
+    },
+    {
+      "exit_code": 1,
+      "kind": "MISSING_GENERATOR",
+      "path": ".evidence/codegen/n03a-generator-red-20261002.log",
+      "sha256": "0679a9933bae30dfe5ee9bd0bef4a35114eed491499fe348be4473a35d5cf29e"
+    },
+    {
+      "failed_subtests": 3,
+      "kind": "STALE_GENERATOR_NOT_CHECKED_BY_GATE",
+      "path": ".evidence/codegen/n03a-generator-gate-red-20261002.log",
+      "sha256": "8ccb4dd7ac879ce81c6d0b97d73e831d9adc9a98872082b2c02503aa61b2656b"
+    }
+  ],
+  "regfile_digest": "c61c9377d01087b9ff986c39bf2af1cf451bdeefc40966bb6008e7356561e379",
+  "schema": "evocc.codegen.result.v1",
+  "status": "STEP1_OBSERVED_FULL_WORKSPACE_PENDING"
+}

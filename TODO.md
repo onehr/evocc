@@ -2345,13 +2345,16 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     separately labeled retained-g0 IR object twins and 10 standalone certificate
     replays. Preparation tests: 2,938 PASS / 0 FAIL / 4 ignored; the full gate
     stopped on a capture-test Clippy unwrap warning, now repaired with its
-    focused check green. Full recheck, target-fact migration and cross-revision
-    comparisons remain pending.
+    focused check green. The final full recheck remains pending.
     [Preparation record](docs/notebook/codegen-n03-foundations-20261002.md).
     Step 1 now extracts register pools, views, scratch roles and assembly
     register primitives from one generated description. Focused Rust 43/43,
-    Python 24/24, focused Clippy and formatting pass. Original-object comparisons,
-    instruction/ABI extraction (steps 2–3) and final full gate are not yet closed.
+    Python 24/24, focused Clippy, formatting and regeneration pass on `42a003d2`.
+    All 24 original A/B objects, 12 retained-g0 objects and 384 native objects
+    on each of Darwin/Linux are byte-identical; both native populations execute
+    and agree completely, and 10 standalone g0 certificates replay successfully.
+    [Step-1 record](docs/notebook/codegen-n03a-regfile-20261002.md).
+    Instruction/ABI extraction (steps 2–3) and final full gate remain open.
 
   - [ ] **N03b — TU-local inlining** — `LATER`, P3.
     Size-aware inliner at EvoIR level for TU-local callees, as a validated
