@@ -1,57 +1,57 @@
 version insts.v1
 target aarch64
-sha256 e05e5f3025dcd5d81982ebdd11686c80b9dd2b749a1e2fcb541fcd1365b58816
-inst Floating defs=dst uses=args* rewrite_defs=dst rewrite_uses=args* flags=false discardable=false call=false
-inst Aes defs=dst uses=args* rewrite_defs=dst rewrite_uses=args* flags=false discardable=false call=false
-inst AtomicRmw defs=dst uses=base,value,expected? rewrite_defs=dst rewrite_uses=base,value,expected? flags=false discardable=false call=false
-inst Vector defs=dst uses=args* rewrite_defs=dst rewrite_uses=args* flags=false discardable=false call=false
-inst Atomic defs=value@load uses=value@store,base rewrite_defs=value@load rewrite_uses=value@store,base flags=false discardable=false call=false
-inst Mov defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false
-inst MovImm defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=true call=false
-inst Adrp defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=true call=false
-inst AddPageOff defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false
-inst Adr defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=true call=false
-inst Load defs=dst uses=base rewrite_defs=dst rewrite_uses=base flags=false discardable=false call=false
-inst Store defs=- uses=src,base rewrite_defs=- rewrite_uses=src,base flags=false discardable=false call=false
-inst Binary defs=dst uses=lhs,rhs rewrite_defs=dst rewrite_uses=lhs,rhs flags=false discardable=true call=false
-inst BinaryImm defs=dst uses=lhs rewrite_defs=dst rewrite_uses=lhs flags=false discardable=true call=false
-inst FlagBinary defs=dst,flags uses=lhs,rhs rewrite_defs=dst,flags rewrite_uses=lhs,rhs flags=true discardable=true call=false
-inst WideMultiply defs=dst uses=lhs,rhs rewrite_defs=dst rewrite_uses=lhs,rhs flags=false discardable=true call=false
-inst Msub defs=dst uses=n,m,a rewrite_defs=dst rewrite_uses=n,m,a flags=false discardable=true call=false
-inst Madd defs=dst uses=n,m,a rewrite_defs=dst rewrite_uses=n,m,a flags=false discardable=true call=false
-inst CarryBinary defs=dst uses=flags,lhs,rhs rewrite_defs=dst rewrite_uses=flags,lhs,rhs flags=false discardable=true call=false
-inst AddCarryFlags defs=dst uses=flags_in,lhs,rhs rewrite_defs=dst rewrite_uses=flags_in,lhs,rhs flags=true discardable=true call=false
-inst SubCarryFlags defs=dst uses=flags_in,lhs,rhs rewrite_defs=dst rewrite_uses=flags_in,lhs,rhs flags=true discardable=true call=false
-inst TstImm defs=dst uses=lhs rewrite_defs=dst rewrite_uses=lhs flags=true discardable=true call=false
-inst Unary defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false
-inst Extend defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false
-inst Bfx defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false
-inst Cmp defs=dst uses=lhs,rhs rewrite_defs=dst rewrite_uses=lhs,rhs flags=true discardable=true call=false
-inst CmpImm defs=dst uses=lhs rewrite_defs=dst rewrite_uses=lhs flags=true discardable=true call=false
-inst Cset defs=dst uses=flags rewrite_defs=dst rewrite_uses=flags flags=false discardable=true call=false
-inst Csel defs=dst uses=flags,lhs,rhs rewrite_defs=dst rewrite_uses=flags,lhs,rhs flags=false discardable=true call=false
-inst Bl defs=results* uses=args* rewrite_defs=results* rewrite_uses=args* flags=false discardable=false call=true
-inst Blr defs=results* uses=target,args* rewrite_defs=results* rewrite_uses=target,args* flags=false discardable=false call=true
-inst Ldp defs=rt1,rt2 uses=base rewrite_defs=rt1,rt2 rewrite_uses=base flags=false discardable=false call=false
-inst Stp defs=- uses=rt1,rt2,base rewrite_defs=- rewrite_uses=rt1,rt2,base flags=false discardable=false call=false
-inst SpillStore defs=- uses=src rewrite_defs=- rewrite_uses=src flags=false discardable=false call=false
-inst SpillReload defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false
-inst IncomingArg defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false
-inst OutgoingArg defs=- uses=src rewrite_defs=- rewrite_uses=src flags=false discardable=false call=false
-inst MemCopy defs=- uses=dst,src rewrite_defs=- rewrite_uses=dst,src flags=false discardable=false call=false
-inst FrameSlot defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false
-inst StackAlloc defs=dst uses=size rewrite_defs=dst rewrite_uses=size flags=false discardable=false call=false
-inst StackRelease defs=- uses=address rewrite_defs=- rewrite_uses=address flags=false discardable=false call=false
-inst FrameAddress defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false
-inst IndirectResult defs=- uses=- rewrite_defs=- rewrite_uses=- flags=false discardable=false call=false
-inst FpEnvCheck defs=- uses=- rewrite_defs=- rewrite_uses=- flags=false discardable=false call=false
-inst VaSaveArea defs=- uses=- rewrite_defs=- rewrite_uses=- flags=false discardable=false call=false
-inst Asm defs=body.outputs.nonmemory uses=body.inputs.reg,body.outputs.read rewrite_defs=body.outputs.definition,body.inputs.definition rewrite_uses=body.outputs.nondefinition,body.inputs.nondefinition flags=body.flags discardable=false call=false
-term Indirect uses=target,edges.args* rewrite_uses=target,edges.args* edges=edges* exit=false
-term B uses=args* rewrite_uses=- edges=target:args exit=false
-term BCond uses=flags,taken_args*,untaken_args* rewrite_uses=flags edges=taken:taken_args,untaken:untaken_args exit=false
-term Cb uses=src,taken_args*,untaken_args* rewrite_uses=src edges=taken:taken_args,untaken:untaken_args exit=false
-term Tb uses=src,taken_args*,untaken_args* rewrite_uses=src edges=taken:taken_args,untaken:untaken_args exit=false
-term Ret uses=values* rewrite_uses=values* edges=- exit=true
-term Brk uses=- rewrite_uses=- edges=- exit=true
-term AsmGoto uses=body.inputs.reg,body.outputs.read,labels.args*,fallthrough_args* rewrite_uses=body.outputs.reg,body.inputs.reg edges=labels*,fallthrough:fallthrough_args exit=false
+sha256 e43fc29338ca6e8edf08eeb2a97de3ee92b803472a36ba1c537f66cd0e039bb4
+inst Floating defs=dst uses=args* rewrite_defs=dst rewrite_uses=args* flags=false discardable=false call=false copy=- fixed=false
+inst Aes defs=dst uses=args* rewrite_defs=dst rewrite_uses=args* flags=false discardable=false call=false copy=- fixed=false
+inst AtomicRmw defs=dst uses=base,value,expected? rewrite_defs=dst rewrite_uses=base,value,expected? flags=false discardable=false call=false copy=- fixed=false
+inst Vector defs=dst uses=args* rewrite_defs=dst rewrite_uses=args* flags=false discardable=false call=false copy=- fixed=false
+inst Atomic defs=value@load uses=value@store,base rewrite_defs=value@load rewrite_uses=value@store,base flags=false discardable=false call=false copy=- fixed=false
+inst Mov defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false copy=dst:src fixed=false
+inst MovImm defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=true call=false copy=- fixed=false
+inst Adrp defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=true call=false copy=- fixed=false
+inst AddPageOff defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false copy=- fixed=false
+inst Adr defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=true call=false copy=- fixed=false
+inst Load defs=dst uses=base rewrite_defs=dst rewrite_uses=base flags=false discardable=false call=false copy=- fixed=false
+inst Store defs=- uses=src,base rewrite_defs=- rewrite_uses=src,base flags=false discardable=false call=false copy=- fixed=false
+inst Binary defs=dst uses=lhs,rhs rewrite_defs=dst rewrite_uses=lhs,rhs flags=false discardable=true call=false copy=- fixed=false
+inst BinaryImm defs=dst uses=lhs rewrite_defs=dst rewrite_uses=lhs flags=false discardable=true call=false copy=- fixed=false
+inst FlagBinary defs=dst,flags uses=lhs,rhs rewrite_defs=dst,flags rewrite_uses=lhs,rhs flags=true discardable=true call=false copy=- fixed=false
+inst WideMultiply defs=dst uses=lhs,rhs rewrite_defs=dst rewrite_uses=lhs,rhs flags=false discardable=true call=false copy=- fixed=false
+inst Msub defs=dst uses=n,m,a rewrite_defs=dst rewrite_uses=n,m,a flags=false discardable=true call=false copy=- fixed=false
+inst Madd defs=dst uses=n,m,a rewrite_defs=dst rewrite_uses=n,m,a flags=false discardable=true call=false copy=- fixed=false
+inst CarryBinary defs=dst uses=flags,lhs,rhs rewrite_defs=dst rewrite_uses=flags,lhs,rhs flags=false discardable=true call=false copy=- fixed=false
+inst AddCarryFlags defs=dst uses=flags_in,lhs,rhs rewrite_defs=dst rewrite_uses=flags_in,lhs,rhs flags=true discardable=true call=false copy=- fixed=false
+inst SubCarryFlags defs=dst uses=flags_in,lhs,rhs rewrite_defs=dst rewrite_uses=flags_in,lhs,rhs flags=true discardable=true call=false copy=- fixed=false
+inst TstImm defs=dst uses=lhs rewrite_defs=dst rewrite_uses=lhs flags=true discardable=true call=false copy=- fixed=false
+inst Unary defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false copy=- fixed=false
+inst Extend defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false copy=- fixed=false
+inst Bfx defs=dst uses=src rewrite_defs=dst rewrite_uses=src flags=false discardable=true call=false copy=- fixed=false
+inst Cmp defs=dst uses=lhs,rhs rewrite_defs=dst rewrite_uses=lhs,rhs flags=true discardable=true call=false copy=- fixed=false
+inst CmpImm defs=dst uses=lhs rewrite_defs=dst rewrite_uses=lhs flags=true discardable=true call=false copy=- fixed=false
+inst Cset defs=dst uses=flags rewrite_defs=dst rewrite_uses=flags flags=false discardable=true call=false copy=- fixed=false
+inst Csel defs=dst uses=flags,lhs,rhs rewrite_defs=dst rewrite_uses=flags,lhs,rhs flags=false discardable=true call=false copy=- fixed=false
+inst Bl defs=results* uses=args* rewrite_defs=results* rewrite_uses=args* flags=false discardable=false call=true copy=- fixed=false
+inst Blr defs=results* uses=target,args* rewrite_defs=results* rewrite_uses=target,args* flags=false discardable=false call=true copy=- fixed=false
+inst Ldp defs=rt1,rt2 uses=base rewrite_defs=rt1,rt2 rewrite_uses=base flags=false discardable=false call=false copy=- fixed=false
+inst Stp defs=- uses=rt1,rt2,base rewrite_defs=- rewrite_uses=rt1,rt2,base flags=false discardable=false call=false copy=- fixed=false
+inst SpillStore defs=- uses=src rewrite_defs=- rewrite_uses=src flags=false discardable=false call=false copy=- fixed=false
+inst SpillReload defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false
+inst IncomingArg defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false
+inst OutgoingArg defs=- uses=src rewrite_defs=- rewrite_uses=src flags=false discardable=false call=false copy=- fixed=false
+inst MemCopy defs=- uses=dst,src rewrite_defs=- rewrite_uses=dst,src flags=false discardable=false call=false copy=- fixed=false
+inst FrameSlot defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false
+inst StackAlloc defs=dst uses=size rewrite_defs=dst rewrite_uses=size flags=false discardable=false call=false copy=- fixed=false
+inst StackRelease defs=- uses=address rewrite_defs=- rewrite_uses=address flags=false discardable=false call=false copy=- fixed=false
+inst FrameAddress defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false
+inst IndirectResult defs=- uses=- rewrite_defs=- rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false
+inst FpEnvCheck defs=- uses=- rewrite_defs=- rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false
+inst VaSaveArea defs=- uses=- rewrite_defs=- rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false
+inst Asm defs=body.outputs.nonmemory uses=body.inputs.reg,body.outputs.read rewrite_defs=body.outputs.definition,body.inputs.definition rewrite_uses=body.outputs.nondefinition,body.inputs.nondefinition flags=body.flags discardable=false call=false copy=- fixed=body.fixed
+term Indirect uses=target,edges.args* rewrite_uses=target,edges.args* edges=edges* exit=false indirect=target forwarding=true jump=-
+term B uses=args* rewrite_uses=- edges=target:args exit=false indirect=- forwarding=false jump=target:args
+term BCond uses=flags,taken_args*,untaken_args* rewrite_uses=flags edges=taken:taken_args,untaken:untaken_args exit=false indirect=- forwarding=false jump=-
+term Cb uses=src,taken_args*,untaken_args* rewrite_uses=src edges=taken:taken_args,untaken:untaken_args exit=false indirect=- forwarding=false jump=-
+term Tb uses=src,taken_args*,untaken_args* rewrite_uses=src edges=taken:taken_args,untaken:untaken_args exit=false indirect=- forwarding=false jump=-
+term Ret uses=values* rewrite_uses=values* edges=- exit=true indirect=- forwarding=false jump=-
+term Brk uses=- rewrite_uses=- edges=- exit=true indirect=- forwarding=false jump=-
+term AsmGoto uses=body.inputs.reg,body.outputs.read,labels.args*,fallthrough_args* rewrite_uses=body.outputs.reg,body.inputs.reg edges=labels*,fallthrough:fallthrough_args exit=false indirect=- forwarding=true jump=-

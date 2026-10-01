@@ -375,8 +375,8 @@ TERMINATOR_SHAPES = {
     "Brk": "",
     "AsmGoto": "body:a labels:e fallthrough:t fallthrough_args:v",
 }
-INST_COLUMNS = ("defs", "uses", "rewrite_defs", "rewrite_uses", "flags", "discardable", "call")
-TERM_COLUMNS = ("uses", "rewrite_uses", "edges", "exit")
+INST_COLUMNS = ("defs", "uses", "rewrite_defs", "rewrite_uses", "flags", "discardable", "call", "copy", "fixed")
+TERM_COLUMNS = ("uses", "rewrite_uses", "edges", "exit", "indirect", "forwarding", "jump")
 ASSEMBLY_FILTERS = {
     "reg": None,
     "nonmemory": "!matches!(operand.constraint, AsmConstraint::Memory { .. })",
@@ -495,7 +495,7 @@ def validate_instructions(description: InstructionDescription):
             for key in ("defs", "uses", "rewrite_defs", "rewrite_uses"):
                 if key in row:
                     validate_operand(row[key], shape)
-            for key in ("discardable", "call", "exit"):
+            for key in ("discardable", "call", "exit", "forwarding"):
                 if key in row and row[key] not in ("true", "false"):
                     raise TargetDescriptionError(f"invalid {key} fact: {name}")
             if "flags" in row and row["flags"] not in ("true", "false"):
@@ -503,6 +503,22 @@ def validate_instructions(description: InstructionDescription):
                     raise TargetDescriptionError(f"invalid flags fact: {name}")
             if "edges" in row:
                 validate_edges(row["edges"], shape)
+            if "fixed" in row and row["fixed"] != "false":
+                if row["fixed"] != "body.fixed" or shape.get("body") != "a":
+                    raise TargetDescriptionError(f"invalid fixed binding fact: {name}")
+            if "indirect" in row and row["indirect"] != "-":
+                if shape.get(row["indirect"]) != "r":
+                    raise TargetDescriptionError(f"invalid indirect target: {name}")
+            for key, kinds in (("copy", ("r", "r")), ("jump", ("t", "v"))):
+                if key in row and row[key] != "-":
+                    fields = row[key].split(":")
+                    if (len(fields) != 2 or len(set(fields)) != 2
+                            or tuple(shape.get(field) for field in fields) != kinds
+                            or set(fields) != set(shape)):
+                        raise TargetDescriptionError(f"invalid {key} constructor: {name}")
+    for rows, key in ((description.instructions, "copy"), (description.terminators, "jump")):
+        if sum(row[key] != "-" for row in rows.values()) != 1:
+            raise TargetDescriptionError(f"expected exactly one {key} constructor")
 
 
 def bound_fields(selector: str) -> set[str]:
@@ -629,11 +645,91 @@ def render_bool_method(name: str, column: str, rows: dict) -> str:
     return "".join(out)
 
 
+def render_constructor(name: str, column: str, rows: dict, parameters: str, values: tuple[str, str]) -> str:
+    family, row = next((family, row) for family, row in rows.items() if row[column] != "-")
+    fields = row[column].split(":")
+    members = ", ".join(field if field == value else f"{field}: {value}" for field, value in zip(fields, values))
+    return f"    fn {name}({parameters}) -> Self {{\n        Self::{family} {{ {members} }}\n    }}\n"
+
+
+def render_edge_mutation(rows: dict, retarget: bool) -> str:
+    if retarget:
+        out = ["    fn retarget(&mut self, from: usize, to: u32) {\n"
+               "        let mut index = 0;\n"
+               "        let mut visit = |target: &mut u32, args: &mut Vec<VReg>| {\n"
+               "            if index == from {\n                *target = to;\n                args.clear();\n            }\n"
+               "            index += 1;\n        };\n        match self {\n"]
+    else:
+        out = ["    fn clear_edge_args(&mut self) {\n        match self {\n"]
+    for family, row in rows.items():
+        parts = operand_parts(row["edges"])
+        if retarget and row["indirect"] != "-":
+            pattern = inst_pattern(family, set())
+            expression = 'unreachable!("computed edges cannot be retargeted without address routing")'
+        else:
+            fields = set()
+            statements = []
+            for part in parts:
+                if part.endswith("*"):
+                    field_name = part[:-1]
+                    fields.add(field_name)
+                    action = "visit(target, args);" if retarget else "args.clear();"
+                    target = "target" if retarget else "_"
+                    statements.append(f"for ({target}, args) in {field_name} {{ {action} }}")
+                else:
+                    target, args = part.split(":")
+                    fields.add(args)
+                    if retarget:
+                        fields.add(target)
+                        statements.append(f"visit({target}, {args});")
+                    else:
+                        statements.append(f"{args}.clear();")
+            pattern = inst_pattern(family, fields)
+            expression = "{ " + " ".join(statements) + " }" if statements else "{}"
+        out.append(f"            {pattern} => {expression},\n")
+    out.append("        }\n    }\n")
+    return "".join(out)
+
+
+def render_ssa(description: InstructionDescription) -> str:
+    out = ["\n#[rustfmt::skip]\nimpl SsaInst for MInst {\n"]
+    out.append(render_constructor("copy", "copy", description.instructions, "dst: Self::Reg, src: Self::Reg", ("dst", "src")))
+    out.append("\n    fn has_fixed_binding(&self) -> bool {\n        match self {\n")
+    for family, row in description.instructions.items():
+        fixed = row["fixed"] == "body.fixed"
+        pattern = inst_pattern(family, {"body"} if fixed else set())
+        expression = "body.numbered().iter().any(|operand| operand.fixed_register.is_some())" if fixed else "false"
+        out.append(f"            {pattern} => {expression},\n")
+    out.append("        }\n    }\n}\n")
+    out.append("\n#[rustfmt::skip]\nimpl SsaTerm for MTerm {\n")
+    out.append("    fn indirect_target(&self) -> Option<Self::Reg> {\n        match self {\n")
+    for family, row in description.terminators.items():
+        field_name = row["indirect"]
+        fields = {field_name} if field_name != "-" else set()
+        expression = f"Some(*{field_name})" if fields else "None"
+        out.append(f"            {inst_pattern(family, fields)} => {expression},\n")
+    out.append("        }\n    }\n")
+    out.append("\n    fn set_indirect_target(&mut self, reg: Self::Reg) {\n        match self {\n")
+    for family, row in description.terminators.items():
+        field_name = row["indirect"]
+        fields = {field_name} if field_name != "-" else set()
+        expression = f"*{field_name} = reg" if fields else "{}"
+        out.append(f"            {inst_pattern(family, fields)} => {expression},\n")
+    out.append("        }\n    }\n")
+    out.append("\n" + render_edge_mutation(description.terminators, False))
+    out.append("\n" + render_edge_mutation(description.terminators, True))
+    out.append("\n" + render_constructor("jump", "jump", description.terminators, "target: u32, args: Vec<Self::Reg>", ("target", "args")))
+    out.append("\n" + render_bool_method("prevents_forwarding", "forwarding", description.terminators))
+    out.append("}\n")
+    return "".join(out)
+
+
 def render_instructions(description: InstructionDescription) -> str:
     out = [
         "// Generated by tools/generate-target.py; do not edit.\n",
         f"// Source: targets/aarch64/insts; sha256 {description.digest}.\n\n",
         "use crate::generic::machine::{MachInst, MachTerm};\n",
+        "use crate::generic::ssa::{SsaInst, SsaTerm};\n",
         "use crate::{\n    AsmBody, AsmClobber, AsmConstraint, AsmDirection, AsmOperand, AsmValue, MInst, MTerm, VReg,\n};\n\n",
         constant("DESCRIPTION_DIGEST", "&str", f'"{description.digest}"'),
     ]
@@ -690,6 +786,7 @@ def render_instructions(description: InstructionDescription) -> str:
     exits = [inst_pattern(family, set(), "MTerm") for family, row in description.terminators.items() if row["exit"] == "true"]
     expression = "matches!(term, " + " | ".join(exits) + ")" if exits else "false"
     out.append(f"\n#[rustfmt::skip]\npub const fn is_exit(term: &MTerm) -> bool {{\n    {expression}\n}}\n")
+    out.append(render_ssa(description))
     return "".join(out)
 
 def main() -> int:

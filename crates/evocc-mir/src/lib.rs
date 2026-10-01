@@ -112,16 +112,11 @@ impl RegClass {
 }
 
 /// A virtual register: the pre-allocation operand form of Section 2.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct VReg {
-    pub id: u32,
-    pub class: RegClass,
-}
+pub type VReg = generic::register::VirtualReg<RegClass>;
 
-impl VReg {
-    #[must_use]
-    pub const fn new(id: u32, class: RegClass) -> Self {
-        Self { id, class }
+impl generic::register::RegisterClass for RegClass {
+    fn is_flags(self) -> bool {
+        self == Self::Flags
     }
 }
 
@@ -1606,20 +1601,10 @@ pub enum MTerm {
 }
 
 /// A basic block: label, block arguments, instructions and one terminator.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MBlock {
-    pub id: u32,
-    pub args: Vec<VReg>,
-    pub insts: Vec<MInst>,
-    pub term: MTerm,
-}
+pub type MBlock = generic::machine::MachineBlock<MInst, MTerm, RegClass>;
 
 /// A function: a list of basic blocks in the order of its EvoIR source.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MFunction {
-    pub name: String,
-    pub blocks: Vec<MBlock>,
-}
+pub type MFunction = generic::machine::MachineFunction<MInst, MTerm, RegClass>;
 
 /// A module: the global objects of Section 8 and the functions.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

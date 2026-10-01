@@ -2354,6 +2354,16 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     on each of Darwin/Linux are byte-identical; both native populations execute
     and agree completely, and 10 standalone g0 certificates replay successfully.
     [Step-1 record](docs/notebook/codegen-n03a-regfile-20261002.md).
+    Step 2a at `cb65735d` shares generated operand/edge, call/flags and exact
+    DCE facts across existing consumers (46 instruction and 8 terminator
+    families). Focused Rust 57/57, Python 33/33, Clippy and regeneration pass;
+    the first generated-local-name collision is retained with its regression.
+    This is a facts facade, not generic allocation acceptance. The separate
+    synthetic-ISA SSA tests first failed on the absent shared containers and
+    algorithm interface. Step 2b now moves the actual forwarding, critical-edge,
+    parallel-copy and DCE algorithms into generic code, preserving public aliases
+    and debug text. Its focused Rust run passes 65/65 and Python 33/33; allocation,
+    independent verification and step-2 object comparisons are still pending.
     Instruction/ABI extraction (steps 2–3) and final full gate remain open.
 
   - [ ] **N03b — TU-local inlining** — `LATER`, P3.

@@ -3,6 +3,47 @@
 //! Semantic reads and mutable occurrences are distinct: a read-write operand
 //! can read and define a value while still occupying only one mutable slot.
 
+use super::register::VirtualReg;
+
+/// Blocks retain source order, explicit arguments and one target terminator.
+#[derive(Clone, PartialEq, Eq)]
+pub struct MachineBlock<I, T, C> {
+    pub id: u32,
+    pub args: Vec<VirtualReg<C>>,
+    pub insts: Vec<I>,
+    pub term: T,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct MachineFunction<I, T, C> {
+    pub name: String,
+    pub blocks: Vec<MachineBlock<I, T, C>>,
+}
+
+impl<I: std::fmt::Debug, T: std::fmt::Debug, C: std::fmt::Debug> std::fmt::Debug
+    for MachineBlock<I, T, C>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MBlock")
+            .field("id", &self.id)
+            .field("args", &self.args)
+            .field("insts", &self.insts)
+            .field("term", &self.term)
+            .finish()
+    }
+}
+
+impl<I: std::fmt::Debug, T: std::fmt::Debug, C: std::fmt::Debug> std::fmt::Debug
+    for MachineFunction<I, T, C>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MFunction")
+            .field("name", &self.name)
+            .field("blocks", &self.blocks)
+            .finish()
+    }
+}
+
 pub trait MachInst {
     type Reg: Copy;
 
