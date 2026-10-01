@@ -10,7 +10,7 @@
 //! the same EvoIR text produce the same EvoMIR text, byte for byte." Nothing
 //! below reads a hash map in iteration order, a clock, or an address.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 mod quad;
 
 use evocc_evoir::{
@@ -128,9 +128,66 @@ pub fn lower_module_for_profile(
     external: &dyn Fn(&str) -> bool,
     ub_checks: UbCheckProfile,
 ) -> Result<MModule, Vec<Refusal>> {
+    lower_module_with_guard_control(target, module, external, ub_checks, &BTreeMap::new())
+}
+
+/// UNVERIFIED_DIAGNOSTIC, not a certified lowering or a driver profile.
+/// Callers may measure object size only; artifacts cannot be installed or PASS.
+pub fn lower_module_for_guard_attribution(
+    target: Target,
+    module: &Module,
+    external: &dyn Fn(&str) -> bool,
+    true_predicates: &BTreeMap<String, BTreeSet<u32>>,
+) -> Result<MModule, Vec<Refusal>> {
+    lower_module_with_guard_control(
+        target,
+        module,
+        external,
+        UbCheckProfile::Checked,
+        true_predicates,
+    )
+}
+
+fn lower_module_with_guard_control(
+    target: Target,
+    module: &Module,
+    external: &dyn Fn(&str) -> bool,
+    ub_checks: UbCheckProfile,
+    true_predicates: &BTreeMap<String, BTreeSet<u32>>,
+) -> Result<MModule, Vec<Refusal>> {
     let mut refusals = Vec::new();
     for function in &module.functions {
         scan_function(target, module, function, &mut refusals);
+        if let Some(claimed) = true_predicates.get(&function.name) {
+            let actual: BTreeSet<_> = function
+                .blocks
+                .iter()
+                .flat_map(|b| &b.insts)
+                .filter(|i| {
+                    matches!(
+                        i,
+                        Inst::DivisorNonZero(..)
+                            | Inst::SignedDivRemNoOverflow(..)
+                            | Inst::SignedAddDefined(..)
+                            | Inst::SignedSubDefined(..)
+                            | Inst::SignedMulDefined(..)
+                            | Inst::ShiftCountDefined { .. }
+                    )
+                })
+                .flat_map(evocc_evoir::inst_results)
+                .map(|v| v.id)
+                .collect();
+            if !claimed.is_subset(&actual) {
+                refusals.push(Refusal {
+                    function: function.name.clone(),
+                    block: function.blocks.first().map_or(0, |b| b.id),
+                    index: 0,
+                    code: E4009.0,
+                    name: E4009.1,
+                    detail: "guard attribution contains a non-predicate result".into(),
+                });
+            }
+        }
     }
     if !refusals.is_empty() {
         return Err(refusals);
@@ -150,7 +207,17 @@ pub fn lower_module_for_profile(
 
     let mut functions = Vec::new();
     for function in &module.functions {
-        match lower_function(target, &signatures, function, &crosses, ub_checks) {
+        match lower_function(
+            target,
+            &signatures,
+            function,
+            &crosses,
+            ub_checks,
+            true_predicates
+                .get(&function.name)
+                .cloned()
+                .unwrap_or_default(),
+        ) {
             Ok(lowered) => functions.push(lowered),
             Err(detail) => refusals.push(Refusal {
                 function: function.name.clone(),
@@ -850,6 +917,7 @@ fn unsupported_access(ty: &EvoIRType) -> Option<String> {
 
 struct Lowerer {
     ub_checks: UbCheckProfile,
+    diagnostic_true_predicates: BTreeSet<u32>,
     dynamic_addresses: HashSet<u32>,
     access_alignments: HashMap<u32, u32>,
     function_name: String,
@@ -1580,6 +1648,7 @@ fn lower_function(
     function: &Function,
     external: &dyn Fn(&str) -> bool,
     ub_checks: UbCheckProfile,
+    diagnostic_true_predicates: BTreeSet<u32>,
 ) -> Result<MFunction, String> {
     let entry = function
         .blocks
@@ -1595,6 +1664,7 @@ fn lower_function(
 
     let mut lowerer = Lowerer {
         ub_checks,
+        diagnostic_true_predicates,
         dynamic_addresses: dynamic_addresses(function),
         access_alignments: HashMap::new(),
         function_name: function.name.clone(),
@@ -1885,6 +1955,9 @@ fn lower_block(
             continue;
         }
         if let Inst::UbAssume(condition, reason) = inst {
+            if lowerer.diagnostic_true_predicates.contains(&condition.id) {
+                continue;
+            }
             if lowerer.ub_checks == UbCheckProfile::Unchecked {
                 continue;
             }
@@ -2308,7 +2381,18 @@ fn lower_block(
             }
         }
 
-        if let Some(length) =
+        if let Some(value) = evocc_evoir::inst_results(inst)
+            .first()
+            .filter(|v| lowerer.diagnostic_true_predicates.contains(&v.id))
+        {
+            // Diagnostic only: retain every other data user of the predicate.
+            let result = lowerer.fresh(RegClass::Gpr32);
+            lowerer.bind(value, result);
+            insts.push(MInst::MovImm {
+                dst: result,
+                imm: 1,
+            });
+        } else if let Some(length) =
             lower_compared_selection(lowerer, &mut insts, block, &use_counts, index)?
         {
             selected_until = index + length;

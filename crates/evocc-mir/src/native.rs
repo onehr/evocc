@@ -113,6 +113,34 @@ pub fn compile_module_with_options(
     relocation: RelocationModel,
     options: &crate::emit::CodegenOptions,
 ) -> Result<String, NativeStop> {
+    compile_module_with_guard_control(target, module, keep, relocation, options, None)
+}
+
+/// Size-attribution only. Not certificate-admitted, installable or PASS-eligible.
+/// Uses the ordinary Linux backend with checked obligations and common DCE.
+pub fn compile_module_for_guard_attribution(
+    module: &Module,
+    true_predicates: &std::collections::BTreeMap<String, std::collections::BTreeSet<u32>>,
+) -> Result<String, NativeStop> {
+    let assembly = compile_module_with_guard_control(
+        Target::Linux,
+        module,
+        &|_| true,
+        RelocationModel::PositionIndependent,
+        &crate::emit::CodegenOptions::default(),
+        Some(true_predicates),
+    )?;
+    Ok(format!("// UNVERIFIED_DIAGNOSTIC: NON_INSTALLABLE, NOT_PASS_ELIGIBLE\n{assembly}\n.section .note.evocc.unverified,\"\",%progbits\n.asciz \"UNVERIFIED_DIAGNOSTIC_NON_INSTALLABLE\"\n"))
+}
+
+fn compile_module_with_guard_control(
+    target: Target,
+    module: &Module,
+    keep: &dyn Fn(&str) -> bool,
+    relocation: RelocationModel,
+    options: &crate::emit::CodegenOptions,
+    true_predicates: Option<&std::collections::BTreeMap<String, std::collections::BTreeSet<u32>>>,
+) -> Result<String, NativeStop> {
     if target != Target::Linux && (options.function_sections || options.data_sections) {
         return Err(NativeStop::Assembly(
             "individual function/data sections require the Linux ELF target".into(),
@@ -160,14 +188,22 @@ pub fn compile_module_with_options(
     // either refuse or leave an undefined symbol in the object.
     let emitted = emitted_functions(module);
     let keep = &move |name: &str| keep(name) && emitted.contains(name);
-    let lowered = lower_module_for_profile(target, module, &|name| !keep(name), options.ub_checks)
-        .map_err(|refusals| {
-            let mut codes: Vec<&'static str> =
-                refusals.iter().map(|refusal| refusal.code).collect();
-            codes.sort_unstable();
-            codes.dedup();
-            NativeStop::Lowering(codes)
-        })?;
+    let lowered = if let Some(claimed) = true_predicates {
+        crate::lower::lower_module_for_guard_attribution(
+            target,
+            module,
+            &|name| !keep(name),
+            claimed,
+        )
+    } else {
+        lower_module_for_profile(target, module, &|name| !keep(name), options.ub_checks)
+    }
+    .map_err(|refusals| {
+        let mut codes: Vec<&'static str> = refusals.iter().map(|refusal| refusal.code).collect();
+        codes.sort_unstable();
+        codes.dedup();
+        NativeStop::Lowering(codes)
+    })?;
     let mut functions = Vec::new();
     for function in &lowered.functions {
         if !keep(&function.name) {

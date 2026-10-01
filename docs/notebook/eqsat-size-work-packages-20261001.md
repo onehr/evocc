@@ -15,7 +15,7 @@ bytes enter the verified-EqSat numerator. No cross-family averages.
 | S1 | [framing revision 7 §5.5](../framing-draft.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `04fec0d7`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
 | S2 | [DCE attribution plan](../../tests/contracts/eqsat-size-dce-20261001.json), same A/B verified IR; common backend DCE | DONE. Implementation `e625b89c`; measurement closeout is this record's commit. Existing baseline confirmed, not newly credited to EqSat. Final allocated MIR retains the separately disclosed unused-parameter copies. |
 | S3 | [Existing-capture size ranking](../../tests/contracts/eqsat-size-policy-ranking-20261001.json), no new evaluation | DONE, this ranking record's commit. Size verdict only FINITE_ENUMERATION_SUFFICIENT or NO_OBSERVABLE_EFFECT; does not reopen R03a. |
-| S4 | Existing guard forms / known bits, MIR diagnostic first | Pending S3. UNVERIFIED_DIAGNOSTIC is non-installable and never PASS. Stop if its ceiling is below the order of post-S2 EqSat savings; otherwise submit the independent semantic/checker/Lean delta. |
+| S4 | Existing guard forms / known bits, MIR diagnostic first | Diagnostic implemented and full-workspace green; object measurement pending. UNVERIFIED_DIAGNOSTIC is non-installable and never PASS. Stop if its ceiling is below the order of post-S2 EqSat savings; otherwise submit the independent semantic/checker/Lean delta. |
 | S5 | Six original TUs and full applications, GCC14/Clang19 `-Os`/`-O2` | Pending S4. Honest size gap, not parity or latency. |
 | S6 | G2 vmlinux `.text` alongside R01's two builds | Pending R01; no separate kernel campaign is authorized by this package. |
 
@@ -212,3 +212,21 @@ negatively. Otherwise the measured ceiling permits only the separate §7/§9
 predicate/obligation semantic delta, independent checker and Lean work, not
 verified-byte claims or production activation. Unsupported/retained coverage
 must be reported, so a weak diagnostic cannot masquerade as an exhaustive proof.
+
+The missing diagnostic API first failed the focused RED. The implementation
+uses the existing fact transfers and seed analysis in `guard_attribution.rs`,
+with a MIR-only lowering control and `evo-guard-size` adapter. The production
+driver has no new guard-folding option. A predicate's other data users remain;
+unproved guards and poison-tainted predicates are retained. Tests enumerate all
+known-bit fact cubes for widths 1..4 and independently check every represented
+arithmetic input; shift tests keep the count's own width and signedness. These
+are diagnostic tests, not Lean proofs or certificates.
+
+The six added focused tests pass. Acceptance before measurement:
+`tools/gate-changed.sh --full-workspace --offline --locked -j1`, **369 Rust suites,
+2,870 PASS / 0 FAIL / 4 ignored**, Clippy with warnings denied and formatting PASS;
+log `.evidence/eqsat-size/full-workspace-S4-diagnostic.log`. Failed RED/build
+attempts are retained. The [committed S4 plan](../../tests/contracts/eqsat-size-guards-20261001.json)
+binds the exact tools, B inputs and S2 controls. This acceptance establishes
+diagnostic plumbing and ordinary regression coverage only: S4 and R02e are not
+closed and no guard-folding byte is verified EqSat benefit.

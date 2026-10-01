@@ -7,6 +7,7 @@
 mod chain;
 mod eligibility;
 mod evp1;
+mod guard_attribution;
 pub mod known_bits;
 mod persistent;
 pub mod policy;
@@ -15,6 +16,7 @@ mod seed_facts;
 
 pub use chain::*;
 pub use evp1::*;
+pub use guard_attribution::{guard_size_attribution, GuardSizeAttribution};
 pub use persistent::*;
 pub use policy::{
     policy_by_name, shipped_policies, CostAxis, CostFunction, CostModel, ExtractionPolicy,

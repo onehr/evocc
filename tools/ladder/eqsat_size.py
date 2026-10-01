@@ -145,3 +145,94 @@ def run_dce_attribution(plan, root):
                 runner.run('stop-size-vm', [tools['container'], 'stop', vm])
             save()
         return directory, receipt
+
+
+def run_guard_attribution(plan, root):
+    """S4 object-size diagnostic only: no link, execution or installation."""
+    root, plan = Path(root).resolve(), Path(plan).resolve()
+    raw, m = plan.read_bytes(), load(plan)
+    require(m['schema'] == 'evocc-guard-size-plan-v1' and m['phase'] == 'S4',
+            'not the committed S4 diagnostic plan')
+    require(subprocess.check_output(['git', 'show', 'HEAD:'+plan.relative_to(root).as_posix()], cwd=root) == raw,
+            'commit the guard plan before execution')
+    tools = {k: (root/v['path']).resolve() for k, v in m['tools'].items()}
+    for name, path in tools.items():
+        require(digest(path.read_bytes()) == m['tools'][name]['sha256'], 'guard tool changed: '+name)
+    for name, expected in m['inputs'].items():
+        require(digest((root/name).read_bytes()) == expected, 'guard input changed: '+name)
+    resources = m['resources']
+    require(resources['jobs'] == 1 and resources['min_free_bytes'] >= 8*1024**3
+            and resources['max_retained_bytes'] <= 256*1024**2, 'unbounded guard diagnostic')
+    require(shutil.disk_usage(root).free >= resources['min_free_bytes'], 'guard disk reserve unavailable')
+    with (root/'.build/bench.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        directory = Path(tempfile.mkdtemp(prefix='S4-', dir=root/'.evidence/eqsat-size'))
+        (directory/'manifest.json').write_bytes(raw)
+        receipt = dict(schema='evocc-guard-size-receipt-v1', status='STARTED',
+            manifest_digest=digest(raw), attempts=[], units=[], families=[],
+            installable=False, pass_eligible=False, native_executions=0, timing='NOT_RUN')
+
+        def save():
+            pending = directory/'receipt.json.pending'
+            pending.write_bytes(json.dumps(receipt, indent=2, sort_keys=True).encode()+b'\n')
+            pending.replace(directory/'receipt.json')
+
+        runner = Capture(directory, resources, dict(os.environ), receipt, save)
+        vm, started = directory.name.lower(), False
+        save()
+        try:
+            image = runner.run('image', [tools['container'], 'image', 'inspect', m['image']['name']])
+            require(load(directory/image['stdout'])[0]['id'] == m['image']['digest'], 'guard image changed')
+            runner.run('start-object-vm', [tools['container'], 'run', '--rm', '-d', '--name', vm,
+                '--cpus', '2', '--memory', '3G', '--read-only', '--tmpfs', '/tmp', '--no-dns',
+                '--mount', f'type=bind,source={root},target=/work,readonly',
+                '--mount', f'type=bind,source={directory},target=/runwork',
+                m['image']['name'], '/bin/sleep', '3600'])
+            started = True
+            for n, unit in enumerate(m['units']):
+                ir = root/unit['ir']
+                control = runner.run('unchanged-production:'+unit['source'],
+                    [tools['backend'], 'linux-aarch64', digest(ir.read_bytes()), ir, '--ub-checks=checked'])
+                require((directory/control['stdout']).read_bytes() == (root/unit['baseline_assembly']).read_bytes(),
+                        'ordinary checked assembly changed before guard attribution')
+                assemblies, reports, objects = [], [], []
+                for repeat in (0, 1):
+                    row = runner.run('diagnostic:'+unit['source']+':'+str(repeat),
+                        [tools['guard_backend'], digest(ir.read_bytes()), ir])
+                    assemblies.append((directory/row['stdout']).read_bytes())
+                    reports.append(load(directory/row['stderr']))
+                    require(reports[-1]['status'] == 'UNVERIFIED_DIAGNOSTIC'
+                            and reports[-1]['installable'] is False and reports[-1]['pass_eligible'] is False,
+                            'diagnostic artifact lost its non-installable scope')
+                    asm, obj = directory/f'{n:02}-{repeat}.s', directory/f'{n:02}-{repeat}.o'
+                    asm.write_bytes(assemblies[-1])
+                    runner.run('assemble-diagnostic:'+unit['source']+':'+str(repeat),
+                        [tools['container'], 'exec', vm, '/usr/bin/gcc-14', '-c', '-x', 'assembler',
+                         '/runwork/'+asm.name, '-o', '/runwork/'+obj.name])
+                    objects.append(obj)
+                require(assemblies[0] == assemblies[1] and reports[0] == reports[1], 'unstable diagnostic lowering')
+                require_identical_objects(objects[0].read_bytes(), objects[1].read_bytes())
+                baseline = inspect_object_size((root/unit['baseline_object']).read_bytes())
+                measured = inspect_object_size(objects[0].read_bytes())
+                recovered = baseline['text_bytes']-measured['text_bytes']
+                receipt['units'].append(dict(case=unit['case'], source=unit['source'],
+                    baseline=baseline, diagnostic=measured, report=reports[0],
+                    object=objects[0].relative_to(root).as_posix(), two_builds='BYTE_IDENTICAL',
+                    recovered_text_bytes=recovered, recovered_percent=100*recovered/baseline['text_bytes']))
+                save()
+            for case, eqsat_saving in m['post_s2_checked_savings'].items():
+                units = [u for u in receipt['units'] if u['case'] == case]
+                recovered = sum(u['recovered_text_bytes'] for u in units)
+                receipt['families'].append(dict(case=case, recovered_text_bytes=recovered,
+                    post_s2_eqsat_saving=eqsat_saving, ratio=recovered/eqsat_saving))
+            receipt['stop_decision'] = 'CLOSE_NEGATIVE' if all(
+                f['ratio'] < 0.1 for f in receipt['families']) else 'REQUIRES_REVIEWED_SEMANTIC_SLICE'
+            receipt['status'] = 'UNVERIFIED_DIAGNOSTIC'
+        except BaseException as error:
+            receipt.update(status='FAILED', error=str(error))
+            raise
+        finally:
+            if started:
+                runner.run('stop-object-vm', [tools['container'], 'stop', vm])
+            save()
+        return directory, receipt

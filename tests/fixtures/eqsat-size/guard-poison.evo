@@ -1,0 +1,11 @@
+func @main(%arg0: mem<all>, %arg1: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: mem<all>, %v1: world):
+    %v2 = uninitialized.bits<32>
+    %v3 = const.bits<32> 0
+    %v4 = signed_add_defined %v2, %v3
+    ub.assume.signed_overflow %v4
+    %v5 = const.bits<32> 0
+    ret %v5, %v0, %v1
+}

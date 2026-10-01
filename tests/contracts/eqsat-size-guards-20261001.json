@@ -1,0 +1,115 @@
+{
+  "claim": "UNVERIFIED_DIAGNOSTIC; non-installable, not PASS-eligible; object-only; no IR/interpreter edit, link or execution; not verified EqSat savings",
+  "image": {
+    "digest": "2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "name": "evo-flight-lab:sealed"
+  },
+  "inputs": {
+    ".evidence/eqsat-completion/complete-9bjq0w16/policies/0000/00-chain/output.evo": "c7eced159e802424e3334d0fdf90a6d80dea350d4c57749142f5a8208a5f7dd0",
+    ".evidence/eqsat-size/S2-cdgrncjl/00-B-checked-on-0.o": "d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363",
+    ".evidence/eqsat-size/S2-cdgrncjl/00-B-checked-on.s": "99533c33375efdc9f7538302a7535a1c374eb7b2ae4d817b2e266643474652e5",
+    ".evidence/eqsat-size/S2-cdgrncjl/01-B-checked-on-0.o": "0e933d68c8fa076781dbfd2ecee032cf8ac62adf68e8bbc51cd7e3b154fbfc61",
+    ".evidence/eqsat-size/S2-cdgrncjl/01-B-checked-on.s": "6294809d49800bbb446e46da3c40e70486e8500d5ff06a288b18e80ce5b4bb20",
+    ".evidence/eqsat-size/S2-cdgrncjl/02-B-checked-on-0.o": "3e74cc20a007af4e08a2847974fc6d7eeb0edad0d08208074c474941de05468b",
+    ".evidence/eqsat-size/S2-cdgrncjl/02-B-checked-on.s": "a051f7eda8428e2fb3657c1bd45c33f5796d516b90816b44ce1493bb6654cfe4",
+    ".evidence/eqsat-size/S2-cdgrncjl/03-B-checked-on-0.o": "2f96c7d15c24ca6f26833e40f74e88b40342bb7f28e8df63fa2ec19e54e063a2",
+    ".evidence/eqsat-size/S2-cdgrncjl/03-B-checked-on.s": "e71a223e3b61fe9fa3049bb2aa06f2da621eaa6886ede07d7c70a11c8e27b7a2",
+    ".evidence/eqsat-size/S2-cdgrncjl/04-B-checked-on-0.o": "8ce98ea2cd34c647bb2a81640dc8796f68bcb5d19eb93f363c39833695646fe6",
+    ".evidence/eqsat-size/S2-cdgrncjl/04-B-checked-on.s": "9470d0e39934c70e0501126222be829b0dc099830ee54e0ed0f4828a8a6af5f6",
+    ".evidence/eqsat-size/S2-cdgrncjl/05-B-checked-on-0.o": "ae98c5766419459083d4f62800833f995a804333f0b9bb52eb40fb51d09922bc",
+    ".evidence/eqsat-size/S2-cdgrncjl/05-B-checked-on.s": "e859c7f3bcd7794b91269d92466e5ade946088df7ebc3a6d0fa80e3659c4ce6a",
+    ".evidence/eqsat-size/S2-cdgrncjl/receipt.json": "d5cefa723ec49923d461f6eaecce77b701f1bf3bb9208dbb5e687e6a3b12a7fc",
+    ".evidence/eqsat-steady/build-9t8d1etw/cjson/00-B-chain/output.evo": "d52a7684bbad485355cb0c3f75dd88b628882303269507bb8ee26fe06b3f0f20",
+    ".evidence/eqsat-steady/build-9t8d1etw/zlib/02-B-chain/output.evo": "5c3e74cdccbc5e198db48f57337bdad2df8b98d04e933da2f78c81420b7ca587",
+    ".evidence/eqsat-steady/build-9t8d1etw/zlib/05-B-chain/output.evo": "3b0c91c501fdc313aaea748e941c3db087c6cf307aea0cc30e6ab2b61624fcc5",
+    ".evidence/eqsat-steady/build-9t8d1etw/zstd/11-B-chain/output.evo": "6fcbc36939255959c2b5af0a8240f724473ba6723f32078f6e06f9abecbd7c1d",
+    ".evidence/eqsat-steady/build-9t8d1etw/zstd/24-B-chain/output.evo": "fa580db46e5781e520cf8da496f62dc597c39bcaa0c986ec28257cd0de3e000a",
+    "crates/evocc-eqopt/src/guard_attribution.rs": "0dc0e13baed58a6dc43dc057fdea74e52aedb45aa34c10ed1efd04daf5f473ac",
+    "crates/evocc-mir/src/lower.rs": "ed61f9e51a76acab8ec4e13ba22bdd808c983b6a4d9c0decbba06d668f39d30d",
+    "crates/evocc-mir/src/native.rs": "5dc0e0a1fef4bfa0aa777cd5bc8e22bde545c407996a54bc41befb7532b347f6",
+    "crates/evocc/src/bin/evo-guard-size.rs": "7916573e75180441540ef5f63d341e44cc77a9f79a58a37d7c8ee5030298fe16",
+    "docs/framing-draft.md": "d02973eff9a82ca6d99e5416b7af54fff472f71d4427578e1d46e10f384131de",
+    "tools/bench.py": "bab5465652223f9e3f76410d355f454779d25ed2f295be58a25762dbe686a331",
+    "tools/ladder/eqsat_elf.py": "7f46356dad3e99b72c98d95e9b4c28aa817727d7f3c4c381d5efabdc745ab706",
+    "tools/ladder/eqsat_size.py": "88147947aa76c11d5cc2d2d151c9b3150429adb47101a1051a8d755b13817b94"
+  },
+  "phase": "S4",
+  "post_s2_checked_savings": {
+    "cjson": 732,
+    "zlib": 472,
+    "zstd": 1440
+  },
+  "resources": {
+    "jobs": 1,
+    "max_retained_bytes": 268435456,
+    "min_free_bytes": 8589934592,
+    "output_bytes": 16777216,
+    "timeout_seconds": 300
+  },
+  "schema": "evocc-guard-size-plan-v1",
+  "stop_rule": "CLOSE_NEGATIVE iff every non-P0 family recovers less than 0.1 times its own post-S2 checked B-A saving; otherwise independent semantic/checker/Lean delta required",
+  "tools": {
+    "backend": {
+      "path": "target/debug/evo-ir-asm",
+      "sha256": "d222a6911fbe1a6803afd18729c7a166dcfaa9b80fabec9c7b42169112c781cf"
+    },
+    "container": {
+      "path": "/usr/local/bin/container",
+      "sha256": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43"
+    },
+    "guard_backend": {
+      "path": "target/debug/evo-guard-size",
+      "sha256": "78088d8c644e7479c5ede8f5a59440298e72a7e3fb324db766657bcc6c908ed3"
+    }
+  },
+  "units": [
+    {
+      "baseline_assembly": ".evidence/eqsat-size/S2-cdgrncjl/00-B-checked-on.s",
+      "baseline_object": ".evidence/eqsat-size/S2-cdgrncjl/00-B-checked-on-0.o",
+      "case": "p0",
+      "eligible_roots": 13,
+      "ir": ".evidence/eqsat-completion/complete-9bjq0w16/policies/0000/00-chain/output.evo",
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c"
+    },
+    {
+      "baseline_assembly": ".evidence/eqsat-size/S2-cdgrncjl/01-B-checked-on.s",
+      "baseline_object": ".evidence/eqsat-size/S2-cdgrncjl/01-B-checked-on-0.o",
+      "case": "zlib",
+      "eligible_roots": 2013,
+      "ir": ".evidence/eqsat-steady/build-9t8d1etw/zlib/02-B-chain/output.evo",
+      "source": "deflate.c"
+    },
+    {
+      "baseline_assembly": ".evidence/eqsat-size/S2-cdgrncjl/02-B-checked-on.s",
+      "baseline_object": ".evidence/eqsat-size/S2-cdgrncjl/02-B-checked-on-0.o",
+      "case": "zlib",
+      "eligible_roots": 1343,
+      "ir": ".evidence/eqsat-steady/build-9t8d1etw/zlib/05-B-chain/output.evo",
+      "source": "inflate.c"
+    },
+    {
+      "baseline_assembly": ".evidence/eqsat-size/S2-cdgrncjl/03-B-checked-on.s",
+      "baseline_object": ".evidence/eqsat-size/S2-cdgrncjl/03-B-checked-on-0.o",
+      "case": "zstd",
+      "eligible_roots": 8363,
+      "ir": ".evidence/eqsat-steady/build-9t8d1etw/zstd/11-B-chain/output.evo",
+      "source": "lib/compress/zstd_compress.c"
+    },
+    {
+      "baseline_assembly": ".evidence/eqsat-size/S2-cdgrncjl/04-B-checked-on.s",
+      "baseline_object": ".evidence/eqsat-size/S2-cdgrncjl/04-B-checked-on-0.o",
+      "case": "zstd",
+      "eligible_roots": 1935,
+      "ir": ".evidence/eqsat-steady/build-9t8d1etw/zstd/24-B-chain/output.evo",
+      "source": "lib/decompress/zstd_decompress.c"
+    },
+    {
+      "baseline_assembly": ".evidence/eqsat-size/S2-cdgrncjl/05-B-checked-on.s",
+      "baseline_object": ".evidence/eqsat-size/S2-cdgrncjl/05-B-checked-on-0.o",
+      "case": "cjson",
+      "eligible_roots": 1787,
+      "ir": ".evidence/eqsat-steady/build-9t8d1etw/cjson/00-B-chain/output.evo",
+      "source": "cJSON.c"
+    }
+  ]
+}
