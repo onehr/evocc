@@ -1,0 +1,56 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N02",
+  "date": "2026-10-02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "9c226401",
+  "authority": "docs/codegen-quality-plan.md sections 3, 4, 10",
+  "scope": "Target-independent module pass interface, per-instance execution-based translation validation and telemetry. No optimizing pass is admitted to default O2 by this package.",
+  "implementation": {
+    "location": "A separate evocc-passes crate using existing EvoIR and interpreter APIs, not evocc-eqopt",
+    "interface": "Pass consumes a validated module, produces a staged module plus explicit eligible/taken/declined counts. Pipeline publishes only after validation succeeds for all supplied executions. An empty pipeline returns the unchanged module and canonical bytes.",
+    "classes": ["VERIFIED", "VALIDATED", "LOWERING"],
+    "class_authority": "The new pass API always reports VALIDATED, never CHANGED_VERIFIED. VERIFIED is reserved for the existing independently replayed EqSat chain; LOWERING labels the existing lowering path.",
+    "observations": "Reuse existing interpreter outcomes and equality projections: results, global/memory and observable events, diagnostics and bounded completion. Steps are reported separately, not required to be equal. Unsupported externals, fuel exhaustion, fenv/asm/volatile/atomic effects are explicit ineligible cases, never PASS.",
+    "telemetry": "Pass name/version, class, eligible sites, taken sites, declined reason counts, before/after IR hashes, validation input count/outcomes, interpreter steps, optional estimated bytes, actual bytes only when measured, elapsed pass time separated from validation time.",
+    "driver": "Opt-in --opt-pass=identity initially and JSON --pass-report path; no enabled pass preserves existing output and avoids extra execution. Driver integration coordinated with N04. Identity is a wiring test, not a size improvement.",
+    "native": "Reuse existing four-lane differential runner after module passes; do not add another native harness. No native correctness claim from interpreter-only TV."
+  },
+  "corpus": {
+    "generated": "Existing evocc-randgen deterministic generator, seeds 0..255 as initial RED subset, then existing 21000-program frozen gate population before any non-identity pass default admission",
+    "source_differential": "Reuse existing evocc-lower day6 G3 C-HIR/EvoIR bridge and source fixtures; compare before and after modules without changing either interpreter",
+    "ladder": "Integer-mix control and existing admitted deterministic ladder inputs; library external-call gaps remain explicit unsupported coverage",
+    "step_limit": 100000,
+    "size_regression_bytes": 0,
+    "compile_time_ratio_bound": 1.25,
+    "interpreter_steps_ratio_bound": 1.05
+  },
+  "red_cases": [
+    "Deliberately wrong pass changes a returned value; TV detects the mismatch on the generated corpus and does not publish staged output",
+    "A pass introduces an interpreter diagnostic, changes memory/event observations or creates malformed IR; reject each",
+    "No enabled pass preserves canonical module bytes and legacy driver output",
+    "Telemetry denominator differs from taken plus declined; reject the inconsistent report",
+    "Unsupported execution and exhausted fuel cannot be relabeled validated",
+    "Multiple passes validate each intermediate module rather than only accidentally equivalent final output",
+    "Native/assembly estimates are not represented as measured byte savings"
+  ],
+  "resources": {
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "max_retained_bytes_per_capture": 524288000,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "cargo_serial": true,
+    "heavy_lane_jobs": 1,
+    "retention": "Keep only compact counts/hashes and minimal failing source. Delete test intermediates, no new target/workspace/kernel/VM disk."
+  },
+  "acceptance": [
+    "Plan committed before RED runs",
+    "Bad-pass injection detected, default identity preserved, steps/observations exported for N05",
+    "Focused framework/source/CLI tests and existing native differential for admitted cases",
+    "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+    "Compact receipt, one-page notebook, TODO, disk net change in bounded commit"
+  ],
+  "stop_rule": "Two-week box; do not change interpreter, IR semantics, registry or trust policy to accommodate a pass. Unmodeled cases constrain admission instead of silently passing.",
+  "claim_ceiling": "Execution-based validation on named inputs, not a universal equivalence proof, whole-program coverage or certified EqSat optimization."
+}

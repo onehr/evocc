@@ -1,0 +1,108 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N05",
+  "date": "2026-10-02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "authority": [
+    "docs/codegen-quality-plan.md#5-work-packages",
+    "docs/codegen-quality-plan.md#10-working-agreement",
+    "docs/framing-draft.md"
+  ],
+  "source_baseline": "9c226401",
+  "scope": "Automate the existing six-unit S1 size measurement, bounded ladder replay and interpreter-step observations; retain compact commit trends and locate regressions from those receipts. No optimization, new semantic authority, timing campaign or independent audit framework.",
+  "inputs": {
+    "population_plan": "tests/contracts/eqsat-size-references-20261001.json",
+    "population_recipe": "tools/ladder/eqsat_pilot.py:recipes",
+    "units": [
+      "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "zlib:deflate.c",
+      "zlib:inflate.c",
+      "zstd:lib/compress/zstd_compress.c",
+      "zstd:lib/decompress/zstd_decompress.c",
+      "cjson:cJSON.c"
+    ],
+    "source_policy": "Reuse the frozen S5 source/header identities, macro definitions and sealed AArch64 image; do not fetch a new source tree or refresh a frozen reference receipt.",
+    "measurement_policy": "Measure the current compiler built in target/frontend/release. Historical object receipts may seed a historical row but cannot satisfy a fresh compile-time, step or correctness observation.",
+    "ladder_subset": "Reuse the existing S5 mixed-link recipes: integer-mix, zlib compress/decompress, zstd compress/decompress, cJSON roundtrip. This is a selected-TU regression subset, not a full application-suite claim.",
+    "steps_subset": "Reuse the N02 frozen deterministic corpus and its interpreter result/step output. The integer-mix control is mandatory. Library TUs without a standalone deterministic entry are not falsely assigned whole-library interpreter steps. The exact N02 plan digest accompanies the first live trend plan."
+  },
+  "reuse": {
+    "size": "tools/ladder/eqsat_elf.py:inspect_object_size and require_identical_objects",
+    "native_capture": "tools/ladder/eqsat_native.py:Capture and .build/bench.lock",
+    "original_recipes": "tools/ladder/eqsat_pilot.py:recipes and existing S5 mixed-link dependency objects",
+    "translation_validation": "N02 execution and telemetry; do not add a second interpreter runner",
+    "status": "tools/render-status.py",
+    "driver": "tools/bench.py",
+    "owned_new_files": [
+      "tools/ladder/codegen_trend.py",
+      "tools/ladder/tests/test_codegen_trend.py",
+      "tools/bisect.py"
+    ]
+  },
+  "metrics": {
+    "primary": "Per TU object .text plus .text.* bytes, separately for checked and unchecked. Report exact integer delta and ratio to the frozen GCC-14 -O2 unit, never a cross-family mean.",
+    "size_detail": "Reuse S1 instruction bytes, padding bytes, in-text literal/data bytes and rodata bytes. Every fresh object is assembled twice and must be byte-identical. Section migration is not credited as a size reduction.",
+    "compile_time": "Host release compiler wall nanoseconds for the frozen source-to-assembly command, separated from assembly, VM startup, linking and correctness replay. Three serial observations, median retained. This is a compiler-resource bound, not a native program latency claim.",
+    "steps": "Exact EvoIR executed steps on each N02 frozen deterministic input, with correctness outcome and before/after result hashes. No timing surrogate is used for missing step observations.",
+    "regression_thresholds": {
+      "text_bytes": "Any positive per-unit delta is flagged; accepting a deliberate tradeoff requires the slice disposition, not changing history.",
+      "compile_time_ratio": 1.25,
+      "interpreter_steps_ratio": 1.05,
+      "correctness_failures": 0,
+      "certificate_rejections": 0
+    },
+    "product_target_ratio": 1.4,
+    "target_compiler": "GCC-14 -O2",
+    "target_profile": "unchecked"
+  },
+  "trend_contract": {
+    "format": "Append-only compact JSON records, one immutable completed observation per source revision and measurement variant; trend storage contains numeric observations, hashes and closed status tags, never raw assembly, objects, stdout or stderr.",
+    "provenance": "Record the measured implementation commit, compiler hash, existing input/plan hashes and existing capture receipt hash. Reuse those identities; do not introduce signatures, a new trust layer or a second audit pass.",
+    "missing_data": "Missing receipts or fields remain NOT_RUN or UNKNOWN. A historical size row without current compile time, steps and replay cannot satisfy the per-push measurement prerequisite.",
+    "append_behavior": "An identical replay is idempotent. A conflicting record at the same observation key is rejected rather than overwriting prior evidence. A new measured retry receives its own observation identity and keeps the earlier failure.",
+    "view": "Extend render-status with an explicit compact trend view: per-TU checked/unchecked baseline, current bytes, delta and GCC ratio, plus compile/steps bound disposition and ladder results. Rendering launches no build or test."
+  },
+  "automation": {
+    "trigger": "A tracked pre-push entry point calls the existing bench adapter once for every newly pushed implementation revision that lacks the required receipt; no remote CI service or new daemon is introduced. Existing hooks must be preserved. The hook and its activation are reported separately until activation is exercised.",
+    "no_hidden_build": "The collector consumes the explicitly selected release binary; the orchestrating entry point performs the required serialized Cargo build once. Builds always use CARGO_TARGET_DIR=target/frontend and CARGO_BUILD_JOBS=2.",
+    "schedule": "The bounded subset is per push. Broader ladder runs reuse the existing bench command on the normal schedule; N05 does not launch a full kernel campaign.",
+    "resource_or_tool_failure": "Return a nonzero measurement status with the actual cause; do not synthesize a successful trend from old data or skip a required submeasurement silently."
+  },
+  "bisect": {
+    "interface": "tools/bisect.py selects good/bad commits and a per-unit metric from retained trend records, traverses actual Git ancestry, and emits the earliest evidenced regression boundary.",
+    "search": "Use retained comparable receipts first. Missing points request a measurement through the same bench entry point only when needed. Do not assume arbitrary history is monotonic: a binary narrowing is followed by checking earlier recorded transitions, or report the bounded interval rather than claiming a unique first bad commit.",
+    "missing_rebuild": "Never create another worktree, clone or target. A rebuild at another revision requires an exclusively held, clean existing checkout; if it cannot be used safely, return the unresolved interval and exact missing commits instead of changing a dirty tree.",
+    "acceptance_experiment": "Create a small local test branch containing good, deliberately size-regressed and later commits. Measure real emitted object bytes through S1, retain actual Git commit IDs and prove that the production trend comparator flags the regression and receipt-first bisect identifies the injected commit. Keep the mutation out of the published compiler path and remove temporary payloads afterward. This experiment proves detection/localization, not native semantic correctness of arbitrary history."
+  },
+  "red_cases": [
+    "A real emitted-object size increase is not currently collected automatically per revision or localized by the existing kernel unit-set ddmin tool.",
+    "An overwritten trend row hides a prior size regression: reject the conflicting append and preserve the original.",
+    "A missing commit receipt or incompatible input/profile must not be treated as a passing midpoint.",
+    "A later size recovery must not let bisect skip an earlier recorded regression.",
+    "A missing checked/unchecked twin or a missing N02 steps/ladder outcome must not count as a complete per-push observation.",
+    "A size increase in one TU must remain visible even when another family decreases more.",
+    "Two nonidentical object builds must fail the existing S1 contract before producing an admitted size row."
+  ],
+  "resources": {
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "cargo_serial": true,
+    "heavy_lane_jobs": 1,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "max_retained_bytes_per_capture": 524288000,
+    "temporary_objects": "Hash, S1-measure, link/replay where required, then delete. Preserve only a minimal failing reproducer within the cap.",
+    "forbidden": "No extra target/worktree/kernel tree/large VM disk; no raw captures in Git; no removal of contracts, sealed fixtures, sole open-task evidence or Lean .lake.",
+    "slice_end": "Clean this slice's temporary products and record its disk net change."
+  },
+  "acceptance": [
+    "Plan committed before its RED or measurement execution.",
+    "Focused Python tests for trend, bisect and status rendering pass, including the injected real-commit regression.",
+    "Fresh current-revision observation includes all six S5 units, checked and unchecked S1 byte-identical twins, compile-time observations, the bounded ladder replay and N02 frozen interpreter-step observations.",
+    "The configured per-push entry point is actually exercised; document inactive delivery integrations rather than marking them enabled.",
+    "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline passes with no selection filter.",
+    "Compact receipt, one-page notebook, TODO update and disk delta are committed together; render-status --todo passes after the TODO edit."
+  ],
+  "stop_rule": "A two-week implementation box. If a prerequisite remains unavailable, retain completed tooling and measured evidence, identify the exact unmet acceptance row and continue another lane. Do not replace a live six-unit acceptance with fabricated receipts or claim full N05 closure from helper-only tests.",
+  "claim_ceiling": "Per-revision deterministic object-size regression detection and bounded compiler-resource/correctness observations for the declared population. No latency, full-application, whole-compiler, verified-pass or product-target claim follows automatically."
+}

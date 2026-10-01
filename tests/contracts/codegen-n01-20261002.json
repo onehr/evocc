@@ -1,0 +1,76 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N01",
+  "date": "2026-10-02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "9c226401",
+  "authority": "docs/codegen-quality-plan.md sections 3, 5 and 10; S1 object-size contract",
+  "inputs": {
+    "s5_receipt": ".evidence/eqsat-size/S5-jj9babiy/receipt.json",
+    "s5_receipt_sha256": "616bbfdefb73b762b8ad12cb4fe361eeba76e20f081a653124704b72af01be6a",
+    "guard_receipt": ".evidence/eqsat-size/g0-dbzfkkrm/receipt.json",
+    "guard_receipt_sha256": "d7192637a21283b4d303d03f0a9d5c3f5bcfc19f9d681b8b0a499e8236d3299d",
+    "population": "All six S5 units, including integer-mix control: retained EvoCC A/B checked and unchecked objects, GCC-14 -O2 and Clang-19 -O2. The g0 checked arm is a separate row, never relabeled P0. Additional ladder objects are reported separately and never substituted for the six units.",
+    "rebuild": "No compilation required for the initial census. Revalidate both retained object builds and their S1 metrics against the original receipt; missing twins are NOT_RUN, not reconstructed acceptance. Subsequent compiler slices use the same classifier on fresh paired builds."
+  },
+  "tools": {
+    "disassembler": "/opt/homebrew/opt/llvm/bin/llvm-objdump",
+    "disassembler_sha256": "a4498b0883383a2653530a8575b53c3058dfbfd9aeb36e9d0e77df1c77fde2f6",
+    "version": "Homebrew LLVM 23.1.2; decoding only, not a reference compiler",
+    "s1": "tools/ladder/eqsat_elf.py:inspect_object_size",
+    "s1_sha256": "7f46356dad3e99b72c98d95e9b4c28aa817727d7f3c4c381d5efabdc745ab706"
+  },
+  "classification": {
+    "precedence": ["guard", "prologue_epilogue", "stack_access", "move", "const_materialize", "address", "extend_mask", "call", "compare_select", "branch", "memory", "compute", "other"],
+    "rules": [
+      "guard: conditional edge to a trap-only basic block, that trap, and a flag setter used only by that edge; standalone traps remain other",
+      "prologue_epilogue: SP adjustments, frame-pointer setup, callee-save and x29/x30 saves/restores, ret, and positively identified stack-canary load/check sequences",
+      "stack_access: other loads/stores based on sp or x29",
+      "move: register copies including mov/fmov aliases",
+      "const_materialize: movz/movn/movk, immediate mov, literal-pool loads",
+      "address: adr/adrp, relocation-proven lo12 additions and GOT/TLS address loads",
+      "extend_mask: sxt/uxt aliases and and masks ff/ffff/ffffffff",
+      "call: bl/blr and tail b to a different function symbol, using relocations before placeholder branch immediates",
+      "compare_select: cmp/cmn/tst/ccmp/cset/csel and their conditional-compare/select relatives",
+      "branch: remaining unconditional/conditional/test branches",
+      "memory: remaining loads and stores",
+      "compute: arithmetic, logic, shifts, multiply/divide and bit operations",
+      "other: all remaining decoded mnemonics, individually counted"
+    ],
+    "coverage": "One category per instruction address. Decode only S1 code ranges; mapping-symbol data and inter-function fill are not instructions. Any unmapped instruction, unknown decoding, overlapping conflicting function extent, or mismatch against S1 instruction bytes fails the census. Symbol aliases may share one body, never duplicate bytes.",
+    "limits": "Classification is syntactic attribution, not a proof of causality. Stack accesses are not automatically allocator spills; disappearing local bodies are inlining evidence, not proven bytes saved by inlining alone. Ambiguous canary/address cases retain their syntactic fallback and are counted explicitly."
+  },
+  "outputs": {
+    "per_unit": "Per compiler/profile category bytes, S1 totals, top three categories and deltas versus each reference; no cross-family mean",
+    "inlining": "TU-local symbol body bytes and direct incoming call count for EvoCC and reference; missing symbols and compiler clone suffixes stay explicit, not silently conflated",
+    "ranking": "Top three candidate levers per TU; estimated recoverable bytes bounded by measured positive category excess, labeled estimates rather than promised improvements; local-body disappearance listed separately to prevent double counting",
+    "retention": "Keep compact JSON summaries and one-page notebook only. Full disassembly is consumed in memory one object at a time, never written to a capture. No object copies or new target tree."
+  },
+  "red_cases": [
+    "Forged category or missing/duplicated instruction fails reconciliation",
+    "Padding and mapping-symbol literal data cannot be counted as instructions",
+    "Unmapped function and overlapping distinct function bodies fail explicitly",
+    "Relocatable call placeholder does not look like a self-loop",
+    "Priority collisions: guard versus branch, save versus spill, address load versus memory, immediate versus register mov",
+    "Aliases count once; internal loop branches are not tail calls; local call counts are per actual instruction",
+    "Identical object twins are required; a same-size byte mutation fails"
+  ],
+  "resources": {
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "max_retained_bytes_per_capture": 524288000,
+    "jobs": 1,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "disassembler_timeout_seconds": 60,
+    "disassembler_output_limit_bytes": 16777216
+  },
+  "acceptance": [
+    "Plan committed before the census",
+    "Focused classifier tests pass; every retained S5 object twin is byte-identical and categories reconcile with S1",
+    "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+    "Compact receipt, one-page notebook, TODO and disk net change committed together"
+  ],
+  "stop_rule": "One-week box; record missing evidence or ambiguous classification instead of inventing cause or coverage. No optimization begins before a valid six-unit ranking exists.",
+  "claim_ceiling": "Read-only attribution of the retained S5 object population, not fresh compiler correctness, a full ladder campaign, causal optimization gains or target attainment."
+}

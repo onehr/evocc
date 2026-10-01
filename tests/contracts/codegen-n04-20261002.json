@@ -1,0 +1,91 @@
+{
+  "schema": "evocc.codegen.plan.v1",
+  "package": "N04",
+  "status": "FROZEN_PLAN_NOT_RUN",
+  "date": "2026-10-02",
+  "baseline_commit": "9c226401",
+  "authority": [
+    "docs/codegen-quality-plan.md: N04 and sections 2, 4, 10",
+    "docs/evoir-spec.md: section 6.3 Diagnostic Authority"
+  ],
+  "objective": "Expose the existing bounded EvoIR program interpreter as a useful C undefined-behavior checker without changing interpreter or lowering semantics.",
+  "observed_gaps": [
+    "The driver has --interpret-evoir, but no --check product command.",
+    "Diagnostics are rendered only as human-readable stderr lines.",
+    "No --explain command or tests/ui blessed-output suite exists.",
+    "The EvoIR driver currently reports runtime findings at input:1:1 because the executable IR has no source-span mapping; the product must not present that fallback as a precise runtime location.",
+    "The normative section 6.3 table does not cover every diagnostic named elsewhere in the specification or compiler; missing explanations must remain explicit TODOs."
+  ],
+  "interface": {
+    "check": "evocc --check [existing preprocessing/language options] <file>",
+    "execution": "Use the existing EvoIR main-contract validation and interpret_program path with its existing 100000-step limit and program lifecycle. Do not bypass unsupported external calls or convert fuel exhaustion to a successful check.",
+    "success": "Exit 0 means the admitted, executed path completed without a finding; it is not whole-program absence-of-UB proof. A nonzero C main result alone is not a checker finding. Report the main result separately from checker status.",
+    "failure": "Existing numbered diagnostics remain authoritative. Resource exhaustion and unsupported execution are failures to complete the check, not evidence of C UB and not PASS.",
+    "explain": "evocc --explain E3xxx; descriptions are derived from the exact section 6.3 table, including withdrawn/retired status. Codes known to the source/spec but missing that table receive an explicit explanation TODO; unknown codes are rejected.",
+    "json": "--error-format=json produces one valid JSON object per diagnostic on stderr, with a stable schema version, code (nullable for driver usage errors), message, severity, phase/category, source location when actually known, and explanation availability. Check completion is a separate structured stdout record. Existing modes retain their current stdout protocol.",
+    "compatibility": "Default human diagnostics and all existing CLI modes remain byte-compatible except the new opt-in interfaces. --check is mutually exclusive with existing action modes. JSON strings preserve Unicode and escape control characters."
+  },
+  "red_cases": [
+    "A defined program and a defined program returning nonzero complete successfully through --check.",
+    "Integer division by zero, uninitialized read, signed overflow, invalid shift, and out-of-bounds access retain existing E-codes.",
+    "An unresolved external call and fuel exhaustion are incomplete checks rather than successful or UB-free verdicts.",
+    "Lexer/preprocessor/parser errors use JSON when requested, including escaped paths and messages, and survey mode emits independently parseable records.",
+    "Runtime JSON locations are null/unavailable rather than fabricated 1:1 spans; front-end real spans remain present.",
+    "Every section 6.3 row has a generated explanation; every discovered named code outside it has an explicit TODO entry; retired/withdrawn annotations survive.",
+    "Unknown explain code, invalid error format, duplicate/conflicting modes, and missing input fail predictably.",
+    "Blessed text stderr fixtures cover representative runtime, front-end, unsupported, and resource outcomes; blessing is explicit, never automatic during tests.",
+    "Legacy --interpret-evoir output and diagnostics remain unchanged on the same fixtures."
+  ],
+  "implementation_boundaries": {
+    "owned": [
+      "crates/evocc/src/diagnostics.rs (new)",
+      "crates/evocc/build.rs (if needed for spec-derived diagnostic catalogue)",
+      "crates/evocc/tests/check_product.rs (new)",
+      "tests/ui/check/ (new)",
+      "tests/contracts/codegen-n04-20261002.json",
+      "tests/contracts/codegen-n04-20261002-receipt.json (result only)",
+      "docs/checker.md (new)",
+      "docs/notebook/codegen-checker-20261002.md (result only)"
+    ],
+    "coordinated": [
+      "crates/evocc/src/main.rs: narrowly scoped option/dispatch/diagnostic integration, coordinated with N02",
+      "crates/evocc/Cargo.toml: only if a small existing workspace dependency is necessary",
+      "README.md and TODO.md: root-agent integration"
+    ],
+    "forbidden": [
+      "Interpreter semantics, limits, external-call behavior, or UB rules",
+      "EvoIR/EvoMIR semantic changes, P0/g0 registries, proof checker changes",
+      "New audit layer, capture identity layer, benchmark framework, or native campaign"
+    ]
+  },
+  "validation": {
+    "focused": [
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline -p evocc --test check_product",
+      "Existing evocc diagnostic and interpreter integration tests"
+    ],
+    "acceptance": [
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "python3 tools/render-status.py --todo after the TODO update"
+    ],
+    "lean": "NOT_REQUIRED: no Lean or registry changes",
+    "execution_owner": "Root agent serializes all Cargo invocations; this lane does not launch Cargo independently.",
+    "metrics": [
+      "UI cases by completed/finding/incomplete/front-end outcome",
+      "JSON records validated and legacy-compatibility cases",
+      "Authoritative explanations and explicit explanation TODO counts",
+      "Full-workspace passed/failed/ignored counts",
+      "Slice disk net delta"
+    ]
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "minimum_start_free_bytes": 26843545600,
+    "stop_below_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "cargo_serial": true,
+    "retention": "Keep only small UI fixtures, contract, compact receipt and one-page note. Remove test temporary outputs; no raw captures in Git, no new target or workspace tree."
+  },
+  "stop_rule": "Stop for semantic authority changes, a published-default regression that cannot be reverted within the slice, exhausted safe disk cleanup below 15 GiB, or deletion of sole open-task evidence. Otherwise record bounded gaps honestly and continue the authorized work.",
+  "claim_ceiling": "Product access to existing interpreter diagnostics on executed, supported paths. Neither static whole-program analysis, complete libc/pthread execution, native sanitizer equivalence, nor absence-of-UB proof."
+}
