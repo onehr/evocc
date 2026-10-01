@@ -1,0 +1,1721 @@
+{
+  "axes": [
+    "add",
+    "sub",
+    "mul",
+    "and",
+    "or",
+    "xor",
+    "shl",
+    "lshr",
+    "ashr",
+    "zext",
+    "sext",
+    "trunc",
+    "icmp"
+  ],
+  "claim": "Finite size ranking only, not AI benefit, runtime benefit, or full-application compiler coverage",
+  "default_capture": ".evidence/eqsat-size/S2-cdgrncjl/receipt.json",
+  "default_capture_digest": "d5cefa723ec49923d461f6eaecce77b701f1bf3bb9208dbb5e687e6a3b12a7fc",
+  "default_schedule": 8,
+  "default_weights": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "evaluations": 1024,
+  "families": [
+    {
+      "best_capture_index": 0,
+      "best_max_transactions": 1,
+      "best_minus_default": 0,
+      "best_text_bytes": 128,
+      "best_tied_evaluations": 1024,
+      "best_weights": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "case": "p0",
+      "changed_tus_vs_default": {
+        "distinct": 1,
+        "histogram": [
+          [
+            0,
+            1024
+          ]
+        ],
+        "max": 0,
+        "median": 0.0,
+        "min": 0
+      },
+      "default_text_bytes": 128,
+      "eligible_roots": 13,
+      "profile": "checked",
+      "size_distribution": {
+        "distinct": 1,
+        "histogram": [
+          [
+            128,
+            1024
+          ]
+        ],
+        "max": 128,
+        "median": 128.0,
+        "min": 128
+      },
+      "subject_tus": 1,
+      "verdict": "NO_OBSERVABLE_EFFECT",
+      "worst_regression_bytes": 0
+    },
+    {
+      "best_capture_index": 0,
+      "best_max_transactions": 1,
+      "best_minus_default": 0,
+      "best_text_bytes": 128,
+      "best_tied_evaluations": 1024,
+      "best_weights": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "case": "p0",
+      "changed_tus_vs_default": {
+        "distinct": 1,
+        "histogram": [
+          [
+            0,
+            1024
+          ]
+        ],
+        "max": 0,
+        "median": 0.0,
+        "min": 0
+      },
+      "default_text_bytes": 128,
+      "eligible_roots": 13,
+      "profile": "unchecked",
+      "size_distribution": {
+        "distinct": 1,
+        "histogram": [
+          [
+            128,
+            1024
+          ]
+        ],
+        "max": 128,
+        "median": 128.0,
+        "min": 128
+      },
+      "subject_tus": 1,
+      "verdict": "NO_OBSERVABLE_EFFECT",
+      "worst_regression_bytes": 0
+    },
+    {
+      "best_capture_index": 42,
+      "best_max_transactions": 1,
+      "best_minus_default": 0,
+      "best_text_bytes": 58448,
+      "best_tied_evaluations": 128,
+      "best_weights": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0
+      ],
+      "case": "zlib",
+      "changed_tus_vs_default": {
+        "distinct": 3,
+        "histogram": [
+          [
+            0,
+            128
+          ],
+          [
+            1,
+            64
+          ],
+          [
+            2,
+            832
+          ]
+        ],
+        "max": 2,
+        "median": 2.0,
+        "min": 0
+      },
+      "default_text_bytes": 58448,
+      "eligible_roots": 3356,
+      "profile": "checked",
+      "size_distribution": {
+        "distinct": 10,
+        "histogram": [
+          [
+            58448,
+            128
+          ],
+          [
+            58460,
+            128
+          ],
+          [
+            58480,
+            128
+          ],
+          [
+            58484,
+            64
+          ],
+          [
+            58488,
+            64
+          ],
+          [
+            58884,
+            128
+          ],
+          [
+            58896,
+            128
+          ],
+          [
+            58916,
+            128
+          ],
+          [
+            58920,
+            64
+          ],
+          [
+            58924,
+            64
+          ]
+        ],
+        "max": 58924,
+        "median": 58686.0,
+        "min": 58448
+      },
+      "subject_tus": 2,
+      "verdict": "FINITE_ENUMERATION_SUFFICIENT",
+      "worst_regression_bytes": 476
+    },
+    {
+      "best_capture_index": 106,
+      "best_max_transactions": 1,
+      "best_minus_default": -4,
+      "best_text_bytes": 55184,
+      "best_tied_evaluations": 64,
+      "best_weights": [
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0
+      ],
+      "case": "zlib",
+      "changed_tus_vs_default": {
+        "distinct": 3,
+        "histogram": [
+          [
+            0,
+            64
+          ],
+          [
+            1,
+            96
+          ],
+          [
+            2,
+            864
+          ]
+        ],
+        "max": 2,
+        "median": 2.0,
+        "min": 0
+      },
+      "default_text_bytes": 55188,
+      "eligible_roots": 3356,
+      "profile": "unchecked",
+      "size_distribution": {
+        "distinct": 18,
+        "histogram": [
+          [
+            55184,
+            64
+          ],
+          [
+            55188,
+            64
+          ],
+          [
+            55196,
+            64
+          ],
+          [
+            55200,
+            64
+          ],
+          [
+            55212,
+            64
+          ],
+          [
+            55216,
+            64
+          ],
+          [
+            55224,
+            32
+          ],
+          [
+            55228,
+            64
+          ],
+          [
+            55232,
+            32
+          ],
+          [
+            55628,
+            64
+          ],
+          [
+            55632,
+            64
+          ],
+          [
+            55640,
+            64
+          ],
+          [
+            55644,
+            64
+          ],
+          [
+            55656,
+            64
+          ],
+          [
+            55660,
+            64
+          ],
+          [
+            55668,
+            32
+          ],
+          [
+            55672,
+            64
+          ],
+          [
+            55676,
+            32
+          ]
+        ],
+        "max": 55676,
+        "median": 55430.0,
+        "min": 55184
+      },
+      "subject_tus": 2,
+      "verdict": "FINITE_ENUMERATION_SUFFICIENT",
+      "worst_regression_bytes": 488
+    },
+    {
+      "best_capture_index": 867,
+      "best_max_transactions": 8,
+      "best_minus_default": -4,
+      "best_text_bytes": 156268,
+      "best_tied_evaluations": 16,
+      "best_weights": [
+        1,
+        0,
+        2,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0
+      ],
+      "case": "zstd",
+      "changed_tus_vs_default": {
+        "distinct": 3,
+        "histogram": [
+          [
+            0,
+            48
+          ],
+          [
+            1,
+            160
+          ],
+          [
+            2,
+            816
+          ]
+        ],
+        "max": 2,
+        "median": 2.0,
+        "min": 0
+      },
+      "default_text_bytes": 156272,
+      "eligible_roots": 10298,
+      "profile": "checked",
+      "size_distribution": {
+        "distinct": 40,
+        "histogram": [
+          [
+            156268,
+            16
+          ],
+          [
+            156272,
+            48
+          ],
+          [
+            156292,
+            8
+          ],
+          [
+            156296,
+            24
+          ],
+          [
+            156300,
+            4
+          ],
+          [
+            156304,
+            16
+          ],
+          [
+            156308,
+            12
+          ],
+          [
+            156312,
+            16
+          ],
+          [
+            156316,
+            48
+          ],
+          [
+            156336,
+            8
+          ],
+          [
+            156340,
+            24
+          ],
+          [
+            156344,
+            20
+          ],
+          [
+            156348,
+            64
+          ],
+          [
+            156352,
+            12
+          ],
+          [
+            156368,
+            8
+          ],
+          [
+            156372,
+            24
+          ],
+          [
+            156376,
+            6
+          ],
+          [
+            156380,
+            18
+          ],
+          [
+            156388,
+            18
+          ],
+          [
+            156392,
+            54
+          ],
+          [
+            156412,
+            8
+          ],
+          [
+            156416,
+            24
+          ],
+          [
+            156420,
+            6
+          ],
+          [
+            156424,
+            18
+          ],
+          [
+            156432,
+            2
+          ],
+          [
+            156436,
+            6
+          ],
+          [
+            157560,
+            64
+          ],
+          [
+            157584,
+            32
+          ],
+          [
+            157592,
+            16
+          ],
+          [
+            157596,
+            16
+          ],
+          [
+            157604,
+            64
+          ],
+          [
+            157628,
+            32
+          ],
+          [
+            157636,
+            80
+          ],
+          [
+            157640,
+            16
+          ],
+          [
+            157660,
+            32
+          ],
+          [
+            157668,
+            24
+          ],
+          [
+            157680,
+            72
+          ],
+          [
+            157704,
+            32
+          ],
+          [
+            157712,
+            24
+          ],
+          [
+            157724,
+            8
+          ]
+        ],
+        "max": 157724,
+        "median": 156998.0,
+        "min": 156268
+      },
+      "subject_tus": 2,
+      "verdict": "FINITE_ENUMERATION_SUFFICIENT",
+      "worst_regression_bytes": 1452
+    },
+    {
+      "best_capture_index": 867,
+      "best_max_transactions": 8,
+      "best_minus_default": -4,
+      "best_text_bytes": 153640,
+      "best_tied_evaluations": 20,
+      "best_weights": [
+        1,
+        0,
+        2,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        0
+      ],
+      "case": "zstd",
+      "changed_tus_vs_default": {
+        "distinct": 3,
+        "histogram": [
+          [
+            0,
+            60
+          ],
+          [
+            1,
+            152
+          ],
+          [
+            2,
+            812
+          ]
+        ],
+        "max": 2,
+        "median": 2.0,
+        "min": 0
+      },
+      "default_text_bytes": 153644,
+      "eligible_roots": 10298,
+      "profile": "unchecked",
+      "size_distribution": {
+        "distinct": 49,
+        "histogram": [
+          [
+            153640,
+            20
+          ],
+          [
+            153644,
+            60
+          ],
+          [
+            153648,
+            4
+          ],
+          [
+            153652,
+            12
+          ],
+          [
+            153664,
+            4
+          ],
+          [
+            153668,
+            12
+          ],
+          [
+            153676,
+            4
+          ],
+          [
+            153680,
+            12
+          ],
+          [
+            153684,
+            20
+          ],
+          [
+            153688,
+            60
+          ],
+          [
+            153692,
+            4
+          ],
+          [
+            153696,
+            12
+          ],
+          [
+            153708,
+            4
+          ],
+          [
+            153712,
+            12
+          ],
+          [
+            153716,
+            20
+          ],
+          [
+            153720,
+            64
+          ],
+          [
+            153724,
+            16
+          ],
+          [
+            153728,
+            12
+          ],
+          [
+            153740,
+            4
+          ],
+          [
+            153744,
+            12
+          ],
+          [
+            153748,
+            2
+          ],
+          [
+            153752,
+            6
+          ],
+          [
+            153760,
+            22
+          ],
+          [
+            153764,
+            66
+          ],
+          [
+            153768,
+            4
+          ],
+          [
+            153772,
+            12
+          ],
+          [
+            153784,
+            4
+          ],
+          [
+            153788,
+            12
+          ],
+          [
+            153792,
+            2
+          ],
+          [
+            153796,
+            6
+          ],
+          [
+            153804,
+            2
+          ],
+          [
+            153808,
+            6
+          ],
+          [
+            154940,
+            80
+          ],
+          [
+            154948,
+            16
+          ],
+          [
+            154964,
+            16
+          ],
+          [
+            154976,
+            16
+          ],
+          [
+            154984,
+            80
+          ],
+          [
+            154992,
+            16
+          ],
+          [
+            155008,
+            16
+          ],
+          [
+            155016,
+            80
+          ],
+          [
+            155020,
+            16
+          ],
+          [
+            155024,
+            16
+          ],
+          [
+            155040,
+            16
+          ],
+          [
+            155048,
+            8
+          ],
+          [
+            155060,
+            88
+          ],
+          [
+            155068,
+            16
+          ],
+          [
+            155084,
+            16
+          ],
+          [
+            155092,
+            8
+          ],
+          [
+            155104,
+            8
+          ]
+        ],
+        "max": 155104,
+        "median": 154374.0,
+        "min": 153640
+      },
+      "subject_tus": 2,
+      "verdict": "FINITE_ENUMERATION_SUFFICIENT",
+      "worst_regression_bytes": 1460
+    },
+    {
+      "best_capture_index": 42,
+      "best_max_transactions": 1,
+      "best_minus_default": 0,
+      "best_text_bytes": 29496,
+      "best_tied_evaluations": 128,
+      "best_weights": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0
+      ],
+      "case": "cjson",
+      "changed_tus_vs_default": {
+        "distinct": 2,
+        "histogram": [
+          [
+            0,
+            128
+          ],
+          [
+            1,
+            896
+          ]
+        ],
+        "max": 1,
+        "median": 1.0,
+        "min": 0
+      },
+      "default_text_bytes": 29496,
+      "eligible_roots": 1787,
+      "profile": "checked",
+      "size_distribution": {
+        "distinct": 8,
+        "histogram": [
+          [
+            29496,
+            128
+          ],
+          [
+            29504,
+            128
+          ],
+          [
+            29512,
+            128
+          ],
+          [
+            29520,
+            128
+          ],
+          [
+            30204,
+            128
+          ],
+          [
+            30212,
+            128
+          ],
+          [
+            30220,
+            128
+          ],
+          [
+            30228,
+            128
+          ]
+        ],
+        "max": 30228,
+        "median": 29862.0,
+        "min": 29496
+      },
+      "subject_tus": 1,
+      "verdict": "FINITE_ENUMERATION_SUFFICIENT",
+      "worst_regression_bytes": 732
+    },
+    {
+      "best_capture_index": 42,
+      "best_max_transactions": 1,
+      "best_minus_default": 0,
+      "best_text_bytes": 29384,
+      "best_tied_evaluations": 128,
+      "best_weights": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        0
+      ],
+      "case": "cjson",
+      "changed_tus_vs_default": {
+        "distinct": 2,
+        "histogram": [
+          [
+            0,
+            128
+          ],
+          [
+            1,
+            896
+          ]
+        ],
+        "max": 1,
+        "median": 1.0,
+        "min": 0
+      },
+      "default_text_bytes": 29384,
+      "eligible_roots": 1787,
+      "profile": "unchecked",
+      "size_distribution": {
+        "distinct": 8,
+        "histogram": [
+          [
+            29384,
+            128
+          ],
+          [
+            29392,
+            128
+          ],
+          [
+            29400,
+            128
+          ],
+          [
+            29408,
+            128
+          ],
+          [
+            30092,
+            128
+          ],
+          [
+            30100,
+            128
+          ],
+          [
+            30108,
+            128
+          ],
+          [
+            30116,
+            128
+          ]
+        ],
+        "max": 30116,
+        "median": 29750.0,
+        "min": 29384
+      },
+      "subject_tus": 1,
+      "verdict": "FINITE_ENUMERATION_SUFFICIENT",
+      "worst_regression_bytes": 732
+    }
+  ],
+  "historical_build_reproducibility": "NOT_RETROACTIVELY_ESTABLISHED: historical search objects had one retained build",
+  "new_evaluations": 0,
+  "new_native_executions": 0,
+  "phase": "S3",
+  "r03_v1": "INCONCLUSIVE / NOT_ADMITTED; R03a/b/c/d remain frozen",
+  "ranking": "family/profile subject-TU text sum, schedule ascending, weights lexicographic, original index",
+  "schedules": [
+    1,
+    8
+  ],
+  "schema": "evocc-existing-policy-size-analysis-v1",
+  "scope": "Existing frozen signature vocabulary only; out-of-vocabulary comparisons do not become admitted",
+  "signatures": 512,
+  "source_capture": ".evidence/eqsat-completion/complete-9bjq0w16/receipt.json",
+  "source_capture_digest": "7b57a622e5adae8dc6de9a654ace597f2fd1a08fa34a050e268f8bc796ec5ae5",
+  "unique_retained_objects": 966,
+  "units": [
+    {
+      "best_text_bytes": 128,
+      "case": "p0",
+      "default_text_bytes": 128,
+      "distribution": {
+        "distinct": 1,
+        "histogram": [
+          [
+            128,
+            1024
+          ]
+        ],
+        "max": 128,
+        "median": 128.0,
+        "min": 128
+      },
+      "eligible_roots": 13,
+      "profile": "checked",
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "worst_regression_bytes": 0
+    },
+    {
+      "best_text_bytes": 128,
+      "case": "p0",
+      "default_text_bytes": 128,
+      "distribution": {
+        "distinct": 1,
+        "histogram": [
+          [
+            128,
+            1024
+          ]
+        ],
+        "max": 128,
+        "median": 128.0,
+        "min": 128
+      },
+      "eligible_roots": 13,
+      "profile": "unchecked",
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "worst_regression_bytes": 0
+    },
+    {
+      "best_text_bytes": 30172,
+      "case": "zlib",
+      "default_text_bytes": 30184,
+      "distribution": {
+        "distinct": 8,
+        "histogram": [
+          [
+            30172,
+            128
+          ],
+          [
+            30184,
+            192
+          ],
+          [
+            30188,
+            64
+          ],
+          [
+            30204,
+            128
+          ],
+          [
+            30504,
+            128
+          ],
+          [
+            30516,
+            192
+          ],
+          [
+            30520,
+            64
+          ],
+          [
+            30536,
+            128
+          ]
+        ],
+        "max": 30536,
+        "median": 30354.0,
+        "min": 30172
+      },
+      "eligible_roots": 2013,
+      "profile": "checked",
+      "source": "deflate.c",
+      "worst_regression_bytes": 352
+    },
+    {
+      "best_text_bytes": 28264,
+      "case": "zlib",
+      "default_text_bytes": 28264,
+      "distribution": {
+        "distinct": 8,
+        "histogram": [
+          [
+            28264,
+            128
+          ],
+          [
+            28276,
+            128
+          ],
+          [
+            28288,
+            128
+          ],
+          [
+            28300,
+            128
+          ],
+          [
+            28368,
+            128
+          ],
+          [
+            28380,
+            128
+          ],
+          [
+            28392,
+            128
+          ],
+          [
+            28404,
+            128
+          ]
+        ],
+        "max": 28404,
+        "median": 28334.0,
+        "min": 28264
+      },
+      "eligible_roots": 1343,
+      "profile": "checked",
+      "source": "inflate.c",
+      "worst_regression_bytes": 140
+    },
+    {
+      "best_text_bytes": 28652,
+      "case": "zlib",
+      "default_text_bytes": 28668,
+      "distribution": {
+        "distinct": 16,
+        "histogram": [
+          [
+            28652,
+            64
+          ],
+          [
+            28656,
+            64
+          ],
+          [
+            28664,
+            64
+          ],
+          [
+            28668,
+            96
+          ],
+          [
+            28672,
+            64
+          ],
+          [
+            28676,
+            32
+          ],
+          [
+            28680,
+            64
+          ],
+          [
+            28684,
+            64
+          ],
+          [
+            28988,
+            64
+          ],
+          [
+            28992,
+            64
+          ],
+          [
+            29000,
+            64
+          ],
+          [
+            29004,
+            96
+          ],
+          [
+            29008,
+            64
+          ],
+          [
+            29012,
+            32
+          ],
+          [
+            29016,
+            64
+          ],
+          [
+            29020,
+            64
+          ]
+        ],
+        "max": 29020,
+        "median": 28836.0,
+        "min": 28652
+      },
+      "eligible_roots": 2013,
+      "profile": "unchecked",
+      "source": "deflate.c",
+      "worst_regression_bytes": 352
+    },
+    {
+      "best_text_bytes": 26520,
+      "case": "zlib",
+      "default_text_bytes": 26520,
+      "distribution": {
+        "distinct": 8,
+        "histogram": [
+          [
+            26520,
+            128
+          ],
+          [
+            26532,
+            128
+          ],
+          [
+            26544,
+            128
+          ],
+          [
+            26556,
+            128
+          ],
+          [
+            26628,
+            128
+          ],
+          [
+            26640,
+            128
+          ],
+          [
+            26652,
+            128
+          ],
+          [
+            26664,
+            128
+          ]
+        ],
+        "max": 26664,
+        "median": 26592.0,
+        "min": 26520
+      },
+      "eligible_roots": 1343,
+      "profile": "unchecked",
+      "source": "inflate.c",
+      "worst_regression_bytes": 144
+    },
+    {
+      "best_text_bytes": 122972,
+      "case": "zstd",
+      "default_text_bytes": 122972,
+      "distribution": {
+        "distinct": 24,
+        "histogram": [
+          [
+            122972,
+            64
+          ],
+          [
+            122996,
+            32
+          ],
+          [
+            123004,
+            16
+          ],
+          [
+            123008,
+            16
+          ],
+          [
+            123016,
+            128
+          ],
+          [
+            123040,
+            64
+          ],
+          [
+            123048,
+            40
+          ],
+          [
+            123052,
+            16
+          ],
+          [
+            123060,
+            72
+          ],
+          [
+            123084,
+            32
+          ],
+          [
+            123092,
+            24
+          ],
+          [
+            123104,
+            8
+          ],
+          [
+            123904,
+            64
+          ],
+          [
+            123928,
+            32
+          ],
+          [
+            123936,
+            16
+          ],
+          [
+            123940,
+            16
+          ],
+          [
+            123948,
+            128
+          ],
+          [
+            123972,
+            64
+          ],
+          [
+            123980,
+            40
+          ],
+          [
+            123984,
+            16
+          ],
+          [
+            123992,
+            72
+          ],
+          [
+            124016,
+            32
+          ],
+          [
+            124024,
+            24
+          ],
+          [
+            124036,
+            8
+          ]
+        ],
+        "max": 124036,
+        "median": 123504.0,
+        "min": 122972
+      },
+      "eligible_roots": 8363,
+      "profile": "checked",
+      "source": "lib/compress/zstd_compress.c",
+      "worst_regression_bytes": 1064
+    },
+    {
+      "best_text_bytes": 33296,
+      "case": "zstd",
+      "default_text_bytes": 33300,
+      "distribution": {
+        "distinct": 6,
+        "histogram": [
+          [
+            33296,
+            64
+          ],
+          [
+            33300,
+            192
+          ],
+          [
+            33328,
+            64
+          ],
+          [
+            33332,
+            192
+          ],
+          [
+            33656,
+            256
+          ],
+          [
+            33688,
+            256
+          ]
+        ],
+        "max": 33688,
+        "median": 33494.0,
+        "min": 33296
+      },
+      "eligible_roots": 1935,
+      "profile": "checked",
+      "source": "lib/decompress/zstd_decompress.c",
+      "worst_regression_bytes": 388
+    },
+    {
+      "best_text_bytes": 120592,
+      "case": "zstd",
+      "default_text_bytes": 120592,
+      "distribution": {
+        "distinct": 28,
+        "histogram": [
+          [
+            120592,
+            80
+          ],
+          [
+            120600,
+            16
+          ],
+          [
+            120616,
+            16
+          ],
+          [
+            120628,
+            16
+          ],
+          [
+            120636,
+            160
+          ],
+          [
+            120644,
+            32
+          ],
+          [
+            120660,
+            32
+          ],
+          [
+            120668,
+            8
+          ],
+          [
+            120672,
+            16
+          ],
+          [
+            120680,
+            88
+          ],
+          [
+            120688,
+            16
+          ],
+          [
+            120704,
+            16
+          ],
+          [
+            120712,
+            8
+          ],
+          [
+            120724,
+            8
+          ],
+          [
+            121532,
+            80
+          ],
+          [
+            121540,
+            16
+          ],
+          [
+            121556,
+            16
+          ],
+          [
+            121568,
+            16
+          ],
+          [
+            121576,
+            160
+          ],
+          [
+            121584,
+            32
+          ],
+          [
+            121600,
+            32
+          ],
+          [
+            121608,
+            8
+          ],
+          [
+            121612,
+            16
+          ],
+          [
+            121620,
+            88
+          ],
+          [
+            121628,
+            16
+          ],
+          [
+            121644,
+            16
+          ],
+          [
+            121652,
+            8
+          ],
+          [
+            121664,
+            8
+          ]
+        ],
+        "max": 121664,
+        "median": 121128.0,
+        "min": 120592
+      },
+      "eligible_roots": 8363,
+      "profile": "unchecked",
+      "source": "lib/compress/zstd_compress.c",
+      "worst_regression_bytes": 1072
+    },
+    {
+      "best_text_bytes": 33048,
+      "case": "zstd",
+      "default_text_bytes": 33052,
+      "distribution": {
+        "distinct": 6,
+        "histogram": [
+          [
+            33048,
+            64
+          ],
+          [
+            33052,
+            192
+          ],
+          [
+            33080,
+            64
+          ],
+          [
+            33084,
+            192
+          ],
+          [
+            33408,
+            256
+          ],
+          [
+            33440,
+            256
+          ]
+        ],
+        "max": 33440,
+        "median": 33246.0,
+        "min": 33048
+      },
+      "eligible_roots": 1935,
+      "profile": "unchecked",
+      "source": "lib/decompress/zstd_decompress.c",
+      "worst_regression_bytes": 388
+    },
+    {
+      "best_text_bytes": 29496,
+      "case": "cjson",
+      "default_text_bytes": 29496,
+      "distribution": {
+        "distinct": 8,
+        "histogram": [
+          [
+            29496,
+            128
+          ],
+          [
+            29504,
+            128
+          ],
+          [
+            29512,
+            128
+          ],
+          [
+            29520,
+            128
+          ],
+          [
+            30204,
+            128
+          ],
+          [
+            30212,
+            128
+          ],
+          [
+            30220,
+            128
+          ],
+          [
+            30228,
+            128
+          ]
+        ],
+        "max": 30228,
+        "median": 29862.0,
+        "min": 29496
+      },
+      "eligible_roots": 1787,
+      "profile": "checked",
+      "source": "cJSON.c",
+      "worst_regression_bytes": 732
+    },
+    {
+      "best_text_bytes": 29384,
+      "case": "cjson",
+      "default_text_bytes": 29384,
+      "distribution": {
+        "distinct": 8,
+        "histogram": [
+          [
+            29384,
+            128
+          ],
+          [
+            29392,
+            128
+          ],
+          [
+            29400,
+            128
+          ],
+          [
+            29408,
+            128
+          ],
+          [
+            30092,
+            128
+          ],
+          [
+            30100,
+            128
+          ],
+          [
+            30108,
+            128
+          ],
+          [
+            30116,
+            128
+          ]
+        ],
+        "max": 30116,
+        "median": 29750.0,
+        "min": 29384
+      },
+      "eligible_roots": 1787,
+      "profile": "unchecked",
+      "source": "cJSON.c",
+      "worst_regression_bytes": 732
+    }
+  ]
+}
