@@ -9,7 +9,10 @@ assumption A7 of docs/lean-plan.md, never a proof: it says how many vectors
 the producer's known-bits analysis, the checker's facts and the interpreter
 answered exactly as the Lean definitions the theorems are about.
 
-Usage: python3 tools/lean/correspondence.py [--skip-build]
+Selected runs replace only their own groups in the receipt. Totals cover all
+retained groups; file_runs preserves each group's run, commit and toolchain.
+
+Usage: python3 tools/lean/correspondence.py [--skip-build] [--set all|guards]
 Requires a finished `lake build` under lean/ and an offline cargo workspace.
 """
 
@@ -74,12 +77,25 @@ def compare(left: Path, right: Path) -> dict:
     return counts
 
 
+def merge_receipts(previous: dict, current: dict) -> dict:
+    files = {**previous.get("files", {}), **current["files"]}
+    file_runs = dict(previous.get("file_runs", {}))
+    metadata = ("run", "commit", "leanToolchain")
+    for name in previous.get("files", {}):
+        file_runs.setdefault(name, {key: previous[key] for key in metadata})
+    for name in current["files"]:
+        file_runs[name] = {key: current[key] for key in metadata}
+    total = {key: sum(counts[key] for sides in files.values() for counts in sides.values())
+             for key in ("compared", "agreements", "differences")}
+    return {**current, "files": files, "file_runs": file_runs, "total": total}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-build", action="store_true")
     ap.add_argument("--set", choices=["all", "guards"], default="all")
     args = ap.parse_args()
-    files = FILES if args.set=="all" else [args.set]
+    files = FILES if args.set == "all" else [args.set]
     run([sys.executable, "tools/lean/vectors.py", "--set", args.set])
     binaries = {}
     debug = target_dir() / "debug"
@@ -92,14 +108,11 @@ def main() -> int:
         for side, binary in binaries.items():
             run([str(binary), str(VECTORS / f"{name}.jsonl"), str(VECTORS / f"{name}.{side}.jsonl")])
     results = {}
-    total = {"compared": 0, "agreements": 0, "differences": 0}
     for name in files:
         results[name] = {}
         for side in RUNNERS:
             counts = compare(VECTORS / f"{name}.lean.jsonl", VECTORS / f"{name}.{side}.jsonl")
             results[name][side] = counts
-            for key in total:
-                total[key] += counts[key]
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     receipt = {
         "schemaVersion": 1,
@@ -111,10 +124,12 @@ def main() -> int:
         "leanToolchain": (ROOT / "lean" / "lean-toolchain").read_text().strip(),
         "sides": {side: f"{r[0]} {r[1]} {r[2]}" for side, r in RUNNERS.items()},
         "rule": "an abstention (skipped or unsupported) on either side is neither an agreement nor a difference",
-        "total": total,
         "files": results,
     }
+    previous = json.loads(RECEIPT.read_text()) if RECEIPT.exists() else {}
+    receipt = merge_receipts(previous, receipt)
     RECEIPT.write_text(json.dumps(receipt, indent=1) + "\n")
+    total = receipt["total"]
     print(json.dumps(total))
     for name in files:
         for side, counts in results[name].items():

@@ -40,7 +40,7 @@ impl KnownBits {
         }
         let pair = || other.filter(|b| b.width == self.width);
         let truth = match operation {
-            "divisor_nonzero" => self.value != 0,
+            "divisor_nonzero" => self.ones() != 0,
             "signed_div_rem_no_overflow" => {
                 let b = pair()?;
                 self.excludes_pattern(1_u64 << (self.width - 1))
@@ -524,4 +524,33 @@ fn decide(
         }
     }
     None
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::KnownBits;
+
+    #[test]
+    fn nonzero_requires_a_known_one_not_a_stray_value_bit() {
+        // Exercise the reported unnormalized fact directly, bypassing the
+        // constructors which ordinarily clear bits outside the mask.
+        let stray = KnownBits {
+            width: 32,
+            mask: 0,
+            value: 1,
+        };
+        assert_eq!(
+            stray.transfer_guard("divisor_nonzero", None),
+            Some(KnownBits::top(1))
+        );
+        let known_one = KnownBits {
+            width: 32,
+            mask: 2,
+            value: 3,
+        };
+        assert_eq!(
+            known_one.transfer_guard("divisor_nonzero", None),
+            Some(KnownBits::constant(1, 1))
+        );
+    }
 }

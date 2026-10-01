@@ -6,7 +6,7 @@
 #
 # Usage: tools/gate-lean.sh
 #
-# Four steps, in order:
+# Six steps, in order:
 #   1. regenerate lean/EvoIR/Registry.lean from the specification block, which
 #      refuses to run unless the block hashes to the digest stated beside it,
 #      and confirm the checked-in file is what the generator produces;
@@ -44,7 +44,7 @@ echo "== 5. differential vectors, this side =="
 cd "$ROOT"
 python3 tools/lean/vectors.py
 cd "$ROOT/lean"
-for name in transfers-small lattice-small values-width8 random named; do
+for name in transfers-small lattice-small values-width8 random named guards; do
   lake exe evoir-sem "vectors/$name.jsonl" "vectors/$name.lean.jsonl"
 done
 cd "$ROOT"
