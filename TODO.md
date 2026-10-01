@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-10-01**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.115** and EvoMIR **0.54**. This is the Git-tracked execution backlog,
+EvoIR **1.9.116** and EvoMIR **0.55**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -78,7 +78,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R02c, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Execute the approved S1–S6 size work packages in order. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2110,28 +2110,22 @@ record a justified not-needed disposition separately from implementation PASS.
     proof against unmodeled UB. Measure checked
     and unchecked separately; GCC sanitizer coverage is not assumed equivalent.
 
-  - [ ] **R02e — Guard-predicate folding domain, separately reviewed** — `LATER`, P3.
-    **OWNER_APPROVED, ceiling first:** S4 begins with a MIR-only
-    UNVERIFIED_DIAGNOSTIC known-bits guard fold, never installable or PASS.
-    **S4 diagnostic complete:** `312f2814`, full workspace 2,870 PASS / 0 FAIL /
-    4 ignored. Six byte-identical object pairs; zero diagnostic links/executions.
-    zlib / zstd / cJSON recoverable text is 952 / 1,608 / 80 bytes, not verified
-    EqSat benefit. The stop test requires the separately reviewed semantic slice;
-    R02e remains open. See the [size package record](docs/notebook/eqsat-size-work-packages-20261001.md#s4-diagnostic-result--frozen-not-a-verified-optimization).
-    The owner approved the exact [first semantic slice](docs/eqsat-guard-folding-draft.md):
-    seven total predicates, separate g0.ub.v1 registry, existing bit/edge facts,
-    kernel-only parametric transfer proofs and independent checker replay.
-    Implementation/acceptance remain open. No second slice is authorized.
-    If its recoverable text is below the order of post-S2 B–A savings, freeze a
-    negative result and do not extend semantics. Only a significant ceiling
-    permits the independent total-predicate/obligation spec delta, checker and
-    Lean proofs with R03f manual integration. Existing forms only. Preserve
-    all source-definedness, poison and other predicate uses; native unchecked
-    comparisons are not proof that a guard can be folded.
-    If retained guards materially limit Q2, specify and prove total UB-predicate
-    folds plus any independently checked proven-true obligation elimination.
-    Preserve poison, other uses and source definedness; no silent P0 expansion.
-    This conditional semantic/checker change is not required to measure baseline B.
+  - [x] **R02e — Guard-predicate folding domain, separately reviewed** — `DONE`, 2026-10-01, exact first slice only.
+    Implementation `595272a2`: seven total predicates, separate `g0.ub.v1`,
+    existing known-bit/all-edge seed facts, independent checker and seven
+    kernel-only parametric A2 transfer proofs. P0 and interpreters unchanged;
+    IR obligations/effects remain, MIR elides only direct canonical true.
+    Full workspace **2,880 PASS / 0 FAIL / 4 existing ignored**, Clippy/fmt and
+    Lean green; **162,644** Rust/Lean comparisons with zero differences.
+    Six chains / ten independently replayed certificates: zero completed
+    rejections, bundle failures or unknowns. 24 byte-identical object pairs;
+    24 original mixed-link correctness executions pass.
+    Certified within-family text savings: zlib **256**, zstd **984**, cJSON
+    **28** bytes, separate from P0/DCE and frozen diagnostic ceilings
+    **952 / 1,608 / 80**. Maximum per-TU saving **0.800%**, below the expected
+    1–3%; no relaxation follows. Unchecked sizes are unchanged. No second slice
+    is authorized, designed or scheduled; no R03/timing/kernel run.
+    [Six-TU table, commits, gates and claim ceiling](docs/notebook/eqsat-certified-guards-20261001.md).
 
 - [ ] **R03 — Q3 measured self-improvement** — `LATER`, P3.
   **OWNER_DECIDED:** current V1 is a completed, frozen negative-admission study;

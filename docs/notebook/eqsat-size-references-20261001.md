@@ -35,4 +35,9 @@ All six B objects remain larger than both references; no parity threshold.
 **Claim ceiling:** reproducible six-TU size comparison of the frozen original
 source/flags. Not whole-application EvoCC coverage, new correctness, latency,
 or certified guard savings. Linked application correctness stays at the prior
-S2 receipt's explicit mixed-object scope. Guard folding will add a separate row.
+S2 receipt's explicit mixed-object scope.
+
+**Separate guard row (`595272a2`):** certified checked B text becomes
+128 / 29,960 / 28,232 / 121,988 / 33,300 / 29,468 in the same TU order;
+unchecked bytes are unchanged. [Guard evidence and boundaries](eqsat-certified-guards-20261001.md).
+The reference comparison above remains frozen; no reference or timing rerun.
