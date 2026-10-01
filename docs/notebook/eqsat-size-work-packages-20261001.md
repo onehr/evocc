@@ -16,7 +16,7 @@ bytes enter the verified-EqSat numerator. No cross-family averages.
 | S2 | [DCE attribution plan](../../tests/contracts/eqsat-size-dce-20261001.json), same A/B verified IR; common backend DCE | DONE. Implementation `e625b89c`; measurement closeout is this record's commit. Existing baseline confirmed, not newly credited to EqSat. Final allocated MIR retains the separately disclosed unused-parameter copies. |
 | S3 | [Existing-capture size ranking](../../tests/contracts/eqsat-size-policy-ranking-20261001.json), no new evaluation | DONE, this ranking record's commit. Size verdict only FINITE_ENUMERATION_SUFFICIENT or NO_OBSERVABLE_EFFECT; does not reopen R03a. |
 | S4 | Existing guard forms / known bits, MIR diagnostic first | Diagnostic DONE (`312f2814`); ceiling significant, independent semantic/checker/Lean slice required. UNVERIFIED_DIAGNOSTIC is non-installable and never PASS. R02e is not closed. |
-| S5 | Six original TUs and full applications, GCC14/Clang19 `-Os`/`-O2` | Pending S4. Honest size gap, not parity or latency. |
+| S5 | Owner-unlocked six original TUs, GCC14/Clang19 `-Os`/`-O2` | DONE, TU-only comparison; [frozen table](eqsat-size-references-20261001.md). No parity or latency claim. |
 | S6 | G2 vmlinux `.text` alongside R01's two builds | Pending R01; no separate kernel campaign is authorized by this package. |
 
 ## S1 — RED and contract
@@ -268,6 +268,8 @@ unchanged EvoIR obligations/other uses, and separately specified direct-true
 MIR discharge. It deliberately retains the existing P0 exclusion/poison rules.
 No current spec revision, P0 allowlist, registry, checker or interpreter is
 changed. The semantic step remains open until that review and implementation.
-S5 is not started out of sequence while this semantic admission remains open.
+The owner subsequently approved the exact first semantic slice and unlocked
+S5 without waiting for certified guard folding; its separate frozen record is
+[here](eqsat-size-references-20261001.md).
 S6 still awaits R01's two G2 builds; no separate kernel or latency run was
 launched. This is a review/dependency boundary, not a test reported as PASS.

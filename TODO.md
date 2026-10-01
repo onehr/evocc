@@ -2077,13 +2077,16 @@ record a justified not-needed disposition separately from implementation PASS.
     declared precision gate before A/B. Failed calibration is a measured limit,
     not permission to tune against A/B or retry the old millisecond protocol.
 
-  - [ ] **R02c — Frozen object-code size comparison** — `LATER`, P3.
-    Owner-approved S5 follows S1–S4: the same six TUs plus full applications,
+  - [x] **R02c — Frozen object-code size comparison** — `DONE`, 2026-10-01, TU scope.
+    Owner unlocked S5 independently of S4: the same six original TUs,
     GCC-14/Clang-19 `-Os` and `-O2`, EvoCC unchecked release-context and checked
     diagnostic-contract builds separately. Per-family distributions/worst
     regressions, no cross-family average or parity threshold. Linked text is
     secondary. No further VM A/B timing; latency NOT_MEASURABLE_ON_THIS_LANE.
-    [Sequential size work packages](docs/notebook/eqsat-size-work-packages-20261001.md).
+    24 GCC/Clang object pairs are byte-identical; original A/B object pairs
+    rechecked under S1. Full workspace 2,870 PASS / 0 FAIL / 4 ignored.
+    [Frozen size table and claim ceiling](docs/notebook/eqsat-size-references-20261001.md).
+    This is TU size evidence, not new full-application correctness or parity.
 
   - [x] **R02d — Implement and verify the stated native UB-check profiles** — `DONE`, 2026-09-30.
     `--ub-checks=checked|unchecked` now reaches the driver and MIR; only native
@@ -2115,8 +2118,10 @@ record a justified not-needed disposition separately from implementation PASS.
     zlib / zstd / cJSON recoverable text is 952 / 1,608 / 80 bytes, not verified
     EqSat benefit. The stop test requires the separately reviewed semantic slice;
     R02e remains open. See the [size package record](docs/notebook/eqsat-size-work-packages-20261001.md#s4-diagnostic-result--frozen-not-a-verified-optimization).
-    The [independent semantic delta](docs/eqsat-guard-folding-draft.md) is proposed,
-    not active authority; review is required before its certified implementation.
+    The owner approved the exact [first semantic slice](docs/eqsat-guard-folding-draft.md):
+    seven total predicates, separate g0.ub.v1 registry, existing bit/edge facts,
+    kernel-only parametric transfer proofs and independent checker replay.
+    Implementation/acceptance remain open. No second slice is authorized.
     If its recoverable text is below the order of post-S2 B–A savings, freeze a
     negative result and do not extend semantics. Only a significant ceiling
     permits the independent total-predicate/obligation spec delta, checker and
