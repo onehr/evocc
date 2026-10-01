@@ -18,6 +18,7 @@ from .eqsat_chain import digest, require, unique
 from .eqsat_elf import inspect_object_size, inspect_elf, require_identical_objects
 from .eqsat_native import Capture
 from .eqsat_twins import bind_bundle, canonical, stable_bundle
+from .eqsat_pilot import recipes
 
 
 def load(path):
@@ -234,5 +235,89 @@ def run_guard_attribution(plan, root):
         finally:
             if started:
                 runner.run('stop-object-vm', [tools['container'], 'stop', vm])
+            save()
+        return directory, receipt
+
+
+def run_reference_sizes(plan, root):
+    """S5 TU sizes only; no timing or application-correctness claim."""
+    root, plan = Path(root).resolve(), Path(plan).resolve()
+    raw, m = plan.read_bytes(), load(plan)
+    require(m['schema'] == 'evocc-reference-size-plan-v1' and m['phase'] == 'S5', 'not the S5 size plan')
+    require(subprocess.check_output(['git', 'show', 'HEAD:'+plan.relative_to(root).as_posix()], cwd=root) == raw,
+            'commit S5 before execution')
+    container = Path(m['container']['path'])
+    require(digest(container.read_bytes()) == m['container']['sha256'], 'container changed')
+    for name, expected in m['inputs'].items():
+        require(digest((root/name).read_bytes()) == expected, 'S5 input changed: '+name)
+    resources = m['resources']
+    require(resources['jobs'] == 1 and resources['max_retained_bytes'] <= 256*1024**2
+            and shutil.disk_usage(root).free >= resources['min_free_bytes'], 'S5 resource limit')
+    cases = {p['id']: p for p in recipes(root)}
+    with (root/'.build/bench.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        directory = Path(tempfile.mkdtemp(prefix='S5-', dir=root/'.evidence/eqsat-size'))
+        (directory/'manifest.json').write_bytes(raw)
+        receipt = dict(schema='evocc-reference-size-receipt-v1', status='STARTED', attempts=[], units=[],
+            manifest_digest=digest(raw), timing='NOT_RUN', native_executions=0,
+            claim='TU_SIZE_ONLY_NO_PARITY_OR_APPLICATION_PASS')
+
+        def save():
+            p = directory/'receipt.json.pending'
+            p.write_bytes(json.dumps(receipt, indent=2, sort_keys=True).encode()+b'\n')
+            p.replace(directory/'receipt.json')
+
+        runner = Capture(directory, resources, dict(os.environ), receipt, save)
+        vm, started = directory.name.lower(), False
+        try:
+            row = runner.run('image', [container, 'image', 'inspect', m['image']['name']])
+            require(load(directory/row['stdout'])[0]['id'] == m['image']['digest'], 'S5 image changed')
+            runner.run('start-size-vm', [container, 'run', '--rm', '-d', '--name', vm,
+                '--cpus', '2', '--memory', '3G', '--read-only', '--tmpfs', '/tmp', '--no-dns',
+                '--mount', f'type=bind,source={root},target=/work,readonly',
+                '--mount', f'type=bind,source={directory},target=/runwork',
+                m['image']['name'], '/bin/sleep', '3600'])
+            started = True
+            for compiler in ('gcc-14', 'clang-19'):
+                runner.run('version:'+compiler, [container, 'exec', vm, '/usr/bin/'+compiler, '--version'])
+            previous = load(root/m['baseline_receipt'])
+            for n, unit in enumerate(previous['units']):
+                case = cases[unit['case']]
+                folder = Path('/work')/case['source_root']
+                includes = [] if case['id'] == 'p0' else [folder, folder/'lib']
+                source = folder/unit['source']
+                result = dict(case=unit['case'], source=unit['source'], eligible_roots=unit['eligible_roots'],
+                    evo={}, references={})
+                receipt['units'].append(result)
+                for arm in ('A', 'B'):
+                    result['evo'][arm] = {}
+                    for profile in ('checked', 'unchecked'):
+                        product = unit['arms'][arm]['profiles'][profile]['on']
+                        obj = root/product['object']
+                        twin = obj.with_name(obj.name.replace('-0.o', '-1.o'))
+                        require_identical_objects(obj.read_bytes(), twin.read_bytes())
+                        result['evo'][arm][profile] = dict(metrics=inspect_object_size(obj.read_bytes()),
+                            object=product['object'], two_builds='BYTE_IDENTICAL')
+                for compiler in ('gcc-14', 'clang-19'):
+                    for level in ('Os', 'O2'):
+                        objects = []
+                        for repeat in (0, 1):
+                            obj = directory/f'{n:02}-{compiler}-{level}-{repeat}.o'
+                            runner.run(f'compile:{n}:{compiler}:{level}:{repeat}', [container, 'exec', vm,
+                                '/usr/bin/'+compiler, '-std=gnu11', '-'+level, '-fPIC', *case['flags'],
+                                *['-I'+str(p) for p in includes], '-c', source, '-o', '/runwork/'+obj.name])
+                            objects.append(obj)
+                        require_identical_objects(objects[0].read_bytes(), objects[1].read_bytes())
+                        result['references'][compiler+'-'+level] = dict(
+                            object=objects[0].relative_to(root).as_posix(),
+                            metrics=inspect_object_size(objects[0].read_bytes()), two_builds='BYTE_IDENTICAL')
+                save()
+            receipt['status'] = 'OBSERVED_TU_SIZE_COMPARISON'
+        except BaseException as error:
+            receipt.update(status='FAILED', error=str(error))
+            raise
+        finally:
+            if started:
+                runner.run('stop-size-vm', [container, 'stop', vm])
             save()
         return directory, receipt

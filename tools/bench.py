@@ -74,6 +74,7 @@ def parser():
     p.add_argument('--eqsat-steady-ab', type=Path, help='run a separately frozen steady-state A/B plan after Linux A/A admission')
     p.add_argument('--eqsat-size-dce', type=Path, help='S2 object-size attribution with existing baseline DCE on/off; no timing experiment')
     p.add_argument('--eqsat-size-guards', type=Path, help='S4 non-installable MIR guard size diagnostic; no native execution')
+    p.add_argument('--eqsat-size-references', type=Path, help='S5 GCC/Clang TU object-size comparison; no timing')
     p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
     p.add_argument("--programs", type=positive, default=500, help="Csmith programs per campaign")
     p.add_argument("--campaign", choices=["all", "base", "bitfields"], default="all")
@@ -575,6 +576,17 @@ def main(argv=None):
     def eqsat_tool(name):
         package = 'ladder' if __name__ == '__main__' and not __package__ else 'tools.ladder'
         return importlib.import_module(package + '.' + name)
+    if args.eqsat_size_references:
+        if not only_options('eqsat_size_references'):
+            print('--eqsat-size-references is a separate TU size mode', file=sys.stderr)
+            return 2
+        try:
+            directory, receipt = eqsat_tool('eqsat_size').run_reference_sizes(args.eqsat_size_references, ROOT)
+            print(f"{receipt['status']}: {directory}")
+            return 0 if receipt['status'] == 'OBSERVED_TU_SIZE_COMPARISON' else 1
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            print(f'reference size comparison failed: {error}', file=sys.stderr)
+            return 1
     if args.eqsat_size_guards:
         if not only_options('eqsat_size_guards'):
             print('--eqsat-size-guards is a separate non-installable diagnostic mode', file=sys.stderr)
