@@ -1,6 +1,16 @@
 # EvoCC: An Equality-Native, Self-Contained C Compiler Architecture and Launch Plan
 
-**Q2/Q3 implementation design, September 29, revision 5:** the maintained
+**Current V1 owner scope, October 1, revision 7:** Q2 targets object code size;
+latency is NOT_MEASURABLE_ON_THIS_LANE and no further VM timing is scheduled.
+R03 V1 is a completed negative-admission study, all three tracks remain
+INCONCLUSIVE / NOT_ADMITTED, R03a/b/c/d do not start, and R03e is deferred.
+EqSat/Lean is a trust anchor for the domains requiring proved rewrites, not a
+claim about the whole optimizer or useful AI discovery. Execute the approved
+[S1–S6 size work packages](notebook/eqsat-size-work-packages-20261001.md) in order.
+These decisions supersede the aspirational equality-native/AI narrative below;
+that narrative is not current implementation or release acceptance.
+
+**Q2/Q3 implementation design:** the maintained
 [verified optimization and performance architecture](framing-draft.md) refines
 the research intentions below into existing-component interfaces, rule-proof
 admission, native measurement, AI/non-AI ablations and R01–R03 child tasks.

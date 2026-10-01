@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-09-30**, initially audited against `a83d803`; current clauses are
+Updated **2026-10-01**, initially audited against `a83d803`; current clauses are
 EvoIR **1.9.115** and EvoMIR **0.54**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -78,7 +78,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R02c, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Current EqSat preflight is frozen, all three tracks INCONCLUSIVE/NOT_ADMITTED. Owner decisions: bounded R02e, deferred R03e, negative-admission R03 V1 freeze. No implicit search or audit expansion; x86-64 and release stay separate. |
+| LATER | R01, R02, R02c, R02e, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05 | Execute the approved S1–S6 size work packages in order. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -1927,11 +1927,11 @@ record a justified not-needed disposition separately from implementation PASS.
     [Implementation and commands](docs/notebook/verified-eqsat-implementation-20260929.md);
     [sealed fixture](tests/fixtures/eqsat-chains/verified-chain/README.md).
 
-- [ ] **R02 — Q2 fair GCC -O2 performance evaluation** — `LATER`, P3.
-  Use the same pinned programs, workloads, machine conditions and result checks;
-  record compile/runtime costs and regressions. MINI_DATASET output correctness
-  and code-size reductions are not performance acceptance. Close with the
-  roadmap's measured comparison, not an inferred speedup. [Roadmap][roadmap].
+- [ ] **R02 — Q2 object code-size evaluation** — `LATER`, P3.
+  V1 primary objective is size under revision 7, using pinned programs and result
+  checks. Compare GCC/Clang `-Os`/`-O2` without a parity threshold. Latency is
+  NOT_MEASURABLE_ON_THIS_LANE; no timing rerun/retuning. Final G2 and whole-scope
+  acceptance remain separate from the six-TU pilot. [Roadmap][roadmap].
 
   - [x] **R02a — Performance manifests and measurement runner** — `DONE`, 2026-09-30, bounded registered Linux pilot.
     Design P1 is implemented through `tools/bench.py` and existing adapters/locks.
@@ -2077,11 +2077,13 @@ record a justified not-needed disposition separately from implementation PASS.
     declared precision gate before A/B. Failed calibration is a measured limit,
     not permission to tune against A/B or retry the old millisecond protocol.
 
-  - [ ] **R02c — Frozen native Q2 comparison** — `LATER`, P3.
-    After the pilot, R02d profiles and final R01, run admitted originals against declared
-    GCC-14/Clang-19 profiles with paired statistics and per-workload objectives.
-    Separate native/VM/emulator claims, mixed links, memory and code size; retain
-    regressions and all non-results. Complete measurement need not mean GCC parity.
+  - [ ] **R02c — Frozen object-code size comparison** — `LATER`, P3.
+    Owner-approved S5 follows S1–S4: the same six TUs plus full applications,
+    GCC-14/Clang-19 `-Os` and `-O2`, EvoCC unchecked release-context and checked
+    diagnostic-contract builds separately. Per-family distributions/worst
+    regressions, no cross-family average or parity threshold. Linked text is
+    secondary. No further VM A/B timing; latency NOT_MEASURABLE_ON_THIS_LANE.
+    [Sequential size work packages](docs/notebook/eqsat-size-work-packages-20261001.md).
 
   - [x] **R02d — Implement and verify the stated native UB-check profiles** — `DONE`, 2026-09-30.
     `--ub-checks=checked|unchecked` now reaches the driver and MIR; only native
@@ -2106,8 +2108,12 @@ record a justified not-needed disposition separately from implementation PASS.
     and unchecked separately; GCC sanitizer coverage is not assumed equivalent.
 
   - [ ] **R02e — Guard-predicate folding domain, separately reviewed** — `LATER`, P3.
-    **OWNER_DECISION_PENDING:** recommended next bounded semantic slice after
-    the frozen close-out; not started or authorized automatically. Preserve
+    **OWNER_APPROVED, ceiling first:** S4 begins with a MIR-only
+    UNVERIFIED_DIAGNOSTIC known-bits guard fold, never installable or PASS.
+    If its recoverable text is below the order of post-S2 B–A savings, freeze a
+    negative result and do not extend semantics. Only a significant ceiling
+    permits the independent total-predicate/obligation spec delta, checker and
+    Lean proofs with R03f manual integration. Existing forms only. Preserve
     all source-definedness, poison and other predicate uses; native unchecked
     comparisons are not proof that a guard can be folded.
     If retained guards materially limit Q2, specify and prove total UB-predicate
@@ -2116,8 +2122,8 @@ record a justified not-needed disposition separately from implementation PASS.
     This conditional semantic/checker change is not required to measure baseline B.
 
 - [ ] **R03 — Q3 measured self-improvement** — `LATER`, P3.
-  **OWNER_DECISION_PENDING:** recommend freezing current V1 as a completed
-  negative-admission study, not marking the positive improvement milestone done.
+  **OWNER_DECIDED:** current V1 is a completed, frozen negative-admission study;
+  this unchecked parent is the unachieved positive improvement milestone.
   All three tracks are formally INCONCLUSIVE/NOT_ADMITTED; do not start R03a/b/c/d
   or expand the census/auditors to force an affirmative result. See the
   [formal stop and decision record](docs/notebook/eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision).
