@@ -81,6 +81,31 @@ fn comparison(op: &str) -> Option<Comparison> {
 fn vectors() -> Vec<(String, String)> {
     let mut cases = Vec::new();
     let same = facts(WIDTH);
+    for op in [
+        "divisor_nonzero",
+        "signed_div_rem_no_overflow",
+        "signed_add_defined",
+        "signed_sub_defined",
+        "signed_mul_defined",
+        "shift_count_defined.unsigned",
+        "shift_count_defined.signed",
+    ] {
+        for &a in &same {
+            let seconds = if op == "divisor_nonzero" {
+                vec![None]
+            } else {
+                same.iter().map(|&b| Some(b)).collect()
+            };
+            for b in seconds {
+                let pair = b.map_or_else(
+                    || fact_literal(a),
+                    |b| format!("{},{}", fact_literal(a), fact_literal(b)),
+                );
+                cases.push((format!("{{\"kind\":\"transfer\",\"op\":\"{op}\",\"n\":{WIDTH},\"facts\":[{pair}]}}"),
+                    fact_literal(a.transfer_guard(op,b).unwrap())));
+            }
+        }
+    }
     for op in BINARY.iter().chain(&COMPARISONS) {
         for &left in &same {
             for &right in &same {

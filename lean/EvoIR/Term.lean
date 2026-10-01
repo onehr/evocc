@@ -27,6 +27,9 @@ inductive Term (Γ : Var → Nat) : Nat → Type where
   | shift (o : ShOp) {n m : Nat} (a : Term Γ n) (k : Term Γ m) : Term Γ n
   /-- Width change: source width `w`, target width `n`. -/
   | cast (o : CastOp) {w : Nat} (n : Nat) (a : Term Γ w) : Term Γ n
+  | guard (o : GuardOp) {n : Nat} (a b : Term Γ n) : Term Γ 1
+  | nonzero {n : Nat} (a : Term Γ n) : Term Γ 1
+  | count (isSigned : Bool) {n m : Nat} (a : Term Γ n) (k : Term Γ m) : Term Γ 1
 
 /-- A valuation of the pattern variables, each at its own width. -/
 abbrev Subst (Γ : Var → Nat) := (v : Var) → BitVec (Γ v)
@@ -39,6 +42,9 @@ def denoteTerm {Γ : Var → Nat} (σ : Subst Γ) : {n : Nat} → Term Γ n → 
   | _, .cmp (n := n) o a b => denoteOp (.cmp o n) (denoteTerm σ a, denoteTerm σ b)
   | n, .shift (m := m) o a k => denoteOp (.shift o n m) (denoteTerm σ a, denoteTerm σ k)
   | n, .cast (w := w) o _ a => denoteOp (.cast o w n) (denoteTerm σ a)
+  | _, .guard (n := n) o a b => denoteOp (.guard o n) (denoteTerm σ a, denoteTerm σ b)
+  | _, .nonzero (n := n) a => denoteOp (.nonzero n) (denoteTerm σ a)
+  | _, .count (n := n) (m := m) s a k => denoteOp (.count s n m) (denoteTerm σ a, denoteTerm σ k)
 
 @[simp] theorem denoteTerm_var {Γ : Var → Nat} (σ : Subst Γ) (v : Var) (n : Nat) (h : Γ v = n) :
     denoteTerm σ (.var v n h) = h ▸ σ v := rfl

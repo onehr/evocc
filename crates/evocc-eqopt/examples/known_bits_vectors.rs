@@ -131,6 +131,24 @@ fn transfer(line: &str) -> String {
         return rendered(left.transfer_icmp(right, comparison));
     }
     match op {
+        "divisor_nonzero"
+        | "signed_div_rem_no_overflow"
+        | "signed_add_defined"
+        | "signed_sub_defined"
+        | "signed_mul_defined"
+        | "shift_count_defined.unsigned"
+        | "shift_count_defined.signed" => {
+            let Some(left) = fact(n, facts.first()) else {
+                return unsupported();
+            };
+            let width = if op.starts_with("shift_count_defined.") {
+                amount_width
+            } else {
+                n
+            };
+            left.transfer_guard(op, fact(width, facts.get(1)))
+                .map_or_else(unsupported, rendered)
+        }
         "and" | "or" | "xor" | "add" | "sub" | "mul" => {
             let (Some(left), Some(right)) = (fact(n, facts.first()), fact(n, facts.get(1))) else {
                 return unsupported();

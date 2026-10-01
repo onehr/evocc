@@ -344,6 +344,8 @@ pub enum RegistryCeiling {
     V2,
     V3,
     V4,
+    /// The independent, opt-in total-guard registry; not a P0 revision.
+    GuardV1,
 }
 
 impl RegistryCeiling {
@@ -355,6 +357,7 @@ impl RegistryCeiling {
             Self::V2 => "p0.scalar.v2",
             Self::V3 => "p0.scalar.v3",
             Self::V4 => "p0.scalar.v4",
+            Self::GuardV1 => "g0.ub.v1",
         }
     }
 }
@@ -512,6 +515,14 @@ pub fn shipped_policies() -> Vec<ExtractionPolicy> {
 /// The policy named `name`, if this producer ships one.
 #[must_use]
 pub fn policy_by_name(name: &str) -> Option<ExtractionPolicy> {
+    if name == "guard-known-true" {
+        return Some(ExtractionPolicy::new(
+            "guard-known-true",
+            RegistryCeiling::GuardV1,
+            CostFunction::InstructionCount,
+            SchedulePolicy::default(),
+        ));
+    }
     shipped_policies()
         .into_iter()
         .find(|policy| policy.name == name)

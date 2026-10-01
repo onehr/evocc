@@ -36,12 +36,31 @@ inductive CastOp where
   | zext | sext | trunc
   deriving DecidableEq, Repr, Inhabited
 
+/-- Total signed integer predicates from Sections 3.3.1 and 6.1. -/
+inductive GuardOp where
+  | add | sub | mul | divRem
+  deriving DecidableEq, Repr, Inhabited
+
+def signedMin (n : Nat) : Int := -(2 ^ (n - 1) : Int)
+def signedMax (n : Nat) : Int := (2 ^ (n - 1) : Int) - 1
+def signedRepresentable (n : Nat) (z : Int) : Prop :=
+  signedMin n ≤ z ∧ z ≤ signedMax n
+
+instance (n : Nat) (z : Int) : Decidable (signedRepresentable n z) := by
+  unfold signedRepresentable; infer_instance
+
+def denoteNonzero {n : Nat} (y : BitVec n) : BitVec 1 :=
+  BitVec.ofBool (y != 0#n)
+
 /-- An operator together with the widths its signature fixes. -/
 inductive Op where
   | bin (o : BinOp) (n : Nat)
   | cmp (o : CmpOp) (n : Nat)
   | shift (o : ShOp) (n m : Nat)
   | cast (o : CastOp) (w n : Nat)
+  | guard (o : GuardOp) (n : Nat)
+  | nonzero (n : Nat)
+  | count (isSigned : Bool) (n m : Nat)
   deriving DecidableEq, Repr, Inhabited
 
 /-- The operand tuple an operator consumes. -/
@@ -50,6 +69,9 @@ def Op.dom : Op → Type
   | .cmp _ n => BitVec n × BitVec n
   | .shift _ n m => BitVec n × BitVec m
   | .cast _ w _ => BitVec w
+  | .guard _ n => BitVec n × BitVec n
+  | .nonzero n => BitVec n
+  | .count _ n m => BitVec n × BitVec m
 
 /-- The width an operator produces. -/
 def Op.res : Op → Nat
@@ -57,6 +79,9 @@ def Op.res : Op → Nat
   | .cmp _ _ => 1
   | .shift _ n _ => n
   | .cast _ _ n => n
+  | .guard _ _ => 1
+  | .nonzero _ => 1
+  | .count _ _ _ => 1
 
 /-- The single semantics.  Everything else in this development -- the rule
 theorems, the known-bits transfers, and the executable evaluator -- is stated
@@ -86,6 +111,17 @@ def denoteOp : (o : Op) → o.dom → BitVec o.res
   | .cast .zext _w n, x => BitVec.zeroExtend n x
   | .cast .sext _w n, x => BitVec.signExtend n x
   | .cast .trunc _w n, x => BitVec.truncate n x
+  -- Section 6.1: the mathematical signed result must be representable.
+  | .guard .add n, (x, y) => BitVec.ofBool (decide (signedRepresentable n (x.toInt + y.toInt)))
+  | .guard .sub n, (x, y) => BitVec.ofBool (decide (signedRepresentable n (x.toInt - y.toInt)))
+  | .guard .mul n, (x, y) => BitVec.ofBool (decide (signedRepresentable n (x.toInt * y.toInt)))
+  -- Section 3.3.1: zero divisor is deliberately not an overflow failure.
+  | .guard .divRem n, (x, y) =>
+      BitVec.ofBool (decide (¬ (x.toInt = signedMin n ∧ y.toInt = -1)))
+  | .nonzero _, y => denoteNonzero y
+  -- Decode the count at M, against the mathematical bound N; do not mask it.
+  | .count false n _, (_, k) => BitVec.ofBool (decide (k.toNat < n))
+  | .count true n _, (_, k) => BitVec.ofBool (decide (0 ≤ k.toInt ∧ k.toInt < (n : Int)))
 
 
 /-! ## Evaluating a shift by an amount too large to shift by
@@ -148,5 +184,9 @@ def ShOp.name : ShOp → String
 
 def CastOp.name : CastOp → String
   | .zext => "zext" | .sext => "sext" | .trunc => "trunc"
+
+def GuardOp.name : GuardOp → String
+  | .add => "signed_add_defined" | .sub => "signed_sub_defined"
+  | .mul => "signed_mul_defined" | .divRem => "signed_div_rem_no_overflow"
 
 end EvoIR

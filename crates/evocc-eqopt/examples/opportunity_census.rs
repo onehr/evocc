@@ -122,19 +122,26 @@ fn run(args: &[String]) -> Result<String, String> {
     if args[0] == "census" && args.len() == 3 {
         return Ok(census(&module, &args[1]));
     }
-    if args[0] != "policy" || args.len() != 8 {
+    if !matches!(args[0].as_str(), "policy" | "guards") || args.len() != 8 {
         return Err("unknown adapter mode".into());
     }
     let max_transactions = args[6].parse::<usize>().map_err(|e| e.to_string())?;
     if !(1..=8).contains(&max_transactions) {
         return Err("transaction count outside frozen native preflight bound".into());
     }
-    let policy = ExtractionPolicy::default()
-        .with_cost(CostFunction::Vector(OperatorWeights::parse(&args[5])?))
-        .with_schedule(SchedulePolicy {
-            max_transactions,
-            ..SchedulePolicy::default()
-        });
+    let policy = if args[0] == "guards" {
+        if args[5] != "guard-known-true" {
+            return Err("unknown guard policy".into());
+        }
+        evocc_eqopt::policy_by_name(&args[5]).ok_or("unknown guard registry")?
+    } else {
+        ExtractionPolicy::default()
+            .with_cost(CostFunction::Vector(OperatorWeights::parse(&args[5])?))
+    }
+    .with_schedule(SchedulePolicy {
+        max_transactions,
+        ..SchedulePolicy::default()
+    });
     let checker =
         evocc_proof::StandaloneProofChecker::new(args[3].clone().into(), std::env::temp_dir())
             .with_timeout(std::time::Duration::from_secs(300))

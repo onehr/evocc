@@ -1,8 +1,9 @@
 # R02e guard-predicate folding — proposed semantic delta
 
-Draft 1 — 2026-10-01. **Proposal, not active authority or a reviewed registry.**
-EvoIR 1.9.115, EvoMIR 0.54 and P0 registries remain unchanged. This independent
-S4 second-step proposal must be reviewed before production implementation.
+Draft 1 — 2026-10-01. **Exact first slice OWNER_APPROVED.**
+The normative integration is EvoIR 1.9.116 Section 8.12 and `g0.ub.v1` in
+Section 11.6. Production acceptance remains open. P0 stays unchanged; no
+second slice is authorized, designed or scheduled.
 
 ## Evidence and scope
 
@@ -39,8 +40,8 @@ shift obligation is reintroduced.
 
 ## Separate profile and fact transfers
 
-Reserve `g0.ub.v1`, separate from P0. No digest or accepted certificate is
-assigned before review of exact rule text. Only the seven typed root forms
+Use `g0.ub.v1`, separate from P0, with the reviewed text/digest in Section
+11.6. Only the seven typed root forms
 above are added. Witness operations remain existing P0 pure integer forms.
 For the first slice, every operand cone/witness/seed passes the existing P0
 exclusion and all-edge poison fixed points, except the permitted predicate
@@ -137,6 +138,7 @@ bundle failures; timeouts are not PASS. Two objects must be byte-identical under
 S1. Report certified guard savings separately from P0/DCE and the diagnostic
 ceiling, including retained forms.
 
-**Current:** diagnostic plumbing/regression gate green. The new profile/registry,
-Lean transfers, checker path, ordinary MIR elision and certified original replay
-are **NOT IMPLEMENTED / NOT RUN**. This exact contract is awaiting review.
+**Current:** diagnostic plumbing/regression gate green; the seven parametric
+Lean transfer proofs compile. Independent checker/profile integration, full
+Lean acceptance, ordinary MIR elision and certified original replay remain
+**IN PROGRESS / NOT ACCEPTED**. Approval does not close those gates.

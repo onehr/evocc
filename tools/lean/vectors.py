@@ -379,6 +379,74 @@ SETS = {
     "named": ("named.jsonl", named),
 }
 
+GUARD_BINARY = ("signed_add_defined", "signed_sub_defined", "signed_mul_defined",
+                "signed_div_rem_no_overflow")
+GUARD_COUNTS = ("shift_count_defined.unsigned", "shift_count_defined.signed")
+
+
+def guards(write) -> int:
+    """The seven g0 rows: exhaustive small facts/values plus independent widths.
+
+    These are inputs, not an implementation-derived oracle. Value answers come
+    from the existing interpreter; transfer answers come from both Rust sides
+    and Lean independently. No interval or edge-condition facts are added.
+    """
+    lines = 0
+
+    def emit(line):
+        nonlocal lines
+        write(line)
+        lines += 1
+
+    for n in SMALL_WIDTHS:
+        all_facts = normalized_facts(n)
+        for op in GUARD_BINARY:
+            for a in all_facts:
+                for b in all_facts:
+                    emit(transfer_line(op, n, [a, b]))
+            for a in range(1 << n):
+                for b in range(1 << n):
+                    emit(value_line(op, n, [a, b]))
+        for a in all_facts:
+            emit(transfer_line("divisor_nonzero", n, [a]))
+        for a in range(1 << n):
+            emit(value_line("divisor_nonzero", n, [a]))
+        for m in SMALL_WIDTHS:
+            for op in GUARD_COUNTS:
+                for a in all_facts:
+                    for k in normalized_facts(m):
+                        emit(transfer_line(op, n, [a, k], m=m))
+                for a in range(1 << n):
+                    for k in range(1 << m):
+                        emit(value_line(op, n, [a, k], m=m))
+    # Every admitted width, including M=2/N=64, both orders, INT_MIN/-1,
+    # count=N and negative count. Values are normalized at their own width.
+    for n in range(1, 65):
+        boundary = [0, 1 & span(n), (1 << (n-1))-1, 1 << (n-1), span(n)]
+        for op in GUARD_BINARY:
+            for a in boundary:
+                for b in boundary:
+                    emit(value_line(op, n, [a, b]))
+                    emit(transfer_line(op, n, [(span(n), a), (span(n), b)]))
+        for m in (1, 2, 8, 32, 64):
+            for op in GUARD_COUNTS:
+                for k in boundary_amounts(n, m):
+                    emit(value_line(op, n, [span(n), k], m=m))
+                    emit(transfer_line(op, n, [(0, 0), (span(m), k)], m=m))
+                emit(transfer_line(op, n, [(0, 0), (0, 0)], m=m))
+    rng = random.Random(20261001)
+    for _ in range(4096):
+        n, m = random_width(rng), random_width(rng)
+        op = rng.choice(GUARD_BINARY + GUARD_COUNTS + ("divisor_nonzero",))
+        fs = [random_fact(rng, n)]
+        if op != "divisor_nonzero":
+            fs.append(random_fact(rng, m if op in GUARD_COUNTS else n))
+        emit(transfer_line(op, n, fs, m=m if op in GUARD_COUNTS else None))
+    return lines
+
+
+SETS["guards"] = ("guards.jsonl", guards)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)

@@ -32,6 +32,9 @@ inductive Pat where
   | cmp (o : CmpOp) (isFold : Bool) (a b : Pat)
   | shift (o : ShOp) (a k : Pat)
   | cast (o : CastOp) (a : Pat)
+  | guard (o : GuardOp) (a b : Pat)
+  | nonzero (a : Pat)
+  | count (isSigned : Bool) (a k : Pat)
   deriving DecidableEq, Repr, Inhabited
 
 /-- A right-hand side: a pattern, or the `known_const` builder, which reads
@@ -72,6 +75,9 @@ def Pat.width (Γ : Var → Nat) : Pat → Option Nat
   | .cmp _ _ _ _ => some 1
   | .shift _ a _ => a.width Γ
   | .cast _ _ => none
+  | .guard _ _ _ => some 1
+  | .nonzero _ => some 1
+  | .count _ _ _ => some 1
 
 /-- Elaboration is the well-typedness judgement: a pattern types at width `n`
 under `Γ` exactly when this returns a term. -/
@@ -108,6 +114,30 @@ def elabPat (Γ : Var → Nat) : (n : Nat) → Pat → Option (Term Γ n)
           | some ta => some (.cast o n ta)
           | none => none
       | none => none
+  | 1, .guard o a b =>
+      match a.width Γ with
+      | some w =>
+          match elabPat Γ w a, elabPat Γ w b with
+          | some ta, some tb => some (.guard o ta tb)
+          | _, _ => none
+      | none => none
+  | 0, .guard _ _ _ => none
+  | _ + 2, .guard _ _ _ => none
+  | 1, .nonzero a =>
+      match a.width Γ with
+      | some w => (elabPat Γ w a).map Term.nonzero
+      | none => none
+  | 0, .nonzero _ => none
+  | _ + 2, .nonzero _ => none
+  | 1, .count s a k =>
+      match a.width Γ, k.width Γ with
+      | some w, some m =>
+          match elabPat Γ w a, elabPat Γ m k with
+          | some ta, some tk => some (.count s ta tk)
+          | _, _ => none
+      | _, _ => none
+  | 0, .count _ _ _ => none
+  | _ + 2, .count _ _ _ => none
 
 /-- The `fold.` marker is rendering, not meaning: Section 11.6 gives the fold
 builders the operator's own semantics, so the two sides of a fold rule
@@ -189,6 +219,10 @@ def Pat.render : Pat → String
       (if f then "fold." else "") ++ o.name ++ "(" ++ a.render ++ "," ++ b.render ++ ")"
   | .shift o a k => o.name ++ "(" ++ a.render ++ "," ++ k.render ++ ")"
   | .cast o a => o.name ++ "(" ++ a.render ++ ")"
+  | .guard o a b => o.name ++ "(" ++ a.render ++ "," ++ b.render ++ ")"
+  | .nonzero a => "divisor_nonzero(" ++ a.render ++ ")"
+  | .count s a k => "shift_count_defined." ++ (if s then "signed" else "unsigned") ++
+      "(" ++ a.render ++ "," ++ k.render ++ ")"
 
 def Rhs.render : Rhs → String
   | .pat p => p.render

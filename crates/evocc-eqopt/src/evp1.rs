@@ -21,6 +21,12 @@ use crate::scalar_eq::{
 use crate::seed_facts::SeedFacts;
 use crate::{ProofAuthority, ScalarEqBudget, ScalarEqReport, ScalarRewrite};
 
+#[path = "guard_certification.rs"]
+mod guards;
+
+const GUARD_REGISTRY: &str = "g0.ub.v1";
+const GUARD_DIGEST: &str = "c49a0caac284fe276cf1605b312f45a8ddb5378b61dc0aaf352e03a41d21cc84";
+
 /// The two reviewed registries of Section 11.6.
 ///
 /// A certificate commits to one registry and cannot extend it, and Section 11.6
@@ -46,6 +52,7 @@ pub(crate) fn registry_ceiling_digest(ceiling: crate::RegistryCeiling) -> &'stat
         crate::RegistryCeiling::V2 => REGISTRY_V2_SHA256,
         crate::RegistryCeiling::V3 => REGISTRY_V3_SHA256,
         crate::RegistryCeiling::V4 => REGISTRY_V4_SHA256,
+        crate::RegistryCeiling::GuardV1 => GUARD_DIGEST,
     }
 }
 
@@ -152,6 +159,9 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     module: &Module,
     policy: &ExtractionPolicy,
 ) -> CertifiedScalarEqTransaction {
+    if policy.registry() == RegistryCeiling::GuardV1 {
+        return guards::optimize(module, policy);
+    }
     let budget = policy.schedule().budget();
     let input = render_module(module);
     let (transient, applied) = optimize_scalar_module_with_events(module, budget);
@@ -409,6 +419,12 @@ fn policy_keeps(
 /// contains. Every rule a revision adds is printed with a `p1_` identifier, so
 /// the two added-rule tables above are the whole test.
 fn rule_within(rule: &str, ceiling: RegistryCeiling) -> bool {
+    if ceiling == RegistryCeiling::GuardV1 {
+        return rule.starts_with("g0_");
+    }
+    if rule.starts_with("g0_") {
+        return false;
+    }
     match ceiling {
         RegistryCeiling::V1 => {
             !V2_RULES.contains(&rule) && !V3_RULES.contains(&rule) && !V4_RULES.contains(&rule)
@@ -416,6 +432,7 @@ fn rule_within(rule: &str, ceiling: RegistryCeiling) -> bool {
         RegistryCeiling::V2 => !V3_RULES.contains(&rule) && !V4_RULES.contains(&rule),
         RegistryCeiling::V3 => !V4_RULES.contains(&rule),
         RegistryCeiling::V4 => true,
+        RegistryCeiling::GuardV1 => false,
     }
 }
 
@@ -1714,6 +1731,15 @@ fn node_transfer(node: &EvpNode, facts: &[KnownBits], classes: &LocalClasses) ->
         "zext" => child(LEFT)?.transfer_zext(width),
         "sext" => child(LEFT)?.transfer_sext(width),
         "trunc" => child(LEFT)?.transfer_trunc(width),
+        "divisor_nonzero" => child(LEFT)?.transfer_guard(&node.operation, None)?,
+        "signed_div_rem_no_overflow"
+        | "signed_add_defined"
+        | "signed_sub_defined"
+        | "signed_mul_defined"
+        | "shift_count_defined.unsigned"
+        | "shift_count_defined.signed" => {
+            child(LEFT)?.transfer_guard(&node.operation, Some(child(RIGHT)?))?
+        }
         _ => return None,
     };
     Some(fact)
@@ -1887,7 +1913,10 @@ fn before_node(
         Inst::ZExt(_, source, _) => ("zext", vec![source], Vec::new()),
         Inst::SExt(_, source, _) => ("sext", vec![source], Vec::new()),
         Inst::Trunc(_, source, _) => ("trunc", vec![source], Vec::new()),
-        _ => return None,
+        _ => {
+            let (operation, _, operands) = guard_instruction(instruction)?;
+            (operation, operands, Vec::new())
+        }
     };
     Some(EvpNode {
         node,
@@ -1902,6 +1931,51 @@ fn before_node(
             .map(|operand| values.get(&operand.id).copied())
             .collect::<Option<_>>()?,
     })
+}
+
+/// Only g0 can certify these forms. This does not change P0 ingestion.
+pub(crate) fn guard_instruction(inst: &Inst) -> Option<(&'static str, &'static str, Vec<&Value>)> {
+    let (op, rule, operands) = match inst {
+        Inst::DivisorNonZero(_, a) => ("divisor_nonzero", "g0_001_nonzero", vec![a]),
+        Inst::SignedDivRemNoOverflow(_, a, b) => {
+            ("signed_div_rem_no_overflow", "g0_002_div_rem", vec![a, b])
+        }
+        Inst::SignedAddDefined(_, a, b) => ("signed_add_defined", "g0_003_add", vec![a, b]),
+        Inst::SignedSubDefined(_, a, b) => ("signed_sub_defined", "g0_004_sub", vec![a, b]),
+        Inst::SignedMulDefined(_, a, b) => ("signed_mul_defined", "g0_005_mul", vec![a, b]),
+        Inst::ShiftCountDefined {
+            shifted,
+            amount,
+            amount_signed,
+            ..
+        } => {
+            if *amount_signed {
+                (
+                    "shift_count_defined.signed",
+                    "g0_007_signed_count",
+                    vec![shifted, amount],
+                )
+            } else {
+                (
+                    "shift_count_defined.unsigned",
+                    "g0_006_unsigned_count",
+                    vec![shifted, amount],
+                )
+            }
+        }
+        _ => return None,
+    };
+    if inst_results(inst).first()?.ty != EvoIRType::Bits(1)
+        || !operands
+            .iter()
+            .all(|v| matches!(v.ty, EvoIRType::Bits(1..=64)))
+        || (operands.len() == 2
+            && !op.starts_with("shift_count")
+            && operands[0].ty != operands[1].ty)
+    {
+        return None;
+    }
+    Some((op, rule, operands))
 }
 
 /// Where the node stream puts one rule variable.

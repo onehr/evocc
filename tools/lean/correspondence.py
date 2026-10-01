@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 VECTORS = ROOT / "lean" / "vectors"
 RECEIPT = ROOT / "tests" / "contracts" / "lean-correspondence-receipt.json"
-FILES = ["transfers-small", "lattice-small", "values-width8", "random", "named"]
+FILES = ["transfers-small", "lattice-small", "values-width8", "random", "named", "guards"]
 ABSTENTIONS = {"skipped", "unsupported"}
 RUNNERS = {
     "producer": ("evocc-eqopt", "--example", "known_bits_vectors", "examples/known_bits_vectors"),
@@ -77,21 +77,23 @@ def compare(left: Path, right: Path) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-build", action="store_true")
+    ap.add_argument("--set", choices=["all", "guards"], default="all")
     args = ap.parse_args()
-    run([sys.executable, "tools/lean/vectors.py"])
+    files = FILES if args.set=="all" else [args.set]
+    run([sys.executable, "tools/lean/vectors.py", "--set", args.set])
     binaries = {}
     debug = target_dir() / "debug"
     for side, (package, kind, name, relative) in RUNNERS.items():
         if not args.skip_build:
             run(["cargo", "build", "-q", "--offline", "-p", package, kind, name])
         binaries[side] = debug / relative
-    for name in FILES:
+    for name in files:
         run(["lake", "exe", "evoir-sem", f"vectors/{name}.jsonl", f"vectors/{name}.lean.jsonl"], cwd=ROOT / "lean")
         for side, binary in binaries.items():
             run([str(binary), str(VECTORS / f"{name}.jsonl"), str(VECTORS / f"{name}.{side}.jsonl")])
     results = {}
     total = {"compared": 0, "agreements": 0, "differences": 0}
-    for name in FILES:
+    for name in files:
         results[name] = {}
         for side in RUNNERS:
             counts = compare(VECTORS / f"{name}.lean.jsonl", VECTORS / f"{name}.{side}.jsonl")
@@ -114,7 +116,7 @@ def main() -> int:
     }
     RECEIPT.write_text(json.dumps(receipt, indent=1) + "\n")
     print(json.dumps(total))
-    for name in FILES:
+    for name in files:
         for side, counts in results[name].items():
             print(f"{name:16} {side:12} compared={counts['compared']:7} agreements={counts['agreements']:7} differences={counts['differences']} abstentions={counts['abstentions']}")
     print("receipt:", RECEIPT.relative_to(ROOT))

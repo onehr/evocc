@@ -75,6 +75,7 @@ def parser():
     p.add_argument('--eqsat-size-dce', type=Path, help='S2 object-size attribution with existing baseline DCE on/off; no timing experiment')
     p.add_argument('--eqsat-size-guards', type=Path, help='S4 non-installable MIR guard size diagnostic; no native execution')
     p.add_argument('--eqsat-size-references', type=Path, help='S5 GCC/Clang TU object-size comparison; no timing')
+    p.add_argument('--eqsat-size-certified-guards', type=Path, help='R02e g0 certificate replay and reproducible TU object sizes; no timing')
     p.add_argument("--jobs", type=positive, default=4, help="Cargo / emission / Csmith workers; reference build settings stay unchanged")
     p.add_argument("--programs", type=positive, default=500, help="Csmith programs per campaign")
     p.add_argument("--campaign", choices=["all", "base", "bitfields"], default="all")
@@ -576,6 +577,17 @@ def main(argv=None):
     def eqsat_tool(name):
         package = 'ladder' if __name__ == '__main__' and not __package__ else 'tools.ladder'
         return importlib.import_module(package + '.' + name)
+    if args.eqsat_size_certified_guards:
+        if not only_options('eqsat_size_certified_guards'):
+            print('--eqsat-size-certified-guards is a separate approved size mode', file=sys.stderr)
+            return 2
+        try:
+            directory, receipt = eqsat_tool('eqsat_size').run_guard_certification(args.eqsat_size_certified_guards, ROOT)
+            print(f"{receipt['status']}: {directory}")
+            return 0 if receipt['status'] == 'VERIFIED_GUARD_TU_SIZES' else 1
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            print(f'certified guard size run failed: {error}', file=sys.stderr)
+            return 1
     if args.eqsat_size_references:
         if not only_options('eqsat_size_references'):
             print('--eqsat-size-references is a separate TU size mode', file=sys.stderr)

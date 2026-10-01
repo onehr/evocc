@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.54** | **Authoritative reference** | **2026-09-28**
+**Revision 0.55** | **Authoritative reference** | **2026-10-01**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -551,6 +551,12 @@ in the table is refused with the diagnostic named in Section 10.
 | `ctlz`, `cttz`, `ctpop`, `bswap` (revision 0.14) | `ctlz`: zero-extend per Section 3, `clz` at the register width, then subtract `32 - N` or `64 - N` for a narrower `N`; `cttz`: `rbit` then `clz`, and for a narrower `N` the result capped at `N` with `cmp`/`csel`, since the unspecified upper bits may hold a set bit; `ctpop`: the general-register sequence both oracles use without SIMD (`p39.out`, Clang-19; GCC-14 calls `__popcountdi2`, which the kernel does not provide): `x - ((x >> 1) & 0x5555...)`, `(x & 0x3333...) + ((x >> 2) & 0x3333...)`, `(x + (x >> 4)) & 0x0f0f...`, multiply by `0x0101...` and `lsr` by the register width minus 8, after zero extension; `bswap`: `rev16` (16, upper bits unspecified per Section 3), `rev` at 32 or 64 |
 
 **Native UB-check profiles (2026-09-29; R02d).**
+Revision 0.55 discharges a checked `UbAssume` only when its operand is a
+direct canonical `const.bits<1> 1` in that source block. This common baseline
+rule applies equally with EqSat on or off. It does not infer truth from an
+alias or from facts, and leaves the EvoIR obligation and function effects
+unchanged. Source-authored true constants are not certified guard savings.
+
 Revision 0.54 specifies the unchecked alternative above, but the inspected
 path at `6be4796` did not implement it. The R02d implementation adds
 `--ub-checks=checked|unchecked` to the C driver and exact-input `evo-ir-asm`

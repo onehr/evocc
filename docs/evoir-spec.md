@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 1.9.115** | **Authoritative reference** | **2026-09-28**
+**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract consumed by the parser agent, lowering agent, EqSat
@@ -3156,6 +3156,56 @@ telemetry the campaign reports.
 
 ---
 
+### 8.12 Certified Total-Integer Guard Folding
+
+`g0.ub.v1` is a separate, opt-in proof profile, not an extension of P0's
+allowlist. Its only roots are the seven total predicate forms in Sections
+3.3.1 and 6.1: divisor nonzero, signed div/rem overflow, signed add/sub/mul
+definedness and signed/unsigned shift-count definedness. `signed_shl_defined`
+remains excluded. Arithmetic operand width N and independent count width M
+are each 1..64. The predicate result is `bits<1>`.
+
+Only the root itself is exempt from P0's opcode exclusion. All operands,
+witnesses and seeds obey the existing exclusion and all-edge poison fixed
+points. Witness closure consists of this one root and P0 operand cones,
+including their earlier structural duplicates. Another predicate, load,
+effect or excluded cone is not an opaque seed. In particular, a poison
+shifted operand forbids folding even when the count alone proves valid.
+Facts are solely existing normalized known bits and Section 8.10's all-edge
+seed facts; no edge conditions, assumptions or execution results are premises.
+
+For normalized fact `(m,v)` at width N, let `u=((2^N-1) xor m)` and
+`s=2^(N-1)`. The unsigned maximum is `v or u`. Signed endpoints are
+`[S_N(v or s), S_N(v or (u and (s-1)))]` if the sign bit is unknown, otherwise
+`[S_N(v), S_N(v or u)]`. These endpoints are derived from bit facts, not a
+new interval lattice. Transfers return exact true `(mask=1,value=1)` only
+under the following sufficient conditions, and TOP otherwise:
+
+| Predicate transfer | Sufficient condition |
+| --- | --- |
+| nonzero | a known-one divisor bit |
+| signed div/rem | lhs facts exclude INT_MIN or rhs facts exclude all-one -1 |
+| signed add | sum of the lower endpoints and sum of the upper endpoints are in signed range |
+| signed sub | lower lhs minus upper rhs, and upper lhs minus lower rhs, are in signed range |
+| signed mul | all four endpoint products are in signed range |
+| unsigned count | maximum M-bit unsigned count is less than mathematical N |
+| signed count | M-bit sign is known zero and maximum unsigned count is less than N |
+
+Endpoint calculations are mathematical integers. N is never truncated to M
+bits or masked as a machine shift count. Each transfer has a width-parametric,
+kernel-only `TransferSound` theorem via `BitVec.toInt`/integer order reasoning;
+the seven new rows do not use `bv_decide`, finite-width enumeration or Mathlib.
+The checker independently recomputes the seven rows and existing seed facts.
+
+The only extraction is `const.bits<1> 1` at the predicate's original result
+identity. Section 8.8 whole-module reassembly remains unchanged: obligations,
+their reasons, other users and conservative effect summaries remain in EvoIR.
+Checked MIR may omit an obligation's branch only when its operand directly
+names canonical `const.bits<1> 1`; this selection rule applies identically to
+A and B. Source-authored true constants are not certified guard savings.
+Publication uses the existing independently verified chain/staging wrapper;
+diagnostic MIR attribution cannot authorize this profile or installation.
+
 ## 9. Textual Syntax
 
 ### 9.1 Purpose and Canonical Status
@@ -6033,6 +6083,9 @@ op_id           := "const" | "add" | "sub" | "mul" | "and" | "or" | "xor"
                  | "icmp.eq" | "icmp.ne" | "icmp.slt" | "icmp.sle"
                  | "icmp.ult" | "icmp.ule"
                  | "shl" | "lshr" | "ashr" | "zext" | "sext" | "trunc"
+                 | "divisor_nonzero" | "signed_div_rem_no_overflow"
+                 | "signed_add_defined" | "signed_sub_defined" | "signed_mul_defined"
+                 | "shift_count_defined.signed" | "shift_count_defined.unsigned"
 sort            := packed_type
 effect_class    := "pure" | "guard" | "effectful"
 node_id         := "n" evp_int
@@ -6520,6 +6573,25 @@ p2_302_add_self_shl add(?x,?x) => shl(?x,const_like(?x,1)) when width_min(?x,2)
 p2_303_shl_one_add shl(?x,const_like(?x,1)) => add(?x,?x) when width_min(?x,2)
 ```
 
+**Reviewed registry `g0.ub.v1`.** This separate guard-only registry is normative
+for `evp2`. Its digest is
+`c49a0caac284fe276cf1605b312f45a8ddb5378b61dc0aaf352e03a41d21cc84`,
+covering the following exact bytes through the final newline. It does not
+include any P0 rule; P0 witness operations use their existing transfer rows.
+Each rule reads one exact-true result-class fact through `fully_known`.
+False/unknown results are not folds. Sorts, independent N/M, operand order
+and source signedness are fixed by the left pattern, not certificate claims.
+
+```text
+g0_001_nonzero divisor_nonzero(?a) => known_const when fully_known
+g0_002_div_rem signed_div_rem_no_overflow(?a,?b) => known_const when fully_known
+g0_003_add signed_add_defined(?a,?b) => known_const when fully_known
+g0_004_sub signed_sub_defined(?a,?b) => known_const when fully_known
+g0_005_mul signed_mul_defined(?a,?b) => known_const when fully_known
+g0_006_unsigned_count shift_count_defined.unsigned(?a,?k) => known_const when fully_known
+g0_007_signed_count shift_count_defined.signed(?a,?k) => known_const when fully_known
+```
+
 **Registries and revisions.** A registry is admissible only when this
 specification prints its rule block and digest; a producer and a checker may
 not agree on a registry between themselves, because a certificate checked
@@ -6527,7 +6599,8 @@ against rules it supplied establishes only that its merges follow from its own
 claims. A revision includes every rule of the registry it revises, unchanged
 and in the same order, before its new rules, so a rule id keeps its meaning
 across revisions. `evp1` accepts `p0.scalar.v1` only; `evp2` accepts
-`p0.scalar.v1` through `p0.scalar.v4`. Defined at revision 1.9.40 after the
+`p0.scalar.v1` through `p0.scalar.v4`, or the independent `g0.ub.v1` under its
+own eligibility profile. Defined at revision 1.9.40 after the
 randomized gate stopped for want of a procedure.
 
 **Which registry a certificate names, and rule order within a tier.** A
@@ -6756,6 +6829,7 @@ Integer    := [1-9] [0-9]*
 
 | Revision | Date | Changes |
 |---|---|---|
+| 1.9.116 | 2026-10-01 | Owner-approved g0.ub.v1 first slice: seven total integer guard roots, existing bit/all-edge facts, independent checker and kernel-only parametric transfers; preserve IR obligations and allow common direct-true checked MIR elision. P0, signed_shl_defined and interpreters unchanged. |
 | 1.9.115 | 2026-09-28 | Enforce existing return and prototype-argument assignment compatibility before execution/lowering; name void/value return mismatches E1207 without repurposing existing diagnostics or changing admitted GNU conversions. |
 | 1.9.114 | 2026-09-27 | Extend existing SIMD asm bindings to scalar f32/f64 with exact transport, complete operand/edge binding, opaque fenv effects and unchanged unsupported-type/interpreter boundaries. |
 | 1.9.113 | 2026-09-27 | Admit no-strict-aliasing as the existing conservative access contract; preserve all object/provenance/access guards and the deferred effective-type/TBAA boundary. |

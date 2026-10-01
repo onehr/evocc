@@ -172,6 +172,8 @@ pub enum ScalarRewrite {
     /// duplicate, and Section 7.4 makes the two one value. What justifies the
     /// replacement is the congruence the region records, not a rewrite.
     Congruent,
+    /// The separate g0 registry's fully-known-true predicate instance.
+    GuardKnownTrue,
 }
 
 impl ScalarRewrite {
@@ -191,6 +193,7 @@ impl ScalarRewrite {
             Self::DoubleByAddition => 12,
             Self::DoubleByShift => 13,
             Self::ShiftedDoubleByAddition => 14,
+            Self::GuardKnownTrue => 15,
         }
     }
 }
@@ -384,6 +387,24 @@ pub(crate) struct AppliedRewrite {
 
 impl AppliedRewrite {
     pub(crate) fn is_reviewed_instance(&self) -> bool {
+        if self.rule == ScalarRewrite::GuardKnownTrue {
+            let Some((operation, _, operands)) = crate::evp1::guard_instruction(&self.instruction)
+            else {
+                return false;
+            };
+            let Some(first) = operands
+                .first()
+                .and_then(|v| self.known.get(&v.id))
+                .copied()
+            else {
+                return false;
+            };
+            let other = operands.get(1).and_then(|v| self.known.get(&v.id)).copied();
+            return self.result == *inst_results(&self.instruction)[0]
+                && operands.iter().all(|v| matches!(v.ty, EvoIRType::Bits(n) if self.known.get(&v.id).is_some_and(|f| f.width()==n)))
+                && first.transfer_guard(operation, other) == Some(KnownBits::constant(1,1))
+                && self.replacement == Replacement::Constant(1);
+        }
         if self.rule == ScalarRewrite::Congruent {
             // Section 7.4: the same operation, the same attributes, and
             // operands that are pairwise the same values.

@@ -36,7 +36,7 @@ class ExtractionTest(unittest.TestCase):
     def test_every_reviewed_registry_of_the_specification_hashes(self):
         import hashlib
 
-        for name in ["p0.scalar.v1", "p0.scalar.v2", "p0.scalar.v3", "p0.scalar.v4"]:
+        for name in ["p0.scalar.v1", "p0.scalar.v2", "p0.scalar.v3", "p0.scalar.v4", "g0.ub.v1"]:
             block, stated = gen.extract_block(SPEC, name)
             self.assertEqual(
                 hashlib.sha256(block.encode("utf-8")).hexdigest(),
@@ -50,6 +50,16 @@ class ExtractionTest(unittest.TestCase):
 
 
 class RoundTripTest(unittest.TestCase):
+    def test_independent_guard_registry_has_only_the_seven_approved_forms(self):
+        block, digest = gen.extract_block(SPEC,"g0.ub.v1")
+        rules = [gen.parse_rule(line) for line in block.splitlines()]
+        self.assertEqual(len(rules),7)
+        self.assertEqual("".join(rule.render()+"\n" for rule in rules),block)
+        emitted = gen.emit(rules,"g0.ub.v1",digest,block,"g0.ub.v1",digest,block,namespace="EvoIR.Guards")
+        self.assertIn("namespace EvoIR.Guards",emitted)
+        with self.assertRaises(gen.RegistryError):
+            gen.parse_rule("g0_008 signed_shl_defined(?a,?k) => known_const when fully_known")
+
     def test_the_decoded_rules_render_back_to_the_block(self):
         block, _ = gen.extract_block(SPEC, "p0.scalar.v4")
         lines = [line for line in block.split("\n") if line]

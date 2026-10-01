@@ -976,6 +976,13 @@ fn validate_operation(text: &str) -> Result<(), EvpParseError> {
             | "zext"
             | "sext"
             | "trunc"
+            | "divisor_nonzero"
+            | "signed_div_rem_no_overflow"
+            | "signed_add_defined"
+            | "signed_sub_defined"
+            | "signed_mul_defined"
+            | "shift_count_defined.signed"
+            | "shift_count_defined.unsigned"
     ) {
         Ok(())
     } else {

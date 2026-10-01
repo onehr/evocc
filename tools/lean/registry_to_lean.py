@@ -48,6 +48,8 @@ LEAN_CMP = {
 }
 LEAN_SHIFT = {"shl": "shl", "lshr": "lshr", "ashr": "ashr"}
 LEAN_CAST = {"zext": "zext", "sext": "sext", "trunc": "trunc"}
+LEAN_GUARD = {"signed_add_defined": "add", "signed_sub_defined": "sub",
+              "signed_mul_defined": "mul", "signed_div_rem_no_overflow": "divRem"}
 
 
 class RegistryError(Exception):
@@ -155,6 +157,24 @@ class KnownConst:
 
     def lean(self) -> str:
         return ".knownConst"
+
+
+@dataclass(frozen=True)
+class Guard:
+    op: str
+    args: tuple
+
+    def render(self) -> str:
+        return self.op + "(" + ",".join(a.render() for a in self.args) + ")"
+
+    def lean(self) -> str:
+        values = " ".join("(" + a.lean() + ")" for a in self.args)
+        if self.op == "divisor_nonzero":
+            return ".nonzero " + values
+        if self.op.startswith("shift_count_defined."):
+            signed = "true" if self.op.endswith(".signed") else "false"
+            return ".count " + signed + " " + values
+        return ".guard ." + LEAN_GUARD[self.op] + " " + values
 
 
 @dataclass(frozen=True)
@@ -270,6 +290,10 @@ def parse_pat(text: str):
         return BoolLit(parse_int(args[0].strip()))
     is_fold = head.startswith("fold.")
     op = head[len("fold.") :] if is_fold else head
+    if op in LEAN_GUARD or op in ("divisor_nonzero", "shift_count_defined.signed", "shift_count_defined.unsigned"):
+        if is_fold or len(args) != (1 if op == "divisor_nonzero" else 2):
+            raise RegistryError(f"not a typed g0 predicate: {text!r}")
+        return Guard(op, tuple(parse_pat(a) for a in args))
     if op in BIN_OPS:
         if len(args) != 2:
             raise RegistryError(f"{op} takes two operands: {text!r}")
@@ -391,6 +415,7 @@ def emit(
     prefix_name: str,
     prefix_digest: str,
     prefix_block: str,
+    namespace: str = "EvoIR",
 ) -> str:
     prefix_count = len([line for line in prefix_block.split("\n") if line])
     out = [HEADER]
@@ -441,7 +466,9 @@ def emit(
     )
     out.append("#guard registryText.startsWith registryPrefixText\n")
     out.append("end EvoIR")
-    return "\n".join(out) + "\n"
+    text = "\n".join(out) + "\n"
+    return text.replace("namespace EvoIR\n", "namespace " + namespace + "\n").replace(
+        "end EvoIR\n", "end " + namespace + "\n")
 
 
 def main(argv: list[str]) -> int:
@@ -455,6 +482,7 @@ def main(argv: list[str]) -> int:
         "byte prefix of the chosen one's",
     )
     parser.add_argument("--out", default="lean/EvoIR/Registry.lean")
+    parser.add_argument("--namespace", default="EvoIR", choices=("EvoIR", "EvoIR.Guards"))
     parser.add_argument(
         "--check",
         action="store_true",
@@ -520,7 +548,8 @@ def main(argv: list[str]) -> int:
         return 3
 
     text = emit(
-        rules, args.registry, stated, block, args.prefix_registry, prefix_stated, prefix_block
+        rules, args.registry, stated, block, args.prefix_registry, prefix_stated, prefix_block,
+        args.namespace
     )
     out_path = Path(args.out)
     if args.check:

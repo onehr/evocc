@@ -90,6 +90,13 @@ def parseOp (name : String) (n m w : Nat) : Option Op :=
   | "zext" => some (.cast .zext w n)
   | "sext" => some (.cast .sext w n)
   | "trunc" => some (.cast .trunc w n)
+  | "signed_add_defined" => some (.guard .add n)
+  | "signed_sub_defined" => some (.guard .sub n)
+  | "signed_mul_defined" => some (.guard .mul n)
+  | "signed_div_rem_no_overflow" => some (.guard .divRem n)
+  | "divisor_nonzero" => some (.nonzero n)
+  | "shift_count_defined.unsigned" => some (.count false n m)
+  | "shift_count_defined.signed" => some (.count true n m)
   | _ => none
 
 /-- A premise pair, refused when a value bit falls outside the mask: Section
@@ -112,6 +119,10 @@ def runValue (o : Op) (args : List Nat) : Option Nat :=
   | .shift b n m, [a, k] =>
       some (denoteOp (.shift b n m) (BitVec.ofNat n a, capAmount n (BitVec.ofNat m k))).toNat
   | .cast b w n, [a] => some (denoteOp (.cast b w n) (BitVec.ofNat w a)).toNat
+  | .guard b n, [a, c] => some (denoteOp (.guard b n) (BitVec.ofNat n a, BitVec.ofNat n c)).toNat
+  | .nonzero n, [a] => some (denoteOp (.nonzero n) (BitVec.ofNat n a)).toNat
+  | .count s n m, [a, k] =>
+      some (denoteOp (.count s n m) (BitVec.ofNat n a, BitVec.ofNat m k)).toNat
   | _, _ => none
 
 /-- `transfer`: the row of Section 8.10, through the same `transfer` the
@@ -133,6 +144,17 @@ def runTransfer (o : Op) (facts : List (Nat × Nat)) : Option String :=
   | .cast b w n, [(m1, v1)] => do
       let A ← mkFact w m1 v1
       pure (factJson (transfer (.cast b w n) A))
+  | .guard b n, [(m1, v1), (m2, v2)] => do
+      let A ← mkFact n m1 v1
+      let B ← mkFact n m2 v2
+      pure (factJson (transfer (.guard b n) (A, B)))
+  | .nonzero n, [(m1, v1)] => do
+      let A ← mkFact n m1 v1
+      pure (factJson (transfer (.nonzero n) A))
+  | .count s n m, [(m1, v1), (m2, v2)] => do
+      let A ← mkFact n m1 v1
+      let K ← mkFact m m2 v2
+      pure (factJson (transfer (.count s n m) (A, K)))
   | _, _ => none
 
 def runMeet (n : Nat) (facts : List (Nat × Nat)) : Option String :=

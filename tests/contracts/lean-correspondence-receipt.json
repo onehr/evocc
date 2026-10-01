@@ -3,8 +3,8 @@
  "segment": "C",
  "authority": "docs/lean-plan.md, sections 2 and 6; assumption A7 of docs/evoir-spec.md 11.7",
  "meaning": "differential test evidence between the Rust implementations and the Lean model; not a proof",
- "run": "20260908T174547Z",
- "commit": "8cff4de865d152a0081c8294b51d988fc5690f9d",
+ "run": "20261001T041353Z",
+ "commit": "3ede9cdd88a980983efc76130fd2030ab2d55d50",
  "leanToolchain": "leanprover/lean4:v4.32.2",
  "sides": {
   "producer": "evocc-eqopt --example known_bits_vectors",
@@ -13,124 +13,32 @@
  },
  "rule": "an abstention (skipped or unsupported) on either side is neither an agreement nor a difference",
  "total": {
-  "compared": 1325045,
-  "agreements": 1325045,
+  "compared": 162644,
+  "agreements": 162644,
   "differences": 0
  },
  "files": {
-  "transfers-small": {
+  "guards": {
    "producer": {
-    "vectors": 132534,
-    "compared": 132534,
-    "agreements": 132534,
+    "vectors": 88434,
+    "compared": 74210,
+    "agreements": 74210,
     "differences": 0,
-    "abstentions": 0
+    "abstentions": 14224
    },
    "checker": {
-    "vectors": 132534,
-    "compared": 132534,
-    "agreements": 132534,
+    "vectors": 88434,
+    "compared": 74210,
+    "agreements": 74210,
     "differences": 0,
-    "abstentions": 0
+    "abstentions": 14224
    },
    "interpreter": {
-    "vectors": 132534,
-    "compared": 0,
-    "agreements": 0,
+    "vectors": 88434,
+    "compared": 14224,
+    "agreements": 14224,
     "differences": 0,
-    "abstentions": 132534
-   }
-  },
-  "lattice-small": {
-   "producer": {
-    "vectors": 22140,
-    "compared": 22140,
-    "agreements": 22140,
-    "differences": 0,
-    "abstentions": 0
-   },
-   "checker": {
-    "vectors": 22140,
-    "compared": 22140,
-    "agreements": 22140,
-    "differences": 0,
-    "abstentions": 0
-   },
-   "interpreter": {
-    "vectors": 22140,
-    "compared": 0,
-    "agreements": 0,
-    "differences": 0,
-    "abstentions": 22140
-   }
-  },
-  "values-width8": {
-   "producer": {
-    "vectors": 983040,
-    "compared": 0,
-    "agreements": 0,
-    "differences": 0,
-    "abstentions": 983040
-   },
-   "checker": {
-    "vectors": 983040,
-    "compared": 0,
-    "agreements": 0,
-    "differences": 0,
-    "abstentions": 983040
-   },
-   "interpreter": {
-    "vectors": 983040,
-    "compared": 983040,
-    "agreements": 983040,
-    "differences": 0,
-    "abstentions": 0
-   }
-  },
-  "random": {
-   "producer": {
-    "vectors": 20000,
-    "compared": 13429,
-    "agreements": 13429,
-    "differences": 0,
-    "abstentions": 6571
-   },
-   "checker": {
-    "vectors": 20000,
-    "compared": 13429,
-    "agreements": 13429,
-    "differences": 0,
-    "abstentions": 6571
-   },
-   "interpreter": {
-    "vectors": 20000,
-    "compared": 5788,
-    "agreements": 5788,
-    "differences": 0,
-    "abstentions": 14212
-   }
-  },
-  "named": {
-   "producer": {
-    "vectors": 11,
-    "compared": 0,
-    "agreements": 0,
-    "differences": 0,
-    "abstentions": 11
-   },
-   "checker": {
-    "vectors": 11,
-    "compared": 0,
-    "agreements": 0,
-    "differences": 0,
-    "abstentions": 11
-   },
-   "interpreter": {
-    "vectors": 11,
-    "compared": 11,
-    "agreements": 11,
-    "differences": 0,
-    "abstentions": 0
+    "abstentions": 74210
    }
   }
  }

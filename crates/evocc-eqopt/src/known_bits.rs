@@ -31,6 +31,78 @@ fn width_mask(width: u16) -> u64 {
 }
 
 impl KnownBits {
+    /// g0.ub.v1 only. Ordinary P0 and seed transfers never call this table.
+    /// Endpoint calculations are derived from normalized bit facts, not path facts.
+    #[must_use]
+    pub fn transfer_guard(self, operation: &str, other: Option<Self>) -> Option<Self> {
+        if !(1..=64).contains(&self.width) {
+            return None;
+        }
+        let pair = || other.filter(|b| b.width == self.width);
+        let truth = match operation {
+            "divisor_nonzero" => self.value != 0,
+            "signed_div_rem_no_overflow" => {
+                let b = pair()?;
+                self.excludes_pattern(1_u64 << (self.width - 1))
+                    || b.excludes_pattern(width_mask(b.width))
+            }
+            "signed_add_defined" => {
+                let (a, b) = (self.guard_signed_bounds(), pair()?.guard_signed_bounds());
+                self.guard_representable(a.0 + b.0) && self.guard_representable(a.1 + b.1)
+            }
+            "signed_sub_defined" => {
+                let (a, b) = (self.guard_signed_bounds(), pair()?.guard_signed_bounds());
+                self.guard_representable(a.0 - b.1) && self.guard_representable(a.1 - b.0)
+            }
+            "signed_mul_defined" => {
+                let (a, b) = (self.guard_signed_bounds(), pair()?.guard_signed_bounds());
+                [a.0 * b.0, a.0 * b.1, a.1 * b.0, a.1 * b.1]
+                    .into_iter()
+                    .all(|p| self.guard_representable(p))
+            }
+            "shift_count_defined.unsigned" | "shift_count_defined.signed" => {
+                let k = other.filter(|k| (1..=64).contains(&k.width))?;
+                let maximum = k.value | (width_mask(k.width) & !k.mask);
+                maximum < u64::from(self.width)
+                    && (operation.ends_with(".unsigned")
+                        || k.zeros() & (1_u64 << (k.width - 1)) != 0)
+            }
+            _ => return None,
+        };
+        Some(if truth {
+            Self::constant(1, 1)
+        } else {
+            Self::top(1)
+        })
+    }
+
+    fn excludes_pattern(self, raw: u64) -> bool {
+        (raw ^ self.value) & self.mask != 0
+    }
+
+    fn guard_signed_bounds(self) -> (i128, i128) {
+        let s = 1_u64 << (self.width - 1);
+        let u = width_mask(self.width) & !self.mask;
+        let signed = |raw| {
+            i128::from(raw)
+                - if raw & s != 0 {
+                    1_i128 << self.width
+                } else {
+                    0
+                }
+        };
+        if u & s != 0 {
+            (signed(self.value | s), signed(self.value | (u & !s)))
+        } else {
+            (signed(self.value), signed(self.value | u))
+        }
+    }
+
+    fn guard_representable(self, value: i128) -> bool {
+        let extent = 1_i128 << (self.width - 1);
+        -extent <= value && value < extent
+    }
+
     /// Nothing known: the top of the lattice.
     #[must_use]
     pub const fn top(width: u16) -> Self {

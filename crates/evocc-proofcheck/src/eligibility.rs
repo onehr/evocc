@@ -25,12 +25,41 @@ struct Definition {
 pub(crate) fn derive_eligible_regions(module: &Module) -> Vec<EligibleRegion> {
     let mut regions = Vec::new();
     for function in &module.functions {
-        derive_function(function, &mut regions);
+        derive_function(function, &mut regions, false);
     }
     regions
 }
 
-fn derive_function(function: &Function, regions: &mut Vec<EligibleRegion>) {
+pub(crate) fn derive_guard_regions(module: &Module) -> Vec<EligibleRegion> {
+    let mut regions = Vec::new();
+    for function in &module.functions {
+        derive_function(function, &mut regions, true);
+    }
+    regions
+}
+
+fn guard_root(inst: &Inst) -> bool {
+    let Some(result) = inst_results(inst).first().copied() else {
+        return false;
+    };
+    if result.ty != EvoIRType::Bits(1) {
+        return false;
+    }
+    let same = |a: &Value, b: &Value| eligible_bits(&a.ty) && a.ty == b.ty;
+    match inst {
+        Inst::DivisorNonZero(_, a) => eligible_bits(&a.ty),
+        Inst::SignedDivRemNoOverflow(_, a, b)
+        | Inst::SignedAddDefined(_, a, b)
+        | Inst::SignedSubDefined(_, a, b)
+        | Inst::SignedMulDefined(_, a, b) => same(a, b),
+        Inst::ShiftCountDefined {
+            shifted, amount, ..
+        } => eligible_bits(&shifted.ty) && eligible_bits(&amount.ty),
+        _ => false,
+    }
+}
+
+fn derive_function(function: &Function, regions: &mut Vec<EligibleRegion>, guards: bool) {
     let definitions = definitions(function);
     let block_arguments = function
         .blocks
@@ -42,7 +71,11 @@ fn derive_function(function: &Function, regions: &mut Vec<EligibleRegion>) {
 
     for (block_index, block) in function.blocks.iter().enumerate() {
         for (instruction_index, instruction) in block.insts.iter().enumerate() {
-            if !allowlisted(instruction) {
+            if !(if guards {
+                guard_root(instruction)
+            } else {
+                allowlisted(instruction)
+            }) {
                 continue;
             }
             let mut closure = HashSet::new();
@@ -82,9 +115,13 @@ fn derive_function(function: &Function, regions: &mut Vec<EligibleRegion>) {
                     .into_iter()
                     .map(|value| value.id)
             });
+            let root_id = inst_results(instruction)[0].id;
             if witness_values
                 .chain(seed_ids.iter().map(|value| value.id))
-                .any(|value| tainted.contains(&value) || excluded.contains(&value))
+                .any(|value| {
+                    tainted.contains(&value)
+                        || (excluded.contains(&value) && !(guards && value == root_id))
+                })
             {
                 continue;
             }

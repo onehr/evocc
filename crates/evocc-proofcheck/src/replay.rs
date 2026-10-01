@@ -24,12 +24,26 @@ pub(crate) enum Registry {
     /// The revision that adds the emitting rules, so that the three spellings
     /// of a doubling are one class and extraction becomes a choice.
     Emitting,
+    /// Independent g0 profile: no P0 rule is included by this registry.
+    Guards,
 }
 
 /// Which registry first prints a rule. The identifiers do not answer this on
 /// their own: `p1_206` is printed by the third registry although it sits
 /// between two rules of the second.
 fn first_printed_by(rule: &str) -> Registry {
+    if matches!(
+        rule,
+        "g0_001_nonzero"
+            | "g0_002_div_rem"
+            | "g0_003_add"
+            | "g0_004_sub"
+            | "g0_005_mul"
+            | "g0_006_unsigned_count"
+            | "g0_007_signed_count"
+    ) {
+        return Registry::Guards;
+    }
     const REVISED: [&str; 18] = [
         "p1_200_known_and",
         "p1_201_known_or",
@@ -89,7 +103,7 @@ const EMITTING: [&str; 4] = [
 fn reads_facts(rule: &str) -> bool {
     matches!(
         first_printed_by(rule),
-        Registry::Revised | Registry::Widened
+        Registry::Revised | Registry::Widened | Registry::Guards
     )
 }
 
@@ -103,7 +117,11 @@ fn contains(named: Registry, printed: Registry) -> bool {
                 Registry::Widened,
                 Registry::Reviewed | Registry::Revised | Registry::Widened
             )
-            | (Registry::Emitting, _)
+            | (
+                Registry::Emitting,
+                Registry::Reviewed | Registry::Revised | Registry::Widened | Registry::Emitting
+            )
+            | (Registry::Guards, Registry::Guards)
     )
 }
 
@@ -248,6 +266,11 @@ impl<'a> Replay<'a> {
             return Err(());
         }
         validate_node_shape(node, &self.sorts, &|class| self.find(class))?;
+        if guard_operation(&node.operation)
+            && (self.registry != Registry::Guards || node.source != EvpNodeSource::Before)
+        {
+            return Err(());
+        }
         match node.source {
             EvpNodeSource::Before => {
                 if self.derived_started || self.before_count >= self.region.witnesses.len() {
@@ -377,6 +400,17 @@ impl<'a> Replay<'a> {
         };
         if let Some(comparison) = Comparison::from_operation(&node.operation) {
             return Ok(child(LEFT)?.compare(child(RIGHT)?, comparison));
+        }
+        if guard_operation(&node.operation) {
+            if self.registry != Registry::Guards {
+                return Err(());
+            }
+            let other = if node.children.len() == 1 {
+                None
+            } else {
+                Some(child(RIGHT)?)
+            };
+            return child(LEFT)?.guard(&node.operation, other).ok_or(());
         }
         Ok(match node.operation.as_str() {
             "const" => Fact::constant(width, attribute_value(node)?),
@@ -563,6 +597,21 @@ impl<'a> Replay<'a> {
         // replacement is an improvement is decided by the producer's policy
         // (7.5 "Cost is a policy") and is not observable here.
         let root_choice = choices.get(&root_class).copied().ok_or(())?;
+        if self.registry == Registry::Guards {
+            // g0 permits exactly a direct, canonical true constant. In
+            // particular, reusing a seed is not the approved root splice.
+            let Selected::Node(node) = &selections[root_choice].choice else {
+                return Err(());
+            };
+            if node.operation != "const"
+                || node.sort != "bits<1>"
+                || node.attributes.as_slice() != [("value".to_owned(), 1)]
+                || !node.children.is_empty()
+                || selections.len() != 1
+            {
+                return Err(());
+            }
+        }
         if let Selection {
             choice: Selected::Node(node),
             ..
@@ -725,6 +774,51 @@ fn validate_reviewed_rule(
         )
     };
     match rewrite.rule.as_str() {
+        "g0_001_nonzero" => {
+            let [child] = lhs.children.as_slice() else {
+                return Err(());
+            };
+            if lhs.operation != "divisor_nonzero" || replay.find(*child) != unary("a")? {
+                return Err(());
+            }
+            guard_known_true(replay, rewrite, lhs, rhs_node, facts)
+        }
+        "g0_002_div_rem"
+        | "g0_003_add"
+        | "g0_004_sub"
+        | "g0_005_mul"
+        | "g0_006_unsigned_count"
+        | "g0_007_signed_count" => {
+            let operation = match rewrite.rule.as_str() {
+                "g0_002_div_rem" => "signed_div_rem_no_overflow",
+                "g0_003_add" => "signed_add_defined",
+                "g0_004_sub" => "signed_sub_defined",
+                "g0_005_mul" => "signed_mul_defined",
+                "g0_006_unsigned_count" => "shift_count_defined.unsigned",
+                _ => "shift_count_defined.signed",
+            };
+            if !replay
+                .fact_of(facts, replay.find(lhs.owner))?
+                .is_known_zero()
+                && replay.fact_of(facts, replay.find(lhs.owner))?.raw() == 1
+            {
+                known_constant(
+                    replay,
+                    rewrite,
+                    lhs,
+                    rhs_node,
+                    operation,
+                    if operation.starts_with("shift_count_defined.") {
+                        shifted()?
+                    } else {
+                        binary()?
+                    },
+                    facts,
+                )
+            } else {
+                Err(())
+            }
+        }
         "p0_001_add_zero_rhs" => identity_binary(
             replay,
             lhs,
@@ -1077,6 +1171,37 @@ fn known_constant(
         return Err(());
     }
     validate_const(rhs.ok_or(())?, &lhs.sort, fact.raw(), None)
+}
+
+fn guard_known_true(
+    replay: &Replay<'_>,
+    rewrite: &EvpRewrite,
+    lhs: &EvpNode,
+    rhs: Option<&EvpNode>,
+    facts: &[Fact],
+) -> Result<(), ()> {
+    let root = replay.find(lhs.owner);
+    let f = replay.fact_of(facts, root)?;
+    let [p] = rewrite.premises.as_slice() else {
+        return Err(());
+    };
+    if !f.is_fully_known() || f.raw() != 1 || replay.find(p.class) != root {
+        return Err(());
+    }
+    validate_const(rhs.ok_or(())?, "bits<1>", 1, None)
+}
+
+fn guard_operation(op: &str) -> bool {
+    matches!(
+        op,
+        "divisor_nonzero"
+            | "signed_div_rem_no_overflow"
+            | "signed_add_defined"
+            | "signed_sub_defined"
+            | "signed_mul_defined"
+            | "shift_count_defined.unsigned"
+            | "shift_count_defined.signed"
+    )
 }
 
 struct CoverSpec {
@@ -1434,6 +1559,33 @@ fn validate_node_shape(
                 return Err(());
             }
         }
+        "divisor_nonzero" => {
+            if node.sort != "bits<1>"
+                || !node.attributes.is_empty()
+                || node.children.len() != 1
+                || bits_width(&sorts[find(node.children[0]) as usize]).is_none()
+            {
+                return Err(());
+            }
+        }
+        "signed_div_rem_no_overflow"
+        | "signed_add_defined"
+        | "signed_sub_defined"
+        | "signed_mul_defined"
+        | "shift_count_defined.unsigned"
+        | "shift_count_defined.signed" => {
+            if node.sort != "bits<1>" || !node.attributes.is_empty() || node.children.len() != 2 {
+                return Err(());
+            }
+            let a = &sorts[find(node.children[0]) as usize];
+            let b = &sorts[find(node.children[1]) as usize];
+            if bits_width(a).is_none()
+                || bits_width(b).is_none()
+                || (!node.operation.starts_with("shift_count_defined.") && a != b)
+            {
+                return Err(());
+            }
+        }
         "trunc" => {
             if !node.attributes.is_empty() || node.children.len() != 1 {
                 return Err(());
@@ -1481,6 +1633,27 @@ fn expected_node(
         Inst::ZExt(_, source, _) => ("zext", vec![source], Vec::new()),
         Inst::SExt(_, source, _) => ("sext", vec![source], Vec::new()),
         Inst::Trunc(_, source, _) => ("trunc", vec![source], Vec::new()),
+        Inst::DivisorNonZero(_, a) => ("divisor_nonzero", vec![a], Vec::new()),
+        Inst::SignedDivRemNoOverflow(_, a, b) => {
+            ("signed_div_rem_no_overflow", vec![a, b], Vec::new())
+        }
+        Inst::SignedAddDefined(_, a, b) => ("signed_add_defined", vec![a, b], Vec::new()),
+        Inst::SignedSubDefined(_, a, b) => ("signed_sub_defined", vec![a, b], Vec::new()),
+        Inst::SignedMulDefined(_, a, b) => ("signed_mul_defined", vec![a, b], Vec::new()),
+        Inst::ShiftCountDefined {
+            shifted,
+            amount,
+            amount_signed,
+            ..
+        } => (
+            if *amount_signed {
+                "shift_count_defined.signed"
+            } else {
+                "shift_count_defined.unsigned"
+            },
+            vec![shifted, amount],
+            Vec::new(),
+        ),
         _ => return Err(()),
     };
     Ok(EvpNode {

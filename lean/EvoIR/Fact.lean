@@ -142,6 +142,13 @@ def Fact.lo {n : Nat} (K : Fact n) : BitVec n := K.value
 /-- The largest value a fact admits, read as an unsigned `bits<n>`. -/
 def Fact.hi {n : Nat} (K : Fact n) : BitVec n := K.value ||| ~~~K.mask
 
+/-- Signed endpoints derived from the same bit fact, including an unknown sign. -/
+def Fact.signedLo {n : Nat} (K : Fact n) : BitVec n :=
+  if K.mask.msb then K.value else K.value ||| BitVec.intMin n
+
+def Fact.signedHi {n : Nat} (K : Fact n) : BitVec n :=
+  if K.mask.msb then K.hi else K.hi &&& ~~~(BitVec.intMin n)
+
 /-- The `bits<1>` fact a decided comparison produces. -/
 def Fact.bit (b : Bool) : Fact 1 := Fact.const (BitVec.ofBool b)
 
@@ -211,6 +218,40 @@ def T_sext {w : Nat} (n : Nat) (A : Fact w) : Fact n :=
 def T_trunc {w : Nat} (n : Nat) (A : Fact w) : Fact n :=
   Fact.mk' (BitVec.truncate n A.mask) (BitVec.truncate n A.value)
 
+/-- A guard transfer establishes only true; every other case remains TOP. -/
+def guardFact (p : Prop) [Decidable p] : Fact 1 :=
+  if p then Fact.bit true else Fact.top 1
+
+def excludes {n : Nat} (K : Fact n) (v : BitVec n) : Prop :=
+  v &&& K.mask ≠ K.value
+
+instance {n : Nat} (K : Fact n) (v : BitVec n) : Decidable (excludes K v) := by
+  unfold excludes; infer_instance
+
+def T_guard {n : Nat} (o : GuardOp) (A B : Fact n) : Fact 1 :=
+  match o with
+  | .add => guardFact (0 < n ∧
+      signedMin n ≤ A.signedLo.toInt + B.signedLo.toInt ∧
+      A.signedHi.toInt + B.signedHi.toInt ≤ signedMax n)
+  | .sub => guardFact (0 < n ∧
+      signedMin n ≤ A.signedLo.toInt - B.signedHi.toInt ∧
+      A.signedHi.toInt - B.signedLo.toInt ≤ signedMax n)
+  | .mul => guardFact (0 < n ∧
+      signedRepresentable n (A.signedLo.toInt * B.signedLo.toInt) ∧
+      signedRepresentable n (A.signedLo.toInt * B.signedHi.toInt) ∧
+      signedRepresentable n (A.signedHi.toInt * B.signedLo.toInt) ∧
+      signedRepresentable n (A.signedHi.toInt * B.signedHi.toInt))
+  | .divRem => guardFact (0 < n ∧
+      (excludes A (BitVec.intMin n) ∨ excludes B (BitVec.allOnes n)))
+
+def T_nonzero {n : Nat} (A : Fact n) : Fact 1 := guardFact (A.value ≠ 0#n)
+
+def T_unsigned_count {n m : Nat} (_A : Fact n) (K : Fact m) : Fact 1 :=
+  guardFact (K.hi.toNat < n)
+
+def T_signed_count {n m : Nat} (_A : Fact n) (K : Fact m) : Fact 1 :=
+  guardFact (K.mask.msb = true ∧ K.value.msb = false ∧ K.hi.toNat < n)
+
 /-! ## The transfer as one function of the operator -/
 
 /-- The fact tuple an operator's transfer consumes. -/
@@ -219,6 +260,9 @@ def Op.factDom : Op → Type
   | .cmp _ n => Fact n × Fact n
   | .shift _ n m => Fact n × Fact m
   | .cast _ w _ => Fact w
+  | .guard _ n => Fact n × Fact n
+  | .nonzero n => Fact n
+  | .count _ n m => Fact n × Fact m
 
 /-- Every operand fact holds of the corresponding operand. -/
 def gammaDom : (o : Op) → o.factDom → o.dom → Prop
@@ -226,6 +270,9 @@ def gammaDom : (o : Op) → o.factDom → o.dom → Prop
   | .cmp _ _, (A, B), (x, y) => gamma A x ∧ gamma B y
   | .shift _ _ _, (A, K), (x, k) => gamma A x ∧ gamma K k
   | .cast _ _ _, A, x => gamma A x
+  | .guard _ _, (A, B), (x, y) => gamma A x ∧ gamma B y
+  | .nonzero _, A, x => gamma A x
+  | .count _ _ _, (A, K), (x, k) => gamma A x ∧ gamma K k
 
 /-- One transfer function, dispatching on the operator, so the evaluator and
 the proofs speak about the same rows. -/
@@ -243,6 +290,10 @@ def transfer : (o : Op) → o.factDom → Fact o.res
   | .cast .zext _ n, A => T_zext n A
   | .cast .sext _ n, A => T_sext n A
   | .cast .trunc _ n, A => T_trunc n A
+  | .guard o _, (A, B) => T_guard o A B
+  | .nonzero _, A => T_nonzero A
+  | .count false _ _, (A, K) => T_unsigned_count A K
+  | .count true _ _, (A, K) => T_signed_count A K
 
 /-- The fixed statement every transfer row is proved against. -/
 def TransferSound (o : Op) (T : o.factDom → Fact o.res) : Prop :=

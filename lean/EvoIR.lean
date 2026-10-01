@@ -6,5 +6,7 @@ import EvoIR.Registry
 import EvoIR.Proofs.Bits
 import EvoIR.Proofs.Lattice
 import EvoIR.Proofs.Transfer
+import EvoIR.Proofs.GuardTransfer
+import EvoIR.Proofs.GuardRules
 import EvoIR.Proofs.Rules
 import EvoIR.Eval

@@ -45,6 +45,83 @@ fn low(count: u32) -> u64 {
 }
 
 impl Fact {
+    /// Independently derived g0 rows. This module imports no producer or
+    /// attribution code; it keeps the checker's disjoint zero/one sets.
+    pub(crate) fn guard(self, operation: &str, other: Option<Self>) -> Option<Self> {
+        if !(1..=64).contains(&self.width) {
+            return None;
+        }
+        let same_width = || other.filter(|f| f.width == self.width);
+        let proved = match operation {
+            "divisor_nonzero" => self.ones != 0,
+            "signed_div_rem_no_overflow" => {
+                let rhs = same_width()?;
+                let minimum = 1_u64 << (self.width - 1);
+                !self.admits_pattern(minimum) || !rhs.admits_pattern(span(rhs.width))
+            }
+            "signed_add_defined" => {
+                let rhs = same_width()?;
+                let (a, b) = (self.signed_extrema(), rhs.signed_extrema());
+                self.signed_fits(a.0 + b.0) && self.signed_fits(a.1 + b.1)
+            }
+            "signed_sub_defined" => {
+                let rhs = same_width()?;
+                let (a, b) = (self.signed_extrema(), rhs.signed_extrema());
+                self.signed_fits(a.0 - b.1) && self.signed_fits(a.1 - b.0)
+            }
+            "signed_mul_defined" => {
+                let rhs = same_width()?;
+                let (a, b) = (self.signed_extrema(), rhs.signed_extrema());
+                for x in [a.0, a.1] {
+                    for y in [b.0, b.1] {
+                        if !self.signed_fits(x * y) {
+                            return Some(Self::top(1));
+                        }
+                    }
+                }
+                true
+            }
+            "shift_count_defined.unsigned" => {
+                let k = other.filter(|k| (1..=64).contains(&k.width))?;
+                (span(k.width) & !k.zeros) < u64::from(self.width)
+            }
+            "shift_count_defined.signed" => {
+                let k = other.filter(|k| (1..=64).contains(&k.width))?;
+                let sign = 1_u64 << (k.width - 1);
+                k.zeros & sign != 0 && (span(k.width) & !k.zeros) < u64::from(self.width)
+            }
+            _ => return None,
+        };
+        Some(if proved {
+            Self::constant(1, 1)
+        } else {
+            Self::top(1)
+        })
+    }
+
+    fn admits_pattern(self, pattern: u64) -> bool {
+        self.zeros & pattern == 0 && self.ones & !pattern == 0
+    }
+
+    fn signed_extrema(self) -> (i128, i128) {
+        let sign = 1_u64 << (self.width - 1);
+        let half = 1_i128 << (self.width - 1);
+        let maximum = i128::from(span(self.width) & !self.zeros);
+        let minimum = i128::from(self.ones);
+        if self.zeros & sign != 0 {
+            (minimum, maximum)
+        } else if self.ones & sign != 0 {
+            (minimum - 2 * half, maximum - 2 * half)
+        } else {
+            (minimum - half, maximum - half)
+        }
+    }
+
+    fn signed_fits(self, value: i128) -> bool {
+        let half = 1_i128 << (self.width - 1);
+        value >= -half && value < half
+    }
+
     /// Nothing known.
     pub(crate) const fn top(width: u16) -> Self {
         Self {

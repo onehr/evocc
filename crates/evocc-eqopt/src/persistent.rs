@@ -368,6 +368,20 @@ impl EqualityState {
                 instance.function, instance.result.id, instance.rule
             ));
         }
+        if instance.rule == crate::ScalarRewrite::GuardKnownTrue
+            && !self
+                .values
+                .contains_key(&(instance.function.clone(), instance.result.id))
+        {
+            // Opaque to P0; introduced only after validating the g0 instance.
+            // The ordinary persistent union/history still records its equality.
+            let binding = self.leaf(LeafKey::Binder {
+                function: instance.function.clone(),
+                value: instance.result.id,
+                ty: type_identity(&instance.result.ty),
+            })?;
+            self.bind_value(&instance.function, &instance.result, binding)?;
+        }
         let lhs = self
             .values
             .get(&(instance.function.clone(), instance.result.id))

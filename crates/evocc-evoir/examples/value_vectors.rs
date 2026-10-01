@@ -139,6 +139,27 @@ fn answer(line: &str, shapes: &mut HashMap<Shape, Module>) -> Option<String> {
     let amount_width = number_field(line, "m").unwrap_or(n);
 
     let shape = match op {
+        "divisor_nonzero" => Shape {
+            op: op.to_owned(),
+            left: n,
+            right: None,
+            result: 1,
+        },
+        "signed_add_defined"
+        | "signed_sub_defined"
+        | "signed_mul_defined"
+        | "signed_div_rem_no_overflow" => Shape {
+            op: op.to_owned(),
+            left: n,
+            right: Some(n),
+            result: 1,
+        },
+        "shift_count_defined.signed" | "shift_count_defined.unsigned" => Shape {
+            op: op.to_owned(),
+            left: n,
+            right: Some(amount_width),
+            result: 1,
+        },
         "zext" | "sext" | "trunc" => Shape {
             op: op.to_owned(),
             left: source_width,
@@ -282,6 +303,25 @@ fn instruction(op: &str, result: &Value, left: &Value, right: Option<&Value>) ->
         "shl" => Inst::Shl(result.clone(), left.clone(), right?.clone()),
         "lshr" => Inst::LShr(result.clone(), left.clone(), right?.clone()),
         "ashr" => Inst::AShr(result.clone(), left.clone(), right?.clone()),
+        "divisor_nonzero" => Inst::DivisorNonZero(result.clone(), left.clone()),
+        "signed_add_defined" => {
+            Inst::SignedAddDefined(result.clone(), left.clone(), right?.clone())
+        }
+        "signed_sub_defined" => {
+            Inst::SignedSubDefined(result.clone(), left.clone(), right?.clone())
+        }
+        "signed_mul_defined" => {
+            Inst::SignedMulDefined(result.clone(), left.clone(), right?.clone())
+        }
+        "signed_div_rem_no_overflow" => {
+            Inst::SignedDivRemNoOverflow(result.clone(), left.clone(), right?.clone())
+        }
+        "shift_count_defined.signed" | "shift_count_defined.unsigned" => Inst::ShiftCountDefined {
+            result: result.clone(),
+            shifted: left.clone(),
+            amount: right?.clone(),
+            amount_signed: op.ends_with(".signed"),
+        },
         "zext" => Inst::ZExt(result.clone(), left.clone(), result.ty.clone()),
         "sext" => Inst::SExt(result.clone(), left.clone(), result.ty.clone()),
         "trunc" => Inst::Trunc(result.clone(), left.clone(), result.ty.clone()),

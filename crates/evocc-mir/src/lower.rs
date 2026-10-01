@@ -1945,6 +1945,16 @@ fn lower_block(
     // Count once, including all edge operands: checking each guard must not
     // rescan a large source block and make instruction selection quadratic.
     let use_counts = block_use_counts(block);
+    // Shared A/B baseline: only direct, canonical bits<1> true is discharged.
+    // A fact about a predicate, an alias, or a masked integer is not enough.
+    let canonical_true: HashSet<_> = block
+        .insts
+        .iter()
+        .filter_map(|inst| match inst {
+            Inst::Const(value, 1) if value.ty == EvoIRType::Bits(1) => Some(value.id),
+            _ => None,
+        })
+        .collect();
 
     for (index, inst) in block.insts.iter().enumerate() {
         if index < selected_until {
@@ -1955,6 +1965,9 @@ fn lower_block(
             continue;
         }
         if let Inst::UbAssume(condition, reason) = inst {
+            if canonical_true.contains(&condition.id) {
+                continue;
+            }
             if lowerer.diagnostic_true_predicates.contains(&condition.id) {
                 continue;
             }

@@ -84,7 +84,11 @@ pub fn main() -> ExitCode {
     if certificate.input_digest != sha256_hex(&before) || !scheduler_record_holds(&certificate) {
         return ExitCode::from(3);
     }
-    let eligible = derive_eligible_regions(&before_module);
+    let eligible = if registry == Registry::Guards {
+        eligibility::derive_guard_regions(&before_module)
+    } else {
+        derive_eligible_regions(&before_module)
+    };
     // Section 8.10: what a block argument knows, recomputed here rather than
     // read off the certificate.
     let seed_facts = SeedFacts::of(&before_module);
@@ -189,6 +193,10 @@ fn admitted_registry(certificate: &EvpCertificate) -> Option<Registry> {
         (EvpVersion::Evp2, (REGISTRY_V2, REGISTRY_V2_SHA256)) => Some(Registry::Revised),
         (EvpVersion::Evp2, (REGISTRY_V3, REGISTRY_V3_SHA256)) => Some(Registry::Widened),
         (EvpVersion::Evp2, (REGISTRY_V4, REGISTRY_V4_SHA256)) => Some(Registry::Emitting),
+        (
+            EvpVersion::Evp2,
+            ("g0.ub.v1", "c49a0caac284fe276cf1605b312f45a8ddb5378b61dc0aaf352e03a41d21cc84"),
+        ) => Some(Registry::Guards),
         _ => None,
     }
 }

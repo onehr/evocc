@@ -70,6 +70,13 @@ PARAMETRIC_ROWS = [
     ("zext", "EvoIR.Op.cast EvoIR.CastOp.zext", ["w", "n"], "EvoIR.transfer_zext"),
     ("sext", "EvoIR.Op.cast EvoIR.CastOp.sext", ["w", "n"], "EvoIR.transfer_sext"),
     ("trunc", "EvoIR.Op.cast EvoIR.CastOp.trunc", ["w", "n"], "EvoIR.transfer_trunc"),
+    ("signed_add_defined", "EvoIR.Op.guard EvoIR.GuardOp.add", ["n"], "EvoIR.transfer_guard_add"),
+    ("signed_sub_defined", "EvoIR.Op.guard EvoIR.GuardOp.sub", ["n"], "EvoIR.transfer_guard_sub"),
+    ("signed_mul_defined", "EvoIR.Op.guard EvoIR.GuardOp.mul", ["n"], "EvoIR.transfer_guard_mul"),
+    ("signed_div_rem_no_overflow", "EvoIR.Op.guard EvoIR.GuardOp.divRem", ["n"], "EvoIR.transfer_guard_div_rem"),
+    ("divisor_nonzero", "EvoIR.Op.nonzero", ["n"], "EvoIR.transfer_guard_nonzero"),
+    ("shift_count_defined.unsigned", "EvoIR.Op.count false", ["n", "m"], "EvoIR.transfer_guard_unsigned_count"),
+    ("shift_count_defined.signed", "EvoIR.Op.count true", ["n", "m"], "EvoIR.transfer_guard_signed_count"),
 ]
 
 ENUMERATED_ROWS = [
@@ -289,7 +296,8 @@ private def auditDefinitions : List Name := [%(definitions)s]
      ("targets", Json.arr targets),
      ("definitions", Json.arr defs),
      ("sorried", Json.arr sorried),
-     ("registry", Json.arr ((EvoIR.registry.map (fun r => Json.str r.render)).toArray))]
+     ("registry", Json.arr ((EvoIR.registry.map (fun r => Json.str r.render)).toArray)),
+     ("guard_registry", Json.arr ((EvoIR.Guards.registry.map (fun r => Json.str r.render)).toArray))]
   IO.println "===AUDIT-JSON==="
   IO.println out.compress
 """
@@ -453,6 +461,7 @@ VECTOR_FILES = [
     "values-width8",
     "random",
     "named",
+    "guards",
 ]
 
 
@@ -529,6 +538,10 @@ def main(argv: list[str]) -> int:
             f"{args.prefix_registry} is not a byte prefix of {args.registry}"
         )
     rules = [parse_rule(line) for line in block.split("\n") if line]
+    guard_block, guard_digest = extract_block(spec, "g0.ub.v1")
+    if hashlib.sha256(guard_block.encode()).hexdigest() != guard_digest:
+        raise AuditFailure("the g0 registry digest does not match its rule text")
+    guard_rules = [parse_rule(line) for line in guard_block.splitlines()]
     prefix_rules = [parse_rule(line) for line in prefix_block.split("\n") if line]
     revision = next(
         line.strip() for line in spec.split("\n") if line.startswith("**Revision ")
@@ -539,6 +552,7 @@ def main(argv: list[str]) -> int:
 
     # -- steps 2 to 4 -----------------------------------------------------
     rule_targets = [f"EvoIR.sound_{r.ident}" for r in rules]
+    rule_targets += [f"EvoIR.sound_{r.ident}" for r in guard_rules]
     transfer_targets = [t[3] for t in PARAMETRIC_ROWS]
     for _, _, base in ENUMERATED_ROWS:
         transfer_targets += [f"{base}_{n}" for n in ENUMERATED_WIDTHS]
@@ -552,6 +566,8 @@ def main(argv: list[str]) -> int:
         raise AuditFailure(
             "the Lean registry values do not render back to the specification block"
         )
+    if dump["guard_registry"] != guard_block.splitlines():
+        raise AuditFailure("the Lean g0 data does not render back to the reviewed text")
 
     axiom_rows = classify_axioms(dump)
     if dump["sorried"]:
@@ -579,6 +595,17 @@ def main(argv: list[str]) -> int:
         }
         segment_a.append(entry)
 
+    for rule in guard_rules:
+        name = f"EvoIR.sound_{rule.ident}"
+        expected = f"EvoIR.RuleCovered EvoIR.Guards.{lean_ident(rule.ident)}"
+        entry = target_entry(byname, name, expected)
+        if entry["proof_kind"] != "kernel-only":
+            raise AuditFailure("g0 rule is not kernel-only: " + name)
+        entry.update(rule=rule.ident, registry_line=rule.render(), registry="g0.ub.v1",
+                     instances=dict(kind="parametric", space="every width environment and result width",
+                                    profile_bound="g0: N/M each 1..64", covers_profile=True))
+        segment_a.append(entry)
+
     segment_b = []
     for key, name, expected, why in LATTICE_TARGETS:
         entry = target_entry(byname, name, expected)
@@ -597,7 +624,11 @@ def main(argv: list[str]) -> int:
         expected = f"∀ ({binder} : Nat), EvoIR.TransferRowSound ({ctor} {binder})"
         entry = target_entry(byname, name, expected)
         entry["row"] = row
-        entry["source"] = "8.10 transfer table"
+        entry["source"] = "g0.ub.v1 transfer table" if "guard_" in name else "8.10 transfer table"
+        if "guard_" in name:
+            entry["assumption"] = "A2"
+        if "guard_" in name and entry["proof_kind"] != "kernel-only":
+            raise AuditFailure("g0 transfer is not kernel-only: " + name)
         entry["instances"] = {
             "kind": "parametric",
             "space": "every " + " and every ".join(params),
@@ -666,6 +697,8 @@ def main(argv: list[str]) -> int:
             "registry_name": args.registry,
             "registry_digest": digest,
             "registry_rules": len(rules),
+            "guard_registry": {"name": "g0.ub.v1", "digest": guard_digest,
+                               "rules": len(guard_rules), "independent_of_p0": True},
             "verified_prefix": {
                 "registry_name": args.prefix_registry,
                 "registry_digest": prefix_digest,

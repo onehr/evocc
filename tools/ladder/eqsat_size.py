@@ -25,6 +25,138 @@ def load(path):
     return json.loads(Path(path).read_bytes(), object_pairs_hook=unique)
 
 
+def run_guard_certification(plan, root):
+    """R02e first slice. Reuse the existing chain replay and S1 ELF contract.
+
+    The old diagnostic ceiling and P0/DCE captures remain frozen. The current
+    B baseline includes the common MIR true-constant selection in both arms.
+    No checker, identity or audit layer is introduced here.
+    """
+    root, plan = Path(root).resolve(), Path(plan).resolve()
+    raw, m = plan.read_bytes(), load(plan)
+    require(m['schema']=='evocc-certified-guard-size-plan-v1' and m['registry']=='g0.ub.v1',
+            'not the approved first guard slice')
+    require(subprocess.check_output(['git','show','HEAD:'+plan.relative_to(root).as_posix()],cwd=root)==raw,
+            'commit the guard size plan before execution')
+    tools = {k: Path(v['path']).resolve() if Path(v['path']).is_absolute() else
+             (root/v['path']).resolve() for k,v in m['tools'].items()}
+    for k,p in tools.items():
+        require(digest(p.read_bytes())==m['tools'][k]['sha256'],'guard size tool changed: '+k)
+    for p,h in m['inputs'].items():
+        require(digest((root/p).read_bytes())==h,'guard size input changed: '+p)
+    resources = m['resources']
+    require(resources['jobs']==1 and resources['min_free_bytes']>=8*1024**3
+            and resources['max_retained_bytes']<=256*1024**2 and resources['timeout_seconds']<=300,
+            'unbounded guard size run')
+    require(shutil.disk_usage(root).free>=resources['min_free_bytes'],'guard disk reserve unavailable')
+    with (root/'.build/bench.lock').open('a') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        directory = Path(tempfile.mkdtemp(prefix='g0-',dir=root/'.evidence/eqsat-size'))
+        (directory/'manifest.json').write_bytes(raw)
+        receipt = dict(schema='evocc-certified-guard-size-receipt-v1',status='STARTED',
+            manifest_digest=digest(raw),attempts=[],units=[],programs=[],timing='NOT_RUN',
+            claim='g0-only-guard-savings-after-P0-and-common-baseline-DCE')
+
+        def save():
+            pending = directory/'receipt.json.pending'
+            pending.write_bytes(json.dumps(receipt,indent=2,sort_keys=True).encode()+b'\n')
+            pending.replace(directory/'receipt.json')
+
+        runner = Capture(directory,resources,dict(os.environ),receipt,save)
+        vm, started = directory.name.lower(), False
+
+        def guest_path(p):
+            p = Path(p).resolve()
+            return '/runwork/'+p.relative_to(directory).as_posix() if p.is_relative_to(directory) else '/work/'+p.relative_to(root).as_posix()
+
+        def guest(argv,stage,expected=None):
+            return runner.run(stage,[tools['container'],'exec',vm,*argv],expected=expected)
+
+        def predicates(path):
+            text = Path(path).read_text()
+            names = ('divisor_nonzero','signed_div_rem_no_overflow','signed_add_defined',
+                     'signed_sub_defined','signed_mul_defined','shift_count_defined.unsigned',
+                     'shift_count_defined.signed')
+            return sum(any((' = '+name+' ') in line for name in names) for line in text.splitlines())
+
+        save()
+        try:
+            image = runner.run('image',[tools['container'],'image','inspect',m['image']['name']])
+            require(load(directory/image['stdout'])[0]['id']==m['image']['digest'],'guard image changed')
+            runner.run('start-object-vm',[tools['container'],'run','--rm','-d','--name',vm,
+                '--cpus','2','--memory','3G','--read-only','--tmpfs','/tmp','--no-dns',
+                '--mount',f'type=bind,source={root},target=/work,readonly',
+                '--mount',f'type=bind,source={directory},target=/runwork',
+                m['image']['name'],'/bin/sleep','3600'])
+            started = True
+            for index,unit in enumerate(m['units']):
+                ir = root/unit['ir']
+                chain = directory/f'{index:02}-chain'
+                runner.run('g0-chain:'+unit['source'],[tools['producer'],'guards',digest(ir.read_bytes()),ir,
+                    tools['checker'],m['tools']['checker']['sha256'],'guard-known-true','8',chain])
+                binding = bind_bundle(chain,tools['checker'])
+                record = load(chain/'chain.json')
+                require(record['policy']['registry']=='g0.ub.v1' and record['publication']=='VERIFIED',
+                        'guard chain not independently verified')
+                row = dict(case=unit['case'],source=unit['source'],binding=binding,
+                    total_predicates=predicates(ir),retained_predicates=predicates(chain/'output.evo'),
+                    certified_roots=sum(t['roots']['accepted'] for t in record['transactions']),
+                    proof_accounting=[dict(result=t['result'],verification=t['verification'],reason=t['rejection_reason'])
+                                      for t in record['transactions']],
+                    diagnostic_ceiling=unit['diagnostic_ceiling'],arms={})
+                require(row['total_predicates']-row['retained_predicates']==row['certified_roots'],
+                        'guard root accounting mismatch')
+                for arm,path in [('B',ir),('G',chain/'output.evo')]:
+                    row['arms'][arm] = {}
+                    for profile in ('checked','unchecked'):
+                        objects, assemblies = [], []
+                        for repeat in (0,1):
+                            stem = f'{index:02}-{arm}-{profile}-{repeat}'
+                            asm = runner.run('asm:'+stem,[tools['backend'],'linux-aarch64',digest(path.read_bytes()),path,
+                                                        '--ub-checks='+profile])
+                            assemblies.append((directory/asm['stdout']).read_bytes())
+                            obj = directory/(stem+'.o')
+                            guest(['/usr/bin/gcc-14','-c','-x','assembler',guest_path(directory/asm['stdout']),
+                                   '-o',guest_path(obj)],'assemble:'+stem)
+                            objects.append(obj)
+                        require(assemblies[0]==assemblies[1],'guard lowering not reproducible')
+                        require_identical_objects(objects[0].read_bytes(),objects[1].read_bytes())
+                        row['arms'][arm][profile] = dict(metrics=inspect_object_size(objects[0].read_bytes()),
+                            object=objects[0].relative_to(root).as_posix(),two_builds='BYTE_IDENTICAL')
+                old = inspect_object_size((root/unit['old_baseline_object']).read_bytes())['text_bytes']
+                baseline = row['arms']['B']['checked']['metrics']['text_bytes']
+                after = row['arms']['G']['checked']['metrics']['text_bytes']
+                row.update(common_baseline_delta=old-baseline,certified_saving=baseline-after,
+                           certified_percent=100*(baseline-after)/baseline)
+                receipt['units'].append(row)
+                save()
+            # Original S2 mixed-link correctness recipes; no timing loops and
+            # no all-Evo application or kernel claim from these six TUs.
+            for program in m['programs']:
+                units = [u for u in receipt['units'] if u['case']==program['case']]
+                for arm in ('B','G'):
+                    for profile in ('checked','unchecked'):
+                        objects = [root/u['arms'][arm][profile]['object'] for u in units]
+                        objects += [root/p for p in program['dependencies']]
+                        if program['harness']: objects.append(root/program['harness'])
+                        exe = directory/f"{program['case']}-{arm}-{profile}"
+                        guest(['/usr/bin/gcc-14',*map(guest_path,objects),'-Wl,--build-id=none','-lm',
+                               '-o',guest_path(exe)],'link:'+exe.name)
+                        checks = [guest([guest_path(exe),*mode],'correctness:'+exe.name+':'+str(i),program['result'])
+                                  for i,mode in enumerate(program['modes'])]
+                        receipt['programs'].append(dict(case=program['case'],arm=arm,profile=profile,
+                            correctness=[r['stage'] for r in checks],scope='S2_MIXED_LINK_REPLAY'))
+                        save()
+            receipt['status'] = 'VERIFIED_GUARD_TU_SIZES'
+        except BaseException as error:
+            receipt.update(status='FAILED',error=str(error))
+            raise
+        finally:
+            if started: runner.run('stop-object-vm',[tools['container'],'stop',vm])
+            save()
+        return directory,receipt
+
+
 def run_dce_attribution(plan, root):
     root, plan = Path(root).resolve(), Path(plan).resolve()
     raw, m = plan.read_bytes(), load(plan)
