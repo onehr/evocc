@@ -114,7 +114,8 @@
     "default_output_changed": false,
     "verified_eqsat_claim": false,
     "actual_bytes": {"identity_only_inputs": [64, 228], "saved": [0, 0]},
-    "compile_time_bound_evaluated": "TWO_IDENTITY_INPUTS_ONLY",
+    "compile_time_bound_evaluated": true,
+    "compile_time_bound_scope": "TWO_IDENTITY_INPUTS_ONLY",
     "whole_n02_source_bridge_closed": false
   },
   "disk": {
