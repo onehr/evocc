@@ -1,0 +1,111 @@
+{
+  "schema": "evocc-codegen-ladder-inventory-plan-v1",
+  "package": "N01",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "date": "2026-10-02",
+  "parent_plan": "tests/contracts/codegen-n01-20261002.json",
+  "scope": "Additional retained ladder subject objects; frozen receipt population, no rebuild, never substituted for paired S5 attribution. Reconcile only units with a recorded original object digest; missing digest/object/twin stays explicit incomplete historical evidence.",
+  "selection": "For absolute assembly paths, use adjacent .o; toybox uses .build/ladder/toybox-work plus unit and substitutedTest.objectFiles digest. Other record formats without an authoritative path/digest are listed as unavailable, not guessed.",
+  "inputs": [
+    {
+      "receipt": "tests/contracts/ladder-cjson-receipt.json",
+      "sha256": "495ac198041d85d44ebf1cbd735259f80bda65efdcab870bb32ed67a5b04738d",
+      "units": ".evidence/ladder/cjson/20260927T092953Z/units.jsonl",
+      "units_sha256": "9da986619f1cbb29f8dac54e72615a650ace1c0862410a50d04fc93bc997dc99"
+    },
+    {
+      "receipt": "tests/contracts/ladder-csmith-receipt.json",
+      "sha256": "97a558e0ef69069033e2cd05ff39240405f6855fe457228ff7bcdd9065f51fef",
+      "units": null,
+      "units_sha256": null
+    },
+    {
+      "receipt": "tests/contracts/ladder-doom-receipt.json",
+      "sha256": "e8c5385b7113e92863b4d70fd5ea9dbbbb5320d4bf8ea45c9dcc760d4a5bdf57",
+      "units": null,
+      "units_sha256": null
+    },
+    {
+      "receipt": "tests/contracts/ladder-e0-receipt.json",
+      "sha256": "7ae88df5ce19ce85442a4ecc0ece827f5688eb96f293a927843465957bfd74b5",
+      "units": null,
+      "units_sha256": null
+    },
+    {
+      "receipt": "tests/contracts/ladder-jq-receipt.json",
+      "sha256": "03cf5c9ff6669a17a7fc932bf1732f3791a096e15662279ceea37a69c30f4705",
+      "units": ".evidence/ladder/jq/20260927T082205Z/units.jsonl",
+      "units_sha256": "e7b2d66e42721fce829a7769e5722655c03cf49d2ffbbb3ccd620e6be5ef7683"
+    },
+    {
+      "receipt": "tests/contracts/ladder-llvm-test-suite-receipt.json",
+      "sha256": "075a99839d3043bb21fdd38ce7e0596f35c494130e81db4c944f637d13cc3382",
+      "units": null,
+      "units_sha256": null
+    },
+    {
+      "receipt": "tests/contracts/ladder-lua-receipt.json",
+      "sha256": "2507cfe90606206395aa397c3ae9d075b6aa3534ae8b2e14137a10b79c22f4f4",
+      "units": ".evidence/ladder/lua/20260919T231634Z/units.jsonl",
+      "units_sha256": "701d9446a635cfc41a7bf0272c35a9d857457fa1d34235fa4ff125c9007ed27e"
+    },
+    {
+      "receipt": "tests/contracts/ladder-mbedtls-receipt.json",
+      "sha256": "dd1bf82f36548e6e3ef4fac6fb7cc69122ce420588939964b0d3efc9a5df11e0",
+      "units": ".evidence/ladder/mbedtls/20260919T232127Z/units.jsonl",
+      "units_sha256": "92072f2c423915df5563260fed4b496d63c829583c0f0c75db439d3b55bf4097"
+    },
+    {
+      "receipt": "tests/contracts/ladder-musl-receipt.json",
+      "sha256": "4f0d4b2eea01419b3745b920e938007ae14e9f6ea96c85add458c3db7581a0be",
+      "units": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260927T110110Z/units.jsonl",
+      "units_sha256": "63805c6dc26ac1b24829459549cab93ef9f13826c66eda8109b411ece319f81d"
+    },
+    {
+      "receipt": "tests/contracts/ladder-polybench-receipt.json",
+      "sha256": "c80dd28b3e1d52eea2058c000531c397c16794ed7499842d32884803179c09c1",
+      "units": null,
+      "units_sha256": null
+    },
+    {
+      "receipt": "tests/contracts/ladder-sqlite-receipt.json",
+      "sha256": "94d32ee416a37c4e0167b3c4dc022223a17692fc24557499a2c3cc26ae23a9e2",
+      "units": ".evidence/ladder/sqlite/20260919T231713Z/units.jsonl",
+      "units_sha256": "958203378f24813ecbe3e21fbace344ce235c8c5dfaee5ff664daae2c48bd03f"
+    },
+    {
+      "receipt": "tests/contracts/ladder-tinycc-receipt.json",
+      "sha256": "76b2db383e87ac8b845c26a603b0c77b0007b7fba5a45ccc660479391bea3f93",
+      "units": ".evidence/ladder/tinycc/20260927T083017Z/units.jsonl",
+      "units_sha256": "d5c1279cdd69b25094632d484313db98725ba169d0c536ea96a499b710a237a2"
+    },
+    {
+      "receipt": "tests/contracts/ladder-toybox-receipt.json",
+      "sha256": "9403516bab330f4c0dffeb73dbf19cc503f7a5428ec4370d84684db4240f1b72",
+      "units": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260927T084656Z/units.jsonl",
+      "units_sha256": "87f7caeed3099aad99a88cf57adef041173dd8ba94c605dae99eb672e1f6e072"
+    },
+    {
+      "receipt": "tests/contracts/ladder-zlib-receipt.json",
+      "sha256": "836dfd6c49a39ce987ee019e03c313a6c061ed88612555851ffd45e91f19cbba",
+      "units": ".evidence/ladder/zlib/20260919T231524Z/units.jsonl",
+      "units_sha256": "cae164d950783c0cdcc329a8a4be586850c0f9822fc74ec985254c6ebdeaf224"
+    },
+    {
+      "receipt": "tests/contracts/ladder-zstd-receipt.json",
+      "sha256": "887bb0aff32604a6a5460262d4e4832d22e546872ae1c3762883bf794af0d0ef",
+      "units": ".evidence/ladder/zstd/20260919T233745Z/units.jsonl",
+      "units_sha256": "f867d4d340119c0dd45cdc5a1d65f8fa6fc39ca7ee9343021eb8f4a893985413"
+    }
+  ],
+  "resources": {
+    "max_retained_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "object_instruction_limit": 250000,
+    "one_object_timeout_seconds": 60,
+    "capture_timeout_seconds": 900
+  },
+  "retention": "Per-unit category tables, object hashes and disposition only; no full disassembly or new objects.",
+  "claim_ceiling": "Historical one-object attribution where identity is recorded. No fresh reproducibility, correctness, ratio to a differently configured reference, or whole-application acceptance."
+}
