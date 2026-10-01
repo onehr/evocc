@@ -456,18 +456,112 @@ boundaries. These results **do not prove the C front end, memory model, backend,
 entire compiler, or Linux kernel correct**. Reproduce the separate proof gate
 with [`tools/gate-lean.sh`](tools/gate-lean.sh).
 
-The [Q2/Q3 implementation design](docs/framing-draft.md) describes the next
-step: measure policy and rule-discovery opportunities separately before AI search,
-then admit data-only rule proposals through trusted proof templates and replay
-their application certificates independently before native performance tests.
-It separates rule soundness from measured benefit; this is planned work, not
-an AI optimization or speedup claim.
+The [Q2/Q3 implementation design](docs/framing-draft.md) separates rule
+soundness from measured benefit and gates any AI search behind measured
+opportunity ceilings. What has actually been built and measured under that
+design is summarized in [Verified EqSat](#verified-eqsat-pipeline-trust-layers-and-evidence)
+below; none of it is an AI optimization or speedup claim.
 
 Implementation evidence stays separate: recorded scalar and MIR gates each
 cover **21,000 generated IR programs** with zero mismatches; native C corpora
 separately pass **384/384 on Linux and 384/384 on Darwin**. Kernel acceptance
 additionally checks original Kbuild inputs, EvoCC object provenance through
 generated-input convergence and linking, then actual boot and runtime tests.
+
+### Verified EqSat: pipeline, trust layers and evidence
+
+EvoCC's optimizer is a bounded equality-saturation engine whose every change
+to a translation unit is accompanied by a certificate that a separate program
+replays. Nothing optimized is published unless that replay succeeds. The
+diagram shows the path one translation unit takes under `-Oeq-scalar`.
+
+```mermaid
+flowchart LR
+    subgraph FRONT["Front end"]
+        C["C source"] --> LOW["Lowering to EvoIR<br/>folds, CSE, block joins,<br/>explicit ub.assume obligations"]
+        LOW --> IR0["Canonical EvoIR<br/>(SHA-256 input digest)"]
+    end
+    subgraph CHAIN["Shared verified chain (driver and evaluator run the same code)"]
+        IR0 --> TX["Transaction k (at most 8)<br/>eligible scalar regions §8.5<br/>rewrite with p0.scalar.v4<br/>policy gate: accept / reject"]
+        TX --> BUNDLE["before.evo · after.evo · proof.evp<br/>(EVP certificate)"]
+        BUNDLE --> CHK["Standalone checker<br/>evo-proofcheck / evocc-checker<br/>own eligibility · own facts · replay · whole-module splice<br/>binary pinned by trusted SHA-256"]
+        CHK -->|"exit 0"| NEXT{"changed?"}
+        CHK -->|"exit 2 malformed · exit 3 invalid<br/>timeout · crash"| REJ["Whole chain REJECTED<br/>no artifact, state rolled back"]
+        NEXT -->|"yes"| TX
+        NEXT -->|"no (terminal no-op proof)"| PUB["Chain VERIFIED<br/>immutable chain record + bundles"]
+    end
+    subgraph BACK["Back end (not proved; tested)"]
+        PUB --> MIR["EvoMIR lowering from the one verified IR"]
+        MIR --> CK["checked profile<br/>ub.assume → trap"]
+        MIR --> UK["unchecked profile<br/>(requires a passing checked twin)"]
+        CK --> OBJ["objects, receipts, size metrics"]
+        UK --> OBJ
+    end
+    subgraph LEAN["Offline, Lean 4 (never runs at compile time)"]
+        REG["Registry text in the spec<br/>(digest-bound)"] --> GEN["Generated Lean rule data"]
+        GEN --> PRF["RuleCovered proofs: 55 / 55 kernel-only<br/>known-bits transfer proofs"]
+        PRF --> AUD["Audit receipt: axioms, toolchain,<br/>registry digest"]
+    end
+    AUD -.->|"same registry digest<br/>compiled into producer and checker"| TX
+    AUD -.-> CHK
+```
+
+Trust is layered, and each layer has a different kind of evidence. The point
+of the design is that an optimizer bug, a checker bug and a proof gap are
+three different failures that three different mechanisms catch.
+
+```mermaid
+flowchart TB
+    subgraph P["Proved in Lean (offline, per registry revision)"]
+        P1["Each of the 55 rule equalities holds for every width environment<br/>under its stated facts and guards"]
+        P2["Known-bits transfers, meet/join and guard predicates are sound<br/>(9 enumerated rows are native-backed; the rest kernel-only)"]
+    end
+    subgraph R["Replayed per compilation (independent Rust checker)"]
+        R1["Every union in the certificate is an admitted rule or congruence"]
+        R2["Eligibility, seed facts and premises are recomputed, not trusted"]
+        R3["after.evo equals before.evo everywhere outside the admitted roots"]
+        R4["Checker binary matches the pinned SHA-256; exit classes are closed"]
+    end
+    subgraph T["Tested, not proved"]
+        T1["Rust semantics agree with the Lean model on 1,325,045 vectors"]
+        T2["Parser, C lowering, EvoMIR lowering, allocation and ABI:<br/>21,000-program IR gates, 384/384 native corpora, kernel boot"]
+    end
+    P --> R --> T
+    T --> N["Claim ceiling: the listed rules and analyses are machine-checked against the Lean model of EvoIR scalar semantics.<br/>This is not a verified compiler."]
+```
+
+**Evidence collected so far.** Every row is receipt-backed; the right column
+is the claim ceiling, not a summary.
+
+| Date | What ran | Numbers | What it does and does not establish |
+|---|---|---|---|
+| 2026-09-09 | Lean audit of `p0.scalar.v4` | 55 / 55 rules proved, kernel-only; [receipt](tests/contracts/lean-p0-receipt.json) | Rules are sound equalities of the modeled semantics. Not a proof of the compiler. |
+| 2026-09-29 | Shared verified chain ([R01a](docs/notebook/verified-eqsat-implementation-20260929.md), [requalification](docs/notebook/eqsat-review-closure-20260929.md)) | Driver and evaluator run one chain; 45 legal transaction states; checker pinned by SHA-256; full workspace 2,850 tests, 0 failures | Optimized output cannot be emitted without independent replay. Integration found and fixed two real producer defects. |
+| 2026-09-30 | Bounded Linux pilot ([protocol and results](docs/notebook/eqsat-r02-linux-pilot-20260930.md), [receipt](tests/contracts/eqsat-r02-pilot-receipt-20260930.json)) | 576 / 576 result-checked executions; 138 certificates replayed, 0 rejections; 108 checked/unchecked twins; default search and certificate caps hit 0 times | The pipeline runs end to end on zlib, zstd and cJSON. Millisecond fresh-process timing was uninformative by construction. |
+| 2026-09-30 | Steady-state timing ([protocol](docs/notebook/eqsat-r02-steady-protocol-20260930.md)) | A/A 10 / 10 admitted; A/B run once: 10 / 10 **INCONCLUSIVE** at a 5% floor; frozen, not rerun | No latency improvement, regression or equivalence is claimed. Latency is `NOT_MEASURABLE_ON_THIS_LANE`; size is the V1 objective. |
+| 2026-09-30 | Deterministic preflight ([adjudication](docs/notebook/eqsat-r02-review-repair-20260930.md)) | 1,024 policy evaluations, 6,144 chains, 8,854 proofs replayed; 1,222 candidate rules attempted: 1,174 proved, 48 unknown, **0 installed** | Policy, rule and shortcut tracks are all **INCONCLUSIVE / NOT_ADMITTED**. No AI campaign is admitted; proving rules was never the bottleneck. |
+| 2026-10-01 | Object-level size ([S1–S4 ledger](docs/notebook/eqsat-size-work-packages-20261001.md), [DCE control](tests/contracts/eqsat-size-dce-20261001.json), [policy ranking](tests/contracts/eqsat-size-policy-ranking-20261001.json)) | see table below; exhaustive best policy beats the default by at most 4 bytes | Verified rewrites shrink object `.text` by 0.8–2.4% on the changed subject TUs. The policy weight space is `FINITE_ENUMERATION_SUFFICIENT` for size. |
+| 2026-10-01 | Guard-folding ceiling ([result](tests/contracts/eqsat-size-guards-result-20261001.json), [semantic proposal](docs/eqsat-guard-folding-draft.md)) | Unverified diagnostic recovers 952 / 1,608 / 80 bytes (zlib / zstd / cJSON) from provably-true UB checks | A ceiling for the next verified domain (R02e), not a benefit. Nothing from the diagnostic is installed. |
+
+Verified EqSat effect on the subject translation units, checked profile,
+object `.text` bytes with the common dead-code elimination enabled on both
+sides (A: EqSat off, B: EqSat on, same lowering, same backend):
+
+| Subject | A | B | Change | Changed TUs / eligible roots |
+|---|---:|---:|---:|---|
+| P0 integer mix | 128 | 128 | 0 | 0 / 13 |
+| zlib `deflate.c` + `inflate.c` | 58,920 | 58,448 | −472 (−0.8%) | 2 / 3,356 |
+| zstd `zstd_compress.c` + `zstd_decompress.c` | 157,712 | 156,272 | −1,440 (−0.9%) | 2 / 10,298 |
+| cJSON `cJSON.c` | 30,228 | 29,496 | −732 (−2.4%) | 1 / 1,787 |
+
+What these numbers mean: the verified scalar domain is sound and reproducible,
+and its measured effect is small, because the domain is small. It cannot touch
+the checked UB guards (0.4–5.5% of object `.text` on these TUs, measured as
+checked minus unchecked), memory operations, inlining or control flow. The design response is to grow the verified domain
+one reviewed slice at a time, measuring the ceiling before proving anything;
+the first slice is guard folding. G2 whole-kernel reproducibility, the Q2
+comparison against GCC and Clang, and any Q3 self-improvement claim remain
+**NOT_ACCEPTED**.
 None of these test populations substitutes for the others.
 
 ## Layout and development
