@@ -1,0 +1,50 @@
+# N03b/N03e: bounded negative preflight
+
+Implementation: `856dfcd3`; plans frozen in `7680ae23`.
+Receipt: [codegen-n03-preflight-20261002-receipt.json](../../tests/contracts/codegen-n03-preflight-20261002-receipt.json).
+Disposition: proposed `NO_ADMITTED_OPPORTUNITY`, pending a green full-workspace gate.
+
+The read-only census inspected the frozen 21,000 generated modules and fresh
+original-source A/current-EqSat-B outputs for the six S5 units. All six source
+inventories reproduced the original A bytes. Existing B chains replayed 12
+transactions: zero completed rejection, bundle failure or unknown outcome.
+No transformation was implemented or executed.
+
+| TU | Inline calls A=B | Integer candidates A/B | Scan-cap operator exclusions A=B |
+| --- | ---: | ---: | ---: |
+| integer-mix | 0 | 3/3 | 0 |
+| zlib deflate | 123 | 414/413 | 99 |
+| zlib inflate | 60 | 281/281 | 247 |
+| zstd compress | 576 | 841/819 | 162 |
+| zstd decompress | 200 | 227/227 | 64 |
+| cJSON | 215 | 184/183 | 0 |
+| Total | 1,174 | 1,950/1,926 | 572 |
+
+N03b found 81 internal strong single-call sites per arm. Three passed the leaf
+shape, all in zstd-compress; all three failed the frozen module-poison
+condition. Another 55 sites exceeded callee block/instruction caps. No site
+was excluded by the growth cap. N03e checked 63/51 edge bindings in A/B and
+found no complete all-edge match. The 572 excluded operators per arm are not
+572 functions, and their exclusion does not prove absence of opportunities.
+All six complete source modules remain N02-opaque.
+
+The generated population admitted 6,274 defined inputs and excluded 14,726
+opaque modules. Its 32,406 calls have no C declaration-chain permission;
+unknown permission is not absence of inlining opportunity. Its 954,563
+integer candidates did not satisfy the frozen edge pattern. Generated
+residual-B inspection was NOT RUN.
+
+The frozen stop rules therefore allow negative closure without widening
+opacity, poison handling, operators or budgets. This does not establish
+that general inlining or CSE is unprofitable. Transform TV, native
+differentials, size/resource bounds and transformed-object twins are
+NOT RUN; no pass is admitted to default O2. The existing volatile-initializer
+source-bridge mismatch remains MISMATCH_NOT_VALIDATED.
+
+Gates: focused 11/11 PASS; example build and formatting PASS.
+Current full-workspace attempt: 379 suites, 2,938 PASS / 0 FAIL / 4 ignored;
+exit 101 from Clippy's unnecessary unwrap in the Linux capture test. The
+explicit `if let` repair needs full recheck with N03a step 1; no green gate
+or final negative closure is inherited. Disk: owned compact capture +75,377
+apparent bytes; joint preparation cache growth +866,865,152 bytes is recorded
+once in the N03a baseline receipt, not charged again here.

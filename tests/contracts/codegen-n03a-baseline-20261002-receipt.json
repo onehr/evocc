@@ -1,0 +1,381 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03a preparation",
+  "date": "2026-10-02",
+  "status": "BASELINES_OBSERVED_GATE_PENDING",
+  "implementation_commit": "856dfcd3935c37b1a4f70b5670697feadaa38fa0",
+  "plans": [
+    "tests/contracts/codegen-n03a-20261002.json",
+    "tests/contracts/codegen-n03a-baseline-a-20261002.json",
+    "tests/contracts/codegen-n03a-baseline-b-20261002.json",
+    "tests/contracts/codegen-n03a-guard-baseline-20261002.json"
+  ],
+  "arms": {
+    "A": {
+      "capture": ".evidence/codegen-trend/measure-9gez8fa0/receipt.json",
+      "capture_sha256": "fe0f835ae9018c04a079f260e238e9e3a738f3a750c3fdb93ee819d5e518a4a7",
+      "status": "OBSERVED",
+      "object_twins": 12,
+      "retained_bytes": 1019744,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "coverage": {
+        "failures": [],
+        "missing": [],
+        "status": "OBSERVED"
+      },
+      "tools": {
+        "checker": "6a4b0602b8e5aedd0c962331ccf528185d112a8787671e1209ced2b0cf7a34a0",
+        "compiler": "3f7537c4e5b0e645496f13023a375413692d4ce3c132aa1df78f548adc043c24",
+        "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+        "steps": "be66183588a5217805cfa9988e21255efbd835d514dcde08203a56ebc6dd1004"
+      },
+      "eqsat": false
+    },
+    "B": {
+      "capture": ".evidence/codegen-trend/measure-w5rjh311/receipt.json",
+      "capture_sha256": "f645c11f78ab0e575bcbcb490723f2e14133e7220c6a7955bbe2348e2dfc2545",
+      "status": "OBSERVED",
+      "object_twins": 12,
+      "retained_bytes": 1023605,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "coverage": {
+        "failures": [],
+        "missing": [],
+        "status": "OBSERVED"
+      },
+      "tools": {
+        "checker": "6a4b0602b8e5aedd0c962331ccf528185d112a8787671e1209ced2b0cf7a34a0",
+        "compiler": "3f7537c4e5b0e645496f13023a375413692d4ce3c132aa1df78f548adc043c24",
+        "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+        "steps": "be66183588a5217805cfa9988e21255efbd835d514dcde08203a56ebc6dd1004"
+      },
+      "eqsat": true
+    },
+    "g0": {
+      "capture": ".evidence/codegen/n03a-g0-peo9evic/receipt.json",
+      "capture_sha256": "05ff16ada1b34b628c5a6bc28b7cb7bde87832eeb9b4e6471fd45cbfdbb68778",
+      "status": "OBSERVED",
+      "object_twins": 12,
+      "retained_bytes": 687452,
+      "certificate_compatibility_replays": 10,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0,
+        "unknowns": 0
+      },
+      "historical_chain_admission": "NOT_CLAIMED_DIFFERENT_CHECKER_IDENTITY",
+      "native_execution": "NOT_RUN_RETAINED_IR_BACKEND_CONTROL"
+    }
+  },
+  "native_corpora": {
+    "darwin": {
+      "objects": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "refused": 0,
+      "two_builds": "BYTE_IDENTICAL",
+      "baseline_directory": ".evidence/codegen/n03a-corpus-20261002/baseline/darwin",
+      "object_bytes": 193392,
+      "sorted_name_tab_sha256_newline_inventory_sha256": "d3f8e1129e4b4238afa8ebfa32963954240d68f04ddd2c84ad1a41b1a6929598",
+      "log": ".evidence/codegen/n03a-corpus-baseline-darwin.log",
+      "log_sha256": "cafa269c7e98122a3cd89081db9083d84ed3658dfb14d57ec016047ba70ecd8f"
+    },
+    "linux": {
+      "objects": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "refused": 0,
+      "two_builds": "BYTE_IDENTICAL",
+      "baseline_directory": ".evidence/codegen/n03a-corpus-20261002/baseline/linux",
+      "object_bytes": 383344,
+      "sorted_name_tab_sha256_newline_inventory_sha256": "2905a22ae1898836cd4cde016b3cb4e9e71d9d1bfd3f8d221da6368d1f1efd3b",
+      "log": ".evidence/codegen/n03a-corpus-baseline-linux.log",
+      "log_sha256": "3baac4923e9fee958ceb543c57b071f6d41a7a391aeaa9b690fe017cc7837d13"
+    }
+  },
+  "table": [
+    {
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "text_bytes": 128,
+      "gcc_o2_text_bytes": 96,
+      "arm": "A"
+    },
+    {
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "text_bytes": 128,
+      "gcc_o2_text_bytes": 96,
+      "arm": "A"
+    },
+    {
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "text_bytes": 30516,
+      "gcc_o2_text_bytes": 14432,
+      "arm": "A"
+    },
+    {
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "text_bytes": 29012,
+      "gcc_o2_text_bytes": 14432,
+      "arm": "A"
+    },
+    {
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "text_bytes": 28404,
+      "gcc_o2_text_bytes": 9940,
+      "arm": "A"
+    },
+    {
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "text_bytes": 26664,
+      "gcc_o2_text_bytes": 9940,
+      "arm": "A"
+    },
+    {
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "text_bytes": 124024,
+      "gcc_o2_text_bytes": 48760,
+      "arm": "A"
+    },
+    {
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "text_bytes": 121652,
+      "gcc_o2_text_bytes": 48760,
+      "arm": "A"
+    },
+    {
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "text_bytes": 33688,
+      "gcc_o2_text_bytes": 14492,
+      "arm": "A"
+    },
+    {
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "text_bytes": 33440,
+      "gcc_o2_text_bytes": 14492,
+      "arm": "A"
+    },
+    {
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "text_bytes": 30228,
+      "gcc_o2_text_bytes": 14400,
+      "arm": "A"
+    },
+    {
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "text_bytes": 30116,
+      "gcc_o2_text_bytes": 14400,
+      "arm": "A"
+    },
+    {
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "text_bytes": 128,
+      "gcc_o2_text_bytes": 96,
+      "arm": "B"
+    },
+    {
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "text_bytes": 128,
+      "gcc_o2_text_bytes": 96,
+      "arm": "B"
+    },
+    {
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "text_bytes": 30184,
+      "gcc_o2_text_bytes": 14432,
+      "arm": "B"
+    },
+    {
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "text_bytes": 28668,
+      "gcc_o2_text_bytes": 14432,
+      "arm": "B"
+    },
+    {
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "text_bytes": 28264,
+      "gcc_o2_text_bytes": 9940,
+      "arm": "B"
+    },
+    {
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "text_bytes": 26520,
+      "gcc_o2_text_bytes": 9940,
+      "arm": "B"
+    },
+    {
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "text_bytes": 122972,
+      "gcc_o2_text_bytes": 48760,
+      "arm": "B"
+    },
+    {
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "text_bytes": 120592,
+      "gcc_o2_text_bytes": 48760,
+      "arm": "B"
+    },
+    {
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "text_bytes": 33300,
+      "gcc_o2_text_bytes": 14492,
+      "arm": "B"
+    },
+    {
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "text_bytes": 33052,
+      "gcc_o2_text_bytes": 14492,
+      "arm": "B"
+    },
+    {
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "text_bytes": 29496,
+      "gcc_o2_text_bytes": 14400,
+      "arm": "B"
+    },
+    {
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "text_bytes": 29384,
+      "gcc_o2_text_bytes": 14400,
+      "arm": "B"
+    },
+    {
+      "arm": "g0",
+      "unit": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "text_bytes": 128
+    },
+    {
+      "arm": "g0",
+      "unit": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "text_bytes": 128
+    },
+    {
+      "arm": "g0",
+      "unit": "deflate.c",
+      "profile": "checked",
+      "text_bytes": 29960
+    },
+    {
+      "arm": "g0",
+      "unit": "deflate.c",
+      "profile": "unchecked",
+      "text_bytes": 28668
+    },
+    {
+      "arm": "g0",
+      "unit": "inflate.c",
+      "profile": "checked",
+      "text_bytes": 28232
+    },
+    {
+      "arm": "g0",
+      "unit": "inflate.c",
+      "profile": "unchecked",
+      "text_bytes": 26520
+    },
+    {
+      "arm": "g0",
+      "unit": "lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "text_bytes": 121988
+    },
+    {
+      "arm": "g0",
+      "unit": "lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "text_bytes": 120592
+    },
+    {
+      "arm": "g0",
+      "unit": "lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "text_bytes": 33300
+    },
+    {
+      "arm": "g0",
+      "unit": "lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "text_bytes": 33052
+    },
+    {
+      "arm": "g0",
+      "unit": "cJSON.c",
+      "profile": "checked",
+      "text_bytes": 29468
+    },
+    {
+      "arm": "g0",
+      "unit": "cJSON.c",
+      "profile": "unchecked",
+      "text_bytes": 29384
+    }
+  ],
+  "gates": {
+    "full_workspace": {
+      "status": "FAILED_CLIPPY_PENDING_FULL_RECHECK",
+      "source_commit": "4a03735f",
+      "suites": 379,
+      "passed": 2938,
+      "failed": 0,
+      "ignored": 4,
+      "exit_code": 101,
+      "clippy": "FAIL_UNNECESSARY_UNWRAP_IN_NATIVE_CAPTURE_TEST",
+      "fmt": "NOT_RUN_AFTER_CLIPPY_FAILURE",
+      "log": ".evidence/codegen/full-workspace-n03-preparation-20261002.log",
+      "log_sha256": "71d3d9280410a610a85af2e30bb33e36e5e238d59449439ab65bdeba1e8d5f7b"
+    }
+  },
+  "clippy_repair": {
+    "status": "PASS_FOCUSED_ONLY",
+    "log": ".evidence/codegen/n03-preparation-clippy-repair-20261002.log",
+    "log_sha256": "09945e8eab81870addb6321863dea04748dadbda374dfb62000bbd65ce91887f"
+  },
+  "claim_ceiling": "Original input baselines only. No backend refactor, cross-revision byte identity or size improvement is established.",
+  "disk": {
+    "capture_limit_bytes": 524288000,
+    "shared_target_checkpoint_before_kib": 20923760,
+    "shared_target_checkpoint_after_kib": 21770308,
+    "shared_target_net_bytes": 866865152,
+    "retained_baseline_capture_bytes": 3307537,
+    "note": "Shared target/frontend growth is recorded once for the joint preparation gate, not charged independently to each lane. The checkpoint includes earlier preparation builds. Baseline objects are the minimal regression set retained until cross-revision comparisons close; native scratch and duplicate objects removed."
+  },
+  "prior_attempt": {
+    "capture": ".evidence/codegen/n03a-g0-tw0shb9t/receipt.json",
+    "capture_sha256": "d8f31716913e6c57a17941faa6139e6dfbacafa03de6f63d14f5cfcfa9641ce7",
+    "status": "FAILED_BEFORE_CHECKER_EXECUTION",
+    "reason": "Historical checker identity differs; no historical record or admission rule changed.",
+    "bundle_admission_failures": 1,
+    "proof_rejections": 0
+  }
+}

@@ -2340,8 +2340,14 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     other backend slice.
     [Frozen extraction and baseline plans](tests/contracts/codegen-n03a-20261002.json)
     and opt-in complete-object capture hooks are prepared; 12 helper tests pass.
-    Actual baseline capture, target-fact migration and cross-revision comparisons
-    remain pending. [Preparation record](docs/notebook/codegen-n03-foundations-20261002.md).
+    Original baselines now retain 24 six-TU A/B object twins, 384/384 native
+    object twins and agreeing executions on each of Darwin and Linux, plus 12
+    separately labeled retained-g0 IR object twins and 10 standalone certificate
+    replays. Preparation tests: 2,938 PASS / 0 FAIL / 4 ignored; the full gate
+    stopped on a capture-test Clippy unwrap warning, now repaired with its
+    focused check green. Full recheck, target-fact migration and cross-revision
+    comparisons remain pending.
+    [Preparation record](docs/notebook/codegen-n03-foundations-20261002.md).
 
   - [ ] **N03b — TU-local inlining** — `LATER`, P3.
     Size-aware inliner at EvoIR level for TU-local callees, as a validated

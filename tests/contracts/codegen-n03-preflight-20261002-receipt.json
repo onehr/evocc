@@ -1,0 +1,123 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03b+N03e",
+  "date": "2026-10-02",
+  "status": "PENDING_FULL_WORKSPACE",
+  "proposed_disposition": "NO_ADMITTED_OPPORTUNITY",
+  "plans": [
+    "tests/contracts/codegen-n03b-20261002.json",
+    "tests/contracts/codegen-n03e-20261002.json"
+  ],
+  "plan_commit": "7680ae23",
+  "preflight_commit": "856dfcd3935c37b1a4f70b5670697feadaa38fa0",
+  "capture": ".evidence/codegen/n03-preflight-oj1qvb8w/receipt.json",
+  "capture_sha256": "9c10fd33693e63418ec6cf48069fe3c9d2fd3c1ad673f0afe95f7006447d0ccb",
+  "red": {
+    "preflight": {"passed": 0, "failed": 4, "exit_code": 101},
+    "retention_permission": {"passed": 10, "failed": 1, "exit_code": 101},
+    "qualification": "The preflight RED is the third attempt after fixing two parser-invalid fixture attempts; fixture failures are not counted as semantic RED."
+  },
+  "gates": {
+    "focused": {"status": "PASS", "passed": 11, "failed": 0},
+    "example_build": "PASS",
+    "fmt": "PASS",
+    "full_workspace": {
+      "status": "FAILED_CLIPPY_PENDING_FULL_RECHECK",
+      "source_commit": "4a03735fc5b2234efd6f428f9a83f179a54cb32e",
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "suites": 379,
+      "passed": 2938,
+      "failed": 0,
+      "ignored": 4,
+      "exit_code": 101,
+      "clippy": "FAIL_UNNECESSARY_UNWRAP_IN_NATIVE_CAPTURE_TEST",
+      "fmt": "NOT_RUN_AFTER_CLIPPY_FAILURE",
+      "log": ".evidence/codegen/full-workspace-n03-preparation-20261002.log",
+      "log_sha256": "71d3d9280410a610a85af2e30bb33e36e5e238d59449439ab65bdeba1e8d5f7b"
+    },
+    "clippy_repair": {
+      "status": "PASS_FOCUSED_ONLY",
+      "log": ".evidence/codegen/n03-preparation-clippy-repair-20261002.log",
+      "log_sha256": "09945e8eab81870addb6321863dea04748dadbda374dfb62000bbd65ce91887f"
+    },
+    "lean": "NOT_REQUIRED_NO_SEMANTIC_OR_REGISTRY_CHANGE"
+  },
+  "capture_execution": {
+    "commands": 25,
+    "completed_exit_zero": 25,
+    "source_inventory_original_A_bytes_match": 6
+  },
+  "generated": {
+    "modules": 21000,
+    "module_admitted_on_defined_inputs": 6274,
+    "module_opaque": 14726,
+    "inline_calls": 32406,
+    "inline_source_policy_unknown": 32406,
+    "integer_candidates": 954563,
+    "integer_declined": {
+      "cyclic-destination": 317651,
+      "entry-block": 177164,
+      "no-existing-result-parameter": 65888,
+      "operands-not-block-parameters": 393860
+    },
+    "inline_structural_sites": 0,
+    "edge_reuse_structural_sites": 0,
+    "admitted_sites": 0,
+    "residual_B": "NOT_RUN_GENERATED_POPULATION",
+    "claim": "Missing source permission is not evidence that inlining opportunities do not exist. Results apply to the frozen generated input IR only."
+  },
+  "source_rows": [
+    {"tu": "integer-mix", "inline_calls_A": 0, "inline_calls_B": 0, "integer_candidates_A": 3, "integer_candidates_B": 3, "scan_budget_operator_exclusions_A": 0, "scan_budget_operator_exclusions_B": 0},
+    {"tu": "zlib-deflate", "inline_calls_A": 123, "inline_calls_B": 123, "integer_candidates_A": 414, "integer_candidates_B": 413, "scan_budget_operator_exclusions_A": 99, "scan_budget_operator_exclusions_B": 99},
+    {"tu": "zlib-inflate", "inline_calls_A": 60, "inline_calls_B": 60, "integer_candidates_A": 281, "integer_candidates_B": 281, "scan_budget_operator_exclusions_A": 247, "scan_budget_operator_exclusions_B": 247},
+    {"tu": "zstd-compress", "inline_calls_A": 576, "inline_calls_B": 576, "integer_candidates_A": 841, "integer_candidates_B": 819, "scan_budget_operator_exclusions_A": 162, "scan_budget_operator_exclusions_B": 162},
+    {"tu": "zstd-decompress", "inline_calls_A": 200, "inline_calls_B": 200, "integer_candidates_A": 227, "integer_candidates_B": 227, "scan_budget_operator_exclusions_A": 64, "scan_budget_operator_exclusions_B": 64},
+    {"tu": "cJSON", "inline_calls_A": 215, "inline_calls_B": 215, "integer_candidates_A": 184, "integer_candidates_B": 183, "scan_budget_operator_exclusions_A": 0, "scan_budget_operator_exclusions_B": 0}
+  ],
+  "source_summary": {
+    "module_admission_A": "ALL_6_OPAQUE",
+    "module_admission_B": "ALL_6_OPAQUE",
+    "inline_calls_each_arm": 1174,
+    "internal_strong_single_sites_each_arm": 81,
+    "leaf_no_frame_sites_each_arm": 3,
+    "module_poison_source_exclusions_each_arm": 3,
+    "inline_callee_block_budget_exclusions_each_arm": 50,
+    "inline_callee_instruction_budget_exclusions_each_arm": 5,
+    "inline_growth_budget_exclusions_each_arm": 0,
+    "integer_candidates_A": 1950,
+    "integer_candidates_B": 1926,
+    "scan_budget_operator_exclusions_each_arm": 572,
+    "edge_binding_checks_A": 63,
+    "edge_binding_checks_B": 51,
+    "all_edge_matches_each_arm": 0,
+    "structural_sites_each_arm": 0,
+    "admitted_sites_each_arm": 0,
+    "claim": "Scan-budget exclusions count operators, not functions, and do not establish absence of opportunities outside the bounded scan. The three leaf sites are in zstd-compress and remain rejected by the frozen module-poison boundary."
+  },
+  "existing_B_certificate_replay": {
+    "verified_transactions": 12,
+    "completed_proof_rejections": 0,
+    "bundle_obligation_failures": 0,
+    "unknown_proof_outcomes": 0,
+    "not_checked": 0,
+    "claim": "Existing EqSat output binding only; these certificates do not prove a new inliner or cross-edge transformation."
+  },
+  "transforms": 0,
+  "transform_acceptance": {
+    "transformation_implementation": "NOT_RUN_NEGATIVE_PREFLIGHT_STOP",
+    "transformed_input_TV": "NOT_RUN",
+    "transformed_native_differential": "NOT_RUN",
+    "size_and_resource_bounds": "NOT_RUN",
+    "two_transformed_object_builds": "NOT_RUN",
+    "default_admission": "NOT_ADMITTED"
+  },
+  "open_boundary": "The volatile initializer source-bridge mismatch remains MISMATCH_NOT_VALIDATED. No interpreter or opacity change was made.",
+  "disk": {
+    "capture_limit_bytes": 524288000,
+    "owned_capture_apparent_bytes": 75377,
+    "owned_capture_net_bytes": 75377,
+    "shared_target_accounting": "tests/contracts/codegen-n03a-baseline-20261002-receipt.json",
+    "note": "Owned capture net retention is +75377 apparent payload bytes. Shared target/frontend growth is recorded once in the joint preparation receipt, not charged again here. Compact tracked source, tests and notes are additional; there is no new target, workspace, kernel or VM tree."
+  },
+  "claim_ceiling": "Negative admission for the two frozen first slices and named populations only, not absence of profitable inlining or CSE generally. No optimization gain, universal proof, application transformation coverage, latency claim or default-output change."
+}

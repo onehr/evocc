@@ -369,7 +369,7 @@ fn measure_against_gcc(with_scalar: bool) {
         };
         row.compiled += 1;
         std::fs::write(work.join(format!("{name}.s")), text).expect("the emitted text");
-        if capture.is_some() {
+        if let Some(capture) = &capture {
             let second_ir = driver
                 .emit_evoir(source, true)
                 .expect("second frontend build");
@@ -385,8 +385,6 @@ fn measure_against_gcc(with_scalar: bool) {
                 "duplicate native source filename"
             );
             capture
-                .as_ref()
-                .unwrap()
                 .remaining_bytes()
                 .expect("bounded assembly capture");
         }

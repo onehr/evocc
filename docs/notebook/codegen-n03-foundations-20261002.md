@@ -1,37 +1,47 @@
-# N03 preparation: original objects and read-only opportunity counts
+# N03a preparation: original object baselines
 
-Plans: [N03a](../../tests/contracts/codegen-n03a-20261002.json),
-[A/B baselines](../../tests/contracts/codegen-n03a-baseline-a-20261002.json),
-[N03b](../../tests/contracts/codegen-n03b-20261002.json),
-[N03e](../../tests/contracts/codegen-n03e-20261002.json).
-This checkpoint is preparation, not acceptance of any N03 transformation.
+Implementation: `856dfcd3`; A/B plans: `eff2235e`; retained-g0 plan: `4a03735f`.
+Plan: [N03a](../../tests/contracts/codegen-n03a-20261002.json).
+Receipt: [baseline capture](../../tests/contracts/codegen-n03a-baseline-20261002-receipt.json).
+This checkpoint is preparation, not acceptance of a backend refactor.
 
-| Preparation | Evidence / limit |
+| Gate | Evidence / limit |
 | --- | --- |
 | Corpus pre-link capture RED | Missing helper/interface; compile exit 101 |
 | Corpus capture focused gate | 12 filesystem/interface tests PASS; both native harnesses compile |
 | S5 retained-object RED | Six tests fail on absent optional interfaces; identity-after-emission-failure regression reproduced separately |
 | S5 collector | Existing Capture/S1 path, optional A identity chain, retained first object and full-byte comparison; defaults unchanged |
-| Opportunity scanner RED | Four tests reach the unimplemented scanner; earlier fixture parse errors are not compiler defects |
-| Source retention RED | Existing `used` declaration incorrectly reported as new-inline permission; complete-chain `used`/`retain` now conservatively decline |
-| Native objects / full workspace | NOT RUN for this checkpoint; no baseline or refactor acceptance inferred from helper tests |
+| Darwin original corpus | 384 objects, 384 executions agreeing with reference; 384 byte-identical build pairs |
+| Sealed Linux original corpus | 384 objects, 384 executions agreeing with GCC; 384 byte-identical build pairs |
+| Six-TU A/B | 24 checked/unchecked object pairs identical; zero completed proof rejection or bundle failure |
+| Retained g0 IR | 12 object pairs identical; 10 standalone current-checker certificate replays exit 0 |
+| Full workspace attempt | 379 suites; 2,938 PASS / 0 FAIL / 4 ignored; Clippy FAIL on capture-test unwrap; full recheck pending |
 
-Capture mode requires all 384 existing scalar/memory IDs, actual native and
-reference outcomes, and two complete identical objects per case. Baselines are
-published only after the entire population completes, never overwritten, and
-retained only until cross-revision comparisons close. Default native tests keep
-their original behavior. Six-TU collection reuses the N05 path; A/B and profiles
-remain distinct and certified g0 stays a separate control.
+Object `.text + .text.*` bytes (checked / unchecked):
 
-The opportunity scanner does not transform IR. It distinguishes structural
-candidates from whole-module/input admission. Original preprocessed source must
-reproduce the driver's exact A IR before its declaration-chain permissions are
-used; current B is counted separately. Raw generated IR cannot invent missing
-source attributes. Opaque modules, absent execution inputs and the existing
-volatile-initializer bridge gap remain excluded. A zero admitted population
-closes the frozen slice negatively, not as an implemented optimizer.
+| TU | A | B | Retained-g0 control |
+| --- | ---: | ---: | ---: |
+| integer-mix | 128 / 128 | 128 / 128 | 128 / 128 |
+| zlib deflate | 30,516 / 29,012 | 30,184 / 28,668 | 29,960 / 28,668 |
+| zlib inflate | 28,404 / 26,664 | 28,264 / 26,520 | 28,232 / 26,520 |
+| zstd compress | 124,024 / 121,652 | 122,972 / 120,592 | 121,988 / 120,592 |
+| zstd decompress | 33,688 / 33,440 | 33,300 / 33,052 | 33,300 / 33,052 |
+| cJSON | 30,228 / 30,116 | 29,496 / 29,384 | 29,468 / 29,384 |
 
-**Claim ceiling:** helper correctness and read-only census preparation only;
-no code-size improvement, native-corpus completion or N03a layering claim.
-**Disk:** no native capture yet; test-owned scratch is removed. Shared Cargo
-cache growth is reported at the next gate checkpoint, not assigned to each lane.
+The initial g0 attempt failed before checker execution because the chain binder
+requires the historical checker identity. The corrected frozen procedure replays
+each original certificate directly with the current checker; it does not rewrite
+or re-admit the historical chain under a different identity. This retained-IR
+control is not fresh source/application acceptance or a new guard saving.
+
+Complete native populations must pass before baseline publication. Only first
+objects remain for cross-revision byte comparison; native scratch, duplicate
+objects and assembly are removed. Default capture behavior is unchanged. The
+separate N03b/e census has no transformation or size claim.
+
+**Claim ceiling:** pre-refactor baseline only; cross-revision identity and N03a
+layering remain pending. Existing P0/g0 differences are not N03 gains.
+**Disk:** retained native objects 576,736 bytes; A/B captures 2,043,349 bytes;
+g0 capture 687,452 bytes. Shared Cargo cache delta +866,865,152 bytes,
+recorded once for the joint preparation checkpoint. The Clippy failure is
+preserved; its explicit `if let` repair is rechecked with step 1, not waived.
