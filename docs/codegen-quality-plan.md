@@ -7,6 +7,19 @@ and claim rules stay in force; its discovery tracks are paused, not cancelled.
 
 ## 0. Why this plan, in numbers
 
+**Disk precondition (owner decision, 2026-10-02).** Complete the retention
+review and reach 80 GiB free before starting this track. Before every rerun,
+require at least 25 GiB free; below 15 GiB stop and clean up. Use only
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2`, with Cargo calls serialized.
+Do not create another target/workspace/kernel tree or a large VM disk.
+Each frozen plan states its capture cap (500 MiB default); hash and measure
+intermediate objects, then delete them except the minimal reproduction set.
+N01 keeps disassembly summaries/category tables, never full disassembly dumps;
+N05 trend receipts contain only numbers and hashes. Keep raw captures out of Git.
+At slice end remove temporary outputs and record the disk net change. Preserve
+all contract manifests/receipts, sealed fixtures, open-task evidence and `.lake`;
+kernel runtime retirement follows [TODO's retention rule](../TODO.md#disk-discipline-owner-decision-2026-10-02).
+
 The frozen S5 comparison ([record](notebook/eqsat-size-references-20261001.md))
 measured the same six translation units under EvoCC and the reference compilers.
 Object `.text + .text.*` bytes, release context (unchecked EvoCC):

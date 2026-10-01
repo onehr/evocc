@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-10-01**, initially audited against `a83d803`; current clauses are
+Updated **2026-10-02**, initially audited against `a83d803`; current clauses are
 EvoIR **1.9.116** and EvoMIR **0.55**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -53,6 +53,32 @@ commands and measurements stay in the [kernel ledger][kernel],
   exact historical runtime is no longer retained. Do not clone the workspace or
   reduce the final kernel configuration to save storage. Rebuild final artifacts
   with the repaired compiler before K13/K14; old Images cannot inherit new fixes.
+
+### Disk discipline (owner decision, 2026-10-02)
+
+- Step zero, before any build or rerun: inspect free space and retention. Do not
+  start below **25 GiB** free; stop active work and clean up below **15 GiB**.
+  This cleanup checkpoint must reach at least **80 GiB** before new work.
+- Use only `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2`; serialize Cargo
+  invocations in that tree. The repository Cargo defaults match this policy.
+  No extra target trees, workspace clones, kernel trees or large VM disks.
+- Freeze each capture's retention cap in its plan: **500 MiB by default**.
+  After hashing and measurement, remove intermediate objects and keep only the
+  minimal reproduction set. Raw captures never enter Git.
+- N01 retains disassembly summaries and category tables, not full disassembly;
+  N05 trend receipts retain numbers and hashes only.
+- End each slice by removing its temporary products and recording its disk net
+  change. Preserve manifest/results before retiring superseded payloads; check
+  open handles and record that the exact historical runtime is no longer retained.
+- Never delete `tests/contracts/`, sealed `tests/fixtures/`, evidence required by
+  an open task, or Lean's `.lake` cache. Keep one current reference/subject runtime
+  pair per still-required kernel configuration, including diagnostic controls.
+
+October 2 cleanup completed: host free **17.910 → 82.078 GiB**; measured project
+artifact net **−57.822 GiB** (mounted volume not double-counted). Eight retained
+runtime hashes and 3,291 preserved records/fixtures are unchanged. The existing
+sparseimage was remounted after unsupported compaction; no compaction saving is
+claimed. No build or benchmark ran. [Exact retention and recovery record][kernel].
 
 ## Execution order
 
@@ -117,7 +143,8 @@ Immediate boundaries that affect the schedule:
   [focused handoff][complex-prompt]. No fresh user approval is needed for ordinary
   engineering under an existing contract; genuine new language/ABI choices
   remain explicitly review-gated.
-- **Storage/runtime:** currently about 61 GiB host free at preflight. Reuse the
+- **Storage/runtime:** apply the October 2 disk discipline above; the earlier
+  61 GiB checkpoint is historical, not live headroom. Reuse the
   existing small diagnostic payloads and 64 MiB scratch disk. Keep one heavy
   run active, check required headroom before launches, and never delete active
   or sole retained evidence. A new configuration/build must first identify what

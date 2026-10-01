@@ -6,6 +6,70 @@ and have records on each kernel, but the aggregate verdict is INCOMPLETE, not
 PASS. The historical 935-program comparison and observations remain below.
 Targeted results and additional configurations use separate denominators.
 
+### Retention review — 2026-10-02
+
+Owner-authorized storage cleanup, not a new compiler/kernel test. Initial host
+free space: 18,780,136 KiB (17.91 GiB). The reported 163.90 GiB under
+`.build/k7-coverage` includes its mounted case-sensitive filesystem and the
+80.00 GiB allocated sparseimage backing file; those are not independent storage.
+No Cargo, EvoCC, QEMU or kernel test process/handle used the retired targets.
+
+Retire unused `target/debug`, `target/pinned-check`, `target/release`,
+`target/tailored`, `target/miri`, both old `target/aarch64-*` trees and
+`target/flycheck0`; retain `target/frontend`. These are regenerable build caches,
+not byte-for-byte backups. No Lean cache is removed.
+Within `target/frontend/debug/deps`, additionally retire 975 idle single-link
+Mach-O test executables predating September 30 (8.854 GiB summed allocation),
+after checking that no frontend file is open. Keep the compiler/checker binaries,
+libraries and current build tree; a future Cargo test regenerates missing binaries.
+
+For early reconnaissance runs under `.evidence/day5-kernel-reconnaissance`,
+retain all run metadata, results, summaries, source inputs, argv and diagnostics.
+Retire only generated parser `*.gcc.c`, `*.clang.c`, `*.linemap.jsonl`, oracle
+`*.oracle.i` and raw-preprocessor `*.stdout` payloads in superseded runs.
+Keep complete runs `20260817T225959Z-57627` (baseline),
+`20260830T110658Z-95784` (throughput reproducer), and `20260905T220441Z-5219`
+(published dashboard). Selected generated payloads: 9,684 files, 29.988 GiB
+logical; recorded input/output hashes remain in the original results.
+Exact historical runtime/payload bytes of retired runs are no longer retained;
+reconstruction does not inherit their historical verdict.
+
+Keep the runtime pairs `runtime-alsa-fixed-20260923/{reference,subject}`,
+`runtime-uniform-20260928/{reference,subject}` and
+`runtime-final-20260928/{reference-fpu-preload,subject}` under `case/selftests`,
+plus `kunit-runtime-20260921/{reference,subject-repaired}`. They cover distinct
+still-required configurations; retain their Images/configs/maps/modules/signing
+material and diagnostic fixtures. Retire only the superseded
+`runtime-final-20260928/reference/scratch.img`, its packaged `staging/rootfs`,
+and generated `case/bpf/evocc-out` assembly/object/error caches. Their manifests,
+results and installed objects remain; the exact pre-preload historical runtime
+is no longer retained. No source tree, accepted receipt or frozen fixture is deleted.
+
+Official `hdiutil compact` returned `Function not implemented` (also with verbose
+diagnostics). No image conversion, replacement or manual block rewriting was
+attempted. The existing image was remounted at the same path; its allocation is
+unchanged, so no image-compaction recovery is claimed.
+
+| Measurement | Before GiB | After GiB |
+| --- | ---: | ---: |
+| Host free (`df`) | 17.910 | **82.078** |
+| `target` allocated (`du`) | 43.038 | 15.221 |
+| Early reconnaissance allocated (`du`) | 31.653 | 1.647 |
+| Sparseimage allocated (blocks × 512) | 80.005 | 80.005 |
+
+**Slice disk net change:** **−57.822 GiB** in the measured host-backed project
+artifacts above, without double-counting the mounted volume. The inner volume
+also has 7.427 GiB less used space, not credited as host-image recovery. Observed
+host free space rose 64.168 GiB; concurrent host activity/extent accounting means
+that delta is not an exclusive attribution to this cleanup.
+
+All eight retained runtime disks still match their manifests; all four current
+Image/config pairs match their pre-cleanup hashes. The 3,291-file set covering
+contracts, sealed fixtures, reconnaissance metadata/results and runtime manifests
+has unchanged aggregate SHA-256 `990a7d32be25b4d717b95cee50e87b2e23bd6e4a11e24470350e8d152afd5158`.
+Cargo metadata selects `target/frontend`; TODO rendering and diff whitespace
+checks pass. No build, test campaign, kernel source/config change or new disk was made.
+
 ### Current pinned composition running — 2026-09-28
 
 Common bench `20260927T233955.767167Z`, K1 `20260927T233955Z`, initially ran
