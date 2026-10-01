@@ -1,0 +1,43 @@
+{
+  "schema": "evocc-codegen-resource-pair-plan-v1",
+  "package": "N02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "date": "2026-10-02",
+  "authority": "tests/contracts/codegen-n02-20261002.json; docs/codegen-quality-plan.md sections 3 and 10",
+  "subject": {
+    "implementation_commit": "7680ae23acb11117730db0e44c2176b056ac86f0",
+    "compiler": "target/frontend/release/evocc",
+    "compiler_sha256": "5076cc9feb1d3d278649c53a0f0191f6ce147e2db45ff5711d2aa2656a9a9236",
+    "assembler": "/usr/bin/clang",
+    "assembler_sha256": "44a68ddc1983d6cff3fd35ba3f9ba5f82004216f1dcde69892b3d1b06e408698",
+    "note": "The retained release executable is the measured subject. Later concurrent source-only preflight work is not included; no rebuild occurs during this capture."
+  },
+  "inputs": {
+    "tests/fixtures/verified-eqsat-chain.c": "56010b6597424ebaf8e8c6a8bd4e9f35916b7817249a52dcc27a63f043948011",
+    "tests/fixtures/addressed-local-before-loop.c": "d8172bd228e0f28b5b16fad039ae66802470ebb03ca1471ef95e5918d470e9f5"
+  },
+  "compiler_argv": ["{compiler}", "--emit=asm", "-std=gnu11", "-O2", "-fPIC", "--ub-checks=unchecked", "{arm_flags}", "{source}"],
+  "assembler_argv": ["{assembler}", "--target=aarch64-linux-gnu", "-c", "-x", "assembler", "{assembly}", "-o", "{object}"],
+  "arms": {"baseline": [], "identity": ["--opt-pass=identity"]},
+  "protocol": {
+    "order": [["baseline", "identity"], ["identity", "baseline"], ["baseline", "identity"]],
+    "compiles_per_arm_per_input": 3,
+    "object_twins": "Assemble the first two compiles per arm, require full-byte equality within and across arms using existing S1 helpers; report S1 text, rodata, padding and literal data separately.",
+    "steps": "One additional identity compilation per input with --pass-report=<new path>; require DEFINED_MATCH and report exact before/after interpreter steps. This report-producing compile is excluded from compile-cost samples.",
+    "metric": "Median host release compiler spawn-to-stdio-drain wall time per input; deterministic size and steps separately. No program timing, A/A or A/B latency campaign.",
+    "attempts": "One capture, no warmups, retries or tuning after results. A missing tool/failed compile remains an explicit failure. Ratios above the frozen bound remain BOUND_NOT_MET, not a reason to rerun.",
+    "serialization": "No Cargo, native corpus, container or other measurement runs concurrently. Reuse existing Capture and S1 helpers; no new runner/audit layer."
+  },
+  "bounds": {"text_regression_bytes": 0, "compile_time_ratio": 1.25, "interpreter_steps_ratio": 1.05},
+  "resources": {
+    "jobs": 1,
+    "min_start_free_bytes": 26843545600,
+    "min_free_bytes": 16106127360,
+    "max_retained_bytes": 524288000,
+    "output_bytes": 4194304,
+    "timeout_seconds": 60,
+    "retention": "Capture commands, hashes, S1 numbers and pass reports. Delete explicitly owned assembly/object intermediates after measurement; record retained bytes."
+  },
+  "disposition": "This bounds the identity wiring only on two already-existing supported inputs. Opaque S5 library units and the integer-mix source-bridge mismatch remain NOT_ADMITTED. No optimizer is promoted, regardless of ratios. A resource bound miss closes this measurement negatively and leaves identity development-only.",
+  "claim_ceiling": "No universal equivalence, application performance, full-source-bridge, six-TU optimizing-pass admission or certified EqSat claim."
+}
