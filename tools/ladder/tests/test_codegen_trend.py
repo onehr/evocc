@@ -400,6 +400,118 @@ class BisectTests(unittest.TestCase):
             trend.git_commits(ROOT, "HEAD", "HEAD~1")
 
 
+class ObjectBaselineTests(unittest.TestCase):
+    def test_codegen_failure_after_identity_chain_is_not_certificate_failure(self):
+        from tools.ladder.eqsat_size import codegen_proof_failure
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ir = (ROOT / 'tests/fixtures/eqsat-chains/verified-chain/000.before.evo').read_bytes()
+            value = trend.digest(ir)
+            record = dict(schema='evocc-identity-chain-v1', mode='eqsat-off', publication='IDENTITY_VERIFIED',
+                          attempted_transactions=0, transactions=[], input_digest=value, output_digest=value,
+                          chain_id=trend.digest(f'identity-chain-v1\n{value}\n'.encode()))
+            (root / 'chain.json').write_text(json.dumps(record))
+            for name in ('input.evo', 'output.evo'):
+                (root / name).write_bytes(ir)
+            receipt = dict(proof=dict(completed_rejections=0, bundle_failures=0), failure_events=[])
+            codegen_proof_failure(receipt, root, ValueError('emit_asm failed'), 'compile')
+            self.assertEqual(receipt['proof'], dict(completed_rejections=0, bundle_failures=0))
+            event = receipt['failure_events'][0]
+            self.assertEqual(event['reason'], 'COMPILE_FAILED_AFTER_IDENTITY_CHAIN')
+            self.assertEqual(event['evidence'], 'BYTE_IDENTITY_ONLY_NOT_EVP_REPLAY')
+            self.assertNotIn('proof_successes', event)
+            # A missing identity artifact is still a bundle failure, not the
+            # earlier frontend case in which no chain was ever published.
+            (root / 'output.evo').unlink()
+            broken = dict(proof=dict(completed_rejections=0, bundle_failures=0), failure_events=[])
+            codegen_proof_failure(broken, root, ValueError('emit_asm failed'), 'compile')
+            self.assertEqual(broken['proof'], dict(completed_rejections=0, bundle_failures=1))
+            self.assertEqual(broken['failure_events'][0]['reason'], 'BUNDLE_MISMATCH')
+
+    def test_identity_chain_baseline_disables_eqsat_but_keeps_bundle(self):
+        case = dict(id='p0', source_root='.', flags=[])
+        args = ('compiler', 'checker', 'a' * 64, case,
+                'tests/fixtures/eqsat-performance/integer-mix.c', ROOT, 'checked', Path('chain'))
+        default = codegen_compile_argv(*args)
+        self.assertEqual(default, codegen_compile_argv(*args, eqsat=True))
+        identity = codegen_compile_argv(*args, eqsat=False)
+        self.assertNotIn('-Oeq-scalar', identity)
+        self.assertFalse(any(str(arg).startswith('--eq-checker') for arg in identity))
+        self.assertIn('--eq-proof-dir=chain', identity)
+        self.assertIn('--ub-checks=checked', identity)
+        self.assertEqual(identity[-1], default[-1])
+
+    def test_only_explicit_first_objects_survive_cleanup(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            first, twin, executable = root / '0-checked-0.o', root / '0-checked-1.o', root / 'program'
+            for path in (first, twin, executable):
+                path.write_bytes(b'owned')
+            cleanup_codegen_products(root, [first, twin, executable], retain=[first])
+            self.assertTrue(first.exists())
+            self.assertFalse(twin.exists())
+            self.assertFalse(executable.exists())
+            cleanup_codegen_products(root, [first])
+            self.assertFalse(first.exists())
+
+    def test_retention_cannot_select_outside_or_unowned_objects(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            capture = root / 'capture'
+            capture.mkdir()
+            owned, outside, unowned = capture / 'owned.o', root / 'reference.o', capture / 'unowned.o'
+            for path in (owned, outside, unowned):
+                path.write_bytes(b'keep')
+            for retained in (outside, unowned):
+                with self.subTest(path=retained), self.assertRaises(ValueError):
+                    cleanup_codegen_products(capture, [owned], retain=[retained])
+                self.assertTrue(owned.exists())
+
+    def baseline(self, root):
+        original = size_fixture()
+        obj = root / 'first.o'
+        obj.write_bytes(original)
+        record = dict(schema='evocc-codegen-capture-v1', status='OBSERVED', retained_objects=[dict(
+            unit=trend.UNITS[0], profile='checked', path='first.o', object_sha256=trend.digest(original))])
+        path = root / 'receipt.json'
+        path.write_text(json.dumps(record))
+        return original, obj, record, path
+
+    def test_candidate_must_equal_full_baseline_object_not_just_text_size(self):
+        from tools.ladder.eqsat_size import compare_codegen_object_baseline
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            original, _, _, receipt = self.baseline(root)
+            compare_codegen_object_baseline(root, receipt, trend.UNITS[0], 'checked', original)
+            changed = original[:-1] + bytes([original[-1] ^ 1])
+            with self.assertRaises(ValueError):
+                compare_codegen_object_baseline(root, receipt, trend.UNITS[0], 'checked', changed)
+
+    def test_baseline_lookup_is_per_unit_profile_and_requires_success(self):
+        from tools.ladder.eqsat_size import compare_codegen_object_baseline
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            original, _, record, receipt = self.baseline(root)
+            for unit, profile in ((trend.UNITS[1], 'checked'), (trend.UNITS[0], 'unchecked')):
+                with self.subTest(unit=unit, profile=profile), self.assertRaises(ValueError):
+                    compare_codegen_object_baseline(root, receipt, unit, profile, original)
+            for status in ('FAILED', 'NOT_RUN'):
+                record['status'] = status
+                receipt.write_text(json.dumps(record))
+                with self.subTest(status=status), self.assertRaises(ValueError):
+                    compare_codegen_object_baseline(root, receipt, trend.UNITS[0], 'checked', original)
+
+    def test_changed_retained_object_cannot_redefine_the_baseline(self):
+        from tools.ladder.eqsat_size import compare_codegen_object_baseline
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            original, obj, _, receipt = self.baseline(root)
+            changed = original[:-1] + bytes([original[-1] ^ 1])
+            obj.write_bytes(changed)
+            with self.assertRaises(ValueError):
+                compare_codegen_object_baseline(root, receipt, trend.UNITS[0], 'checked', changed)
+
+
 class PushTests(unittest.TestCase):
     def test_missing_step_or_ladder_data_blocks_push_admission(self):
         record = observation(complete=False)

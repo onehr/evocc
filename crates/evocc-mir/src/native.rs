@@ -295,6 +295,13 @@ pub struct Toolchain {
 impl Toolchain {
     /// Find `clang`, record its version line, and open a working directory.
     pub fn locate() -> Result<Self, String> {
+        let workdir = std::env::temp_dir().join(format!("evocc-native-{}", std::process::id()));
+        Self::locate_in(&workdir)
+    }
+
+    /// Use an explicit working directory, for byte-identical object captures
+    /// whose assembler input paths must be stable across compiler revisions.
+    pub fn locate_in(workdir: &Path) -> Result<Self, String> {
         let output = Command::new("clang")
             .arg("--version")
             .output()
@@ -306,8 +313,7 @@ impl Toolchain {
         if !text.contains("arm64") && !text.contains("aarch64") {
             return Err("the host toolchain does not target arm64".to_owned());
         }
-        let workdir = std::env::temp_dir().join(format!("evocc-native-{}", std::process::id()));
-        std::fs::create_dir_all(&workdir)
+        std::fs::create_dir_all(workdir)
             .map_err(|error| format!("no working directory: {error}"))?;
         // A campaign writes and deletes three files per program, and a desktop
         // platform indexes and scans each one as it appears. The marker is
@@ -316,7 +322,7 @@ impl Toolchain {
         let _ = std::fs::write(workdir.join(".metadata_never_index"), b"");
         Ok(Self {
             version: text.lines().next().unwrap_or_default().to_owned(),
-            workdir,
+            workdir: workdir.to_owned(),
         })
     }
 

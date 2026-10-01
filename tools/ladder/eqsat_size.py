@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import tempfile
 
-from .eqsat_chain import digest, proof_bucket, require, unique, validate_record
+from .eqsat_chain import digest, proof_bucket, require, unique, validate_record, verify_bundle
 from .eqsat_elf import inspect_object_size, inspect_elf, require_identical_objects
 from .eqsat_native import Capture
 from .eqsat_twins import BundleReplayRejected, bind_bundle, canonical, stable_bundle
@@ -26,7 +26,7 @@ def load(path):
 
 
 def codegen_compile_argv(compiler, checker, checker_hash, case, source, root, profile, chain,
-                         extra_flags=()):
+                         extra_flags=(), *, eqsat=True):
     """Fresh original C to assembly; never label frozen old IR as new frontend work."""
     from .eqsat_pilot import ROOTS
     root = Path(root)
@@ -35,10 +35,11 @@ def codegen_compile_argv(compiler, checker, checker_hash, case, source, root, pr
                 ('usr/lib/gcc/aarch64-linux-gnu/14/include', 'usr/include/aarch64-linux-gnu', 'usr/include')]
     if case['id'] != 'p0':
         includes = [folder, folder / 'lib', *includes]
-    return [compiler, '--emit=asm', '-std=gnu11', '-O2', '-fPIC', *case['flags'],
-            '-nostdinc', *['-I' + str(p) for p in includes], '-Oeq-scalar',
+    proof_flags = ['-Oeq-scalar',
             '--eq-checker=' + str(checker), '--eq-checker-sha256=' + checker_hash,
-            '--eq-checker-timeout-ms=300000', '--eq-proof-dir=' + str(chain),
+            '--eq-checker-timeout-ms=300000'] if eqsat else []
+    return [compiler, '--emit=asm', '-std=gnu11', '-O2', '-fPIC', *case['flags'],
+            '-nostdinc', *['-I' + str(p) for p in includes], *proof_flags, '--eq-proof-dir=' + str(chain),
             '--ub-checks=' + profile, *extra_flags, folder / source]
 
 
@@ -50,14 +51,45 @@ def codegen_disk_preflight(root, resources, *, start):
             'N05 requires 25 GiB free before starting' if start else 'N05 free space below stop reserve')
 
 
-def cleanup_codegen_products(directory, products):
+def cleanup_codegen_products(directory, products, *, retain=()):
     """Only the explicitly owned new outputs; never reference dependencies."""
     directory = Path(directory).resolve()
     paths = [Path(path) for path in products]
     require(all(path.resolve().is_relative_to(directory) for path in paths),
             'N05 cleanup target is outside this capture')
+    retained = {Path(path).resolve() for path in retain}
+    require(retained <= {path.resolve() for path in paths} and
+            all(path.suffix == '.o' for path in retained), 'retained object is not an owned object')
     for path in paths:
-        path.unlink(missing_ok=True)
+        if path.resolve() not in retained:
+            path.unlink(missing_ok=True)
+
+
+class ObjectBaselineMismatch(ValueError):
+    """Only a full-byte mismatch authorizes retaining a failure object."""
+
+
+def compare_codegen_object_baseline(root, baseline_receipt, unit, profile, candidate):
+    """Compare full ELF bytes with the one retained, already measured object."""
+    root = Path(root).resolve()
+    record = load(baseline_receipt)
+    require(record.get('schema') == 'evocc-codegen-capture-v1' and record.get('status') == 'OBSERVED',
+            'object baseline is not a completed capture')
+    matching = [row for row in record.get('retained_objects', [])
+                if row['unit'] == unit and row['profile'] == profile]
+    require(len(matching) == 1, 'missing or duplicate object baseline for unit/profile')
+    row = matching[0]
+    obj = root / row['path']
+    require(obj.is_file() and not obj.is_symlink() and obj.resolve().is_relative_to(root),
+            'missing or aliased retained baseline object')
+    original = obj.read_bytes()
+    require(digest(original) == row['object_sha256'], 'retained baseline object changed')
+    try:
+        require_identical_objects(original, candidate)
+    except ValueError as error:
+        raise ObjectBaselineMismatch(str(error)) from error
+    return dict(unit=unit, profile=profile, baseline_object_sha256=row['object_sha256'],
+                candidate_object_sha256=digest(candidate), status='BYTE_IDENTICAL')
 
 
 def codegen_proof_failure(receipt, chain, error, phase):
@@ -70,27 +102,40 @@ def codegen_proof_failure(receipt, chain, error, phase):
         event.update(evidence='INDEPENDENT_REPLAY', replay=audit['replay'],
                      proof_counts=audit['proof_counts'])
     elif phase == 'compile':
+        record_loaded, identity_audit = False, None
         try:
             record = load(Path(chain) / 'chain.json')
-            validate_record(record)
-        except FileNotFoundError:
+            record_loaded = True
+            if isinstance(record, dict) and record.get('schema') == 'evocc-identity-chain-v1':
+                identity_audit = verify_bundle(Path(chain))
+            else:
+                validate_record(record)
+        except FileNotFoundError as missing:
             # A frontend/driver failure before the chain exists is not evidence
             # of either an invalid equation or a malformed certificate.
-            event.update(evidence='NOT_AVAILABLE', reason='CHAIN_NOT_EMITTED')
+            if record_loaded:
+                receipt['proof']['bundle_failures'] += 1
+                event.update(evidence='UNREADABLE_IDENTITY_BUNDLE', reason='BUNDLE_MISMATCH', detail=str(missing))
+            else:
+                event.update(evidence='NOT_AVAILABLE', reason='CHAIN_NOT_EMITTED')
         except (OSError, ValueError, TypeError, KeyError) as malformed:
             receipt['proof']['bundle_failures'] += 1
             event.update(evidence='UNREADABLE_CHAIN_RECORD', reason='BUNDLE_MISMATCH', detail=str(malformed))
         else:
-            transactions = []
-            for tx in record['transactions']:
-                bucket = proof_bucket(tx['verification'], tx['rejection_reason'], tx['result'])
-                receipt['proof']['completed_rejections'] += int(bucket == 'completed_proof_rejections')
-                receipt['proof']['bundle_failures'] += int(bucket == 'bundle_obligation_failures')
-                transactions.append(dict(index=tx['index'], result=tx['result'], bucket=bucket,
-                                         reason=tx['rejection_reason']))
-            event.update(evidence='PRODUCER_TELEMETRY_NOT_PROVED', publication=record['publication'],
-                         reason=record.get('rejection_reason', 'COMPILE_FAILED_AFTER_VERIFIED_CHAIN'),
-                         transactions=transactions)
+            if identity_audit is not None:
+                event.update(evidence=identity_audit['evidence'], publication=record['publication'],
+                             reason='COMPILE_FAILED_AFTER_IDENTITY_CHAIN')
+            else:
+                transactions = []
+                for tx in record['transactions']:
+                    bucket = proof_bucket(tx['verification'], tx['rejection_reason'], tx['result'])
+                    receipt['proof']['completed_rejections'] += int(bucket == 'completed_proof_rejections')
+                    receipt['proof']['bundle_failures'] += int(bucket == 'bundle_obligation_failures')
+                    transactions.append(dict(index=tx['index'], result=tx['result'], bucket=bucket,
+                                             reason=tx['rejection_reason']))
+                event.update(evidence='PRODUCER_TELEMETRY_NOT_PROVED', publication=record['publication'],
+                             reason=record.get('rejection_reason', 'COMPILE_FAILED_AFTER_VERIFIED_CHAIN'),
+                             transactions=transactions)
     else:
         receipt['proof']['bundle_failures'] += 1
         event.update(evidence='BUNDLE_ADMISSION_FAILURE', reason='BUNDLE_MISMATCH', detail=str(error))
@@ -110,6 +155,9 @@ def run_codegen_measurement(plan, root):
     root, plan = Path(root).resolve(), Path(plan).resolve()
     raw, m = plan.read_bytes(), load(plan)
     require(m['schema'] == 'evocc-codegen-measure-plan-v1', 'not an N05 live measurement plan')
+    eqsat = m.get('eqsat', True)
+    retain_objects = m.get('retain_object_baseline', False)
+    require(type(eqsat) is bool and type(retain_objects) is bool, 'invalid object baseline option')
     require(subprocess.check_output(['git', 'show', 'HEAD:' + plan.relative_to(root).as_posix()], cwd=root) == raw,
             'commit the N05 live plan before execution')
     require(not subprocess.check_output(['git', 'status', '--porcelain'], cwd=root),
@@ -121,6 +169,26 @@ def run_codegen_measurement(plan, root):
     tool_hashes = {name: digest(path.read_bytes()) for name, path in tools.items()}
     for path, expected in m['inputs'].items():
         require(digest((root / path).read_bytes()) == expected, 'N05 input changed: ' + path)
+    object_baseline = m.get('object_baseline_receipt')
+    if object_baseline is not None:
+        require(object_baseline in m['inputs'], 'object baseline receipt must be a frozen input')
+        baseline_record = load(root / object_baseline)
+        require(baseline_record.get('status') == 'OBSERVED' and
+                len(baseline_record.get('retained_objects', [])) == len(UNITS) * len(PROFILES) and
+                {(row['unit'], row['profile']) for row in baseline_record['retained_objects']}
+                == {(unit, profile) for unit in UNITS for profile in PROFILES},
+                'object baseline does not contain the completed six-unit/profile population')
+        baseline_raw = (root / object_baseline).parent.joinpath('manifest.json').read_bytes()
+        require(digest(baseline_raw) == baseline_record['manifest_sha256'], 'object baseline plan changed')
+        baseline_plan = json.loads(baseline_raw, object_pairs_hook=unique)
+        require(baseline_plan.get('eqsat', True) == eqsat and
+                baseline_plan.get('extra_flags', []) == m.get('extra_flags', []) and
+                all(baseline_plan[field] == m[field] for field in
+                    ('source_plan', 'program_plan', 'reference_receipt', 'image', 'container_sha256', 'tools')),
+                'object baseline compiler controls differ')
+        require(all(m['inputs'].get(path) == expected for path, expected in baseline_plan['inputs'].items()
+                    if path != baseline_plan.get('object_baseline_receipt')),
+                'object baseline source/runtime inputs differ')
     require(m['source_plan'] in m['inputs'], 'N05 S5 source plan must be frozen')
     for path, expected in load(root / m['source_plan'])['inputs'].items():
         if path.endswith(('.c', '.h')):
@@ -153,6 +221,13 @@ def run_codegen_measurement(plan, root):
                        bindings={}, failure_events=[],
                        proof=dict(completed_rejections=0, bundle_failures=0), timing='NOT_RUN',
                        scope='SIX_SELECTED_TUS_WITH_REFERENCE_DEPENDENCIES_NOT_FULL_APPLICATIONS')
+        if 'eqsat' in m:
+            receipt['eqsat'] = eqsat
+        if retain_objects:
+            receipt['retained_objects'] = []
+        if object_baseline:
+            receipt['object_baseline_receipt'] = object_baseline
+            receipt['object_baseline_comparisons'] = []
 
         def save():
             (directory / 'receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
@@ -161,6 +236,7 @@ def run_codegen_measurement(plan, root):
         vm, started = directory.name.lower(), False
         trend = None
         owned_objects, owned_executables = [], []
+        retention_candidates, failure_objects = [], []
 
         def run(stage, argv, expected=None):
             codegen_disk_preflight(root, resources, start=False)
@@ -193,7 +269,7 @@ def run_codegen_measurement(plan, root):
                     for repeat in range(3):
                         chain = directory / f'{number}-{profile}-{repeat}-chain'
                         argv = codegen_compile_argv(tools['compiler'], tools['checker'], tool_hashes['checker'],
-                            case, source, root, profile, chain, m.get('extra_flags', []))
+                            case, source, root, profile, chain, m.get('extra_flags', []), eqsat=eqsat)
                         try:
                             result = run(f'compile:{name}:{profile}:{repeat}', argv)
                         except Exception as error:
@@ -203,7 +279,7 @@ def run_codegen_measurement(plan, root):
                         asm = directory / result['stdout']
                         assembly_hashes.append(result['stdout_sha256'])
                         try:
-                            binding = bind_bundle(chain, tools['checker'])
+                            binding = bind_bundle(chain, tools['checker'] if eqsat else None)
                         except Exception as error:
                             codegen_proof_failure(receipt, chain, error, 'replay')
                             raise
@@ -217,10 +293,10 @@ def run_codegen_measurement(plan, root):
                             receipt['bindings'][name] = compact_binding
                         if repeat < 2:
                             obj = directory / f'{number}-{profile}-{repeat}.o'
+                            owned_objects.append(obj)
                             guest(f'assemble:{name}:{profile}:{repeat}', ['/usr/bin/gcc-14', '-c', '-x',
                                   'assembler', guest_path(asm), '-o', guest_path(obj)])
                             objects.append(obj)
-                            owned_objects.append(obj)
                         # Commands and hashes are retained. The same fresh source
                         # compilation recreates the now-replayed intermediate bundle.
                         shutil.rmtree(chain)
@@ -228,6 +304,21 @@ def run_codegen_measurement(plan, root):
                     require(len(set(assembly_hashes)) == 1, 'N05 three source compilations differ')
                     row = object_row(name, profile, objects[0].read_bytes(), objects[1].read_bytes(),
                                      gcc_o2_text_bytes=gcc_size, compile_wall_ns=compile_times)
+                    retained = dict(unit=name, profile=profile, path=objects[0].relative_to(root).as_posix(),
+                                    object_sha256=row['object_sha256'])
+                    if object_baseline:
+                        try:
+                            comparison = compare_codegen_object_baseline(
+                                root, root / object_baseline, name, profile, objects[0].read_bytes())
+                        except ObjectBaselineMismatch:
+                            # A single already-replayed candidate is the minimal
+                            # failure artifact; FAILED receipts cannot be baselines.
+                            receipt['failure_object'] = retained
+                            failure_objects.append(objects[0])
+                            raise
+                        receipt['object_baseline_comparisons'].append(comparison)
+                    if retain_objects:
+                        retention_candidates.append(retained)
                     receipt['units'].append(row)
                     live_objects[name, profile] = objects[0]
                     objects[1].unlink()
@@ -294,7 +385,11 @@ def run_codegen_measurement(plan, root):
                 receipt.update(status='FAILED', cleanup_error=str(error))
                 raise
             finally:
-                cleanup_codegen_products(directory, owned_objects + owned_executables)
+                retained = retention_candidates if retain_objects and receipt['status'] == 'OBSERVED' else []
+                if retain_objects:
+                    receipt['retained_objects'] = retained
+                cleanup_codegen_products(directory, owned_objects + owned_executables,
+                                         retain=[root / row['path'] for row in retained] + failure_objects)
                 receipt['owned_retained_bytes'] = sum(p.stat().st_size for p in directory.rglob('*') if p.is_file())
                 receipt['disk_free_delta_bytes'] = shutil.disk_usage(root).free - free_before
                 save()

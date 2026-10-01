@@ -13,12 +13,21 @@ use evocc_proof::sha256_hex;
 use evocc_randgate::{entry_arguments, generate_module, GeneratorConfig, Observation};
 use evocc_types::TargetDataLayout;
 
+#[path = "support/source_inventory.rs"]
+mod source_inventory;
+
 fn main() -> Result<(), String> {
     let preset = std::env::args()
         .nth(1)
         .ok_or("usage: corpus small|full|native")?;
     if preset == "native" {
         return native();
+    }
+    if preset == "preflight-full" {
+        return preflight_full();
+    }
+    if preset == "preflight-source" {
+        return preflight_source();
     }
     let ranges: &[(u64, u64)] = match preset.as_str() {
         "small" => &[(0, 256)],
@@ -108,6 +117,106 @@ fn main() -> Result<(), String> {
         )?;
     }
     println!("{{\"schema\":\"evocc-pass-corpus-v1\",\"preset\":\"{preset}\",\"modules\":{modules},\"identity_tv_admitted\":{admitted},\"identity_tv_ineligible_opaque\":{opaque},\"defined_measurements\":{defined},\"diagnostic_measurements\":{diagnostic},\"total_before_steps\":{steps},\"total_after_steps\":{steps},\"observations_sha256\":\"{}\",\"native_validation\":\"NOT_RUN\",\"source_bridge\":\"{source_bridge}\",\"source_bridge_detail\":{source_bridge_detail},\"cases\":[{}]}}", sha256_hex(identity.as_bytes()), rows.join(","));
+    Ok(())
+}
+
+fn preflight_full() -> Result<(), String> {
+    use evocc_passes::preflight::{inspect, OpportunityCounts};
+    use std::collections::BTreeMap;
+    let mut inline = OpportunityCounts::default();
+    let mut edge_reuse = OpportunityCounts::default();
+    let mut admissions = BTreeMap::<&str, u64>::new();
+    let mut identity = String::new();
+    let mut executed_inputs = 0;
+    for (start, count) in [(0x5EED_0001, 1000), (0x5EED_9001, 20_000)] {
+        for seed in start..start + count {
+            let module = generate_module(seed, GeneratorConfig::default());
+            let before = render_module(&module);
+            let input = ExecutionInput::main(
+                format!("seed-{seed}"),
+                entry_arguments(&module, seed),
+                100_000,
+            );
+            // Generated EvoIR has no C declaration chain. Never manufacture
+            // source permission from the absence of a barrier in raw IR.
+            let report =
+                inspect(&module, &BTreeMap::new(), &[input]).map_err(|e| format!("{seed}: {e}"))?;
+            if before != render_module(&module) {
+                return Err(format!("preflight mutated seed {seed}"));
+            }
+            inline.accumulate(&report.inline);
+            edge_reuse.accumulate(&report.edge_reuse);
+            *admissions.entry(report.module_admission).or_default() += 1;
+            executed_inputs += report.executed_inputs;
+            identity.push_str(&format!(
+                "{seed}:{}:{}\n",
+                sha256_hex(before.as_bytes()),
+                sha256_hex(report.render_json().as_bytes())
+            ));
+        }
+    }
+    let admissions = admissions
+        .iter()
+        .map(|(name, count)| format!("\"{name}\":{count}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    println!("{{\"schema\":\"evocc-opportunity-population-v1\",\"population\":\"frozen-generated-21000\",\"modules\":21000,\"transforms\":0,\"source_permission\":\"UNAVAILABLE_RAW_IR\",\"residual_B\":\"NOT_RUN_GENERATED_POPULATION\",\"module_admissions\":{{{admissions}}},\"executed_inputs\":{executed_inputs},\"inline\":{},\"edge_reuse\":{},\"observations_sha256\":\"{}\"}}", inline.render_json(), edge_reuse.render_json(), sha256_hex(identity.as_bytes()));
+    Ok(())
+}
+
+fn preflight_source() -> Result<(), String> {
+    use evocc_passes::preflight::inspect;
+    let args: Vec<_> = std::env::args().skip(2).collect();
+    if args.len() != 3 {
+        return Err("usage: corpus preflight-source input.i original-A.evo current-B.evo".into());
+    }
+    let source = std::fs::read_to_string(&args[0]).map_err(|e| e.to_string())?;
+    let (module, permissions) = source_inventory::lower_preprocessed(&source)?;
+    let a_bytes = std::fs::read(&args[1]).map_err(|e| e.to_string())?;
+    if render_module(&module).as_bytes() != a_bytes {
+        return Err(format!(
+            "source inventory lowering differs from original driver A: {} != {}",
+            sha256_hex(render_module(&module).as_bytes()),
+            sha256_hex(&a_bytes)
+        ));
+    }
+    let b_bytes = std::fs::read(&args[2]).map_err(|e| e.to_string())?;
+    let b = evocc_evoir::parse_section9_module(&b_bytes).map_err(|e| e.to_string())?;
+    // Only the existing no-ordinary-argument main consumer is authorized.
+    // A library TU is not turned into a synthetic function-scoped TV case.
+    let inputs = module
+        .functions
+        .iter()
+        .find(|f| f.name == "main")
+        .filter(|f| {
+            f.params.iter().all(|p| {
+                matches!(
+                    p.ty,
+                    evocc_types::EvoIRType::Mem(_) | evocc_types::EvoIRType::World
+                )
+            })
+        })
+        .map(|f| {
+            vec![ExecutionInput::main(
+                "original-main",
+                f.params
+                    .iter()
+                    .map(|p| RuntimeValue::new(p.ty.clone(), 0))
+                    .collect(),
+                100_000,
+            )]
+        })
+        .unwrap_or_default();
+    let a_report = inspect(&module, &permissions, &inputs).map_err(|e| e.to_string())?;
+    let b_report = inspect(&b, &permissions, &inputs).map_err(|e| e.to_string())?;
+    if render_module(&module).as_bytes() != a_bytes || render_module(&b).as_bytes() != b_bytes {
+        return Err("preflight modified original modules or B is noncanonical".into());
+    }
+    let barriers = permissions
+        .values()
+        .filter(|p| **p == evocc_passes::preflight::SourcePermission::Barrier)
+        .count();
+    println!("{{\"schema\":\"evocc-opportunity-source-v1\",\"transforms\":0,\"preprocessed_sha256\":\"{}\",\"A_sha256\":\"{}\",\"B_sha256\":\"{}\",\"source_permission_symbols\":{},\"source_barrier_symbols\":{barriers},\"source_inventory\":\"ORIGINAL_A_BYTES_MATCH\",\"A\":{},\"residual_B\":{}}}", sha256_hex(source.as_bytes()), sha256_hex(&a_bytes), sha256_hex(&b_bytes), permissions.len(), a_report.render_json(), b_report.render_json());
     Ok(())
 }
 

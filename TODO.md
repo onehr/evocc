@@ -2338,11 +2338,18 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     for the six units and the native corpora, verifier verdicts unchanged,
     full workspace gate. No size change may ride along. Two weeks, before any
     other backend slice.
+    [Frozen extraction and baseline plans](tests/contracts/codegen-n03a-20261002.json)
+    and opt-in complete-object capture hooks are prepared; 12 helper tests pass.
+    Actual baseline capture, target-fact migration and cross-revision comparisons
+    remain pending. [Preparation record](docs/notebook/codegen-n03-foundations-20261002.md).
 
   - [ ] **N03b — TU-local inlining** — `LATER`, P3.
     Size-aware inliner at EvoIR level for TU-local callees, as a validated
     pass under N02. The certificate chain runs after inlining and must still
     verify. A size increase on any unit is a recorded regression.
+    [First slice](tests/contracts/codegen-n03b-20261002.json) begins with a
+    read-only original-source/IR opportunity census. No transform is implemented
+    before a nonzero source-permitted, structurally eligible, TV-admitted result.
 
   - [ ] **N03c — Register allocation improvements** — `LATER`, P3.
     Coalescing and spill placement in the generic layer first; a different
@@ -2359,6 +2366,9 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     GVN/CSE, SCCP, dead-code elimination and simple loop-invariant motion on
     the integer and control subset, each a validated pass under N02. EqSat
     stays the verified path for what it covers.
+    [First slice](tests/contracts/codegen-n03e-20261002.json) checks exact
+    all-incoming-edge reuse of already-carried integer results. Read-only
+    preflight is prepared; broad GVN/SCCP/LICM is not silently admitted.
 
   - [ ] **N03f — Frame and call overhead** — `LATER`, P3.
     Leaf-frame elision, callee-saved minimization and argument shuffling

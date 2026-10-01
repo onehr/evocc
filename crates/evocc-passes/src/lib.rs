@@ -10,6 +10,8 @@ use evocc_evoir::{
 use evocc_proof::sha256_hex;
 use evocc_randgate::{DefinedRun, Observation};
 
+pub mod preflight;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PassClass {
     Verified,

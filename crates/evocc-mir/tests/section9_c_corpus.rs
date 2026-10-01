@@ -18,11 +18,16 @@ use std::process::Command;
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{compile_module, Driver, NativeStop, Toolchain};
 
+#[path = "support/object_capture.rs"]
+mod object_capture;
+use object_capture::{memory_case_ids, CaptureConfig, ObjectCapture};
+
 /// One corpus of C sources, materialized by its own authority script.
 struct Corpus {
     name: &'static str,
     script: &'static str,
     sources: Vec<PathBuf>,
+    capture_ids: BTreeMap<PathBuf, String>,
 }
 
 /// The workspace root, found from this file's own location.
@@ -35,7 +40,10 @@ fn workspace() -> PathBuf {
 }
 
 /// A fresh directory nothing else in this process writes to.
-fn scratch(name: &str) -> PathBuf {
+fn scratch(name: &str, capture: Option<&ObjectCapture>) -> PathBuf {
+    if let Some(capture) = capture {
+        return capture.scratch_dir().join(name);
+    }
     let directory =
         std::env::temp_dir().join(format!("evocc-c-corpus-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
@@ -43,9 +51,9 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 /// The Day 7 memory corpus: 128 defined programs, each an `int main(void)`.
-fn day7() -> Result<Corpus, String> {
+fn day7(capture: Option<&ObjectCapture>) -> Result<Corpus, String> {
     let script = "tests/acceptance/day7-memory-corpus.py";
-    let directory = scratch("day7");
+    let directory = scratch("day7", capture);
     let output = Command::new("python3")
         .arg(workspace().join(script))
         .arg("materialize-defined")
@@ -65,15 +73,21 @@ fn day7() -> Result<Corpus, String> {
         .filter(|path| path.extension().is_some_and(|suffix| suffix == "c"))
         .collect();
     sources.sort();
+    let capture_ids = if capture.is_some() {
+        memory_case_ids(&directory)?
+    } else {
+        BTreeMap::new()
+    };
     Ok(Corpus {
         name: "day7",
         script,
         sources,
+        capture_ids,
     })
 }
 
 /// The Day 5 scalar corpus: 256 defined programs, emitted as JSON lines.
-fn day5() -> Result<Corpus, String> {
+fn day5(capture: Option<&ObjectCapture>) -> Result<Corpus, String> {
     let script = "tests/acceptance/day5-scalar-interpreter.py";
     let output = Command::new("python3")
         .arg(workspace().join(script))
@@ -86,10 +100,11 @@ fn day5() -> Result<Corpus, String> {
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-    let directory = scratch("day5");
+    let directory = scratch("day5", capture);
     std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     let text = String::from_utf8_lossy(&output.stdout).into_owned();
     let mut sources = Vec::new();
+    let mut capture_ids = BTreeMap::new();
     for line in text.lines() {
         let Some((id, source)) = json_id_and_source(line) else {
             continue;
@@ -103,6 +118,9 @@ fn day5() -> Result<Corpus, String> {
         }
         let path = directory.join(format!("{id}.c"));
         std::fs::write(&path, source).map_err(|error| error.to_string())?;
+        if capture.is_some() && capture_ids.insert(path.clone(), id).is_some() {
+            return Err("duplicate Day 5 case ID".into());
+        }
         sources.push(path);
     }
     sources.sort();
@@ -110,6 +128,7 @@ fn day5() -> Result<Corpus, String> {
         name: "day5",
         script,
         sources,
+        capture_ids,
     })
 }
 
@@ -197,9 +216,17 @@ struct Row {
     ran: usize,
     agreeing: usize,
     disagreements: Vec<(String, u8, u8)>,
+    executed_ids: Vec<String>,
+    agreeing_ids: Vec<String>,
 }
 
-fn measure(corpus: &Corpus, driver: &Driver, toolchain: &Toolchain, optimize: bool) -> Row {
+fn measure(
+    corpus: &Corpus,
+    driver: &Driver,
+    toolchain: &Toolchain,
+    optimize: bool,
+    mut capture: Option<&mut ObjectCapture>,
+) -> Row {
     let mut row = Row {
         corpus: corpus.name,
         programs: corpus.sources.len(),
@@ -210,6 +237,8 @@ fn measure(corpus: &Corpus, driver: &Driver, toolchain: &Toolchain, optimize: bo
         ran: 0,
         agreeing: 0,
         disagreements: Vec::new(),
+        executed_ids: Vec::new(),
+        agreeing_ids: Vec::new(),
     };
 
     for source in &corpus.sources {
@@ -247,7 +276,38 @@ fn measure(corpus: &Corpus, driver: &Driver, toolchain: &Toolchain, optimize: bo
             }
         };
         row.compiled += 1;
-        let observed = match toolchain.exit_status(&format!("corpus-{name}"), &text) {
+        let result = if let Some(capture) = capture.as_deref_mut() {
+            let id = corpus.capture_ids.get(source).expect("a corpus case ID");
+            let assembled_name = format!("corpus-{name}");
+            let first_path = toolchain
+                .assemble(&assembled_name, &text)
+                .expect("first object");
+            capture.remaining_bytes().expect("bounded first object");
+            let first = std::fs::read(&first_path).expect("first object bytes");
+
+            // Rebuild through the same frontend and backend, then use exactly
+            // the same assembler input/output paths. Do not strip metadata.
+            let second_ir = driver
+                .emit_evoir(source, optimize)
+                .expect("second frontend build");
+            let second_module = parse_section9_module(second_ir.as_bytes()).expect("second EvoIR");
+            let second_text = compile_module(&second_module).expect("second native compilation");
+            let second_path = toolchain
+                .assemble(&assembled_name, &second_text)
+                .expect("second object");
+            capture.remaining_bytes().expect("bounded second object");
+            let second = std::fs::read(&second_path).expect("second object bytes");
+            capture
+                .observe_pair(id, &first, &second)
+                .expect("identical object twins/baseline");
+            capture.remaining_bytes().expect("bounded retained object");
+            toolchain
+                .link(&assembled_name, &second_path)
+                .and_then(|program| toolchain.run(&program))
+        } else {
+            toolchain.exit_status(&format!("corpus-{name}"), &text)
+        };
+        let observed = match result {
             Ok(status) => status,
             Err(stop) => {
                 *row.stopped.entry(stop.component()).or_default() += 1;
@@ -255,8 +315,16 @@ fn measure(corpus: &Corpus, driver: &Driver, toolchain: &Toolchain, optimize: bo
             }
         };
         row.ran += 1;
+        if capture.is_some() {
+            row.executed_ids.push(corpus.capture_ids[source].clone());
+        }
         match reference(toolchain, source) {
-            Ok(expected) if expected == observed => row.agreeing += 1,
+            Ok(expected) if expected == observed => {
+                row.agreeing += 1;
+                if capture.is_some() {
+                    row.agreeing_ids.push(corpus.capture_ids[source].clone());
+                }
+            }
             Ok(expected) => row.disagreements.push((name, expected, observed)),
             Err(_) => *row.stopped.entry("reference").or_default() += 1,
         }
@@ -293,9 +361,18 @@ fn report(row: &Row) {
 
 #[test]
 fn the_c_corpora_reach_the_host_through_the_driver() {
-    let toolchain = match Toolchain::locate() {
+    let mut capture = CaptureConfig::from_env()
+        .expect("valid object capture configuration")
+        .map(|config| config.start("darwin"))
+        .transpose()
+        .expect("start corpus object capture");
+    let located = capture.as_ref().map_or_else(Toolchain::locate, |capture| {
+        Toolchain::locate_in(&capture.scratch_dir().join("asm"))
+    });
+    let toolchain = match located {
         Ok(toolchain) => toolchain,
         Err(reason) => {
+            assert!(capture.is_none(), "capture cannot skip toolchain: {reason}");
             println!("skipped={reason}");
             return;
         }
@@ -303,6 +380,7 @@ fn the_c_corpora_reach_the_host_through_the_driver() {
     let driver = match Driver::locate() {
         Ok(driver) => driver,
         Err(reason) => {
+            assert!(capture.is_none(), "capture cannot skip driver: {reason}");
             println!("skipped={reason}");
             return;
         }
@@ -322,16 +400,26 @@ fn the_c_corpora_reach_the_host_through_the_driver() {
     let mut total_ran = 0;
     let mut total_agreeing = 0;
     let mut disagreements = Vec::new();
-    for corpus in [day7(), day5()] {
+    let mut expected_ids = Vec::new();
+    let mut executed_ids = Vec::new();
+    let mut agreeing_ids = Vec::new();
+    for corpus in [day7(capture.as_ref()), day5(capture.as_ref())] {
         let corpus = match corpus {
             Ok(corpus) => corpus,
             Err(reason) => {
+                assert!(capture.is_none(), "capture cannot skip corpus: {reason}");
                 println!("corpusSkipped={reason}");
                 continue;
             }
         };
+        if capture.is_some() {
+            let expected_count = if corpus.name == "day7" { 128 } else { 256 };
+            assert_eq!(corpus.sources.len(), expected_count);
+            assert_eq!(corpus.capture_ids.len(), expected_count);
+            expected_ids.extend(corpus.capture_ids.values().cloned());
+        }
         println!("corpusScript={}", corpus.script);
-        let row = measure(&corpus, &driver, &toolchain, true);
+        let row = measure(&corpus, &driver, &toolchain, true, capture.as_mut());
         report(&row);
         assert!(
             row.programs > 0,
@@ -340,6 +428,8 @@ fn the_c_corpora_reach_the_host_through_the_driver() {
         );
         total_ran += row.ran;
         total_agreeing += row.agreeing;
+        executed_ids.extend(row.executed_ids);
+        agreeing_ids.extend(row.agreeing_ids);
         disagreements.extend(row.disagreements);
     }
 
@@ -353,4 +443,9 @@ fn the_c_corpora_reach_the_host_through_the_driver() {
         "no program of either corpus reached the host"
     );
     assert_eq!(total_agreeing, total_ran);
+    if let Some(capture) = capture {
+        capture
+            .finish(&expected_ids, &executed_ids, &agreeing_ids)
+            .expect("complete 384-case object and native comparison");
+    }
 }

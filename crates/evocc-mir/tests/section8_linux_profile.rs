@@ -19,6 +19,10 @@ use std::process::Command;
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{compile_module_for, Driver, NativeStop, Target};
 
+#[path = "support/object_capture.rs"]
+mod object_capture;
+use object_capture::{memory_case_ids, CaptureConfig, ObjectCapture};
+
 /// The runtime and image the build-environment contract seals.
 const CONTAINER_BIN: &str = "/usr/local/bin/container";
 const IMAGE: &str = "evo-flight-lab:sealed";
@@ -58,9 +62,20 @@ fn container() -> Result<String, String> {
 }
 
 /// The Day 7 memory corpus, materialized by its own authority.
-fn corpus(with_scalar: bool) -> Result<Vec<PathBuf>, String> {
-    let directory = std::env::temp_dir().join(format!("evocc-linux-corpus-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&directory);
+struct Corpus {
+    sources: Vec<PathBuf>,
+    capture_ids: BTreeMap<PathBuf, String>,
+}
+
+fn corpus(with_scalar: bool, capture: Option<&ObjectCapture>) -> Result<Corpus, String> {
+    let directory = if let Some(capture) = capture {
+        capture.scratch_dir().join("sources")
+    } else {
+        let directory =
+            std::env::temp_dir().join(format!("evocc-linux-corpus-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        directory
+    };
     let output = Command::new("python3")
         .arg(workspace().join("tests/acceptance/day7-memory-corpus.py"))
         .arg("materialize-defined")
@@ -77,9 +92,17 @@ fn corpus(with_scalar: bool) -> Result<Vec<PathBuf>, String> {
         .filter(|path| path.extension().is_some_and(|suffix| suffix == "c"))
         .collect();
     sources.sort();
+    let mut capture_ids = if capture.is_some() {
+        memory_case_ids(&directory)?
+    } else {
+        BTreeMap::new()
+    };
 
     if !with_scalar {
-        return Ok(sources);
+        return Ok(Corpus {
+            sources,
+            capture_ids,
+        });
     }
 
     // The Day 5 scalar corpus too, so the Linux table is the Darwin one's
@@ -104,11 +127,20 @@ fn corpus(with_scalar: bool) -> Result<Vec<PathBuf>, String> {
         }
         let path = directory.join(format!("{id}.c"));
         std::fs::write(&path, body).map_err(|error| error.to_string())?;
+        if capture.is_some() && capture_ids.insert(path.clone(), id).is_some() {
+            return Err("duplicate Day 5 case ID".into());
+        }
         scalar.push(path);
     }
     scalar.sort();
     sources.extend(scalar);
-    Ok(sources)
+    if capture.is_some() && (sources.len() != 384 || capture_ids.len() != 384) {
+        return Err("capture requires 128 memory and 256 scalar cases".into());
+    }
+    Ok(Corpus {
+        sources,
+        capture_ids,
+    })
 }
 
 /// The `id` and `source` of one JSON line, without a JSON dependency.
@@ -145,9 +177,30 @@ fn json_id_and_source(line: &str) -> Option<(String, String)> {
 /// program so the outcome is data rather than an exit code.
 const RUNNER: &str = r#"#!/bin/sh
 cd /work || exit 2
+capture_bytes=0
 for s in *.s; do
   base="${s%.s}"
-  if ! gcc-14 -o "$base.mine" "$s" 2>"$base.link.err"; then
+  if [ "${1-}" = capture ]; then
+    if ! gcc-14 -c -o "$base.o" "$s" 2>"$base.asm.err"; then
+      echo "$base capture first-assembly-failed"
+      exit 2
+    fi
+    mv "$base.o" "$base.first.o" || exit 2
+    cp "twins/$s" "$s" || exit 2
+    if ! gcc-14 -c -o "$base.o" "$s" 2>"$base.asm.err"; then
+      echo "$base capture second-assembly-failed"
+      exit 2
+    fi
+    capture_bytes=$((capture_bytes + $(wc -c <"$base.first.o") + $(wc -c <"$base.o")))
+    if [ "$capture_bytes" -gt "$2" ]; then
+      echo "$base capture retention-limit"
+      exit 2
+    fi
+    input="$base.o"
+  else
+    input="$s"
+  fi
+  if ! gcc-14 -o "$base.mine" "$input" 2>"$base.link.err"; then
     echo "$base link $(head -c 200 "$base.link.err" | tr '\n' ' ')"
     continue
   fi
@@ -160,6 +213,9 @@ for s in *.s; do
   ./"$base.theirs" >/dev/null 2>&1
   theirs=$?
   echo "$base run $mine $theirs"
+  if [ "${1-}" = capture ]; then
+    rm -f "$base.mine" "$base.theirs" "$base.link.err" "$base.cc.err" "$base.asm.err"
+  fi
 done
 "#;
 
@@ -203,9 +259,21 @@ fn the_whole_c_corpus_agrees_with_gcc_in_the_sealed_container() {
 }
 
 fn measure_against_gcc(with_scalar: bool) {
+    let mut capture = CaptureConfig::from_env()
+        .expect("valid object capture configuration")
+        .map(|config| {
+            assert!(
+                with_scalar,
+                "object capture requires the complete C384 test"
+            );
+            config.start("linux")
+        })
+        .transpose()
+        .expect("start corpus object capture");
     let image = match container() {
         Ok(image) => image,
         Err(reason) => {
+            assert!(capture.is_none(), "capture cannot skip container: {reason}");
             println!("skipped={reason}");
             return;
         }
@@ -213,17 +281,20 @@ fn measure_against_gcc(with_scalar: bool) {
     let driver = match Driver::locate() {
         Ok(driver) => driver,
         Err(reason) => {
+            assert!(capture.is_none(), "capture cannot skip driver: {reason}");
             println!("skipped={reason}");
             return;
         }
     };
-    let sources = match corpus(with_scalar) {
-        Ok(sources) => sources,
+    let corpus = match corpus(with_scalar, capture.as_ref()) {
+        Ok(corpus) => corpus,
         Err(reason) => {
+            assert!(capture.is_none(), "capture cannot skip corpus: {reason}");
             println!("skipped={reason}");
             return;
         }
     };
+    let sources = &corpus.sources;
     println!("target={}", Target::Linux.mnemonic());
     let checker = driver
         .binary()
@@ -249,11 +320,20 @@ fn measure_against_gcc(with_scalar: bool) {
     };
 
     // Everything the container sees lives in one directory it mounts.
-    let work = std::env::temp_dir().join(format!("evocc-linux-work-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&work);
+    let work = if let Some(capture) = &capture {
+        capture.scratch_dir().join("work")
+    } else {
+        let work = std::env::temp_dir().join(format!("evocc-linux-work-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&work);
+        work
+    };
     std::fs::create_dir_all(&work).expect("a working directory");
+    if capture.is_some() {
+        std::fs::create_dir(work.join("twins")).expect("second-build assembly directory");
+    }
     let mut names = Vec::new();
-    for source in &sources {
+    let mut capture_names = BTreeMap::new();
+    for source in sources {
         let name = source
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
@@ -289,6 +369,27 @@ fn measure_against_gcc(with_scalar: bool) {
         };
         row.compiled += 1;
         std::fs::write(work.join(format!("{name}.s")), text).expect("the emitted text");
+        if capture.is_some() {
+            let second_ir = driver
+                .emit_evoir(source, true)
+                .expect("second frontend build");
+            let second_module = parse_section9_module(second_ir.as_bytes()).expect("second EvoIR");
+            let second_text = compile_module_for(Target::Linux, &second_module, &|_| true)
+                .expect("second native compilation");
+            std::fs::write(work.join("twins").join(format!("{name}.s")), second_text)
+                .expect("second-build assembly");
+            assert!(
+                capture_names
+                    .insert(name.clone(), corpus.capture_ids[source].clone())
+                    .is_none(),
+                "duplicate native source filename"
+            );
+            capture
+                .as_ref()
+                .unwrap()
+                .remaining_bytes()
+                .expect("bounded assembly capture");
+        }
         std::fs::copy(source, work.join(format!("{name}.c"))).expect("the source");
         names.push(name);
     }
@@ -302,7 +403,8 @@ fn measure_against_gcc(with_scalar: bool) {
             .expect("an executable runner");
     }
 
-    let output = Command::new(CONTAINER_BIN)
+    let mut command = Command::new(CONTAINER_BIN);
+    command
         .arg("run")
         .arg("--rm")
         .arg("--platform")
@@ -312,9 +414,16 @@ fn measure_against_gcc(with_scalar: bool) {
         .arg("--volume")
         .arg(format!("{}:/work", work.display()))
         .arg(&image)
-        .arg("/work/runner.sh")
-        .output()
-        .expect("run the sealed container");
+        .arg("/work/runner.sh");
+    if let Some(capture) = &capture {
+        command.arg("capture").arg(
+            capture
+                .remaining_bytes()
+                .expect("capture space before assembly")
+                .to_string(),
+        );
+    }
+    let output = command.output().expect("run the sealed container");
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     assert!(
         output.status.success(),
@@ -323,6 +432,8 @@ fn measure_against_gcc(with_scalar: bool) {
     );
 
     let mut seen = BTreeMap::new();
+    let mut executed_ids = Vec::new();
+    let mut agreeing_ids = Vec::new();
     for line in stdout.lines() {
         let mut fields = line.split_whitespace();
         let (Some(name), Some(kind)) = (fields.next(), fields.next()) else {
@@ -338,8 +449,22 @@ fn measure_against_gcc(with_scalar: bool) {
                 seen.insert(name.to_owned(), ());
             }
             "run" => {
-                let mine: u8 = fields.next().and_then(|v| v.parse().ok()).unwrap_or(255);
-                let theirs: u8 = fields.next().and_then(|v| v.parse().ok()).unwrap_or(255);
+                let mine = fields.next().and_then(|v| v.parse::<u8>().ok());
+                let theirs = fields.next().and_then(|v| v.parse::<u8>().ok());
+                if capture.is_some() {
+                    assert!(
+                        mine.is_some() && theirs.is_some(),
+                        "malformed capture run outcome"
+                    );
+                    assert!(!seen.contains_key(name), "duplicate capture outcome");
+                    let id = capture_names.get(name).expect("known capture case");
+                    executed_ids.push(id.clone());
+                    if mine == theirs {
+                        agreeing_ids.push(id.clone());
+                    }
+                }
+                let mine = mine.unwrap_or(255);
+                let theirs = theirs.unwrap_or(255);
                 row.linked += 1;
                 row.ran += 1;
                 if mine == theirs {
@@ -355,6 +480,22 @@ fn measure_against_gcc(with_scalar: bool) {
     for name in &names {
         if !seen.contains_key(name) {
             *row.stopped.entry("noOutcome").or_default() += 1;
+        }
+    }
+    if let Some(capture) = capture.as_mut() {
+        capture.remaining_bytes().expect("bounded object capture");
+        for (name, id) in &capture_names {
+            let first_path = work.join(format!("{name}.first.o"));
+            let second_path = work.join(format!("{name}.o"));
+            let first = std::fs::read(&first_path).expect("first actual object bytes");
+            let second = std::fs::read(&second_path).expect("second actual object bytes");
+            // Both bytes are now in memory. Remove intermediates before
+            // persisting the single baseline object, keeping retention bounded.
+            std::fs::remove_file(&first_path).expect("remove first intermediate object");
+            std::fs::remove_file(&second_path).expect("remove second intermediate object");
+            capture
+                .observe_pair(id, &first, &second)
+                .expect("identical object twins/baseline");
         }
     }
 
@@ -390,6 +531,12 @@ fn measure_against_gcc(with_scalar: bool) {
     }
     assert!(row.ran > 0, "no program reached the container");
     assert_eq!(row.agreeing, row.ran);
+    if let Some(capture) = capture {
+        let expected: Vec<_> = corpus.capture_ids.values().cloned().collect();
+        capture
+            .finish(&expected, &executed_ids, &agreeing_ids)
+            .expect("complete 384-case object and native comparison");
+    }
 }
 
 /// The two profiles differ in exactly the four places Section 8 names.
