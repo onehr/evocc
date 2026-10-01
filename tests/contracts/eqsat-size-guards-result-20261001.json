@@ -1,0 +1,605 @@
+{
+  "acceptance": {
+    "clippy": "PASS",
+    "failed": 0,
+    "format": "PASS",
+    "ignored": 4,
+    "log": ".evidence/eqsat-size/full-workspace-S4-diagnostic.log",
+    "passed": 2870,
+    "rust_suites": 369
+  },
+  "claim_ceiling": "MIR-only conservative attribution using existing known bits; not an exhaustive semantic upper bound, not verified EqSat gain; no diagnostic link, execution or installation",
+  "families": [
+    {
+      "case": "cjson",
+      "post_s2_eqsat_saving": 732,
+      "ratio": 0.1092896174863388,
+      "recovered_text_bytes": 80
+    },
+    {
+      "case": "zlib",
+      "post_s2_eqsat_saving": 472,
+      "ratio": 2.016949152542373,
+      "recovered_text_bytes": 952
+    },
+    {
+      "case": "zstd",
+      "post_s2_eqsat_saving": 1440,
+      "ratio": 1.1166666666666667,
+      "recovered_text_bytes": 1608
+    }
+  ],
+  "implementation_commit": "312f2814",
+  "installable": false,
+  "manifest_digest": "858fd1a4040108a51c62d8ed7b29cd84bf060103458ce14287d48d25cf670d82",
+  "native_executions": 0,
+  "pass_eligible": false,
+  "raw_receipt": ".evidence/eqsat-size/S4-wmacfqy0/receipt.json",
+  "raw_receipt_sha256": "aafaf5bfd1b03557a4f0ee253304e7f28425fa7ceda028b3816fc612e07b56f5",
+  "schema": "evocc-guard-size-receipt-v1",
+  "status": "UNVERIFIED_DIAGNOSTIC",
+  "stop_decision": "REQUIRES_REVIEWED_SEMANTIC_SLICE",
+  "timing": "NOT_RUN",
+  "two_build_identical_pairs": 6,
+  "units": [
+    {
+      "baseline": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 976,
+        "instruction_bytes": 128,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 0,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 128,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 128,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 32,
+        "text_bytes": 128,
+        "text_plus_rodata_bytes": 128,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 0,
+        "zerofill_alloc_bytes": 0
+      },
+      "case": "p0",
+      "diagnostic": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 1128,
+        "instruction_bytes": 128,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "d74e6ef5a454376c80f718ec7f192bd9002e3b27c9ba2fb6eb2312e0b99f511a",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 0,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 128,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 128,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 32,
+        "text_bytes": 128,
+        "text_plus_rodata_bytes": 128,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 0,
+        "zerofill_alloc_bytes": 0
+      },
+      "object": ".evidence/eqsat-size/S4-wmacfqy0/00-0.o",
+      "recovered_percent": 0.0,
+      "recovered_text_bytes": 0,
+      "report": {
+        "assumptions": 0,
+        "by_kind": {},
+        "folded_predicates": 0,
+        "installable": false,
+        "pass_eligible": false,
+        "predicates": 0,
+        "removed_assumptions": 0,
+        "schema": "evocc-guard-size-attribution-v1",
+        "status": "UNVERIFIED_DIAGNOSTIC"
+      },
+      "source": "tests/fixtures/eqsat-performance/integer-mix.c",
+      "two_builds": "BYTE_IDENTICAL"
+    },
+    {
+      "baseline": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 36504,
+        "instruction_bytes": 30184,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "0e933d68c8fa076781dbfd2ecee032cf8ac62adf68e8bbc51cd7e3b154fbfc61",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 74,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 30184,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 30184,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 7546,
+        "text_bytes": 30184,
+        "text_plus_rodata_bytes": 30258,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 160,
+        "zerofill_alloc_bytes": 0
+      },
+      "case": "zlib",
+      "diagnostic": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 35784,
+        "instruction_bytes": 29312,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "9a42570e02c15b5d1acf700d9cd6667f54d136d326d7a81835dd1cc1c6eb85ee",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 74,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 29312,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 29312,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 7328,
+        "text_bytes": 29312,
+        "text_plus_rodata_bytes": 29386,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 160,
+        "zerofill_alloc_bytes": 0
+      },
+      "object": ".evidence/eqsat-size/S4-wmacfqy0/01-0.o",
+      "recovered_percent": 2.8889477869069706,
+      "recovered_text_bytes": 872,
+      "report": {
+        "assumptions": 121,
+        "by_kind": {
+          "divisor_nonzero": {
+            "folded": 2,
+            "total": 2
+          },
+          "shift_count_defined": {
+            "folded": 39,
+            "total": 53
+          },
+          "signed_add_defined": {
+            "folded": 18,
+            "total": 29
+          },
+          "signed_mul_defined": {
+            "folded": 0,
+            "total": 2
+          },
+          "signed_sub_defined": {
+            "folded": 3,
+            "total": 35
+          }
+        },
+        "folded_predicates": 62,
+        "installable": false,
+        "pass_eligible": false,
+        "predicates": 121,
+        "removed_assumptions": 62,
+        "schema": "evocc-guard-size-attribution-v1",
+        "status": "UNVERIFIED_DIAGNOSTIC"
+      },
+      "source": "deflate.c",
+      "two_builds": "BYTE_IDENTICAL"
+    },
+    {
+      "baseline": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 33992,
+        "instruction_bytes": 28264,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "3e74cc20a007af4e08a2847974fc6d7eeb0edad0d08208074c474941de05468b",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 558,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 28264,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 28264,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 7066,
+        "text_bytes": 28264,
+        "text_plus_rodata_bytes": 28822,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 0,
+        "zerofill_alloc_bytes": 0
+      },
+      "case": "zlib",
+      "diagnostic": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 34064,
+        "instruction_bytes": 28184,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "05cfcd692cdb1834fe9e4381d55f821bd773f616d760a5ceaa552f192009c665",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 558,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 28184,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 28184,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 7046,
+        "text_bytes": 28184,
+        "text_plus_rodata_bytes": 28742,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 0,
+        "zerofill_alloc_bytes": 0
+      },
+      "object": ".evidence/eqsat-size/S4-wmacfqy0/02-0.o",
+      "recovered_percent": 0.2830455703368242,
+      "recovered_text_bytes": 80,
+      "report": {
+        "assumptions": 105,
+        "by_kind": {
+          "divisor_nonzero": {
+            "folded": 1,
+            "total": 1
+          },
+          "shift_count_defined": {
+            "folded": 4,
+            "total": 86
+          },
+          "signed_add_defined": {
+            "folded": 0,
+            "total": 16
+          },
+          "signed_sub_defined": {
+            "folded": 0,
+            "total": 2
+          }
+        },
+        "folded_predicates": 5,
+        "installable": false,
+        "pass_eligible": false,
+        "predicates": 105,
+        "removed_assumptions": 5,
+        "schema": "evocc-guard-size-attribution-v1",
+        "status": "UNVERIFIED_DIAGNOSTIC"
+      },
+      "source": "inflate.c",
+      "two_builds": "BYTE_IDENTICAL"
+    },
+    {
+      "baseline": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 156488,
+        "instruction_bytes": 122972,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "2f96c7d15c24ca6f26833e40f74e88b40342bb7f28e8df63fa2ec19e54e063a2",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 3336,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 122972,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 122972,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 30743,
+        "text_bytes": 122972,
+        "text_plus_rodata_bytes": 126308,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 416,
+        "zerofill_alloc_bytes": 0
+      },
+      "case": "zstd",
+      "diagnostic": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 155176,
+        "instruction_bytes": 121512,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "0bd40e4c7600ce5b1774c52e57809bd60f2231333ead0bff98cad099e301c15e",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 3336,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 121512,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 121512,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 30378,
+        "text_bytes": 121512,
+        "text_plus_rodata_bytes": 124848,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 416,
+        "zerofill_alloc_bytes": 0
+      },
+      "object": ".evidence/eqsat-size/S4-wmacfqy0/03-0.o",
+      "recovered_percent": 1.1872621409751813,
+      "recovered_text_bytes": 1460,
+      "report": {
+        "assumptions": 168,
+        "by_kind": {
+          "divisor_nonzero": {
+            "folded": 36,
+            "total": 38
+          },
+          "shift_count_defined": {
+            "folded": 49,
+            "total": 85
+          },
+          "signed_add_defined": {
+            "folded": 7,
+            "total": 26
+          },
+          "signed_div_rem_no_overflow": {
+            "folded": 2,
+            "total": 2
+          },
+          "signed_mul_defined": {
+            "folded": 0,
+            "total": 1
+          },
+          "signed_sub_defined": {
+            "folded": 0,
+            "total": 7
+          }
+        },
+        "folded_predicates": 94,
+        "installable": false,
+        "pass_eligible": false,
+        "predicates": 159,
+        "removed_assumptions": 94,
+        "schema": "evocc-guard-size-attribution-v1",
+        "status": "UNVERIFIED_DIAGNOSTIC"
+      },
+      "source": "lib/compress/zstd_compress.c",
+      "two_builds": "BYTE_IDENTICAL"
+    },
+    {
+      "baseline": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 44344,
+        "instruction_bytes": 33300,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "8ce98ea2cd34c647bb2a81640dc8796f68bcb5d19eb93f363c39833695646fe6",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 712,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 33300,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 33300,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 8325,
+        "text_bytes": 33300,
+        "text_plus_rodata_bytes": 34012,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 0,
+        "zerofill_alloc_bytes": 0
+      },
+      "case": "zstd",
+      "diagnostic": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 44344,
+        "instruction_bytes": 33152,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "7ec555b48ec55d825c6f950d00c3f6675863971f0b3c49ea20c4e29b853354ad",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 712,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 33152,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 33152,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 8288,
+        "text_bytes": 33152,
+        "text_plus_rodata_bytes": 33864,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 0,
+        "zerofill_alloc_bytes": 0
+      },
+      "object": ".evidence/eqsat-size/S4-wmacfqy0/04-0.o",
+      "recovered_percent": 0.4444444444444444,
+      "recovered_text_bytes": 148,
+      "report": {
+        "assumptions": 17,
+        "by_kind": {
+          "divisor_nonzero": {
+            "folded": 0,
+            "total": 1
+          },
+          "shift_count_defined": {
+            "folded": 7,
+            "total": 11
+          },
+          "signed_add_defined": {
+            "folded": 2,
+            "total": 4
+          }
+        },
+        "folded_predicates": 9,
+        "installable": false,
+        "pass_eligible": false,
+        "predicates": 16,
+        "removed_assumptions": 9,
+        "schema": "evocc-guard-size-attribution-v1",
+        "status": "UNVERIFIED_DIAGNOSTIC"
+      },
+      "source": "lib/decompress/zstd_decompress.c",
+      "two_builds": "BYTE_IDENTICAL"
+    },
+    {
+      "baseline": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 43288,
+        "instruction_bytes": 29496,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "ae98c5766419459083d4f62800833f995a804333f0b9bb52eb40fb51d09922bc",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 80,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 29496,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 29496,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 7374,
+        "text_bytes": 29496,
+        "text_plus_rodata_bytes": 29576,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 24,
+        "zerofill_alloc_bytes": 31
+      },
+      "case": "cjson",
+      "diagnostic": {
+        "data_scope": "MAPPING_SYMBOL_DATA; LITERAL_POOLS_AND_OTHER_IN_TEXT_DATA",
+        "debug_bytes": 0,
+        "file_bytes": 43360,
+        "instruction_bytes": 29416,
+        "literal_pool_or_intext_data_bytes": 0,
+        "object_digest": "ffb4559546c26ff981b8b2cf9039a7b7647e10539735bc234cc3e0790376f522",
+        "other_executable_bytes": 0,
+        "other_readonly_alloc_bytes": 0,
+        "padding_bytes": 0,
+        "padding_scope": "INTER_FUNCTION_FILL_ONLY; INTERNAL_NOPS_ARE_INSTRUCTION_SLOTS",
+        "rodata_bytes": 80,
+        "schema": "evocc-tu-size-v1",
+        "sections": [
+          {
+            "instruction_bytes": 29416,
+            "literal_pool_or_intext_data_bytes": 0,
+            "name": ".text",
+            "padding_bytes": 0,
+            "size": 29416,
+            "unclassified_text_bytes": 0
+          }
+        ],
+        "static_instruction_slots": 7354,
+        "text_bytes": 29416,
+        "text_plus_rodata_bytes": 29496,
+        "unclassified_text_bytes": 0,
+        "writable_alloc_bytes": 24,
+        "zerofill_alloc_bytes": 31
+      },
+      "object": ".evidence/eqsat-size/S4-wmacfqy0/05-0.o",
+      "recovered_percent": 0.27122321670735017,
+      "recovered_text_bytes": 80,
+      "report": {
+        "assumptions": 9,
+        "by_kind": {
+          "shift_count_defined": {
+            "folded": 3,
+            "total": 3
+          },
+          "signed_sub_defined": {
+            "folded": 2,
+            "total": 3
+          }
+        },
+        "folded_predicates": 5,
+        "installable": false,
+        "pass_eligible": false,
+        "predicates": 6,
+        "removed_assumptions": 5,
+        "schema": "evocc-guard-size-attribution-v1",
+        "status": "UNVERIFIED_DIAGNOSTIC"
+      },
+      "source": "cJSON.c",
+      "two_builds": "BYTE_IDENTICAL"
+    }
+  ]
+}

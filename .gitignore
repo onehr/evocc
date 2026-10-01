@@ -7,6 +7,7 @@ docs/*
 !docs/evomir-spec.md
 !docs/lean-plan.md
 !docs/framing-draft.md
+!docs/eqsat-guard-folding-draft.md
 !docs/status.md
 !docs/notebook/
 !docs/notebook/**

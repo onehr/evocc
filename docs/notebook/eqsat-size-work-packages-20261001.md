@@ -15,7 +15,7 @@ bytes enter the verified-EqSat numerator. No cross-family averages.
 | S1 | [framing revision 7 §5.5](../framing-draft.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `04fec0d7`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
 | S2 | [DCE attribution plan](../../tests/contracts/eqsat-size-dce-20261001.json), same A/B verified IR; common backend DCE | DONE. Implementation `e625b89c`; measurement closeout is this record's commit. Existing baseline confirmed, not newly credited to EqSat. Final allocated MIR retains the separately disclosed unused-parameter copies. |
 | S3 | [Existing-capture size ranking](../../tests/contracts/eqsat-size-policy-ranking-20261001.json), no new evaluation | DONE, this ranking record's commit. Size verdict only FINITE_ENUMERATION_SUFFICIENT or NO_OBSERVABLE_EFFECT; does not reopen R03a. |
-| S4 | Existing guard forms / known bits, MIR diagnostic first | Diagnostic implemented and full-workspace green; object measurement pending. UNVERIFIED_DIAGNOSTIC is non-installable and never PASS. Stop if its ceiling is below the order of post-S2 EqSat savings; otherwise submit the independent semantic/checker/Lean delta. |
+| S4 | Existing guard forms / known bits, MIR diagnostic first | Diagnostic DONE (`312f2814`); ceiling significant, independent semantic/checker/Lean slice required. UNVERIFIED_DIAGNOSTIC is non-installable and never PASS. R02e is not closed. |
 | S5 | Six original TUs and full applications, GCC14/Clang19 `-Os`/`-O2` | Pending S4. Honest size gap, not parity or latency. |
 | S6 | G2 vmlinux `.text` alongside R01's two builds | Pending R01; no separate kernel campaign is authorized by this package. |
 
@@ -230,3 +230,44 @@ attempts are retained. The [committed S4 plan](../../tests/contracts/eqsat-size-
 binds the exact tools, B inputs and S2 controls. This acceptance establishes
 diagnostic plumbing and ordinary regression coverage only: S4 and R02e are not
 closed and no guard-folding byte is verified EqSat benefit.
+
+### S4 diagnostic result — frozen, not a verified optimization
+
+Capture `.evidence/eqsat-size/S4-wmacfqy0/receipt.json`, SHA-256
+`aafaf5bfd1b03557a4f0ee253304e7f28425fa7ceda028b3816fc612e07b56f5`;
+[compact result](../../tests/contracts/eqsat-size-guards-result-20261001.json).
+There are **6/6 byte-identical diagnostic object pairs**, 33 capture commands,
+and **zero diagnostic links, native executions or installations**. All six
+ordinary checked control assemblies are byte-identical to S2 B. The temporary
+object-only VM exited normally. Every diagnostic artifact remains
+UNVERIFIED_DIAGNOSTIC and NOT_PASS_ELIGIBLE.
+
+| TU | Checked B text | Diagnostic text | Recoverable bytes | Percent | Predicates / folded | Obligations / omitted |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| integer-mix.c | 128 | 128 | 0 | 0.000% | 0 / 0 | 0 / 0 |
+| deflate.c | 30,184 | 29,312 | 872 | 2.889% | 121 / 62 | 121 / 62 |
+| inflate.c | 28,264 | 28,184 | 80 | 0.283% | 105 / 5 | 105 / 5 |
+| zstd_compress.c | 122,972 | 121,512 | 1,460 | 1.187% | 159 / 94 | 168 / 94 |
+| zstd_decompress.c | 33,300 | 33,152 | 148 | 0.444% | 16 / 9 | 17 / 9 |
+| cJSON.c | 29,496 | 29,416 | 80 | 0.271% | 6 / 5 | 9 / 5 |
+
+Within-family recoverable bytes are zlib **952**, zstd **1,608**, cJSON **80**;
+their own post-S2 checked EqSat savings are 472 / 1,440 / 732, giving ratios
+2.017 / 1.117 / 0.109. The preregistered stop test is **not satisfied**:
+`REQUIRES_REVIEWED_SEMANTIC_SLICE`. This licenses the independent R02e design
+work, not production guard folding. `.rodata` stays unchanged; the measured
+diagnostic text has no unclassified bytes, mapped in-text data or inter-function
+padding. Other retained guards/obligations are explicitly counted in the JSON.
+The diagnostic's conservative fact coverage is not an exhaustive global upper
+bound and its producer truth claims have no Lean/certificate acceptance yet.
+
+The [independent semantic delta](../eqsat-guard-folding-draft.md) is submitted
+for the required domain/discharge review. It proposes a separate guard-only
+registry, existing `fully_known` rule guard with proved predicate transfers,
+unchanged EvoIR obligations/other uses, and separately specified direct-true
+MIR discharge. It deliberately retains the existing P0 exclusion/poison rules.
+No current spec revision, P0 allowlist, registry, checker or interpreter is
+changed. The semantic step remains open until that review and implementation.
+S5 is not started out of sequence while this semantic admission remains open.
+S6 still awaits R01's two G2 builds; no separate kernel or latency run was
+launched. This is a review/dependency boundary, not a test reported as PASS.

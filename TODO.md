@@ -2110,6 +2110,13 @@ record a justified not-needed disposition separately from implementation PASS.
   - [ ] **R02e — Guard-predicate folding domain, separately reviewed** — `LATER`, P3.
     **OWNER_APPROVED, ceiling first:** S4 begins with a MIR-only
     UNVERIFIED_DIAGNOSTIC known-bits guard fold, never installable or PASS.
+    **S4 diagnostic complete:** `312f2814`, full workspace 2,870 PASS / 0 FAIL /
+    4 ignored. Six byte-identical object pairs; zero diagnostic links/executions.
+    zlib / zstd / cJSON recoverable text is 952 / 1,608 / 80 bytes, not verified
+    EqSat benefit. The stop test requires the separately reviewed semantic slice;
+    R02e remains open. See the [size package record](docs/notebook/eqsat-size-work-packages-20261001.md#s4-diagnostic-result--frozen-not-a-verified-optimization).
+    The [independent semantic delta](docs/eqsat-guard-folding-draft.md) is proposed,
+    not active authority; review is required before its certified implementation.
     If its recoverable text is below the order of post-S2 B–A savings, freeze a
     negative result and do not extend semantics. Only a significant ceiling
     permits the independent total-predicate/obligation spec delta, checker and
