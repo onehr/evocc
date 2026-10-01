@@ -19,8 +19,8 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "8cff4de865d152a0081c8294b51d988fc5690f9d",
-    "lean_worktree_clean": false,
+    "lean_commit": "595272a2771a4f633524ea4eef239b8f2cc752b2",
+    "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
   },
@@ -14996,19 +14996,26 @@
       "status": "differential evidence only; this side's answers are counted here, and the comparison against the Rust runners' <name>.rust.jsonl is tools/lean/diff.py, not this receipt",
       "vectors": {
         "transfers-small": {
-          "status": "not run"
+          "answered": 132534,
+          "abstained": 0
         },
         "lattice-small": {
-          "status": "not run"
+          "answered": 22140,
+          "abstained": 0
         },
         "values-width8": {
-          "status": "not run"
+          "answered": 983040,
+          "abstained": 0
         },
         "random": {
-          "status": "not run"
+          "answered": 20000,
+          "abstained": 0
         },
         "named": {
-          "status": "not run"
+          "answered": 11,
+          "abstained": 0,
+          "named_checked": 11,
+          "named_wrong": 0
         },
         "guards": {
           "answered": 88434,

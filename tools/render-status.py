@@ -480,12 +480,19 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
         lines.append(f"  AArch64 {target:6} C corpus: {ratio(corpus.get('agreeing'), corpus.get('programs'))}")
     lean = receipts.get("lean-p0-receipt.json", {})
     if lean:
-        n = len(lean.get("segments", {}).get("A", {}).get("targets", []))
-        lines.append(f"  Lean scalar rules: {ratio(n, lean.get('binding', {}).get('registry_rules'))}; "
-                     "not a proof of the entire compiler")
+        binding = lean.get("binding", {})
+        targets = lean.get("segments", {}).get("A", {}).get("targets", [])
+        primary = binding.get("registry_name", "P0")
+        n = sum(t.get("registry", primary) == primary for t in targets)
+        counts = [f"{primary} {ratio(n, binding.get('registry_rules'))}"]
+        guard = binding.get("guard_registry")
+        if guard:
+            n = sum(t.get("registry") == guard["name"] for t in targets)
+            counts.append(f"{guard['name']} {ratio(n, guard['rules'])}")
+        lines.append(f"  Lean rules: {'; '.join(counts)}; not a proof of the entire compiler")
     correspondence = receipts.get("lean-correspondence-receipt.json", {}).get("total", {})
     if correspondence:
-        lines.append(f"  Rust/Lean model differential: {correspondence.get('compared', '?')} vectors; "
+        lines.append(f"  Rust/Lean model differential: {correspondence.get('compared', '?')} comparisons; "
                      f"{correspondence.get('differences', '?')} differences")
     lines += [
         "  FP: scalar/strict and hosted f128 implemented; jq PASS; full musl and FP complex/vector open",

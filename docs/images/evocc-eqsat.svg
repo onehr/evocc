@@ -110,7 +110,7 @@
 <text x="90" y="827" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">implementation base</text>
 <rect x="320" y="760" width="290" height="68" rx="7" fill="#111925" stroke="#232d3a" stroke-width="1.0" opacity="1.0"/>
 <text x="334" y="783" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">Rust ↔ Lean model</text>
-<text x="334" y="802" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">1,325,045 differential vectors</text>
+<text x="334" y="802" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">P0: 1,325,045 comparisons</text>
 <text x="334" y="817" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">agree (evidence, not proof)</text>
 <rect x="628" y="760" width="290" height="68" rx="7" fill="#111925" stroke="#232d3a" stroke-width="1.0" opacity="1.0"/>
 <text x="642" y="783" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#f0f3f6" text-anchor="start" opacity="1.0" letter-spacing="0">parser · lowering · facts</text>

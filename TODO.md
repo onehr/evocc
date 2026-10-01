@@ -2115,8 +2115,10 @@ record a justified not-needed disposition separately from implementation PASS.
     existing known-bit/all-edge seed facts, independent checker and seven
     kernel-only parametric A2 transfer proofs. P0 and interpreters unchanged;
     IR obligations/effects remain, MIR elides only direct canonical true.
-    Full workspace **2,880 PASS / 0 FAIL / 4 existing ignored**, Clippy/fmt and
-    Lean green; **162,644** Rust/Lean comparisons with zero differences.
+    Review repair `7b385567`: full workspace **2,881 PASS / 0 FAIL / 4 existing ignored**,
+    Clippy/fmt and clean-tree Lean gate green. All six Rust/Lean groups rerun:
+    **1,487,689** comparisons (1,325,045 P0 + 162,644 guards), zero differences;
+    subset receipts merge, and nonzero transfer requires a known one bit.
     Six chains / ten independently replayed certificates: zero completed
     rejections, bundle failures or unknowns. 24 byte-identical object pairs;
     24 original mixed-link correctness executions pass.

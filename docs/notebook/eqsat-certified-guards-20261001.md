@@ -1,18 +1,22 @@
 # R02e — certified guard first slice
 
-Implementation **`595272a2`**; [normative contract](../evoir-spec.md#812-certified-total-integer-guard-folding),
+Implementation **`595272a2`**, review repair **`7b385567`**; [normative contract](../evoir-spec.md#812-certified-total-integer-guard-folding),
 [frozen plan](../../tests/contracts/eqsat-size-certified-guards-20261001.json).
 Exact scope: seven total predicates, independent `g0.ub.v1`, existing known bits
 and all-edge seeds; no signed-shift, P0 expansion or second slice.
 
-Acceptance: **371 suites, 2,880 PASS / 0 FAIL / 4 existing ignored**,
-Clippy/fmt green (`.evidence/eqsat-size/full-workspace-g0.log`). Existing Lean
+Review acceptance: **371 suites, 2,881 PASS / 0 FAIL / 4 existing ignored**,
+Clippy/fmt green (`.evidence/eqsat-size/g0-review-full-workspace.log`). Existing Lean
 gate green: 62 rules / 36 analysis rows; the seven new A2 transfer rows and
 seven guard rules are width-parametric, kernel-only, no Mathlib or `bv_decide`.
 Inherited P0 fact-transfer dependencies retain their prior native-backed trust.
-Rust/Lean guard correspondence: **162,644 comparisons, zero differences**
-(74,210 transfer vectors independently answered by producer and checker;
-14,224 value vectors). Focused Python gate: **103/103**.
+All six Rust/Lean groups rerun: **1,487,689 comparisons, zero differences**
+(1,325,045 P0 + 162,644 guards). Selected runs preserve other groups and their
+metadata. The Lean gate started from a clean tree; its receipt records
+`lean_worktree_clean: true`, Lean commit `595272a2`, and actual answers in all
+six groups (`.evidence/eqsat-size/g0-review-gate-lean.log`). Producer nonzero
+transfer now uses `ones()`, with a stray-value-bit regression. Focused Python
+review tests: **18 Lean + 7 status PASS**; original acceptance: **103/103**.
 
 Capture `.evidence/eqsat-size/g0-dbzfkkrm/receipt.json`, SHA-256
 `d7192637a21283b4d303d03f0a9d5c3f5bcfc19f9d681b8b0a499e8236d3299d`:
@@ -40,7 +44,8 @@ certified credit. P0/DCE savings and diagnostic ceilings remain separate frozen
 results. Unchecked B/result sizes are identical: 128 / 28,668 / 26,520 / 120,592 /
 33,052 / 29,384; `.rodata`, padding and in-text data are unchanged.
 
-**Claim ceiling:** the reviewed domain-extension pipeline closes end to end for
+**Claim ceiling:** native figures above remain the original frozen capture,
+not a new measurement by this receipt repair. The domain-extension pipeline closes end to end for
 this first slice and six original TUs. Benefit is below the expected 1–3%; no
 admission relaxation follows. Not whole-compiler proof, whole-application EvoCC
 coverage, latency, R03 or G2 acceptance. S6 stays with R01's two G2 builds.

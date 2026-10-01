@@ -7,7 +7,7 @@ For the separately tracked execution schedule, run `python3 tools/render-status.
 Benchmark orchestrator run: `20260928T122910.089006Z`; checkout `69c1b7638427`; dirty tree: `True`. Each application row retains its own measurement and compiler identity; the current kernel run does not remeasure applications.
 
 ```text
-EvoCC roadmap checkpoint | EvoIR 1.9.115 | EvoMIR 0.54
+EvoCC roadmap checkpoint | EvoIR 1.9.116 | EvoMIR 0.55
 =========================================================================================================
 APPLICATIONS - each lane keeps its own frozen measurement
   4 INCOMPLETE | 10 PASS | 1 PROFILE_CLEAN
@@ -62,8 +62,8 @@ ARCHITECTURE / REMAINING ROADMAP GATES (bounded evidence, not a completion perce
   MIR three-lane gate: 21,000/21,000; 0 mismatches
   AArch64 Darwin C corpus: 384/384
   AArch64 Linux  C corpus: 384/384
-  Lean scalar rules: 55/55; not a proof of the entire compiler
-  Rust/Lean model differential: 1325045 vectors; 0 differences
+  Lean rules: p0.scalar.v4 55/55; g0.ub.v1 7/7; not a proof of the entire compiler
+  Rust/Lean model differential: 1487689 comparisons; 0 differences
   FP: scalar/strict and hosted f128 implemented; jq PASS; full musl and FP complex/vector open
   R06 Doom PASS: 81/81 TU; 12 x 350 matching headless frames; wrap/video-init profile, not audio/window
   R02a/b/d historical Linux pilot: ARTIFACT_AUDIT_PASS; 576 timed; 138 EVP certificates; 108 checked twins

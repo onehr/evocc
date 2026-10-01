@@ -401,7 +401,7 @@ def eqsat() -> None:
             ("chain and identity", ["adjacent digests, trusted", "SHA-256, 45 legal state tuples"]),
         ]),
         ("TESTED, NOT PROVED", ["differential and corpus", "evidence; the trusted", "implementation base"], AMBER, [
-            ("Rust ↔ Lean model", ["1,325,045 differential vectors", "agree (evidence, not proof)"]),
+            ("Rust ↔ Lean model", ["P0: 1,325,045 comparisons", "agree (evidence, not proof)"]),
             ("parser · lowering · facts", ["21,000-program scalar and MIR", "gates, 0 mismatches"]),
             ("backend · allocation · ABI", ["384/384 native corpora, Linux", "and Darwin; kernel boot"]),
         ]),

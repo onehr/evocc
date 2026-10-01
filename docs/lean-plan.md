@@ -1,5 +1,15 @@
 # Lean 4 integration plan for EvoCC (second version)
 
+**October 1 receipt refresh.** All six correspondence groups were rerun:
+1,325,045 P0 comparisons plus 162,644 guard comparisons, **1,487,689 total with
+zero differences**. Selected runs now replace only their own groups; retained
+groups keep their run/commit/toolchain metadata and totals are recomputed.
+`tools/gate-lean.sh` ran from a clean tree and records actual answered counts for
+all six groups, with `lean_worktree_clean: true` and Lean source commit `595272a2`.
+The current audit covers 55 P0 rules plus seven g0 rules; all seven new g0 A2
+transfer rows are parametric and kernel-only. The older five-group counts below
+remain the P0 subset, rather than the combined receipt total.
+
 **September 29 integration note, revision 5 (design only).** The existing L0–L4 plan and its
 historical evidence below remain scoped to the reviewed scalar semantics,
 registry and analysis modules. The maintained

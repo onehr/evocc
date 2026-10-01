@@ -443,10 +443,10 @@ dependency of compiled C programs.
 
 | Layer | What it establishes |
 |---|---|
-| [Lean rule proofs](lean/EvoIR/Proofs/Rules.lean) | The retained audit covers all **55 rules in `p0.scalar.v4`**, parametrically over the admitted 1–64-bit widths and stated premises. These rule proofs are classified **kernel-only**. |
+| [Lean rule proofs](lean/EvoIR/Proofs/Rules.lean) | The retained audit covers all **55 rules in `p0.scalar.v4`** and [**7 rules in `g0.ub.v1`**](lean/EvoIR/Proofs/GuardRules.lean), parametrically over the admitted 1–64-bit widths and stated premises. These rule proofs are classified **kernel-only**. |
 | [Lean known-bits proofs](lean/EvoIR/Proofs/Transfer.lean) | Soundness of the modeled transfer functions, lattice operations and side conditions. Some proofs are **native-backed** and have additional Lean compiler / SAT-LRAT trust dependencies, recorded per theorem. |
 | Rust `evo-proofcheck` | Whether a particular before/after rewrite certificate follows the allowed rules and reconstruction checks. It does not invoke Lean for each compilation. |
-| [Rust–Lean correspondence tests](tests/contracts/lean-correspondence-receipt.json) | **1,325,045 / 1,325,045** recorded comparisons agree. Differential agreement is not a proof that the Rust implementation equals the Lean model. |
+| [Rust–Lean correspondence tests](tests/contracts/lean-correspondence-receipt.json) | **1,487,689 / 1,487,689** recorded comparisons agree: **1,325,045** across the five P0 groups plus **162,644** guards. All six groups were rerun together on 2026-10-01. Differential agreement is not a proof that the Rust implementation equals the Lean model. |
 
 The [proof audit and trust list](tests/contracts/lean-p0-receipt.json) bind the
 registry digest and historical proof subject; they are not a blanket theorem
@@ -473,11 +473,11 @@ generated-input convergence and linking, then actual boot and runtime tests.
 EvoCC's optimizer is a bounded equality-saturation engine whose every change
 to a translation unit is accompanied by a certificate that a separate program
 replays. Nothing optimized is published unless that replay succeeds. The
-diagram shows the path one translation unit takes under `-Oeq-scalar`.
+diagram shows the P0 path one translation unit takes under `-Oeq-scalar`.
 
 <p align="center"><a href="docs/images/evocc-eqsat.svg"><img src="docs/images/evocc-eqsat.svg" alt="Verified EqSat: a translation unit is lowered to canonical EvoIR, rewritten by the chain producer under the p0.scalar.v4 registry, bound into an EVP certificate, replayed by the independent pinned checker, published as a verified chain and lowered once to checked and unchecked native profiles; a failed check rejects the whole chain. Below: three trust layers (proved in Lean, replayed per compile, tested) and the numbers on 2026-10-01." width="1000"></a></p>
 
-Top: the path one translation unit takes under `-Oeq-scalar`. The Lean audit
+Top: the P0 path one translation unit takes under `-Oeq-scalar`. The Lean audit
 runs offline and pins the registry digest that both the producer and the
 checker are compiled with. Middle: trust is layered, and each layer has a
 different kind of evidence, so an optimizer bug, a checker bug and a proof gap
@@ -496,9 +496,10 @@ is the claim ceiling, not a summary.
 | 2026-09-30 | Steady-state timing ([protocol](docs/notebook/eqsat-r02-steady-protocol-20260930.md)) | A/A 10 / 10 admitted; A/B run once: 10 / 10 **INCONCLUSIVE** at a 5% floor; frozen, not rerun | No latency improvement, regression or equivalence is claimed. Latency is `NOT_MEASURABLE_ON_THIS_LANE`; size is the V1 objective. |
 | 2026-09-30 | Deterministic preflight ([adjudication](docs/notebook/eqsat-r02-review-repair-20260930.md)) | 1,024 policy evaluations, 6,144 chains, 8,854 proofs replayed; 1,222 candidate rules attempted: 1,174 proved, 48 unknown, **0 installed** | Policy, rule and shortcut tracks are all **INCONCLUSIVE / NOT_ADMITTED**. No AI campaign is admitted; proving rules was never the bottleneck. |
 | 2026-10-01 | Object-level size ([S1–S4 ledger](docs/notebook/eqsat-size-work-packages-20261001.md), [DCE control](tests/contracts/eqsat-size-dce-20261001.json), [policy ranking](tests/contracts/eqsat-size-policy-ranking-20261001.json)) | see table below; exhaustive best policy beats the default by at most 4 bytes | Verified rewrites shrink object `.text` by 0.8–2.4% on the changed subject TUs. The policy weight space is `FINITE_ENUMERATION_SUFFICIENT` for size. |
-| 2026-10-01 | Guard-folding ceiling ([result](tests/contracts/eqsat-size-guards-result-20261001.json), [semantic proposal](docs/eqsat-guard-folding-draft.md)) | Unverified diagnostic recovers 952 / 1,608 / 80 bytes (zlib / zstd / cJSON) from provably-true UB checks | A ceiling for the next verified domain (R02e), not a benefit. Nothing from the diagnostic is installed. |
+| 2026-10-01 | Guard-folding ceiling ([result](tests/contracts/eqsat-size-guards-result-20261001.json), [guard contract](docs/eqsat-guard-folding-draft.md)) | Unverified diagnostic recovers 952 / 1,608 / 80 bytes (zlib / zstd / cJSON) from provably-true UB checks | A diagnostic ceiling for R02e, not a certified benefit. Nothing from the diagnostic is installed. |
+| 2026-10-01 | Certified guard first slice ([acceptance](docs/notebook/eqsat-certified-guards-20261001.md)) | Seven g0 rules and seven new A2 rows are kernel-only; ten certificates replay; checked text saves 256 / 984 / 28 bytes in zlib / zstd / cJSON | First-slice acceptance on six original TUs. Maximum per-TU saving is 0.800%; unchecked sizes are unchanged. Diagnostic and P0 savings remain separate. |
 
-Verified EqSat effect on the subject translation units, checked profile,
+Verified P0 EqSat effect on the subject translation units, checked profile,
 object `.text` bytes with the common dead-code elimination enabled on both
 sides (A: EqSat off, B: EqSat on, same lowering, same backend):
 
@@ -509,14 +510,14 @@ sides (A: EqSat off, B: EqSat on, same lowering, same backend):
 | zstd `zstd_compress.c` + `zstd_decompress.c` | 157,712 | 156,272 | −1,440 (−0.9%) | 2 / 10,298 |
 | cJSON `cJSON.c` | 30,228 | 29,496 | −732 (−2.4%) | 1 / 1,787 |
 
-What these numbers mean: the verified scalar domain is sound and reproducible,
-and its measured effect is small, because the domain is small. It cannot touch
+What these numbers mean: the verified P0 domain is sound and reproducible,
+and its measured effect is small, because the domain is small. P0 cannot touch
 the checked UB guards (0.4–5.5% of object `.text` on these TUs, measured as
 checked minus unchecked), memory operations, inlining or control flow. The design response is to grow the verified domain
 one reviewed slice at a time, measuring the ceiling before proving anything;
-the first slice is guard folding. G2 whole-kernel reproducibility, the Q2
-comparison against GCC and Clang, and any Q3 self-improvement claim remain
-**NOT_ACCEPTED**.
+the first guard slice is now accepted. The [six-TU GCC/Clang size comparison](docs/notebook/eqsat-size-references-20261001.md)
+is complete and records larger EvoCC objects. G2 whole-kernel reproducibility,
+full Q2 acceptance and any Q3 self-improvement claim remain **NOT_ACCEPTED**.
 None of these test populations substitutes for the others.
 
 ## Layout and development

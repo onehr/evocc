@@ -26,6 +26,26 @@ class PilotStatusTests(unittest.TestCase):
     def test_missing_checkpoint_is_not_run(self):
         self.assertEqual(status.eqsat_pilot_status({}), ['R02a/b/d bounded Linux pilot: NOT_RUN'])
 
+    def test_lean_rules_use_separate_registry_denominators(self):
+        receipts = {
+            'lean-p0-receipt.json': {
+                'binding': {
+                    'registry_name': 'p0.scalar.v4', 'registry_rules': 2,
+                    'guard_registry': {'name': 'g0.ub.v1', 'rules': 1},
+                },
+                'segments': {'A': {'targets': [
+                    {}, {'registry': 'p0.scalar.v4'}, {'registry': 'g0.ub.v1'},
+                ]}},
+            },
+            'lean-correspondence-receipt.json': {
+                'total': {'compared': 17, 'differences': 0},
+            },
+        }
+        output = status.render_ascii(receipts, evoir='1.9.116', evomir='0.55')
+        self.assertIn('Lean rules: p0.scalar.v4 2/2; g0.ub.v1 1/1', output)
+        self.assertIn('Rust/Lean model differential: 17 comparisons; 0 differences', output)
+        self.assertNotIn('3/2', output)
+
     def test_qualified_pilot_does_not_promote_parent_gates(self):
         output = status.render_ascii({NAME: checkpoint()}, evoir='1.9.115', evomir='0.54')
         self.assertIn('ARTIFACT_AUDIT_PASS; 576 timed; 138 EVP certificates; 108 checked twins', output)
