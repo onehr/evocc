@@ -1,7 +1,7 @@
 # N02: bounded pass framework and identity validation
 
 Plan: [`917f8955`](../../tests/contracts/codegen-n02-20261002.json).
-Implementation: `7680ae23`; bounded framework accepted.
+Implementation: `7680ae23`; bounded framework accepted. Resource plan: `4cbe9be9`.
 [Compact receipt](../../tests/contracts/codegen-n02-20261002-receipt.json).
 
 | Evidence | Result |
@@ -15,6 +15,7 @@ Implementation: `7680ae23`; bounded framework accepted.
 | Small measurement | 257 defined observations; 70 TV admitted / 187 opaque; 52,825 unchanged steps |
 | Integer-mix cross-interpreter bridge | **MISMATCH_NOT_VALIDATED**, described below |
 | Full workspace | 377 suites; 2,915 PASS / 0 FAIL / 4 ignored; Clippy and formatting PASS |
+| Frozen identity resource pair | 64/228-byte objects identical; 10/41 steps unchanged; compile ratios 1.031/1.089 (bound 1.25) |
 
 `evocc-passes` stages each module pass and validates every intermediate output
 before publishing the chain. Existing typed observation equality compares
@@ -46,8 +47,13 @@ acceptance. The successful measurement process retains `MISMATCH_NOT_VALIDATED`.
 **Claim ceiling:** execution validation on named admitted inputs, not universal
 equivalence, whole-program coverage, an optimization improvement or certified
 EqSat. The bounded identity integration does not close the pending bridge gap.
-N02's optimization-admission size and compile-cost bounds also remain unmeasured.
+The one-shot resource pair uses two existing supported C inputs, the retained
+release binary and S1 object inspection. Four object-twin pairs are identical,
+as are the two cross-arm pairs. Three host compile samples per arm meet the
+frozen bound on these inputs only; these millisecond observations are not a
+program-latency or statistically general performance claim. Six-TU optimizing
+pass admission remains a future per-pass obligation, not N02 acceptance.
 
-**Disk:** net retained capture +127,627 bytes plus small sources; native temporary
+**Disk:** net retained captures +127,627 and +25,532 bytes plus small sources; native temporary
 products use the existing runner's cleanup. Shared driver and Cargo costs are
 not separable by lane; the N01 record reports the combined cache checkpoint.

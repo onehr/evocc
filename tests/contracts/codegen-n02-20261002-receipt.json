@@ -87,13 +87,34 @@
     "before_evoir_steps": 11017,
     "after_evoir_steps": 11017
   },
+  "resource_pair": {
+    "status": "OBSERVED_IDENTITY_BOUNDS_MET_ON_TWO_INPUTS",
+    "plan": "tests/contracts/codegen-n02-resources-20261002.json",
+    "plan_commit": "4cbe9be9",
+    "capture": ".evidence/codegen/n02-resource-t472r6cn/receipt.json",
+    "capture_sha256": "558f8d459c33edd12b2d3b73245c30d25038d0c8120dbae2b0672c6f84a2ec79",
+    "compiler_sha256": "5076cc9feb1d3d278649c53a0f0191f6ce147e2db45ff5711d2aa2656a9a9236",
+    "input_order": ["tests/fixtures/verified-eqsat-chain.c", "tests/fixtures/addressed-local-before-loop.c"],
+    "baseline_text_bytes": [64, 228],
+    "identity_text_bytes": [64, 228],
+    "full_object_twin_pairs": 4,
+    "full_object_cross_arm_pairs": 2,
+    "baseline_compile_median_ns": [3877625, 4234708],
+    "identity_compile_median_ns": [3997916, 4610417],
+    "compile_ratios": [1.0310218239257278, 1.0887213474931448],
+    "compile_ratio_bound": 1.25,
+    "before_steps": [10, 41],
+    "after_steps": [10, 41],
+    "owned_retained_bytes": 25532,
+    "claim": "One frozen capture, no retries. Identity wiring only; no six-TU pass admission, optimizer promotion or program-latency conclusion."
+  },
   "claims": {
     "pass_class": "VALIDATED",
     "new_optimizing_passes": 0,
     "default_output_changed": false,
     "verified_eqsat_claim": false,
-    "actual_bytes": null,
-    "compile_time_bound_evaluated": false,
+    "actual_bytes": {"identity_only_inputs": [64, 228], "saved": [0, 0]},
+    "compile_time_bound_evaluated": "TWO_IDENTITY_INPUTS_ONLY",
     "whole_n02_source_bridge_closed": false
   },
   "disk": {

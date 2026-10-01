@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N02, N03, N03a, N03b, N03c, N03d, N03e, N03f, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01's census, N04's bounded checker and N05's bounded automation are complete. Retain N02's admission limits, then N03a layering before any other backend slice; the paused R items wait on the codegen track. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03a, N03b, N03c, N03d, N03e, N03f, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N04 and N05 are complete. Retain N02's admission limits and legacy source-bridge mismatch, then N03a layering before any other backend slice; the paused R items wait on the codegen track. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2299,7 +2299,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   historical ladder records classified. Library TU ratios remain 1.986–2.668,
   not a size improvement or target attainment.
 
-- [ ] **N02 — Pass framework, translation validation and pass telemetry** — `LATER`, P3.
+- [x] **N02 — Pass framework, translation validation and pass telemetry** — `DONE (bounded framework)`, P3.
   An EvoIR pass interface with before/after hooks; a validation runner that
   reuses the two interpreters, the random corpus, ladder inputs and the
   four-lane native differential; per-pass telemetry (seen, taken,
@@ -2310,7 +2310,10 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   6,274/21,000 generated inputs admitted to TV; 14,726 opaque inputs only
   measured. A separate native-main population admits and runs 72/256.
   Bounded framework full gate: 2,915 PASS / 0 FAIL / 4 ignored, Clippy/fmt PASS.
-  Optimization-admission size/compile-cost bounds remain unmeasured.
+  Frozen no-pass/identity resource pair: two supported inputs retain identical
+  64/228-byte objects and 10/41 interpreter steps; observed compile ratios
+  1.031/1.089 meet the 1.25 bound. This closes identity wiring only, not any
+  optimizing pass or six-TU promotion; those bounds remain per-pass obligations.
   **Unclosed source bridge:** the unchanged
   integer-mix control records 1,001 C-HIR versus 1,002 EvoIR volatile events
   (local initialization store), despite matching returns. [Minimal input](tests/fixtures/codegen/volatile-initializer-observation.c).
