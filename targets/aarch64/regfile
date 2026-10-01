@@ -1,0 +1,41 @@
+version regfile.v1
+target aarch64
+sha256 c61c9377d01087b9ff986c39bf2af1cf451bdeefc40966bb6008e7356561e379
+bank gpr 0 31
+bank simd 64 32
+view gpr32 gpr 32 w
+view gpr64 gpr 64 x
+view simd32 simd 32 s
+view simd64 simd 64 d
+view simd128 simd 128 q
+alias gpr32 gpr64
+alias simd32 simd64
+alias simd64 simd128
+virtual flags nzcv 0
+set CALLER_SAVED 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+set CALLEE_SAVED 19 20 21 22 23 24 25 26 27 28
+set SIMD_CALLER_SAVED 64 65 66 67 68 69 70 71 80 81 82 83 84 85 86 87 88 89 90 91 92 93
+set GPR_CALL_CLOBBERS 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17
+set SIMD_CALL_CLOBBERS 64 65 66 67 68 69 70 71 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95
+set SIMD_ACROSS_CALL none
+set SIMD_LOW64_PRESERVED 72 73 74 75 76 77 78 79
+set RESERVED 16 17 18 29 30 @SIMD_LOW64_PRESERVED 94 95
+set FIXED_ASM_GPR @CALLER_SAVED @CALLEE_SAVED 30
+set FIXED_ASM_SIMD @SIMD_CALLER_SAVED
+set FIXED_ASM @FIXED_ASM_GPR @FIXED_ASM_SIMD
+role SCRATCH gpr 16
+role SCRATCH_UNIT gpr 17
+role SIMD_SCRATCH simd 94
+role SIMD_SCRATCH_UNIT simd 95
+role FRAME_POINTER gpr 29
+role LINK_REGISTER gpr 30
+role PLATFORM_REGISTER gpr 18
+special STACK_POINTER sp
+special ZERO_GPR32 wzr
+special ZERO_GPR64 xzr
+clobber-alias gpr x w
+clobber-alias simd v d s
+asm-view gpr w x
+asm-view simd v b h s d q
+binding-prefix gpr x
+binding-prefix simd v

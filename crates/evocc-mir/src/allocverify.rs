@@ -8,6 +8,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::isa::aarch64::regfile;
+
 use crate::{
     inst_defs, inst_uses, term_edges, term_uses, Allocated, AsmBody, AsmConstraint, AsmOperand,
     AsmValue, MInst, MTerm, RegClass, VReg,
@@ -49,10 +51,7 @@ fn verify_assembly(
             ));
         }
         if let Some(expected) = operand.fixed_register {
-            if !(matches!(expected, 0..=15 | 19..=28 | 30)
-                || crate::linscan::SIMD_CALLER_SAVED.contains(&expected))
-                || number(operand) != Some(expected)
-            {
+            if !regfile::FIXED_ASM.contains(&expected) || number(operand) != Some(expected) {
                 return Err(refuse(
                     block,
                     format!("assembly binding x{expected} does not match its assigned register"),
@@ -99,9 +98,9 @@ fn verify_assembly(
                 }
                 if register(reg).is_some_and(|number| {
                     if reg.class.is_simd() {
-                        !(64..=95).contains(&number)
+                        !regfile::SIMD_BANK.contains(number)
                     } else {
-                        number >= 31
+                        !regfile::GPR_BANK.contains(number)
                     }
                 }) {
                     return Err(refuse(
@@ -200,8 +199,6 @@ type State = BTreeMap<u8, Option<u32>>;
 /// above sixteen bytes arrives in.
 const INDIRECT_RESULT: u8 = 8;
 
-const CLOBBERED: [u8; 18] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
-
 /// Check an allocated function.
 pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
     let refuse = |block: u32, detail: String| VerifierRefusal {
@@ -234,9 +231,9 @@ pub fn verify_allocation(allocated: &Allocated) -> Result<(), VerifierRefusal> {
             return Err(refuse(0, format!("%v{} is unassigned", reg.id)));
         };
         let valid = if reg.class.is_simd() {
-            (64..=95).contains(&number)
+            regfile::SIMD_BANK.contains(number)
         } else {
-            number < 31
+            regfile::GPR_BANK.contains(number)
         };
         if !valid {
             return Err(refuse(
@@ -486,10 +483,9 @@ fn transfer(state: &State, block: &crate::MBlock, register: &impl Fn(VReg) -> Op
 fn apply(state: &mut State, inst: &MInst, register: &impl Fn(VReg) -> Option<u8>) {
     // A call destroys every caller-saved register before its results arrive.
     if matches!(inst, MInst::Bl { .. } | MInst::Blr { .. }) {
-        for number in CLOBBERED
+        for number in regfile::GPR_CALL_CLOBBERS
             .into_iter()
-            .chain(crate::linscan::SIMD_CALLER_SAVED)
-            .chain([94, 95])
+            .chain(regfile::SIMD_CALL_CLOBBERS)
         {
             state.remove(&number);
         }

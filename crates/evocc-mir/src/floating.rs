@@ -1,4 +1,8 @@
 //! Scalar FP shares the SIMD allocation bank; no host arithmetic is used.
+use crate::isa::aarch64::regfile::{
+    SCRATCH_UNIT_W, SCRATCH_UNIT_X, SCRATCH_W, SCRATCH_X, SIMD_SCRATCH_UNIT_D, SIMD_SCRATCH_UNIT_S,
+    ZERO_GPR64,
+};
 use crate::{MBlock, MInst, MTerm, RegClass, VReg};
 use evocc_evoir::{EvoIRType, FloatingInst, FloatingOp, Value};
 use evocc_types::{floating::FloatBits, FloatKind};
@@ -248,21 +252,29 @@ pub(crate) fn operation(
 
 fn constant(text: &mut String, kind: FloatKind, value: FloatBits) {
     let raw = value.bits() as u64;
-    let _ = writeln!(text, "    movz x17, #{}", raw & 65535);
+    let _ = writeln!(text, "    movz {SCRATCH_UNIT_X}, #{}", raw & 65535);
     for shift in [16, 32, 48] {
         if raw >> shift & 65535 != 0 {
             let _ = writeln!(
                 text,
-                "    movk x17, #{}, lsl #{shift}",
+                "    movk {SCRATCH_UNIT_X}, #{}, lsl #{shift}",
                 raw >> shift & 65535
             );
         }
     }
     let _ = writeln!(
         text,
-        "    fmov {}31, {}17",
-        if kind == FloatKind::F32 { "s" } else { "d" },
-        if kind == FloatKind::F32 { "w" } else { "x" }
+        "    fmov {}, {}",
+        if kind == FloatKind::F32 {
+            SIMD_SCRATCH_UNIT_S
+        } else {
+            SIMD_SCRATCH_UNIT_D
+        },
+        if kind == FloatKind::F32 {
+            SCRATCH_UNIT_W
+        } else {
+            SCRATCH_UNIT_X
+        }
     );
 }
 
@@ -277,16 +289,25 @@ fn bounds(
     // A definedness predicate is pure. FCMP on an sNaN would set FPSR.INVALID,
     // so classify every NaN through its representation before any FP compare.
     // The strict conversion itself raises INVALID on the rejected path below.
-    let (gpr, signless, infinity) = if kind == FloatKind::F32 {
-        ("w", "0x7fffffff", "0x7f800000")
+    let (scratch_gpr, scratch_unit, signless, infinity) = if kind == FloatKind::F32 {
+        (SCRATCH_W, SCRATCH_UNIT_W, "0x7fffffff", "0x7f800000")
     } else {
-        ("x", "0x7fffffffffffffff", "0x7ff0000000000000")
+        (
+            SCRATCH_X,
+            SCRATCH_UNIT_X,
+            "0x7fffffffffffffff",
+            "0x7ff0000000000000",
+        )
     };
-    let _ = writeln!(text, "    fmov {gpr}16, {input}\n    and {gpr}16, {gpr}16, #{signless}\n    mov {gpr}17, #{infinity}\n    cmp {gpr}16, {gpr}17\n    b.hi {invalid}");
+    let _ = writeln!(text, "    fmov {scratch_gpr}, {input}\n    and {scratch_gpr}, {scratch_gpr}, #{signless}\n    mov {scratch_unit}, #{infinity}\n    cmp {scratch_gpr}, {scratch_unit}\n    b.hi {invalid}");
     let upper_exponent = width - u16::from(signed);
     let upper = FloatBits::parse(kind, &format!("0x1p{upper_exponent}")).unwrap();
     constant(text, kind, upper);
-    let scratch = if kind == FloatKind::F32 { "s31" } else { "d31" };
+    let scratch = if kind == FloatKind::F32 {
+        SIMD_SCRATCH_UNIT_S
+    } else {
+        SIMD_SCRATCH_UNIT_D
+    };
     // HS also rejects unordered (NaN), whose FCMP carry flag is set.
     let _ = writeln!(text, "    fcmp {input}, {scratch}\n    b.hs {invalid}");
     let (lower, strict) = if !signed {
@@ -410,9 +431,9 @@ pub(crate) fn emit(
                 &format!("{label}_invalid"),
             );
             let invalid_status = if strict {
-                "    fmov d31, xzr\n    fdiv d31, d31, d31\n"
+                format!("    fmov {SIMD_SCRATCH_UNIT_D}, {ZERO_GPR64}\n    fdiv {SIMD_SCRATCH_UNIT_D}, {SIMD_SCRATCH_UNIT_D}, {SIMD_SCRATCH_UNIT_D}\n")
             } else {
-                ""
+                String::new()
             };
             let _ = writeln!(text, "    fcvtz{} {dest}, {}\n    b {label}_done\n{label}_invalid:\n{invalid_status}    mov {dest}, #0\n{label}_done:", if op == ToSigned { "s" } else { "u" }, name(args[0]));
         }

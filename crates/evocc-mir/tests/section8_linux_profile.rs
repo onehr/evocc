@@ -384,9 +384,7 @@ fn measure_against_gcc(with_scalar: bool) {
                     .is_none(),
                 "duplicate native source filename"
             );
-            capture
-                .remaining_bytes()
-                .expect("bounded assembly capture");
+            capture.remaining_bytes().expect("bounded assembly capture");
         }
         std::fs::copy(source, work.join(format!("{name}.c"))).expect("the source");
         names.push(name);

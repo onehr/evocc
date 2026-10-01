@@ -35,12 +35,14 @@ if [ "$BASE" = "--full-workspace" ]; then
         fi
     done
     if [ "$jobs_value" = true ]; then echo "missing job count" >&2; exit 2; fi
+    python3 tools/generate-target.py --check
     cargo test --workspace --no-fail-fast "$@"
     cargo clippy --workspace --all-targets -- -D warnings
     cargo fmt --all -- --check
     echo "gate-changed: full workspace green"
     exit 0
 fi
+python3 tools/generate-target.py --check
 changed="$(git diff --name-only "$BASE"...HEAD; git status --short | awk '{print $2}')"
 crates="$(python3 - "$changed" <<'PY'
 import json

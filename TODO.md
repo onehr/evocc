@@ -2348,6 +2348,10 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     focused check green. Full recheck, target-fact migration and cross-revision
     comparisons remain pending.
     [Preparation record](docs/notebook/codegen-n03-foundations-20261002.md).
+    Step 1 now extracts register pools, views, scratch roles and assembly
+    register primitives from one generated description. Focused Rust 43/43,
+    Python 24/24, focused Clippy and formatting pass. Original-object comparisons,
+    instruction/ABI extraction (steps 2–3) and final full gate are not yet closed.
 
   - [ ] **N03b — TU-local inlining** — `LATER`, P3.
     Size-aware inliner at EvoIR level for TU-local callees, as a validated

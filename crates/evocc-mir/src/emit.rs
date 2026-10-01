@@ -11,6 +11,11 @@ use std::fmt::Write as _;
 
 use evocc_evoir::{GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
 
+use crate::isa::aarch64::regfile::{
+    self, FRAME_POINTER_X, LINK_REGISTER_X, SCRATCH_UNIT_W, SCRATCH_UNIT_X, SCRATCH_W, SCRATCH_X,
+    SIMD_SCRATCH_D, SIMD_SCRATCH_UNIT_V, SIMD_SCRATCH_V, STACK_POINTER, ZERO_GPR32, ZERO_GPR64,
+};
+
 use crate::{
     inst_defs, inst_uses, linscan::physical, term_uses, Allocated, AsmBody, AsmClobber,
     AsmConstraint, AsmOperand, AsmValue, LoadKind, MInst, MTerm, RegClass, StoreKind, SymbolKind,
@@ -325,7 +330,11 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
                 })
                 .flat_map(|body| body.clobbers.iter())
                 .filter_map(|clobber| match clobber {
-                    AsmClobber::VectorRegister(number @ 8..=15) => Some(*number),
+                    AsmClobber::VectorRegister(number)
+                        if regfile::SIMD_LOW64_PRESERVED_INDICES.contains(number) =>
+                    {
+                        Some(*number)
+                    }
                     _ => None,
                 })
         })
@@ -1265,9 +1274,9 @@ fn emit_function(
         allocated.assignment.get(&reg.id).map_or_else(
             || {
                 if class == RegClass::Gpr32 {
-                    "wzr"
+                    ZERO_GPR32
                 } else {
-                    "xzr"
+                    ZERO_GPR64
                 }
                 .to_owned()
             },
@@ -1371,13 +1380,13 @@ fn emit_blocks(
                 );
                 copies += 1;
                 let mask = if *strict {
-                    "    bic x16, x16, #0xc00000\n"
+                    format!("    bic {SCRATCH_X}, {SCRATCH_X}, #0xc00000\n")
                 } else {
-                    ""
+                    String::new()
                 };
                 let _ = writeln!(
                     text,
-                    "    mrs x16, fpcr\n{mask}    cbz x16, {name}\n    brk #3064\n{name}:"
+                    "    mrs {SCRATCH_X}, fpcr\n{mask}    cbz {SCRATCH_X}, {name}\n    brk #3064\n{name}:"
                 );
             }
             emit_inst(
@@ -1412,34 +1421,53 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
             let _ = writeln!(text, ".cfi_negate_ra_state");
         }
     }
-    let _ = writeln!(text, "    stp x29, x30, [sp, #-16]!");
+    let _ = writeln!(
+        text,
+        "    stp {FRAME_POINTER_X}, {LINK_REGISTER_X}, [{STACK_POINTER}, #-16]!"
+    );
     if frame.unwind_tables {
         let _ = writeln!(
             text,
             ".cfi_def_cfa_offset 16\n.cfi_offset 29, -16\n.cfi_offset 30, -8"
         );
     }
-    let _ = writeln!(text, "    mov x29, sp");
+    let _ = writeln!(text, "    mov {FRAME_POINTER_X}, {STACK_POINTER}");
     if frame.unwind_tables {
         let _ = writeln!(text, ".cfi_def_cfa 29, 16");
     }
     if frame.size != 0 {
-        emit_add_immediate(text, "sub", "sp", "sp", frame.size);
+        emit_add_immediate(text, "sub", STACK_POINTER, STACK_POINTER, frame.size);
     }
     if frame.alignment > 16 {
-        let _ = writeln!(text, "    mov x16, sp");
-        let _ = writeln!(text, "    and x16, x16, #-{}", frame.alignment);
-        let _ = writeln!(text, "    mov sp, x16");
+        let _ = writeln!(text, "    mov {SCRATCH_X}, {STACK_POINTER}");
+        let _ = writeln!(
+            text,
+            "    and {SCRATCH_X}, {SCRATCH_X}, #-{}",
+            frame.alignment
+        );
+        let _ = writeln!(text, "    mov {STACK_POINTER}, {SCRATCH_X}");
     }
     for (number, offset) in &frame.saved {
-        emit_frame_access(text, "str", &format!("x{number}"), *offset, frame);
+        emit_frame_access(
+            text,
+            "str",
+            &format!("{}{number}", regfile::GPR64_VIEW.prefix),
+            *offset,
+            frame,
+        );
         if frame.unwind_tables {
             emit_saved_register_cfi(text, *number, *offset, frame);
         }
     }
     if !frame.general_registers_only {
         for (number, offset) in &frame.saved_vectors {
-            emit_frame_access(text, "str", &format!("d{number}"), *offset, frame);
+            emit_frame_access(
+                text,
+                "str",
+                &format!("{}{number}", regfile::SIMD64_VIEW.prefix),
+                *offset,
+                frame,
+            );
             if frame.unwind_tables {
                 emit_saved_register_cfi(text, 64 + *number, *offset, frame);
             }
@@ -1447,8 +1475,8 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
     }
     if let Some((offset, guard)) = &frame.stack_guard {
         emit_guard_load(text, guard);
-        let _ = writeln!(text, "    mov x17, x16");
-        emit_frame_access(text, "str", "x17", *offset, frame);
+        let _ = writeln!(text, "    mov {SCRATCH_UNIT_X}, {SCRATCH_X}");
+        emit_frame_access(text, "str", SCRATCH_UNIT_X, *offset, frame);
     }
     // Section 6: a variadic callee "stores `x_k` to `x7` into it at offsets
     // `8 * k` to `56` in the prologue". Nothing before this point writes an
@@ -1458,7 +1486,7 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
             emit_frame_access(
                 text,
                 "str",
-                &format!("x{number}"),
+                &format!("{}{number}", regfile::GPR64_VIEW.prefix),
                 base + u64::from(number) * 8,
                 frame,
             );
@@ -1468,11 +1496,18 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
         // scratch register so large outgoing areas cannot overflow stp's
         // signed, scaled offset; no argument register is clobbered.
         if !frame.general_registers_only {
-            emit_add_immediate(text, "add", "x16", "sp", base + REGISTER_SAVE_BYTES);
+            emit_add_immediate(
+                text,
+                "add",
+                SCRATCH_X,
+                STACK_POINTER,
+                base + REGISTER_SAVE_BYTES,
+            );
+            let prefix = regfile::SIMD128_VIEW.prefix;
             for number in (0..8).step_by(2) {
                 let _ = writeln!(
                     text,
-                    "    stp q{number}, q{}, [x16, #{}]",
+                    "    stp {prefix}{number}, {prefix}{}, [{SCRATCH_X}, #{}]",
                     number + 1,
                     number * 16
                 );
@@ -1484,24 +1519,39 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
 fn emit_epilogue(text: &mut String, frame: &Frame) {
     if !frame.general_registers_only {
         for (number, offset) in &frame.saved_vectors {
-            emit_frame_access(text, "ldr", &format!("d{number}"), *offset, frame);
+            emit_frame_access(
+                text,
+                "ldr",
+                &format!("{}{number}", regfile::SIMD64_VIEW.prefix),
+                *offset,
+                frame,
+            );
             if frame.unwind_tables {
                 let _ = writeln!(text, ".cfi_restore {}", 64 + *number);
             }
         }
     }
     for (number, offset) in &frame.saved {
-        emit_frame_access(text, "ldr", &format!("x{number}"), *offset, frame);
+        emit_frame_access(
+            text,
+            "ldr",
+            &format!("{}{number}", regfile::GPR64_VIEW.prefix),
+            *offset,
+            frame,
+        );
         if frame.unwind_tables {
             let _ = writeln!(text, ".cfi_restore {number}");
         }
     }
     if frame.alignment > 16 || frame.dynamic {
-        let _ = writeln!(text, "    mov sp, x29");
+        let _ = writeln!(text, "    mov {STACK_POINTER}, {FRAME_POINTER_X}");
     } else if frame.size != 0 {
-        emit_add_immediate(text, "add", "sp", "sp", frame.size);
+        emit_add_immediate(text, "add", STACK_POINTER, STACK_POINTER, frame.size);
     }
-    let _ = writeln!(text, "    ldp x29, x30, [sp], #16");
+    let _ = writeln!(
+        text,
+        "    ldp {FRAME_POINTER_X}, {LINK_REGISTER_X}, [{STACK_POINTER}], #16"
+    );
     if frame.unwind_tables {
         let _ = writeln!(text, ".cfi_def_cfa 31, 0\n.cfi_restore 29\n.cfi_restore 30");
     }
@@ -1554,18 +1604,23 @@ fn emit_saved_register_cfi(text: &mut String, register: u8, offset: u64, frame: 
 fn emit_guard_load(text: &mut String, guard: &StackGuard) {
     match guard {
         StackGuard::Global => {
-            let _ = writeln!(text, "    adrp x16, :got:__stack_chk_guard\n    ldr x16, [x16, :got_lo12:__stack_chk_guard]\n    ldr x16, [x16]");
+            let _ = writeln!(text, "    adrp {SCRATCH_X}, :got:__stack_chk_guard\n    ldr {SCRATCH_X}, [{SCRATCH_X}, :got_lo12:__stack_chk_guard]\n    ldr {SCRATCH_X}, [{SCRATCH_X}]");
         }
         StackGuard::SystemRegister { register, offset } => {
-            let _ = writeln!(text, "    mrs x16, {register}");
+            let _ = writeln!(text, "    mrs {SCRATCH_X}, {register}");
             if *offset >= 0 && *offset <= 32760 && offset % 8 == 0 {
-                let _ = writeln!(text, "    ldr x16, [x16, #{offset}]");
+                let _ = writeln!(text, "    ldr {SCRATCH_X}, [{SCRATCH_X}, #{offset}]");
             } else {
                 // LR is already saved and restored by the common epilogue;
                 // x17 may hold the saved canary and must survive this load.
-                emit_immediate(text, "x30", RegClass::Gpr64, offset.unsigned_abs());
+                emit_immediate(
+                    text,
+                    LINK_REGISTER_X,
+                    RegClass::Gpr64,
+                    offset.unsigned_abs(),
+                );
                 let op = if *offset < 0 { "sub" } else { "add" };
-                let _ = writeln!(text, "    {op} x16, x16, x30\n    ldr x16, [x16]");
+                let _ = writeln!(text, "    {op} {SCRATCH_X}, {SCRATCH_X}, {LINK_REGISTER_X}\n    ldr {SCRATCH_X}, [{SCRATCH_X}]");
             }
         }
     }
@@ -1627,7 +1682,7 @@ fn emit_add_immediate(text: &mut String, op: &str, dst: &str, src: &str, imm: u6
     } else {
         let scratch = physical(
             RegClass::Gpr64,
-            if src == "x16" {
+            if src == SCRATCH_X {
                 SCRATCH_UNIT
             } else {
                 SCRATCH_OFFSET
@@ -1641,11 +1696,17 @@ fn emit_add_immediate(text: &mut String, op: &str, dst: &str, src: &str, imm: u6
 /// One transfer to or from a frame slot, at whatever distance from `sp`.
 fn emit_frame_address(text: &mut String, destination: &str, offset: u64, frame: &Frame) {
     if !frame.dynamic {
-        emit_add_immediate(text, "add", destination, "sp", offset);
+        emit_add_immediate(text, "add", destination, STACK_POINTER, offset);
     } else if frame.alignment == 16 {
-        emit_add_immediate(text, "sub", destination, "x29", frame.size - offset);
+        emit_add_immediate(
+            text,
+            "sub",
+            destination,
+            FRAME_POINTER_X,
+            frame.size - offset,
+        );
     } else {
-        emit_add_immediate(text, "sub", destination, "x29", frame.size);
+        emit_add_immediate(text, "sub", destination, FRAME_POINTER_X, frame.size);
         let _ = writeln!(
             text,
             "    and {destination}, {destination}, #-{}",
@@ -1663,7 +1724,10 @@ fn emit_frame_access(
     frame: &Frame,
 ) {
     if offset <= SCALED_LIMIT && !frame.dynamic {
-        let _ = writeln!(text, "    {mnemonic} {register}, [sp, #{offset}]");
+        let _ = writeln!(
+            text,
+            "    {mnemonic} {register}, [{STACK_POINTER}, #{offset}]"
+        );
         return;
     }
     let scratch = physical(RegClass::Gpr64, SCRATCH_OFFSET);
@@ -1709,16 +1773,20 @@ fn emit_assembly(
             AsmValue::Zero(class) => {
                 let class = width.unwrap_or(*class);
                 if class == RegClass::Gpr32 {
-                    "wzr"
+                    ZERO_GPR32
                 } else {
-                    "xzr"
+                    ZERO_GPR64
                 }
                 .to_owned()
             }
             AsmValue::Reg(reg) => {
                 if reg.class.is_simd() {
                     let physical = spell(*reg, reg.class);
-                    return format!("{}{}", view.unwrap_or('v'), &physical[1..]);
+                    return format!(
+                        "{}{}",
+                        view.unwrap_or(regfile::SIMD_ASM_VIEWS[0]),
+                        &physical[1..]
+                    );
                 }
                 let spelled = spell(*reg, width.unwrap_or(reg.class));
                 if address || matches!(operand.constraint, AsmConstraint::Memory { .. }) {
@@ -1780,12 +1848,13 @@ fn emit_assembly(
         // Address operands print a bracketed full-width register.
         let address = characters[index] == 'a';
         let width = match characters[index] {
-            'w' => Some(RegClass::Gpr32),
-            'x' | 'a' => Some(RegClass::Gpr64),
+            view if view == regfile::GPR_ASM_VIEWS[0] => Some(RegClass::Gpr32),
+            view if view == regfile::GPR_ASM_VIEWS[1] || view == 'a' => Some(RegClass::Gpr64),
             _ => None,
         };
-        let view =
-            matches!(characters[index], 'b' | 'h' | 's' | 'd' | 'q').then_some(characters[index]);
+        let view = regfile::SIMD_ASM_VIEWS[1..]
+            .contains(&characters[index])
+            .then_some(characters[index]);
         let at = if width.is_some() || view.is_some() || characters[index] == 'c' {
             index + 1
         } else {
@@ -1842,8 +1911,7 @@ fn scratch(class: RegClass) -> String {
 /// Section 2's two intra-procedure-call scratch registers, "used only by
 /// emitted sequences". The unrolled copy needs one; the counted loop needs the
 /// second for its counter.
-const SCRATCH_OFFSET: u8 = 16;
-const SCRATCH_UNIT: u8 = 17;
+use crate::isa::aarch64::regfile::{SCRATCH as SCRATCH_OFFSET, SCRATCH_UNIT};
 
 /// Section 4: a `mem.copy` is "unrolled up to 64 bytes and a counted loop
 /// above".
@@ -1919,7 +1987,7 @@ fn emit_inst(
     let name = |reg: VReg| spell(reg, reg.class);
     // Every operand of a two-width form takes the form's own width.
     let at = |reg: VReg, width: Width| spell(reg, width.class());
-    let vector_name = |reg: VReg| format!("v{}", &name(reg)[1..]);
+    let vector_name = |reg: VReg| format!("{}{}", regfile::SIMD_ASM_VIEWS[0], &name(reg)[1..]);
     match inst {
         MInst::Floating { .. } => {
             let label = format!(
@@ -1941,7 +2009,7 @@ fn emit_inst(
                 // v30 is the existing reserved SIMD scratch register.
                 let _ = writeln!(
                     text,
-                    "    mov v30.16b, {}.16b\n    {} v30.16b, {}.16b\n    mov {}.16b, v30.16b",
+                    "    mov {SIMD_SCRATCH_V}.16b, {}.16b\n    {} {SIMD_SCRATCH_V}.16b, {}.16b\n    mov {}.16b, {SIMD_SCRATCH_V}.16b",
                     vector_name(args[0]),
                     op.mnemonic(),
                     vector_name(args[1]),
@@ -1988,7 +2056,7 @@ fn emit_inst(
                 );
                 if *bytes <= 4 {
                     let shift = lane_bits.trailing_zeros();
-                    let _ = writeln!(text, "    lsl w16, {}, #{shift}\n    lsr w16, {}, w16\n    ubfx {}, w16, #0, #{lane_bits}", at(args[1], Width::W), at(source, Width::W), at(*dst, Width::W));
+                    let _ = writeln!(text, "    lsl {SCRATCH_W}, {}, #{shift}\n    lsr {SCRATCH_W}, {}, {SCRATCH_W}\n    ubfx {}, {SCRATCH_W}, #0, #{lane_bits}", at(args[1], Width::W), at(source, Width::W), at(*dst, Width::W));
                     return;
                 }
                 // TBL selects bytes without changing their order. v30/v31
@@ -1996,25 +2064,25 @@ fn emit_inst(
                 let shift = (lane_bits / 8).trailing_zeros();
                 let _ = writeln!(
                     text,
-                    "    lsl w16, {}, #{shift}\n    dup v31.16b, w16",
+                    "    lsl {SCRATCH_W}, {}, #{shift}\n    dup {SIMD_SCRATCH_UNIT_V}.16b, {SCRATCH_W}",
                     at(args[1], Width::W)
                 );
-                emit_immediate(text, "x17", RegClass::Gpr64, 0x0706_0504_0302_0100);
-                let _ = writeln!(text, "    fmov d30, x17");
-                emit_immediate(text, "x17", RegClass::Gpr64, 0x0f0e_0d0c_0b0a_0908);
-                let _ = writeln!(text, "    ins v30.d[1], x17\n    add v31.16b, v31.16b, v30.16b\n    tbl v30.16b, {{{}.16b}}, v31.16b\n    umov {}, v30.{suffix}[0]", vector_name(source), at(*dst, if *lane_bits == 64 { Width::X } else { Width::W }));
+                emit_immediate(text, SCRATCH_UNIT_X, RegClass::Gpr64, 0x0706_0504_0302_0100);
+                let _ = writeln!(text, "    fmov {SIMD_SCRATCH_D}, {SCRATCH_UNIT_X}");
+                emit_immediate(text, SCRATCH_UNIT_X, RegClass::Gpr64, 0x0f0e_0d0c_0b0a_0908);
+                let _ = writeln!(text, "    ins {SIMD_SCRATCH_V}.d[1], {SCRATCH_UNIT_X}\n    add {SIMD_SCRATCH_UNIT_V}.16b, {SIMD_SCRATCH_UNIT_V}.16b, {SIMD_SCRATCH_V}.16b\n    tbl {SIMD_SCRATCH_V}.16b, {{{}.16b}}, {SIMD_SCRATCH_UNIT_V}.16b\n    umov {}, {SIMD_SCRATCH_V}.{suffix}[0]", vector_name(source), at(*dst, if *lane_bits == 64 { Width::X } else { Width::W }));
             } else {
                 if *bytes <= 4 {
-                    let _ = writeln!(text, "    mov w16, wzr");
+                    let _ = writeln!(text, "    mov {SCRATCH_W}, {ZERO_GPR32}");
                     for (index, source) in args.iter().enumerate() {
                         let offset = index * usize::from(*lane_bits);
                         let _ = writeln!(
                             text,
-                            "    bfi w16, {}, #{offset}, #{lane_bits}",
+                            "    bfi {SCRATCH_W}, {}, #{offset}, #{lane_bits}",
                             at(*source, Width::W)
                         );
                     }
-                    let _ = writeln!(text, "    mov {}, w16", at(*dst, Width::W));
+                    let _ = writeln!(text, "    mov {}, {SCRATCH_W}", at(*dst, Width::W));
                     return;
                 }
                 let vector = vector_name(*dst);
@@ -2172,7 +2240,7 @@ fn emit_inst(
             let width = if size == 8 { Width::X } else { Width::W };
             let old = at(*dst, width);
             let operand = at(*value, width);
-            let temporary = if size == 8 { "x16" } else { "w16" };
+            let temporary = if size == 8 { SCRATCH_X } else { SCRATCH_W };
             let suffix = match size {
                 1 => "b",
                 2 => "h",
@@ -2227,7 +2295,7 @@ fn emit_inst(
             }
             let _ = writeln!(
                 text,
-                "    {store}{suffix} w17, {temporary}, [{}]\n    cbnz w17, {label}",
+                "    {store}{suffix} {SCRATCH_UNIT_W}, {temporary}, [{}]\n    cbnz {SCRATCH_UNIT_W}, {label}",
                 name(*base)
             );
             if expected.is_some() {
@@ -2283,34 +2351,34 @@ fn emit_inst(
                     for byte in 0..kind.size_bytes() {
                         let _ = writeln!(
                             text,
-                            "    ldrb w16, [{}, #{}]\n    ins {vector}.b[{byte}], w16",
+                            "    ldrb {SCRATCH_W}, [{}, #{}]\n    ins {vector}.b[{byte}], {SCRATCH_W}",
                             name(*base),
                             offset + byte as i64
                         );
                     }
                     return;
                 }
-                let _ = writeln!(text, "    mov x16, #0");
+                let _ = writeln!(text, "    mov {SCRATCH_X}, #0");
                 for byte in 0..kind.size_bytes() {
                     let _ = writeln!(
                         text,
-                        "    ldrb w17, [{}, #{}]\n    orr x16, x16, x17, lsl #{}",
+                        "    ldrb {SCRATCH_UNIT_W}, [{}, #{}]\n    orr {SCRATCH_X}, {SCRATCH_X}, {SCRATCH_UNIT_X}, lsl #{}",
                         name(*base),
                         offset + byte as i64,
                         byte * 8
                     );
                 }
                 if *kind == LoadKind::Sw {
-                    let _ = writeln!(text, "    sxtw {}, w16", name(*dst));
+                    let _ = writeln!(text, "    sxtw {}, {SCRATCH_W}", name(*dst));
                 } else {
                     let _ = writeln!(
                         text,
                         "    mov {}, {}",
                         spell(*dst, load_class(*kind, dst.class)),
                         if load_class(*kind, dst.class) == RegClass::Gpr32 {
-                            "w16"
+                            SCRATCH_W
                         } else {
-                            "x16"
+                            SCRATCH_X
                         }
                     );
                 }
@@ -2338,7 +2406,7 @@ fn emit_inst(
                     for byte in 0..kind.size_bytes() {
                         let _ = writeln!(
                             text,
-                            "    umov w16, {vector}.b[{byte}]\n    strb w16, [{}, #{}]",
+                            "    umov {SCRATCH_W}, {vector}.b[{byte}]\n    strb {SCRATCH_W}, [{}, #{}]",
                             name(*base),
                             offset + byte as i64
                         );
@@ -2348,7 +2416,7 @@ fn emit_inst(
                 for byte in 0..kind.size_bytes() {
                     let _ = writeln!(
                         text,
-                        "    lsr x16, {}, #{}\n    strb w16, [{}, #{}]",
+                        "    lsr {SCRATCH_X}, {}, #{}\n    strb {SCRATCH_W}, [{}, #{}]",
                         spell(*src, RegClass::Gpr64),
                         byte * 8,
                         name(*base),
@@ -2453,9 +2521,9 @@ fn emit_inst(
             lhs, rhs, width, ..
         } => {
             let zero = if matches!(width, Width::X) {
-                "xzr"
+                ZERO_GPR64
             } else {
-                "wzr"
+                ZERO_GPR32
             };
             let _ = writeln!(
                 text,
@@ -2588,7 +2656,7 @@ fn emit_inst(
         // incoming stack slot)" and `gr_top` is "save area + 64".
         MInst::FrameAddress { dst, place } => match place {
             crate::FramePlace::IncomingStack => {
-                emit_add_immediate(text, "add", &name(*dst), "x29", 16);
+                emit_add_immediate(text, "add", &name(*dst), FRAME_POINTER_X, 16);
             }
             crate::FramePlace::RegisterSaveTop => {
                 let top = frame
@@ -2601,17 +2669,17 @@ fn emit_inst(
             // register at `x29 + 8`, and the frame pointer is `x29` itself.
             crate::FramePlace::SavedLinkRegister => {
                 if frame.sign_returns {
-                    let _ = writeln!(text, "    mov x17, x30\n    ldr x30, [x29, #8]\n    xpaclri\n    mov {}, x30\n    mov x30, x17", name(*dst));
+                    let _ = writeln!(text, "    mov {SCRATCH_UNIT_X}, {LINK_REGISTER_X}\n    ldr {LINK_REGISTER_X}, [{FRAME_POINTER_X}, #8]\n    xpaclri\n    mov {}, {LINK_REGISTER_X}\n    mov {LINK_REGISTER_X}, {SCRATCH_UNIT_X}", name(*dst));
                 } else {
-                    let _ = writeln!(text, "    ldr {}, [x29, #8]", name(*dst));
+                    let _ = writeln!(text, "    ldr {}, [{FRAME_POINTER_X}, #8]", name(*dst));
                 }
             }
             crate::FramePlace::FramePointer => {
-                let _ = writeln!(text, "    mov {}, x29", name(*dst));
+                let _ = writeln!(text, "    mov {}, {FRAME_POINTER_X}", name(*dst));
             }
             crate::FramePlace::AncestorFrame(depth) => {
                 let destination = name(*dst);
-                let _ = writeln!(text, "    mov {destination}, x29");
+                let _ = writeln!(text, "    mov {destination}, {FRAME_POINTER_X}");
                 if depth.get() <= 2 {
                     for _ in 0..depth.get() {
                         let _ = writeln!(text, "    ldr {destination}, [{destination}]");
@@ -2621,8 +2689,8 @@ fn emit_inst(
                     // and cbnz preserve live NZCV across this pseudo-form.
                     let label = format!("{}{function}_frame{}", target.label_prefix(), *copies);
                     *copies += 1;
-                    emit_immediate(text, "x16", RegClass::Gpr64, u64::from(depth.get()));
-                    let _ = writeln!(text, "{label}:\n    ldr {destination}, [{destination}]\n    sub x16, x16, #1\n    cbnz x16, {label}");
+                    emit_immediate(text, SCRATCH_X, RegClass::Gpr64, u64::from(depth.get()));
+                    let _ = writeln!(text, "{label}:\n    ldr {destination}, [{destination}]\n    sub {SCRATCH_X}, {SCRATCH_X}, #1\n    cbnz {SCRATCH_X}, {label}");
                 }
             }
         },
@@ -2646,12 +2714,26 @@ fn emit_inst(
         } => {
             // Keep a fresh outgoing-argument area below each allocation. It
             // must never overlap either the new object or a previous one.
-            let _ = writeln!(text, "    mov x17, sp");
-            let _ = writeln!(text, "    sub x16, sp, {}", name(*size));
-            let _ = writeln!(text, "    and x16, x16, #-{}", (*align).max(16));
-            let _ = writeln!(text, "    stur x17, [x16, #-16]");
-            let _ = writeln!(text, "    mov {}, x16", name(*dst));
-            emit_add_immediate(text, "sub", "sp", "x16", align_up(frame.outgoing, 16) + 16);
+            let _ = writeln!(text, "    mov {SCRATCH_UNIT_X}, {STACK_POINTER}");
+            let _ = writeln!(
+                text,
+                "    sub {SCRATCH_X}, {STACK_POINTER}, {}",
+                name(*size)
+            );
+            let _ = writeln!(
+                text,
+                "    and {SCRATCH_X}, {SCRATCH_X}, #-{}",
+                (*align).max(16)
+            );
+            let _ = writeln!(text, "    stur {SCRATCH_UNIT_X}, [{SCRATCH_X}, #-16]");
+            let _ = writeln!(text, "    mov {}, {SCRATCH_X}", name(*dst));
+            emit_add_immediate(
+                text,
+                "sub",
+                STACK_POINTER,
+                SCRATCH_X,
+                align_up(frame.outgoing, 16) + 16,
+            );
         }
         MInst::StackRelease { address } => {
             let done = format!("{}{function}_release{}", target.label_prefix(), *copies);
@@ -2659,13 +2741,19 @@ fn emit_inst(
             // Non-flag-setting arithmetic preserves a live NZCV value.
             let _ = writeln!(
                 text,
-                "    mov x16, sp\n    sub x16, {}, x16",
+                "    mov {SCRATCH_X}, {STACK_POINTER}\n    sub {SCRATCH_X}, {}, {SCRATCH_X}",
                 name(*address)
             );
-            emit_add_immediate(text, "sub", "x16", "x16", align_up(frame.outgoing, 16) + 16);
+            emit_add_immediate(
+                text,
+                "sub",
+                SCRATCH_X,
+                SCRATCH_X,
+                align_up(frame.outgoing, 16) + 16,
+            );
             let _ = writeln!(
                 text,
-                "    cbnz x16, {done}\n    ldur x16, [{}, #-16]\n    mov sp, x16\n{done}:",
+                "    cbnz {SCRATCH_X}, {done}\n    ldur {SCRATCH_X}, [{}, #-16]\n    mov {STACK_POINTER}, {SCRATCH_X}\n{done}:",
                 name(*address)
             );
         }
@@ -2732,11 +2820,15 @@ fn emit_inst(
         // at increasing addresses from the `sp` it calls with.
         MInst::IncomingArg { dst, slot } => {
             let offset = 16 + u64::from(*slot) * 8;
-            let _ = writeln!(text, "    ldr {}, [x29, #{offset}]", name(*dst));
+            let _ = writeln!(
+                text,
+                "    ldr {}, [{FRAME_POINTER_X}, #{offset}]",
+                name(*dst)
+            );
         }
         MInst::OutgoingArg { src, slot } => {
             let offset = u64::from(*slot) * 8;
-            let _ = writeln!(text, "    str {}, [sp, #{offset}]", name(*src));
+            let _ = writeln!(text, "    str {}, [{STACK_POINTER}, #{offset}]", name(*src));
         }
         MInst::Asm(body) => emit_assembly(text, target, body, &[], function, spell),
         MInst::Ldp {
@@ -2910,13 +3002,13 @@ fn emit_term(
                 let _ = writeln!(text, ".cfi_remember_state");
             }
             if let Some((offset, guard)) = &frame.stack_guard {
-                emit_frame_access(text, "ldr", "x17", *offset, frame);
+                emit_frame_access(text, "ldr", SCRATCH_UNIT_X, *offset, frame);
                 emit_guard_load(text, guard);
                 let ok = format!("{}{function}_guard{}", target.label_prefix(), *relaxations);
                 *relaxations += 1;
                 let _ = writeln!(
                     text,
-                    "    cmp x16, x17\n    b.eq {ok}\n    bl __stack_chk_fail\n    brk #0\n{ok}:"
+                    "    cmp {SCRATCH_X}, {SCRATCH_UNIT_X}\n    b.eq {ok}\n    bl __stack_chk_fail\n    brk #0\n{ok}:"
                 );
             }
             emit_epilogue(text, frame);

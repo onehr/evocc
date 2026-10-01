@@ -14,11 +14,18 @@ GATE = Path(__file__).resolve().parents[2] / "gate-changed.sh"
 
 
 class ChangedGateTest(unittest.TestCase):
-    def run_gate(self, changed="", status="", fail_test=False, sources=None, full=False, extra=()):
+    def run_gate(self, changed="", status="", fail_test=False, sources=None, full=False, extra=(),
+                 generator_exit=0):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "tools").mkdir()
             shutil.copy2(GATE, root / "tools/gate-changed.sh")
+            (root / "tools/generate-target.py").write_text(
+                "import sys\n"
+                "assert sys.argv[1:] == ['--check']\n"
+                "print('generated-target-checked')\n"
+                f"sys.exit({generator_exit})\n"
+            )
             for name in ("leaf", "consumer", "unrelated"):
                 (root / "crates" / name).mkdir(parents=True)
             for path, source in (sources or {}).items():
@@ -71,6 +78,21 @@ class ChangedGateTest(unittest.TestCase):
         failed, calls = self.run_gate(full=True, fail_test=True)
         self.assertNotEqual(failed.returncode, 0)
         self.assertEqual(len(calls), 1)
+
+    def test_stale_generated_target_facts_fail_before_any_cargo_gate(self):
+        for full in (True, False):
+            with self.subTest(full=full):
+                result, calls = self.run_gate(full=full, generator_exit=9,
+                                              changed="crates/leaf/src/lib.rs")
+                self.assertEqual(result.returncode, 9, result.stdout + result.stderr)
+                self.assertIn("generated-target-checked", result.stdout)
+                self.assertEqual(calls, [])
+
+    def test_generated_target_facts_are_checked_even_without_a_cargo_change(self):
+        result, calls = self.run_gate(changed="docs/roadmap.md")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("generated-target-checked", result.stdout)
+        self.assertEqual(calls, [])
 
     def test_full_workspace_cannot_be_relabelled_after_excluding_tests(self):
         for extra in [('--test', 'only-one'), ('-p', 'leaf'), ('--exclude', 'unrelated'),

@@ -18,8 +18,10 @@
 pub mod allocverify;
 pub mod emit;
 mod floating;
+pub mod generic;
 mod immediate;
 pub mod interp;
+pub mod isa;
 pub mod lane;
 pub mod linkage;
 pub mod linscan;
@@ -1417,9 +1419,16 @@ impl AsmOperand {
             || base.clone(),
             |n| {
                 if n >= linscan::SIMD_BASE {
-                    format!("{base}@v{}", n - linscan::SIMD_BASE)
+                    format!(
+                        "{base}@{}{}",
+                        crate::isa::aarch64::regfile::SIMD_BINDING_PREFIX,
+                        n - linscan::SIMD_BASE
+                    )
                 } else {
-                    format!("{base}@x{n}")
+                    format!(
+                        "{base}@{}{n}",
+                        crate::isa::aarch64::regfile::GPR_BINDING_PREFIX
+                    )
                 }
             },
         )
@@ -1445,8 +1454,14 @@ impl AsmClobber {
     #[must_use]
     pub fn spelling(&self) -> String {
         match self {
-            Self::Register(number) => format!("x{number}"),
-            Self::VectorRegister(number) => format!("v{number}"),
+            Self::Register(number) => format!(
+                "{}{number}",
+                crate::isa::aarch64::regfile::GPR_BINDING_PREFIX
+            ),
+            Self::VectorRegister(number) => format!(
+                "{}{number}",
+                crate::isa::aarch64::regfile::SIMD_BINDING_PREFIX
+            ),
             Self::Flags => "cc".to_owned(),
             Self::Memory => "memory".to_owned(),
         }
@@ -1455,21 +1470,21 @@ impl AsmClobber {
     /// Read one clobber name.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
-        if let Some(number) = text.strip_prefix(['v', 'd', 's']) {
+        if let Some(number) = text.strip_prefix(crate::isa::aarch64::regfile::SIMD_CLOBBER_PREFIXES)
+        {
             return number
                 .parse::<u8>()
                 .ok()
-                .filter(|number| *number <= 31)
+                .filter(|number| *number < crate::isa::aarch64::regfile::SIMD_BANK.count)
                 .map(Self::VectorRegister);
         }
         match text {
             "cc" => Some(Self::Flags),
             "memory" => Some(Self::Memory),
             _ => text
-                .strip_prefix('x')
-                .or_else(|| text.strip_prefix('w'))
+                .strip_prefix(crate::isa::aarch64::regfile::GPR_CLOBBER_PREFIXES)
                 .and_then(|number| number.parse::<u8>().ok())
-                .filter(|number| *number <= 30)
+                .filter(|number| *number < crate::isa::aarch64::regfile::GPR_BANK.count)
                 .map(Self::Register),
         }
     }

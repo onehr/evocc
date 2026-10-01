@@ -4,6 +4,9 @@ use evocc_types::{EvoIRType, Region};
 
 use crate::{BlockId, Value};
 
+#[path = "assembly_registers.rs"]
+mod registers;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssemblyOutput {
     pub constraint: String,
@@ -61,31 +64,31 @@ pub fn assembly_register_binding(constraint: &str) -> Result<(&str, Option<u8>),
         return Ok((constraint, None));
     };
     if let Some(number) = register
-        .strip_prefix('v')
+        .strip_prefix(registers::SIMD_BINDING_PREFIX)
         .and_then(|text| text.parse::<u8>().ok())
     {
-        if matches!(number, 0..=7 | 16..=29)
-            && register == format!("v{number}")
+        if registers::SIMD_BINDING_INDICES.contains(&number)
+            && register == format!("{}{number}", registers::SIMD_BINDING_PREFIX)
             && (matches!(base, "w" | "=w" | "+w" | "=&w" | "+&w")
                 || (base.len() == 1 && base.as_bytes()[0].is_ascii_digit()))
         {
-            return Ok((base, Some(64 + number)));
+            return Ok((base, Some(registers::SIMD_BASE + number)));
         }
         return Err(format!(
             "unsupported assembly register binding {constraint}"
         ));
     }
     let number = register
-        .strip_prefix('x')
+        .strip_prefix(registers::GPR_BINDING_PREFIX)
         .and_then(|text| text.parse::<u8>().ok());
     // x30 is saved by every function prologue. It remains unavailable to
     // ordinary allocation, but a short-lived explicit asm operand may use it.
-    let Some(number) = number.filter(|n| matches!(n, 0..=15 | 19..=28 | 30)) else {
+    let Some(number) = number.filter(|n| registers::GPR_BINDINGS.contains(n)) else {
         return Err(format!(
             "unsupported assembly register binding {constraint}"
         ));
     };
-    if register != format!("x{number}")
+    if register != format!("{}{number}", registers::GPR_BINDING_PREFIX)
         || !(matches!(base, "r" | "=r" | "+r" | "=&r" | "+&r")
             || (base.len() == 1 && base.as_bytes()[0].is_ascii_digit()))
     {
@@ -419,16 +422,15 @@ pub fn assembly_clobber(name: &str) -> bool {
 }
 
 fn assembly_clobber_register(name: &str) -> Option<u8> {
-    if let Some(number) = name.strip_prefix(['v', 'd', 's']) {
+    if let Some(number) = name.strip_prefix(registers::SIMD_CLOBBER_PREFIXES) {
         number
             .parse::<u8>()
             .ok()
-            .filter(|number| *number <= 31)
-            .map(|number| 64 + number)
+            .filter(|number| *number <= registers::SIMD_LAST_INDEX)
+            .map(|number| registers::SIMD_BASE + number)
     } else {
-        name.strip_prefix('x')
-            .or_else(|| name.strip_prefix('w'))
+        name.strip_prefix(registers::GPR_CLOBBER_PREFIXES)
             .and_then(|number| number.parse::<u8>().ok())
-            .filter(|number| *number <= 30)
+            .filter(|number| *number <= registers::GPR_LAST_INDEX)
     }
 }

@@ -18,6 +18,8 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
+use crate::isa::aarch64::regfile;
+
 use crate::{
     inst_defs, inst_uses, regalloc, term_edges, term_uses, AsmBody, AsmConstraint, AsmOperand,
     AsmValue, MBlock, MFunction, MInst, MTerm, RegClass, Target, VReg,
@@ -25,23 +27,19 @@ use crate::{
 
 /// Section 6: "`x0` to `x17` are caller-saved", less the two intra-procedure
 /// scratch registers, which Section 2 keeps for emitted sequences.
-pub const CALLER_SAVED: [u8; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+pub use crate::isa::aarch64::regfile::CALLER_SAVED;
 
 /// Section 6: "`x19` to `x28` ... are callee-saved".
-pub const CALLEE_SAVED: [u8; 10] = [19, 20, 21, 22, 23, 24, 25, 26, 27, 28];
+pub use crate::isa::aarch64::regfile::CALLEE_SAVED;
 
 /// Section 2: "`x16` and `x17` are the intra-procedure-call scratch
 /// registers, used only by emitted sequences".
-pub const SCRATCH: u8 = 16;
+pub use crate::isa::aarch64::regfile::SCRATCH;
 
 /// SIMD numbers occupy a disjoint allocator bank. v30/v31 are emission
 /// scratch; v8-v15 are deliberately not allocated because only their low
 /// halves are callee saved. Live-across-call vectors spill at full width.
-pub const SIMD_BASE: u8 = 64;
-pub const SIMD_SCRATCH: u8 = SIMD_BASE + 30;
-pub const SIMD_CALLER_SAVED: [u8; 22] = [
-    64, 65, 66, 67, 68, 69, 70, 71, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93,
-];
+pub use crate::isa::aarch64::regfile::{SIMD_BASE, SIMD_CALLER_SAVED, SIMD_SCRATCH};
 
 /// Independent integer and SIMD argument banks share one stack cursor.
 #[derive(Default)]
@@ -486,11 +484,7 @@ fn pin_assembly(
     let mut requested = BTreeMap::new();
     for operand in source.numbered() {
         if let Some(number) = operand.fixed_register {
-            if !CALLER_SAVED.contains(&number)
-                && !CALLEE_SAVED.contains(&number)
-                && number != 30
-                && !SIMD_CALLER_SAVED.contains(&number)
-            {
+            if !regfile::FIXED_ASM.contains(&number) {
                 return Err(format!("unsupported assembly register binding x{number}"));
             }
             let reg = operand
@@ -960,7 +954,7 @@ fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, 
         if interval.class == RegClass::Flags {
             // Section 2 gives the class one register, and the adjacency rule
             // keeps every live range inside one pair of instructions.
-            assignment.insert(interval.value, 0);
+            assignment.insert(interval.value, regfile::FLAGS_ASSIGNMENT_TAG);
             continue;
         }
         if let Some(number) = pins.get(&interval.value).copied() {
@@ -1030,7 +1024,7 @@ fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, 
         // spilled."
         let candidates: Vec<u8> = if interval.class.is_simd() {
             if interval.spans_call {
-                Vec::new()
+                regfile::SIMD_ACROSS_CALL.to_vec()
             } else {
                 SIMD_CALLER_SAVED.to_vec()
             }
@@ -1848,12 +1842,12 @@ fn replace_term_use(term: &mut MTerm, from: VReg, to: VReg) {
 #[must_use]
 pub fn physical(class: RegClass, number: u8) -> String {
     match class {
-        RegClass::Gpr32 => format!("w{number}"),
-        RegClass::Gpr64 => format!("x{number}"),
-        RegClass::Simd32 => format!("s{}", number - SIMD_BASE),
-        RegClass::Simd64 => format!("d{}", number - SIMD_BASE),
-        RegClass::Simd128 => format!("q{}", number - SIMD_BASE),
-        RegClass::Flags => "nzcv".to_owned(),
+        RegClass::Gpr32 => regfile::GPR32_VIEW.spell(number),
+        RegClass::Gpr64 => regfile::GPR64_VIEW.spell(number),
+        RegClass::Simd32 => regfile::SIMD32_VIEW.spell(number),
+        RegClass::Simd64 => regfile::SIMD64_VIEW.spell(number),
+        RegClass::Simd128 => regfile::SIMD128_VIEW.spell(number),
+        RegClass::Flags => regfile::FLAGS_SPELLING.to_owned(),
     }
 }
 
