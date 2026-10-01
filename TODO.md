@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N02, N03, N03a, N03b, N03c, N03d, N03e, N03f, N05, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01's census and N04's bounded checker interface are complete. Finish N02/N05 admission and measurement, then N03a layering before any other backend slice; the paused R items wait on the codegen track. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N02, N03, N03a, N03b, N03c, N03d, N03e, N03f, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01's census, N04's bounded checker and N05's bounded automation are complete. Retain N02's admission limits, then N03a layering before any other backend slice; the paused R items wait on the codegen track. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2373,14 +2373,17 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   2,915 PASS / 0 FAIL / 4 ignored, Clippy/fmt PASS. Existing supported execution
   only; no whole-program absence-of-UB or complete system-model claim.
 
-- [ ] **N05 — Measurement automation and bisect** — `LATER`, P3.
+- [x] **N05 — Measurement automation and bisect** — `DONE`, P3.
   On each push: S1 sizes for the six units, compile time, a ladder subset and
   interpreter steps, appended as trend receipts; a receipt-driven bisect over
   commits. RED: an injected size regression is flagged and bisected to its
   commit. Lands before the first N03 slice. Parallel lane, two weeks.
   Real Git/ELF injection 8→24→24 bytes correctly located `ff5b17a0`;
   [receipt](tests/contracts/codegen-n05-20261002-receipt.json). Fresh six-TU
-  collection and pre-push activation/exercise remain pending. Full workspace
+  collection completed at `7680ae23`: 12 byte-identical object pairs, 36 source
+  compiles, 12 bounded native replays and 257 step measurements. Independent
+  replay: zero completed rejection/bundle failure. Local pre-push activated
+  and exercised through its real entry point; no remote push. Full workspace
   2,915 PASS / 0 FAIL / 4 ignored, Clippy/fmt PASS; shared Python 135 PASS.
   The integer-mix source-bridge mismatch is retained independently of its
   measurable unchanged-EvoIR step count; observation is not TV acceptance.

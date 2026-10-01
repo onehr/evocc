@@ -2,7 +2,7 @@
 
 **Bounded interface accepted.** Plan frozen in `917f8955`:
 [contract](../../tests/contracts/codegen-n04-20261002.json).
-Implementation and this record share the containing commit. [Compact receipt](../../tests/contracts/codegen-n04-20261002-receipt.json).
+Implementation: `7680ae23`. [Compact receipt](../../tests/contracts/codegen-n04-20261002-receipt.json).
 
 | Item | Evidence / status |
 | --- | --- |

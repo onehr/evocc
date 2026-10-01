@@ -1,14 +1,14 @@
 {
   "schema": "evocc.codegen.result.v1",
   "package": "N05",
-  "status": "ACCEPTANCE_PENDING",
+  "status": "ACCEPTED_BOUNDED_MEASUREMENT_AUTOMATION",
   "date": "2026-10-02",
   "plan": "tests/contracts/codegen-n05-20261002.json",
   "plan_commit": "917f8955",
   "plan_sha256": "87d353b0e311994536c9b4b7dcfac2bf34fb400c832106473d378f99d1c2658d",
-  "implementation_commit": null,
+  "implementation_commit": "7680ae23acb11117730db0e44c2176b056ac86f0",
   "live_plan": "tests/contracts/codegen-n05-live-20261002.json",
-  "live_plan_status": "FROZEN_IN_CONTAINING_COMMIT_NOT_EXECUTED",
+  "live_plan_status": "FROZEN_7680ae23_EXECUTED",
   "red": {
     "initial": "The frozen plan preceded the missing codegen_trend import RED.",
     "failure_accounting": {
@@ -39,17 +39,33 @@
       "log_sha256": "1b7f2da7fd9f6dff1acfe685bf74e0176d819ed5f93c4d77eeca6ce4092a221f"
     },
     "six_tu_live_capture": {
-      "status": "NOT_RUN",
+      "status": "OBSERVED",
       "command": "python3 tools/bench.py --codegen-measure tests/contracts/codegen-n05-live-20261002.json",
-      "receipt": null,
-      "unit_profiles_measured": 0,
-      "ladder_cases_measured": 0,
-      "steps_inputs_measured": 0
+      "receipt": ".evidence/codegen-trend/measure-6lgm77ye/receipt.json",
+      "receipt_sha256": "5f5655a2c508bc0beb0f53e381ea9b7cabf99feeb67691ad58a3f3d25c28a18f",
+      "history": ".evidence/codegen-trend/history.jsonl",
+      "history_sha256_at_closure": "1370f941cab94ec526951735dab12389c4e256d012ab98b77e338918cc235fb0",
+      "unit_profiles_measured": 12,
+      "source_compilations": 36,
+      "byte_identical_object_pairs": 12,
+      "ladder_cases_measured": 6,
+      "native_executions": 12,
+      "steps_inputs_measured": 257,
+      "steps_before": 52825,
+      "steps_after": 52825,
+      "steps_tv_admitted": 70,
+      "steps_tv_opaque": 187,
+      "completed_proof_rejections": 0,
+      "bundle_failures": 0,
+      "comparison": "Initial trend baseline only; no cross-revision compile-time improvement or bound claim."
     },
     "pre_push": {
       "implementation": "PRESENT_UNIT_TESTED",
-      "activation": "NOT_ACTIVATED",
-      "live_exercise": "NOT_RUN",
+      "activation": "LOCAL_CORE_HOOKSPATH_TOOLS_HOOKS_AND_FROZEN_PLAN",
+      "live_exercise": "PASS_REAL_HOOK_ENTRY_WITH_SIMULATED_UPDATE_STDIN_NO_REMOTE_PUSH",
+      "exercise_commit": "7680ae23acb11117730db0e44c2176b056ac86f0",
+      "exercise_status": "OBSERVED",
+      "missing_commits": [],
       "historical_missing": "Blocks with exact missing commits; never checks out a different revision or fabricates historical measurements."
     },
     "lean": "NOT_REQUIRED_NO_SEMANTIC_OR_REGISTRY_CHANGE"
@@ -78,15 +94,26 @@
     "same_ir_steps": "OBSERVED does not imply source bridge or translation validation passed.",
     "retained_fields": ["validation", "source_bridge", "source_bridge_detail"],
     "mismatch_regression_test": "The known integer-mix source-bridge mismatch remains MISMATCH_NOT_VALIDATED, with event counts and first differing index preserved in the compact trend and visible in render-status.",
-    "live_evidence": "Pending the current N02 executable and fresh N05 capture."
+    "live_evidence": "Fresh release capture retains integer-mix MISMATCH_NOT_VALIDATED (1001 versus 1002 events), while independently recording 11017 unchanged EvoIR steps."
   },
+  "units": [
+    {"unit": "integer-mix", "checked_bytes": 128, "unchecked_bytes": 128, "gcc_o2_bytes": 96, "checked_compile_median_ms": 20.566875, "unchecked_compile_median_ms": 18.937333},
+    {"unit": "deflate.c", "checked_bytes": 30184, "unchecked_bytes": 28668, "gcc_o2_bytes": 14432, "checked_compile_median_ms": 635.828750, "unchecked_compile_median_ms": 595.609209},
+    {"unit": "inflate.c", "checked_bytes": 28264, "unchecked_bytes": 26520, "gcc_o2_bytes": 9940, "checked_compile_median_ms": 642.374292, "unchecked_compile_median_ms": 622.391500},
+    {"unit": "zstd_compress.c", "checked_bytes": 122972, "unchecked_bytes": 120592, "gcc_o2_bytes": 48760, "checked_compile_median_ms": 2788.547792, "unchecked_compile_median_ms": 2776.473625},
+    {"unit": "zstd_decompress.c", "checked_bytes": 33300, "unchecked_bytes": 33052, "gcc_o2_bytes": 14492, "checked_compile_median_ms": 1098.419833, "unchecked_compile_median_ms": 1088.379375},
+    {"unit": "cJSON.c", "checked_bytes": 29496, "unchecked_bytes": 29384, "gcc_o2_bytes": 14400, "checked_compile_median_ms": 542.356209, "unchecked_compile_median_ms": 525.996333}
+  ],
   "disk": {
     "capture_limit_bytes": 524288000,
     "injection_retained_allocated_bytes": 81920,
     "injection_host_free_delta_bytes": -18911232,
     "temporary_index_and_objects": "REMOVED",
     "net_slice_bytes": null,
-    "note": "The free-space delta includes concurrent work and is not attributed to this slice. Final combined source/build/capture net delta remains pending shared cleanup."
+    "live_capture_retained_bytes": 395008,
+    "live_capture_allocated_bytes": 458752,
+    "live_host_free_delta_bytes": -109117440,
+    "note": "Owned live capture net +395008 bytes; intermediate assembly, proof bundles, objects and executables removed after measurement/replay. Shared target gate delta is reported once in N01 (+4.12 GiB), not apportioned again. Host free-space changes are not a slice attribution; no new target/workspace/VM disk."
   },
-  "claim_ceiling": "Regression detector/localizer and adapters are implemented and locally tested. N05 remains unaccepted until current-source six-TU twin sizes, compile time, ladder and steps, the real pre-push path and the full workspace gate complete. No latency, codegen improvement or verified-rewrite claim."
+  "claim_ceiling": "Accepted bounded measurement automation and injected-regression localization. Fresh original selected-TU compiles with reference-built dependencies, not complete application coverage or TV admission of opaque inputs. The hook was exercised locally, not on a remote push. No latency, codegen improvement or verified-rewrite claim."
 }

@@ -1,52 +1,48 @@
-# N05: measurement automation
+# N05: bounded measurement automation accepted
 
-**Acceptance pending.** Plan frozen in `917f8955`:
-[contract](../../tests/contracts/codegen-n05-20261002.json). Implementation
-commit: the containing commit. [Compact receipt](../../tests/contracts/codegen-n05-20261002-receipt.json).
+Implementation `7680ae23`; [plan](../../tests/contracts/codegen-n05-20261002.json)
+frozen in `917f8955`, [live plan](../../tests/contracts/codegen-n05-live-20261002.json)
+frozen in `7680ae23`. [Compact receipt](../../tests/contracts/codegen-n05-20261002-receipt.json).
+Full workspace: 377 suites, 2,915 PASS / 0 FAIL / 4 ignored; Clippy/fmt PASS.
+Shared Python: 135 PASS. No Lean or registry change.
 
-| Item | Result |
-| --- | --- |
-| Focused Python adapters | 127 PASS / 0 FAIL; mock benchmark output is not native evidence |
-| Injected AArch64 object sizes | 8 → 24 → 24 bytes; each built twice, byte-identical |
-| First bad Git commit | `ff5b17a0665d4013ff6e18e88947789a0b0d3372`; no receipt rebuild required |
-| Six current-source TU profiles / ladder / steps | NOT RUN; [live plan](../../tests/contracts/codegen-n05-live-20261002.json) frozen in the containing commit |
-| Full workspace | 377 suites; 2,915 PASS / 0 FAIL / 4 ignored; Clippy and formatting PASS |
-| Live pre-push | NOT ACTIVATED |
+| TU | Checked bytes | Unchecked bytes | Unchecked / GCC14-O2 | Compile median ms, checked / unchecked |
+| --- | ---: | ---: | ---: | ---: |
+| integer-mix | 128 | 128 | 1.333 | 20.57 / 18.94 |
+| deflate | 30,184 | 28,668 | 1.986 | 635.83 / 595.61 |
+| inflate | 28,264 | 26,520 | 2.668 | 642.37 / 622.39 |
+| zstd compress | 122,972 | 120,592 | 2.473 | 2788.55 / 2776.47 |
+| zstd decompress | 33,300 | 33,052 | 2.281 | 1098.42 / 1088.38 |
+| cJSON | 29,496 | 29,384 | 2.041 | 542.36 / 526.00 |
 
-The injection used real `commit-tree` objects and `/usr/bin/clang` as an
-AArch64 assembler; it did not check out or alter the main index. Its unit is
-`test:n05_regression_probe`, not a substituted S5 unit. GCC ratios, compile
-times and interpreter/ladder coverage remain `NOT_RUN` in that capture.
-Raw receipt: `.evidence/codegen-trend/injection-yu9yd2yl/receipt.json`.
+Fresh original C compiled 36 times under the release compiler, not old IR.
+All 12 object pairs are byte-identical; independent bundle replay has zero
+completed rejections and zero bundle failures. Six bounded mixed-link modes,
+with retained reference-built dependencies, passed in both profiles (12 runs).
+The 257 unchanged EvoIR measurements total 52,825 steps before/after: 70 are
+TV-admitted, 187 opaque. Integer-mix still records **MISMATCH_NOT_VALIDATED**
+(1,001 versus 1,002 volatile events); its 11,017 steps are measurement-only.
+This is the first live trend observation, not a cross-revision compile-cost
+bound or improvement. Five library TUs still miss the 1.4 target.
 
-The fresh collector reuses S1, `Capture`, `bench.lock` and S5 recipes. It
-compiles the original C with the current release compiler, not old EvoIR;
-three compile samples are mechanical host-cost trends, never native latency.
-It checks twin object identity, replays certificates once, runs the bounded
-mixed-object ladder and consumes N02 step reports. `integer-mix` source-bridge
-`MISMATCH_NOT_VALIDATED` stays visible beside same-IR step observations, never
-relabeled translation validation; its numeric diagnostic is retained. Proof failures reuse
-the existing disposition buckets: completed rejection, bundle failure and
-unknown are distinct; a producer recovery proof never admits its rollback.
+The actual Git/ELF injection produced 8 -> 24 -> 24 bytes with identical twins;
+receipt-first bisect identified `ff5b17a0`, without switching the checkout.
+It is a detector/localizer test, not an EvoCC application result. The local
+pre-push hook is now configured. Its real entry point accepted simulated update
+stdin for `7680ae23` with `OBSERVED`, no missing commits and no remote push.
+It measures missing clean HEAD; missing historical implementation receipts
+block as NOT_RUN rather than silently checking out another revision.
 
-`tools/hooks/pre-push` is an opt-in local hook, not active merely because it
-exists. After the live plan and shared release binaries pass, configure
-`evocc.codegenPlan` and install/compose the hook without replacing another
-hook. It measures missing current `HEAD`, and requires retained observations
-for pushed implementation commits and each tip since the frozen N05 plan.
-Missing historical commits **block with `NOT_RUN` and their exact hashes**;
-they need the same plan in an exclusively scheduled clean checkout. Neither
-the hook nor receipt-first bisect creates a worktree or silently switches the
-shared checkout. Installing a hook is not evidence it has run on a push.
+Raw capture: `.evidence/codegen-trend/measure-6lgm77ye/receipt.json`;
+append-only numbers/hashes: `.evidence/codegen-trend/history.jsonl`.
+Use `python3 tools/render-status.py --codegen-trend` with that history path.
+Object/assembly/executable/proof intermediates were removed after measurement
+and replay. **Disk net:** live retained capture +395,008 bytes (448 KiB allocated),
+plus 80 KiB allocated injection capture and small source/record files; shared
+Cargo gate growth +4.12 GiB is recorded once in N01. Host free-space changes
+are not attributed to this slice. Capture cap remains 500 MiB.
 
-```sh
-python3 tools/render-status.py --codegen-trend .evidence/codegen-trend/history.jsonl
-python3 tools/bisect.py --history .evidence/codegen-trend/injection-yu9yd2yl/trend.jsonl --good 34a9b56de201663e7caf529d2849bcd018235448 --bad 41509ab8e36feca096ac508c06cb64290e178879 --unit test:n05_regression_probe --variant injected-assembly-test
-```
-
-**Claim ceiling:** local detector/localizer and adapter tests only until fresh
-six-TU, full-workspace and real hook gates complete; no latency, optimizer
-quality or verified-size gain. **Disk:** injection retained 80 KiB allocated;
-temporary index/objects removed. Observed host free-space delta was −18,911,232
-bytes during concurrent work, not a slice attribution; final net delta awaits
-shared build cleanup. No new target, worktree or VM disk was created.
+**Claim ceiling:** current-source selected-TU measurement, bounded reference-
+dependency replay, regression localization and local hook operation. Not full
+applications, whole-module TV for opaque inputs, latency, improved codegen,
+verified rewrite gain, or a claim that a remote push was performed.

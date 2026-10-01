@@ -5,7 +5,7 @@
   "date": "2026-10-02",
   "plan": "tests/contracts/codegen-n02-20261002.json",
   "plan_commit": "917f8955",
-  "implementation_commit": null,
+  "implementation_commit": "7680ae23acb11117730db0e44c2176b056ac86f0",
   "red": {
     "framework": {"passed": 0, "failed": 7, "exit_code": 101},
     "driver": {"passed": 2, "failed": 3, "exit_code": 101}

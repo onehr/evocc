@@ -1,6 +1,7 @@
 {
   "schema": "evocc-codegen-n01-receipt-v1",
   "status": "COMPLETED_RETAINED_OBJECT_CENSUS",
+  "implementation_commit": "7680ae23acb11117730db0e44c2176b056ac86f0",
   "plan": "tests/contracts/codegen-n01-20261002.json",
   "ladder_plan": "tests/contracts/codegen-n01-ladder-20261002.json",
   "source_baseline": "a58d28aa95ebd22436be5b06eb0a11b55d3d57e7",

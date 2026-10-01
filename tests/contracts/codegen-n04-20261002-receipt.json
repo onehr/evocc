@@ -5,7 +5,7 @@
   "date": "2026-10-02",
   "plan": "tests/contracts/codegen-n04-20261002.json",
   "plan_commit": "917f8955",
-  "implementation_commit": null,
+  "implementation_commit": "7680ae23acb11117730db0e44c2176b056ac86f0",
   "red": {
     "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline -p evocc --test check_product",
     "exit_code": 101,

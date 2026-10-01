@@ -1,7 +1,7 @@
 # N02: bounded pass framework and identity validation
 
 Plan: [`917f8955`](../../tests/contracts/codegen-n02-20261002.json).
-Implementation and this record share the containing commit; bounded framework accepted.
+Implementation: `7680ae23`; bounded framework accepted.
 [Compact receipt](../../tests/contracts/codegen-n02-20261002-receipt.json).
 
 | Evidence | Result |
