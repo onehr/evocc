@@ -18,6 +18,7 @@ OUT = Path(__file__).resolve().parent.parent / "docs" / "images"
 BG, PANEL, PANEL2, STROKE = "#0b1117", "#111925", "#0e151f", "#232d3a"
 TEXT, MUTED, GRAY = "#f0f3f6", "#9aa4b2", "#4a5462"
 BLUE, CYAN, GREEN = "#58a6ff", "#79c0ff", "#3fb950"
+RED, AMBER = "#f85149", "#d4a72c"
 SANS = "Helvetica Neue, Helvetica, Arial, sans-serif"
 MONO = "JetBrains Mono, Menlo, monospace"
 
@@ -29,7 +30,7 @@ class Canvas:
         markers = "".join(
             f'<marker id="arr-{c[1:]}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" '
             f'markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="{c}"/></marker>'
-            for c in (STROKE, BLUE, CYAN, GREEN, GRAY)
+            for c in (STROKE, BLUE, CYAN, GREEN, GRAY, RED, AMBER)
         )
         self.parts.append(
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
@@ -333,10 +334,124 @@ def milestones() -> None:
     c.write("evocc-milestones")
 
 
+def eqsat() -> None:
+    """Verified EqSat: the path of one translation unit, the trust layers, the numbers."""
+    c = Canvas(1600, 1010)
+    c.text(60, 64, "Verified EqSat", 40, TEXT, "700")
+    c.text(60, 94, "every rewrite carries a certificate that a separate program replays; nothing optimized is published on the optimizer's own authority", 17, MUTED)
+    c.raw('<rect x="60" y="110" width="1480" height="2" fill="url(#hair)" opacity="0.8"/>')
+
+    # offline Lean audit
+    lx, ly, lw, lh = 560, 130, 480, 66
+    c.rect(lx, ly, lw, lh, PANEL2, GREEN, 10, 1.4)
+    c.text(lx + lw / 2, ly + 27, "Lean 4 audit, offline; never runs at compile time", 16, GREEN, "600", SANS, "middle")
+    c.text(lx + lw / 2, ly + 49, "registry text in the spec → generated rule data → RuleCovered proofs → audit receipt", 12.5, MUTED, "normal", SANS, "middle")
+
+    nx, nw, nh, ny, gap = 70, 200, 120, 250, 52
+    stations = [
+        ("1 · LOWERING", "C → EvoIR", ["ordinary -O2 folds, CSE,", "block joins; every C check", "explicit as ub.assume"], STROKE),
+        ("2 · CHAIN PRODUCER", "transaction k ≤ 8", ["eligible scalar regions", "p0.scalar.v4, known bits", "policy accepts or rejects"], STROKE),
+        ("3 · CERTIFICATE", "EVP bundle", ["before.evo · after.evo", "proof.evp: every union,", "binding and premise"], STROKE),
+        ("4 · CHECKER", "independent replay", ["own eligibility and facts", "whole-module splice", "binary pinned by SHA-256"], BLUE),
+        ("5 · PUBLICATION", "chain VERIFIED", ["immutable chain record", "retained bundles", "state committed atomically"], STROKE),
+        ("6 · BACKEND (tested)", "EvoMIR twins", ["checked: ub.assume → trap", "unchecked: only after the", "checked twin passed"], STROKE),
+    ]
+    for i, (eyebrow, name, subs, col) in enumerate(stations):
+        x = nx + i * (nw + gap)
+        c.rect(x, ny, nw, nh, PANEL, col, 10, 1.8 if col != STROKE else 1.2)
+        c.text(x + 16, ny + 24, eyebrow, 11.5, GRAY, "600", SANS, "start", 1.0, 0.6)
+        c.text(x + 16, ny + 50, name, 16 if i == 1 else 18, TEXT, "700", MONO if i in (1, 2, 5) else SANS)
+        for j, s_ in enumerate(subs):
+            c.text(x + 16, ny + 74 + j * 17, s_, 12.5, MUTED)
+        if i < len(stations) - 1:
+            c.arrow(x + nw + 4, ny + nh / 2, x + nw + gap - 4, ny + nh / 2, STROKE)
+    labels = [("SHA-256", "input digest"), ("rewrites and", "fact premises"), ("three files,", "nothing else"), ("exit 0", "per transaction"), ("one verified IR,", "two native profiles")]
+    for i, (a, b) in enumerate(labels):
+        cx = nx + i * (nw + gap) + nw + gap / 2
+        c.text(cx, ny + nh + 22, a, 12, GRAY, "normal", SANS, "middle")
+        c.text(cx, ny + nh + 38, b, 12, GRAY, "normal", SANS, "middle")
+    # registry digest into producer and checker
+    for tx in (nx + 1 * (nw + gap) + nw / 2, nx + 3 * (nw + gap) + nw / 2):
+        sx = 700 if tx < 800 else 900
+        c.raw(f'<path d="M{sx} {ly + lh} C{sx} {ly + lh + 30} {tx} {ny - 34} {tx} {ny - 4}" fill="none" stroke="{GREEN}" stroke-width="1.4" stroke-dasharray="6 4" marker-end="url(#arr-{GREEN[1:]})"/>')
+    c.text(950, ny - 14, "same registry digest, compiled into producer and checker", 12.5, GREEN, "normal", SANS, "start")
+    # loop back and reject branch
+    x2 = nx + 1 * (nw + gap) + nw / 2
+    x4 = nx + 3 * (nw + gap) + 60
+    c.raw(f'<path d="M{x4} {ny + nh} C{x4} {ny + nh + 100} {x2 + 40} {ny + nh + 100} {x2} {ny + nh + 6}" fill="none" stroke="{STROKE}" stroke-width="1.6" marker-end="url(#arr-{STROKE[1:]})"/>')
+    c.text(620, ny + nh + 126, "exit 0 and changed → next transaction (≤ 8); unchanged → terminal no-op proof, then publish", 13, MUTED, "normal", SANS, "middle")
+    rx, rw = 900, 470
+    c.arrow(nx + 3 * (nw + gap) + 170, ny + nh + 4, nx + 3 * (nw + gap) + 170, ny + nh + 60, RED, 1.6)
+    c.rect(rx, ny + nh + 62, rw, 58, PANEL2, RED, 10, 1.4)
+    c.text(rx + rw / 2, ny + nh + 86, "exit 2 malformed · exit 3 invalid · timeout · crash", 13.5, RED, "600", SANS, "middle")
+    c.text(rx + rw / 2, ny + nh + 106, "whole chain REJECTED, staged state discarded, nothing emitted", 12.5, MUTED, "normal", SANS, "middle")
+
+    # trust layers
+    by0 = 536
+    bands = [
+        ("PROVED IN LEAN", ["offline, per registry revision;", "kernel-only except nine", "enumerated analysis rows"], GREEN, [
+            ("55 rule equalities", ["RuleCovered: every width", "environment, stated facts/guards"]),
+            ("known-bits analysis", ["transfers, meet/join, covers,", "known-zero; add/sub/mul/icmp SAT"]),
+            ("audit receipt", ["axioms per theorem, Lean 4.32.2,", "registry digest 1a539160…"]),
+        ]),
+        ("REPLAYED PER COMPILE", ["independent Rust checker,", "separate process, pinned", "binary, closed exit classes"], BLUE, [
+            ("every union", ["is an admitted rule firing", "or a congruence"]),
+            ("facts recomputed", ["eligibility, taint, seed facts", "re-derived; premises checked"]),
+            ("whole-module splice", ["after.evo must equal the", "rebuilt module byte for byte"]),
+            ("chain and identity", ["adjacent digests, trusted", "SHA-256, 45 legal state tuples"]),
+        ]),
+        ("TESTED, NOT PROVED", ["differential and corpus", "evidence; the trusted", "implementation base"], AMBER, [
+            ("Rust ↔ Lean model", ["1,325,045 differential vectors", "agree (evidence, not proof)"]),
+            ("parser · lowering · facts", ["21,000-program scalar and MIR", "gates, 0 mismatches"]),
+            ("backend · allocation · ABI", ["384/384 native corpora, Linux", "and Darwin; kernel boot"]),
+        ]),
+    ]
+    bh, bgap = 92, 14
+    for bi, (title, subs, col, items) in enumerate(bands):
+        y = by0 + bi * (bh + bgap)
+        c.rect(70, y, 1460, bh, PANEL2, col, 10, 1.4)
+        c.text(90, y + 28, title, 14, col, "700", SANS, "start", 1.0, 0.6)
+        for j, s_ in enumerate(subs):
+            c.text(90, y + 49 + j * 15, s_, 11.5, MUTED)
+        iw = 290
+        for k, (name, lines_) in enumerate(items):
+            ix = 320 + k * (iw + 18)
+            c.rect(ix, y + 12, iw, bh - 24, PANEL, STROKE, 7, 1.0)
+            c.text(ix + 14, y + 35, name, 14, TEXT, "600")
+            for j, s_ in enumerate(lines_):
+                c.text(ix + 14, y + 54 + j * 15, s_, 11.5, MUTED)
+    # arrows between layers
+    c.raw(f'<path d="M1390 {by0 + bh} V{by0 + bh + bgap - 4}" stroke="{GREEN}" stroke-width="1.4" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-{GREEN[1:]})"/>')
+    c.raw(f'<path d="M445 {by0 + bh} V{by0 + bh + bgap - 4}" stroke="{GREEN}" stroke-width="1.4" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-{GREEN[1:]})"/>')
+    c.raw(f'<path d="M445 {by0 + 2 * (bh + bgap)} V{by0 + 2 * (bh + bgap) - bgap + 4}" stroke="{AMBER}" stroke-width="1.4" fill="none" marker-end="url(#arr-{AMBER[1:]})"/>')
+
+    # numbers
+    sy = 868
+    c.text(70, sy - 8, "Numbers on 2026-10-01, from receipts", 15, TEXT, "600")
+    stats = [
+        ("55 / 55", "rules proved in Lean 4, kernel-only; 9 analysis rows SAT-backed", GREEN),
+        ("8,854 + 138", "certificates replayed by the independent checker, 0 rejections", BLUE),
+        ("1,024", "policy evaluations: best policy beats the default by at most 4 bytes", CYAN),
+        ("−0.8 … −2.4 %", "object .text on changed zlib, zstd, cJSON units; latency not measurable", GREEN),
+        ("NOT_ACCEPTED", "G2 whole-kernel, Q2 versus GCC, Q3 AI improvement; AI campaign not admitted", RED),
+    ]
+    sw_ = (1460 - 4 * 16) / 5
+    for i, (big, small, col) in enumerate(stats):
+        sx = 70 + i * (sw_ + 16)
+        c.rect(sx, sy + 4, sw_, 100, PANEL2)
+        c.text(sx + 16, sy + 40, big, 24, col, "700", MONO)
+        for j, s_ in enumerate(wrap(small, 34)[:3]):
+            c.text(sx + 16, sy + 62 + j * 15, s_, 12, MUTED)
+    c.text(70, 992, "docs/framing-draft.md · docs/notebook/eqsat-*.md · tests/contracts/eqsat-*.json · tests/fixtures/eqsat-chains/verified-chain", 12.5, MUTED, "normal", MONO)
+    c.text(1530, 992, "the claim ceiling is the weakest layer a result depends on; this is not a verified compiler", 12.5, MUTED, "normal", SANS, "end")
+    c.write("evocc-eqsat")
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     concept()
     overview()
     ladder()
     milestones()
+    eqsat()
     print("rendered:", ", ".join(p.name for p in sorted(OUT.iterdir()) if p.suffix in (".svg", ".png")))
