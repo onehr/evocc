@@ -5,7 +5,7 @@
 //! MachTerm has associated Reg plus uses, operand_slots, edges and is_exit.
 //! operand_slots is the existing mutable occurrence traversal, not a second
 //! interpretation of semantic reads. In particular, term operand_slots means
-//! linscan::term_slots (coalescing), not "rewrite every semantic use".
+//! the former linscan::term_slots (coalescing), not "rewrite every semantic use".
 //! No instruction selection, interpreter, allocation or ABI change is admitted.
 
 use std::collections::BTreeSet;

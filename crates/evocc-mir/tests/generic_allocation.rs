@@ -1,8 +1,10 @@
 //! N03a step 2c: the actual allocator and independent verifier on a small ISA.
 //! No target interpreter, allocation callback or native toolchain is used here.
 
+use std::collections::BTreeMap;
+
 use evocc_mir::generic::allocation::{
-    allocate, AllocClass, AllocInst, AllocTerm, AllocationTarget, ConstraintBody,
+    allocate, AllocClass, AllocInst, AllocTerm, Allocated, AllocationTarget, ConstraintBody,
     ConstraintOperand, ConstraintValue, SpillKind, SpillView,
 };
 use evocc_mir::generic::allocverify::verify_allocation;
@@ -548,6 +550,55 @@ fn single(args: Vec<Reg>, insts: Vec<Inst>, values: Vec<Reg>) -> Function {
     }
 }
 
+/// A bounded test-local trace over physical registers and spill words. This
+/// checks actual transported values, separately from the verifier's dataflow;
+/// it is not another compilation target or a replacement project interpreter.
+fn straight_result(
+    allocated: &Allocated<Inst, Term, Class>,
+    mut registers: BTreeMap<u8, u128>,
+) -> Vec<u128> {
+    assert_eq!(allocated.blocks.len(), 1);
+    let number = |reg: Reg| allocated.assignment[&reg.id];
+    let mut slots = BTreeMap::<u32, u64>::new();
+    for inst in &allocated.blocks[0].insts {
+        match inst {
+            Inst::Value(dst, value) => {
+                registers.insert(number(*dst), u128::from(*value));
+            }
+            Inst::Copy(dst, src) => {
+                let value = registers[&number(*src)];
+                registers.insert(number(*dst), value);
+            }
+            Inst::Add(dst, lhs, rhs) => {
+                let value = registers[&number(*lhs)].wrapping_add(registers[&number(*rhs)]);
+                let value = if dst.class == Class::Pair {
+                    value
+                } else {
+                    u128::from(value as u64)
+                };
+                registers.insert(number(*dst), value);
+            }
+            Inst::Save(src, slot) => {
+                let value = registers[&number(*src)];
+                for word in 0..src.class.spill_words() {
+                    slots.insert(slot + word, (value >> (word * 64)) as u64);
+                }
+            }
+            Inst::Restore(dst, slot) => {
+                let value = (0..dst.class.spill_words()).fold(0_u128, |value, word| {
+                    value | (u128::from(slots[&(slot + word)]) << (word * 64))
+                });
+                registers.insert(number(*dst), value);
+            }
+            other => panic!("outside this straight-line transport fixture: {other:?}"),
+        }
+    }
+    let Term::Return(values) = &allocated.blocks[0].term else {
+        panic!("straight-line fixture must return");
+    };
+    values.iter().map(|reg| registers[&number(*reg)]).collect()
+}
+
 #[test]
 fn ordered_pools_and_boundary_copies_are_the_actual_shared_algorithm() {
     let source = single(
@@ -561,10 +612,44 @@ fn ordered_pools_and_boundary_copies_are_the_actual_shared_algorithm() {
     verify_allocation(&TinyTarget, &first).unwrap();
     assert_eq!(first.spilled, 0);
     assert_eq!(first.frame_slots, 0);
-    assert_eq!(first.assignment[&0], 0);
+    let incoming = first.blocks[0]
+        .insts
+        .iter()
+        .find_map(|inst| {
+            if let Inst::Add(_, lhs, _) = inst {
+                Some(*lhs)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    assert_eq!(first.assignment[&incoming.id], 0);
     assert_eq!(first.assignment[&1], 1);
     assert_eq!(first.parameters, 1);
     assert!(first.blocks.iter().all(|block| block.args.is_empty()));
+    assert_eq!(straight_result(&first, BTreeMap::from([(0, 5)])), vec![8]);
+}
+
+#[test]
+fn indirect_result_uses_the_target_boundary_register_not_an_argument_slot() {
+    let source = single(
+        vec![r(0), r(1)],
+        vec![Inst::IndirectResult, Inst::Add(r(2), r(0), r(1))],
+        vec![r(2)],
+    );
+    let allocated = allocate(&TinyTarget, &source).unwrap();
+    verify_allocation(&TinyTarget, &allocated).unwrap();
+    assert!(allocated.indirect_result);
+    assert_eq!(allocated.parameters, 2);
+    assert!(allocated.assignment.values().any(|number| *number == 7));
+
+    let mut corrupted = allocated.clone();
+    for number in corrupted.assignment.values_mut() {
+        if *number == 7 {
+            *number = 6;
+        }
+    }
+    assert!(verify_allocation(&TinyTarget, &corrupted).is_err());
 }
 
 #[test]
@@ -591,6 +676,7 @@ fn pressure_spills_and_a_removed_reload_is_independently_rejected() {
         .iter()
         .flat_map(|b| &b.insts)
         .any(|i| matches!(i, Inst::Restore(..))));
+    assert_eq!(straight_result(&allocated, BTreeMap::new()), vec![45]);
     let mut missing = allocated.clone();
     for block in &mut missing.blocks {
         block.insts.retain(|i| !matches!(i, Inst::Restore(..)));

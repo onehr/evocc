@@ -2362,9 +2362,16 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     synthetic-ISA SSA tests first failed on the absent shared containers and
     algorithm interface. Step 2b now moves the actual forwarding, critical-edge,
     parallel-copy and DCE algorithms into generic code, preserving public aliases
-    and debug text. Its focused Rust run passes 65/65 and Python 33/33; allocation,
-    independent verification and step-2 object comparisons are still pending.
-    Instruction/ABI extraction (steps 2–3) and final full gate remain open.
+    and debug text. Its focused Rust run passes 65/65 and Python 33/33.
+    Step 2c now shares the actual boundary pinning, linear scan, spill placement,
+    slot compaction and independent allocation verifier; generated operand views
+    preserve target payloads and the existing ordering. Ten synthetic-allocation
+    tests include physical-value traces, pressure, call preservation, constraints
+    and corrupted assignments. Focused Rust passes 75/75 and Python 33/33;
+    focused Clippy, formatting and regeneration pass after the recorded lint
+    repair (named result views and generated constructor shorthand).
+    ABI/frame extraction, final complete-object comparisons and the full
+    workspace gate remain open; these focused results do not close N03a.
 
   - [ ] **N03b — TU-local inlining** — `LATER`, P3.
     Size-aware inliner at EvoIR level for TU-local callees, as a validated

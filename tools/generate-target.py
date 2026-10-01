@@ -273,6 +273,8 @@ def render_mir(description: Description) -> str:
     out.append("\n")
     for name, members in sets.items():
         out.append(array(name, "u8", members))
+    out.append(array("GPR_ALLOCATABLE", "u8", (*sets["CALLER_SAVED"], *sets["CALLEE_SAVED"])))
+    out.append(array("CALL_CLOBBERS", "u8", (*sets["GPR_CALL_CLOBBERS"], *sets["SIMD_CALL_CLOBBERS"])))
     simd = description.banks["simd"]
     out.append(array("SIMD_LOW64_PRESERVED_INDICES", "u8", (number - simd.first for number in sets["SIMD_LOW64_PRESERVED"])))
     out.append(constant("SIMD_BASE", "u8", str(simd.first)))
@@ -351,10 +353,10 @@ INSTRUCTION_SHAPES = {
     "Blr": "target:r args:v results:v",
     "Ldp": "rt1:r rt2:r base:r",
     "Stp": "rt1:r rt2:r base:r",
-    "SpillStore": "src:r",
-    "SpillReload": "dst:r",
-    "IncomingArg": "dst:r",
-    "OutgoingArg": "src:r",
+    "SpillStore": "src:r slot:s",
+    "SpillReload": "dst:r slot:s",
+    "IncomingArg": "dst:r slot:s",
+    "OutgoingArg": "src:r slot:s",
     "MemCopy": "dst:r src:r",
     "FrameSlot": "dst:r",
     "StackAlloc": "dst:r size:r",
@@ -375,8 +377,8 @@ TERMINATOR_SHAPES = {
     "Brk": "",
     "AsmGoto": "body:a labels:e fallthrough:t fallthrough_args:v",
 }
-INST_COLUMNS = ("defs", "uses", "rewrite_defs", "rewrite_uses", "flags", "discardable", "call", "copy", "fixed")
-TERM_COLUMNS = ("uses", "rewrite_uses", "edges", "exit", "indirect", "forwarding", "jump")
+INST_COLUMNS = ("defs", "uses", "rewrite_defs", "rewrite_uses", "flags", "discardable", "call", "copy", "fixed", "call_operands", "assembly", "exclusive", "indirect_result", "spill", "incoming", "outgoing")
+TERM_COLUMNS = ("uses", "rewrite_uses", "edges", "exit", "indirect", "forwarding", "jump", "assembly", "returns", "spill_bridge")
 ASSEMBLY_FILTERS = {
     "reg": None,
     "nonmemory": "!matches!(operand.constraint, AsmConstraint::Memory { .. })",
@@ -495,7 +497,7 @@ def validate_instructions(description: InstructionDescription):
             for key in ("defs", "uses", "rewrite_defs", "rewrite_uses"):
                 if key in row:
                     validate_operand(row[key], shape)
-            for key in ("discardable", "call", "exit", "forwarding"):
+            for key in ("discardable", "call", "exit", "forwarding", "indirect_result", "spill_bridge"):
                 if key in row and row[key] not in ("true", "false"):
                     raise TargetDescriptionError(f"invalid {key} fact: {name}")
             if "flags" in row and row["flags"] not in ("true", "false"):
@@ -509,6 +511,19 @@ def validate_instructions(description: InstructionDescription):
             if "indirect" in row and row["indirect"] != "-":
                 if shape.get(row["indirect"]) != "r":
                     raise TargetDescriptionError(f"invalid indirect target: {name}")
+            for key, kind in (("assembly", "a"), ("exclusive", "r"), ("returns", "v")):
+                if key in row and row[key] != "-" and shape.get(row[key]) != kind:
+                    raise TargetDescriptionError(f"invalid {key} view: {name}")
+            for key, kinds in (("call_operands", ("v", "v")), ("incoming", ("r", "s")), ("outgoing", ("r", "s"))):
+                if key in row and row[key] != "-":
+                    fields = row[key].split(":")
+                    if len(fields) != 2 or tuple(shape.get(field) for field in fields) != kinds:
+                        raise TargetDescriptionError(f"invalid {key} view: {name}")
+            if "spill" in row and row["spill"] != "-":
+                fields = row["spill"].split(":")
+                if (len(fields) != 3 or fields[0] not in ("store", "reload")
+                        or shape.get(fields[1]) != "r" or shape.get(fields[2]) != "s"):
+                    raise TargetDescriptionError(f"invalid spill view: {name}")
             for key, kinds in (("copy", ("r", "r")), ("jump", ("t", "v"))):
                 if key in row and row[key] != "-":
                     fields = row[key].split(":")
@@ -724,10 +739,64 @@ def render_ssa(description: InstructionDescription) -> str:
     return "".join(out)
 
 
+def render_allocation_view(name: str, column: str, rows: dict, result: str, expression, mutable: bool = False, selected_fields=None) -> str:
+    receiver = "&mut self" if mutable else "&self"
+    out = [f"    fn {name}({receiver}) -> Option<{result}> {{\n        match self {{\n"]
+    for family, row in rows.items():
+        selector = row[column]
+        parts = selector.split(":") if selector != "-" else []
+        fields = set(selected_fields(parts) if selected_fields is not None and parts
+                     else parts[1:] if column == "spill" else parts)
+        pattern = inst_pattern(family, fields)
+        value = f"Some({expression(parts)})" if parts else "None"
+        out.append(f"            {pattern} => {value},\n")
+    out.append("        }\n    }\n")
+    return "".join(out)
+
+
+def render_allocation(description: InstructionDescription) -> str:
+    rows = description.instructions
+    out = ["\n#[rustfmt::skip]\nimpl AllocInst for MInst {\n    type Body = AsmBody;\n\n"]
+    out.append(render_allocation_view("copy_operands", "copy", rows, "(Self::Reg, Self::Reg)", lambda p: f"(*{p[0]}, *{p[1]})"))
+    out.append(render_allocation_view("call_operands", "call_operands", rows, "CallOperands<'_, Self::Reg>", lambda p: f"({p[0]}.as_slice(), {p[1]}.as_slice())"))
+    out.append(render_allocation_view("call_operands_mut", "call_operands", rows, "CallOperandsMut<'_, Self::Reg>", lambda p: f"({p[0]}, {p[1]})", True))
+    out.append(render_allocation_view("assembly", "assembly", rows, "&Self::Body", lambda p: p[0]))
+    out.append(render_allocation_view("assembly_mut", "assembly", rows, "&mut Self::Body", lambda p: p[0], True))
+    out.append(render_bool_method("is_indirect_result", "indirect_result", rows))
+    out.append(render_allocation_view("exclusive_result", "exclusive", rows, "Self::Reg", lambda p: "*" + p[0]))
+    out.append(render_allocation_view("spill", "spill", rows, "SpillView<Self::Reg>", lambda p: f"SpillView {{ kind: SpillKind::{p[0].title()}, reg: *{p[1]}, slot: *{p[2]} }}"))
+    out.append(render_allocation_view("spill_slot_mut", "spill", rows, "&mut u32", lambda p: p[2], True,
+                                      selected_fields=lambda p: (p[2],)))
+    for kind, name, value in (("store", "spill_store", "src"), ("reload", "spill_reload", "dst")):
+        family, row = next((family, row) for family, row in rows.items() if row["spill"].startswith(kind + ":"))
+        _, reg, slot = row["spill"].split(":")
+        members = ", ".join(field if field == source else f"{field}: {source}"
+                            for field, source in ((reg, value), (slot, "slot")))
+        out.append(f"    fn {name}({value}: Self::Reg, slot: u32) -> Self {{\n        Self::{family} {{ {members} }}\n    }}\n")
+    out.append(render_constructor("incoming_arg", "incoming", rows, "dst: Self::Reg, slot: u32", ("dst", "slot")))
+    out.append(render_constructor("outgoing_arg", "outgoing", rows, "src: Self::Reg, slot: u32", ("src", "slot")))
+    out.append("}\n\n#[rustfmt::skip]\nimpl AllocTerm for MTerm {\n    type Body = AsmBody;\n\n")
+    rows = description.terminators
+    out.append(render_allocation_view("return_values", "returns", rows, "&[Self::Reg]", lambda p: p[0] + ".as_slice()"))
+    out.append(render_allocation_view("return_values_mut", "returns", rows, "&mut Vec<Self::Reg>", lambda p: p[0], True))
+    out.append(render_allocation_view("assembly", "assembly", rows, "&Self::Body", lambda p: p[0]))
+    out.append(render_allocation_view("assembly_mut", "assembly", rows, "&mut Self::Body", lambda p: p[0], True))
+    out.append("    fn defs(&self) -> Vec<Self::Reg> {\n        match self {\n")
+    for family, row in rows.items():
+        fields = {row["assembly"]} if row["assembly"] != "-" else set()
+        expression = f"assembly_defs({row['assembly']})" if fields else "Vec::new()"
+        out.append(f"            {inst_pattern(family, fields)} => {expression},\n")
+    out.append("        }\n    }\n")
+    out.append(render_bool_method("allows_edge_spill_bridge", "spill_bridge", rows))
+    out.append("}\n")
+    return "".join(out)
+
+
 def render_instructions(description: InstructionDescription) -> str:
     out = [
         "// Generated by tools/generate-target.py; do not edit.\n",
         f"// Source: targets/aarch64/insts; sha256 {description.digest}.\n\n",
+        "use crate::generic::allocation::{\n    AllocInst, AllocTerm, CallOperands, CallOperandsMut, SpillKind, SpillView,\n};\n",
         "use crate::generic::machine::{MachInst, MachTerm};\n",
         "use crate::generic::ssa::{SsaInst, SsaTerm};\n",
         "use crate::{\n    AsmBody, AsmClobber, AsmConstraint, AsmDirection, AsmOperand, AsmValue, MInst, MTerm, VReg,\n};\n\n",
@@ -787,6 +856,7 @@ def render_instructions(description: InstructionDescription) -> str:
     expression = "matches!(term, " + " | ".join(exits) + ")" if exits else "false"
     out.append(f"\n#[rustfmt::skip]\npub const fn is_exit(term: &MTerm) -> bool {{\n    {expression}\n}}\n")
     out.append(render_ssa(description))
+    out.append(render_allocation(description))
     return "".join(out)
 
 def main() -> int:

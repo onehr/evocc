@@ -3,10 +3,10 @@
 Revision 1 — 2026-10-01. **Implementation is staged.** N03a now has canonical
 `targets/aarch64/regfile` and `insts` components, their deterministic generator
 and shared register/operand-fact consumers. Step-1 cross-revision objects are
-byte-identical; generated operand facts and generic SSA destruction have focused
-tests, not complete generic allocation acceptance. The remaining N03a
-allocator/verifier/ABI extraction, final object
-comparisons and full workspace gate remain open. N07 is still design work
+byte-identical; generated operand facts, generic SSA destruction, allocation
+and its independent verifier have focused tests, not final acceptance. The
+remaining N03a ABI/frame extraction, complete-object comparisons and full
+workspace gate remain open. N07 is still design work
 under the [codegen quality plan](codegen-quality-plan.md).
 [EvoMIR](evomir-spec.md)
 stays the normative specification of the machine IR; until a fact has been
