@@ -1,0 +1,173 @@
+{
+  "schema": "evocc.codegen.plan.v1",
+  "package": "N03a",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "date": "2026-10-02",
+  "inspected_commit": "a58d28aa95ebd22436be5b06eb0a11b55d3d57e7",
+  "authority": [
+    "docs/target-spec.md: sections 2-4, migration steps 1-3, Appendix A",
+    "docs/codegen-quality-plan.md: sections 4a, 7, 8 and 10",
+    "docs/evomir-spec.md: existing machine, allocation, frame and ABI semantics"
+  ],
+  "objective": "Extract the existing backend into generic machine algorithms and one AArch64 implementation, without changing any selected instruction, allocation decision, observable refusal or emitted object byte.",
+  "prerequisites": [
+    "Owner reviews and commits this plan before any described baseline capture or implementation.",
+    "N01 supplies the six-unit ranking; N02 and N05 acceptance close before N03a lands. This draft is not evidence that those packages have closed.",
+    "Capture the current pre-migration backend, after first-wave integration, using the existing receipt fields for source revision and tool identities. Historical S5 objects are inputs to population selection, not substitutes for a fresh baseline.",
+    "The backend lane is exclusive: no N03b-N03f backend optimization changes are mixed into this refactor. Root serializes Cargo and the native/container lane."
+  ],
+  "inspection": {
+    "registers": "linscan.rs owns allocatable pools and scratch IDs; allocverify.rs separately owns call clobbers. The GPR allocation pool excludes 16/17 while the call-clobber set includes them: these are different facts, not a discrepancy to normalize.",
+    "operands": "lib.rs has inst_defs/inst_uses/term_uses/term_edges/writes_flags; linscan.rs has operand_slots/term_slots. Atomic direction, optional RMW inputs, call vectors and assembly constraints require field-dependent descriptors, not only static arity.",
+    "assembly": "AsmBody::read includes read-write outputs; operand_slots treats their mutable occurrence as a definition. Preserve the distinction between semantic roles and once-per-occurrence rewriting until a separate semantic defect is demonstrated.",
+    "out_of_ssa": "regalloc.rs already performs parameter forwarding, critical-edge splitting, indirect union copies, cycle breaking and baseline DCE. Preserve their order and the exact discardable_computation set.",
+    "allocation": "linscan.rs pin_boundaries, scan, spill insertion and frame-slot compaction currently inspect concrete MInst/MTerm. Preserve numbering, iteration order, tie breaks, fresh-register ranges and retry limits.",
+    "verification": "allocverify.rs derives its own physical-register dataflow and constraints. Sharing generated target facts does not authorize sharing allocator intervals, pins, liveness conclusions or spill decisions.",
+    "abi_frame": "ArgumentCursor in linscan.rs, classification in lower.rs and frame_of in emit.rs split the existing ABI. The frame printer, condition codes and symbol/section syntax remain ISA-specific; frame layout and placement algorithms become generic."
+  },
+  "interfaces": {
+    "generic": "Introduce generic block/function/allocated containers, VReg and register-class properties; MachInst exposes ordered semantic operands, occurrence rewriting, constraints, move/call/frame access views and target constructors needed by the existing algorithms. A corresponding terminator interface exposes uses, edge arguments, retargeting, indirect targets and flag-consumer adjacency. No generic opcode enum is introduced.",
+    "facts": "One descriptor supplies immutable reads/definitions and mutable occurrence traversal, with explicit read-write and rewrite roles. Dynamic operand lists remain data, not opaque callbacks that reimplement the allocator in the ISA layer.",
+    "abi": "AbiSpec supplies generated register/stack facts and the existing per-OS classification. The generic boundary/frame driver consumes locations and layout requirements. There remains one AArch64 aggregate/HFA/HVA/varargs classifier, not a second generic classifier.",
+    "compatibility": "Keep current public MInst/MTerm/MFunction/Allocated aliases or thin wrappers and allocate_for(Target, ...), out_of_ssa, verify_allocation and native compile APIs. Target, AArch64 enums, physical spelling and assembly printers are confined to the ISA adapter; generic modules cannot import them.",
+    "independence": "The generic verifier reads the same generated descriptors as allocation but retains its separate meet/transfer state analysis and refusal checks. The existing MIR interpreter remains unchanged."
+  },
+  "steps": [
+    {
+      "step": 1,
+      "name": "Register description and generated facts",
+      "red_first": "Add crates/evocc-mir/tests/target_regfile.rs: require targets/aarch64/regfile and its checked-in generated table, then compare exact ordered pools, aliases, reserved registers and separate call-clobber sets with the frozen current values. The first run fails because the description/generated interface is absent; it must not fail because a compiler/tool is unavailable.",
+      "implementation": [
+        "Fix a minimal canonical line grammar in the RED; each input carries a digest of its canonical payload excluding the digest line. Generate checked-in Rust under src/isa/aarch64/ with a generated-file header; no runtime parser or new dependency.",
+        "Represent register identities, width aliases, allocatable pools, reserved scratch, partial preservation, fixed-only bindings and flags explicitly. ABI files reference named sets rather than copying their memberships.",
+        "Replace linscan/verifier/emitter register facts with generated references; preserve existing pool ordering, numeric IDs and physical spellings. Keep 16/17 and vector 30/31 unavailable to ordinary allocation, and platform register 18 explicitly reserved.",
+        "Add only the generic register/container scaffolding consumed by this extraction. Do not change allocator heuristics or broaden the available SIMD callee-save pool."
+      ],
+      "focused_reds": [
+        "Duplicate register/view IDs, inconsistent alias bank and allocatable/reserved overlap reject during generation.",
+        "Call-clobbered-but-not-allocatable registers remain distinct; corrupt assignment to a reserved scratch register is rejected.",
+        "Regeneration produces no diff; the first migrated generic module has no ISA names."
+      ],
+      "exit": "Fresh six-unit object twins equal the pre-migration baseline; focused allocation/native tests retain their verdicts."
+    },
+    {
+      "step": 2,
+      "name": "Instruction descriptors and generic machine algorithms",
+      "red_first": "Add ordered operand/constraint conformance vectors for every current instruction and terminator family, including read-write asm, atomic direction, optional RMW operands and indirect calls. A synthetic instruction type must instantiate the same out-of-SSA, allocator and independent verifier without importing AArch64 types.",
+      "implementation": [
+        "Add targets/aarch64/insts and generate the descriptor dispatch for semantic uses/defs, mutable occurrence slots, constraints, call/flags/expansion clobbers, move/frame views and exact current DCE discardability.",
+        "Move out-of-SSA, linear scan, spill insertion and allocation verification into generic modules mechanically. Keep critical/indirect edges, simultaneous copies, spill widths, constraints and selected-edge behavior unchanged.",
+        "Per-ISA constructors emit the current move, spill, argument and branch forms; descriptor implementations supply facts only. The generic code must contain the actual algorithms, not merely call an AArch64 allocation callback.",
+        "Keep selection, immediate legality, FP/atomic expansion and assembly printing in the AArch64 module. Do not rewrite lower_inst or adjust any instruction-selection rule."
+      ],
+      "focused_reds": [
+        "Operand order and write traversal are stable for read-write, tied, fixed and early-clobber operands; one occurrence is not rewritten twice.",
+        "Call clobbers and alias views invalidate the same verifier state as before; forged assignments and missing reloads retain their rejection verdicts.",
+        "Parallel-copy cycles, critical edges, computed self-edges and live indirect targets preserve the existing transfer sequence.",
+        "Existing baseline DCE and private-slot treatment do not acquire new discardable operations."
+      ],
+      "exit": "Synthetic out-of-SSA/allocation/verifier cases pass; all existing allocation-verifier cases have unchanged verdicts; six-unit and native-corpus object identities hold."
+    },
+    {
+      "step": 3,
+      "name": "ABI facts, frame driver and final boundary",
+      "red_first": "Run the shared boundary/frame driver on a toy ABI with different register counts, register IDs and stack alignment; add current Darwin/Linux placement snapshots before extracting their tables.",
+      "implementation": [
+        "Add targets/aarch64/abi-darwin, abi-linux and profile-kernel. Extract current argument/results, stack and variadic placement, preservation and profile facts; generated values reference the regfile sets.",
+        "Move shared cursor/frame/call bookkeeping to AbiSpec-driven algorithms. Preserve current private-object reuse, frame-slot order, outgoing area, alignment, save areas, frame-pointer policy and all refusal boundaries.",
+        "Retain AArch64 prologue/epilogue instructions, symbol/section syntax, relocation, TLS and system-register guard printing in the per-ISA implementation.",
+        "Finish the module-boundary test and regeneration check in the existing workspace gate. Unsupported or unmeasured Darwin ABI paths stay unsupported/unmeasured; do not correct ABI semantics inside extraction."
+      ],
+      "focused_reds": [
+        "Independent integer/vector argument cursors share one stack cursor; aggregate exhaustion is not partially allocated.",
+        "Mixed FP/vector/HFA/HVA and variadic placement matches existing probes; live full-width vectors retain their current call-preservation policy.",
+        "Dynamic stack, fixed objects, spills and canary/profile options preserve frame offsets and emitted sequences.",
+        "Every generic source rejects ISA imports/names through the boundary test; per-ISA handwritten code has no duplicated migrated register, operand or ABI tables."
+      ],
+      "exit": "All byte identities, actual native corpus counts, ABI/verifier tests, regeneration and full-workspace gate pass."
+    }
+  ],
+  "synthetic_isa": {
+    "scope": "Test-only local enum with approximately twelve forms and two register classes; never a CLI target or alternate compiler/interpreter.",
+    "forms": ["constant", "copy", "binary", "load", "store", "spill", "reload", "call", "constrained", "jump", "conditional", "return"],
+    "abi": "Use small non-AArch64 register memberships, unequal per-class argument counts and toy stack alignment to expose accidental fixed constants. Define explicit reserved scratch, alias and call-clobber facts.",
+    "coverage": [
+      "One shared generic implementation handles straight-line allocation, pressure/spill/reload and live-across-call values.",
+      "Parallel-copy cycle and critical-edge tests exercise out-of-SSA; a constrained form covers fixed, tied and early-clobber roles.",
+      "Frame/argument tests force both register-bank exhaustion and stack alignment.",
+      "Independent verifier rejects corrupted assignments, alias collisions and unpreserved live values; test-local expected traces check semantics without changing project interpreters."
+    ]
+  },
+  "byte_identity": {
+    "six_units": [
+      "tests/fixtures/eqsat-performance/integer-mix.c",
+      ".build/ladder/zlib/zlib-1.3.2/deflate.c",
+      ".build/ladder/zlib/zlib-1.3.2/inflate.c",
+      ".build/ladder/zstd/zstd-1.5.7/lib/compress/zstd_compress.c",
+      ".build/ladder/zstd/zstd-1.5.7/lib/decompress/zstd_decompress.c",
+      ".build/ladder/cjson/cJSON-1.7.19/cJSON.c"
+    ],
+    "input_authority": "Reuse the exact sources, headers, options and target tools from tests/contracts/eqsat-size-references-20261001.json and the current six-unit N05 capture; preserve A/B and checked/unchecked identities rather than substituting a new workload. Certified g0 results remain a separately labeled regression control.",
+    "native_population": "Use the existing Day 5 defined scalar generator (256) plus Day 7 defined memory generator (128): all 384 identities on Darwin and all 384 on sealed Linux, not a newly sampled corpus. Reuse section9_c_corpus.rs and section8_linux_profile.rs, including the explicitly requested ignored whole-corpus Linux test.",
+    "procedure": [
+      "Before changing backend code, build each baseline object twice with the same source/IR, paths, options and assembler. Record existing S1 metrics and byte hashes; require baseline twin equality.",
+      "After each extraction, build corresponding candidate objects twice under the same inputs/tools and require candidate twin equality plus full-object equality against the retained baseline. Equal .text size, equal disassembly or two identical candidate builds alone are insufficient.",
+      "Use existing S1 require_identical_objects/inspect_object_size and existing native corpus execution paths. Add only a minimal pre-link object comparison hook to the corpus tests, not another benchmark runner or identity framework.",
+      "Record allocator verdicts and actual corpus executed/passed/refused counts. A test that returns early because the host toolchain or container is unavailable is NOT_RUN, never native acceptance.",
+      "Retain baseline objects only until their cross-revision comparisons close, then remove intermediates and keep compact numeric/hash receipts. Stop on any byte mismatch and isolate the first changed stage; do not normalize away metadata or claim a hidden size gain."
+    ],
+    "bounds": "Exactly zero changed object bytes and zero changed allocation-verifier verdicts. No numerical tolerance, latency objective or performance-improvement claim. Existing compile-resource observations may be recorded, but this plan does not invent a new speed gate."
+  },
+  "ownership": {
+    "backend_owner": [
+      "crates/evocc-mir/src/generic/ and src/isa/aarch64/ (new)",
+      "crates/evocc-mir/src/lib.rs, linscan.rs, regalloc.rs, allocverify.rs, lower.rs, emit.rs, native.rs and compatibility surfaces, one serial owner",
+      "crates/evocc-mir/tests/ target, synthetic and existing native-corpus integration",
+      "targets/aarch64/regfile, insts, abi-darwin, abi-linux, profile-kernel (new)",
+      "tools/generate-target.py (new deterministic generator, not an audit runner)"
+    ],
+    "coordinated_measurement_owner": "Only minimal reuse/extension of tools/ladder/eqsat_size.py and existing native-corpus object capture; do not race N01/N05 edits. Backend owner retains ownership of the Rust corpus hook.",
+    "root_owner": "Plan approval/commit, serialized Cargo and container execution, existing gate integration, compact final receipt/notebook/TODO and disk accounting.",
+    "untouched": [
+      "C-HIR, EvoIR and MIR interpreter semantics",
+      "P0/g0 registries, proof format/checker and Lean proofs",
+      "Driver CLI and N04 diagnostics",
+      "N07 encodings, patterns and imported ISA semantics",
+      "Optimization policy, cost weights, DCE eligibility and backend heuristics"
+    ]
+  },
+  "validation": {
+    "focused_existing": [
+      "section7_out_of_ssa",
+      "section7_linear_scan",
+      "section7_allocation_verifier",
+      "section6_variadic_and_assembly",
+      "section6_records",
+      "section9_calling_convention_probe",
+      "section9_native_differential",
+      "floating, strict_floating and quad_floating"
+    ],
+    "acceptance": [
+      "Generated files regenerate without differences; boundary and synthetic-ISA workspace tests pass.",
+      "Six original TU object identities and 384/384 Darwin plus 384/384 Linux corpus identities/executions are recorded, with no skipped lane counted as passing.",
+      "Existing three-lane MIR, random-corpus and verified-chain gates retain their meanings and pass; no interpreter adjustment or certificate bypass.",
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "One-page notebook, compact result receipt, TODO update and measured slice disk delta; no raw captures in Git."
+    ],
+    "lean": "No new Lean run is introduced by N03a: Lean and registries remain unchanged. Existing project acceptance requirements still apply.",
+    "current_result": "NOT_RUN: this document is a plan, not implementation or acceptance evidence."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "minimum_start_free_bytes": 26843545600,
+    "stop_below_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "cargo_serial": true,
+    "container_lane_serial": true,
+    "time_box": "Two weeks for the behavior-preserving slice; exceeding the box stops and reports rather than silently expanding scope.",
+    "retention": "No new target/workspace/kernel tree or VM disk. Only the bounded baseline object set needed for cross-revision comparison is retained temporarily; no full disassembly dumps. Never delete contracts, sealed fixtures, open-task evidence or Lean .lake. Record net disk change at closure."
+  },
+  "stop_rule": "Stop on any source-semantic/ABI/selection change required to continue, unexplained object-byte or verifier-verdict drift, unavailable mandatory native lane, capture cap, disk safety floor or time box. Preserve the minimal failing case and classify missing coverage honestly. A suspected pre-existing defect is separate work, not permission to change behavior inside N03a.",
+  "claim_ceiling": "A behavior-preserving three-layer backend for the existing AArch64 targets on the stated test population. Neither a new target, a proved backend, an optimization gain, improved C coverage, nor completion of N07 steps 4-6."
+}
