@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03a, N03b, N03c, N03d, N03e, N03f, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N04 and N05 are complete. Retain N02's admission limits and legacy source-bridge mismatch, then N03a layering before any other backend slice; the paused R items wait on the codegen track. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03b, N03c, N03d, N03e, N03f, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a layering, N04 and N05 are complete. Retain N02's admission limits and legacy source-bridge mismatch; later backend slices build on the N03a layers; the paused R items wait on the codegen track. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2328,7 +2328,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   compile-time and interpreter-step bounds met. The order of N03b–N03f is
   provisional until N01 replaces it.
 
-  - [ ] **N03a — Backend layering, behavior-preserving** — `LATER`, P3.
+  - [x] **N03a — Backend layering, behavior-preserving** — `DONE`, P3.
     Separate the target-independent allocator, out-of-SSA, spill placement and
     verifier from AArch64 facts: instruction operand descriptors read by both
     allocator and verifier, an ABI interface with Darwin and Linux
@@ -2336,46 +2336,25 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     and a synthetic test ISA for unit tests. Includes target-description
     steps 1–3 (`regfile`, `insts`, ABI tables). Exit: byte-identical objects
     for the six units and the native corpora, verifier verdicts unchanged,
-    full workspace gate. No size change may ride along. Two weeks, before any
-    other backend slice.
-    [Frozen extraction and baseline plans](tests/contracts/codegen-n03a-20261002.json)
-    and opt-in complete-object capture hooks are prepared; 12 helper tests pass.
-    Original baselines now retain 24 six-TU A/B object twins, 384/384 native
-    object twins and agreeing executions on each of Darwin and Linux, plus 12
-    separately labeled retained-g0 IR object twins and 10 standalone certificate
-    replays. Preparation tests: 2,938 PASS / 0 FAIL / 4 ignored; the full gate
-    stopped on a capture-test Clippy unwrap warning, now repaired with its
-    focused check green. The final full recheck remains pending.
-    [Preparation record](docs/notebook/codegen-n03-foundations-20261002.md).
-    Step 1 now extracts register pools, views, scratch roles and assembly
-    register primitives from one generated description. Focused Rust 43/43,
-    Python 24/24, focused Clippy, formatting and regeneration pass on `42a003d2`.
-    All 24 original A/B objects, 12 retained-g0 objects and 384 native objects
-    on each of Darwin/Linux are byte-identical; both native populations execute
-    and agree completely, and 10 standalone g0 certificates replay successfully.
-    [Step-1 record](docs/notebook/codegen-n03a-regfile-20261002.md).
-    Step 2a at `cb65735d` shares generated operand/edge, call/flags and exact
-    DCE facts across existing consumers (46 instruction and 8 terminator
-    families). Focused Rust 57/57, Python 33/33, Clippy and regeneration pass;
-    the first generated-local-name collision is retained with its regression.
-    This is a facts facade, not generic allocation acceptance. The separate
-    synthetic-ISA SSA tests first failed on the absent shared containers and
-    algorithm interface. Step 2b now moves the actual forwarding, critical-edge,
-    parallel-copy and DCE algorithms into generic code, preserving public aliases
-    and debug text. Its focused Rust run passes 65/65 and Python 33/33.
-    Step 2c now shares the actual boundary pinning, linear scan, spill placement,
-    slot compaction and independent allocation verifier; generated operand views
-    preserve target payloads and the existing ordering. Ten synthetic-allocation
-    tests include physical-value traces, pressure, call preservation, constraints
-    and corrupted assignments. Focused Rust passes 75/75 and Python 33/33;
-    focused Clippy, formatting and regeneration pass after the recorded lint
-    repair (named result views and generated constructor shorthand).
-    Step-2 objects at `16cc9b2b`: all 24 A/B, 12 retained-g0 and 384 native
-    objects on each of Darwin/Linux are byte-identical to the originals; both
-    native populations execute and agree 384/384; 10 g0 certificates replay.
-    [Step-2 record](docs/notebook/codegen-n03a-machine-20261002.md).
-    ABI/frame extraction and the full workspace gate remain open; these
-    results do not close N03a.
+    full workspace gate. No size change may ride along.
+    [Frozen plan](tests/contracts/codegen-n03a-20261002.json);
+    [receipt](tests/contracts/codegen-n03a-20261002-receipt.json);
+    [result](docs/notebook/codegen-backend-layering-20261002.md), with
+    [preparation](docs/notebook/codegen-n03-foundations-20261002.md),
+    [step-1](docs/notebook/codegen-n03a-regfile-20261002.md) and
+    [step-2](docs/notebook/codegen-n03a-machine-20261002.md) records.
+    `targets/aarch64/{regfile,insts,abi-darwin,abi-linux,profile-kernel}`
+    generate every migrated table; `src/generic` holds SSA destruction, linear
+    scan, spill placement, slot compaction, the independent verifier, the
+    argument cursor and the frame driver, and the workspace boundary test keeps
+    it free of ISA names. At `efcf8c57`: 24/24 original A/B objects, 12/12
+    retained-g0 objects and 384/384 native objects on each of Darwin and Linux
+    are byte-identical, both corpora execute and agree 384/384, and 10 g0
+    certificates replay. Full workspace: 2,986 PASS / 0 FAIL / 4 ignored;
+    Clippy, formatting and regeneration PASS. Zero changed object bytes or
+    verifier verdicts; no optimization or ABI-correction claim. Current Darwin
+    variadic and stack rules remain as applied (unmeasured), recorded
+    explicitly in `abi-darwin`.
 
   - [ ] **N03b — TU-local inlining** — `LATER`, P3.
     Size-aware inliner at EvoIR level for TU-local callees, as a validated

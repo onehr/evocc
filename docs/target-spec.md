@@ -4,10 +4,10 @@ Revision 1 — 2026-10-01. **Implementation is staged.** N03a now has canonical
 `targets/aarch64/regfile`, `insts`, `abi-darwin`, `abi-linux` and
 `profile-kernel` components, their deterministic generator and shared
 consumers: register and operand facts, generic SSA destruction, allocation,
-its independent verifier, the argument cursor and the frame driver. Steps 1
-and 2 have byte-identical cross-revision objects; step-3 final object
-comparisons and the full workspace gate are recorded with N03a's closure.
-N07 is still design work
+its independent verifier, the argument cursor and the frame driver. Migration
+steps 1–3 are complete under N03a with byte-identical objects for the six S5
+units and both native corpora and a green full workspace gate
+([result](notebook/codegen-backend-layering-20261002.md)). N07 is still design work
 under the [codegen quality plan](codegen-quality-plan.md).
 [EvoMIR](evomir-spec.md)
 stays the normative specification of the machine IR; until a fact has been

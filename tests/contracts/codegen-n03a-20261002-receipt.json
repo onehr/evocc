@@ -1,0 +1,159 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03a",
+  "status": "DONE",
+  "date": "2026-10-02",
+  "plan": "tests/contracts/codegen-n03a-20261002.json",
+  "subject_commit": "efcf8c57c909db8614fa44c725beebb38e2eedb2",
+  "implementation_commits": {
+    "step1_regfile": "42a003d2a312553b715ea0f8191dd474bec2e64d",
+    "step2_insts_ssa_allocation_verifier": [
+      "cb65735dab54e37ac28487a6b55e4ad4a7cb2c3e",
+      "a1717dc1a47c9cdd78c54c53466c16b2c43865d9",
+      "16cc9b2b120c21e68dc64e7b3ecc502453c8289d"
+    ],
+    "step3_red": "cc02556e8918bec76aa39128bb429a7c470f3f81",
+    "step3_abi_frame": "efcf8c57c909db8614fa44c725beebb38e2eedb2"
+  },
+  "step_receipts": [
+    "tests/contracts/codegen-n03a-baseline-20261002-receipt.json",
+    "tests/contracts/codegen-n03a-regfile-20261002-receipt.json",
+    "tests/contracts/codegen-n03a-machine-20261002-receipt.json"
+  ],
+  "descriptions": {
+    "targets/aarch64/abi-darwin": "e5cf5e15490e774a02d3ae3b89ba217008ae902497a2d8471a74ada5b7cc2b7c",
+    "targets/aarch64/abi-linux": "eeee405a280b3735abdfad5c9076d94170677230d097c801d616a88a4b7bf526",
+    "targets/aarch64/profile-kernel": "d61471addc623b6056a5e5d2c392e1e1159f5511bf5bab749a04f3ccc164f5df",
+    "generated": "crates/evocc-mir/src/isa/aarch64/abi_tables.rs"
+  },
+  "red": [
+    {
+      "kind": "MISSING_GENERIC_ABI_FRAME_AND_ABI_TABLES_E0432",
+      "path": ".evidence/codegen/n03a-step3-red-20261002.log",
+      "sha256": "891531278f82bc9ee2cb0df1f00d986a9de977df1ce520ddc1ec7260c0ac3fd9",
+      "boundary_failures": "1 ISA name in a generic comment; 17 handwritten table sites"
+    },
+    {
+      "kind": "MISSING_ABI_GENERATOR",
+      "errors": 13,
+      "path": ".evidence/codegen/n03a-step3-python-red-20261002.log",
+      "sha256": "73c1defd3819a9235f71f6b396f5d88b84064162e4ec8c3866c2612dd8421cb6"
+    }
+  ],
+  "gates": {
+    "focused_rust": {
+      "passed": 180,
+      "failed": 0,
+      "suites": 21,
+      "includes": "placement snapshot, 23 shapes x Darwin/Linux, recorded at e5c05b23 before extraction",
+      "path": ".evidence/codegen/n03a-step3-focused-20261002.log",
+      "sha256": "df62865cd9d032ac99f8eb2f8396a8ef5844a82a300cc3cf4b27c43bb00b185c",
+      "status": "PASS"
+    },
+    "python": {
+      "passed": 46,
+      "failed": 0,
+      "modules": ["tools.tests.test_generate_target", "tools.ladder.tests.test_gate_changed"],
+      "path": ".evidence/codegen/n03a-step3-python-20261002.log",
+      "sha256": "46177b0a097142389f1116d8202930be9fefae5e4e5f92e972ab3809618c6fcd",
+      "status": "PASS"
+    },
+    "focused_clippy": {
+      "first_attempt": "FAIL_MANUAL_IS_MULTIPLE_OF_REPAIRED",
+      "first_path": ".evidence/codegen/n03a-step3-clippy-20261002.log",
+      "path": ".evidence/codegen/n03a-step3-clippy-recheck-20261002.log",
+      "sha256": "fb8a7f2beabb8629d42b5295d48fa520b88ac6b072e8c63d930dea4f9e60cf66",
+      "status": "PASS"
+    },
+    "regeneration": "PASS",
+    "boundary_test": "PASS",
+    "full_workspace": {
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "commit": "efcf8c57c909db8614fa44c725beebb38e2eedb2",
+      "suites": 388,
+      "passed": 2986,
+      "failed": 0,
+      "ignored": 4,
+      "clippy": "PASS",
+      "formatting": "PASS",
+      "path": ".evidence/codegen/full-workspace-n03a-20261002.log",
+      "sha256": "2d01b74e3b33e6ac39709bce11c8bc1fa0915e6ffab5922ee8b8ffd9057c63bf",
+      "status": "PASS"
+    }
+  },
+  "object_identity": {
+    "A": {
+      "object_twins": 12,
+      "baseline_byte_matches": 12,
+      "path": ".evidence/codegen-trend/measure-2aey7c91/receipt.json",
+      "sha256": "795f0a0324a6852fabbd2b337e92def4673a0e16b0d5b1fe0f13c5acf88696cd",
+      "proof": {"bundle_failures": 0, "completed_rejections": 0}
+    },
+    "B": {
+      "object_twins": 12,
+      "baseline_byte_matches": 12,
+      "path": ".evidence/codegen-trend/measure-hxp05g2n/receipt.json",
+      "sha256": "a3eaa78eac2fd39fc6770984329f4a883825abba0f46e8f8ae47a5bf6d47d9e2",
+      "proof": {"bundle_failures": 0, "completed_rejections": 0}
+    },
+    "g0": {
+      "object_twins": 12,
+      "baseline_byte_matches": 12,
+      "certificate_compatibility_replays": 10,
+      "historical_chain_admission": "NOT_CLAIMED_DIFFERENT_CHECKER_IDENTITY",
+      "native_execution": "NOT_RUN_RETAINED_IR_BACKEND_CONTROL",
+      "path": ".evidence/codegen/n03a-g0-rd0mokkt/receipt.json",
+      "sha256": "08c3318ac34a294b59b2d84068f7884c099c8966e54faf6b80b90804f17c4750"
+    },
+    "darwin_corpus": {
+      "objects": 384,
+      "baseline_byte_matches": 384,
+      "two_builds": "BYTE_IDENTICAL",
+      "executed": 384,
+      "agreeing": 384,
+      "refused": 0,
+      "object_bytes": 193392,
+      "path": ".evidence/codegen/n03a-final-corpus-darwin-20261002.log",
+      "sha256": "864e2dd3e8bb6855309479dc8b488d2ec5b3e6fa600ddc8f5a1007bb6e9ca912"
+    },
+    "linux_corpus": {
+      "objects": 384,
+      "baseline_byte_matches": 384,
+      "two_builds": "BYTE_IDENTICAL",
+      "executed": 384,
+      "agreeing": 384,
+      "refused": 0,
+      "object_bytes": 383344,
+      "path": ".evidence/codegen/n03a-final-corpus-linux-20261002.log",
+      "sha256": "3bc28138ffc2545c8fb9f01eb015c130e89a909fca7ca74dfd087253f2c68e9b"
+    },
+    "changed_object_bytes": 0,
+    "changed_verifier_verdicts": 0
+  },
+  "observations_not_changed": [
+    "A synthetic ABI whose argument registers equal the whole three-register pool made the shared allocator's spill retry grow without settling (killed at 8.8 GB RSS); the test shape was changed, the algorithm was not. AArch64 has 8 argument and 26 allocatable general registers.",
+    "abi-darwin records the current, unmeasured Darwin rules as applied: AAPCS64 variadic save areas, refused general stack arguments and unrefused vector stack placement.",
+    "binary128 and strict integer128 helper qualification remain OS checks in lowering; prologue, epilogue and dynamic-stack printers keep their AArch64 16-byte immediates.",
+    "The boundary test covers crates/evocc-mir/src/generic, not Layer-1 crates."
+  ],
+  "disk": {
+    "retained_baseline_objects_removed": 804,
+    "retained_baseline_bytes_removed": 2453416,
+    "hashes_kept_in": [
+      ".evidence/codegen-trend/measure-9gez8fa0/receipt.json",
+      ".evidence/codegen-trend/measure-w5rjh311/receipt.json",
+      ".evidence/codegen/n03a-g0-peo9evic/receipt.json",
+      ".evidence/codegen/n03a-corpus-baseline-darwin.log",
+      ".evidence/codegen/n03a-corpus-baseline-linux.log"
+    ],
+    "session_shared_target_before_bytes": 22830964736,
+    "session_shared_target_after_bytes": 23822319616,
+    "session_evidence_before_bytes": 10031394816,
+    "session_evidence_after_bytes": 10028789760,
+    "session_repository_net_bytes": 988749824,
+    "free_bytes_before": 153940054016,
+    "free_bytes_after": 144996466688,
+    "free_space_note": "The volume-wide drop exceeds the checkout's change; the rest is host activity outside this checkout (swap 9.7 GB in use, other projects' temporary files)."
+  },
+  "claim_ceiling": "A behavior-preserving three-layer backend for the existing AArch64 Darwin and Linux targets on the stated population: exactly zero changed object bytes and verifier verdicts. Not a new target, proved backend, optimization gain, ABI correction, improved C coverage or N07 steps 4-6."
+}
