@@ -2395,9 +2395,15 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     RED `74473d62` reached the test-only 2,048-visit limit in both cases.
     The repair now passes all 59 tests in the six focused allocator/ABI/SSA
     suites, including successful saturated scalar/wide/mixed call setup and
-    finite refusal of impossible local pressure. Full workspace, both native
-    corpora and six-TU historical hash comparisons remain pending; T1 is not
-    closed and no broader allocation improvement is claimed.
+    finite refusal of impossible local pressure. T1 correctness is closed in
+    the [result](docs/notebook/codegen-allocation-termination-20261003.md) and
+    [receipt](tests/contracts/codegen-n03c-t1-20261003-receipt.json): full workspace
+    3,020/0/5 ignored, both native corpora 384/384, all 768 corpus and 24
+    six-TU hashes match C2 OFF. All 24 original harness executions pass.
+    Three of 24 compile-median ratios miss 1.25x (maximum 1.4563x); the
+    negative measurements are frozen, not performance admission. No size
+    gain or broader allocation closure is claimed. Copy preferences and
+    spill-quality work remain open; do not rerun to erase the cost misses.
 
   - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
     Addressing modes, immediates, shifted operands, conditional select and

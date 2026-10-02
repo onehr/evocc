@@ -1,0 +1,388 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03c",
+  "slice": "T1",
+  "date": "2026-10-03",
+  "status": "CLOSED_CORRECTNESS_WITH_COMPILE_BOUND_MISS",
+  "subject_commit": "02d6bd54bb67750a11c804fd1aaf93ecf614be27",
+  "implementation_commit": "02d6bd54bb67750a11c804fd1aaf93ecf614be27",
+  "red_commit": "74473d62",
+  "plan": "tests/contracts/codegen-n03c-termination-20261002.json",
+  "specification": "EvoMIR 0.59",
+  "behavior": "Saturated generated call preparation stores outgoing stack arguments before filling the whole candidate bank with pinned copies. Spill retries consume previously unspilled pre-rewrite values or refuse; generated spill temporaries are not recursively spilled. Existing 64-retry ceiling, ABI, register pools and independent verifier remain unchanged.",
+  "gates": {
+    "full_workspace": {
+      "status": "PASS",
+      "subject": "02d6bd54bb67750a11c804fd1aaf93ecf614be27",
+      "suites": 392,
+      "passed": 3020,
+      "failed": 0,
+      "ignored": 5,
+      "log": ".evidence/codegen/n03c-t1/full-workspace-20261002.log",
+      "clippy": "PASS",
+      "format": "PASS",
+      "regeneration": "PASS",
+      "sha256": "4febd00b04b715c4e515f10af2802cb7d6a1822ac5fcfd54d2c59f666602ec5e"
+    },
+    "focused": {
+      "passed": 59,
+      "failed": 0,
+      "suites": 6,
+      "path": ".evidence/codegen/n03c-t1/focused-20261002.log",
+      "sha256": "36133dc4d23b4a0440c08013795a159bfb569c256d3a7a5bb724dbae6bae567f"
+    },
+    "red": {
+      "passed": 0,
+      "failed": 2,
+      "candidate_visit_limit": 2048,
+      "path": ".evidence/codegen/n03c-t1/bounded-red-20261002.log",
+      "sha256": "0c2e15abb41a10188322f4b9741d407bc474748e472f0c90a030efb7440792cc",
+      "note": "Expected pre-fix bounded failures, not acceptance failures; historical multi-GiB reproduction not rerun."
+    },
+    "python": {
+      "passed": 8,
+      "failed": 0,
+      "path": ".evidence/codegen/n03c-t1/python-schedule-20261002.log",
+      "sha256": "fc23540c8545d4075fe2f0420accd022e74e5566176c3bd4c597964ff02c2e14"
+    },
+    "lean": "NOT_REQUIRED: no Lean or registry changes"
+  },
+  "native_corpora": [
+    {
+      "lane": "darwin",
+      "path": ".evidence/codegen/n03c-t1/corpus-off-darwin-20261003.log",
+      "sha256": "ebd61fec26806930c82567e0b3857c6233d0e2492e10bb1f59196d2aa8ad4b60",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "historical_hash_matches": 384,
+      "baseline": ".evidence/codegen/n03d-c2/corpus-off-darwin-20261002.log"
+    },
+    {
+      "lane": "linux",
+      "path": ".evidence/codegen/n03c-t1/corpus-off-linux-20261003.log",
+      "sha256": "3b1ef6145e46c1eac2b06418c5c901aef71f952f75eab0fc41db1e20b572d369",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "historical_hash_matches": 384,
+      "baseline": ".evidence/codegen/n03d-c2/corpus-off-linux-20261002.log"
+    }
+  ],
+  "measurements": [
+    {
+      "arm": "A",
+      "plan": "tests/contracts/codegen-n03c-t1-a-20261002.json",
+      "path": ".evidence/codegen-trend/measure-fmh4sqh_/receipt.json",
+      "sha256": "27493f3e7640c1cfec459e843cefe81c1fad9bf45c11b7b39e5b151ae4de7b87",
+      "baseline": ".evidence/codegen-trend/measure-c_2x8fkl/receipt.json",
+      "status": "OBSERVED",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 12,
+      "original_harness_executions": 12,
+      "completed_proof_rejections": 0,
+      "bundle_failures": 0,
+      "steps_equal": 257,
+      "bindings_equal": 6
+    },
+    {
+      "arm": "B",
+      "plan": "tests/contracts/codegen-n03c-t1-b-20261002.json",
+      "path": ".evidence/codegen-trend/measure-n8_r9i32/receipt.json",
+      "sha256": "40cef257d807e1d6d01c59399f4e0f4425ebb8734e3ff25890b0e1c73c169c62",
+      "baseline": ".evidence/codegen-trend/measure-xef4bjdd/receipt.json",
+      "status": "OBSERVED",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 12,
+      "original_harness_executions": 12,
+      "completed_proof_rejections": 0,
+      "bundle_failures": 0,
+      "steps_equal": 257,
+      "bindings_equal": 6
+    }
+  ],
+  "tools": {
+    "release": {
+      "checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+      "compiler": "b1a4b1e9298e96b67e3078d472aa1934d29bb6efeb4e9ce272a78155a8edeeb6",
+      "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+      "steps": "fd52aab6934c22b6b2a6022fad8cfd7cd48df3e7b7fe4cf972e62ba96ecbd468"
+    },
+    "native_debug_compiler": "c608ab2d12d27fa4b704460f1729d8a55159030537c62f5f7f75b841029806c8",
+    "native_companion_checker": "8e513c88ac77b4af183c3c60cb2a7e3ee40b85e9eac244ed5fb320ea36559a7b",
+    "release_build": {
+      "path": ".evidence/codegen/n03c-t1/release-build-20261003.log",
+      "sha256": "21d61f552bda957418de27acc32c606724a69d06548711a232ece5dc54034d2a"
+    }
+  },
+  "size_and_compile_comparisons": [
+    {
+      "arm": "A",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "text": 128,
+      "old_median_ns": 7177000,
+      "new_median_ns": 7103958,
+      "ratio": 0.9898227671729135
+    },
+    {
+      "arm": "A",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "text": 128,
+      "old_median_ns": 6690750,
+      "new_median_ns": 5897000,
+      "ratio": 0.8813660650898628
+    },
+    {
+      "arm": "A",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "text": 30516,
+      "old_median_ns": 158620541,
+      "new_median_ns": 159061041,
+      "ratio": 1.0027770678199868
+    },
+    {
+      "arm": "A",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "text": 29012,
+      "old_median_ns": 164571416,
+      "new_median_ns": 231150750,
+      "ratio": 1.4045619562512606
+    },
+    {
+      "arm": "A",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "text": 28404,
+      "old_median_ns": 187317000,
+      "new_median_ns": 205694666,
+      "ratio": 1.0981099740012918
+    },
+    {
+      "arm": "A",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "text": 26664,
+      "old_median_ns": 175732666,
+      "new_median_ns": 168422500,
+      "ratio": 0.9584017805773231
+    },
+    {
+      "arm": "A",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "text": 124024,
+      "old_median_ns": 1123171084,
+      "new_median_ns": 1117723375,
+      "ratio": 0.9951497068633579
+    },
+    {
+      "arm": "A",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "text": 121652,
+      "old_median_ns": 1404755458,
+      "new_median_ns": 1106535792,
+      "ratio": 0.7877070601138038
+    },
+    {
+      "arm": "A",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "text": 33688,
+      "old_median_ns": 610345583,
+      "new_median_ns": 595941625,
+      "ratio": 0.9764003240111921
+    },
+    {
+      "arm": "A",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "text": 33440,
+      "old_median_ns": 597542958,
+      "new_median_ns": 532886000,
+      "ratio": 0.8917952975022759
+    },
+    {
+      "arm": "A",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "text": 30228,
+      "old_median_ns": 382472166,
+      "new_median_ns": 154550416,
+      "ratio": 0.40408277971265494
+    },
+    {
+      "arm": "A",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "text": 30116,
+      "old_median_ns": 196034208,
+      "new_median_ns": 151902084,
+      "ratio": 0.7748753931762766
+    },
+    {
+      "arm": "B",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "text": 128,
+      "old_median_ns": 21738125,
+      "new_median_ns": 20745250,
+      "ratio": 0.9543256375607372
+    },
+    {
+      "arm": "B",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "text": 128,
+      "old_median_ns": 21504958,
+      "new_median_ns": 18217708,
+      "ratio": 0.8471399014125022
+    },
+    {
+      "arm": "B",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "text": 30184,
+      "old_median_ns": 749405958,
+      "new_median_ns": 643333583,
+      "ratio": 0.8584580575218752
+    },
+    {
+      "arm": "B",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "text": 28668,
+      "old_median_ns": 693414458,
+      "new_median_ns": 632061750,
+      "ratio": 0.9115208699614394
+    },
+    {
+      "arm": "B",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "text": 28264,
+      "old_median_ns": 853183917,
+      "new_median_ns": 798200708,
+      "ratio": 0.9355552678567428
+    },
+    {
+      "arm": "B",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "text": 26520,
+      "old_median_ns": 726077583,
+      "new_median_ns": 726084083,
+      "ratio": 1.0000089522113782
+    },
+    {
+      "arm": "B",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "text": 122972,
+      "old_median_ns": 3137231459,
+      "new_median_ns": 4568760125,
+      "ratio": 1.4563031719872856
+    },
+    {
+      "arm": "B",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "text": 120592,
+      "old_median_ns": 3262679250,
+      "new_median_ns": 4450315666,
+      "ratio": 1.364006488225896
+    },
+    {
+      "arm": "B",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "text": 33300,
+      "old_median_ns": 1686587584,
+      "new_median_ns": 1306219250,
+      "ratio": 0.7744746032708848
+    },
+    {
+      "arm": "B",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "text": 33052,
+      "old_median_ns": 1211335834,
+      "new_median_ns": 1202962833,
+      "ratio": 0.9930877955023
+    },
+    {
+      "arm": "B",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "text": 29496,
+      "old_median_ns": 628665625,
+      "new_median_ns": 599368833,
+      "ratio": 0.9533984508855562
+    },
+    {
+      "arm": "B",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "text": 29384,
+      "old_median_ns": 578310917,
+      "new_median_ns": 636774500,
+      "ratio": 1.101093687290707
+    }
+  ],
+  "compile_bound": {
+    "limit_ratio": 1.25,
+    "comparisons": 24,
+    "within": 21,
+    "misses": 3,
+    "max_ratio": 1.4563031719872856,
+    "disposition": "Frozen observed misses; cause not established, no resampling or threshold change. Correctness/byte-identity closure is not performance admission."
+  },
+  "coverage": {
+    "tv_admitted_inputs": 70,
+    "opaque_inputs": 187,
+    "source_bridge": "Legacy integer-mix event mismatch retained: C-HIR 1001 versus EvoIR 1002. NOT_VALIDATED; no interpreter change.",
+    "scope": "SIX_SELECTED_TUS_WITH_REFERENCE_DEPENDENCIES_NOT_FULL_APPLICATIONS",
+    "kernel": "NOT_RUN",
+    "native_latency": "NOT_RUN",
+    "new_optimization_defaults": "OFF"
+  },
+  "infrastructure_failure": {
+    "path": ".evidence/codegen-trend/measure-ghahu8tp/receipt.json",
+    "sha256": "b3cb408f7e212499a33c87706594f1211f756c1f2302f53e4f93f930db5152be",
+    "stage": "image inspection",
+    "reason": "Sandbox denied existing container service access before compilation or measurement. Failed receipt retained; authorized run uses unchanged frozen plan."
+  },
+  "retention": {
+    "status": "RETIRED_AFTER_HASH_AND_IDLE_HANDLE_CHECK",
+    "objects": 792,
+    "bytes": 1832400,
+    "remaining": "Logs, manifests, receipts, reduced RED fixtures and append-only trend retained. Exact historical runtime payloads are no longer retained; reproducible from pinned inputs and commits.",
+    "disk": {
+      "initial": {
+        "target_frontend_kib": 24141552,
+        "t1_evidence_kib": 12,
+        "note": "Snapshot taken during the initial focused compilation, not before the entire slice. Other T1 capture roots did not yet exist."
+      },
+      "final": {
+        "target_frontend_kib": 24333420,
+        "t1_evidence_kib": 436,
+        "capture_a_kib": 448,
+        "capture_b_kib": 456,
+        "failed_capture_kib": 24,
+        "trend_kib": 232
+      },
+      "shared_cache_delta_bytes": 196472832,
+      "retained_evidence_delta_bytes": 1622016,
+      "scoped_net_bytes": 198094848,
+      "available_bytes": 101398970368,
+      "scope_note": "du allocated bytes, shared target/frontend plus the named T1 evidence/captures/trend only. Excludes tracked source/docs and unrelated activity. No global free-space delta attributed to this slice."
+    }
+  },
+  "claim_ceiling": "Bounded termination repair for the observed synthetic ABI, with unchanged measured AArch64 outputs and full correctness gate. Three compile-cost misses remain negative. Not allocation quality improvement, complete allocator, N03c completion, performance/default optimization admission, verified EqSat benefit, backend proof or full-application/kernel acceptance."
+}

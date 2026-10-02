@@ -401,7 +401,7 @@ sections above remain the contract.
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
 | N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
 | N03d | C1 closed opt-in; C2 closed with compile-bound miss, not admitted; remaining selection patterns open | [C1](notebook/codegen-constants-20261002.md), [C2 result](notebook/codegen-local-selection-20261002.md), [C2 receipt](../tests/contracts/codegen-n03d-c2-20261002-receipt.json): full workspace 3,018/0/5 ignored, native and size controls green; local-only B checked zstd-compress compile median 1.7977x OFF exceeds 1.25x. Negative result frozen, no default flip. |
-| N03c | T1 bounded-progress repair implemented; acceptance pending | [Plan](../tests/contracts/codegen-n03c-termination-20261002.json); bounded RED `74473d62`, 59 focused tests pass. Full workspace/native/six-TU identity pending; broader allocation improvements remain open. |
+| N03c | T1 correctness closed with compile-bound misses; allocation quality still open | [Result](notebook/codegen-allocation-termination-20261003.md), [receipt](../tests/contracts/codegen-n03c-t1-20261003-receipt.json): full workspace 3,020/0/5 ignored; both 384-case corpora and all 24 six-TU hashes unchanged. Three compile-median ratios exceed 1.25x, maximum 1.4563x; no performance admission or size claim. |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Not started | Steps 1–3 landed inside N03a |
 | N06 | Not scheduled | |
@@ -458,6 +458,7 @@ remaining N03d selection opportunities require a separately frozen scope.
   assembly header records the request, not a claim that every function took it.
 - One writer in the tree at a time; all builds share `target/frontend`.
 
-**Open observation from N03a.** With a synthetic ABI whose argument registers
-are the whole allocatable pool, the shared allocator's spill-retry loop did
-not converge. AArch64 is unaffected. It is recorded under N03c.
+**N03a observation, repaired by N03c T1.** The synthetic whole-pool ABI now
+has bounded spill progress and valid saturated-call preparation. Existing
+AArch64 objects are unchanged. This correctness closure does not close
+allocation quality or excuse the frozen compile-cost misses above.
