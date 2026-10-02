@@ -2370,8 +2370,12 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     and corrupted assignments. Focused Rust passes 75/75 and Python 33/33;
     focused Clippy, formatting and regeneration pass after the recorded lint
     repair (named result views and generated constructor shorthand).
-    ABI/frame extraction, final complete-object comparisons and the full
-    workspace gate remain open; these focused results do not close N03a.
+    Step-2 objects at `16cc9b2b`: all 24 A/B, 12 retained-g0 and 384 native
+    objects on each of Darwin/Linux are byte-identical to the originals; both
+    native populations execute and agree 384/384; 10 g0 certificates replay.
+    [Step-2 record](docs/notebook/codegen-n03a-machine-20261002.md).
+    ABI/frame extraction and the full workspace gate remain open; these
+    results do not close N03a.
 
   - [ ] **N03b — TU-local inlining** — `LATER`, P3.
     Size-aware inliner at EvoIR level for TU-local callees, as a validated

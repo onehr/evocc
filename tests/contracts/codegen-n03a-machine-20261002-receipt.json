@@ -1,0 +1,116 @@
+{
+  "arms": {
+    "A": {
+      "baseline_byte_matches": 12,
+      "coverage": "OBSERVED",
+      "object_twins": 12,
+      "path": ".evidence/codegen-trend/measure-yfw0tk41/receipt.json",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 390225,
+      "sha256": "23f7e2f8be24ccaa1c194002ff39203e6d6da0af852257b38adace094a50b6e0",
+      "status": "OBSERVED"
+    },
+    "B": {
+      "baseline_byte_matches": 12,
+      "coverage": "OBSERVED",
+      "object_twins": 12,
+      "path": ".evidence/codegen-trend/measure-78obair7/receipt.json",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 399419,
+      "sha256": "82ba36f2b62cfe1b030f00acba9ed7993422cb7f6b08d603d63a56d548bf258b",
+      "status": "OBSERVED"
+    },
+    "g0": {
+      "baseline_byte_matches": 12,
+      "certificate_compatibility_replays": 10,
+      "historical_chain_admission": "NOT_CLAIMED_DIFFERENT_CHECKER_IDENTITY",
+      "native_execution": "NOT_RUN_RETAINED_IR_BACKEND_CONTROL",
+      "object_twins": 12,
+      "path": ".evidence/codegen/n03a-g0-sviovfmv/receipt.json",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0,
+        "unknowns": 0
+      },
+      "retained_bytes": 67635,
+      "sha256": "2f3c9106615662f683b9c8a1f1dd4d1165d28dd49151551b23fee673b84fdc04",
+      "status": "OBSERVED"
+    }
+  },
+  "baseline_receipt": "tests/contracts/codegen-n03a-baseline-20261002-receipt.json",
+  "claim_ceiling": "Generated operand facts, generic SSA destruction, allocation and independent verification with behavior-preserving step-2 object comparisons only. Exactly zero changed target-object bytes. No optimization, ABI/frame extraction, fresh g0 source acceptance or final N03a full-workspace claim.",
+  "date": "2026-10-02",
+  "disk": {
+    "baseline_objects": "RETAINED_FOR_N03A_STEP_3",
+    "native_candidate_objects_retained_bytes": 0,
+    "new_captures_retained_bytes": 857279
+  },
+  "gates": {
+    "focused_clippy": {
+      "path": ".evidence/codegen/n03a-step2c-clippy-recheck-20261002.log",
+      "sha256": "19811a41dd0bd2c08abaa2b4f579f9586550d41c4efff43b751ff239337754aa",
+      "status": "PASS"
+    },
+    "focused_rust": {
+      "failed": 0,
+      "passed": 75,
+      "path": ".evidence/codegen/n03a-step2c-focused-final-20261002.log",
+      "sha256": "f2c4b41be6247360aacc9860ffbdb5f3c625f0f3b995b377506d5cd0c4d4ca1e",
+      "status": "PASS",
+      "suites": 8
+    },
+    "full_workspace": "PENDING_FINAL_N03A_GATE",
+    "python": {
+      "failed": 0,
+      "passed": 33,
+      "path": ".evidence/codegen/n03a-step2c-python-final-20261002.log",
+      "sha256": "0850c6be706e4565a8079c79817f92c4f9c6814e8991f27783922c89095eaf76",
+      "status": "PASS"
+    }
+  },
+  "implementation_commits": [
+    "cb65735dab54e37ac28487a6b55e4ad4a7cb2c3e",
+    "a1717dc1a47c9cdd78c54c53466c16b2c43865d9",
+    "16cc9b2b120c21e68dc64e7b3ecc502453c8289d"
+  ],
+  "native_corpora": {
+    "darwin": {
+      "agreeing": 384,
+      "baseline_byte_matches": 384,
+      "executed": 384,
+      "object_bytes": 193392,
+      "objects": 384,
+      "path": ".evidence/codegen/n03a-step2-corpus-darwin-20261002.log",
+      "refused": 0,
+      "sha256": "a27968d966223d2183c8ade339d0b0677a1a60657c6392a961dae675dfd8f267",
+      "two_builds": "BYTE_IDENTICAL"
+    },
+    "linux": {
+      "agreeing": 384,
+      "baseline_byte_matches": 384,
+      "executed": 384,
+      "object_bytes": 383344,
+      "objects": 384,
+      "path": ".evidence/codegen/n03a-step2-corpus-linux-20261002.log",
+      "refused": 0,
+      "sha256": "b0fc5be6c16ff383cd62cec75bbdad484b6393f3e79e8c6aa77abe42dd49fa89",
+      "two_builds": "BYTE_IDENTICAL"
+    }
+  },
+  "package": "N03a step 2",
+  "plans": [
+    "tests/contracts/codegen-n03a-20261002.json",
+    "tests/contracts/codegen-n03a-regression-a-20261002.json",
+    "tests/contracts/codegen-n03a-regression-b-20261002.json",
+    "tests/contracts/codegen-n03a-guard-baseline-20261002.json"
+  ],
+  "schema": "evocc.codegen.result.v1",
+  "status": "STEP2_OBSERVED_FULL_WORKSPACE_PENDING",
+  "subject_commit": "16cc9b2b120c21e68dc64e7b3ecc502453c8289d"
+}
