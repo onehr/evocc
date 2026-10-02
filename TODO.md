@@ -2325,8 +2325,13 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   unchecked object text at or below 1.4× GCC-14 `-O2` per S5 unit by the end
   of the quarter. Each slice lands behind a flag, is measured on the six units
   and the ladder, and enters `-O2` only with validation green and the size,
-  compile-time and interpreter-step bounds met. The order of N03b–N03f is
-  provisional until N01 replaces it.
+  compile-time and interpreter-step bounds met. N01 has replaced the
+  provisional order: summed positive excess over GCC-14 `-O2` on the five
+  library units is 44,484 bytes of prologue/epilogue, 23,224 of constant
+  materialization, 15,972 of memory access, 12,952 of register moves and
+  6,712 of stack access on inflate alone. Work order: **N03f, then N03d, then
+  N03c**; N03b and N03e wait on a redesign after their bounded negative
+  preflight. N03a is closed, so backend slices may start.
 
   - [x] **N03a — Backend layering, behavior-preserving** — `DONE`, P3.
     Separate the target-independent allocator, out-of-SSA, spill placement and
@@ -2363,11 +2368,23 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     [First slice](tests/contracts/codegen-n03b-20261002.json) begins with a
     read-only original-source/IR opportunity census. No transform is implemented
     before a nonzero source-permitted, structurally eligible, TV-admitted result.
+    The bounded preflight proposed `NO_ADMITTED_OPPORTUNITY`
+    ([record](docs/notebook/codegen-negative-preflight-20261002.md)); the
+    full-workspace gate it was waiting for has since passed at `efcf8c57`.
+    N01 still counts 3/1/85/24/23 TU-local bodies absent from the reference
+    objects, so the negative result is about the frozen admission rules, not
+    about inlining. Finalize that disposition, then redesign before any transform.
 
   - [ ] **N03c — Register allocation improvements** — `LATER`, P3.
     Coalescing and spill placement in the generic layer first; a different
     allocator only if N01 shows allocation dominates. The allocation verifier
     is the gate. After N03a.
+    Recorded during N03a and deliberately not changed there: with a synthetic
+    ABI whose argument registers are the whole allocatable pool, the shared
+    allocator's spill-retry loop did not converge. AArch64 is unaffected, but
+    a target with few registers would be; give it a reduced reproducer and a
+    bounded-termination fix in this slice.
+    [N03a note](docs/notebook/codegen-backend-layering-20261002.md).
 
   - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
     Addressing modes, immediates, shifted operands, conditional select and
@@ -2382,11 +2399,26 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     [First slice](tests/contracts/codegen-n03e-20261002.json) checks exact
     all-incoming-edge reuse of already-carried integer results. Read-only
     preflight is prepared; broad GVN/SCCP/LICM is not silently admitted.
+    Same bounded preflight and disposition as N03b: no complete all-edge match
+    under the frozen rules; finalize it and redesign before any transform.
 
   - [ ] **N03f — Frame and call overhead** — `LATER`, P3.
     Leaf-frame elision, callee-saved minimization and argument shuffling
     through the ABI interface, with EvoMIR revision text and ABI corpora.
     After N03a.
+    **In progress, 2026-10-02.** [Frozen plan](tests/contracts/codegen-n03f-20261002.json)
+    at `161d81d0`: three opt-in sub-steps behind `--frame-opt=LIST`, paired
+    saves (F1), one shared epilogue per function (F2) and leaf-frame elision
+    (F3); every default stays off in this slice and a default flip is a
+    separate owner decision. Fresh options-off baselines were re-recorded at
+    that commit (six units A/B, both 384-case native corpora) because N03a
+    deleted its retained objects at closure. F1 exists only as interrupted,
+    unverified work on branch `wip/n03f-paired-saves` (`3e5e4688`): option
+    plumbing, `stp`/`ldp` pairing at unchanged offsets and RED tests; it
+    passes `cargo check --tests` and nothing else has been run. F2, F3, the
+    EvoMIR revision text, options-on validation, options-off byte identity,
+    measurement and the admission proposal are not started. Review the branch
+    against the frozen plan before building on it; it is not acceptance.
 
 - [x] **N04 — The C checker as a product** — `DONE`, P3.
   One command that runs the EvoIR interpreter as a precise undefined-behavior

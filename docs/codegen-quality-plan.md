@@ -386,3 +386,62 @@ the work.
 
 **Report format.** Commit, plan and receipt paths, gate result, one number
 table, claim ceiling. Nothing else.
+
+## 11. Status and order of work, 2026-10-02
+
+This section is the entry point for whoever continues. It records state; the
+sections above remain the contract.
+
+| Package | State | Evidence |
+| --- | --- | --- |
+| N01 census | Done | [note](notebook/codegen-census-20261002.md), [receipt](../tests/contracts/codegen-n01-20261002-receipt.json) |
+| N02 pass framework and validation | Done, bounded framework | [note](notebook/codegen-pass-framework-20261002.md) |
+| N03a backend layering | Done, independently rechecked | [note](notebook/codegen-backend-layering-20261002.md): every one of the 384 Darwin and 384 Linux corpus object hashes equals the pre-refactor baseline; `src/generic/` holds no ISA name; gate 2,986 passed, 0 failed, 4 ignored |
+| N04 C checker | Done | [note](notebook/codegen-checker-20261002.md) |
+| N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
+| N03f frame and calls | In progress | [frozen plan](../tests/contracts/codegen-n03f-20261002.json) and fresh baselines at `161d81d0`; F1 only as unverified work on branch `wip/n03f-paired-saves` |
+| N03d, N03c | Not started | |
+| N03b, N03e | Bounded preflight negative, redesign needed | [note](notebook/codegen-negative-preflight-20261002.md) |
+| N07 steps 4–6 | Not started | Steps 1–3 landed inside N03a |
+| N06 | Not scheduled | |
+
+**Order of the remaining slices, from N01.** Summed positive excess of
+unchecked EvoCC over GCC-14 `-O2` on the five library units:
+
+| Category | Excess bytes | Slice |
+| --- | ---: | --- |
+| Prologue and epilogue | 44,484 | N03f |
+| Constant materialization | 23,224 | N03d |
+| Memory access | 15,972 | N03d (addressing modes) |
+| Register moves | 12,952 | N03c |
+| Branches | 11,336 | N03d |
+| Compute | 11,044 | N03d |
+| Compare and select | 8,288 | N03d |
+| Extension and masks | 4,132 | N03d |
+| Stack access, inflate only | 6,712 | N03c |
+
+So: **N03f, then N03d, then N03c.** N07 steps 4–6 follow once N03d has
+started. N03b and N03e are not next: their frozen preflight rules admitted
+nothing, and inlining in particular needs a new design before any transform.
+
+**What is known about today's frame code**, for N03f: callee-saved registers
+are saved and restored one at a time with `str` and `ldr`; the whole epilogue
+is emitted at every return; every function builds a frame record, with no leaf
+case. The first two can change without touching the frame layout.
+
+**Rules that hold for the rest of N03.**
+
+- New behavior lands behind an option and stays off by default. Turning a
+  default on changes every emitted object and the exact-text tests that pin
+  them, so it is a separate, owner-approved step with its own baselines, not
+  part of a slice.
+- With the options off, objects stay byte-identical to the slice's recorded
+  baseline. With them on, the native corpora and the six units' harnesses
+  must execute and agree.
+- The kernel profile and any frame-pointer-requesting option keep today's
+  output until the kernel gates have been run with the new code.
+- One writer in the tree at a time; all builds share `target/frontend`.
+
+**Open observation from N03a.** With a synthetic ABI whose argument registers
+are the whole allocatable pool, the shared allocator's spill-retry loop did
+not converge. AArch64 is unaffected. It is recorded under N03c.
