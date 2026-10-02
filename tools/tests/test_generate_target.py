@@ -194,5 +194,105 @@ class InstructionDescriptionTest(unittest.TestCase):
         self.assertNotEqual(gen.collection_name("edges", "edges*"), "edges")
 
 
+class AbiDescriptionTest(unittest.TestCase):
+    """N03a step 3: per-OS ABI facts and the kernel profile, with valid digests."""
+
+    def setUp(self):
+        self.regfile = gen.parse_description(DESCRIPTION.read_bytes())
+        gen.validate(self.regfile)
+        self.paths = {
+            "darwin": ROOT / "targets/aarch64/abi-darwin",
+            "linux": ROOT / "targets/aarch64/abi-linux",
+        }
+        self.sources = {name: path.read_bytes() for name, path in self.paths.items()}
+        self.profile_path = ROOT / "targets/aarch64/profile-kernel"
+        self.profile = self.profile_path.read_bytes()
+        self.generated = ROOT / "crates/evocc-mir/src/isa/aarch64/abi_tables.rs"
+
+    def decoded_abi(self, source):
+        abi = gen.parse_abi(source)
+        gen.validate_abi(abi, self.regfile)
+        return abi
+
+    def decoded_profile(self, source):
+        abis = {name: self.decoded_abi(body) for name, body in self.sources.items()}
+        profile = gen.parse_profile(source)
+        gen.validate_profile(profile, abis)
+        return profile
+
+    def assert_structural_rejection(self, source, decode, reason):
+        payload = b"".join(row for row in source.splitlines(keepends=True) if not row.startswith(b"sha256 "))
+        stated = [row for row in source.splitlines() if row.startswith(b"sha256 ")]
+        self.assertEqual(stated, [b"sha256 " + hashlib.sha256(payload).hexdigest().encode("ascii")])
+        with self.assertRaisesRegex(gen.TargetDescriptionError, reason) as caught:
+            decode(source)
+        self.assertNotIn("digest", str(caught.exception).lower())
+
+    def mutate(self, source, old, new):
+        return replace_one(source, old, new)
+
+    def test_abi_tables_regenerate_byte_for_byte(self):
+        abis = [self.decoded_abi(self.sources[name]) for name in ("darwin", "linux")]
+        profiles = [self.decoded_profile(self.profile)]
+        rendered = gen.render_abi(self.regfile, abis, profiles).encode("utf-8")
+        self.assertEqual(rendered, self.generated.read_bytes())
+        self.assertTrue(self.generated.read_bytes().startswith(b"// Generated"))
+
+    def test_the_two_abis_differ_only_in_named_rules(self):
+        darwin, linux = (self.decoded_abi(self.sources[name]) for name in ("darwin", "linux"))
+        differing = {key for key in darwin.facts if darwin.facts[key] != linux.facts[key]}
+        self.assertEqual(differing, {"abi", "stack-arguments", "aligned-record-pair-rounding"})
+
+    def test_argument_registers_cannot_exceed_their_bank(self):
+        changed = self.mutate(self.sources["darwin"], b"arguments simd 8\n", b"arguments simd 33\n")
+        self.assert_structural_rejection(changed, self.decoded_abi, "exceed.*bank")
+
+    def test_unknown_register_set_reference_is_rejected(self):
+        changed = self.mutate(self.sources["linux"], b"callee-saved @CALLEE_SAVED\n", b"callee-saved @CALLEE_SAVD\n")
+        self.assert_structural_rejection(changed, self.decoded_abi, "unknown.*set")
+
+    def test_callee_saved_registers_cannot_be_call_clobbered(self):
+        changed = self.mutate(self.sources["linux"], b"callee-saved @CALLEE_SAVED\n", b"callee-saved @CALLEE_SAVED 0\n")
+        self.assert_structural_rejection(changed, self.decoded_abi, "callee-saved.*clobber")
+
+    def test_argument_registers_cannot_be_reserved(self):
+        changed = self.mutate(self.sources["darwin"], b"indirect-result gpr 8\n", b"indirect-result gpr 16\n")
+        self.assert_structural_rejection(changed, self.decoded_abi, "reserved")
+
+    def test_missing_fact_is_rejected(self):
+        changed = self.mutate(self.sources["darwin"], b"va-list vector-offset 28\n", b"")
+        self.assert_structural_rejection(changed, self.decoded_abi, "missing")
+
+    def test_duplicate_fact_is_rejected(self):
+        changed = self.mutate(self.sources["linux"], b"stack-slot-bytes 8\n", b"stack-slot-bytes 8\nstack-slot-bytes 8\n")
+        self.assert_structural_rejection(changed, self.decoded_abi, "duplicate")
+
+    def test_stack_alignment_must_be_whole_slots(self):
+        changed = self.mutate(self.sources["linux"], b"stack-alignment-bytes 16\n", b"stack-alignment-bytes 12\n")
+        self.assert_structural_rejection(changed, self.decoded_abi, "alignment")
+
+    def test_stale_register_description_revision_is_rejected(self):
+        row = b"regfile " + self.regfile.digest.encode("ascii") + b"\n"
+        changed = self.mutate(self.sources["darwin"], row, b"regfile " + b"1" * 64 + b"\n")
+        self.assert_structural_rejection(changed, self.decoded_abi, "register description revision")
+
+    def test_profile_feature_must_be_known(self):
+        changed = self.mutate(self.profile, b"host-only tls\n", b"host-only tlss\n")
+        self.assert_structural_rejection(changed, self.decoded_profile, "unknown.*feature")
+
+    def test_profile_host_abi_revision_must_be_current(self):
+        rows = [row for row in self.profile.splitlines(keepends=True) if row.startswith(b"abi linux ")]
+        self.assertEqual(len(rows), 1)
+        changed = self.mutate(self.profile, rows[0], b"abi linux " + b"2" * 64 + b"\n")
+        self.assert_structural_rejection(changed, self.decoded_profile, "ABI revision")
+
+    def test_wrong_abi_digest_remains_a_separate_failure(self):
+        rows = [row for row in self.sources["linux"].splitlines(keepends=True) if row.startswith(b"sha256 ")]
+        self.assertEqual(len(rows), 1)
+        mutated = self.sources["linux"].replace(rows[0], b"sha256 " + b"0" * 64 + b"\n", 1)
+        with self.assertRaisesRegex(gen.TargetDescriptionError, "digest"):
+            self.decoded_abi(mutated)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use evocc_mir::generic::abi::AbiFacts;
 use evocc_mir::generic::allocation::{
     allocate, AllocClass, AllocInst, AllocTerm, Allocated, AllocationTarget, ConstraintBody,
     ConstraintOperand, ConstraintValue, SpillKind, SpillView,
@@ -467,7 +468,59 @@ impl AllocTerm for Term {
     }
 }
 
-struct TinyTarget;
+const TINY_ARGUMENTS: [RegisterBank; 2] = [
+    RegisterBank { first: 0, count: 2 },
+    RegisterBank {
+        first: 16,
+        count: 2,
+    },
+];
+
+const TINY_ABI: AbiFacts = AbiFacts {
+    name: "tiny",
+    argument_banks: &TINY_ARGUMENTS,
+    result_banks: &TINY_ARGUMENTS,
+    indirect_result: 7,
+    result_overflow: 2,
+    stack_slot_bytes: 8,
+    stack_alignment_bytes: 16,
+    stack_arguments: true,
+    callee_saved: &[2],
+    call_clobbers: &[0, 1, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23],
+    partially_preserved: &[],
+    partially_preserved_bytes: 0,
+    frame_record_bytes: 16,
+    save_slot_bytes: 8,
+    variadic_save_bytes: &[8, 16],
+    variadic_save_alignment: 16,
+};
+
+/// Unequal per-bank counts, four-byte slots and 32-byte stack alignment.
+const TOY_ARGUMENTS: [RegisterBank; 2] = [
+    RegisterBank { first: 0, count: 3 },
+    RegisterBank {
+        first: 16,
+        count: 1,
+    },
+];
+
+const TOY_ABI: AbiFacts = AbiFacts {
+    name: "toy",
+    argument_banks: &TOY_ARGUMENTS,
+    result_banks: &TOY_ARGUMENTS,
+    indirect_result: 5,
+    result_overflow: 3,
+    stack_slot_bytes: 4,
+    stack_alignment_bytes: 32,
+    ..TINY_ABI
+};
+
+struct TinyTarget {
+    abi: &'static AbiFacts,
+}
+
+const TINY: TinyTarget = TinyTarget { abi: &TINY_ABI };
+const TOY: TinyTarget = TinyTarget { abi: &TOY_ABI };
 
 impl AllocationTarget<Class> for TinyTarget {
     fn bank(&self, class: Class) -> RegisterBank {
@@ -484,11 +537,8 @@ impl AllocationTarget<Class> for TinyTarget {
             (_, true) => &[2],
         }
     }
-    fn callee_saved(&self) -> &'static [u8] {
-        &[2]
-    }
-    fn call_clobbers(&self) -> &'static [u8] {
-        &[0, 1, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23]
+    fn abi(&self) -> &AbiFacts {
+        self.abi
     }
     fn cycle_scratch(&self, class: Class) -> u8 {
         if class == Class::Pair {
@@ -505,33 +555,6 @@ impl AllocationTarget<Class> for TinyTarget {
     }
     fn clobber_classes(&self) -> &'static [Class] {
         &[Class::Word]
-    }
-    fn argument_bank(&self, class: Class) -> RegisterBank {
-        RegisterBank {
-            first: if class == Class::Pair { 16 } else { 0 },
-            count: 2,
-        }
-    }
-    fn argument_banks(&self) -> &'static [RegisterBank] {
-        &[
-            RegisterBank { first: 0, count: 2 },
-            RegisterBank {
-                first: 16,
-                count: 2,
-            },
-        ]
-    }
-    fn indirect_result_register(&self) -> u8 {
-        7
-    }
-    fn result_overflow_register(&self) -> u8 {
-        2
-    }
-    fn stack_slot_bytes(&self) -> u64 {
-        8
-    }
-    fn stack_alignment_words(&self) -> u32 {
-        2
     }
     fn fixed_binding_spelling(&self, number: u8) -> String {
         format!("p{number}")
@@ -606,10 +629,10 @@ fn ordered_pools_and_boundary_copies_are_the_actual_shared_algorithm() {
         vec![Inst::Value(r(1), 3), Inst::Add(r(2), r(0), r(1))],
         vec![r(2)],
     );
-    let first = allocate(&TinyTarget, &source).unwrap();
-    let second = allocate(&TinyTarget, &source).unwrap();
+    let first = allocate(&TINY, &source).unwrap();
+    let second = allocate(&TINY, &source).unwrap();
     assert_eq!(first, second);
-    verify_allocation(&TinyTarget, &first).unwrap();
+    verify_allocation(&TINY, &first).unwrap();
     assert_eq!(first.spilled, 0);
     assert_eq!(first.frame_slots, 0);
     let incoming = first.blocks[0]
@@ -637,8 +660,8 @@ fn indirect_result_uses_the_target_boundary_register_not_an_argument_slot() {
         vec![Inst::IndirectResult, Inst::Add(r(2), r(0), r(1))],
         vec![r(2)],
     );
-    let allocated = allocate(&TinyTarget, &source).unwrap();
-    verify_allocation(&TinyTarget, &allocated).unwrap();
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
     assert!(allocated.indirect_result);
     assert_eq!(allocated.parameters, 2);
     assert!(allocated.assignment.values().any(|number| *number == 7));
@@ -649,7 +672,7 @@ fn indirect_result_uses_the_target_boundary_register_not_an_argument_slot() {
             *number = 6;
         }
     }
-    assert!(verify_allocation(&TinyTarget, &corrupted).is_err());
+    assert!(verify_allocation(&TINY, &corrupted).is_err());
 }
 
 #[test]
@@ -662,8 +685,8 @@ fn pressure_spills_and_a_removed_reload_is_independently_rejected() {
         insts.push(Inst::Add(r(19 + id), r(18 + id), r(id)));
     }
     let source = single(vec![], insts, vec![r(28)]);
-    let allocated = allocate(&TinyTarget, &source).unwrap();
-    verify_allocation(&TinyTarget, &allocated).unwrap();
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
     assert!(allocated.spilled > 0);
     assert!(allocated.frame_slots > 0);
     assert!(allocated
@@ -681,7 +704,7 @@ fn pressure_spills_and_a_removed_reload_is_independently_rejected() {
     for block in &mut missing.blocks {
         block.insts.retain(|i| !matches!(i, Inst::Restore(..)));
     }
-    assert!(verify_allocation(&TinyTarget, &missing).is_err());
+    assert!(verify_allocation(&TINY, &missing).is_err());
 }
 
 #[test]
@@ -699,8 +722,8 @@ fn call_keeps_opaque_payload_and_full_width_values_spill_across_it() {
         ],
         vec![q(2)],
     );
-    let allocated = allocate(&TinyTarget, &source).unwrap();
-    verify_allocation(&TinyTarget, &allocated).unwrap();
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
     assert!(allocated.spilled > 0);
     assert!(allocated.frame_slots >= 2);
     let insts = &allocated.blocks[0].insts;
@@ -738,13 +761,13 @@ fn a_live_scalar_uses_the_callee_pool_and_call_clobber_forgery_is_rejected() {
         ],
         vec![r(1)],
     );
-    let allocated = allocate(&TinyTarget, &source).unwrap();
-    verify_allocation(&TinyTarget, &allocated).unwrap();
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
     assert_eq!(allocated.assignment[&0], 2);
     assert_eq!(allocated.used_callee_saved, vec![2]);
     let mut forged = allocated.clone();
     forged.assignment.insert(0, 0);
-    assert!(verify_allocation(&TinyTarget, &forged).is_err());
+    assert!(verify_allocation(&TINY, &forged).is_err());
 }
 
 #[test]
@@ -761,8 +784,8 @@ fn repeated_fixed_inputs_split_occurrences_not_the_source_value() {
         })],
         vec![r(0)],
     );
-    let allocated = allocate(&TinyTarget, &source).unwrap();
-    verify_allocation(&TinyTarget, &allocated).unwrap();
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
     let body = allocated.blocks[0]
         .insts
         .iter()
@@ -788,8 +811,8 @@ fn tied_early_constraints_and_out_of_range_tie_are_checked_independently() {
         })],
         vec![r(2)],
     );
-    let allocated = allocate(&TinyTarget, &source).unwrap();
-    verify_allocation(&TinyTarget, &allocated).unwrap();
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
     let body = allocated.blocks[0]
         .insts
         .iter()
@@ -813,12 +836,12 @@ fn tied_early_constraints_and_out_of_range_tie_are_checked_independently() {
         .find_map(AllocInst::assembly_mut)
         .unwrap();
     body.inputs[0].tied = Some(9);
-    assert!(verify_allocation(&TinyTarget, &forged).is_err());
+    assert!(verify_allocation(&TINY, &forged).is_err());
     let mut forged = allocated.clone();
     forged
         .assignment
         .insert(result.id, allocated.assignment[&other.id]);
-    assert!(verify_allocation(&TinyTarget, &forged).is_err());
+    assert!(verify_allocation(&TINY, &forged).is_err());
 }
 
 #[test]
@@ -834,12 +857,12 @@ fn verifier_checks_bank_membership_not_allocator_pool_membership() {
         ],
         vec![],
     );
-    let allocated = allocate(&TinyTarget, &source).unwrap();
+    let allocated = allocate(&TINY, &source).unwrap();
     let mut in_bank = allocated.clone();
     in_bank.assignment.insert(0, 5); // Admitted physical bank, not an allocation candidate.
-    verify_allocation(&TinyTarget, &in_bank).unwrap();
+    verify_allocation(&TINY, &in_bank).unwrap();
     in_bank.assignment.insert(0, 16); // Other bank, even though it is a valid candidate there.
-    assert!(verify_allocation(&TinyTarget, &in_bank).is_err());
+    assert!(verify_allocation(&TINY, &in_bank).is_err());
 }
 
 #[test]
@@ -849,8 +872,8 @@ fn exclusive_result_cannot_overlap_any_input() {
         vec![Inst::Early(r(2), r(0), r(1))],
         vec![r(2)],
     );
-    let allocated = allocate(&TinyTarget, &source).unwrap();
-    verify_allocation(&TinyTarget, &allocated).unwrap();
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
     let (dst, src) = allocated.blocks[0]
         .insts
         .iter()
@@ -867,7 +890,7 @@ fn exclusive_result_cannot_overlap_any_input() {
     forged
         .assignment
         .insert(dst.id, allocated.assignment[&src.id]);
-    assert!(verify_allocation(&TinyTarget, &forged).is_err());
+    assert!(verify_allocation(&TINY, &forged).is_err());
 }
 
 #[test]
@@ -904,8 +927,8 @@ fn constraint_output_copies_live_on_selected_edges_not_in_shared_successors() {
             },
         ],
     };
-    let allocated = allocate(&TinyTarget, &source).unwrap();
-    verify_allocation(&TinyTarget, &allocated).unwrap();
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
     let selected = allocated.blocks[0].term.edges();
     assert_eq!(selected.len(), 2);
     assert_ne!(selected[0].0, selected[1].0);
@@ -924,4 +947,58 @@ fn constraint_output_copies_live_on_selected_edges_not_in_shared_successors() {
             |i| matches!(i, Inst::Copy(_, src) if allocated.assignment.get(&src.id) == Some(&3))
         ));
     }
+}
+
+fn stack_slots(allocated: &Allocated<Inst, Term, Class>) -> (Vec<u32>, Vec<u32>) {
+    let insts = || allocated.blocks.iter().flat_map(|block| &block.insts);
+    let incoming = insts()
+        .filter_map(|inst| match inst {
+            Inst::Incoming(_, slot) => Some(*slot),
+            _ => None,
+        })
+        .collect();
+    let outgoing = insts()
+        .filter_map(|inst| match inst {
+            Inst::Outgoing(_, slot) => Some(*slot),
+            _ => None,
+        })
+        .collect();
+    (incoming, outgoing)
+}
+
+#[test]
+fn boundary_driver_follows_the_toy_abi_counts_slots_and_alignment() {
+    let source = single(
+        vec![r(0), r(1), r(2), r(3), q(4), q(5)],
+        vec![
+            Inst::Call {
+                args: vec![r(0), r(1), r(2), r(3), q(4), q(5), r(1)],
+                results: vec![r(6)],
+                opaque: 1,
+            },
+            Inst::Add(r(7), r(6), r(3)),
+        ],
+        vec![r(7)],
+    );
+    let toy = allocate(&TOY, &source).unwrap();
+    verify_allocation(&TOY, &toy).unwrap();
+    // Three general registers and one pair register; the two-word pair piece
+    // aligns the shared stack cursor before it is placed.
+    assert_eq!(stack_slots(&toy), (vec![0, 2], vec![0, 2, 4]));
+    // Five four-byte words round to the toy's 32-byte stack alignment.
+    assert_eq!(toy.outgoing, 32);
+    let call = toy.blocks[0]
+        .insts
+        .iter()
+        .find_map(|inst| match inst {
+            Inst::Call { results, .. } => Some(results.clone()),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(toy.assignment[&call[0].id], 0);
+
+    let tiny = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &tiny).unwrap();
+    assert_eq!(stack_slots(&tiny), (vec![0, 1], vec![0, 1, 2]));
+    assert_eq!(tiny.outgoing, 32);
 }
