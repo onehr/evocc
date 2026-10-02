@@ -95,3 +95,44 @@ fn constant_selection_is_shared_by_the_exact_ir_adapter() {
     }
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn local_selection_uses_the_same_canonical_option_list_without_changing_ir() {
+    let directory =
+        std::env::temp_dir().join(format!("evocc-ir-local-test-{}", std::process::id()));
+    fs::create_dir(&directory).unwrap();
+    let path = directory.join("input.evo");
+    let module = evocc_evoir::parse_section9_module(b"func @product(%arg0: bits<64>, %arg1: bits<64>) -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: bits<64>, %v1: bits<64>):\n    %v2 = mul.bits<64> %v0, %v1\n    %v3 = add.bits<64> %v0, %v2\n    ret %v3\n}\n").unwrap();
+    let text = evocc_evoir::render_module(&module);
+    fs::write(&path, &text).unwrap();
+    let digest = evocc_proof::sha256_hex(text.as_bytes());
+    for target in ["darwin-arm64", "linux-aarch64"] {
+        let mut outputs = vec![];
+        for flags in ["local,constants", "constants,local"] {
+            let output = Command::new(env!("CARGO_BIN_EXE_evo-ir-asm"))
+                .args([target, &digest])
+                .arg(&path)
+                .arg(format!("--isel-opt={flags}"))
+                .arg("--frame-opt=paired-saves,shared-epilogue,leaf-frames")
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:?}");
+            let assembly = String::from_utf8(output.stdout).unwrap();
+            assert!(assembly.contains("// evocc-native-isel=constants,local\n"));
+            assert!(assembly.contains("    madd "), "{assembly}");
+            assert!(assembly.contains("// evocc-local-selected local_multiply_arithmetic=1"));
+            outputs.push(assembly);
+        }
+        assert_eq!(outputs[0], outputs[1]);
+        let output = Command::new(env!("CARGO_BIN_EXE_evo-ir-asm"))
+            .args([target, &digest])
+            .arg(&path)
+            .arg("--isel-opt=local,local")
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+    }
+    assert_eq!(fs::read_to_string(&path).unwrap(), text);
+    fs::remove_dir_all(directory).unwrap();
+}

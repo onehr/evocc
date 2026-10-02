@@ -10,6 +10,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -41,6 +42,18 @@ def codegen_compile_argv(compiler, checker, checker_hash, case, source, root, pr
     return [compiler, '--emit=asm', '-std=gnu11', '-O2', '-fPIC', *case['flags'],
             '-nostdinc', *['-I' + str(p) for p in includes], *proof_flags, '--eq-proof-dir=' + str(chain),
             '--ub-checks=' + profile, *extra_flags, folder / source]
+
+
+def codegen_selection_counts(assembly):
+    """Retain producer counters before discarding assembly, never as proof evidence."""
+    counts = dict(selected={}, declined={})
+    for bucket, key, count in re.findall(
+            rb'^// evocc-local-(selected|declined) ([a-z0-9_/-]+)=([0-9]+)$',
+            assembly, flags=re.MULTILINE):
+        values = counts[bucket.decode('ascii')]
+        key = key.decode('ascii')
+        values[key] = values.get(key, 0) + int(count)
+    return counts
 
 
 def codegen_disk_preflight(root, resources, *, start):
@@ -278,6 +291,11 @@ def run_codegen_measurement(plan, root):
                         compile_times.append(result['wall_ns'])
                         asm = directory / result['stdout']
                         assembly_hashes.append(result['stdout_sha256'])
+                        if repeat == 0:
+                            receipt.setdefault('producer_selection_counts', []).append(dict(
+                                unit=name, profile=profile,
+                                claim='PRODUCER_TELEMETRY_NOT_PROVED',
+                                **codegen_selection_counts(asm.read_bytes())))
                         try:
                             binding = bind_bundle(chain, tools['checker'] if eqsat else None)
                         except Exception as error:

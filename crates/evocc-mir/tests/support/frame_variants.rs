@@ -19,10 +19,13 @@ pub fn compile_module_for(
         FrameVariants::parse(value.to_str().expect("UTF-8 frame variant request"))
             .expect("valid native-test frame variant request")
     });
-    let compact_constants = selection_value.is_some_and(|value| {
-        evocc_mir::emit::parse_constant_selection(value.to_str().expect("UTF-8 selection request"))
+    let selection =
+        selection_value.map_or_else(evocc_mir::emit::SelectionVariants::default, |value| {
+            evocc_mir::emit::SelectionVariants::parse(
+                value.to_str().expect("UTF-8 selection request"),
+            )
             .expect("valid native-test selection request")
-    });
+        });
     evocc_mir::compile_module_with_options(
         target,
         module,
@@ -30,7 +33,8 @@ pub fn compile_module_for(
         RelocationModel::PositionIndependent,
         &CodegenOptions {
             frame,
-            compact_constants,
+            compact_constants: selection.constants,
+            local_selection: selection.local,
             ..Default::default()
         },
     )

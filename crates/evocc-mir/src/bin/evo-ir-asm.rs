@@ -5,11 +5,11 @@ use std::process::ExitCode;
 
 fn emit(args: &[String]) -> Result<String, String> {
     if args.len() < 3 {
-        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo [--ub-checks=checked|unchecked] [--frame-opt=LIST] [--isel-opt=constants] [--retain-dead-computations] [--dce-report]".into());
+        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo [--ub-checks=checked|unchecked] [--frame-opt=LIST] [--isel-opt=constants,local] [--retain-dead-computations] [--dce-report]".into());
     }
     let mut profile = evocc_mir::UbCheckProfile::Checked;
     let mut frame = evocc_mir::emit::FrameVariants::OFF;
-    let mut compact_constants = false;
+    let mut selection = evocc_mir::emit::SelectionVariants::default();
     let mut retain_dead = false;
     let mut report = false;
     let mut seen = std::collections::BTreeSet::new();
@@ -23,7 +23,7 @@ fn emit(args: &[String]) -> Result<String, String> {
         } else if let Some(value) = flag.strip_prefix("--frame-opt=") {
             frame = evocc_mir::emit::FrameVariants::parse(value)?;
         } else if let Some(value) = flag.strip_prefix("--isel-opt=") {
-            compact_constants = evocc_mir::emit::parse_constant_selection(value)?;
+            selection = evocc_mir::emit::SelectionVariants::parse(value)?;
         } else if flag == "--retain-dead-computations" {
             retain_dead = true;
         } else if flag == "--dce-report" {
@@ -126,7 +126,8 @@ fn emit(args: &[String]) -> Result<String, String> {
             ub_checks: profile,
             retain_dead_computations: retain_dead,
             frame,
-            compact_constants,
+            compact_constants: selection.constants,
+            local_selection: selection.local,
             ..Default::default()
         },
     )

@@ -95,6 +95,38 @@ class ConstantPatternDescriptionTest(unittest.TestCase):
                 gen.parse_costs(changed)
 
 
+class LocalPatternDescriptionTest(unittest.TestCase):
+    def source(self):
+        return (ROOT / "targets/aarch64/patterns").read_bytes()
+
+    def test_local_families_are_generated_not_an_unconditional_emitter_switch(self):
+        source = self.source()
+        description = gen.parse_patterns(source)
+        local = [row for row in description.rows if row["id"].startswith("local_")]
+        self.assertEqual(len(local), 6)
+        rendered = gen.render_patterns(description)
+        self.assertIn('ops: &["add", "sub", "and", "orr", "eor"]', rendered)
+        self.assertLess(rendered.index('id: "local_indexed_memory"'), rendered.index('id: "local_shift_arithmetic"'))
+        without = with_valid_digest(b"".join(line for line in source.splitlines(keepends=True)
+                                             if not line.startswith(b"pattern local_shift_arithmetic ")))
+        self.assertNotIn('id: "local_shift_arithmetic"', gen.render_patterns(gen.parse_patterns(without)))
+
+    def test_local_domain_mutations_fail_after_digest_rebinding(self):
+        source = self.source()
+        for old, new in [
+            (b"ops=add,sub,and,orr,eor", b"ops=add,sub,and,orr,eor,sdiv"),
+            (b"shifts=lsl,lsr,asr", b"shifts=lsl,lsr,asr,ror"),
+            (b"guard=adjacent_single_use_physical_safe", b"guard=adjacent"),
+            (b"memory=same_access", b"memory=none"),
+            (b"flags=original_cmp", b"flags=preserve"),
+            (b"root=address_memory widths=64", b"root=address_memory widths=32,64"),
+            (b"claim=equal_live_state", b"claim=equal_all_registers"),
+        ]:
+            with self.subTest(new=new):
+                with self.assertRaises(gen.TargetDescriptionError):
+                    gen.parse_patterns(with_valid_digest(source.replace(old, new, 1)))
+
+
 class RegisterDescriptionTest(unittest.TestCase):
     def setUp(self):
         self.original = DESCRIPTION.read_bytes()

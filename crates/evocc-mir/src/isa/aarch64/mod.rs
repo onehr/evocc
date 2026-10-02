@@ -6,5 +6,6 @@ pub mod allocation;
 pub mod constants;
 pub mod costs;
 pub mod insts;
+pub mod local;
 pub mod patterns;
 pub mod regfile;

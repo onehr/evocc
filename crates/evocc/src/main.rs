@@ -295,7 +295,7 @@ fn main() -> ExitCode {
         eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
         eprintln!("       --ub-checks=checked|unchecked (native only; default checked)");
         eprintln!("       --frame-opt=paired-saves,shared-epilogue,leaf-frames (native only; default none)");
-        eprintln!("       --isel-opt=constants (native only; default none)");
+        eprintln!("       --isel-opt=constants,local (native only; default none)");
         eprintln!("       --opt-pass=identity [--pass-report NEW_JSON_PATH] (development TV)");
         eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
         eprintln!("       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
@@ -466,9 +466,11 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                     return Err("--isel-opt may appear only once".into());
                 }
                 selection_variants_selected = true;
-                codegen.compact_constants = evocc_mir::emit::parse_constant_selection(
+                let selected = evocc_mir::emit::SelectionVariants::parse(
                     arg.strip_prefix("--isel-opt=").unwrap(),
                 )?;
+                codegen.compact_constants = selected.constants;
+                codegen.local_selection = selected.local;
             }
             _ if arg.starts_with("--eq-") => {
                 let (key, value) = arg

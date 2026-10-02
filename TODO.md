@@ -2411,7 +2411,9 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     remain part of N03d after C1; no closure is inferred from this plan.
     C2 is now frozen in [the local-selection plan](tests/contracts/codegen-n03d-local-20261002.json):
     adjacent single-use shift/extension/multiply and indexed-memory idioms,
-    emission only, default OFF. Real-driver RED fixtures precede implementation;
+    emission only, default OFF. The real-driver RED was reproduced at `504e012a`;
+    the implementation and focused boundary/native controls are in progress.
+    Full-workspace, both native corpora and the six-unit capture remain due;
     no C2 acceptance or size result is recorded yet.
 
   - [x] **N03e — EvoIR mid-level passes, bounded first slice** — `DONE_NEGATIVE`, P3.

@@ -49,6 +49,8 @@ pub struct CodegenOptions {
     pub frame: FrameVariants,
     /// C1 GPR constant materialization; all selection options default off.
     pub compact_constants: bool,
+    /// C2 adjacent single-use emission idioms.
+    pub local_selection: bool,
     pub frame_pointer_required: bool,
     pub leaf_frame_pointer_required: bool,
 }
@@ -122,6 +124,45 @@ pub fn parse_constant_selection(value: &str) -> Result<bool, String> {
     }
 }
 
+/// Native-only selection options; canonical identity is independent of list order.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SelectionVariants {
+    pub constants: bool,
+    pub local: bool,
+}
+
+impl SelectionVariants {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        let mut result = Self::default();
+        for name in value.split(',') {
+            let slot = match name {
+                "constants" => &mut result.constants,
+                "local" => &mut result.local,
+                _ => {
+                    return Err(format!(
+                    "unknown instruction selection variant {name:?}; supported: constants, local"
+                ))
+                }
+            };
+            if std::mem::replace(slot, true) {
+                return Err(format!(
+                    "instruction selection variant {name:?} may appear only once"
+                ));
+            }
+        }
+        Ok(result)
+    }
+
+    pub fn name(self) -> Option<&'static str> {
+        match (self.constants, self.local) {
+            (false, false) => None,
+            (true, false) => Some("constants"),
+            (false, true) => Some("local"),
+            (true, true) => Some("constants,local"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum StackGuard {
     #[default]
@@ -153,6 +194,7 @@ pub struct Frame {
     pub shared_epilogue: bool,
     pub frameless: bool,
     pub compact_constants: bool,
+    pub local_selection: bool,
     pub stack_guard: Option<(u64, StackGuard)>,
     /// Runtime allocations move sp; fixed slots must then stay relative to x29.
     pub dynamic: bool,
@@ -380,6 +422,7 @@ pub fn frame_of_for(target: Target, allocated: &Allocated) -> Frame {
         shared_epilogue: false,
         frameless: false,
         compact_constants: false,
+        local_selection: false,
         stack_guard: None,
         dynamic: allocated.blocks.iter().any(|block| {
             block
@@ -1256,6 +1299,7 @@ fn emit_function(
     frame.paired_saves = options.frame.paired_saves && !protected;
     frame.shared_epilogue = options.frame.shared_epilogue && !protected;
     frame.compact_constants = options.compact_constants && !protected;
+    frame.local_selection = options.local_selection && !protected;
     if stack_protect {
         frame.stack_guard = Some((frame.size, options.stack_guard.clone()));
         frame.size += KERNEL.stack_guard_slot_bytes;
@@ -1443,6 +1487,9 @@ fn emit_blocks(
     let mut copies = 0_u32;
     let mut relaxations = 0_u32;
     let fp_guards = crate::floating::guard_points(&allocated.blocks);
+    let mut local = frame
+        .local_selection
+        .then(|| crate::isa::aarch64::local::Selector::new(allocated));
     for (index, block) in allocated.blocks.iter().enumerate() {
         let _ = writeln!(text, "{}:", label(target, &allocated.name, block.id));
         if addressed.contains(&block.id)
@@ -1450,7 +1497,11 @@ fn emit_blocks(
         {
             let _ = writeln!(text, "{}:", block_symbol(target, &allocated.name, block.id));
         }
+        let mut skip_until = 0;
         for (inst_index, inst) in block.insts.iter().enumerate() {
+            if inst_index < skip_until {
+                continue;
+            }
             if let Some(strict) = fp_guards.get(&(block.id, inst_index)) {
                 let name = format!(
                     "{}{}_fp_env{}",
@@ -1468,6 +1519,15 @@ fn emit_blocks(
                     text,
                     "    mrs {SCRATCH_X}, fpcr\n{mask}    cbz {SCRATCH_X}, {name}\n    brk #3064\n{name}:"
                 );
+            }
+            if let Some(selection) = local.as_mut().and_then(|selector| {
+                selector.select(&block.insts[inst_index..], frame.strict_alignment)
+            }) {
+                // Only integer/memory forms are admitted, so no FP guard point
+                // or other effect is skipped inside this adjacent sequence.
+                selection.emit(text, spell);
+                skip_until = inst_index + selection.consumed;
+                continue;
             }
             emit_inst(
                 text,
@@ -1500,6 +1560,14 @@ fn emit_blocks(
             relax,
             &mut relaxations,
         );
+    }
+    if let Some(selector) = local {
+        for (pattern, count) in selector.counts.selected {
+            let _ = writeln!(text, "// evocc-local-selected {pattern}={count}");
+        }
+        for ((pattern, reason), count) in selector.counts.declined {
+            let _ = writeln!(text, "// evocc-local-declined {pattern}/{reason}={count}");
+        }
     }
 }
 
@@ -2141,7 +2209,7 @@ use crate::isa::aarch64::regfile::{SCRATCH as SCRATCH_OFFSET, SCRATCH_UNIT};
 /// above".
 const UNROLL_CEILING: u64 = 64;
 
-fn load_mnemonic(kind: LoadKind) -> &'static str {
+pub(crate) fn load_mnemonic(kind: LoadKind) -> &'static str {
     match kind {
         LoadKind::B => "ldrb",
         LoadKind::H => "ldrh",
@@ -2158,7 +2226,7 @@ fn load_mnemonic(kind: LoadKind) -> &'static str {
     }
 }
 
-fn store_mnemonic(kind: StoreKind) -> &'static str {
+pub(crate) fn store_mnemonic(kind: StoreKind) -> &'static str {
     match kind {
         StoreKind::B => "strb",
         StoreKind::H => "strh",
@@ -2174,7 +2242,7 @@ fn store_mnemonic(kind: StoreKind) -> &'static str {
 /// write a thirty-two-bit register, `ldrsw` a sixty-four-bit one, and the two
 /// sign-extending byte and halfword forms take whichever the value's class
 /// asks for.
-const fn load_class(kind: LoadKind, declared: RegClass) -> RegClass {
+pub(crate) const fn load_class(kind: LoadKind, declared: RegClass) -> RegClass {
     match kind {
         LoadKind::B | LoadKind::H | LoadKind::W => RegClass::Gpr32,
         LoadKind::X | LoadKind::P | LoadKind::Pf | LoadKind::Sw => RegClass::Gpr64,
@@ -2187,7 +2255,7 @@ const fn load_class(kind: LoadKind, declared: RegClass) -> RegClass {
 
 /// The class a store's source is spelled in: the same rule without the
 /// sign-extending forms, which do not store.
-const fn store_class(kind: StoreKind) -> RegClass {
+pub(crate) const fn store_class(kind: StoreKind) -> RegClass {
     match kind {
         StoreKind::B | StoreKind::H | StoreKind::W => RegClass::Gpr32,
         StoreKind::X | StoreKind::P => RegClass::Gpr64,

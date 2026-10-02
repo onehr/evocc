@@ -43,6 +43,23 @@ def observation(commit="1" * 40, capture="a" * 64, complete=True):
 
 
 class TrendTests(unittest.TestCase):
+    def test_local_selection_counts_survive_discarding_assembly(self):
+        from tools.ladder import eqsat_size
+        assembly = b'''f:
+    add x0, x0, x1, lsl #3
+// evocc-local-selected local_shift_arithmetic=2
+// evocc-local-declined local_shift_compare/temporary-not-single-definition-and-use=1
+g:
+// evocc-local-selected local_shift_arithmetic=3
+// evocc-local-selected local_indexed_memory=1
+'''
+        self.assertEqual(eqsat_size.codegen_selection_counts(assembly), {
+            'selected': {'local_shift_arithmetic': 5, 'local_indexed_memory': 1},
+            'declined': {'local_shift_compare/temporary-not-single-definition-and-use': 1},
+        })
+        self.assertEqual(eqsat_size.codegen_selection_counts(b'ret\n'),
+                         {'selected': {}, 'declined': {}})
+
     def test_failed_compile_keeps_rejection_and_rollback_buckets(self):
         from tools.ladder.eqsat_size import codegen_proof_failure
         fixture = ROOT / 'tests/fixtures/eqsat-chains/verified-chain/chain.json'

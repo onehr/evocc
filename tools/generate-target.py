@@ -1171,13 +1171,21 @@ def parse_patterns(source: bytes) -> PatternDescription:
         "const_movn": ("movn_movk", "any"),
         "const_orr": ("orr_zero", "logical_mask"),
     }
+    local = {
+        "local_indexed_memory": ("address_memory", "64", "indexed_memory", "access_result", "preserve", "same_access", "add", "lsl"),
+        "local_shift_arithmetic": ("shift_alu", "32,64", "shifted_arithmetic", "dst", "preserve", "none", "add,sub,and,orr,eor", "lsl,lsr,asr"),
+        "local_shift_compare": ("shift_cmp", "32,64", "shifted_compare", "flags", "original_cmp", "none", "cmp", "lsl,lsr,asr"),
+        "local_extend_arithmetic": ("extend_alu", "32,64", "extended_arithmetic", "dst", "preserve", "none", "add,sub", "none"),
+        "local_extend_compare": ("extend_cmp", "32,64", "extended_compare", "flags", "original_cmp", "none", "cmp", "none"),
+        "local_multiply_arithmetic": ("mul_alu", "32,64", "multiply_arithmetic", "dst", "preserve", "none", "add,sub", "none"),
+    }
     for line in lines:
         parts = line.split(" ")
-        if len(parts) != 10 or parts[0] != "pattern":
-            raise TargetDescriptionError("malformed constant pattern")
+        if len(parts) not in {10, 12} or parts[0] != "pattern":
+            raise TargetDescriptionError("malformed selection pattern")
         name = parts[1]
-        if name not in families or name in seen:
-            raise TargetDescriptionError("unknown or duplicate constant pattern")
+        if name not in families and name not in local or name in seen:
+            raise TargetDescriptionError("unknown or duplicate selection pattern")
         seen.add(name)
         row = {"id": name}
         for token in parts[2:]:
@@ -1185,14 +1193,23 @@ def parse_patterns(source: bytes) -> PatternDescription:
             if not separator:
                 raise TargetDescriptionError("malformed pattern field")
             insert(row, key, value, "pattern field")
-        kind, guard = families[name]
-        expected = {
-            "root": "mov_imm", "widths": "32,64", "sequence": kind,
-            "guard": guard, "writes": "dst", "flags": "preserve",
-            "memory": "none", "claim": "exact_bits_zero_upper_w",
-        }
+        if name in families:
+            kind, guard = families[name]
+            expected = {
+                "root": "mov_imm", "widths": "32,64", "sequence": kind,
+                "guard": guard, "writes": "dst", "flags": "preserve",
+                "memory": "none", "claim": "exact_bits_zero_upper_w",
+            }
+        else:
+            root, widths, kind, writes, flags, memory, ops, shifts = local[name]
+            expected = {
+                "root": root, "widths": widths, "sequence": kind,
+                "guard": "adjacent_single_use_physical_safe", "writes": writes,
+                "flags": flags, "memory": memory, "claim": "equal_live_state",
+                "ops": ops, "shifts": shifts,
+            }
         if {key: value for key, value in row.items() if key != "id"} != expected:
-            raise TargetDescriptionError("unsupported constant pattern contract")
+            raise TargetDescriptionError("unsupported selection pattern contract")
         rows.append(row)
     if not rows:
         raise TargetDescriptionError("empty constant pattern table")
@@ -1212,7 +1229,27 @@ def render_patterns(description: PatternDescription) -> str:
         "#[rustfmt::skip]\npub const CONSTANT_PATTERNS: &[ConstantPattern] = &[\n",
     ]
     for row in description.rows:
+        if row["root"] != "mov_imm":
+            continue
         out.append(f'    ConstantPattern {{ id: "{row["id"]}", kind: ConstantKind::{kinds[row["sequence"]]}, widths: &[32, 64] }},\n')
+    out.append("];\n")
+    local_kinds = {
+        "indexed_memory": "IndexedMemory", "shifted_arithmetic": "ShiftedArithmetic",
+        "shifted_compare": "ShiftedCompare", "extended_arithmetic": "ExtendedArithmetic",
+        "extended_compare": "ExtendedCompare", "multiply_arithmetic": "MultiplyArithmetic",
+    }
+    out.extend([
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum LocalKind {\n",
+        "".join(f"    {name},\n" for name in local_kinds.values()), "}\n",
+        "#[derive(Debug, Clone, Copy)]\npub struct LocalPattern {\n    pub id: &'static str,\n    pub kind: LocalKind,\n    pub widths: &'static [u32],\n    pub ops: &'static [&'static str],\n    pub shifts: &'static [&'static str],\n}\n",
+        "#[rustfmt::skip]\npub const LOCAL_PATTERNS: &[LocalPattern] = &[\n",
+    ])
+    for row in description.rows:
+        if row["root"] == "mov_imm":
+            continue
+        ops = ", ".join(f'"{op}"' for op in row["ops"].split(","))
+        shifts = ", ".join(f'"{op}"' for op in row["shifts"].split(","))
+        out.append(f'    LocalPattern {{ id: "{row["id"]}", kind: LocalKind::{local_kinds[row["sequence"]]}, widths: &[{row["widths"]}], ops: &[{ops}], shifts: &[{shifts}] }},\n')
     out.append("];\n")
     return "".join(out)
 
@@ -1225,7 +1262,7 @@ def render_pattern_docs(description: PatternDescription) -> str:
         "| --- | --- | --- | --- | --- |\n",
     ]
     for row in description.rows:
-        out.append(f'| {row["id"]} | {row["root"]} / {row["widths"]} | {row["sequence"]} | {row["guard"]} | {row["claim"]}; writes dst only; flags preserved; no memory |\n')
+        out.append(f'| {row["id"]} | {row["root"]} / {row["widths"]} | {row["sequence"]} | {row["guard"]} | {row["claim"]}; writes {row["writes"]}; flags {row["flags"]}; memory {row["memory"]} |\n')
     return "".join(out)
 
 
@@ -1237,7 +1274,8 @@ def parse_costs(source: bytes) -> tuple[str, dict[str, int]]:
         if len(parts) != 3 or parts[0] != "bytes":
             raise TargetDescriptionError("malformed instruction byte cost")
         insert(costs, parts[1], quantity(parts[2]), "instruction byte cost")
-    if costs != {"mov_wide": 4, "logical_immediate": 4}:
+    if costs not in ({"mov_wide": 4, "logical_immediate": 4},
+                     {"mov_wide": 4, "logical_immediate": 4, "scalar_instruction": 4}):
         raise TargetDescriptionError("C1 costs must count the admitted four-byte A64 forms")
     return digest, costs
 
@@ -1249,6 +1287,7 @@ def render_costs(description: tuple[str, dict[str, int]]) -> str:
         f'pub const DIGEST: &str = "{digest}";\n'
         f'pub const WIDE_BYTES: u32 = {costs["mov_wide"]};\n'
         f'pub const LOGICAL_BYTES: u32 = {costs["logical_immediate"]};\n'
+        f'pub const SCALAR_BYTES: Option<u32> = {"Some(4)" if "scalar_instruction" in costs else "None"};\n'
     )
 
 

@@ -1,6 +1,12 @@
 version patterns.v1
 target aarch64
-sha256 4b419bed5c5b92fe94eb7147623066d47f15a2bae83aee86111cffd04a8ee2d4
+sha256 8e6e3c6b8524565ed8843dc1114a7192dd3f4a4f590acd33c33ea50cc196f9e2
 pattern const_movz root=mov_imm widths=32,64 sequence=movz_movk guard=any writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w
 pattern const_movn root=mov_imm widths=32,64 sequence=movn_movk guard=any writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w
 pattern const_orr root=mov_imm widths=32,64 sequence=orr_zero guard=logical_mask writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w
+pattern local_indexed_memory root=address_memory widths=64 sequence=indexed_memory guard=adjacent_single_use_physical_safe writes=access_result flags=preserve memory=same_access claim=equal_live_state ops=add shifts=lsl
+pattern local_shift_arithmetic root=shift_alu widths=32,64 sequence=shifted_arithmetic guard=adjacent_single_use_physical_safe writes=dst flags=preserve memory=none claim=equal_live_state ops=add,sub,and,orr,eor shifts=lsl,lsr,asr
+pattern local_shift_compare root=shift_cmp widths=32,64 sequence=shifted_compare guard=adjacent_single_use_physical_safe writes=flags flags=original_cmp memory=none claim=equal_live_state ops=cmp shifts=lsl,lsr,asr
+pattern local_extend_arithmetic root=extend_alu widths=32,64 sequence=extended_arithmetic guard=adjacent_single_use_physical_safe writes=dst flags=preserve memory=none claim=equal_live_state ops=add,sub shifts=none
+pattern local_extend_compare root=extend_cmp widths=32,64 sequence=extended_compare guard=adjacent_single_use_physical_safe writes=flags flags=original_cmp memory=none claim=equal_live_state ops=cmp shifts=none
+pattern local_multiply_arithmetic root=mul_alu widths=32,64 sequence=multiply_arithmetic guard=adjacent_single_use_physical_safe writes=dst flags=preserve memory=none claim=equal_live_state ops=add,sub shifts=none
