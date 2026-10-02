@@ -1,0 +1,99 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N07",
+  "slice": "E3: bounded existing-lowering verdicts",
+  "date": "2026-10-03",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "6cda1cc1",
+  "authority": [
+    "docs/target-spec.md step 6 and B1",
+    "docs/codegen-quality-plan.md sections 10 and 11"
+  ],
+  "observed": [
+    "E1 encoding round trips and E2 finite execution do not establish universal-in-input lowering equivalence.",
+    "The pinned Sail default property query accepts overflow and failed assumptions as escape paths; E3 must use an explicit no-escape query.",
+    "Existing lowering has memory/provenance, effects, ABI, 128-bit, floating and other forms outside the executable integer model."
+  ],
+  "scope": {
+    "included": "Inventory every current EvoIR Inst family, every Section 5 table row and each target patterns row, including named specialized lowering/emission paths. Give each a scoped verdict. Symbolically check the E2 nine-by-nine integer bodies and eight constant controls against the verbatim vendor model; do not claim unattempted widths or patterns.",
+    "body_source": ".evidence/codegen/n07-e2/corpus-linux.o; re-extract actual words with the existing E2 object parser and compare with its recorded differential. Same words exist in Darwin. Do not hand-select or simplify machine instructions.",
+    "source_semantics": "EvoIR sections 3.2, 3.3, 3.4: fixed-width modular add/sub/mul, Boolean bit operations, and shifts restricted to defined counts. Source values are low N bits of arbitrary 64-bit ABI inputs; results zero-extend to 64. Reference expressions use Sail bitvector primitives, never host arithmetic or handwritten ISA.",
+    "state": "Arbitrary initial x0/x1, all other 29 GPRs and every ProcState field. Allowed writes x0/x1 only; compare x0 to source result and preserve x2..x30 plus ProcState. No SP/memory/PC/RET/ABI proof. Model exception returns false. SEE is model bookkeeping, not architectural state.",
+    "domain": "Operations add/sub/mul/and/or/xor/shl/lshr/ashr at N=1,2,8,16,31,32,33,63,64. Shift count source width M=N and unsigned low-N count < N. Other widths, M!=N, poison, signed shift predicates and all wider memory/effect/ABI families receive explicit NOT_MODELLED or PARTIAL verdicts, never PASS by association.",
+    "unchanged": "No compiler lowering, model semantics, interpreter, registry, EqSat, option-default or native timing changes. Proof against the pinned model does not change the production trust policy.",
+    "inventory": "No generic opcode DSL or new audit layer. One versioned result table maps current code/spec rows to concrete obligations or explicit reasons outside this model. Negative/UNKNOWN rows remain visible."
+  },
+  "inputs": {
+    "tests/contracts/codegen-n07-e2-20261003-receipt.json": "receipt from 6cda1cc1",
+    ".evidence/codegen/n07-e2/differential.json": "0bcb4ece589f65e7420bcb04110843cb6a9d6d66930c10d969be38c2ca638fa2",
+    ".evidence/codegen/n07-e2/corpus-linux.o": "04e8f5fd08f39572ea49434ab47ba11ba08d2b38d4bca56e32a2f76fb799921b",
+    ".evidence/codegen/n07-e2/corpus.evo": "77103695c649c39c9f856042dcd06734bd030cb86f12bc828c1152bdc9dea012",
+    "targets/aarch64/isa/provenance.json": "d5f6e7afd55de07e111a0867fc10d527eaa9db087a6e9051ef44d1146368c87c"
+  },
+  "toolchain": {
+    "sail_commit": "60695b1ea377048f0adc39c62671cd099b2ed9f6",
+    "sail_sha256": "28f529fc9d738c1659ee4681cf06d9d55f11dcb4d03b5e1cb7e3f2624b375bd3",
+    "z3_sha256": "2c4f9116fefa860dc52d5542a3bbf8ef91f2cbc7f117c84fb2d492b80d7c26d9",
+    "cache": ".evidence/codegen/n07-e2/toolchain/sail",
+    "execution": "existing sealed Linux container, serial, 2 CPUs/3 GiB, no new image/disk or toolchain build"
+  },
+  "smt": {
+    "query": "~(exist assertion) & all return & ~(exist match_failure) & ~(exist overflow) & all assumption",
+    "integer_bound_bits": 256,
+    "unknown_bitvector_bound_bits": 256,
+    "dynamic_loop_unroll_limit": 10,
+    "static_loop_policy": "Sail fully unrolls statically bounded loops. Dynamic cutoff emits match_failure and cannot be a pass under the explicit query.",
+    "forbidden": [
+      "--smt-ignore-overflow",
+      "implicit default property query",
+      "model exception treated as success",
+      "SAT or UNKNOWN classified as proof",
+      "fabricated solver answers"
+    ],
+    "proof_admission": "Bounded pass only on exact successful solver UNSAT plus separate SAT domain non-vacuity query. Runtime is not used as proof. Preserve exact solver status, timeout, generation error and unknown separately.",
+    "timeouts": {
+      "generation_seconds": 90,
+      "solver_seconds": 30,
+      "qualification_minutes": 30,
+      "whole_slice_tool_minutes": 120
+    },
+    "controls": [
+      "Wrong add/sub instruction must produce SAT.",
+      "Unexpected x2 modification must produce SAT even when x0 is correct.",
+      "Unknown instruction caught as false must produce SAT.",
+      "Overflow must not escape; a bounded unbounded-integer overflow sentinel produces SAT.",
+      "A false Sail assumption must not escape; produces SAT.",
+      "Loop cutoff cannot silently succeed; explicit match-failure query rejects it.",
+      "Deliberately empty shift domain fails the SAT non-vacuity check.",
+      "Missing/error/unknown solver output never reports a pass."
+    ]
+  },
+  "sequence": [
+    "Commit plan, then RED for absent obligations and observed query/status failures.",
+    "Qualify pinned Sail/Z3 against small source/model properties and negative controls before all obligations.",
+    "Run the 89 frozen bodies without production code edits; keep per-shape symbolic domain, result and state verdicts.",
+    "Complete the existing-rule inventory with explicit scope and negative/unknown rows; no full-backend promotion.",
+    "Full workspace, focused Python and unchanged-object regressions; compact receipt and one-page note. Retire generated transient SMT after hashes where reproducible, retaining counterexamples and minimal reproducers."
+  ],
+  "acceptance": {
+    "per_rule": "Every inventory row has a verdict and reason. A counterexample to an admitted source/model claim becomes an isolated defect; do not silently weaken the domain.",
+    "positive_ceiling": "Universal over inputs and preserved register/ProcState components only for the frozen concrete body and width, bounded by the admitted Sail/SMT translation; not a kernel proof or theorem for the whole selector.",
+    "partial_closure": "If dependency qualification or resources prevent coverage, freeze a negative/partial scoped result and explicit missing domains, then continue other quality slices. Do not label NOT_MODELLED as proved.",
+    "object_identity": "384 native objects per OS plus 24 A/B/profile TU objects retain two-build/full-byte identity to E2; no size gain.",
+    "gates": [
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "focused Python SMT/model tests",
+      "python3 tools/render-status.py --todo"
+    ]
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "serial": true,
+    "retention": "Reuse E2 extracted toolchain and model. Preserve current native/TU baselines, contracts, fixtures and .lake. No full disassembly, workspace/kernel clone, new target or VM disk; record scoped disk increment."
+  },
+  "claim_ceiling": "Scoped model-backed bounded SMT verdicts or honest negative/partial closure; never whole-backend correctness, proof of ISA source, new Lean proof, semantic authority, default optimization admission or performance benefit."
+}
