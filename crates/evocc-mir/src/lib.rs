@@ -42,7 +42,8 @@ pub use emit::{
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
 pub use linkage::emitted_functions;
 pub use linscan::{
-    allocate, allocate_for, render_allocated, Allocated, CALLEE_SAVED, CALLER_SAVED,
+    allocate, allocate_for, allocate_for_with_options, render_allocated, Allocated, CALLEE_SAVED,
+    CALLER_SAVED,
 };
 pub use lower::{
     lower_module, lower_module_for, lower_module_for_profile, lower_module_with, Refusal,

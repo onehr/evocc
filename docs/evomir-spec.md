@@ -1,6 +1,11 @@
 # EvoMIR Specification
 
-**Revision 0.59** | **Authoritative reference** | **2026-10-02**
+**Revision 0.60** | **Authoritative reference** | **2026-10-03**
+
+Allocation-policy addendum (revision 0.60, N03c T2):
+`--regalloc-opt=copy-hints` optionally prefers free same-class copy-peer
+locations under Section 7. It defaults OFF and changes no instruction,
+interpreter or proof semantics. Protected profiles retain the original policy.
 
 Local-emission addendum (revision 0.58, N03d C2): `--isel-opt=local` is an
 optional composition of adjacent allocated instructions, OFF by default.
@@ -1194,12 +1199,26 @@ reloaded before each use and stored after its definition. Fixed operands
 `x16`/`x17` in emitted sequences) are pre-assigned intervals the allocator
 must respect; a call clobbers every caller-saved register, so an interval
 live across a call is assigned a callee-saved register or spilled. Ties are
-broken by virtual register number, and among free registers the lowest-numbered
-one of the class is taken, callee-saved only for an interval that spans a call
-(revision 0.4), so the allocation is deterministic and the emitted text is a
-stable digest. Physical allocation performs no coalescing beyond removing a
+broken by virtual register number, and among free registers the first in the
+target's ordered class/across-call candidate pool is taken by default, so
+allocation is deterministic and the emitted text is a stable digest.
+Physical allocation performs no interference-relaxing coalescing beyond removing a
 move whose two operands got the same register; the preceding identical-value
 SSA transport reduction is independent of physical locations.
+
+**Copy-location hints (revision 0.60).** The explicit native-only option
+`--regalloc-opt=copy-hints` may prefer an assigned or fixed location of a
+same-class copy peer. Peers are examined in deterministic instruction order.
+The location must belong to the unchanged candidate pool and be free over
+the entire existing interval, including future pins and assembly clobbers.
+A hint must not add a new callee-save location when the ordinary free choice
+would not. Otherwise use the ordinary first-free choice. Interval bounds,
+overlap, tied/early-clobber constraints, spill priorities and the independent
+allocation verifier are unchanged. The option never forces a register or
+admits a cross-class copy. Only existing physically identical copies can be
+removed. Kernel markers, nonzero patchable entries and explicit frame-pointer
+requests suppress the option, as for selection/frame variants. Its header
+records the request, not eligibility or a size claim; OFF preserves old output.
 
 **Bounded spill progress (revision 0.59).** The implementation retains its
 64-retry ceiling. Spill-rewrite temporaries are not recursively spillable:

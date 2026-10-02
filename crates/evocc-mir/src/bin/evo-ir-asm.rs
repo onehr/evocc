@@ -5,11 +5,12 @@ use std::process::ExitCode;
 
 fn emit(args: &[String]) -> Result<String, String> {
     if args.len() < 3 {
-        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo [--ub-checks=checked|unchecked] [--frame-opt=LIST] [--isel-opt=constants,local] [--retain-dead-computations] [--dce-report]".into());
+        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo [--ub-checks=checked|unchecked] [--frame-opt=LIST] [--isel-opt=constants,local] [--regalloc-opt=copy-hints] [--retain-dead-computations] [--dce-report]".into());
     }
     let mut profile = evocc_mir::UbCheckProfile::Checked;
     let mut frame = evocc_mir::emit::FrameVariants::OFF;
     let mut selection = evocc_mir::emit::SelectionVariants::default();
+    let mut allocation = evocc_mir::generic::allocation::AllocationOptions::default();
     let mut retain_dead = false;
     let mut report = false;
     let mut seen = std::collections::BTreeSet::new();
@@ -24,6 +25,8 @@ fn emit(args: &[String]) -> Result<String, String> {
             frame = evocc_mir::emit::FrameVariants::parse(value)?;
         } else if let Some(value) = flag.strip_prefix("--isel-opt=") {
             selection = evocc_mir::emit::SelectionVariants::parse(value)?;
+        } else if let Some(value) = flag.strip_prefix("--regalloc-opt=") {
+            allocation = evocc_mir::generic::allocation::AllocationOptions::parse(value)?;
         } else if flag == "--retain-dead-computations" {
             retain_dead = true;
         } else if flag == "--dce-report" {
@@ -106,7 +109,21 @@ fn emit(args: &[String]) -> Result<String, String> {
             let lowered = evocc_mir::regalloc::out_of_ssa_with_dce(f, !retain_dead);
             after += lowered.blocks.iter().map(|b| b.insts.len()).sum::<usize>();
             dead_after += evocc_mir::regalloc::dead_computation_count(&lowered);
-            let allocated = evocc_mir::allocate_for(target, &lowered)?;
+            let protected = module
+                .functions
+                .iter()
+                .find(|source| source.name == f.name)
+                .and_then(|source| source.patchable_entry)
+                .is_some_and(|(count, _)| count != 0);
+            let allocated = evocc_mir::allocate_for_with_options(
+                target,
+                &lowered,
+                if protected {
+                    Default::default()
+                } else {
+                    allocation
+                },
+            )?;
             evocc_mir::verify_allocation_for(target, &allocated).map_err(|e| format!("{e:?}"))?;
             dead_allocated += evocc_mir::regalloc::dead_computation_count(&evocc_mir::MFunction {
                 name: allocated.name,
@@ -115,8 +132,8 @@ fn emit(args: &[String]) -> Result<String, String> {
         }
         eprintln!("{{\"schema\":\"evocc-dce-attribution-v1\",\"baseline_dce\":{},\"ir_direct_unused_p0_results\":{direct_unused},\"mir_instructions_before_ssa\":{before},\"mir_dead_before_ssa\":{dead_before},\"mir_instructions_after_ssa\":{after},\"mir_dead_after_ssa\":{dead_after},\"mir_dead_after_allocation\":{dead_allocated},\"claim\":\"PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT\"}}", !retain_dead);
     }
-    // Only obligation branch emission varies. PIC and allocation checks remain.
-    // This adapter never reruns frontend lowering or EqSat.
+    // These options affect the native backend only; PIC and allocation checks
+    // remain. This adapter never reruns frontend lowering or EqSat.
     evocc_mir::compile_module_with_options(
         target,
         &module,
@@ -128,6 +145,7 @@ fn emit(args: &[String]) -> Result<String, String> {
             frame,
             compact_constants: selection.constants,
             local_selection: selection.local,
+            allocation,
             ..Default::default()
         },
     )

@@ -51,8 +51,21 @@ pub struct CodegenOptions {
     pub compact_constants: bool,
     /// C2 adjacent single-use emission idioms.
     pub local_selection: bool,
+    /// T2 candidate-order hints; constraints and verifier remain unchanged.
+    pub allocation: crate::generic::allocation::AllocationOptions,
     pub frame_pointer_required: bool,
     pub leaf_frame_pointer_required: bool,
+}
+
+impl CodegenOptions {
+    /// Existing profile protection shared by allocation and emission variants.
+    pub fn protects_codegen(&self, patchable_entry: Option<(u16, u16)>) -> bool {
+        self.frame_pointer_required
+            || self.leaf_frame_pointer_required
+            || self.general_registers_only
+            || matches!(self.stack_guard, StackGuard::SystemRegister { .. })
+            || patchable_entry.is_some_and(|(total, _)| total != 0)
+    }
 }
 
 /// Section 6 frame variants selected by `--frame-opt` (revision 0.56).
@@ -1291,11 +1304,7 @@ fn emit_function(
     frame.sign_returns = options.sign_returns;
     frame.strict_alignment = options.strict_alignment;
     frame.general_registers_only = options.general_registers_only;
-    let protected = options.frame_pointer_required
-        || options.leaf_frame_pointer_required
-        || options.general_registers_only
-        || matches!(options.stack_guard, StackGuard::SystemRegister { .. })
-        || patchable_entry.is_some_and(|(total, _)| total != 0);
+    let protected = options.protects_codegen(patchable_entry);
     frame.paired_saves = options.frame.paired_saves && !protected;
     frame.shared_epilogue = options.frame.shared_epilogue && !protected;
     frame.compact_constants = options.compact_constants && !protected;

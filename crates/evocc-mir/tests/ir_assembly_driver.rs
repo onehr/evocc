@@ -2,6 +2,51 @@
 use std::{fs, process::Command};
 
 #[test]
+fn copy_hints_are_shared_by_the_exact_ir_adapter_and_diagnostic_path() {
+    let directory = std::env::temp_dir().join(format!("evocc-ir-copy-test-{}", std::process::id()));
+    fs::create_dir(&directory).unwrap();
+    let path = directory.join("input.evo");
+    let module = evocc_evoir::parse_section9_module(include_bytes!(
+        "../../../tests/fixtures/eqsat-performance/identity-tail.evo"
+    ))
+    .unwrap();
+    let text = evocc_evoir::render_module(&module);
+    fs::write(&path, &text).unwrap();
+    let digest = evocc_proof::sha256_hex(text.as_bytes());
+    for target in ["darwin-arm64", "linux-aarch64"] {
+        let run = |flags: &[&str]| {
+            Command::new(env!("CARGO_BIN_EXE_evo-ir-asm"))
+                .args([target, &digest])
+                .arg(&path)
+                .args(flags)
+                .output()
+                .unwrap()
+        };
+        let normal = run(&["--regalloc-opt=copy-hints"]);
+        let report = run(&["--regalloc-opt=copy-hints", "--dce-report"]);
+        assert!(normal.status.success(), "{normal:?}");
+        assert!(report.status.success(), "{report:?}");
+        assert_eq!(normal.stdout, report.stdout);
+        assert!(String::from_utf8_lossy(&normal.stdout)
+            .contains("// evocc-native-regalloc=copy-hints\n"));
+        assert!(String::from_utf8_lossy(&report.stderr)
+            .contains("PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT"));
+        for flags in [
+            vec!["--regalloc-opt="],
+            vec!["--regalloc-opt=unknown"],
+            vec!["--regalloc-opt=copy-hints,copy-hints"],
+            vec!["--regalloc-opt=copy-hints", "--regalloc-opt=copy-hints"],
+        ] {
+            let output = run(&flags);
+            assert_eq!(output.status.code(), Some(2));
+            assert!(output.stdout.is_empty());
+        }
+    }
+    assert_eq!(fs::read_to_string(path).unwrap(), text);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn canonical_digest_binds_the_actual_backend_input() {
     let directory = std::env::temp_dir().join(format!("evocc-ir-asm-test-{}", std::process::id()));
     fs::create_dir(&directory).unwrap();

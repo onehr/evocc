@@ -296,6 +296,7 @@ fn main() -> ExitCode {
         eprintln!("       --ub-checks=checked|unchecked (native only; default checked)");
         eprintln!("       --frame-opt=paired-saves,shared-epilogue,leaf-frames (native only; default none)");
         eprintln!("       --isel-opt=constants,local (native only; default none)");
+        eprintln!("       --regalloc-opt=copy-hints (native only; default none)");
         eprintln!("       --opt-pass=identity [--pass-report NEW_JSON_PATH] (development TV)");
         eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
         eprintln!("       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
@@ -383,6 +384,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut ub_checks_selected = false;
     let mut frame_variants_selected = false;
     let mut selection_variants_selected = false;
+    let mut allocation_variants_selected = false;
     let mut guard_is_sysreg = false;
     let mut guard_register = None;
     let mut guard_offset = None;
@@ -471,6 +473,15 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 )?;
                 codegen.compact_constants = selected.constants;
                 codegen.local_selection = selected.local;
+            }
+            _ if arg.starts_with("--regalloc-opt=") => {
+                if allocation_variants_selected {
+                    return Err("--regalloc-opt may appear only once".into());
+                }
+                allocation_variants_selected = true;
+                codegen.allocation = evocc_mir::generic::allocation::AllocationOptions::parse(
+                    arg.strip_prefix("--regalloc-opt=").unwrap(),
+                )?;
             }
             _ if arg.starts_with("--eq-") => {
                 let (key, value) = arg
@@ -800,6 +811,9 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     }
     if mode == DriverMode::Check && selection_variants_selected {
         return Err("--isel-opt is native-only and has no meaning for --check".into());
+    }
+    if mode == DriverMode::Check && allocation_variants_selected {
+        return Err("--regalloc-opt is native-only and has no meaning for --check".into());
     }
     Ok(DriverOptions {
         mode,

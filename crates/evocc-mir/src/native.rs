@@ -19,8 +19,8 @@ use evocc_types::EvoIRType;
 use crate::isa::aarch64::abi::{ProfileFeature, KERNEL};
 use crate::lane::is_register_type;
 use crate::{
-    allocate_for, emitted_functions, lower_module_for_profile, out_of_ssa, verify_allocation_for,
-    RelocationModel, Target,
+    allocate_for_with_options, emitted_functions, lower_module_for_profile, out_of_ssa,
+    verify_allocation_for, RelocationModel, Target,
 };
 
 /// Where the native pipeline stopped.
@@ -234,12 +234,20 @@ fn compile_module_with_guard_control(
         } else {
             out_of_ssa(function)
         };
-        let mut allocated = allocate_for(target, &destroyed)
+        let source = module
+            .functions
+            .iter()
+            .find(|source| source.name == function.name);
+        let allocation_options =
+            if options.protects_codegen(source.and_then(|source| source.patchable_entry)) {
+                crate::generic::allocation::AllocationOptions::default()
+            } else {
+                options.allocation
+            };
+        let mut allocated = allocate_for_with_options(target, &destroyed, allocation_options)
             .map_err(|detail| NativeStop::Allocation(format!("@{}: {detail}", function.name)))?;
-        allocated.internal = module.functions.iter().any(|source| {
-            source.name == function.name
-                && source.visibility == evocc_evoir::GlobalVisibility::Internal
-        });
+        allocated.internal = source
+            .is_some_and(|source| source.visibility == evocc_evoir::GlobalVisibility::Internal);
         verify_allocation_for(target, &allocated).map_err(|refusal| {
             NativeStop::Verification(format!(
                 "@{}: {} {} in block {}: {}",
@@ -261,8 +269,13 @@ fn compile_module_with_guard_control(
     }
     .name()
     .map_or_else(String::new, |name| format!("// evocc-native-isel={name}\n"));
+    let allocation = if options.allocation.copy_hints {
+        "// evocc-native-regalloc=copy-hints\n"
+    } else {
+        ""
+    };
     Ok(format!(
-        "// evocc-native-ub-checks={}\n{frame}{selection}{assembly}",
+        "// evocc-native-ub-checks={}\n{frame}{selection}{allocation}{assembly}",
         options.ub_checks.name()
     ))
 }

@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-10-02**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.116** and EvoMIR **0.59**. This is the Git-tracked execution backlog,
+EvoIR **1.9.116** and EvoMIR **0.60**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -2404,6 +2404,13 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     negative measurements are frozen, not performance admission. No size
     gain or broader allocation closure is claimed. Copy preferences and
     spill-quality work remain open; do not rerun to erase the cost misses.
+    T2 [copy-hint plan](tests/contracts/codegen-n03c-copy-hints-20261003.json)
+    is frozen in `5a477d38`; `e5a9361f` records allocator and public-option
+    REDs. Same-class, already assigned locations are optional preferences
+    behind `--regalloc-opt=copy-hints`, with unchanged interference checks,
+    spill policy and independent verifier. Focused validation is in progress;
+    native corpora, six-TU measurement and full-workspace acceptance remain
+    NOT RUN for T2. Defaults remain OFF.
 
   - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
     Addressing modes, immediates, shifted operands, conditional select and

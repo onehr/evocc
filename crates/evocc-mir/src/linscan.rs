@@ -44,6 +44,18 @@ pub fn allocate_for(target: Target, function: &MFunction) -> Result<Allocated, S
     crate::generic::allocation::allocate(&Aarch64Allocation::for_target(target), function)
 }
 
+pub fn allocate_for_with_options(
+    target: Target,
+    function: &MFunction,
+    options: crate::generic::allocation::AllocationOptions,
+) -> Result<Allocated, String> {
+    crate::generic::allocation::allocate_with_options(
+        &Aarch64Allocation::for_target(target),
+        function,
+        options,
+    )
+}
+
 #[cfg(test)]
 fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, u8>, Vec<u32>> {
     crate::generic::allocation::scan(

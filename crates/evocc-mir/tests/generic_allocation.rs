@@ -672,10 +672,13 @@ fn ordered_pools_and_boundary_copies_are_the_actual_shared_algorithm() {
     assert_eq!(straight_result(&first, BTreeMap::from([(0, 5)])), vec![8]);
 }
 
-// The initial RED measures the current choice. Wire this one entry point to
-// the explicit opt-in API when the candidate-order implementation exists.
 fn allocate_copy_hints(source: &Function) -> Allocated<Inst, Term, Class> {
-    allocate(&TINY, source).unwrap()
+    evocc_mir::generic::allocation::allocate_with_options(
+        &TINY,
+        source,
+        evocc_mir::generic::allocation::AllocationOptions { copy_hints: true },
+    )
+    .unwrap()
 }
 
 #[test]
@@ -708,6 +711,60 @@ fn n03c_copy_hint_reuses_a_dying_nonfirst_source() {
         assert_eq!(straight_result(&off, input.clone()), expected);
         assert_eq!(straight_result(&on, input), expected);
     }
+}
+
+#[test]
+fn n03c_copy_hints_do_not_merge_live_or_redefined_values() {
+    for redefine in [false, true] {
+        let mut insts = vec![Inst::Value(r(0), 13), Inst::Copy(r(1), r(0))];
+        if redefine {
+            insts.push(Inst::Value(r(0), 29));
+        }
+        insts.push(Inst::Add(r(2), r(1), r(0)));
+        let source = single(vec![], insts, vec![r(2)]);
+        let on = allocate_copy_hints(&source);
+        verify_allocation(&TINY, &on).unwrap();
+        assert_eq!(
+            straight_result(&on, BTreeMap::new()),
+            vec![if redefine { 42 } else { 26 }]
+        );
+        assert!(on.blocks[0]
+            .insts
+            .iter()
+            .any(|inst| matches!(inst, Inst::Copy(..))));
+        let mut forged = on.clone();
+        let (dst, src) = forged.blocks[0]
+            .insts
+            .iter()
+            .find_map(AllocInst::copy_operands)
+            .unwrap();
+        forged.assignment.insert(dst.id, forged.assignment[&src.id]);
+        assert!(verify_allocation(&TINY, &forged).is_err());
+    }
+}
+
+#[test]
+fn n03c_copy_hints_keep_cross_class_copies_and_long_chains_well_formed() {
+    let source = single(vec![r(0)], vec![Inst::Copy(h(1), r(0))], vec![h(1)]);
+    let on = allocate_copy_hints(&source);
+    verify_allocation(&TINY, &on).unwrap();
+    assert!(on.blocks[0]
+        .insts
+        .iter()
+        .any(|inst| matches!(inst, Inst::Copy(dst, src) if dst.class != src.class)));
+
+    let mut insts = vec![Inst::Value(r(0), 17)];
+    for id in 1..=192 {
+        insts.push(Inst::Copy(r(id), r(id - 1)));
+    }
+    insts.push(Inst::Value(r(193), 3));
+    insts.push(Inst::Add(r(194), r(192), r(193)));
+    let source = single(vec![], insts, vec![r(194)]);
+    let on = allocate_copy_hints(&source);
+    assert_eq!(on, allocate_copy_hints(&source));
+    verify_allocation(&TINY, &on).unwrap();
+    assert_eq!(straight_result(&on, BTreeMap::new()), vec![20]);
+    assert!(on.used_callee_saved.is_empty());
 }
 
 #[test]
@@ -779,28 +836,32 @@ fn call_keeps_opaque_payload_and_full_width_values_spill_across_it() {
         ],
         vec![q(2)],
     );
-    let allocated = allocate(&TINY, &source).unwrap();
-    verify_allocation(&TINY, &allocated).unwrap();
-    assert!(allocated.spilled > 0);
-    assert!(allocated.frame_slots >= 2);
-    let insts = &allocated.blocks[0].insts;
-    let call = insts
-        .iter()
-        .position(|i| matches!(i, Inst::Call { .. }))
-        .unwrap();
-    assert!(matches!(
-        insts[call],
-        Inst::Call {
-            opaque: 0xfeed_cafe,
-            ..
-        }
-    ));
-    assert!(insts[..call]
-        .iter()
-        .any(|i| matches!(i, Inst::Save(reg, slot) if reg.class == Class::Pair && slot % 2 == 0)));
-    assert!(insts[call + 1..].iter().any(
-        |i| matches!(i, Inst::Restore(reg, slot) if reg.class == Class::Pair && slot % 2 == 0)
-    ));
+    for allocated in [
+        allocate(&TINY, &source).unwrap(),
+        allocate_copy_hints(&source),
+    ] {
+        verify_allocation(&TINY, &allocated).unwrap();
+        assert!(allocated.spilled > 0);
+        assert!(allocated.frame_slots >= 2);
+        let insts = &allocated.blocks[0].insts;
+        let call = insts
+            .iter()
+            .position(|i| matches!(i, Inst::Call { .. }))
+            .unwrap();
+        assert!(matches!(
+            insts[call],
+            Inst::Call {
+                opaque: 0xfeed_cafe,
+                ..
+            }
+        ));
+        assert!(insts[..call].iter().any(
+            |i| matches!(i, Inst::Save(reg, slot) if reg.class == Class::Pair && slot % 2 == 0)
+        ));
+        assert!(insts[call + 1..].iter().any(
+            |i| matches!(i, Inst::Restore(reg, slot) if reg.class == Class::Pair && slot % 2 == 0)
+        ));
+    }
 }
 
 #[test]
@@ -818,13 +879,17 @@ fn a_live_scalar_uses_the_callee_pool_and_call_clobber_forgery_is_rejected() {
         ],
         vec![r(1)],
     );
-    let allocated = allocate(&TINY, &source).unwrap();
-    verify_allocation(&TINY, &allocated).unwrap();
-    assert_eq!(allocated.assignment[&0], 2);
-    assert_eq!(allocated.used_callee_saved, vec![2]);
-    let mut forged = allocated.clone();
-    forged.assignment.insert(0, 0);
-    assert!(verify_allocation(&TINY, &forged).is_err());
+    for allocated in [
+        allocate(&TINY, &source).unwrap(),
+        allocate_copy_hints(&source),
+    ] {
+        verify_allocation(&TINY, &allocated).unwrap();
+        assert_eq!(allocated.assignment[&0], 2);
+        assert_eq!(allocated.used_callee_saved, vec![2]);
+        let mut forged = allocated.clone();
+        forged.assignment.insert(0, 0);
+        assert!(verify_allocation(&TINY, &forged).is_err());
+    }
 }
 
 #[test]
@@ -841,16 +906,20 @@ fn repeated_fixed_inputs_split_occurrences_not_the_source_value() {
         })],
         vec![r(0)],
     );
-    let allocated = allocate(&TINY, &source).unwrap();
-    verify_allocation(&TINY, &allocated).unwrap();
-    let body = allocated.blocks[0]
-        .insts
-        .iter()
-        .find_map(AllocInst::assembly)
-        .unwrap();
-    assert_ne!(body.inputs[0].reg.id, body.inputs[1].reg.id);
-    assert_eq!(allocated.assignment[&body.inputs[0].reg.id], 3);
-    assert_eq!(allocated.assignment[&body.inputs[1].reg.id], 4);
+    for allocated in [
+        allocate(&TINY, &source).unwrap(),
+        allocate_copy_hints(&source),
+    ] {
+        verify_allocation(&TINY, &allocated).unwrap();
+        let body = allocated.blocks[0]
+            .insts
+            .iter()
+            .find_map(AllocInst::assembly)
+            .unwrap();
+        assert_ne!(body.inputs[0].reg.id, body.inputs[1].reg.id);
+        assert_eq!(allocated.assignment[&body.inputs[0].reg.id], 3);
+        assert_eq!(allocated.assignment[&body.inputs[1].reg.id], 4);
+    }
 }
 
 #[test]
@@ -868,37 +937,41 @@ fn tied_early_constraints_and_out_of_range_tie_are_checked_independently() {
         })],
         vec![r(2)],
     );
-    let allocated = allocate(&TINY, &source).unwrap();
-    verify_allocation(&TINY, &allocated).unwrap();
-    let body = allocated.blocks[0]
-        .insts
-        .iter()
-        .find_map(AllocInst::assembly)
-        .unwrap();
-    let result = body.outputs[0].reg;
-    let tied = body.inputs[0].reg;
-    let other = body.inputs[1].reg;
-    assert_eq!(
-        allocated.assignment[&result.id],
-        allocated.assignment[&tied.id]
-    );
-    assert_ne!(
-        allocated.assignment[&result.id],
-        allocated.assignment[&other.id]
-    );
-    let mut forged = allocated.clone();
-    let body = forged.blocks[0]
-        .insts
-        .iter_mut()
-        .find_map(AllocInst::assembly_mut)
-        .unwrap();
-    body.inputs[0].tied = Some(9);
-    assert!(verify_allocation(&TINY, &forged).is_err());
-    let mut forged = allocated.clone();
-    forged
-        .assignment
-        .insert(result.id, allocated.assignment[&other.id]);
-    assert!(verify_allocation(&TINY, &forged).is_err());
+    for allocated in [
+        allocate(&TINY, &source).unwrap(),
+        allocate_copy_hints(&source),
+    ] {
+        verify_allocation(&TINY, &allocated).unwrap();
+        let body = allocated.blocks[0]
+            .insts
+            .iter()
+            .find_map(AllocInst::assembly)
+            .unwrap();
+        let result = body.outputs[0].reg;
+        let tied = body.inputs[0].reg;
+        let other = body.inputs[1].reg;
+        assert_eq!(
+            allocated.assignment[&result.id],
+            allocated.assignment[&tied.id]
+        );
+        assert_ne!(
+            allocated.assignment[&result.id],
+            allocated.assignment[&other.id]
+        );
+        let mut forged = allocated.clone();
+        let body = forged.blocks[0]
+            .insts
+            .iter_mut()
+            .find_map(AllocInst::assembly_mut)
+            .unwrap();
+        body.inputs[0].tied = Some(9);
+        assert!(verify_allocation(&TINY, &forged).is_err());
+        let mut forged = allocated.clone();
+        forged
+            .assignment
+            .insert(result.id, allocated.assignment[&other.id]);
+        assert!(verify_allocation(&TINY, &forged).is_err());
+    }
 }
 
 #[test]
@@ -929,25 +1002,29 @@ fn exclusive_result_cannot_overlap_any_input() {
         vec![Inst::Early(r(2), r(0), r(1))],
         vec![r(2)],
     );
-    let allocated = allocate(&TINY, &source).unwrap();
-    verify_allocation(&TINY, &allocated).unwrap();
-    let (dst, src) = allocated.blocks[0]
-        .insts
-        .iter()
-        .find_map(|i| {
-            if let Inst::Early(dst, src, _) = i {
-                Some((*dst, *src))
-            } else {
-                None
-            }
-        })
-        .unwrap();
-    assert_ne!(allocated.assignment[&dst.id], allocated.assignment[&src.id]);
-    let mut forged = allocated.clone();
-    forged
-        .assignment
-        .insert(dst.id, allocated.assignment[&src.id]);
-    assert!(verify_allocation(&TINY, &forged).is_err());
+    for allocated in [
+        allocate(&TINY, &source).unwrap(),
+        allocate_copy_hints(&source),
+    ] {
+        verify_allocation(&TINY, &allocated).unwrap();
+        let (dst, src) = allocated.blocks[0]
+            .insts
+            .iter()
+            .find_map(|i| {
+                if let Inst::Early(dst, src, _) = i {
+                    Some((*dst, *src))
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+        assert_ne!(allocated.assignment[&dst.id], allocated.assignment[&src.id]);
+        let mut forged = allocated.clone();
+        forged
+            .assignment
+            .insert(dst.id, allocated.assignment[&src.id]);
+        assert!(verify_allocation(&TINY, &forged).is_err());
+    }
 }
 
 #[test]
@@ -984,25 +1061,29 @@ fn constraint_output_copies_live_on_selected_edges_not_in_shared_successors() {
             },
         ],
     };
-    let allocated = allocate(&TINY, &source).unwrap();
-    verify_allocation(&TINY, &allocated).unwrap();
-    let selected = allocated.blocks[0].term.edges();
-    assert_eq!(selected.len(), 2);
-    assert_ne!(selected[0].0, selected[1].0);
-    for (index, (bridge, args)) in selected.iter().enumerate() {
-        assert!(*bridge > 2);
-        assert!(args.is_empty());
-        let block = allocated.blocks.iter().find(|b| b.id == *bridge).unwrap();
-        assert!(block.insts.iter().any(|i| matches!(i, Inst::Copy(..))));
-        assert_eq!(block.term.edges()[0].0, index as u32 + 1);
-    }
-    // The fixed output copy has no execution site before the selected branch,
-    // and neither original shared successor receives that boundary copy.
-    for id in [0, 1, 2] {
-        let block = allocated.blocks.iter().find(|b| b.id == id).unwrap();
-        assert!(!block.insts.iter().any(
-            |i| matches!(i, Inst::Copy(_, src) if allocated.assignment.get(&src.id) == Some(&3))
-        ));
+    for allocated in [
+        allocate(&TINY, &source).unwrap(),
+        allocate_copy_hints(&source),
+    ] {
+        verify_allocation(&TINY, &allocated).unwrap();
+        let selected = allocated.blocks[0].term.edges();
+        assert_eq!(selected.len(), 2);
+        assert_ne!(selected[0].0, selected[1].0);
+        for (index, (bridge, args)) in selected.iter().enumerate() {
+            assert!(*bridge > 2);
+            assert!(args.is_empty());
+            let block = allocated.blocks.iter().find(|b| b.id == *bridge).unwrap();
+            assert!(block.insts.iter().any(|i| matches!(i, Inst::Copy(..))));
+            assert_eq!(block.term.edges()[0].0, index as u32 + 1);
+        }
+        // The fixed output copy has no execution site before the selected branch,
+        // and neither original shared successor receives that boundary copy.
+        for id in [0, 1, 2] {
+            let block = allocated.blocks.iter().find(|b| b.id == id).unwrap();
+            assert!(!block.insts.iter().any(
+                |i| matches!(i, Inst::Copy(_, src) if allocated.assignment.get(&src.id) == Some(&3))
+            ));
+        }
     }
 }
 

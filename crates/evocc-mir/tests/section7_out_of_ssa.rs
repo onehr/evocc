@@ -329,6 +329,28 @@ fn an_indirect_copy_cycle_preserves_the_branch_register_and_original_labels() {
         edges.iter().map(|(target, _)| *target).collect::<Vec<_>>(),
         vec![1, 2]
     );
+    verify_with_copy_hints(&after);
+}
+
+fn verify_with_copy_hints(function: &MFunction) {
+    for target in [evocc_mir::Target::Darwin, evocc_mir::Target::Linux] {
+        for copy_hints in [false, true] {
+            let allocated = evocc_mir::allocate_for_with_options(
+                target,
+                function,
+                evocc_mir::generic::allocation::AllocationOptions { copy_hints },
+            )
+            .unwrap();
+            evocc_mir::verify_allocation_for(target, &allocated).unwrap();
+        }
+    }
+}
+
+#[test]
+fn copy_hints_preserve_selected_swap_and_rotation_edges() {
+    for function in [swap(), rotation()] {
+        verify_with_copy_hints(&out_of_ssa(&function));
+    }
 }
 
 fn find(function: &MFunction, id: u32) -> &MBlock {

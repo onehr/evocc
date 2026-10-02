@@ -155,9 +155,41 @@ fn place<C: AllocClass>(cursor: &mut ArgumentCursor<'_>, class: C) -> Result<u8,
 
 const FRESH_BASE: u32 = SCRATCH_LIMIT;
 
+/// Candidate-order policy only; constraints and spill policy are unchanged.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct AllocationOptions {
+    pub copy_hints: bool,
+}
+
+impl AllocationOptions {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        if value == "copy-hints" {
+            Ok(Self { copy_hints: true })
+        } else {
+            Err(format!(
+                "unknown allocation variant {value:?}; supported: copy-hints"
+            ))
+        }
+    }
+}
+
 pub fn allocate<I, T, C, A>(
     target: &A,
     function: &MachineFunction<I, T, C>,
+) -> Result<Allocated<I, T, C>, String>
+where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+    T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body>,
+    A: AllocationTarget<C>,
+{
+    allocate_with_options(target, function, AllocationOptions::default())
+}
+
+pub fn allocate_with_options<I, T, C, A>(
+    target: &A,
+    function: &MachineFunction<I, T, C>,
+    options: AllocationOptions,
 ) -> Result<Allocated<I, T, C>, String>
 where
     C: AllocClass,
@@ -177,7 +209,7 @@ where
     let mut slots: BTreeMap<u32, u32> = BTreeMap::new();
     let mut spillable: Option<BTreeSet<u32>> = None;
     for _ in 0..64 {
-        match scan(target, &current, &pins) {
+        match scan_with_options(target, &current, &pins, options) {
             Ok(mut assignment) => {
                 let mut compacted = MachineFunction {
                     name: current.name.clone(),
@@ -1232,6 +1264,7 @@ where
     pairs
 }
 
+#[cfg(test)]
 pub(crate) fn scan<I, T, C, A>(
     target: &A,
     function: &MachineFunction<I, T, C>,
@@ -1243,9 +1276,35 @@ where
     T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body>,
     A: AllocationTarget<C>,
 {
+    scan_with_options(target, function, pins, AllocationOptions::default())
+}
+
+fn scan_with_options<I, T, C, A>(
+    target: &A,
+    function: &MachineFunction<I, T, C>,
+    pins: &BTreeMap<u32, u8>,
+    options: AllocationOptions,
+) -> Result<BTreeMap<u32, u8>, Vec<u32>>
+where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+    T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body>,
+    A: AllocationTarget<C>,
+{
     let all = intervals(function);
     let reads = read_positions(function);
     let tied = tied_pairs(function);
+    let mut peers = BTreeMap::<u32, Vec<u32>>::new();
+    if options.copy_hints {
+        for inst in function.blocks.iter().flat_map(|block| &block.insts) {
+            if let Some((dst, src)) = inst.copy_operands() {
+                if dst.class == src.class && !dst.class.is_flags() && dst.id != src.id {
+                    peers.entry(dst.id).or_default().push(src.id);
+                    peers.entry(src.id).or_default().push(dst.id);
+                }
+            }
+        }
+    }
     let mut assignment: BTreeMap<u32, u8> = BTreeMap::new();
     let mut fixed = asm_interferences(target, function);
     let mut held: Vec<(Interval<C>, u8)> = Vec::new();
@@ -1324,11 +1383,25 @@ where
         // interval live across a call is assigned a callee-saved register or
         // spilled."
         let candidates = target.candidates(interval.class, interval.spans_call);
-        match candidates
+        let ordinary = candidates
             .iter()
             .copied()
-            .find(|number| !taken.contains(number))
-        {
+            .find(|number| !taken.contains(number));
+        let selected = ordinary.map(|fallback| {
+            if !options.copy_hints {
+                return fallback;
+            }
+            // Hints only name locations already present in assignment. Thus
+            // no new callee-save location is opened solely to honor a hint.
+            peers
+                .get(&interval.value)
+                .into_iter()
+                .flatten()
+                .filter_map(|peer| assignment.get(peer).copied())
+                .find(|number| candidates.contains(number) && !taken.contains(number))
+                .unwrap_or(fallback)
+        });
+        match selected {
             Some(number) => {
                 assignment.insert(interval.value, number);
                 held.push((*interval, number));
