@@ -1,0 +1,226 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N07",
+  "slice": "E2",
+  "date": "2026-10-03",
+  "status": "CLOSED_BOUNDED_VENDOR_DIFFERENTIAL",
+  "subject_commit": "3105e33f03c59595790a29ff38efad97e5959eb4",
+  "implementation_commit": "060f9065",
+  "plan": "tests/contracts/codegen-n07-model-20261003.json",
+  "plan_commit": "542541a9",
+  "red_commits": [
+    "e961b1a8",
+    "cec6a473"
+  ],
+  "behavior": "No production lowering, allocation, interpreter, registry or default changes. No-op target generation now preserves unchanged output mtimes.",
+  "gates": {
+    "full_workspace": {
+      "status": "PASS",
+      "path": ".evidence/codegen/n07-e2/full-workspace-20261003.log",
+      "sha256": "ca691c64e1b6048e306b55e468c508ee79a04a102bfcdfc178f8c241daf9042b",
+      "suites": 394,
+      "passed": 3032,
+      "failed": 0,
+      "ignored": 5,
+      "clippy": "PASS",
+      "format": "PASS",
+      "regeneration": "PASS"
+    },
+    "python": {
+      "passed": 51,
+      "failed": 0,
+      "path": ".evidence/codegen/n07-e2/python-focused-final-20261003.log",
+      "sha256": "32752f12e6c52ca782e735add546366b70ca28c346797415fae77dff26037407"
+    },
+    "red": [
+      {
+        "path": ".evidence/codegen/n07-e2/red-generator-20261003.log",
+        "sha256": "70573c390a2d157d721ff07cff80963b1b5b3a1f1e78cbf661d3919f13d22fc5",
+        "result": "EXPECTED_FAILURE: three no-op/corrupt/missing-output tests; 22 mtime subfailures"
+      },
+      {
+        "path": ".evidence/codegen/n07-e2/red-model-20261003.log",
+        "sha256": "f107b4d3e935b974ed77e9219eda8fcf6af2a7c03a3b6dad7bbf4fdbd4051e48",
+        "result": "EXPECTED_FAILURE: executable vendor model absent"
+      }
+    ],
+    "lean": "NOT_REQUIRED: no Lean or registry change"
+  },
+  "tools": {
+    "checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+    "compiler": "9d5aa180e790c2d9fd131a7866305d59dd1b5178d506c4884ed048437e339288",
+    "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+    "steps": "dcfe04187db025d97727ee67157749304755f957e7fddb9581c90a238fb961e2"
+  },
+  "vendor_model": {
+    "repository": "https://github.com/rems-project/sail-arm",
+    "commit": "1bf2e5574ba9d704639a28401b6a387dcb113cae",
+    "source": "arm-v9.4-a; translated Arm 2023-03 ASL",
+    "license": "BSD-3-Clause-Clear",
+    "provenance": "targets/aarch64/isa/provenance.json",
+    "provenance_sha256": "d5f6e7afd55de07e111a0867fc10d527eaa9db087a6e9051ef44d1146368c87c",
+    "sail": "0.20.3, sail2@60695b1ea377048f0adc39c62671cd099b2ed9f6",
+    "qemu": "11.1.2, virt/cortex-a72/TCG/64MiB; diskless semihosting",
+    "runtime": "Sail-generated C; exact command logs retained. Existing GMP 6.3.0 header and sealed libgmp10; no handwritten instruction execution."
+  },
+  "differential": {
+    "status": "BOUNDED_DIFFERENTIAL_PASS",
+    "path": ".evidence/codegen/n07-e2/differential.json",
+    "sha256": "0bcb4ece589f65e7420bcb04110843cb6a9d6d66930c10d969be38c2ca638fa2",
+    "operation_width_shapes": 81,
+    "constant_controls": 8,
+    "cases_per_lane": 2600,
+    "lanes": [
+      "EvoIR interpreter",
+      "EvoMIR interpreter",
+      "vendor-model runtime",
+      "Apple native",
+      "diskless QEMU"
+    ],
+    "static_instruction_words": 409,
+    "model_body_words": 320,
+    "executed_model_instructions": 9496,
+    "text_bytes": 1636,
+    "negative_boundaries": 4,
+    "exact_darwin_linux_body_words": true,
+    "flags": "NZCV starts and remains zero in this finite corpus; not a full-state preservation proof",
+    "scope": "Nine integer operations at nine frozen widths; shift M=N and count in range. RET is a transport termination boundary. Memory, calls, FP/SIMD, privileged state and full applications excluded."
+  },
+  "native_corpora": [
+    {
+      "lane": "darwin",
+      "path": ".evidence/codegen/n07-e2/after-darwin-20261003.log",
+      "sha256": "fbb59260551cbaa1412519dad9d0f2eea991874d5dee976f7456c74ad51d2754",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "object_bytes": 193392,
+      "twins": "BYTE_IDENTICAL",
+      "e1_comparison": "BYTE_IDENTICAL"
+    },
+    {
+      "lane": "linux",
+      "path": ".evidence/codegen/n07-e2/after-linux-20261003.log",
+      "sha256": "fcb89f9d2f087c6b20b566abb2448cb92720408f9de30badc933b4ce2ba88796",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "object_bytes": 383344,
+      "twins": "BYTE_IDENTICAL",
+      "e1_comparison": "BYTE_IDENTICAL"
+    }
+  ],
+  "measurements": [
+    {
+      "arm": "A",
+      "plan": "tests/contracts/codegen-n07-e2-a-20261003.json",
+      "path": ".evidence/codegen-trend/measure-ad9qi5dr/receipt.json",
+      "sha256": "703c0b56b02facc5ed7dcf51a53dad6b5b62dfad03aaec33768c451d4607b3d4",
+      "status": "OBSERVED",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "e1_comparison": "BYTE_IDENTICAL",
+      "correctness_executions": 12,
+      "bindings_equal": 6,
+      "steps_equal": 257,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      }
+    },
+    {
+      "arm": "B",
+      "plan": "tests/contracts/codegen-n07-e2-b-20261003.json",
+      "path": ".evidence/codegen-trend/measure-m79rtrey/receipt.json",
+      "sha256": "c5a49856e7eb34b35009a96604258a2606aeae6c991f901991d340fd0d16a776",
+      "status": "OBSERVED",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "e1_comparison": "BYTE_IDENTICAL",
+      "correctness_executions": 12,
+      "bindings_equal": 6,
+      "steps_equal": 257,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      }
+    }
+  ],
+  "text_bytes": [
+    {
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "a_checked": 128,
+      "a_unchecked": 128,
+      "b_checked": 128,
+      "b_unchecked": 128,
+      "migration_delta": 0
+    },
+    {
+      "unit": "zlib:deflate.c",
+      "a_checked": 30516,
+      "a_unchecked": 29012,
+      "b_checked": 30184,
+      "b_unchecked": 28668,
+      "migration_delta": 0
+    },
+    {
+      "unit": "zlib:inflate.c",
+      "a_checked": 28404,
+      "a_unchecked": 26664,
+      "b_checked": 28264,
+      "b_unchecked": 26520,
+      "migration_delta": 0
+    },
+    {
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "a_checked": 124024,
+      "a_unchecked": 121652,
+      "b_checked": 122972,
+      "b_unchecked": 120592,
+      "migration_delta": 0
+    },
+    {
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "a_checked": 33688,
+      "a_unchecked": 33440,
+      "b_checked": 33300,
+      "b_unchecked": 33052,
+      "migration_delta": 0
+    },
+    {
+      "unit": "cjson:cJSON.c",
+      "a_checked": 30228,
+      "a_unchecked": 30116,
+      "b_checked": 29496,
+      "b_unchecked": 29384,
+      "migration_delta": 0
+    }
+  ],
+  "coverage": {
+    "tv_admitted_inputs": 70,
+    "opaque_inputs": 187,
+    "source_bridge": "Legacy integer-mix C-HIR 1001 versus EvoIR 1002 event mismatch remains NOT_VALIDATED.",
+    "native_latency": "NOT_RUN",
+    "smt": "NOT_RUN",
+    "defaults": "UNCHANGED"
+  },
+  "retention": {
+    "path": ".evidence/codegen/n07-e2/retention.json",
+    "sha256": "88e75b22b2bdd1e62341b9b2505dd0a9c4850969e92c15a359af1a063a984877",
+    "retired_tu_objects": 24,
+    "retired_tu_bytes": 1255664,
+    "retired_generated_and_archive_bytes": 40254904,
+    "disposition": "Exact historical E1 TU runtime objects are no longer retained. Every retired TU has a full-byte-identical retained E2 replacement. Manifests, receipts and logs remain. Generated C/header are reproducible; the extracted pinned toolchain, licenses and model runner remain for E3.",
+    "current_migration_objects": 792,
+    "current_migration_object_bytes": 1832400,
+    "disk": {
+      "baseline_frontend_kib": 24606156,
+      "final_frontend_kib": 24645336,
+      "new_owned_evidence_kib": 121148,
+      "scoped_net_growth_upper_bound_bytes": 164175872,
+      "free_kib": 70551924,
+      "note": "Allocated shared-cache growth plus owned E2/model/trend footprint. Upper bound does not credit deleted historical TU blocks because their allocated footprint was not snapshotted before retirement; their exact logical bytes are recorded above. Excludes tracked files and unrelated volume activity."
+    }
+  },
+  "claim_ceiling": "Bounded finite vendor-model differential and byte-preserving tooling, not full ISA/backend correctness, bounded SMT, whole-application/kernel acceptance, size improvement or default promotion."
+}

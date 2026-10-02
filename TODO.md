@@ -2549,11 +2549,15 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   BinaryImm validator repair change no selection or defaults. Retired 24
   duplicate before-TU objects; keep 792 current objects as the sole open
   E2/E3 migration baselines. Scoped disk net +60,121,088 bytes; about 74 GiB free.
-  E2's [bounded vendor-model plan](tests/contracts/codegen-n07-model-20261003.json)
-  freezes tool qualification, 81 integer shapes and 2,592 input cases before
-  execution. First repair the observed no-op generator mtime churn; then
-  qualify the original vendor model, native and diskless QEMU lanes. This is
-  planned work, not model acceptance. Bounded SMT remains a separate E3 step.
+  E2 is [closed for its bounded integer model](docs/notebook/codegen-vendor-model-20261003.md):
+  [receipt](tests/contracts/codegen-n07-e2-20261003-receipt.json), implementation
+  `060f9065`; 2,600 exact cases per interpreter/model/native/QEMU lane, four
+  boundary refusals, full workspace 3,032/0/5 ignored and 51 Python PASS.
+  All 768 native and 24 TU objects remain byte-identical; no new size benefit.
+  No-op generation preserves mtimes. Retired duplicate E1 TU objects and
+  temporary model products; current E2 replacements plus native baselines
+  remain for E3. Scoped disk net at most +164,175,872 bytes; about 67 GiB free.
+  Bounded SMT remains a separate E3 step, not implied by finite agreement.
 
 ## Benchmark coverage index
 

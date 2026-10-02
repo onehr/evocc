@@ -15,8 +15,11 @@ N07 E1's encoding-fact migration is closed under its
 [frozen plan](../tests/contracts/codegen-n07-encodings-20261003.json):
 [full workspace and byte-identity evidence](notebook/codegen-encodings-20261003.md)
 cover all 24 A/B/profile TU objects and both 384-case native corpora.
-The model/emulator and SMT steps remain open
-under the [codegen quality plan](codegen-quality-plan.md).
+E2's [bounded vendor-model differential](notebook/codegen-vendor-model-20261003.md)
+is closed for 81 integer op/width shapes and eight constant controls, with
+2,600 exact cases per interpreter/model/native/QEMU lane and unchanged objects.
+This is finite testing, not B1 proof or full-state validation. The SMT step
+remains open under the [codegen quality plan](codegen-quality-plan.md).
 [EvoMIR](evomir-spec.md)
 stays the normative specification of the machine IR; until a fact has been
 migrated under this contract, the code that holds it today (Appendix A) remains
