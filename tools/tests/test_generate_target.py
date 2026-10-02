@@ -42,6 +42,41 @@ def replace_one(source: bytes, old: bytes, new: bytes) -> bytes:
     return with_valid_digest(source.replace(old, new, 1))
 
 
+class ConstantPatternDescriptionTest(unittest.TestCase):
+    def source(self):
+        return with_valid_digest(
+            b"version patterns.v1\ntarget aarch64\nsha256 " + b"0" * 64 + b"\n"
+            b"pattern const_movz root=mov_imm widths=32,64 sequence=movz_movk guard=any writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w\n"
+            b"pattern const_movn root=mov_imm widths=32,64 sequence=movn_movk guard=any writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w\n"
+            b"pattern const_orr root=mov_imm widths=32,64 sequence=orr_zero guard=logical_mask writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w\n"
+        )
+
+    def test_constant_patterns_generate_candidates_and_claim_rows(self):
+        description = gen.parse_patterns(self.source())
+        rust = gen.render_patterns(description)
+        for name in ["const_movz", "const_movn", "const_orr"]:
+            self.assertIn(name, rust)
+        self.assertIn("MovzMovk", rust)
+        self.assertIn("MovnMovk", rust)
+        self.assertIn("OrrZero", rust)
+        self.assertIn("exact_bits_zero_upper_w", gen.render_pattern_docs(description))
+
+    def test_rebound_unsafe_patterns_are_rejected(self):
+        source = self.source()
+        for old, new in [
+            (b"widths=32,64", b"widths=16,64"),
+            (b"writes=dst", b"writes=dst,scratch"),
+            (b"flags=preserve", b"flags=write"),
+            (b"memory=none", b"memory=write"),
+            (b"guard=logical_mask", b"guard=any"),
+            (b"claim=exact_bits_zero_upper_w", b"claim=low_bits_only"),
+        ]:
+            with self.subTest(new=new):
+                changed = with_valid_digest(source.replace(old, new, 1))
+                with self.assertRaises(gen.TargetDescriptionError):
+                    gen.parse_patterns(changed)
+
+
 class RegisterDescriptionTest(unittest.TestCase):
     def setUp(self):
         self.original = DESCRIPTION.read_bytes()
