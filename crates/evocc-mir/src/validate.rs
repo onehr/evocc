@@ -255,17 +255,18 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
     }
     match inst {
         MInst::BinaryImm {
-            op: crate::BinOp::And | crate::BinOp::Orr | crate::BinOp::Eor,
+            op,
             dst,
             lhs,
             imm,
             width,
         } => {
-            expect_general(name, block, *dst, "a logical destination")?;
-            expect_general(name, block, *lhs, "a logical operand")?;
-            if !crate::immediate::logical_mask(*imm, *width) {
+            expect_general(name, block, *dst, "a binary immediate destination")?;
+            expect_general(name, block, *lhs, "a binary immediate operand")?;
+            if !crate::isa::aarch64::encodings::binary_immediate(*op, *imm, *width) {
                 return Err(format!(
-                    "@{name} block {block}: unencodable logical immediate"
+                    "@{name} block {block}: unencodable {} immediate",
+                    op.mnemonic()
                 ));
             }
             Ok(())
@@ -471,7 +472,7 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
         MInst::CmpImm { dst, lhs, imm, .. } => {
             expect_flags(name, block, *dst, "a cmp result")?;
             expect_general(name, block, *lhs, "a cmp operand")?;
-            if *imm > 4095 {
+            if !crate::isa::aarch64::encodings::add_sub_immediate(*imm) {
                 return Err(format!(
                     "@{name} block {block}: compare immediate is not an unshifted imm12"
                 ));

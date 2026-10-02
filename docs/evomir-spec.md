@@ -1,6 +1,14 @@
 # EvoMIR Specification
 
-**Revision 0.60** | **Authoritative reference** | **2026-10-03**
+**Revision 0.61** | **Authoritative reference** | **2026-10-03**
+
+Encoding-fact addendum (revision 0.61, N07 E1): the existing immediate and
+offset facts now come from `targets/aarch64/encodings`, generated into the
+selector, validator and emitter. This migrates facts without changing selection,
+frame policy, relaxation margins or instruction/interpreter semantics. The
+validator now enforces the existing `BinaryImm` domain for all forms, not only
+logical operations: ADD/SUB use unshifted imm12, shifts require a count below
+the machine-register width, and multiply/divide have no immediate form.
 
 Allocation-policy addendum (revision 0.60, N03c T2):
 `--regalloc-opt=copy-hints` optionally prefers free same-class copy-peer
@@ -1518,10 +1526,50 @@ entry:
 }
 ```
 
+### A.1. Generated encoding facts
+
+These limits describe encodings, not optimization permissions. In particular,
+the frame-transfer path retains its conservative 32-bit scaled bound, paired
+saves retain eight-byte slots, and relaxation retains the prior factor-of-two
+margin. The two-instruction ADD/SUB expansion is the union of one shifted
+chunk and one unshifted chunk, not a larger single-instruction immediate.
+Logical masks are the cyclic-run/repetition domain specified in Section 3;
+zero, all-ones and out-of-width values remain excluded. Source shift selection
+still additionally requires a count below the source value's width.
+
+<!-- aarch64-encodings:start -->
+Generated from targets/aarch64/encodings by tools/generate-target.py.
+
+Description digest: 96d58a17f4b979210e5fa38cb8fe2a3a76d311cc5707428505b7c568a072f203.
+
+| Fact | Encoding constraint |
+| --- | --- |
+| add_sub field | unsigned 12 bits; encoded units 0..4095 |
+| memory_unscaled field | signed 9 bits; encoded units -256..255 |
+| memory_scaled field | unsigned 12 bits; encoded units 0..4095 |
+| pair field | signed 7 bits; encoded units -64..63 |
+| mov_wide field | unsigned 16 bits; encoded units 0..65535 |
+| tbz field | signed 14 bits; encoded units -8192..8191 |
+| adr field | signed 21 bits; encoded units -1048576..1048575 |
+| add_sub shift | 12 bits |
+| mov_wide shift | 16 bits |
+| tbz displacement | 4 bytes per encoded unit |
+| adr displacement | 1 bytes per encoded unit |
+| Instruction | 4 bytes |
+| memory_bytes | 1, 2, 4, 8, 16 |
+| pair_bytes | 4, 8, 16 |
+| logical_elements | 2, 4, 8, 16, 32, 64 |
+| Binary add_sub | add, sub |
+| Binary logical | and, orr, eor |
+| Binary shift | lsl, lsr, asr |
+
+<!-- aarch64-encodings:end -->
+
 ## Appendix B. Revision History
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.61 | 2026-10-03 | Generate existing immediate/addressing limits and enforce malformed BinaryImm rejection; preserve ordinary object bytes, frame policy and branch-relaxation margins. |
 | 0.59 | 2026-10-02 | Require progress when rewriting spills; refuse recursive spill-temporary expansion and prepare saturated-bank stack arguments before fixed copies. No instruction, ABI-layout or interpreter semantics change. |
 | 0.58 | 2026-10-02 | Opt-in adjacent single-use shift, extension, product and indexed-access emission; preserve live state, flags, access order and all protected/default paths. No MIR or interpreter operation added. |
 | 0.54 | 2026-09-28 | Select existing immediate-zero pointer equality for direct null definitions; preserve identity and repair typed null-pointer stores in MIR interpretation without admitting nonzero raw provenance or integer-store pointer fragments. |

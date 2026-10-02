@@ -1,0 +1,21 @@
+version encodings.v1
+target aarch64
+sha256 96d58a17f4b979210e5fa38cb8fe2a3a76d311cc5707428505b7c568a072f203
+field add_sub unsigned 12
+field memory_unscaled signed 9
+field memory_scaled unsigned 12
+field pair signed 7
+field mov_wide unsigned 16
+field tbz signed 14
+field adr signed 21
+shift add_sub 12
+shift mov_wide 16
+scale tbz 4
+scale adr 1
+instruction bytes 4
+set memory_bytes 1,2,4,8,16
+set pair_bytes 4,8,16
+set logical_elements 2,4,8,16,32,64
+binary add_sub add,sub
+binary logical and,orr,eor
+binary shift lsl,lsr,asr

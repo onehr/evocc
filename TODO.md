@@ -2539,6 +2539,12 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   emulator as a differential lane; bounded SMT verdicts for every existing
   lowering rule. Lean statements for patterns start on RISC-V and only after
   those steps. No hand-written ISA specification, no full-ISA proofs.
+  E1's [frozen plan](tests/contracts/codegen-n07-encodings-20261003.json)
+  has fresh retained pre-migration objects for both 384-case native corpora
+  and six A/B TUs in both profiles. The generated immediate/offset component
+  and existing BinaryImm validator repair are implemented; full-workspace
+  and post-migration byte comparisons are pending, not acceptance.
+  Model execution and bounded SMT (steps 5–6) have not started.
 
 ## Benchmark coverage index
 

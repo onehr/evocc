@@ -96,7 +96,10 @@ fn malformed_binary_immediates_are_rejected_by_the_public_validator() {
             let mut changed = original.clone();
             let mut replaced = false;
             for inst in &mut changed.functions[0].blocks[0].insts {
-                if let MInst::BinaryImm { op: actual, imm, .. } = inst {
+                if let MInst::BinaryImm {
+                    op: actual, imm, ..
+                } = inst
+                {
                     *actual = op;
                     *imm = invalid;
                     replaced = true;

@@ -22,6 +22,7 @@ use evocc_types::{param_mark, EvoIRType, ParamMark, RecordShape};
 use crate::isa::aarch64::abi::{
     general_bank, place, vector_bank, Aarch64Abi, ProfileFeature, KERNEL,
 };
+use crate::isa::aarch64::encodings;
 use crate::{
     inst_defs, AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond,
     ExtOp, FlagOp, FramePlace, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
@@ -1008,17 +1009,10 @@ impl Lowerer {
         let uninterrupted = insts[after..]
             .iter()
             .all(|inst| matches!(inst, MInst::MovImm { .. }));
-        let encodable = (-256..=255).contains(&offset)
-            || (offset >= 0
-                && (offset as u64).is_multiple_of(size)
-                && offset as u64 / size <= 4095);
+        let encodable = encodings::memory_offset(offset, size);
         // Strict-align emission may expand the access to byte instructions.
         // Every byte offset must fit too, even if the wide scaled offset fits.
-        let byte_safe = u64::from(align) >= size
-            || (offset >= -256
-                && offset
-                    .checked_add(size as i64 - 1)
-                    .is_some_and(|end| end <= 4095));
+        let byte_safe = u64::from(align) >= size || encodings::memory_byte_expansion(offset, size);
         Ok(if uninterrupted && encodable && byte_safe {
             (base, offset)
         } else {
@@ -2747,7 +2741,7 @@ fn lower_compare(
                 .constants
                 .get(&value.id)
                 .copied()
-                .filter(|v| *v <= 4095)
+                .filter(|v| encodings::add_sub_immediate(*v))
         };
         let selected = if let Some(imm) = literal(rhs) {
             Some((lhs, imm, condition_of(operation)))
@@ -4381,7 +4375,7 @@ fn simple(
             .constants
             .get(&value.id)
             .map(|raw| raw & width.mask())
-            .filter(|raw| *raw <= 4095)
+            .filter(|raw| encodings::add_sub_immediate(*raw))
     };
     let logical = |value: &Value| {
         lowerer

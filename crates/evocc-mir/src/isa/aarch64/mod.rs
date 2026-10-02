@@ -5,6 +5,7 @@ mod abi_tables;
 pub mod allocation;
 pub mod constants;
 pub mod costs;
+pub mod encodings;
 pub mod insts;
 pub mod local;
 pub mod patterns;

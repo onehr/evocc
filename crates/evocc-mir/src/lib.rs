@@ -335,17 +335,7 @@ impl BinOp {
     /// Whether Section 4 gives this form an immediate spelling.
     #[must_use]
     pub const fn has_immediate_form(self) -> bool {
-        matches!(
-            self,
-            Self::Add
-                | Self::Sub
-                | Self::And
-                | Self::Orr
-                | Self::Eor
-                | Self::Lsl
-                | Self::Lsr
-                | Self::Asr
-        )
+        isa::aarch64::encodings::has_immediate_form(self)
     }
 }
 

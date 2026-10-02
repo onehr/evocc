@@ -2,6 +2,7 @@
 //! Tables choose which families exist; costs select, never justify equality.
 
 use super::costs::{LOGICAL_BYTES, WIDE_BYTES};
+use super::encodings::{MOV_WIDE_MAX, MOV_WIDE_SHIFT};
 use super::patterns::{ConstantKind, CONSTANT_PATTERNS};
 use crate::Width;
 
@@ -23,26 +24,26 @@ impl Part {
 }
 
 fn wide(value: u64, width: Width, ones: bool) -> Vec<Part> {
-    let halves = u32::from(width.bits()) / 16;
-    let fill = if ones { u16::MAX } else { 0 };
-    let half = |index| (value >> (16 * index)) as u16;
+    let halves = u32::from(width.bits()) / MOV_WIDE_SHIFT;
+    let fill = if ones { MOV_WIDE_MAX as u16 } else { 0 };
+    let half = |index| (value >> (MOV_WIDE_SHIFT * index)) as u16;
     let first = (0..halves).find(|&i| half(i) != fill).unwrap_or(0);
     let mut result = vec![if ones {
         Part::Ones {
             half: !half(first),
-            shift: 16 * first,
+            shift: MOV_WIDE_SHIFT * first,
         }
     } else {
         Part::Zero {
             half: half(first),
-            shift: 16 * first,
+            shift: MOV_WIDE_SHIFT * first,
         }
     }];
     for index in 0..halves {
         if index != first && half(index) != fill {
             result.push(Part::Keep {
                 half: half(index),
-                shift: 16 * index,
+                shift: MOV_WIDE_SHIFT * index,
             });
         }
     }
@@ -54,8 +55,8 @@ fn wide(value: u64, width: Width, ones: bool) -> Vec<Part> {
 pub fn select(value: u64, width: Width) -> Option<Vec<Part>> {
     let value = value & width.mask();
     let legacy_parts = 1
-        + (1..u32::from(width.bits()) / 16)
-            .filter(|i| (value >> (16 * i)) & 0xffff != 0)
+        + (1..u32::from(width.bits()) / MOV_WIDE_SHIFT)
+            .filter(|i| (value >> (MOV_WIDE_SHIFT * i)) & MOV_WIDE_MAX != 0)
             .count() as u32;
     let mut best_bytes = legacy_parts * WIDE_BYTES;
     let mut best = None;

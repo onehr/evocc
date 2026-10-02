@@ -241,7 +241,7 @@ impl<'a> Selector<'a> {
         self.single_use(temporary)?;
         self.input_survives(tail.other, &[temporary])?;
         if let Some(count) = amount {
-            if source.class != width.class() || count >= u64::from(width.bits()) {
+            if source.class != width.class() || !super::encodings::shift_immediate(count, width) {
                 return Err("shift-domain");
             }
         } else if matches!(

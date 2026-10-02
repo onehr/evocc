@@ -1,41 +1,11 @@
-//! Encodability of existing AArch64 immediate instruction forms.
+//! Compatibility path for the generated logical-immediate recognizer.
 
-use crate::Width;
-
-/// A logical immediate is a repeated power-of-two element with one nonempty,
-/// nonfull cyclic run of ones. Inspect that representation without folding
-/// zero/all-ones operations or changing the semantic operand width.
-pub(crate) fn logical_mask(value: u64, width: Width) -> bool {
-    if value & !width.mask() != 0 || value == 0 || value == width.mask() {
-        return false;
-    }
-    for size in [2, 4, 8, 16, 32, 64] {
-        if size > width.bits() {
-            break;
-        }
-        let mask = u64::MAX >> (64 - size);
-        let element = value & mask;
-        // Two transitions around the ring mean exactly one run of each bit.
-        let rotated = ((element << 1) & mask) | (element >> (size - 1));
-        if (element ^ rotated).count_ones() != 2 {
-            continue;
-        }
-        let mut repeated = element;
-        let mut filled = size;
-        while filled < width.bits() {
-            repeated |= repeated << filled;
-            filled *= 2;
-        }
-        if repeated == value {
-            return true;
-        }
-    }
-    false
-}
+pub(crate) use crate::isa::aarch64::encodings::logical_mask;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Width;
     use std::collections::BTreeSet;
 
     #[test]

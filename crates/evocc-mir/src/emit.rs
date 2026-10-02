@@ -13,6 +13,7 @@ use evocc_evoir::{GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
 
 use crate::generic::frame::{FrameObject, FrameRequest, ObjectLifetime};
 use crate::isa::aarch64::abi::{general_bank, vector_bank, Aarch64Abi, KERNEL};
+use crate::isa::aarch64::encodings;
 use crate::isa::aarch64::regfile::{
     self, FRAME_POINTER_X, LINK_REGISTER_X, SCRATCH_UNIT_W, SCRATCH_UNIT_X, SCRATCH_W, SCRATCH_X,
     SIMD_SCRATCH_D, SIMD_SCRATCH_UNIT_V, SIMD_SCRATCH_V, STACK_POINTER, ZERO_GPR32, ZERO_GPR64,
@@ -1240,11 +1241,17 @@ fn label(target: Target, function: &str, block: u32) -> String {
 /// The threshold is half the `tbz` reach. The margin covers the two ways the
 /// count can be below the truth: an inline-assembly template line standing for
 /// more than one instruction, and the growth relaxation itself adds.
-const RELAXATION_THRESHOLD: usize = 4_096;
+const RELAXATION_THRESHOLD: usize = (encodings::TBZ_MAX as usize + 1)
+    * encodings::TBZ_SCALE as usize
+    / encodings::INSTRUCTION_BYTES
+    / 2;
 
 // ADR has a signed 21-bit byte displacement. Keep a factor-of-two margin for
 // branch relaxation and address expansion, as for the conditional branches.
-const BLOCK_ADDRESS_RELAXATION_THRESHOLD: usize = 131_072;
+const BLOCK_ADDRESS_RELAXATION_THRESHOLD: usize = (encodings::ADR_MAX as usize + 1)
+    * encodings::ADR_SCALE as usize
+    / encodings::INSTRUCTION_BYTES
+    / 2;
 
 /// The local symbol a `block_addr` names.
 ///
@@ -1716,8 +1723,8 @@ fn emit_single_saves(text: &mut String, frame: &Frame) {
 
 /// The largest offset the signed, scaled seven-bit immediate of an X or D
 /// register `stp`/`ldp` reaches, and the distance between its two slots.
-const PAIR_LIMIT: u64 = 63 * 8;
-const PAIR_STRIDE: u64 = 8;
+const PAIR_STRIDE: u64 = regfile::GPR64_VIEW.bits as u64 / 8;
+const PAIR_LIMIT: u64 = encodings::PAIR_MAX as u64 * PAIR_STRIDE;
 
 /// Revision 0.56 F1: the slots of one save area in ascending offset order,
 /// each either alone or paired with the slot directly above it. A pair needs
@@ -1909,7 +1916,7 @@ fn emit_guard_load(text: &mut String, guard: &StackGuard) {
         }
         StackGuard::SystemRegister { register, offset } => {
             let _ = writeln!(text, "    mrs {SCRATCH_X}, {register}");
-            if *offset >= 0 && *offset <= 32760 && offset % 8 == 0 {
+            if encodings::scaled_memory_offset(*offset, u64::from(regfile::GPR64_VIEW.bits / 8)) {
                 let _ = writeln!(text, "    ldr {SCRATCH_X}, [{SCRATCH_X}, #{offset}]");
             } else {
                 // LR is already saved and restored by the common epilogue;
@@ -1929,20 +1936,26 @@ fn emit_guard_load(text: &mut String, guard: &StackGuard) {
 
 /// The `movz`/`movk` sequence Section 4 names for `mov rd, #imm`.
 fn emit_immediate(text: &mut String, register: &str, class: RegClass, value: u64) {
-    let chunks = if class == RegClass::Gpr64 { 4 } else { 2 };
+    let bits = if class == RegClass::Gpr64 {
+        regfile::GPR64_VIEW.bits
+    } else {
+        regfile::GPR32_VIEW.bits
+    };
+    let chunks = u32::from(bits) / encodings::MOV_WIDE_SHIFT;
     let mut written = false;
     for index in 0..chunks {
-        let part = (value >> (16 * index)) & 0xffff;
+        let shift = encodings::MOV_WIDE_SHIFT * index;
+        let part = (value >> shift) & encodings::MOV_WIDE_MAX;
         if part == 0 && written {
             continue;
         }
         if written {
-            let _ = writeln!(text, "    movk {register}, #{part}, lsl #{}", 16 * index);
+            let _ = writeln!(text, "    movk {register}, #{part}, lsl #{shift}");
         } else {
             if index == 0 {
                 let _ = writeln!(text, "    movz {register}, #{part}");
             } else {
-                let _ = writeln!(text, "    movz {register}, #{part}, lsl #{}", 16 * index);
+                let _ = writeln!(text, "    movz {register}, #{part}, lsl #{shift}");
             }
             written = true;
         }
@@ -1955,13 +1968,13 @@ fn emit_immediate(text: &mut String, register: &str, class: RegClass, value: u64
 /// The largest immediate an `add` or `sub` carries in one instruction, and the
 /// largest one it carries in two: the second form shifts its twelve bits left
 /// by twelve.
-const IMM12: u64 = 4095;
-const IMM12_SHIFTED: u64 = 4095 << 12 | 4095;
+const IMM12: u64 = encodings::ADD_SUB_MAX;
+const IMM12_SHIFTED: u64 = encodings::ADD_SUB_DOUBLE_MAX;
 
 /// The largest frame offset a scaled transfer immediate reaches for a
 /// thirty-two-bit access. Every frame offset this revision produces is a
 /// multiple of eight, so one bound serves both widths.
-const SCALED_LIMIT: u64 = 4095 * 4;
+const SCALED_LIMIT: u64 = encodings::MEMORY_SCALED_MAX * (regfile::GPR32_VIEW.bits as u64 / 8);
 
 /// `dst := src + imm`, in as many instructions as the immediate needs.
 ///
@@ -1974,9 +1987,10 @@ fn emit_add_immediate(text: &mut String, op: &str, dst: &str, src: &str, imm: u6
     if imm <= IMM12 {
         let _ = writeln!(text, "    {op} {dst}, {src}, #{imm}");
     } else if imm <= IMM12_SHIFTED {
-        let high = imm >> 12;
+        let high = imm >> encodings::ADD_SUB_SHIFT;
         let low = imm & IMM12;
-        let _ = writeln!(text, "    {op} {dst}, {src}, #{high}, lsl #12");
+        let shift = encodings::ADD_SUB_SHIFT;
+        let _ = writeln!(text, "    {op} {dst}, {src}, #{high}, lsl #{shift}");
         if low != 0 {
             let _ = writeln!(text, "    {op} {dst}, {dst}, #{low}");
         }

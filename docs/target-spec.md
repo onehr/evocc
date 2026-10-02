@@ -1,6 +1,6 @@
 # EvoCC internal target description: contract
 
-Revision 1 — 2026-10-01. **Implementation is staged.** N03a now has canonical
+Revision 2 — 2026-10-03. **Implementation is staged.** N03a now has canonical
 `targets/aarch64/regfile`, `insts`, `abi-darwin`, `abi-linux` and
 `profile-kernel` components, their deterministic generator and shared
 consumers: register and operand facts, generic SSA destruction, allocation,
@@ -11,7 +11,9 @@ units and both native corpora and a green full workspace gate
 bounded constant-materialization `patterns` and byte `costs`, with generated
 Rust and EvoMIR rows; C2 extends those tables to adjacent single-use emission
 idioms. Neither slice closes N07's encoding/model/SMT steps.
-N07 is still design work
+N07 E1 has an encoding-fact implementation under validation against its
+[frozen plan](../tests/contracts/codegen-n07-encodings-20261003.json).
+The model/emulator and SMT steps remain open
 under the [codegen quality plan](codegen-quality-plan.md).
 [EvoMIR](evomir-spec.md)
 stays the normative specification of the machine IR; until a fact has been
@@ -165,6 +167,24 @@ and its Lean output are smallest, and only after step 6.
 - x86-64 files this quarter. The layout is per ISA so that R04 adds a
   directory, not a redesign.
 
+### Encoding migration provenance and boundary
+
+E1's `encodings.v1` moves the existing add/sub/compare, memory, pair, mov-wide,
+logical-mask and scalar-shift domains plus the TBZ/ADR reach used by relaxation.
+Canonical rows have one field, shift, scale, ordered size set or existing
+binary-immediate family per line. The generated Rust and EvoMIR Appendix A.1
+share that digest. Generator/schema tests are not an ISA oracle: the independent
+cyclic-run enumeration, immediate/offset boundary cases and Clang
+assembly/disassembly/reassembly test check that boundary separately.
+
+The field inventory was checked against the automatically translated Arm
+2023-03 ASL in
+[`sail-arm` at `1bf2e5574ba9d704639a28401b6a387dcb113cae`](https://github.com/rems-project/sail-arm/blob/1bf2e5574ba9d704639a28401b6a387dcb113cae/arm-v9.4-a/src/instrs64.sail).
+No execution of that model is claimed by E1. Emission's conservative frame
+limit and relaxation margins remain policy, derived from encoding facts but
+not widened to the architectural maximum. Existing C1/C2/frame options retain
+their separate defaults and admission dispositions.
+
 ## Appendix A. Where the facts live today
 
 Read-only inventory of `crates/evocc-mir/src` at `ad7549b8` (EvoMIR 0.55).
@@ -206,6 +226,8 @@ engineer doing the step, to be confirmed against the code, not a verdict:
   AAPCS64 variadic save areas), while the specification's Darwin variadic note
   says the Darwin rule is still unmeasured. Splitting `abi-darwin` from
   `abi-linux` makes each such rule an explicit entry.
-- Immediate legality for `BinaryImm` add and subtract is enforced at selection
-  and emission but not in the validator; a generated predicate from
-  `encodings` gives all three the same answer.
+- The inventory identified a validator gap for `BinaryImm` add and subtract.
+  E1 confirmed that selection limits them, but their emitter prints the supplied
+  immediate directly (only separate pseudo-form expansions split larger values).
+  The generated domain now rejects malformed MIR before that emission path;
+  ordinary selection and the pseudo-form expansion policy remain unchanged.

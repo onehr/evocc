@@ -68,7 +68,7 @@ class EncodingDescriptionTest(unittest.TestCase):
         self.assertEqual(rendered, (ROOT / "crates/evocc-mir/src/isa/aarch64/encodings.rs").read_text())
         self.assertTrue(rendered.startswith("// Generated"))
         for consumer in ["lower.rs", "validate.rs", "emit.rs"]:
-            self.assertIn("encodings::", (ROOT / "crates/evocc-mir/src" / consumer).read_text())
+            self.assertTrue("encodings::" in (ROOT / "crates/evocc-mir/src" / consumer).read_text(), consumer)
 
     def test_malformed_encoding_rows_fail_after_digest_rebinding(self):
         source = self.source()
