@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -40,6 +42,59 @@ def replace_one(source: bytes, old: bytes, new: bytes) -> bytes:
     if source.count(old) != 1:
         raise AssertionError(f"expected one fixture row: {old!r}")
     return with_valid_digest(source.replace(old, new, 1))
+
+
+class TargetGenerationWritesTest(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(prefix="evocc-target-noop-")
+        self.addCleanup(self.directory.cleanup)
+        folder = Path(self.directory.name)
+        self.outputs = {
+            "--output": folder / "regfile.rs",
+            "--evoir-output": folder / "assembly_registers.rs",
+            "--insts-output": folder / "insts.rs",
+            "--abi-output": folder / "abi_tables.rs",
+            "--patterns-output": folder / "patterns.rs",
+            "--costs-output": folder / "costs.rs",
+            "--encodings-output": folder / "encodings.rs",
+            "--pattern-docs": folder / "evomir-spec.md",
+        }
+        self.outputs["--pattern-docs"].write_bytes((ROOT / "docs/evomir-spec.md").read_bytes())
+        self.generate()
+        for path in self.outputs.values():
+            os.utime(path, ns=(946684800000000000, 946684800000000000))
+        self.before = {path: (path.read_bytes(), path.stat().st_mtime_ns)
+                       for path in self.outputs.values()}
+
+    def generate(self):
+        argv = [sys.executable, str(GENERATOR)]
+        for option, path in self.outputs.items():
+            argv.extend([option, str(path)])
+        result = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def assert_unchanged(self, except_path=None):
+        for path, (contents, mtime) in self.before.items():
+            with self.subTest(path=path.name):
+                self.assertEqual(path.read_bytes(), contents)
+                if path != except_path:
+                    self.assertEqual(path.stat().st_mtime_ns, mtime)
+
+    def test_no_op_generation_preserves_all_output_bytes_and_mtimes(self):
+        self.generate()
+        self.assert_unchanged()
+
+    def test_only_corrupt_output_is_rewritten(self):
+        broken = self.outputs["--output"]
+        broken.write_bytes(b"deliberately corrupted output\n")
+        self.generate()
+        self.assert_unchanged(except_path=broken)
+
+    def test_only_missing_output_is_created(self):
+        missing = self.outputs["--insts-output"]
+        missing.unlink()
+        self.generate()
+        self.assert_unchanged(except_path=missing)
 
 
 class EncodingDescriptionTest(unittest.TestCase):
