@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.55** | **Authoritative reference** | **2026-10-01**
+**Revision 0.56** | **Authoritative reference** | **2026-10-02**
 
 Function-placement addendum (revision 0.34): the associated validated EvoIR
 module carries each definition's optional `section`, just as it carries alignment
@@ -546,7 +546,7 @@ in the table is refused with the diagnostic named in Section 10.
 | `uninitialized.bits<N>` | `mov #0` (any value is permitted; zero is chosen so the output is deterministic) |
 | `ptr.to_int`, `ptr.from_int.*` | nothing: the value is the same 64-bit register (revision 0.12) |
 | `block_addr ^b` | `adr rd, <label of block b>` (revision 0.15); a static relocation against a block uses a local symbol `.L<function>.<block>` the emitter places at the block's first instruction |
-| `return_address` | `ldr rd, [x29, #8]`: the saved link register of this frame record, valid anywhere in the body because every function keeps a frame pointer (revision 0.17) |
+| `return_address` | `ldr rd, [x29, #8]`: the saved link register of this frame record, valid anywhere in the body because a function using an activation address always keeps its frame pointer (revision 0.17; opt-in leaf exclusion in revision 0.56) |
 | `frame_address` | `mov rd, x29` (revision 0.17) |
 | `ctlz`, `cttz`, `ctpop`, `bswap` (revision 0.14) | `ctlz`: zero-extend per Section 3, `clz` at the register width, then subtract `32 - N` or `64 - N` for a narrower `N`; `cttz`: `rbit` then `clz`, and for a narrower `N` the result capped at `N` with `cmp`/`csel`, since the unspecified upper bits may hold a set bit; `ctpop`: the general-register sequence both oracles use without SIMD (`p39.out`, Clang-19; GCC-14 calls `__popcountdi2`, which the kernel does not provide): `x - ((x >> 1) & 0x5555...)`, `(x & 0x3333...) + ((x >> 2) & 0x3333...)`, `(x + (x >> 4)) & 0x0f0f...`, multiply by `0x0101...` and `lsr` by the register width minus 8, after zero extension; `bswap`: `rev16` (16, upper bits unspecified per Section 3), `rev` at 32 or 64 |
 
@@ -714,7 +714,7 @@ used for a call across the boundary (Section 9 names the probe).
 **Preserved registers.** `x19` to `x28`, `x29`, `x30` and `sp` are
 callee-saved; `x0` to `x17` are caller-saved; `x18` is untouchable.
 
-**Frame layout.** Every function keeps a frame pointer. The prologue is
+**Frame layout.** By default every function keeps a frame pointer. The prologue is
 
 ```text
 stp x29, x30, [sp, #-16]!
@@ -732,10 +732,50 @@ virtual register), then the register save area of a variadic function
 `sp` stays 16-byte aligned at every call. Fixed slots remain in this frame;
 EvoIR's approved `alloca.dynamic` additionally moves `sp` at runtime.
 
-**Driver compatibility with the existing native model (2026-09-27).**
-Every current function needs the frame record above. `-fno-omit-frame-pointer`
-therefore selects existing behavior; `-fomit-frame-pointer` permits removal only
-when a frame is unnecessary and does not override this requirement. Neither
+**Opt-in frame emission (revision 0.56).** The native-only `--frame-opt=LIST`
+selects a nonempty, duplicate-free subset of `paired-saves`, `shared-epilogue`
+and `leaf-frames`. The option occurs at most once and unknown names are errors;
+it is refused with `--check`. The exact-input `evo-ir-asm` adapter accepts the
+same list. All three default off: their absence leaves assembly and object
+bytes unchanged. The assembly header records the canonical requested list;
+eligibility is per function, so that header is not a transformation count.
+These variants do not change allocation, frame size, slot offsets, preservation
+sets, argument placement, EvoIR, certificates or interpreter behavior.
+
+- `paired-saves`: in a nondynamic frame, adjacent callee-saved slots at `o`
+  and `o+8`, with `o` a multiple of 8 and `0 <= o <= 504`, use one `stp` / `ldp`
+  of the corresponding X registers or preserved D halves. Odd remainders,
+  nonadjacent or unencodable slots and dynamic frames keep single transfers.
+  Each register retains its individual CFI rule immediately after the pair,
+  including Section 6's over-aligned saved-location expression.
+- `shared-epilogue`: with at least two return terminators and an exit sequence
+  longer than one instruction, place one complete exit at the last return in
+  layout order behind a function-unique local label. Every other return branches
+  there. The exit includes the entire canary check before any restoration,
+  restores the original SP before authentication, and retains its CFI
+  remember/restore-state pair. The label is stable under conditional-branch
+  relaxation. A sole return, or a frameless unsigned leaf whose exit is only
+  `ret`, is unchanged.
+- `leaf-frames`: omit the frame-record push, frame-pointer setup, frame-record
+  pop and their CFI only when there are no calls, saves, slots, spills,
+  outgoing/variadic areas, dynamic allocations/releases, stack guard, inline
+  assembly, incoming stack arguments or activation/incoming/save-area address
+  reads. The frame size must be zero. Return signing still emits
+  `paciasp` / `autiasp` at the unchanged SP; unwind tables retain the entry CFA
+  (`sp+0`) and applicable authentication-state directives.
+
+Until separate kernel validation, **all** variants are suppressed by explicit
+frame-pointer or leaf-frame-pointer requests, `-mgeneral-regs-only`, a sysreg
+stack guard, or a nonzero patchable entry. This is the narrower N03f handoff
+admission rule, not a claim that paired saves require frame-pointer omission.
+No variant is automatically enabled by `-O2` or `-fomit-frame-pointer`.
+
+**Driver compatibility with the existing native model (revision 0.56).**
+`-fno-omit-frame-pointer` requests the unchanged frame-emission path;
+`-fomit-frame-pointer` clears that request (last occurrence wins), and permits
+removal only with the explicit leaf variant and its eligibility above.
+`-mno-omit-leaf-frame-pointer` sets an independent retaining request, not
+cleared by `-fomit-frame-pointer`. Neither
 spelling introduces ancestor return-address support. The backend has no sibling
 or tail-call transformation, so `-fno-optimize-sibling-calls` also selects the
 existing call/frame behavior.

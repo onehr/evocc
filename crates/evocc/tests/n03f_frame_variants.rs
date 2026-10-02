@@ -157,7 +157,7 @@ long frame(long n)
     use(arr, b);
     return a + b + c + d + e + f + g + h + i + j + k + l;
 }
-long odd(long n) { long a = work(n), b = work(a), c = work(b); return a + b + c + work(c); }
+long odd(long n) { long a = work(n), b = work(a), c = work(b), d = work(c); return a + b + c + d; }
 long many(long n, int c)
 {
     long a = work(n), b = work(a), d = work(b);
@@ -384,4 +384,185 @@ fn pairs_follow_the_encodable_adjacent_slots() {
     );
     assert!(vectors.contains("    stp d8, d9, [sp, #"), "{vectors}");
     assert!(vectors.contains("    ldp d10, d11, [sp, #"), "{vectors}");
+}
+
+fn linux_body<'a>(text: &'a str, name: &str) -> &'a str {
+    text.split(&format!("\n{name}:\n"))
+        .nth(1)
+        .unwrap()
+        .split(&format!(".size {name},"))
+        .next()
+        .unwrap()
+}
+
+#[test]
+fn shared_epilogues_keep_one_complete_exit_and_leave_single_returns_unchanged() {
+    let shared = FrameVariants::parse("shared-epilogue").unwrap();
+    for (source, flags, name) in [
+        (FRAME_SPILLS, &[][..], "many"),
+        (GUARDED, &["-fstack-protector-strong"][..], "prot"),
+    ] {
+        let ir = evoir(flags, source);
+        let options = CodegenOptions {
+            unwind_tables: true,
+            sign_returns: true,
+            ..CodegenOptions::default()
+        };
+        let before = compile(Target::Linux, &ir, &options);
+        let after = compile(Target::Linux, &ir, &with(shared, &options));
+        let old_body = linux_body(&before, name);
+        let body = linux_body(&after, name);
+        let returns = old_body.matches("    ret\n").count();
+        assert!(
+            returns >= 2,
+            "fixture must retain multiple returns: {old_body}"
+        );
+        let label = format!(".L{name}_frame_exit");
+        assert_eq!(body.matches("    ret\n").count(), 1, "{body}");
+        assert_eq!(body.matches(&format!("{label}:\n")).count(), 1);
+        assert_eq!(
+            body.matches(&format!("    b {label}\n")).count(),
+            returns - 1
+        );
+        assert_eq!(body.matches(".cfi_remember_state\n").count(), 1);
+        assert_eq!(body.matches(".cfi_restore_state\n").count(), 1);
+        assert_eq!(body.matches("    autiasp\n").count(), 1);
+        let exit = body.split(&format!("{label}:\n")).nth(1).unwrap();
+        assert!(exit.find("ldp x29, x30").unwrap() < exit.find("autiasp").unwrap());
+        if name == "prot" {
+            assert_eq!(body.matches("bl __stack_chk_fail").count(), 1);
+            assert!(exit.find("bl __stack_chk_fail").unwrap() < exit.find("ldp x29, x30").unwrap());
+        } else {
+            assert_eq!(linux_body(&before, "odd"), linux_body(&after, "odd"));
+            assert_eq!(linux_body(&before, "frame"), linux_body(&after, "frame"));
+        }
+    }
+}
+
+#[test]
+fn protected_profiles_decline_all_requested_frame_variants() {
+    for flags in [
+        vec!["-fno-omit-frame-pointer"],
+        vec!["-mno-omit-leaf-frame-pointer"],
+        vec!["-mgeneral-regs-only"],
+        vec![
+            "-mstack-protector-guard=sysreg",
+            "-mstack-protector-guard-reg=sp_el0",
+            "-mstack-protector-guard-offset=64",
+        ],
+        vec!["-fpatchable-function-entry=2"],
+    ] {
+        let mut base = vec!["--emit=asm"];
+        base.extend(flags.iter().copied());
+        let before = successful(run(&base, FRAME_SPILLS));
+        base.push("--frame-opt=paired-saves");
+        let after = successful(run(&base, FRAME_SPILLS));
+        assert_eq!(without_header(&after), before, "{flags:?}");
+    }
+}
+
+#[test]
+fn shared_epilogue_label_survives_conditional_branch_relaxation() {
+    // Enough dependent, live instructions to force the emitter's second pass.
+    let mut ir = String::from("func @far_exit(%arg0: bits<1>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: bits<1>, %v1: bits<32>, %v2: mem<all>, %v3: world):\n    cond_br %v0, ^b2(%v1, %v2, %v3), ^b1(%v1, %v2, %v3)\n^b1(%v4: bits<32>, %v5: mem<all>, %v6: world):\n");
+    let mut last = 4;
+    for next in 100..5100 {
+        ir.push_str(&format!("    %v{next} = add.bits<32> %v{last}, %v{last}\n"));
+        last = next;
+    }
+    ir.push_str(&format!("    ret %v{last}, %v5, %v6\n^b2(%v7: bits<32>, %v8: mem<all>, %v9: world):\n    ret %v7, %v8, %v9\n}}\n"));
+    let options = with(
+        FrameVariants::parse("shared-epilogue").unwrap(),
+        &CodegenOptions::default(),
+    );
+    for target in [Target::Linux, Target::Darwin] {
+        let after = compile(target, &ir, &options);
+        assert!(after.contains("_relax0:"), "conditional was not relaxed");
+        assert_eq!(after.matches("_frame_exit:\n").count(), 1);
+        assert_eq!(after.matches("    ret\n").count(), 1);
+    }
+}
+
+#[test]
+fn leaf_frames_remove_only_the_unneeded_record_and_preserve_authentication() {
+    let ir = evoir(
+        &["-O2"],
+        "unsigned long leaf(unsigned long x) { return x + 7; }",
+    );
+    let leaf = FrameVariants::parse("leaf-frames").unwrap();
+    for target in [Target::Linux, Target::Darwin] {
+        for signed in [false, true] {
+            let options = CodegenOptions {
+                unwind_tables: true,
+                sign_returns: signed,
+                ..CodegenOptions::default()
+            };
+            let before = compile(target, &ir, &options);
+            assert!(before.contains("stp x29, x30"));
+            let after = compile(target, &ir, &with(leaf, &options));
+            assert!(!after.contains("stp x29, x30"), "{after}");
+            assert!(!after.contains("ldp x29, x30"), "{after}");
+            assert!(!after.contains("mov x29, sp"), "{after}");
+            assert!(!after.contains(".cfi_def_cfa 29"), "{after}");
+            assert!(after.contains(".cfi_startproc"));
+            assert!(after.contains(".cfi_endproc"));
+            assert_eq!(after.matches("paciasp").count(), usize::from(signed));
+            assert_eq!(after.matches("autiasp").count(), usize::from(signed));
+            if signed {
+                assert!(after.find("paciasp").unwrap() < after.find("autiasp").unwrap());
+                assert_eq!(after.matches(".cfi_negate_ra_state").count(), 2);
+            }
+        }
+    }
+}
+
+#[test]
+fn leaf_frames_keep_activation_stack_calls_and_opaque_assembly() {
+    let leaf = FrameVariants::parse("leaf-frames").unwrap();
+    for source in [
+        "extern long work(long); long f(long n) { return work(n); }",
+        "void *f(void) { return __builtin_frame_address(0); }",
+        "void *f(void) { return __builtin_return_address(0); }",
+        "void *f(void) { return __builtin_frame_address(1); }",
+        "long f(long n) { __asm__ volatile(\"nop\"); return n; }",
+        "long f(long n) { volatile long a[2]; a[1] = n; return a[1]; }",
+        "long f(long n) { volatile char a[n]; a[0] = 1; return a[0]; }",
+        "long f(long a,long b,long c,long d,long e,long f,long g,long h,long i) { return i; }",
+        "long f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap,n); long x=__builtin_va_arg(ap,long); __builtin_va_end(ap); return x; }",
+    ] {
+        let ir = evoir(&["-O2"], source);
+        let before = compile(Target::Linux, &ir, &CodegenOptions::default());
+        let after = compile(Target::Linux, &ir, &with(leaf, &CodegenOptions::default()));
+        assert_eq!(without_header(&after), before, "{source}");
+        assert!(after.contains("stp x29, x30"), "{source}");
+    }
+}
+
+#[test]
+fn frame_pointer_requests_have_ordered_and_independent_meanings() {
+    let source = "unsigned long f(unsigned long n) { return n + 7; }";
+    for (flags, retained) in [
+        (vec!["-fno-omit-frame-pointer"], true),
+        (
+            vec!["-fno-omit-frame-pointer", "-fomit-frame-pointer"],
+            false,
+        ),
+        (
+            vec!["-fomit-frame-pointer", "-fno-omit-frame-pointer"],
+            true,
+        ),
+        (
+            vec!["-mno-omit-leaf-frame-pointer", "-fomit-frame-pointer"],
+            true,
+        ),
+    ] {
+        let mut args = vec!["--emit=asm", "-O2", "--frame-opt=leaf-frames"];
+        args.extend(flags);
+        let assembly = successful(run(&args, source));
+        assert_eq!(
+            assembly.contains("stp x29, x30"),
+            retained,
+            "{args:?}\n{assembly}"
+        );
+    }
 }
