@@ -1,8 +1,9 @@
 # N03b/N03e: bounded negative preflight
 
 Implementation: `856dfcd3`; plans frozen in `7680ae23`.
-Receipt: [codegen-n03-preflight-20261002-receipt.json](../../tests/contracts/codegen-n03-preflight-20261002-receipt.json).
-Disposition: proposed `NO_ADMITTED_OPPORTUNITY`, pending a green full-workspace gate.
+Receipts: [original](../../tests/contracts/codegen-n03-preflight-20261002-receipt.json),
+[closure](../../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json).
+Disposition: **CLOSED_NEGATIVE_FIRST_SLICES / NO_ADMITTED_OPPORTUNITY**.
 
 The read-only census inspected the frozen 21,000 generated modules and fresh
 original-source A/current-EqSat-B outputs for the six S5 units. All six source
@@ -41,10 +42,12 @@ differentials, size/resource bounds and transformed-object twins are
 NOT RUN; no pass is admitted to default O2. The existing volatile-initializer
 source-bridge mismatch remains MISMATCH_NOT_VALIDATED.
 
-Gates: focused 11/11 PASS; example build and formatting PASS.
-Current full-workspace attempt: 379 suites, 2,938 PASS / 0 FAIL / 4 ignored;
-exit 101 from Clippy's unnecessary unwrap in the Linux capture test. The
-explicit `if let` repair needs full recheck with N03a step 1; no green gate
-or final negative closure is inherited. Disk: owned compact capture +75,377
-apparent bytes; joint preparation cache growth +866,865,152 bytes is recorded
-once in the N03a baseline receipt, not charged again here.
+Gates: focused 11/11 PASS; the original 2,938-test run failed Clippy and stays
+in the original receipt. The complete recheck at `efcf8c57` passed 2,986 tests,
+0 failed, 4 ignored, plus Clippy, format and regeneration. At `a1b0d7f0`, the
+capture hash still matches and `evocc-passes` is unchanged since `856dfcd3`.
+This closes the frozen negative slices; broader inlining/CSE needs a new
+design, not a weakened preflight. No measurement was rerun.
+Disk: original capture +75,377 apparent bytes; closure adds only compact
+receipt/docs, no runtime payload. Joint preparation cache growth remains
+accounted once in the N03a baseline receipt.

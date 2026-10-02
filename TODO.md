@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03b, N03c, N03d, N03e, N03f, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a layering, N04 and N05 are complete. Retain N02's admission limits and legacy source-bridge mismatch; later backend slices build on the N03a layers; the paused R items wait on the codegen track. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03c, N03d, N03f, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a layering, N04 and N05 are complete; N03b/N03e first slices are closed negative without transforms. Retain N02's admission limits and legacy source-bridge mismatch; later backend slices build on the N03a layers; the paused R items wait on the codegen track. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2361,19 +2361,22 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     variadic and stack rules remain as applied (unmeasured), recorded
     explicitly in `abi-darwin`.
 
-  - [ ] **N03b — TU-local inlining** — `LATER`, P3.
+  - [x] **N03b — TU-local inlining, bounded first slice** — `DONE_NEGATIVE`, P3.
     Size-aware inliner at EvoIR level for TU-local callees, as a validated
     pass under N02. The certificate chain runs after inlining and must still
     verify. A size increase on any unit is a recorded regression.
     [First slice](tests/contracts/codegen-n03b-20261002.json) begins with a
     read-only original-source/IR opportunity census. No transform is implemented
     before a nonzero source-permitted, structurally eligible, TV-admitted result.
-    The bounded preflight proposed `NO_ADMITTED_OPPORTUNITY`
+    The bounded preflight is closed as `NO_ADMITTED_OPPORTUNITY`
     ([record](docs/notebook/codegen-negative-preflight-20261002.md)); the
     full-workspace gate it was waiting for has since passed at `efcf8c57`.
     N01 still counts 3/1/85/24/23 TU-local bodies absent from the reference
     objects, so the negative result is about the frozen admission rules, not
-    about inlining. Finalize that disposition, then redesign before any transform.
+    about inlining. [Closure receipt](tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json)
+    preserves the original failed-gate receipt and binds the later full green
+    recheck. Zero transformations, no gain or default admission. A broader
+    inliner requires a new design before any transform.
 
   - [ ] **N03c — Register allocation improvements** — `LATER`, P3.
     Coalescing and spill placement in the generic layer first; a different
@@ -2392,15 +2395,16 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     description's pattern table with EvoMIR revision text; existing match arms
     migrate only when touched. After N03a.
 
-  - [ ] **N03e — EvoIR mid-level passes** — `LATER`, P3.
+  - [x] **N03e — EvoIR mid-level passes, bounded first slice** — `DONE_NEGATIVE`, P3.
     GVN/CSE, SCCP, dead-code elimination and simple loop-invariant motion on
     the integer and control subset, each a validated pass under N02. EqSat
     stays the verified path for what it covers.
     [First slice](tests/contracts/codegen-n03e-20261002.json) checks exact
     all-incoming-edge reuse of already-carried integer results. Read-only
-    preflight is prepared; broad GVN/SCCP/LICM is not silently admitted.
+    preflight is complete; broad GVN/SCCP/LICM is not silently admitted.
     Same bounded preflight and disposition as N03b: no complete all-edge match
-    under the frozen rules; finalize it and redesign before any transform.
+    under the frozen rules. The same closure receipt records zero transforms;
+    broader passes require a new design before implementation.
 
   - [ ] **N03f — Frame and call overhead** — `LATER`, P3.
     Leaf-frame elision, callee-saved minimization and argument shuffling
