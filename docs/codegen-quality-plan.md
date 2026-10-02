@@ -401,7 +401,7 @@ sections above remain the contract.
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
 | N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
 | N03d | C1 closed opt-in; C2 closed with compile-bound miss, not admitted; remaining selection patterns open | [C1](notebook/codegen-constants-20261002.md), [C2 result](notebook/codegen-local-selection-20261002.md), [C2 receipt](../tests/contracts/codegen-n03d-c2-20261002-receipt.json): full workspace 3,018/0/5 ignored, native and size controls green; local-only B checked zstd-compress compile median 1.7977x OFF exceeds 1.25x. Negative result frozen, no default flip. |
-| N03c | T1 correctness closed with compile-bound misses; T2 copy hints in focused validation | [T1 result](notebook/codegen-allocation-termination-20261003.md), [receipt](../tests/contracts/codegen-n03c-t1-20261003-receipt.json): full workspace 3,020/0/5 ignored; both 384-case corpora and all 24 six-TU hashes unchanged. Three compile-median ratios exceed 1.25x, maximum 1.4563x. [T2 plan](../tests/contracts/codegen-n03c-copy-hints-20261003.json) is frozen; no T2 acceptance or default change yet. |
+| N03c | T1 correctness closed with compile-bound misses; T2 copy hints closed opt-in; spill quality open | [T1 result](notebook/codegen-allocation-termination-20261003.md) preserves three compile-bound misses. [T2 result](notebook/codegen-copy-hints-20261003.md), [receipt](../tests/contracts/codegen-n03c-t2-20261003-receipt.json): full workspace 3,028/0/5 ignored; both 384-case corpora ON/OFF and 72 selected-TU harness executions green. Copy-only B unchecked savings 0/44/400/628/148/44 move bytes; all 48 size/cost comparisons within bounds, maximum compile ratio 1.021x. Defaults OFF; no full allocator closure. |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Not started | Steps 1–3 landed inside N03a |
 | N06 | Not scheduled | |
@@ -438,8 +438,10 @@ comparison. The 1.4 target is still not met and default output has not changed.
 C1's measured reduction is entirely constant materialization; C2 removes
 compute/extension instructions. Both are separate from frame and P0 gains.
 Do not reclassify C2's size/correctness results as full admission. Continue
-with the independent N03c bounded-termination and allocation work, then N07;
-remaining N03d selection opportunities require a separately frozen scope.
+with N07 after N03c T1/T2. T2 copy hints save only move bytes on the frozen
+population; frame+C1+copy leaves library ratios 1.643–2.488 times GCC-O2,
+without including C2 or upgrading its negative cost result. Remaining N03c
+spill-quality and N03d selection work require separately frozen scopes.
 
 **Rules that hold for the rest of N03.**
 

@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-10-02**, initially audited against `a83d803`; current clauses are
+Updated **2026-10-03**, initially audited against `a83d803`; current clauses are
 EvoIR **1.9.116** and EvoMIR **0.60**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03c, N03d, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a layering, N03f's opt-in frame slice, N04 and N05 are complete; N03b/N03e first slices are closed negative without transforms. Retain N02's admission limits and legacy source-bridge mismatch; N03d then N03c follow, with all new frame defaults OFF; the paused R items wait on the codegen track. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03c, N03d, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a, N03f, N04 and N05 are complete; N03b/N03e first slices are closed negative. N03d C1 and N03c T2 are closed opt-in; C2/T1 retain cost misses. Continue N07, then separately scoped selection/spill work; all new defaults remain OFF. Retain N02's admission limits and source-bridge mismatch; paused R items wait on the codegen track. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2408,9 +2408,17 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     is frozen in `5a477d38`; `e5a9361f` records allocator and public-option
     REDs. Same-class, already assigned locations are optional preferences
     behind `--regalloc-opt=copy-hints`, with unchanged interference checks,
-    spill policy and independent verifier. Focused validation is in progress;
-    native corpora, six-TU measurement and full-workspace acceptance remain
-    NOT RUN for T2. Defaults remain OFF.
+    spill policy and independent verifier. T2 is now **closed opt-in** in the
+    [result](docs/notebook/codegen-copy-hints-20261003.md) and
+    [receipt](tests/contracts/codegen-n03c-t2-20261003-receipt.json): full workspace
+    3,028/0/5 ignored; native ON/OFF each 384/384 on both OS lanes, all OFF
+    hashes match T1; 72 original selected-TU harness executions pass with
+    zero proof/bundle failures. All 48 size/cost comparisons meet their bounds
+    (maximum compile ratio 1.021x). B unchecked move-byte savings are
+    0/44/400/628/148/44; no stack-byte improvement. Cumulative frame+C1+copy
+    library ratios are 1.643–2.488, still above 1.4. Defaults remain OFF;
+    T1/C2 negative cost results are not upgraded. Spill-quality work remains
+    open and needs its own bounded scope; continue the independent N07 lane.
 
   - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
     Addressing modes, immediates, shifted operands, conditional select and

@@ -1,0 +1,1169 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03c",
+  "slice": "T2",
+  "date": "2026-10-03",
+  "status": "CLOSED_OPT_IN",
+  "subject_commit": "bb2f3b5f4c4d5ccdc0a957cdca36c2df3817ce43",
+  "implementation_commit": "bb2f3b5f4c4d5ccdc0a957cdca36c2df3817ce43",
+  "red_commit": "e5a9361f",
+  "plan_commit": "5a477d38",
+  "plan": "tests/contracts/codegen-n03c-copy-hints-20261003.json",
+  "specification": "EvoMIR 0.60",
+  "behavior": "Optional stable same-class copy-location hints before the original first-free candidate. Existing interval interference, fixed/tied constraints, register pools, spills, T1 retry bound and independent verifier are unchanged. Protected profiles and all defaults remain OFF.",
+  "gates": {
+    "full_workspace": {
+      "status": "PASS",
+      "log": ".evidence/codegen/n03c-t2/full-workspace-20261003.log",
+      "rust": {
+        "suites": 393,
+        "passed": 3028,
+        "failed": 0,
+        "ignored": 5
+      },
+      "clippy": "PASS",
+      "format": "PASS",
+      "regeneration": "PASS",
+      "sha256": "4d9d652445c11ba1b878a669e9eee717fa6cf55aa3dabec9af3a356e9af44e58"
+    },
+    "focused": {
+      "suites": 8,
+      "passed": 69,
+      "failed": 0,
+      "path": ".evidence/codegen/n03c-t2/focused-final-20261003.log",
+      "sha256": "3ed13083ddadf6734f2eea584b4b12d4fb961203e0c54daf2c35568e244557da"
+    },
+    "driver": {
+      "passed": 3,
+      "failed": 0,
+      "native_inputs": 4096,
+      "variants": [
+        "off",
+        "hint",
+        "combined",
+        "reference"
+      ],
+      "functions": [
+        "choose",
+        "rotate",
+        "dispatch",
+        "shuffled",
+        "wide_across",
+        "vector_across"
+      ],
+      "path": ".evidence/codegen/n03c-t2/driver-native-corrected-20261003.log",
+      "sha256": "df8691e465e325ae1aeeec136384788ef44552d705a8401ed8d50d881dc599ec"
+    },
+    "python": {
+      "passed": 8,
+      "failed": 0,
+      "path": ".evidence/codegen/n03c-t2/python-schedule-20261003.log",
+      "sha256": "322e9bec5d6bbde47d6476008f309469c1e42048ed96320a3bae52af8811e27a"
+    },
+    "red": [
+      {
+        "path": ".evidence/codegen/n03c-t2/allocator-red-20261003.log",
+        "sha256": "c00d28d6173170916074dfcbd6e380e4066a8d568bc41791f628543ee9b1d78b",
+        "result": "EXPECTED_FAILURE: dying non-first copy source retains a move"
+      },
+      {
+        "path": ".evidence/codegen/n03c-t2/driver-red-20261003.log",
+        "sha256": "8fba9ab5e5ded45217740d68298701eb84f3d92880b7a7cb56c2928995fc009a",
+        "result": "EXPECTED_FAILURE: public option unavailable"
+      }
+    ],
+    "lean": "NOT_REQUIRED: no Lean or registry changes"
+  },
+  "native_corpora": [
+    {
+      "lane": "darwin",
+      "variant": "OFF",
+      "path": ".evidence/codegen/n03c-t2/corpus-off-darwin-20261003.log",
+      "sha256": "c4a2d38276393fe9be54bd64554300abde26bc5777e2f51170ad71954cae7803",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "historical_hash_matches": 384,
+      "object_bytes": 193392,
+      "baseline": ".evidence/codegen/n03c-t1/corpus-off-darwin-20261003.log"
+    },
+    {
+      "lane": "darwin",
+      "variant": "ON",
+      "path": ".evidence/codegen/n03c-t2/corpus-on-darwin-20261003.log",
+      "sha256": "6676f56e0cbd5ddf2c6114e9c769bf27078e70be9cf440b05a8926074badda8b",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "changed_vs_off": 0,
+      "object_bytes": 193392
+    },
+    {
+      "lane": "linux",
+      "variant": "OFF",
+      "path": ".evidence/codegen/n03c-t2/corpus-off-linux-20261003.log",
+      "sha256": "eaf7467d6ed6318382cbc865baea1df94c6be366cee10405c256173f4f302129",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "historical_hash_matches": 384,
+      "object_bytes": 383344,
+      "baseline": ".evidence/codegen/n03c-t1/corpus-off-linux-20261003.log"
+    },
+    {
+      "lane": "linux",
+      "variant": "ON",
+      "path": ".evidence/codegen/n03c-t2/corpus-on-linux-20261003.log",
+      "sha256": "5f771bc58c5dfc73e40302c6b30336dbc76d927c363e68c233454e2ead8b9037",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "changed_vs_off": 0,
+      "object_bytes": 383344
+    }
+  ],
+  "measurements": [
+    {
+      "variant": "regression-a",
+      "path": ".evidence/codegen-trend/measure-lc7qwq00/receipt.json",
+      "sha256": "345a21571b19081837b532dd5c4818804cec410e860e3a7079d1d2605e963680",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t2-regression-a-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 12
+    },
+    {
+      "variant": "regression-b",
+      "path": ".evidence/codegen-trend/measure-hat00pm4/receipt.json",
+      "sha256": "6eb2040e183e2f72f624caa2ed07f9de1280c08249a5c353058221d91be3e5b6",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t2-regression-b-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 12
+    },
+    {
+      "variant": "copy-a",
+      "path": ".evidence/codegen-trend/measure-yh1ljimj/receipt.json",
+      "sha256": "844c14cf2a410d750436d80c1dce9dc40e47713eef9202a58f7f40f07e06a869",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t2-copy-a-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null
+    },
+    {
+      "variant": "copy-b",
+      "path": ".evidence/codegen-trend/measure-3l2jq90j/receipt.json",
+      "sha256": "1ad0edc92eb7def141a93c7dff354891321b7d514bf57d8016016a163236ea1f",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t2-copy-b-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null
+    },
+    {
+      "variant": "combined-a",
+      "path": ".evidence/codegen-trend/measure-h8tus1si/receipt.json",
+      "sha256": "c5fa66a3264b4734ae72cf0af862ac3aada437465379bd87c78ee0dc4ff8cee9",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t2-combined-a-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null
+    },
+    {
+      "variant": "combined-b",
+      "path": ".evidence/codegen-trend/measure-l4iptfai/receipt.json",
+      "sha256": "d7c8f10b9ca5f541e7811561abc45e28a6ed83f0bbf819a4c45fb31a3d636aad",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t2-combined-b-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null
+    }
+  ],
+  "tools": {
+    "release": {
+      "compiler": "2dd997fe6556f28d2e86f4b370bea5847c26f5e7b4058f6e93faaac34d911c9c",
+      "checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+      "steps": "a66cc85a589a8a8bb9179d83e9a094f4af3ca013f29c555bd5027551acc93655"
+    },
+    "native_debug_compiler": "7b8ddc4a29a312c3949368025a0fa31aae6747a08f8eef1fe8f43c9ca853583a",
+    "native_companion_checker": "deb0dd5780745f736c60bd0e7afc59a9c7c4a5fcff9cb0f8f157a440aef32435",
+    "release_build": {
+      "path": ".evidence/codegen/n03c-t2/release-build-20261003.log",
+      "sha256": "955fab51c7b50a463f250031bfe36ea8db26aaa95c75f767b50e85f7938bb55a"
+    }
+  },
+  "size_and_compile_comparisons": [
+    {
+      "variant": "copy-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9837686510107054,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_c1_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "copy-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9564444532937905,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_c1_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "copy-a",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30516,
+      "text": 30472,
+      "saving": 44,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9781223907689693,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.111419068736142,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 44
+      }
+    },
+    {
+      "variant": "copy-a",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 29012,
+      "text": 28968,
+      "saving": 44,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9794478465542483,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0072062084257207,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 44
+      }
+    },
+    {
+      "variant": "copy-a",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28404,
+      "text": 28004,
+      "saving": 400,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9924167368959885,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.817303822937626,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 400
+      }
+    },
+    {
+      "variant": "copy-a",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26664,
+      "text": 26264,
+      "saving": 400,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0030347208275132,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.6422535211267606,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 400
+      }
+    },
+    {
+      "variant": "copy-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 124024,
+      "text": 123388,
+      "saving": 636,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9715608585527422,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.5305168170631664,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 636
+      }
+    },
+    {
+      "variant": "copy-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 121652,
+      "text": 121016,
+      "saving": 636,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9992771429643943,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.481870385561936,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 636
+      }
+    },
+    {
+      "variant": "copy-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33688,
+      "text": 33540,
+      "saving": 148,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0136579734128692,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.3143803477780844,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 148
+      }
+    },
+    {
+      "variant": "copy-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33440,
+      "text": 33292,
+      "saving": 148,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9886752393377877,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.2972674579078114,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 148
+      }
+    },
+    {
+      "variant": "copy-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 30228,
+      "text": 30184,
+      "saving": 44,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9736418502932771,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.096111111111111,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 44
+      }
+    },
+    {
+      "variant": "copy-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 30116,
+      "text": 30072,
+      "saving": 44,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0011282938192443,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0883333333333334,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 44
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9839398329272586,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_c1_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "copy-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.963446071759754,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_c1_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "copy-b",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30184,
+      "text": 30140,
+      "saving": 44,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9922283724212723,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0884146341463414,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 44
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 28668,
+      "text": 28624,
+      "saving": 44,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0088971008347645,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.983370288248337,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 44
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28264,
+      "text": 27864,
+      "saving": 400,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0002909027929456,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.8032193158953724,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 400
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26520,
+      "text": 26120,
+      "saving": 400,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9873523133498674,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.6277665995975856,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 400
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 122972,
+      "text": 122344,
+      "saving": 628,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0075644253025215,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.5091058244462676,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 628
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 120592,
+      "text": 119964,
+      "saving": 628,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9938750873346608,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.460295324036095,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 628
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33300,
+      "text": 33152,
+      "saving": 148,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0066347422737651,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.287606955561689,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 148
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33052,
+      "text": 32904,
+      "saving": 148,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9970124168818139,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.270494065691416,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 148
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 29496,
+      "text": 29452,
+      "saving": 44,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9971447292766523,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0452777777777778,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 44
+      }
+    },
+    {
+      "variant": "copy-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 29384,
+      "text": 29340,
+      "saving": 44,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9960138673380153,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0375,
+      "vs_c1_saving": null,
+      "category_savings": {
+        "move": 44
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.944879090863969,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_c1_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9825277291111425,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_c1_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30516,
+      "text": 27160,
+      "saving": 3356,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0138953083966757,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.8819290465631928,
+      "vs_c1_saving": 44,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "move": 44,
+        "const_materialize": 212,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 29012,
+      "text": 25656,
+      "saving": 3356,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9865466132534677,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7777161862527717,
+      "vs_c1_saving": 44,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "move": 44,
+        "const_materialize": 212,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28404,
+      "text": 26616,
+      "saving": 1788,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9852004111383263,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.6776659959758553,
+      "vs_c1_saving": 400,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "move": 400,
+        "const_materialize": 180,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26664,
+      "text": 24876,
+      "saving": 1788,
+      "rodata_delta": 0,
+      "compile_ratio": 0.992085270112122,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.50261569416499,
+      "vs_c1_saving": 400,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "move": 400,
+        "const_materialize": 180,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 124024,
+      "text": 102852,
+      "saving": 21172,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9768837574265822,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.10935192780968,
+      "vs_c1_saving": 636,
+      "category_savings": {
+        "prologue_epilogue": 20072,
+        "move": 636,
+        "const_materialize": 2124,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 121652,
+      "text": 100496,
+      "saving": 21156,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9974166777758573,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.061033634126333,
+      "vs_c1_saving": 636,
+      "category_savings": {
+        "prologue_epilogue": 20072,
+        "move": 636,
+        "const_materialize": 2108,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33688,
+      "text": 25612,
+      "saving": 8076,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0112248012884981,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.767319900634833,
+      "vs_c1_saving": 148,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "move": 148,
+        "const_materialize": 848,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33440,
+      "text": 25364,
+      "saving": 8076,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9838661308122949,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7502070107645598,
+      "vs_c1_saving": 148,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "move": 148,
+        "const_materialize": 848,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 30228,
+      "text": 25388,
+      "saving": 4840,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9796734021352026,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7630555555555556,
+      "vs_c1_saving": 44,
+      "category_savings": {
+        "prologue_epilogue": 5256,
+        "move": 44,
+        "const_materialize": 92,
+        "branch": -552
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 30116,
+      "text": 25276,
+      "saving": 4840,
+      "rodata_delta": 0,
+      "compile_ratio": 1.020992149830902,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7552777777777777,
+      "vs_c1_saving": 44,
+      "category_savings": {
+        "prologue_epilogue": 5256,
+        "move": 44,
+        "const_materialize": 92,
+        "branch": -552
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9859837070116203,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_c1_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.964017506723571,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_c1_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30184,
+      "text": 26788,
+      "saving": 3396,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9973291684644143,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.8561529933481153,
+      "vs_c1_saving": 44,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "move": 44,
+        "const_materialize": 252,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 28668,
+      "text": 25272,
+      "saving": 3396,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0067393157845623,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.751108647450111,
+      "vs_c1_saving": 44,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "move": 44,
+        "const_materialize": 252,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28264,
+      "text": 26472,
+      "saving": 1792,
+      "rodata_delta": 0,
+      "compile_ratio": 1.009556652237041,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.66317907444668,
+      "vs_c1_saving": 400,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "move": 400,
+        "const_materialize": 184,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26520,
+      "text": 24728,
+      "saving": 1792,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0011991121339108,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.4877263581488935,
+      "vs_c1_saving": 400,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "move": 400,
+        "const_materialize": 184,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 122972,
+      "text": 98780,
+      "saving": 24192,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0104835223682511,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0258408531583263,
+      "vs_c1_saving": 628,
+      "category_savings": {
+        "prologue_epilogue": 20032,
+        "move": 628,
+        "const_materialize": 5192,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 120592,
+      "text": 96416,
+      "saving": 24176,
+      "rodata_delta": 0,
+      "compile_ratio": 0.996393289678122,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.9773584905660377,
+      "vs_c1_saving": 628,
+      "category_savings": {
+        "prologue_epilogue": 20032,
+        "move": 628,
+        "const_materialize": 5176,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33300,
+      "text": 24056,
+      "saving": 9244,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0046283842380104,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.6599503174165056,
+      "vs_c1_saving": 148,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "move": 148,
+        "const_materialize": 2016,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33052,
+      "text": 23808,
+      "saving": 9244,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0044116003032968,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.6428374275462323,
+      "vs_c1_saving": 148,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "move": 148,
+        "const_materialize": 2016,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 29496,
+      "text": 24704,
+      "saving": 4792,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9942247440617089,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7155555555555555,
+      "vs_c1_saving": 44,
+      "category_savings": {
+        "prologue_epilogue": 5212,
+        "move": 44,
+        "const_materialize": 88,
+        "branch": -552
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 29384,
+      "text": 24592,
+      "saving": 4792,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9919293016397871,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7077777777777778,
+      "vs_c1_saving": 44,
+      "category_savings": {
+        "prologue_epilogue": 5212,
+        "move": 44,
+        "const_materialize": 88,
+        "branch": -552
+      }
+    }
+  ],
+  "bounds": {
+    "compile_median_limit_ratio": 1.25,
+    "comparisons": 48,
+    "compile_misses": 0,
+    "maximum_compile_ratio": 1.020992149830902,
+    "text_growth_limit_bytes": 0,
+    "text_plus_rodata_growth_limit_bytes": 0,
+    "size_misses": 0,
+    "rodata_changed": 0,
+    "steps": "257 records unchanged for all six captures; this is not 257 TV-admitted inputs"
+  },
+  "attribution": {
+    "path": ".evidence/codegen/n03c-t2/category-summary.json",
+    "sha256": "fcf90182f6eb81fd25677a7faadf917b7c6d8f5b8b647634bf7aa187f8f9c7c3",
+    "objects": 72,
+    "method": "Unchanged N01 classifier; totals reconcile with S1 instruction bytes. All copy-only savings are move bytes; no stack/frame/compute category gain. No full disassembly retained."
+  },
+  "native_fixture_correction": {
+    "log": ".evidence/codegen/n03c-t2/driver-native-20261003.log",
+    "sha256": "b2b27f223e5ee9ca7a913415795a77902581be05e90c524e30a2ca0a12cf1364",
+    "off_mov_instructions": 28,
+    "on_mov_instructions": 29,
+    "note": "An initially over-strong aggregate-benefit assertion failed on Linux assembly. Choose removes one move; wide call preparation adds two. The final test checks the intended local hit plus native correctness of all functions, not whole-fixture monotonicity. Frozen six-TU size bounds unchanged. Darwin native execution uses the existing MIR API on canonical public-driver IR, not the Linux-only C driver's assembly."
+  },
+  "coverage": {
+    "tv_admitted_inputs": 70,
+    "opaque_inputs": 187,
+    "source_bridge": "Legacy integer-mix event mismatch retained: C-HIR 1001 versus EvoIR 1002. NOT_VALIDATED; no interpreter change.",
+    "scope": "SIX_SELECTED_TUS_WITH_REFERENCE_DEPENDENCIES_NOT_FULL_APPLICATIONS",
+    "kernel": "NOT_RUN",
+    "native_latency": "NOT_RUN",
+    "new_optimization_defaults": "OFF"
+  },
+  "retention": {
+    "status": "RETIRED_AFTER_HASH_AND_IDLE_HANDLE_CHECK",
+    "objects": 1608,
+    "bytes": 4750144,
+    "remaining": "All manifests, receipts, logs, category summaries and reduced fixtures remain. Exact historical runtime objects are no longer retained; reproduce from pinned inputs and subject. No full disassembly or raw capture added to Git.",
+    "disk": {
+      "baseline_target_frontend_kib": 24333420,
+      "final_target_frontend_kib": 24554636,
+      "shared_cache_growth_bytes": 226525184,
+      "owned_evidence_final_kib": 4156,
+      "owned_evidence_growth_bytes": 4255744,
+      "scoped_net_growth_bytes": 230780928,
+      "free_kib": 95594888,
+      "scopes": [
+        "target/frontend",
+        ".evidence/codegen/n03c-t2",
+        ".evidence/codegen-trend/measure-lc7qwq00",
+        ".evidence/codegen-trend/measure-hat00pm4",
+        ".evidence/codegen-trend/measure-yh1ljimj",
+        ".evidence/codegen-trend/measure-3l2jq90j",
+        ".evidence/codegen-trend/measure-h8tus1si",
+        ".evidence/codegen-trend/measure-l4iptfai",
+        ".evidence/codegen-trend/n03c-copy-hints.jsonl"
+      ],
+      "note": "Baseline is the previous T1 closure's retained cache snapshot; T2 evidence roots did not exist. Shared-cache growth is scoped, not global attribution. Excludes tracked files and unrelated activity."
+    }
+  },
+  "claim_ceiling": "Copy-hint opt-in correctness and measured move-byte savings on the frozen population. All 48 current size/cost comparisons meet bounds. Not a complete allocator, verified EqSat gain, ISA proof, full application/kernel acceptance or default admission. The cumulative frame+C1+copy combination excludes C2; all five library ratios still exceed 1.4. Earlier T1/C2 compile-bound misses are not reclassified."
+}
