@@ -400,7 +400,8 @@ sections above remain the contract.
 | N04 C checker | Done | [note](notebook/codegen-checker-20261002.md) |
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
 | N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
-| N03d, N03c | Not started | |
+| N03d | C1 plan frozen, not implemented | [constant materialization plan](../tests/contracts/codegen-n03d-constants-20261002.json); remaining selection opportunities still open |
+| N03c | Not started | Includes the recorded bounded-termination repair |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Not started | Steps 1–3 landed inside N03a |
 | N06 | Not scheduled | |

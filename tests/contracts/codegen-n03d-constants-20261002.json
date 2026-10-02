@@ -1,0 +1,71 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03d",
+  "slice": "C1: table-driven materialization of existing GPR MovImm instructions",
+  "date": "2026-10-02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "c3452c03",
+  "authority": ["docs/codegen-quality-plan.md sections 4a, 5, 10 and 11", "docs/target-spec.md sections 2-6", "docs/evomir-spec.md section 4 mov-immediate value contract"],
+  "motivation": "N01 measured 23224 summed positive excess bytes of constant materialization across the five library TUs. The current emitter starts with a low-halfword MOVZ even when zero, then MOVK for nonzero higher halves. It never emits MOVN or ORR-from-zero for MovImm. The estimate is a category gap, not this slice's promised savings.",
+  "precedent": {
+    "source": "https://llvm.googlesource.com/llvm-project/+/refs/tags/llvmorg-16-init/llvm/lib/Target/AArch64/AArch64ExpandImm.cpp",
+    "functions": ["expandMOVImmSimple", "expandMOVImm"],
+    "use": "Engineering precedent for MOVZ/MOVN halfword counts and a single logical-immediate ORR candidate, not an ISA authority or copied implementation. LLVM also searches broader multi-instruction combinations; this first slice does not claim global minimum synthesis."
+  },
+  "scope": {
+    "included": "Emission of existing 32/64-bit GPR MInst::MovImm, including constants used by pointer/integer/FP-bit transport. Keep MIR allocation, verifier inputs, EvoIR, interpreters, ABI and object semantics unchanged.",
+    "excluded": "SIMD MOVI, relocations, inline-asm text, emitter-internal scratch constants, frame/address helpers, multi-instruction ORR+MOVK/EOR synthesis, other instruction-selection patterns. These exclusions do not close the remaining N03d opportunities; inspect addressing/shift/extension patterns next.",
+    "protection": "As in plan section 11, kernel markers and explicit frame-pointer requests suppress the option. No kernel rollout in this slice.",
+    "default": "OFF; a default flip is separate owner-approved work."
+  },
+  "interface": {
+    "driver": "--isel-opt=constants, at most once, rejects unknown/empty/repeated values and refuses --check. Same option in evo-ir-asm. CodegenOptions.compact_constants defaults false.",
+    "identity": "Requested option recorded as evocc-native-isel=constants in assembly header; OFF text unchanged. Per-function protection can decline the request.",
+    "test_hook": "Existing native corpus adapter additionally reads EVOCC_MIR_ISEL_OPT only in test code. With both hooks unset it calls the unchanged default entry point."
+  },
+  "patterns": {
+    "canonical_source": "targets/aarch64/patterns",
+    "cost_source": "targets/aarch64/costs",
+    "generator": "Extend tools/generate-target.py; checked-in Rust candidate descriptors and EvoMIR pattern rows regenerate with --check. No runtime parser, arbitrary rewrite DSL or new proof registry.",
+    "rows": [
+      {"id": "const_movz", "domain": "W/X GPR MovImm", "candidate": "MOVZ at lowest nonzero halfword, then MOVK for other nonzero halfwords; zero uses MOVZ #0", "claim": "Exact destination value at its width, W writes zero upper X bits; no flags, memory, other registers or new scratch clobbers"},
+      {"id": "const_movn", "domain": "W/X GPR MovImm", "candidate": "MOVN of complemented lowest non-ffff halfword, then MOVK for other non-ffff halfwords; all-ones uses MOVN #0", "claim": "Same state relation as const_movz"},
+      {"id": "const_orr", "domain": "W/X GPR MovImm, nonzero/nonfull logical immediate", "candidate": "ORR destination, width-matched zero register, immediate", "claim": "Same state relation as const_movz"}
+    ],
+    "selection": "Normalize to the declared width. Start with the exact legacy sequence and replace only for fewer emitted bytes using generated per-instruction costs. Candidate order MOVZ, MOVN, ORR breaks improvement ties; a tie with the legacy sequence preserves its spelling. Lowest halfword first makes remaining ties deterministic.",
+    "legality": "Reuse the existing exhaustive-tested logical-mask recognizer. Halfword immediate is 0..65535; shifts are 0/16 for W and 0/16/32/48 for X. Never use SP as destination or source. Allocated destinations already exclude zero/SP/reserved registers.",
+    "proof_boundary": "Semantic equality is the existing total MovImm relation; this slice is native/assembler validated, not Lean-proved. N07's separately pinned vendor-model and bounded-SMT obligations remain open."
+  },
+  "red": [
+    "Driver missing option on high-only constant, all-ones constant and repeated logical mask; explicit W/X expected one-instruction materialization.",
+    "OFF exact assembly unchanged; non-improving ties keep legacy MOVZ/MOVK; width masking and W upper-half clearing.",
+    "Missing canonical pattern/cost generator, row/cost mutations rejected rather than silently ignored; generated data controls candidate order/availability.",
+    "Independent reconstruction of emitted sequences over boundaries, every encodable logical mask, each halfword position and fixed-seed random values; unchanged NZCV and no scratch/memory access checked by emitted instruction forms and native sentinels.",
+    "Invalid driver/adapter options, protected profiles, both OS targets, and frame-option interaction."
+  ],
+  "baselines": {
+    "reuse": "N03f OFF receipts and per-case corpus hashes identify the unchanged default production source. Re-record temporary object payloads before implementation using existing measurement/corpus record modes, then check all hashes against those receipts/logs; do not rewrite historical receipts.",
+    "six_units": "Fresh A and B, checked/unchecked, retain only first twin until final OFF comparison; existing tools/bench.py --codegen-measure path.",
+    "corpora": "384 Darwin and 384 sealed Linux objects/executions; final OFF compare must find zero changes.",
+    "on": "Separate C1-only A/B captures, plus combined F1/F2/F3+C1 A/B to expose interactions and the remaining target gap, not to attribute prior frame savings to C1."
+  },
+  "gates": [
+    "Focused generator, sequence reconstruction, driver and native sentinel tests",
+    "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+    "Existing three-lane MIR/IR/native population: both 384-case corpora ON execute/agree and have identical object twins; OFF objects byte-identical",
+    "Six original TU harnesses in both profiles, P0 independent replay with zero completed rejection/bundle failure; opaque inputs and source-bridge mismatch stay qualified",
+    "Object S1 and frozen N01 category report, including ORR alias classification; three compile observations and interpreter steps, no native latency run",
+    "python3 tools/render-status.py --todo"
+  ],
+  "acceptance": "No object growth within the frozen population; constants-category reduction reconciles with total instruction bytes. All observed semantic failures require repair or explicit rollback of the option. Exact repeat builds, OFF identity and stated native populations must pass before closing C1. Broader N03d and N07 remain open.",
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "cargo_and_native_serial": true,
+    "retention": "Delete temporary objects after final hash/category capture; retain only compact records/logs, no full disassembly, new target/workspace/kernel tree or VM disk. Preserve open-task evidence and Lean cache; record disk delta."
+  },
+  "claim_ceiling": "Opt-in constant materialization within the three declared sequence families. Not global optimal synthesis, verified EqSat benefit, default admission, a proved backend, kernel acceptance, full application coverage or completion of N03d/N07."
+}

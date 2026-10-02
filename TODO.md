@@ -2394,6 +2394,12 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     compare forms, extension elimination. New rules enter through the target
     description's pattern table with EvoMIR revision text; existing match arms
     migrate only when touched. After N03a.
+    First slice [C1 plan](tests/contracts/codegen-n03d-constants-20261002.json):
+    opt-in GPR constant materialization using MOVZ/MOVK, MOVN/MOVK or a logical
+    immediate ORR, with generated pattern/cost descriptors. Default OFF;
+    frozen RED, OFF identity, native, size and interaction gates required.
+    Addressing, shifted operands, compare/select and extension opportunities
+    remain part of N03d after C1; no closure is inferred from this plan.
 
   - [x] **N03e — EvoIR mid-level passes, bounded first slice** — `DONE_NEGATIVE`, P3.
     GVN/CSE, SCCP, dead-code elimination and simple loop-invariant motion on
