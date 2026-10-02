@@ -2398,9 +2398,15 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     opt-in GPR constant materialization using MOVZ/MOVK, MOVN/MOVK or a logical
     immediate ORR, with generated pattern/cost descriptors. Default OFF;
     frozen RED, OFF identity, native, size and interaction gates required.
-    C1 implementation checkpoint: generated pattern/cost tables and opt-in
-    emission are present; RED and fresh OFF baselines are recorded. Full
-    workspace, ON/OFF native corpora and six-TU size acceptance are pending.
+    C1 opt-in is closed: [result](docs/notebook/codegen-constants-20261002.md),
+    [receipt](tests/contracts/codegen-n03d-c1-20261002-receipt.json).
+    Full workspace 3,005 PASS / 0 FAIL / 5 ignored; Darwin/Linux ON and OFF
+    each agree on 384/384, with OFF byte identity. All six original TU captures
+    pass their harness/twin/proof gates; 187 interpreter inputs and the old
+    source-bridge mismatch remain unvalidated. C1 B savings are
+    0/252/184/5,176/2,016/88 unchecked bytes, entirely constant materialization.
+    Combined with opt-in frames, library ratios are 1.653–2.528; no default
+    flip and no 1.4x claim. Retired completed object payloads, retained receipts.
     Addressing, shifted operands, compare/select and extension opportunities
     remain part of N03d after C1; no closure is inferred from this plan.
 
