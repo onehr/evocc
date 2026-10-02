@@ -31,6 +31,13 @@ class BoundedModelTest(unittest.TestCase):
         self.assertIn("catch { _ => false }", source)
         self.assertIn("__DecodeA64(0, 0x1ac12000)", source)
 
+    def test_preservation_conjunction_avoids_observed_overload_explosion(self):
+        source = property_source("model_add_64", [0x8b010000])
+        self.assertEqual(source.count(" : bool = R"), 30)
+        self.assertEqual(source.count("correct = and_bool(correct, preserved_"), 30)
+        self.assertIn("let preserved_29 : bool = PSTATE == initial_pstate;", source)
+        self.assertNotIn("R2 == initial_gprs[63..0] &", source)
+
 
 if __name__ == "__main__":
     unittest.main()

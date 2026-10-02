@@ -1,0 +1,955 @@
+{
+  "schema": "evocc-codegen-lowering-verdict-inventory-v1",
+  "date": "2026-10-03",
+  "subject_commit": "20671add",
+  "plan": "tests/contracts/codegen-n07-smt-20261003.json",
+  "disposition": "CLOSED_NEGATIVE_QUALIFICATION_NO_SMT_PROOF",
+  "source_hashes": {
+    "crates/evocc-evoir/src/lib.rs": "cee5e1852f7d2b4f62478f33067d76809656a7bfefb8ad721ce1fd5cb1752089",
+    "crates/evocc-mir/src/lower.rs": "20af0eabe7ea1a1653adbbd65079de76f217c76d9f97ded46c85863acb52d9fa",
+    "crates/evocc-mir/src/emit.rs": "d2e45000da6d2470288867ec52b28316007d15a488fb7601d9d2fb71cefee5cf",
+    "docs/evomir-spec.md": "d6081888e541fdb9bc2587aa520ea788b3b666ec2df010eba570a9b020b235c3",
+    "targets/aarch64/patterns": "a45d9969f58206de0880a200faf7e8da81448b83fdd2da58d2a1638799ba3a48"
+  },
+  "denominators": {
+    "inst_families": 59,
+    "section5_rows": 44,
+    "target_patterns": 9,
+    "specialized_paths": 28
+  },
+  "claim_ceiling": "Snapshot inventory of these explicit code/spec units, not a complete opcode-space enumeration or proof. E2 finite evidence remains separate. Every row has a negative or missing-model disposition; none is PROVED.",
+  "inst_families": [
+    {
+      "family": "Floating",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Floating formats, FP/SIMD state, fenv and binary128 helper calls are outside the integer vendor slice.",
+      "forms": [
+        "Constant",
+        "Add",
+        "Sub",
+        "Mul",
+        "Div",
+        "Fma",
+        "Neg",
+        "Oeq",
+        "Une",
+        "Olt",
+        "Ole",
+        "Ogt",
+        "Oge",
+        "QuietOlt",
+        "QuietOle",
+        "QuietOgt",
+        "QuietOge",
+        "Convert",
+        "FromSigned",
+        "FromUnsigned",
+        "ToSigned",
+        "ToUnsigned",
+        "ToIntDefined",
+        "ToBits",
+        "FromBits"
+      ]
+    },
+    {
+      "family": "StrictFloating",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Floating formats, FP/SIMD state, fenv and binary128 helper calls are outside the integer vendor slice.",
+      "forms": [
+        "strict versions admitted by the current Floating operation validator; world/fenv state excluded"
+      ]
+    },
+    {
+      "family": "TlsAddr",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "TLS resolver/relocation/thread-state path is outside the register-only model."
+    },
+    {
+      "family": "Vector",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Vector lanes, AES, pack/extract/bitcast and SIMD state are outside the integer vendor slice.",
+      "forms": [
+        "Pack",
+        "Extract",
+        "Bitcast",
+        "Aes"
+      ]
+    },
+    {
+      "family": "Atomic",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary.",
+      "forms": [
+        "Load",
+        "Store",
+        "Rmw (every operation and order)"
+      ]
+    },
+    {
+      "family": "IndirectBr",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "CFG/edge binding, control transfers and traps are outside the straight-line body obligations; RET is only E2 transport."
+    },
+    {
+      "family": "BitOperation",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation.",
+      "forms": [
+        "LeadingZeros",
+        "TrailingZeros",
+        "Population",
+        "ByteSwap"
+      ]
+    },
+    {
+      "family": "VaAccess",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Call/return ABI, frames, argument copies, helpers and external effects are outside these obligations.",
+      "forms": [
+        "Start",
+        "Arg",
+        "ArgRecord",
+        "End"
+      ]
+    },
+    {
+      "family": "Asm",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Inline assembly constraints, clobbers, labels and arbitrary instruction text are outside the vendor-model slice.",
+      "forms": [
+        "all constraints and clobbers"
+      ]
+    },
+    {
+      "family": "AsmGoto",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Inline assembly constraints, clobbers, labels and arbitrary instruction text are outside the vendor-model slice.",
+      "forms": [
+        "all labels, constraints and clobbers"
+      ]
+    },
+    {
+      "family": "Const",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "Eight E2 default constant sequences only; common SMT decoder qualification failed. No exhaustive constants or opt-in pattern proof."
+    },
+    {
+      "family": "Uninitialized",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Poison/uninitialized source values are excluded; deterministic native materialization is not a defined-value proof."
+    },
+    {
+      "family": "Add",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "family": "Sub",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "family": "Mul",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "family": "SRem",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "family": "URem",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "family": "Shl",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "family": "AShr",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "family": "LShr",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "family": "And",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "family": "Or",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "family": "Xor",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "family": "SignedAddDefined",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "family": "SignedSubDefined",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "family": "SignedMulDefined",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "family": "DivisorNonZero",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "family": "SignedDivRemNoOverflow",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "family": "ShiftCountDefined",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "family": "SignedShlDefined",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "family": "UbAssume",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "family": "SDiv",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "family": "UDiv",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "family": "ICmp",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation.",
+      "forms": [
+        "Eq",
+        "Ne",
+        "SLt",
+        "SLe",
+        "ULt",
+        "ULe"
+      ]
+    },
+    {
+      "family": "Br",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "CFG/edge binding, control transfers and traps are outside the straight-line body obligations; RET is only E2 transport."
+    },
+    {
+      "family": "CondBr",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "CFG/edge binding, control transfers and traps are outside the straight-line body obligations; RET is only E2 transport."
+    },
+    {
+      "family": "Ret",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "CFG/edge binding, control transfers and traps are outside the straight-line body obligations; RET is only E2 transport."
+    },
+    {
+      "family": "Trap",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "CFG/edge binding, control transfers and traps are outside the straight-line body obligations; RET is only E2 transport."
+    },
+    {
+      "family": "PtrNull",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "PointerCast",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "GlobalAddr",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "FuncAddr",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "BlockAddr",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "ReturnAddress",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Call/return ABI, frames, argument copies, helpers and external effects are outside these obligations."
+    },
+    {
+      "family": "FrameAddress",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Call/return ABI, frames, argument copies, helpers and external effects are outside these obligations."
+    },
+    {
+      "family": "Alloca",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "DynamicAlloca",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "LifetimeEnd",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "PointerValid",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "AccessInBounds",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "Load",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "Store",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "Copy",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "PtrOffset",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "family": "Call",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Call/return ABI, frames, argument copies, helpers and external effects are outside these obligations."
+    },
+    {
+      "family": "IndirectCall",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Call/return ABI, frames, argument copies, helpers and external effects are outside these obligations."
+    },
+    {
+      "family": "SExt",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "family": "ZExt",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "family": "Trunc",
+      "code": "crates/evocc-mir/src/lower.rs",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    }
+  ],
+  "section5_rows": [
+    {
+      "row": 1,
+      "form": "`const.bits<N>`",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "Eight E2 default constant sequences only; common SMT decoder qualification failed. No exhaustive constants or opt-in pattern proof."
+    },
+    {
+      "row": 2,
+      "form": "`add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `lshr`, `ashr` on `bits<N>`, `N <= 64`",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "row": 3,
+      "form": "`sdiv`, `udiv`, `srem`, `urem`, width <= 64",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 4,
+      "form": "`sdiv`, `udiv`, `srem`, `urem`, width 128",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 5,
+      "form": "`divisor_nonzero %d`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 6,
+      "form": "`signed_div_rem_no_overflow %a, %b`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 7,
+      "form": "`signed_add_defined %a, %b` / `signed_sub_defined`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 8,
+      "form": "`signed_mul_defined %a, %b`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 9,
+      "form": "`shift_count_defined.<s> %x, %amt`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 10,
+      "form": "`signed_shl_defined.<s> %x, %amt`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 11,
+      "form": "`sext`, `zext`, `trunc`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 12,
+      "form": "`bits<128>` forms (revision 0.10; the pair is `lo`, `hi`)",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 13,
+      "form": "128-bit UB predicates (revision 0.26; the pair is `lo`, `hi`)",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 14,
+      "form": "`va_start %ap`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 15,
+      "form": "`va_arg.T %ap`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 16,
+      "form": "`va_end %ap`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 17,
+      "form": "`icmp.*` on integers",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 18,
+      "form": "`icmp.eq`/`ne` on pointers",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 19,
+      "form": "`ptr.null`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 20,
+      "form": "`global_addr @g` / `func_addr @f`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 21,
+      "form": "`ptr.offset.<direction>.<signedness>`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 22,
+      "form": "`alloca` (static size and alignment)",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 23,
+      "form": "`alloca.dynamic`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 24,
+      "form": "`lifetime.end`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 25,
+      "form": "`pointer_valid`, `access_in_bounds`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 26,
+      "form": "`load [volatile]` of `bits<N>`, `N <= 64`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 27,
+      "form": "`load [volatile]` of a pointer",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 28,
+      "form": "`store [volatile]`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 29,
+      "form": "`atomic.load/store order [volatile]`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 30,
+      "form": "`copy` with static size",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 31,
+      "form": "`copy.volatile.read/write/readwrite`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 32,
+      "form": "`br ^b(args)`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 33,
+      "form": "`cond_br %c, ^t(...), ^e(...)`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 34,
+      "form": "`br.indirect %p [^b(args), ...]`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 35,
+      "form": "`ret v...`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 36,
+      "form": "`trap.<reason>`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 37,
+      "form": "`ub.assume.<reason> %c`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 38,
+      "form": "`call @f(args, %m, %w)` / `call %p(...)`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 39,
+      "form": "`uninitialized.bits<N>`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 40,
+      "form": "`ptr.to_int`, `ptr.from_int.*`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 41,
+      "form": "`block_addr ^b`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 42,
+      "form": "`return_address`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 43,
+      "form": "`frame_address`",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    },
+    {
+      "row": 44,
+      "form": "`ctlz`, `cttz`, `ctpop`, `bswap` (revision 0.14)",
+      "verdict": "NOT_MODELLED",
+      "reason": "Not a standalone obligation in the frozen 89-body source subset; no B1 proof by association. See matching Inst family and specialized paths."
+    }
+  ],
+  "target_patterns": [
+    {
+      "pattern": "const_movz",
+      "verdict": "NOT_MODELLED",
+      "reason": "E2 default constant controls do not enumerate this opt-in selector or all constants; C1 finite evidence is not B1 proof."
+    },
+    {
+      "pattern": "const_movn",
+      "verdict": "NOT_MODELLED",
+      "reason": "E2 default constant controls do not enumerate this opt-in selector or all constants; C1 finite evidence is not B1 proof."
+    },
+    {
+      "pattern": "const_orr",
+      "verdict": "NOT_MODELLED",
+      "reason": "E2 default constant controls do not enumerate this opt-in selector or all constants; C1 finite evidence is not B1 proof."
+    },
+    {
+      "pattern": "local_indexed_memory",
+      "verdict": "NOT_MODELLED",
+      "reason": "C2 opt-in combined instruction selection is not the frozen E2 default body path; memory/flags/operand domain is not independently proved."
+    },
+    {
+      "pattern": "local_shift_arithmetic",
+      "verdict": "NOT_MODELLED",
+      "reason": "C2 opt-in combined instruction selection is not the frozen E2 default body path; memory/flags/operand domain is not independently proved."
+    },
+    {
+      "pattern": "local_shift_compare",
+      "verdict": "NOT_MODELLED",
+      "reason": "C2 opt-in combined instruction selection is not the frozen E2 default body path; memory/flags/operand domain is not independently proved."
+    },
+    {
+      "pattern": "local_extend_arithmetic",
+      "verdict": "NOT_MODELLED",
+      "reason": "C2 opt-in combined instruction selection is not the frozen E2 default body path; memory/flags/operand domain is not independently proved."
+    },
+    {
+      "pattern": "local_extend_compare",
+      "verdict": "NOT_MODELLED",
+      "reason": "C2 opt-in combined instruction selection is not the frozen E2 default body path; memory/flags/operand domain is not independently proved."
+    },
+    {
+      "pattern": "local_multiply_arithmetic",
+      "verdict": "NOT_MODELLED",
+      "reason": "C2 opt-in combined instruction selection is not the frozen E2 default body path; memory/flags/operand domain is not independently proved."
+    }
+  ],
+  "specialized_paths": [
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_function",
+      "domain": "entry parameters, ABI copies and function layout",
+      "verdict": "NOT_MODELLED",
+      "reason": "Call/return ABI, frames, argument copies, helpers and external effects are outside these obligations."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_block",
+      "domain": "constant true UB elision, guard splitting, va_arg, asm.goto, fusion dispatch",
+      "verdict": "NOT_MODELLED",
+      "reason": "CFG/edge binding, control transfers and traps are outside the straight-line body obligations; RET is only E2 transport."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_compared_selection",
+      "domain": "compare/select diamond and flag consumers",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_checked_result",
+      "domain": "adjacent operation/guard fusion",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "take_checked_flags",
+      "domain": "checked flags and guarded consumer selection",
+      "verdict": "NOT_MODELLED",
+      "reason": "Total UB predicates and obligation/trap selection are not among the frozen E2 source shapes. Existing g0 Lean proofs are not native-lowering proofs."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_compare",
+      "domain": "integer/pointer comparison and signed-width treatment",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_terminator",
+      "domain": "edge arguments, conditional/indirect branches, return and trap",
+      "verdict": "NOT_MODELLED",
+      "reason": "CFG/edge binding, control transfers and traps are outside the straight-line body obligations; RET is only E2 transport."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_inst",
+      "domain": "ordinary single-register dispatch; all Inst families above",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "Lowerer::memory_address",
+      "domain": "bounded immediate addressing and retained preparation",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "Lowerer::shift",
+      "domain": "variable and immediate shifts plus source-width upper bits",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "Lowerer::sign_extend",
+      "domain": "source-width signed extension",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "Lowerer::zero_extend",
+      "domain": "source-width zero extension",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "address_of",
+      "domain": "symbol kind, relocation and PIC sequence",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_floating",
+      "domain": "scalar/strict/f128 operations and helper ABI",
+      "verdict": "NOT_MODELLED",
+      "reason": "Floating formats, FP/SIMD state, fenv and binary128 helper calls are outside the integer vendor slice."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_vector",
+      "domain": "pack/extract/bitcast/AES SIMD operations",
+      "verdict": "NOT_MODELLED",
+      "reason": "Vector lanes, AES, pack/extract/bitcast and SIMD state are outside the integer vendor slice."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "simple",
+      "domain": "single-register modular/bitwise operations",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "E2 finite nine-width register corpus only; pinned SMT generator fails before producing even add/64 query. No per-rule proof."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "divide",
+      "domain": "signed/unsigned division and remainder",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_bit_operation",
+      "domain": "bit-count and byte-swap sequences",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_assembly",
+      "domain": "operand constraints and substitutions",
+      "verdict": "NOT_MODELLED",
+      "reason": "Inline assembly constraints, clobbers, labels and arbitrary instruction text are outside the vendor-model slice."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_va_start",
+      "domain": "variadic state setup",
+      "verdict": "NOT_MODELLED",
+      "reason": "Call/return ABI, frames, argument copies, helpers and external effects are outside these obligations."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_pair",
+      "domain": "all 128-bit operations, predicates, copies and helper calls",
+      "verdict": "NOT_MODELLED",
+      "reason": "Call/return ABI, frames, argument copies, helpers and external effects are outside these obligations."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_pair_shift",
+      "domain": "128-bit cross-limb variable shifts",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "code": "crates/evocc-mir/src/lower.rs",
+      "path": "lower_pair_compare",
+      "domain": "128-bit comparisons and flags",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    },
+    {
+      "code": "crates/evocc-mir/src/emit.rs",
+      "path": "emit_inst",
+      "domain": "instruction expansion, spill/frame/memory/atomic/FP pseudos",
+      "verdict": "NOT_MODELLED",
+      "reason": "Memory, object/provenance state, access effects and addressing are outside the register-only model boundary."
+    },
+    {
+      "code": "crates/evocc-mir/src/emit.rs",
+      "path": "emit_term",
+      "domain": "control transfer, tail/return/epilogue and guarded branches",
+      "verdict": "NOT_MODELLED",
+      "reason": "CFG/edge binding, control transfers and traps are outside the straight-line body obligations; RET is only E2 transport."
+    },
+    {
+      "code": "crates/evocc-mir/src/emit.rs",
+      "path": "emit_immediate",
+      "domain": "default constants and C1 alternative sequences",
+      "verdict": "GENERATION_BLOCKED_FROZEN_SUBSET",
+      "reason": "Eight E2 default constant sequences only; common SMT decoder qualification failed. No exhaustive constants or opt-in pattern proof."
+    },
+    {
+      "code": "crates/evocc-mir/src/emit.rs",
+      "path": "emit_prologue/emit_epilogue/emit_frame_access",
+      "domain": "frame construction, F1/F2/F3, spills and preservation",
+      "verdict": "NOT_MODELLED",
+      "reason": "Call/return ABI, frames, argument copies, helpers and external effects are outside these obligations."
+    },
+    {
+      "code": "targets/aarch64/patterns",
+      "path": "select::local patterns",
+      "domain": "all nine declarative pattern rows; opt-in selector",
+      "verdict": "NOT_MODELLED",
+      "reason": "Bit-count/byte-swap and comparison/extension families have no standalone frozen body obligation."
+    }
+  ]
+}
