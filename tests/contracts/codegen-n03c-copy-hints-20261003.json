@@ -1,0 +1,67 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03c",
+  "slice": "T2: conservative copy-location hints",
+  "date": "2026-10-03",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "20995f41",
+  "authority": [
+    "docs/codegen-quality-plan.md sections 4a, 5, 10 and 11",
+    "docs/evomir-spec.md section 7",
+    "docs/target-spec.md B3"
+  ],
+  "observed": "The shared scan chooses the first free location even when a same-class copy peer already has another free location. The whole-pool retry failure is closed by T1. N01 attributes 12,952 excess move bytes across the five libraries and 6,712 excess stack bytes to inflate; these are prioritization signals, not a promise that hints recover them.",
+  "engineering_reference": {
+    "url": "https://github.com/bytecodealliance/regalloc2/blob/main/doc/ION.md#allocation-map-probing",
+    "principle": "Try hints before ordinary preferred registers, while retaining the full allocation-map conflict checks. No regalloc2 algorithm/proof claim or wholesale allocator replacement."
+  },
+  "scope": {
+    "included": "An opt-in preference for an already-assigned or fixed same-class copy peer's physical location, before the existing first-free choice. Inspect peers in deterministic instruction order. A hint must be in the original class/across-call pool and not held, pinned or clobbered anywhere in the existing interval. Do not open an additional callee-save location when the ordinary free choice avoids one.",
+    "unchanged": "Live ranges and overlap rules, ABI pinning, tied/fixed/early-clobber handling, spill-victim priority, T1 progress bound, spill placement/slot compaction, register pools, cycle scratch and independent verifier. No merging of interfering live ranges, new opcode, IR/interpreter/registry change or default optimization flip.",
+    "identity_copies": "Reuse the existing identity-copy removal only when physical locations and classes agree. Add long-chain, selected-edge/cycle and multiply-defined-value controls. If these expose a pre-existing defect, retain a bounded RED and repair it separately before broader hint admission; never weaken the verifier.",
+    "excluded": "Global allocator, interval splitting, rematerialization, call scheduling beyond T1, new callee-save policy, cross-class coalescing, FP/vector semantics, memory optimization, new audit layer and runtime latency.",
+    "default": "OFF; kernel markers, patchable entry and explicit frame-pointer requests suppress the new allocator choice. Ordinary legacy entry points preserve OFF behavior."
+  },
+  "interface": {
+    "driver": "--regalloc-opt=copy-hints, once only; exact spelling shared by native IR adapter. Record request in native assembly header. Reject unknown/duplicate values and --check combinations. A test-only environment hook extends the existing native-corpus adapter, not production behavior.",
+    "generic": "Explicit allocation options with a default-OFF compatibility wrapper; no ISA names in generic code.",
+    "spec": "EvoMIR implementation-policy revision for optional candidate order and protected profiles; instruction semantics unchanged."
+  },
+  "red": [
+    "Same-class dying source allocated to a non-first location: OFF retains the move, ON can remove it; independently verify allocation and transported values.",
+    "Future fixed call/return locations may hint an earlier interval only if the original whole-interval conflict checks permit it.",
+    "Still-live source, overlapping peer, class/width mismatch, early-clobber, fixed/tied asm and reserved registers must not bypass existing constraints.",
+    "Full-width live-across-call values still spill when the original target pool is empty; don't borrow partially preserved registers.",
+    "Long copy chains, multi-definition out-of-SSA values, selected indirect edges, parallel-copy cycles and forged assignments remain correct/rejected as appropriate.",
+    "Public native option parsing, protected profiles, no-option exact output and C driver examples exercise the implemented path rather than a helper-only test."
+  ],
+  "acceptance": {
+    "native": "Existing 384 Darwin and 384 sealed Linux cases ON/OFF; both object twins byte-identical; OFF all hashes equal T1 logs; independent verifier unchanged. Native correctness, no latency.",
+    "six_units": "Six frozen A/B measurement plans: OFF, copy-only and cumulative frame+C1+copy. Exclude unadmitted C2 local selection. Same six TUs, both profiles, original selected-TU harnesses, zero completed proof rejection/bundle failure. Match OFF objects to T1. Report copy-only and combined size separately, not as EqSat gains.",
+    "bounds": {
+      "compile_median_ratio": 1.25,
+      "text_growth_bytes": 0,
+      "text_plus_rodata_growth_bytes": 0,
+      "interpreter_steps": "UNCHANGED (native-only choice)",
+      "comparison": "copy-only and cumulative each against matched fresh OFF; also show cumulative versus historical frame+C1 size, without upgrading C2 or T1 cost dispositions."
+    },
+    "coverage": "Retain N02's 70 admitted inputs, 187 opaque cases and integer-mix source-event mismatch. No full-app/kernel admission inferred from selected-TU harnesses.",
+    "gates": [
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "focused Rust and touched Python tests",
+      "python3 tools/generate-target.py --check",
+      "python3 tools/render-status.py --todo"
+    ],
+    "stop": "A hint never forces a location. If correctness cannot be repaired within existing rules, decline it and retain the RED. Freeze zero/negative size or cost results; do not grow heuristics or rerun to erase misses. Broader N03c spill quality requires its own frozen slice."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "serial": true,
+    "retention": "Hash/measure then retire idle intermediate objects; keep summaries, receipts and reduced reproducers. No full disassembly, new target/workspace/kernel tree or VM disk. Record scoped cache/evidence net growth."
+  },
+  "claim_ceiling": "Optional candidate-order hint on the frozen population, validated per allocated output. Not interference-relaxing coalescing, a complete allocator, backend proof, verified EqSat gain, default admission or full N03c/N07 closure."
+}
