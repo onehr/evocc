@@ -1,0 +1,106 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03f",
+  "date": "2026-10-02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "slice": "Frame and call overhead, first slice: opt-in paired saves, one shared epilogue and leaf-frame elision",
+  "source_baseline": "fb02b7e3594eadc0d631d8be3277853256e7f7ef",
+  "baseline_qualification": "Clean HEAD after N03a closure. The release compiler at this commit is the options-off reference. N03a retained baseline objects were deleted at its closure, so fresh A/B six-unit objects and both 384-case native object sets are re-recorded at this commit before any frame code changes.",
+  "authority": [
+    "docs/codegen-quality-plan.md sections 3, 4, 4a, 5 (N03f row) and 10",
+    "docs/target-spec.md sections 2-4 (abi-<os> frame facts, profile-kernel) and row B4",
+    "docs/evomir-spec.md section 6 (frame layout, dynamic and over-aligned frames, variadic save areas) and section 8 (emission)",
+    "tests/contracts/codegen-n01-20261002-receipt.json (13-category census, prologue_epilogue rule)"
+  ],
+  "scope": "Three emission-only frame variants in the AArch64 module, each behind an explicit code-generation option that defaults OFF. No frame layout, slot offset, frame size, save-area order, callee-saved set, allocation decision, instruction selection outside prologue/epilogue/return emission, EvoIR semantics, registry, checker or interpreter changes. No default flip.",
+  "motivation": {
+    "census": "B-unchecked prologue_epilogue bytes versus GCC-14 -O2: deflate 4,608/860; inflate 2,100/392; zstd compress 28,164/4,672; zstd decompress 10,688/1,744; cJSON 8,336/1,744; total 53,896/9,412.",
+    "composition_method": "Exploration only, not a receipt: arm-A unchecked assembly text of the six units at fb02b7e3, counted per function between .type and .size. Totals reproduce the census instruction counts (deflate 1,152 x 4 = 4,608 bytes).",
+    "composition": {
+      "zlib:deflate.c": {"frames": 29, "returns": 102, "multi_return_functions": 23, "callee_save_str": 133, "callee_restore_ldr": 636, "frameless_leaf_candidates": 2},
+      "zlib:inflate.c": {"frames": 21, "returns": 60, "multi_return_functions": 19, "callee_save_str": 61, "callee_restore_ldr": 229, "frameless_leaf_candidates": 2},
+      "zstd:lib/compress/zstd_compress.c": {"frames": 238, "returns": 685, "multi_return_functions": 124, "callee_save_str": 816, "callee_restore_ldr": 3676, "frameless_leaf_candidates": 55, "saves_beyond_stp_offset_504": 35, "frames_above_4095_bytes": 1},
+      "zstd:lib/decompress/zstd_decompress.c": {"frames": 91, "returns": 307, "multi_return_functions": 56, "callee_save_str": 214, "callee_restore_ldr": 1346, "frameless_leaf_candidates": 14},
+      "cjson:cJSON.c": {"frames": 110, "returns": 270, "multi_return_functions": 73, "callee_save_str": 222, "callee_restore_ldr": 858, "frameless_leaf_candidates": 23}
+    },
+    "ranking": "Repeated per-return epilogues (F2) are the largest lever (estimated 3,734 of 7,073 prologue/epilogue instructions in zstd compress), then pairing (F1), then frameless leaves (F3, 55 functions in zstd compress). Estimates are syntactic ceilings; measured S1 bytes decide.",
+    "f4_decision": "SKIPPED: the current layout puts the frame record above the save area, so stp/ldp pre/post-index folding of the stack adjustment would move offsets. The only layout-preserving form found (restoring sp from x29 for frames above 4,095 bytes) touches one function in the six units. Not worth a sub-step."
+  },
+  "options": {
+    "driver_flag": "--frame-opt=LIST, LIST a comma-separated subset of paired-saves, shared-epilogue, leaf-frames; at most once per command; each name at most once; unknown names rejected; refused with --check like --ub-checks. The exact-input evo-ir-asm adapter accepts the same --frame-opt=LIST.",
+    "codegen_fields": "CodegenOptions.frame: FrameVariants { paired_saves, shared_epilogue, leaf_frames } (all false by default) and CodegenOptions.frame_pointer_required (false by default).",
+    "frame_pointer_requests": "-fno-omit-frame-pointer sets frame_pointer_required, -fomit-frame-pointer clears that request (last wins). -mno-omit-leaf-frame-pointer is newly admitted and sets an independent leaf request. Either request suppresses leaf-frames only; paired-saves and shared-epilogue never remove the frame record.",
+    "kernel_profile": "Kernel-profile markers suppress leaf-frames: -mgeneral-regs-only (unconditional in arm64 Kbuild), -mstack-protector-guard=sysreg, or a nonzero patchable entry on the function. The kernel command projection (tools/k1/cmdrecord.py) does not pass --frame-opt, so kernel objects keep today's output.",
+    "identity": "When any frame variant is on, the assembly header records it beside the existing evocc-native-ub-checks line. With every variant off the emitted text is unchanged.",
+    "default": "OFF for every sub-step in this slice."
+  },
+  "sub_steps": [
+    {
+      "id": "F1",
+      "name": "paired-saves",
+      "change": "In prologue and epilogue, two callee-saved general registers whose save slots are adjacent (offsets o and o+8, o a multiple of 8 and o <= 504, frame not dynamic) are saved with one stp and restored with one ldp. The saved vector low halves (d8-d15, partially preserved) pair the same way. Unpaired or out-of-range slots keep today's str/ldr. No offset changes.",
+      "cfi": "Under unwind tables each register of a pair gets its own .cfi_offset (or DW_CFA_expression for over-aligned frames) after the stp and its own .cfi_restore after the ldp.",
+      "red": "Focused tests asserting stp/ldp of adjacent saves at the unchanged offsets, odd remainders, out-of-range and dynamic fallbacks, CFI per register; driver test that --frame-opt=paired-saves is accepted. Fails before implementation on the missing option."
+    },
+    {
+      "id": "F2",
+      "name": "shared-epilogue",
+      "change": "When a function has at least two Ret terminators and the per-return sequence (guard check, restores, stack restore, frame-record pop, autiasp, ret) is longer than one instruction, emit it once at the last Ret in layout order behind a local label; every other Ret becomes one unconditional b to that label.",
+      "invariants": "Every return still executes the complete guard check (when the function is protected) before any restore; autiasp still follows the restore of the same sp; CFI remember/restore state brackets the single epilogue; the shared label is unique per function and survives the long-branch re-emission; unconditional b reach (128 MiB) exceeds any function the relaxation threshold admits.",
+      "red": "Focused tests: one ret per multi-return function, every other return branches to the label, guard check emitted once and dominating the restores, pac-ret order, unwind state directives, relaxation re-emission keeps one label, single-return functions unchanged."
+    },
+    {
+      "id": "F3",
+      "name": "leaf-frames",
+      "change": "Omit the frame record (stp x29,x30 / mov x29,sp / ldp x29,x30 and their CFI) for a function with no calls, frame size zero (no callee-saved registers, slots, spills, outgoing or variadic areas), no dynamic allocation or release, no stack guard, no inline assembly, no incoming stack argument and no frame-address/return-address/ancestor/incoming-stack/save-area reads.",
+      "forbidden_when": "frame_pointer_required (-fno-omit-frame-pointer), the leaf request (-mno-omit-leaf-frame-pointer), general-registers-only, a sysreg stack guard, or a nonzero patchable entry. pac-ret keeps paciasp/autiasp around the frameless body. Unwind tables keep the default CFA (sp+0).",
+      "spec": "EvoMIR revision text restates 'every function keeps a frame pointer' as the default rule and adds the opt-in exception with its complete forbidden list.",
+      "red": "Focused tests: eligible leaf has no frame record; each forbidding condition keeps it; the requesting options and the kernel markers keep today's text."
+    }
+  ],
+  "baselines": {
+    "six_units": "Re-record arms A (no EqSat) and B (P0 verified chain) at the plan commit with tests/contracts/codegen-n03f-baseline-{a,b}-20261002.json (retain_object_baseline=true, extra_flags=[]); both profiles; three compiles and two assembled twins per unit/profile through the existing Capture/S1 path.",
+    "native_corpora": "Record Darwin and Linux 384-case objects with EVOCC_MIR_OBJECT_CAPTURE_MODE=record into .evidence/codegen/n03f-corpus-20261002/ (section9_c_corpus.rs and the ignored whole-corpus test in section8_linux_profile.rs).",
+    "options_off_identity": "After the last kept sub-step: regression plans codegen-n03f-regression-{a,b}-20261002.json (extra_flags=[], object_baseline_receipt = the baseline captures, frozen when their hashes exist) and both corpora in compare mode. Zero changed object bytes is required; any difference not caused by the change is a stop."
+  },
+  "validation_options_on": {
+    "mechanism": "Six units: measurement plans with extra_flags. Native tests: an opt-in test-support variable EVOCC_MIR_FRAME_OPT=LIST read only by test code; unset keeps the existing call path byte-for-byte.",
+    "required": [
+      "Allocation verifier and MIR validator unchanged (they run before emission) and the existing evocc-mir suites green.",
+      "Darwin 384-case and Linux 384-case corpora with EVOCC_MIR_FRAME_OPT set: every case executes and agrees; options-on twins byte-identical (record mode into a separate capture root).",
+      "Six-unit correctness harnesses through tests/contracts/codegen-n03f-on-*.json (zlib compress/decompress, zstd compress/decompress, cJSON round trip, integer-mix) in both profiles.",
+      "Calling-convention probes, record and variadic native tests with EVOCC_MIR_FRAME_OPT set: section9_calling_convention_probe, section6_records, section9_lowering_frontier_corpus (variadic callee, named stack, forwarding), section9_activation_addresses_natively.",
+      "Targeted interaction tests: unwind tables (CFI per paired register, backtrace through over-aligned and dynamic frames), stack guard global (exit 0 and 77 through __stack_chk_fail) and sysreg (text), pac-ret, over-aligned and dynamic frames, variadic functions, return_address/frame_address users, general-registers-only, patchable entries; executed under GCC-14 in the sealed container where executable.",
+      "Kernel-profile markers and frame-pointer requests with leaf-frames requested produce today's frame records."
+    ]
+  },
+  "measurement": {
+    "plans": {
+      "F1": "tests/contracts/codegen-n03f-on-f1-b-20261002.json",
+      "F1+F2": "tests/contracts/codegen-n03f-on-f2-b-20261002.json",
+      "F1+F2+F3 arm B": "tests/contracts/codegen-n03f-on-f3-b-20261002.json",
+      "F1+F2+F3 arm A": "tests/contracts/codegen-n03f-on-f3-a-20261002.json"
+    },
+    "metric": "Per unit and profile, S1 .text + .text.* bytes and static instruction slots, options off versus on, cumulative per sub-step; prologue_epilogue (and every other) N01 category through tools/ladder/codegen_census.py analyze() with the frozen N01 disassembler identity; ratio to the frozen GCC-14 -O2 bytes of the S5 reference receipt.",
+    "reporting": "Per unit; checked and unchecked separately; no cross-family average. A unit that grows is a recorded regression. Two builds byte-identical for every measured object. Compile time is observed, not a new bound; interpreter steps are unaffected by emission and recorded through the existing steps command.",
+    "expected_direction": "prologue_epilogue bytes down on every library unit; branch bytes up by at most one b per removed return copy."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "cargo_serial": true,
+    "heavy_lane_jobs": 1,
+    "retention": "Baseline objects only until the options-off comparisons close; options-on retained objects only until the census summary is written; then delete and keep hashes, category tables and logs. No new target tree, workspace clone, kernel tree or VM disk. Never delete contracts, sealed fixtures, open-task evidence or lean/.lake. Record the net disk change."
+  },
+  "gates": [
+    "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+    "python3 -m unittest tools.ladder.tests.test_codegen_census (touched tool module)",
+    "python3 tools/render-status.py --todo"
+  ],
+  "stop_rule": "Stop on: any need to change default behavior, EvoIR semantics, a registry or an ABI rule; options-off object bytes differing from the baseline without a root cause in this change; disk below 15 GiB after cleaning own intermediates. A correctness failure with options on that cannot be fixed inside frame code reverts that sub-step with its minimal reproducer recorded, and the others continue. An unavailable Linux lane is NOT_RUN with the exact error, never PASS.",
+  "admission": "Defaults stay OFF in this slice. The close-out proposes, per sub-step, whether evidence suffices for a later default flip; the flip itself is separate work with its own owner decision.",
+  "claim_ceiling": "Opt-in, emission-only frame variants validated on the stated populations (six units with original harnesses, 384+384 native corpora, probes and targeted interactions). Not a default change, not a proved backend, not a latency result, not GCC parity, not kernel acceptance."
+}
