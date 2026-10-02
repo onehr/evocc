@@ -18,10 +18,12 @@ use std::process::Command;
 
 use evocc_evoir::{interpret_module, parse_section9_module, InterpreterLimits, RuntimeValue};
 use evocc_mir::{
-    compile_module_for, interpret_module as interpret_machine_module, lower_module_for, MirLimits,
-    MirValue, Target,
+    interpret_module as interpret_machine_module, lower_module_for, MirLimits, MirValue, Target,
 };
 use evocc_types::{EvoIRType, Region};
+#[path = "support/frame_variants.rs"]
+mod frame_variants;
+use frame_variants::compile_module_for;
 
 /// The runtime and image the build-environment contract seals.
 const CONTAINER_BIN: &str = "/usr/local/bin/container";

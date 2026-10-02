@@ -399,7 +399,7 @@ sections above remain the contract.
 | N03a backend layering | Done, independently rechecked | [note](notebook/codegen-backend-layering-20261002.md): every one of the 384 Darwin and 384 Linux corpus object hashes equals the pre-refactor baseline; `src/generic/` holds no ISA name; gate 2,986 passed, 0 failed, 4 ignored |
 | N04 C checker | Done | [note](notebook/codegen-checker-20261002.md) |
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
-| N03f frame and calls | In progress | [frozen plan](../tests/contracts/codegen-n03f-20261002.json) and fresh baselines at `161d81d0`; F1 only as unverified work on branch `wip/n03f-paired-saves` |
+| N03f frame and calls | In progress, not accepted | [frozen plan](../tests/contracts/codegen-n03f-20261002.json), fresh baselines at `161d81d0`; reviewed F1 WIP integrated, F2/F3 implemented default-off. Focused and bounded native interaction tests pass; full gate, corpus identity/execution and size measurements pending. See [TODO](../TODO.md) for the failed Darwin signed-unwind reference control. |
 | N03d, N03c | Not started | |
 | N03b, N03e | Bounded preflight negative, redesign needed | [note](notebook/codegen-negative-preflight-20261002.md) |
 | N07 steps 4–6 | Not started | Steps 1–3 landed inside N03a |

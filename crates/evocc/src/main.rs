@@ -294,6 +294,7 @@ fn main() -> ExitCode {
         eprintln!("       evocc --explain E3xxx");
         eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
         eprintln!("       --ub-checks=checked|unchecked (native only; default checked)");
+        eprintln!("       --frame-opt=paired-saves,shared-epilogue,leaf-frames (native only; default none)");
         eprintln!("       --opt-pass=identity [--pass-report NEW_JSON_PATH] (development TV)");
         eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
         eprintln!("       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
@@ -379,6 +380,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut minimum_function_alignment = 4;
     let mut codegen = CodegenOptions::default();
     let mut ub_checks_selected = false;
+    let mut frame_variants_selected = false;
     let mut guard_is_sysreg = false;
     let mut guard_register = None;
     let mut guard_offset = None;
@@ -447,6 +449,16 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 codegen.ub_checks =
                     evocc_mir::UbCheckProfile::parse(arg.strip_prefix("--ub-checks=").unwrap())?;
             }
+            // EvoMIR revision 0.56: opt-in, emission-only frame variants.
+            _ if arg.starts_with("--frame-opt=") => {
+                if frame_variants_selected {
+                    return Err("--frame-opt may appear only once".into());
+                }
+                frame_variants_selected = true;
+                codegen.frame = evocc_mir::emit::FrameVariants::parse(
+                    arg.strip_prefix("--frame-opt=").unwrap(),
+                )?;
+            }
             _ if arg.starts_with("--eq-") => {
                 let (key, value) = arg
                     .split_once('=')
@@ -513,10 +525,12 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             // No pass derives non-aliasing from the C access type. Existing
             // object/provenance, initializedness and permission checks remain.
             "-fno-strict-aliasing" => {}
-            // Every current function requires the Section 6 frame record.
-            // Omission is permission, not a requirement to remove a needed
-            // frame. No sibling-call transform exists in this backend.
-            "-fomit-frame-pointer" | "-fno-omit-frame-pointer" | "-fno-optimize-sibling-calls" => {}
+            // Omission is permission, not a request to enable a frame variant.
+            "-fomit-frame-pointer" => codegen.frame_pointer_required = false,
+            "-fno-omit-frame-pointer" => codegen.frame_pointer_required = true,
+            "-mno-omit-leaf-frame-pointer" => codegen.leaf_frame_pointer_required = true,
+            // No sibling-call transform exists in this backend.
+            "-fno-optimize-sibling-calls" => {}
             // There is no optional function/branch padding, automatic array
             // prefetch, loop-header copying or loop-to-libcall transform.
             // These disabling options select that existing contract; source
@@ -767,6 +781,9 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     }
     if mode == DriverMode::Check && ub_checks_selected {
         return Err("--ub-checks is native-only and cannot weaken --check".into());
+    }
+    if mode == DriverMode::Check && frame_variants_selected {
+        return Err("--frame-opt is native-only and has no meaning for --check".into());
     }
     Ok(DriverOptions {
         mode,

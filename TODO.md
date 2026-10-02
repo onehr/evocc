@@ -2412,13 +2412,19 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     (F3); every default stays off in this slice and a default flip is a
     separate owner decision. Fresh options-off baselines were re-recorded at
     that commit (six units A/B, both 384-case native corpora) because N03a
-    deleted its retained objects at closure. F1 exists only as interrupted,
-    unverified work on branch `wip/n03f-paired-saves` (`3e5e4688`): option
-    plumbing, `stp`/`ldp` pairing at unchanged offsets and RED tests; it
-    passes `cargo check --tests` and nothing else has been run. F2, F3, the
-    EvoMIR revision text, options-on validation, options-off byte identity,
-    measurement and the admission proposal are not started. Review the branch
-    against the frozen plan before building on it; it is not acceptance.
+    deleted its retained objects at closure. The interrupted F1 branch
+    `wip/n03f-paired-saves` (`3e5e4688`) has now been reviewed and integrated;
+    F2/F3 and EvoMIR 0.56 are implemented behind the same default-off options.
+    RED checkpoints: `0771b134`, `fb12b2d9`; protection clarification:
+    `718f155f`. Nine focused frame tests PASS; native interactions PASS for
+    all four cumulative variants unsigned on Darwin and all eight variant /
+    PAC combinations on sealed Linux (including canary exit 0/77).
+    The Darwin PAC/unwind reference control itself fails (Clang-built subject,
+    unsigned harness: exit 90, only two frames); that combination is explicitly
+    NOT_VALIDATED, not counted as a successful unwind test.
+    Full-workspace validation is in progress. Options-on 384+384 corpora and
+    ABI probes, options-off object identity, six-TU measurements and admission
+    proposal remain pending: **N03f is not closed and defaults stay off.**
 
 - [x] **N04 — The C checker as a product** — `DONE`, P3.
   One command that runs the EvoIR interpreter as a precise undefined-behavior

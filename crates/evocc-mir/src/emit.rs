@@ -45,6 +45,68 @@ pub struct CodegenOptions {
     pub sign_returns: bool,
     pub general_registers_only: bool,
     pub stack_guard: StackGuard,
+    /// Opt-in frame variants (EvoMIR revision 0.56); all off by default.
+    pub frame: FrameVariants,
+    pub frame_pointer_required: bool,
+    pub leaf_frame_pointer_required: bool,
+}
+
+/// Section 6 frame variants selected by `--frame-opt` (revision 0.56).
+///
+/// Each is emission-only: it moves no slot, changes no frame size, save order
+/// or callee-saved set, and with every field false emission is byte-for-byte
+/// the default rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FrameVariants {
+    /// Adjacent callee-saved slots are saved with `stp` and restored with `ldp`.
+    pub paired_saves: bool,
+    pub shared_epilogue: bool,
+    pub leaf_frames: bool,
+}
+
+impl FrameVariants {
+    pub const OFF: Self = Self {
+        paired_saves: false,
+        shared_epilogue: false,
+        leaf_frames: false,
+    };
+
+    /// Parse the comma-separated `--frame-opt` list. Every name is admitted at
+    /// most once and an unknown or empty name is refused.
+    pub fn parse(list: &str) -> Result<Self, String> {
+        let mut variants = Self::OFF;
+        for name in list.split(',') {
+            let slot = match name {
+                "paired-saves" => &mut variants.paired_saves,
+                "shared-epilogue" => &mut variants.shared_epilogue,
+                "leaf-frames" => &mut variants.leaf_frames,
+                _ => {
+                    return Err(format!(
+                        "unknown frame variant `{name}`; supported: paired-saves, shared-epilogue, leaf-frames"
+                    ))
+                }
+            };
+            if std::mem::replace(slot, true) {
+                return Err(format!("frame variant `{name}` may appear only once"));
+            }
+        }
+        Ok(variants)
+    }
+
+    /// The canonical spelling the assembly header records, or `None` when no
+    /// variant is on and the header is unchanged.
+    #[must_use]
+    pub fn name(self) -> Option<String> {
+        let names: Vec<&str> = [
+            (self.paired_saves, "paired-saves"),
+            (self.shared_epilogue, "shared-epilogue"),
+            (self.leaf_frames, "leaf-frames"),
+        ]
+        .into_iter()
+        .filter_map(|(on, name)| on.then_some(name))
+        .collect();
+        (!names.is_empty()).then(|| names.join(","))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -73,6 +135,10 @@ pub struct Frame {
     pub strict_alignment: bool,
     pub sign_returns: bool,
     pub general_registers_only: bool,
+    /// Revision 0.56 F1: save and restore adjacent slots as pairs.
+    pub paired_saves: bool,
+    pub shared_epilogue: bool,
+    pub frameless: bool,
     pub stack_guard: Option<(u64, StackGuard)>,
     /// Runtime allocations move sp; fixed slots must then stay relative to x29.
     pub dynamic: bool,
@@ -296,6 +362,9 @@ pub fn frame_of_for(target: Target, allocated: &Allocated) -> Frame {
         strict_alignment: false,
         sign_returns: false,
         general_registers_only: false,
+        paired_saves: false,
+        shared_epilogue: false,
+        frameless: false,
         stack_guard: None,
         dynamic: allocated.blocks.iter().any(|block| {
             block
@@ -1164,10 +1233,19 @@ fn emit_function(
     frame.sign_returns = options.sign_returns;
     frame.strict_alignment = options.strict_alignment;
     frame.general_registers_only = options.general_registers_only;
+    let protected = options.frame_pointer_required
+        || options.leaf_frame_pointer_required
+        || options.general_registers_only
+        || matches!(options.stack_guard, StackGuard::SystemRegister { .. })
+        || patchable_entry.is_some_and(|(total, _)| total != 0);
+    frame.paired_saves = options.frame.paired_saves && !protected;
+    frame.shared_epilogue = options.frame.shared_epilogue && !protected;
     if stack_protect {
         frame.stack_guard = Some((frame.size, options.stack_guard.clone()));
         frame.size += KERNEL.stack_guard_slot_bytes;
     }
+    frame.frameless =
+        options.frame.leaf_frames && !protected && is_frameless_leaf(allocated, &frame);
     let prefix = target.symbol_prefix();
     // Section 8 (revision 0.16): "An EvoIR function or global whose
     // `visibility` is `internal` is emitted without `.globl`, so its symbol is
@@ -1277,6 +1355,39 @@ fn emit_function(
     }
 }
 
+/// Emission-only admission: inspect the allocated function, including inserted
+/// calls, spills, incoming arguments and opaque assembly. No analysis assumes
+/// that a source-level leaf remains a machine leaf.
+fn is_frameless_leaf(allocated: &Allocated, frame: &Frame) -> bool {
+    frame.size == 0
+        && frame.saved.is_empty()
+        && frame.saved_vectors.is_empty()
+        && frame.slots.is_empty()
+        && frame.spills.is_empty()
+        && frame.outgoing == 0
+        && frame.register_save.is_none()
+        && !frame.dynamic
+        && frame.stack_guard.is_none()
+        && allocated.blocks.iter().all(|block| {
+            !matches!(block.term, MTerm::AsmGoto { .. })
+                && block.insts.iter().all(|inst| {
+                    !matches!(
+                        inst,
+                        MInst::Bl { .. }
+                            | MInst::Blr { .. }
+                            | MInst::FrameSlot { .. }
+                            | MInst::StackAlloc { .. }
+                            | MInst::StackRelease { .. }
+                            | MInst::FrameAddress { .. }
+                            | MInst::IncomingArg { .. }
+                            | MInst::OutgoingArg { .. }
+                            | MInst::VaSaveArea { .. }
+                            | MInst::Asm(_)
+                    )
+                })
+        })
+}
+
 fn emit_blocks(
     text: &mut String,
     symbols: &SymbolEmission<'_>,
@@ -1288,6 +1399,19 @@ fn emit_blocks(
 ) {
     let target = symbols.target;
     let order: Vec<u32> = allocated.blocks.iter().map(|block| block.id).collect();
+    let mut returns = allocated
+        .blocks
+        .iter()
+        .filter(|block| matches!(block.term, MTerm::Ret { .. }));
+    let first_return = returns.next();
+    // The remaining exit is just `ret` only for an unsigned frameless leaf.
+    let shared_exit = if frame.shared_epilogue && (!frame.frameless || frame.sign_returns) {
+        returns.next_back().map(|block| block.id)
+    } else {
+        None
+    };
+    debug_assert!(shared_exit.is_none() || first_return.is_some());
+    let shared_label = format!("{}{}_frame_exit", target.label_prefix(), allocated.name);
     // An adr or static relocation can take a block's address. Both name the
     // same local symbol at the first instruction; unaddressed blocks retain
     // only their branch label.
@@ -1340,6 +1464,15 @@ fn emit_blocks(
             );
         }
         let next = order.get(index + 1).copied();
+        if matches!(block.term, MTerm::Ret { .. }) {
+            if let Some(last) = shared_exit {
+                if last != block.id {
+                    let _ = writeln!(text, "    b {shared_label}");
+                    continue;
+                }
+                let _ = writeln!(text, "{shared_label}:");
+            }
+        }
         emit_term(
             text,
             target,
@@ -1360,6 +1493,9 @@ fn emit_prologue(text: &mut String, frame: &Frame, abi: &Aarch64Abi) {
         if frame.unwind_tables {
             let _ = writeln!(text, ".cfi_negate_ra_state");
         }
+    }
+    if frame.frameless {
+        return;
     }
     let _ = writeln!(
         text,
@@ -1387,31 +1523,27 @@ fn emit_prologue(text: &mut String, frame: &Frame, abi: &Aarch64Abi) {
         );
         let _ = writeln!(text, "    mov {STACK_POINTER}, {SCRATCH_X}");
     }
-    for (number, offset) in &frame.saved {
-        emit_frame_access(
+    if frame.paired_saves {
+        emit_save_groups(
             text,
-            "str",
-            &format!("{}{number}", regfile::GPR64_VIEW.prefix),
-            *offset,
             frame,
+            &frame.saved,
+            regfile::GPR64_VIEW.prefix,
+            0,
+            false,
         );
-        if frame.unwind_tables {
-            emit_saved_register_cfi(text, *number, *offset, frame);
-        }
-    }
-    if !frame.general_registers_only {
-        for (number, offset) in &frame.saved_vectors {
-            emit_frame_access(
+        if !frame.general_registers_only {
+            emit_save_groups(
                 text,
-                "str",
-                &format!("{}{number}", regfile::SIMD64_VIEW.prefix),
-                *offset,
                 frame,
+                &frame.saved_vectors,
+                regfile::SIMD64_VIEW.prefix,
+                64,
+                false,
             );
-            if frame.unwind_tables {
-                emit_saved_register_cfi(text, 64 + *number, *offset, frame);
-            }
         }
+    } else {
+        emit_single_saves(text, frame);
     }
     if let Some((offset, guard)) = &frame.stack_guard {
         emit_guard_load(text, guard);
@@ -1458,7 +1590,178 @@ fn emit_prologue(text: &mut String, frame: &Frame, abi: &Aarch64Abi) {
     }
 }
 
+/// The default rule: one `str` per saved register, general registers then
+/// the preserved vector halves, each in register order.
+fn emit_single_saves(text: &mut String, frame: &Frame) {
+    for (number, offset) in &frame.saved {
+        emit_frame_access(
+            text,
+            "str",
+            &format!("{}{number}", regfile::GPR64_VIEW.prefix),
+            *offset,
+            frame,
+        );
+        if frame.unwind_tables {
+            emit_saved_register_cfi(text, *number, *offset, frame);
+        }
+    }
+    if !frame.general_registers_only {
+        for (number, offset) in &frame.saved_vectors {
+            emit_frame_access(
+                text,
+                "str",
+                &format!("{}{number}", regfile::SIMD64_VIEW.prefix),
+                *offset,
+                frame,
+            );
+            if frame.unwind_tables {
+                emit_saved_register_cfi(text, 64 + *number, *offset, frame);
+            }
+        }
+    }
+}
+
+/// The largest offset the signed, scaled seven-bit immediate of an X or D
+/// register `stp`/`ldp` reaches, and the distance between its two slots.
+const PAIR_LIMIT: u64 = 63 * 8;
+const PAIR_STRIDE: u64 = 8;
+
+/// Revision 0.56 F1: the slots of one save area in ascending offset order,
+/// each either alone or paired with the slot directly above it. A pair needs
+/// both slots adjacent, the lower one within the `stp`/`ldp` reach, and a
+/// frame addressed from `sp`; every other slot keeps its single transfer.
+/// Pairing never moves a slot.
+fn save_groups(slots: &BTreeMap<u8, u64>, frame: &Frame) -> Vec<(u8, u64, Option<u8>)> {
+    let mut ordered: Vec<(u8, u64)> = slots.iter().map(|(r, o)| (*r, *o)).collect();
+    ordered.sort_by_key(|(_, offset)| *offset);
+    let mut groups = Vec::new();
+    let mut index = 0;
+    while index < ordered.len() {
+        let (first, offset) = ordered[index];
+        let partner = ordered.get(index + 1).filter(|(_, next)| {
+            !frame.dynamic
+                && offset.is_multiple_of(PAIR_STRIDE)
+                && offset <= PAIR_LIMIT
+                && *next == offset + PAIR_STRIDE
+        });
+        groups.push((first, offset, partner.map(|(second, _)| *second)));
+        index += if partner.is_some() { 2 } else { 1 };
+    }
+    groups
+}
+
+#[cfg(test)]
+mod paired_save_tests {
+    use super::*;
+
+    #[test]
+    fn pairs_require_adjacent_encodable_offsets_and_a_stable_stack_base() {
+        let mut frame = frame_of_for(
+            Target::Linux,
+            &Allocated {
+                name: "boundary".into(),
+                blocks: Vec::new(),
+                assignment: BTreeMap::new(),
+                spilled: 0,
+                frame_slots: 0,
+                used_callee_saved: Vec::new(),
+                parameters: 0,
+                outgoing: 0,
+                indirect_result: false,
+                internal: true,
+            },
+        );
+        for offset in [0, 496, 504] {
+            let slots = BTreeMap::from([(19, offset), (20, offset + 8), (21, offset + 16)]);
+            assert_eq!(
+                save_groups(&slots, &frame),
+                vec![(19, offset, Some(20)), (21, offset + 16, None)]
+            );
+        }
+        for slots in [
+            BTreeMap::from([(19, 512), (20, 520)]),
+            BTreeMap::from([(19, 0), (20, 16)]),
+            BTreeMap::from([(19, 4), (20, 12)]),
+        ] {
+            assert!(save_groups(&slots, &frame).iter().all(|g| g.2.is_none()));
+        }
+        frame.dynamic = true;
+        assert_eq!(
+            save_groups(&BTreeMap::from([(19, 0), (20, 8)]), &frame),
+            vec![(19, 0, None), (20, 8, None)]
+        );
+    }
+}
+
+/// Save (`restore == false`) or restore one save area as `save_groups`
+/// groups it. Each register keeps its own CFI rule: a `.cfi_offset` (or the
+/// over-aligned expression) after the store, a `.cfi_restore` after the load.
+fn emit_save_groups(
+    text: &mut String,
+    frame: &Frame,
+    slots: &BTreeMap<u8, u64>,
+    prefix: &str,
+    dwarf_base: u8,
+    restore: bool,
+) {
+    let (pair, single) = if restore {
+        ("ldp", "ldr")
+    } else {
+        ("stp", "str")
+    };
+    for (first, offset, second) in save_groups(slots, frame) {
+        match second {
+            Some(second) => {
+                let _ = writeln!(
+                    text,
+                    "    {pair} {prefix}{first}, {prefix}{second}, [{STACK_POINTER}, #{offset}]"
+                );
+            }
+            None => emit_frame_access(text, single, &format!("{prefix}{first}"), offset, frame),
+        }
+        if frame.unwind_tables {
+            let members = std::iter::once((first, offset))
+                .chain(second.map(|second| (second, offset + PAIR_STRIDE)));
+            for (number, slot) in members {
+                if restore {
+                    let _ = writeln!(text, ".cfi_restore {}", dwarf_base + number);
+                } else {
+                    emit_saved_register_cfi(text, dwarf_base + number, slot, frame);
+                }
+            }
+        }
+    }
+}
+
 fn emit_epilogue(text: &mut String, frame: &Frame) {
+    if frame.paired_saves {
+        if !frame.general_registers_only {
+            emit_save_groups(
+                text,
+                frame,
+                &frame.saved_vectors,
+                regfile::SIMD64_VIEW.prefix,
+                64,
+                true,
+            );
+        }
+        emit_save_groups(
+            text,
+            frame,
+            &frame.saved,
+            regfile::GPR64_VIEW.prefix,
+            0,
+            true,
+        );
+    } else {
+        emit_single_restores(text, frame);
+    }
+    emit_frame_pop(text, frame);
+}
+
+/// The default rule: one `ldr` per saved register, the preserved vector
+/// halves then the general registers, each in register order.
+fn emit_single_restores(text: &mut String, frame: &Frame) {
     if !frame.general_registers_only {
         for (number, offset) in &frame.saved_vectors {
             emit_frame_access(
@@ -1485,17 +1788,23 @@ fn emit_epilogue(text: &mut String, frame: &Frame) {
             let _ = writeln!(text, ".cfi_restore {number}");
         }
     }
-    if frame.alignment > 16 || frame.dynamic {
-        let _ = writeln!(text, "    mov {STACK_POINTER}, {FRAME_POINTER_X}");
-    } else if frame.size != 0 {
-        emit_add_immediate(text, "add", STACK_POINTER, STACK_POINTER, frame.size);
-    }
-    let _ = writeln!(
-        text,
-        "    ldp {FRAME_POINTER_X}, {LINK_REGISTER_X}, [{STACK_POINTER}], #16"
-    );
-    if frame.unwind_tables {
-        let _ = writeln!(text, ".cfi_def_cfa 31, 0\n.cfi_restore 29\n.cfi_restore 30");
+}
+
+/// Restore `sp` to the frame record and pop it, then authenticate.
+fn emit_frame_pop(text: &mut String, frame: &Frame) {
+    if !frame.frameless {
+        if frame.alignment > 16 || frame.dynamic {
+            let _ = writeln!(text, "    mov {STACK_POINTER}, {FRAME_POINTER_X}");
+        } else if frame.size != 0 {
+            emit_add_immediate(text, "add", STACK_POINTER, STACK_POINTER, frame.size);
+        }
+        let _ = writeln!(
+            text,
+            "    ldp {FRAME_POINTER_X}, {LINK_REGISTER_X}, [{STACK_POINTER}], #16"
+        );
+        if frame.unwind_tables {
+            let _ = writeln!(text, ".cfi_def_cfa 31, 0\n.cfi_restore 29\n.cfi_restore 30");
+        }
     }
     if frame.sign_returns {
         let _ = writeln!(text, "    autiasp");

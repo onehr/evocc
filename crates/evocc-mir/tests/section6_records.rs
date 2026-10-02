@@ -19,7 +19,10 @@
 use std::process::Command;
 
 use evocc_evoir::parse_section9_module;
-use evocc_mir::{compile_module_for, compile_module_with, Target, Toolchain};
+use evocc_mir::{Target, Toolchain};
+#[path = "support/frame_variants.rs"]
+mod frame_variants;
+use frame_variants::{compile_module_for, compile_module_with};
 
 // ---------------------------------------------------------------------------
 // The record shapes

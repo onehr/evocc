@@ -20,8 +20,11 @@ use std::process::Command;
 use evocc_evoir::{
     AccessLayout, Block, BlockArg, EffectSummary, Function, FunctionParam, Inst, Module, Value,
 };
-use evocc_mir::{compile_module_with, Toolchain};
+use evocc_mir::Toolchain;
+#[path = "support/frame_variants.rs"]
+mod frame_variants;
 use evocc_types::{AddressSpace, EvoIRType, Region};
+use frame_variants::compile_module_with;
 
 /// One argument's class, in the two spellings the probe needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -464,13 +464,13 @@ fn protected_profiles_decline_all_requested_frame_variants() {
 #[test]
 fn shared_epilogue_label_survives_conditional_branch_relaxation() {
     // Enough dependent, live instructions to force the emitter's second pass.
-    let mut ir = String::from("func @far_exit(%arg0: bits<1>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: bits<1>, %v1: bits<32>, %v2: mem<all>, %v3: world):\n    cond_br %v0, ^b2(%v1, %v2, %v3), ^b1(%v1, %v2, %v3)\n^b1(%v4: bits<32>, %v5: mem<all>, %v6: world):\n");
+    let mut ir = String::from("func @far_exit(%arg0: bits<1>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: bits<1>, %v1: bits<32>, %v2: mem<all>, %v3: world):\n    cond_br %v0, ^b2(%v1, %v2, %v3), ^b1(%v1, %v2, %v3)\n\n^b1(%v4: bits<32>, %v5: mem<all>, %v6: world):\n");
     let mut last = 4;
     for next in 100..5100 {
         ir.push_str(&format!("    %v{next} = add.bits<32> %v{last}, %v{last}\n"));
         last = next;
     }
-    ir.push_str(&format!("    ret %v{last}, %v5, %v6\n^b2(%v7: bits<32>, %v8: mem<all>, %v9: world):\n    ret %v7, %v8, %v9\n}}\n"));
+    ir.push_str(&format!("    ret %v{last}, %v5, %v6\n\n^b2(%v7: bits<32>, %v8: mem<all>, %v9: world):\n    ret %v7, %v8, %v9\n}}\n"));
     let options = with(
         FrameVariants::parse("shared-epilogue").unwrap(),
         &CodegenOptions::default(),

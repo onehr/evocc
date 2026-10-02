@@ -16,7 +16,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use evocc_evoir::parse_section9_module;
-use evocc_mir::{compile_module, Driver, NativeStop, Toolchain};
+use evocc_mir::{Driver, NativeStop, Toolchain};
+#[path = "support/frame_variants.rs"]
+mod frame_variants;
+use frame_variants::compile_module;
 
 #[path = "support/object_capture.rs"]
 mod object_capture;

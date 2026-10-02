@@ -17,7 +17,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use evocc_evoir::parse_section9_module;
-use evocc_mir::{compile_module_for, Driver, NativeStop, Target, Toolchain};
+use evocc_mir::{Driver, NativeStop, Target, Toolchain};
+#[path = "support/frame_variants.rs"]
+mod frame_variants;
+use frame_variants::compile_module_for;
 
 /// The runtime and image the build-environment contract seals.
 const CONTAINER_BIN: &str = "/usr/local/bin/container";

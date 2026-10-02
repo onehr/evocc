@@ -249,8 +249,14 @@ fn compile_module_with_guard_control(
         functions.push(allocated);
     }
     let assembly = crate::emit::emit_linked_module(target, &functions, module, relocation, options);
+    // Requested frame variants are part of the artifact identity; eligibility
+    // and protected profiles may decline them for individual functions. With
+    // every variant off the header is the one before revision 0.56.
+    let frame = options.frame.name().map_or_else(String::new, |name| {
+        format!("// evocc-native-frame={name}\n")
+    });
     Ok(format!(
-        "// evocc-native-ub-checks={}\n{assembly}",
+        "// evocc-native-ub-checks={}\n{frame}{assembly}",
         options.ub_checks.name()
     ))
 }
