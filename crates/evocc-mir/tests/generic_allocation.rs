@@ -2,6 +2,7 @@
 //! No target interpreter, allocation callback or native toolchain is used here.
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use evocc_mir::generic::abi::AbiFacts;
 use evocc_mir::generic::allocation::{
@@ -520,14 +521,21 @@ const TOY_ABI: AbiFacts = AbiFacts {
     ..TINY_ABI
 };
 
-struct TinyTarget {
+struct TinyTarget<'a> {
     abi: &'static AbiFacts,
+    candidate_visits: Option<&'a AtomicUsize>,
 }
 
-const TINY: TinyTarget = TinyTarget { abi: &TINY_ABI };
-const TOY: TinyTarget = TinyTarget { abi: &TOY_ABI };
+const TINY: TinyTarget<'static> = TinyTarget {
+    abi: &TINY_ABI,
+    candidate_visits: None,
+};
+const TOY: TinyTarget<'static> = TinyTarget {
+    abi: &TOY_ABI,
+    candidate_visits: None,
+};
 
-impl AllocationTarget<Class> for TinyTarget {
+impl AllocationTarget<Class> for TinyTarget<'_> {
     fn bank(&self, class: Class) -> RegisterBank {
         RegisterBank {
             first: if class == Class::Pair { 16 } else { 0 },
@@ -535,6 +543,12 @@ impl AllocationTarget<Class> for TinyTarget {
         }
     }
     fn candidates(&self, class: Class, across_call: bool) -> &'static [u8] {
+        if let Some(visits) = self.candidate_visits {
+            assert!(
+                visits.fetch_add(1, Ordering::Relaxed) < 2048,
+                "bounded N03c RED: allocation exceeded 2048 candidate visits"
+            );
+        }
         match (class, across_call) {
             (Class::Pair, false) => &[16, 17],
             (Class::Pair, true) => &[],
@@ -1044,4 +1058,119 @@ fn views_of_one_physical_register_cannot_both_hold_live_values() {
     let mut forged = allocated.clone();
     forged.assignment.insert(1, allocated.assignment[&0]);
     assert!(verify_allocation(&TINY, &forged).is_err());
+}
+
+const SATURATED_ARGUMENTS: [RegisterBank; 2] = [
+    RegisterBank { first: 0, count: 3 },
+    RegisterBank {
+        first: 16,
+        count: 2,
+    },
+];
+const SATURATED_ABI: AbiFacts = AbiFacts {
+    name: "saturated",
+    argument_banks: &SATURATED_ARGUMENTS,
+    ..TINY_ABI
+};
+
+/// Execute only the small preparation sequence, stopping at the call rather
+/// than inventing an external callee. Frame spills and outgoing arguments use
+/// separate maps, as they do in the real frame layout.
+fn prepared_arguments(allocated: &Allocated<Inst, Term, Class>) -> (Vec<u128>, BTreeMap<u32, u64>) {
+    let mut registers = BTreeMap::<u8, u128>::new();
+    let mut spills = BTreeMap::<u32, u64>::new();
+    let mut outgoing = BTreeMap::new();
+    let number = |reg: Reg| allocated.assignment[&reg.id];
+    for inst in &allocated.blocks[0].insts {
+        match inst {
+            Inst::Value(dst, value) => {
+                registers.insert(number(*dst), u128::from(*value));
+            }
+            Inst::Copy(dst, src) => {
+                registers.insert(number(*dst), registers[&number(*src)]);
+            }
+            Inst::Save(src, slot) | Inst::Outgoing(src, slot) => {
+                let words = if matches!(inst, Inst::Save(..)) {
+                    &mut spills
+                } else {
+                    &mut outgoing
+                };
+                for word in 0..src.class.spill_words() {
+                    words.insert(
+                        slot + word,
+                        (registers[&number(*src)] >> (64 * word)) as u64,
+                    );
+                }
+            }
+            Inst::Restore(dst, slot) => {
+                let value = (0..dst.class.spill_words()).fold(0u128, |value, word| {
+                    value | (u128::from(spills[&(slot + word)]) << (64 * word))
+                });
+                registers.insert(number(*dst), value);
+            }
+            Inst::Call { args, .. } => {
+                return (
+                    args.iter().map(|arg| registers[&number(*arg)]).collect(),
+                    outgoing,
+                );
+            }
+            other => panic!("outside the bounded call fixture: {other:?}"),
+        }
+    }
+    panic!("missing call")
+}
+
+#[test]
+fn n03c_saturated_call_banks_preserve_register_and_stack_arguments() {
+    let cases = [
+        (vec![r(0), r(1), r(2), r(3)], vec![1, 2, 3], vec![(0, 4)]),
+        (vec![q(0), q(1), q(2)], vec![1, 2], vec![(0, 3), (1, 0)]),
+        (
+            vec![r(0), q(1), r(2), q(3), r(4), q(5), r(6)],
+            vec![1, 2, 3, 4, 5],
+            vec![(0, 6), (1, 0), (2, 7)],
+        ),
+    ];
+    for (args, expected_registers, expected_stack) in cases {
+        let visits = AtomicUsize::new(0);
+        let target = TinyTarget {
+            abi: &SATURATED_ABI,
+            candidate_visits: Some(&visits),
+        };
+        let mut insts: Vec<_> = args
+            .iter()
+            .enumerate()
+            .map(|(i, reg)| Inst::Value(*reg, i as u64 + 1))
+            .collect();
+        insts.push(Inst::Call {
+            args,
+            results: vec![],
+            opaque: 19,
+        });
+        let source = single(vec![], insts, vec![]);
+        let allocated = allocate(&target, &source).unwrap();
+        verify_allocation(&target, &allocated).unwrap();
+        assert_eq!(
+            prepared_arguments(&allocated),
+            (expected_registers, expected_stack.into_iter().collect())
+        );
+        assert!(visits.load(Ordering::Relaxed) < 2048);
+    }
+}
+
+#[test]
+fn n03c_impossible_local_pressure_refuses_without_recursive_spills() {
+    let visits = AtomicUsize::new(0);
+    let target = TinyTarget {
+        abi: &TINY_ABI,
+        candidate_visits: Some(&visits),
+    };
+    let mut insts: Vec<_> = (0..4).map(|i| Inst::Value(r(i), u64::from(i))).collect();
+    insts.push(Inst::Constraint(Body {
+        inputs: (0..4).map(|i| operand(r(i))).collect(),
+        ..Default::default()
+    }));
+    let error = allocate(&target, &single(vec![], insts, vec![])).unwrap_err();
+    assert!(error.contains("spill"), "{error}");
+    assert!(visits.load(Ordering::Relaxed) < 2048);
 }
