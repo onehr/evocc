@@ -79,6 +79,39 @@ fn small_known_addends_select_existing_immediates_with_exact_wraparound() {
 }
 
 #[test]
+fn malformed_binary_immediates_are_rejected_by_the_public_validator() {
+    for bits in [32, 64] {
+        let (_, original) = lower(&source("add", bits, 19, false));
+        for (op, invalid) in [
+            (BinOp::Add, 4096),
+            (BinOp::Sub, 4097),
+            (BinOp::Add, u64::MAX),
+            (BinOp::Lsl, u64::from(bits)),
+            (BinOp::Lsr, u64::from(bits)),
+            (BinOp::Asr, u64::MAX),
+            (BinOp::Mul, 1),
+            (BinOp::SDiv, 1),
+            (BinOp::UDiv, 1),
+        ] {
+            let mut changed = original.clone();
+            let mut replaced = false;
+            for inst in &mut changed.functions[0].blocks[0].insts {
+                if let MInst::BinaryImm { op: actual, imm, .. } = inst {
+                    *actual = op;
+                    *imm = invalid;
+                    replaced = true;
+                }
+            }
+            assert!(replaced);
+            assert!(
+                evocc_mir::validate_module(&changed).is_err(),
+                "accepted malformed {op:?} bits={bits} immediate={invalid}"
+            );
+        }
+    }
+}
+
+#[test]
 fn nonmatching_operands_do_not_commute_subtraction_or_widen_the_scope() {
     for (op, bits, value, left) in [
         ("sub", 64, 19, true),

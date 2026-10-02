@@ -42,6 +42,52 @@ def replace_one(source: bytes, old: bytes, new: bytes) -> bytes:
     return with_valid_digest(source.replace(old, new, 1))
 
 
+class EncodingDescriptionTest(unittest.TestCase):
+    def source(self):
+        return with_valid_digest(
+            b"version encodings.v1\ntarget aarch64\nsha256 " + b"0" * 64 + b"\n"
+            b"field add_sub unsigned 12\n"
+            b"field memory_unscaled signed 9\n"
+            b"field memory_scaled unsigned 12\n"
+            b"field pair signed 7\n"
+            b"field mov_wide unsigned 16\n"
+            b"field tbz signed 14\n"
+            b"field adr signed 21\n"
+            b"shift add_sub 12\nshift mov_wide 16\n"
+            b"scale tbz 4\nscale adr 1\ninstruction bytes 4\n"
+            b"set memory_bytes 1,2,4,8,16\nset pair_bytes 4,8,16\n"
+            b"set logical_elements 2,4,8,16,32,64\n"
+            b"binary add_sub add,sub\nbinary logical and,orr,eor\n"
+            b"binary shift lsl,lsr,asr\n"
+        )
+
+    def test_encoding_facts_have_one_checked_in_generated_owner(self):
+        source = self.source()
+        self.assertEqual(source, (ROOT / "targets/aarch64/encodings").read_bytes())
+        rendered = gen.render_encodings(gen.parse_encodings(source))
+        self.assertEqual(rendered, (ROOT / "crates/evocc-mir/src/isa/aarch64/encodings.rs").read_text())
+        self.assertTrue(rendered.startswith("// Generated"))
+        for consumer in ["lower.rs", "validate.rs", "emit.rs"]:
+            self.assertIn("encodings::", (ROOT / "crates/evocc-mir/src" / consumer).read_text())
+
+    def test_malformed_encoding_rows_fail_after_digest_rebinding(self):
+        source = self.source()
+        for old, new in [
+            (b"field add_sub unsigned 12", b"field add_sub unsigned 0"),
+            (b"field pair signed 7", b"field pair unsigned 7"),
+            (b"field mov_wide unsigned 16", b"field mov_wide unsigned 65"),
+            (b"scale tbz 4", b"scale tbz 3"),
+            (b"set memory_bytes 1,2,4,8,16", b"set memory_bytes 1,2,2,8,16"),
+            (b"set logical_elements 2,4,8,16,32,64", b"set logical_elements 2,4,8,16,31,64"),
+            (b"binary add_sub add,sub", b"binary add_sub add,mul"),
+            (b"binary shift lsl,lsr,asr", b"binary shift lsl,lsr,add"),
+            (b"field adr signed 21\n", b""),
+            (b"scale adr 1\n", b"scale adr 1\nscale adr 1\n"),
+        ]:
+            with self.subTest(new=new), self.assertRaises(gen.TargetDescriptionError):
+                gen.parse_encodings(with_valid_digest(source.replace(old, new, 1)))
+
+
 class ConstantPatternDescriptionTest(unittest.TestCase):
     def source(self):
         return with_valid_digest(
