@@ -672,6 +672,44 @@ fn ordered_pools_and_boundary_copies_are_the_actual_shared_algorithm() {
     assert_eq!(straight_result(&first, BTreeMap::from([(0, 5)])), vec![8]);
 }
 
+// The initial RED measures the current choice. Wire this one entry point to
+// the explicit opt-in API when the candidate-order implementation exists.
+fn allocate_copy_hints(source: &Function) -> Allocated<Inst, Term, Class> {
+    allocate(&TINY, source).unwrap()
+}
+
+#[test]
+fn n03c_copy_hint_reuses_a_dying_nonfirst_source() {
+    let source = single(
+        vec![r(0), r(1)],
+        vec![
+            Inst::Add(r(3), r(0), r(0)),
+            Inst::Copy(r(2), r(1)),
+            Inst::Add(r(4), r(2), r(2)),
+        ],
+        vec![r(4)],
+    );
+    let off = allocate(&TINY, &source).unwrap();
+    let on = allocate_copy_hints(&source);
+    let moves = |allocated: &Allocated<Inst, Term, Class>| {
+        allocated
+            .blocks
+            .iter()
+            .flat_map(|b| &b.insts)
+            .filter(|inst| matches!(inst, Inst::Copy(..)))
+            .count()
+    };
+    verify_allocation(&TINY, &off).unwrap();
+    verify_allocation(&TINY, &on).unwrap();
+    assert_eq!(moves(&on) + 1, moves(&off), "OFF={off:?}\nON={on:?}");
+    for y in [0, 1, 17, u64::MAX] {
+        let input = BTreeMap::from([(0, 5), (1, u128::from(y))]);
+        let expected = vec![u128::from(y.wrapping_mul(2))];
+        assert_eq!(straight_result(&off, input.clone()), expected);
+        assert_eq!(straight_result(&on, input), expected);
+    }
+}
+
 #[test]
 fn indirect_result_uses_the_target_boundary_register_not_an_argument_slot() {
     let source = single(
