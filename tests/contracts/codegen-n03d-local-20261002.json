@@ -1,0 +1,47 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03d",
+  "slice": "C2: adjacent single-use machine idioms",
+  "date": "2026-10-02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "927e9512",
+  "authority": ["docs/codegen-quality-plan.md sections 4a, 5, 10 and 11", "docs/target-spec.md sections 2-6", "docs/evomir-spec.md sections 4 and 8"],
+  "observed_red": "The current driver emits separate LSL+ADD for x+(y<<3), MUL+ADD for x+y*z, SXTB+ADD for x+y and LSL+ADD+LDR for p[i]. N01 ranks addressing, compute, moves and extensions after the completed constant/frame slices. These examples establish missed idioms, not a measured TU savings promise.",
+  "scope": {
+    "included": "Emission-only composition of adjacent, already allocated instructions: constant shift plus integer ADD/SUB/AND/ORR/EOR or CMP; sign/zero extension plus ADD/SUB or CMP; MUL plus ADD/SUB; X-width ADD plus a nonvolatile scalar Load/Store at offset zero, optionally preceded by a legal LSL index. Existing MIR, allocation, verifier, EvoIR and interpreter semantics are unchanged.",
+    "excluded": "Non-adjacent motion, CFG rewrites, SIMD accesses, atomic/volatile access fusion, inline assembly, relocation arithmetic, guard deletion/folding, new MIR opcodes, multiply-negate algebra, general result constant folding, post/pre-index writeback. Other N03d opportunities remain open for a separate measured disposition.",
+    "admission": "Each eliminated temporary has exactly one definition and one explicit use in the entire allocated function, including arguments, terminators, spill and assembly operands. Width/class and count bounds are checked before emission. All surviving inputs refer to their pre-sequence physical values; if a removed definition overwrites a distinct surviving input, decline. No other instruction, guard or effect may lie inside the sequence.",
+    "state_relation": "Preserve final result bits, every live value, NZCV except the original CMP result, and the original single memory access including width/alignment/address. Dead temporary physical contents need not agree. No scratch register or memory access is added.",
+    "default": "OFF. Kernel markers and explicit frame-pointer requests suppress all new choices, as for C1 and N03f. Default admission remains separate."
+  },
+  "interface": {
+    "driver": "Extend --isel-opt to a duplicate-free list containing constants and local. Canonical header order is constants,local. Existing constants-only and OFF spelling remain byte-identical. The exact IR adapter and existing native-test hook use the same parser.",
+    "patterns": "Extend the existing targets/aarch64/patterns and costs plus their generator, not a new DSL or registry. Generated rows enumerate each admitted sequence family, widths, shifts and state contract. Costs select no semantic rule.",
+    "telemetry": "An optional development adapter report counts observed adjacent candidates, selected sequences, eliminated instructions and declined reasons. It does not mutate input IR, emit certificates or expand acceptance; existing S1/N01 tools measure actual objects."
+  },
+  "red": [
+    "Real-driver fixtures for W/X shifted arithmetic, sign extension, multiply-add/subtract, shifted/unshifted indexed load/store and CMP with ordered flags.",
+    "Multi-use and multiply-defined temporaries, cross-block/terminator uses, physical alias collisions, width mismatch, shift count equal to width and SUB/CMP operand reversal must decline.",
+    "Memory negatives: nonzero offset, volatile, atomic, SIMD and strict-alignment byte-expansion paths; store value aliasing a removed temporary.",
+    "Protected profiles, invalid/duplicate option lists and constants/frame interactions; OFF exact output.",
+    "Native before/after execution with boundary/random inputs and NZCV sentinels; both OS assemblers; existing MIR/interpreter/native corpora and independent allocation verifier unchanged."
+  ],
+  "acceptance": {
+    "baseline": "Reuse C1's committed OFF receipts and per-case hashes. Retired payloads are rebuilt only as needed, never relabeled. OFF objects must match those hashes exactly.",
+    "native": "384 Darwin and 384 sealed Linux cases ON/OFF, identical object twins and matching execution. Focused cases must actually exercise every admitted family and negative boundary.",
+    "six_units": "Freeze six-unit A/B plans before running them: OFF regression, local-only and cumulative frame+constants+local; checked/unchecked separately, same verified IR/chain/bundle, original selected-TU harnesses, zero completed proof rejections or bundle failures. Prior opaque/source-bridge limits remain.",
+    "bounds": "No measured object text or text+rodata growth; compile median at most 1.25x matched OFF; interpreter steps and outputs unchanged. Use S1/N01 category totals and retain per-family selection counts; do not credit these gains to EqSat.",
+    "gates": ["CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline", "focused Rust and touched Python tests", "python3 tools/generate-target.py --check", "python3 tools/render-status.py --todo"],
+    "stop": "Repair or decline a faulty family rather than broaden admission. If eligible counts or savings are zero, freeze that result; do not claim closure of unexamined N03d/N07 work."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "cargo_and_native_serial": true,
+    "retention": "Keep summaries, hashes and minimal reproducers. Retire intermediate objects after measurement; no full disassembly retention, new target/workspace/kernel tree or VM disk. Record evidence/cache net delta; protect open evidence and Lean cache."
+  },
+  "claim_ceiling": "Opt-in local emission idioms tested on the frozen population. Not a new semantic domain, verified EqSat benefit, proved backend, default/kernel/full-application/latency acceptance or the completion of N03d/N07."
+}

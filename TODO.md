@@ -2409,6 +2409,10 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     flip and no 1.4x claim. Retired completed object payloads, retained receipts.
     Addressing, shifted operands, compare/select and extension opportunities
     remain part of N03d after C1; no closure is inferred from this plan.
+    C2 is now frozen in [the local-selection plan](tests/contracts/codegen-n03d-local-20261002.json):
+    adjacent single-use shift/extension/multiply and indexed-memory idioms,
+    emission only, default OFF. Real-driver RED fixtures precede implementation;
+    no C2 acceptance or size result is recorded yet.
 
   - [x] **N03e — EvoIR mid-level passes, bounded first slice** — `DONE_NEGATIVE`, P3.
     GVN/CSE, SCCP, dead-code elimination and simple loop-invariant motion on
