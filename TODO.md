@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-10-02**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.116** and EvoMIR **0.55**. This is the Git-tracked execution backlog,
+EvoIR **1.9.116** and EvoMIR **0.59**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -2392,6 +2392,12 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     bounded synthetic RED, saturated call-preparation repair and refusal of
     recursive spill-temporary expansion. No copy preference or size claim;
     the historical multi-GiB reproducer must not be rerun unbounded.
+    RED `74473d62` reached the test-only 2,048-visit limit in both cases.
+    The repair now passes all 59 tests in the six focused allocator/ABI/SSA
+    suites, including successful saturated scalar/wide/mixed call setup and
+    finite refusal of impossible local pressure. Full workspace, both native
+    corpora and six-TU historical hash comparisons remain pending; T1 is not
+    closed and no broader allocation improvement is claimed.
 
   - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
     Addressing modes, immediates, shifted operands, conditional select and

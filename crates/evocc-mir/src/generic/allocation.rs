@@ -175,6 +175,7 @@ where
     });
     let (mut current, pins, outgoing) = pin_boundaries(target, function, &mut next)?;
     let mut slots: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut spillable: Option<BTreeSet<u32>> = None;
     for _ in 0..64 {
         match scan(target, &current, &pins) {
             Ok(mut assignment) => {
@@ -204,6 +205,33 @@ where
                 });
             }
             Err(victims) => {
+                // Splitting a value creates the short local ranges needed to
+                // reload/use and define/store it. Spilling those ranges again
+                // cannot make an overconstrained use fit; it recursively grows
+                // spill code. Snapshot the pre-rewrite values only on the first
+                // failure, and require every retry to remove a new one.
+                let remaining = spillable.get_or_insert_with(|| {
+                    current
+                        .blocks
+                        .iter()
+                        .flat_map(|block| {
+                            block
+                                .insts
+                                .iter()
+                                .flat_map(|inst| inst.uses().into_iter().chain(inst.defs()))
+                                .chain(block.term.uses())
+                                .chain(block.term.defs())
+                        })
+                        .map(|reg| reg.id)
+                        .collect()
+                });
+                let victims: Vec<_> = victims
+                    .into_iter()
+                    .filter(|value| remaining.remove(value))
+                    .collect();
+                if victims.is_empty() {
+                    return Err("the allocator cannot place an unspillable spill temporary".into());
+                }
                 for victim in &victims {
                     let next_slot = u32::try_from(slots.len()).unwrap_or(u32::MAX);
                     slots.entry(*victim).or_insert(next_slot);
@@ -494,12 +522,14 @@ where
     // the destination of a record result and uses its indirect-result location.
     let indirect = indirect_result.then(|| args.len().saturating_sub(1));
     let mut moved = Vec::new();
+    let mut preparation = Vec::new();
+    let mut stack_classes = Vec::new();
     let mut cursor = ArgumentCursor::new(target.abi().argument_banks);
     for (position, arg) in args.iter().enumerate() {
         if indirect == Some(position) {
             let outgoing = fresh(next, arg.class);
             pins.insert(outgoing.id, target.abi().indirect_result);
-            insts.push(I::copy(outgoing, *arg));
+            preparation.push((I::copy(outgoing, *arg), false));
             moved.push(outgoing);
             continue;
         }
@@ -507,14 +537,31 @@ where
         // from the caller's stack pointer at the call.
         let location = place(&mut cursor, arg.class);
         if let Err(slot) = location {
-            insts.push(I::outgoing_arg(*arg, slot));
+            preparation.push((I::outgoing_arg(*arg, slot), true));
+            stack_classes.push(arg.class);
             *outgoing_slots = (*outgoing_slots).max(cursor.stack_words());
             continue;
         }
         let outgoing = fresh(next, arg.class);
         pins.insert(outgoing.id, location.unwrap());
-        insts.push(I::copy(outgoing, *arg));
+        preparation.push((I::copy(outgoing, *arg), false));
         moved.push(outgoing);
+    }
+    let pinned: BTreeSet<_> = moved.iter().map(|reg| pins[&reg.id]).collect();
+    let saturated = stack_classes.iter().any(|class| {
+        let candidates = target.candidates(*class, false);
+        !candidates.is_empty() && candidates.iter().all(|number| pinned.contains(number))
+    });
+    if saturated {
+        // A late outgoing reload needs a register before the call consumes
+        // its fixed operands. Store the already-evaluated stack arguments
+        // before occupying the entire pool with argument pins. Both internal
+        // orders and all ABI offsets remain unchanged.
+        let (stores, copies): (Vec<_>, Vec<_>) =
+            preparation.into_iter().partition(|(_, stack)| *stack);
+        insts.extend(stores.into_iter().chain(copies).map(|(inst, _)| inst));
+    } else {
+        insts.extend(preparation.into_iter().map(|(inst, _)| inst));
     }
     let mut outputs = Vec::new();
     let mut cursor = ArgumentCursor::new(target.abi().result_banks);

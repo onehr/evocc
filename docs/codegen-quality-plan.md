@@ -401,7 +401,7 @@ sections above remain the contract.
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
 | N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
 | N03d | C1 closed opt-in; C2 closed with compile-bound miss, not admitted; remaining selection patterns open | [C1](notebook/codegen-constants-20261002.md), [C2 result](notebook/codegen-local-selection-20261002.md), [C2 receipt](../tests/contracts/codegen-n03d-c2-20261002-receipt.json): full workspace 3,018/0/5 ignored, native and size controls green; local-only B checked zstd-compress compile median 1.7977x OFF exceeds 1.25x. Negative result frozen, no default flip. |
-| N03c | Not started | Includes the recorded bounded-termination repair |
+| N03c | T1 bounded-progress repair implemented; acceptance pending | [Plan](../tests/contracts/codegen-n03c-termination-20261002.json); bounded RED `74473d62`, 59 focused tests pass. Full workspace/native/six-TU identity pending; broader allocation improvements remain open. |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Not started | Steps 1–3 landed inside N03a |
 | N06 | Not scheduled | |

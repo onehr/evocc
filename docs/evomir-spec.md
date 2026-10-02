@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 0.58** | **Authoritative reference** | **2026-10-02**
+**Revision 0.59** | **Authoritative reference** | **2026-10-02**
 
 Local-emission addendum (revision 0.58, N03d C2): `--isel-opt=local` is an
 optional composition of adjacent allocated instructions, OFF by default.
@@ -1201,6 +1201,19 @@ stable digest. Physical allocation performs no coalescing beyond removing a
 move whose two operands got the same register; the preceding identical-value
 SSA transport reduction is independent of physical locations.
 
+**Bounded spill progress (revision 0.59).** The implementation retains its
+64-retry ceiling. Spill-rewrite temporaries are not recursively spillable:
+each retry must spill at least one previously unspilled value from before the
+first rewrite. If no such victim remains, allocation refuses instead of
+expanding reload/store code again. This is a fail-closed implementation limit,
+not a proof that every refused function has no possible allocation. It does
+not relax the independent output verifier or change instruction semantics.
+When call-argument pins exhaust a stack argument's entire candidate pool,
+the already-evaluated outgoing stack arguments are stored before those
+fixed-register copies. Store order, copy order, offsets and call bindings
+remain unchanged; no instruction moves outside that call's generated
+preparation sequence. Nonsaturated preparations retain their prior order.
+
 The output is verified, not trusted (Section 9): every physical register
 read is defined on every path, no two simultaneously live values share a
 register, and every `flags` producer is adjacent to its consumer.
@@ -1490,6 +1503,7 @@ entry:
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.59 | 2026-10-02 | Require progress when rewriting spills; refuse recursive spill-temporary expansion and prepare saturated-bank stack arguments before fixed copies. No instruction, ABI-layout or interpreter semantics change. |
 | 0.58 | 2026-10-02 | Opt-in adjacent single-use shift, extension, product and indexed-access emission; preserve live state, flags, access order and all protected/default paths. No MIR or interpreter operation added. |
 | 0.54 | 2026-09-28 | Select existing immediate-zero pointer equality for direct null definitions; preserve identity and repair typed null-pointer stores in MIR interpretation without admitting nonzero raw provenance or integer-store pointer fragments. |
 | 0.53 | 2026-09-28 | Select unshifted immediate full-register comparisons with correct reversed relations; independently reject malformed imm12 values, preserving flags adjacency, source evaluation, guards and nonmatching paths. |
