@@ -240,7 +240,7 @@ where
                 format!("%v{value} is live when the function is entered and was never assigned"),
             ));
         };
-        if allocated.indirect_result && number == target.indirect_result_register() {
+        if allocated.indirect_result && number == target.abi().indirect_result {
             if entry.insert(number, Some(*value)).is_some() {
                 return Err(refuse(
                     0,
@@ -252,7 +252,8 @@ where
             continue;
         }
         if !target
-            .argument_banks()
+            .abi()
+            .argument_banks
             .iter()
             .any(|bank| bank.contains(number) && number - bank.first < limit.min(bank.count))
         {
@@ -460,7 +461,7 @@ fn apply<I, C, A>(
     A: AllocationTarget<C>,
 {
     if inst.is_call() {
-        for number in target.call_clobbers() {
+        for number in target.abi().call_clobbers {
             state.remove(number);
         }
     }

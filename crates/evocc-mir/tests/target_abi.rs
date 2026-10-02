@@ -106,8 +106,9 @@ fn darwin_and_linux_differ_only_in_their_existing_rules() {
     // stack arguments. Only Linux rounds a 16-aligned record to an even pair.
     frozen("darwin", false, false, &DARWIN);
     frozen("linux", true, true, &LINUX);
-    assert!(std::ptr::eq(Target::Darwin.abi(), &DARWIN));
-    assert!(std::ptr::eq(Target::Linux.abi(), &LINUX));
+    assert_eq!(Target::Darwin.abi(), &DARWIN);
+    assert_eq!(Target::Linux.abi(), &LINUX);
+    assert_ne!(DARWIN, LINUX);
     assert_eq!(abi::machine_result_registers(0), 8);
     assert_eq!(abi::machine_result_registers(1), 8);
 }

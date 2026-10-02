@@ -1,7 +1,7 @@
 //! Target compatibility entry points and allocated AArch64 text rendering.
 //!
-//! Allocation policy and spill rewriting live in generic::allocation. The
-//! remaining argument-layout cursor is shared with lowering until step 3.
+//! Allocation policy and spill rewriting live in generic::allocation; argument
+//! placement uses the shared cursor of generic::abi over the selected ABI.
 
 #[cfg(test)]
 use std::cmp::Reverse;
@@ -31,47 +31,6 @@ pub use crate::isa::aarch64::regfile::SCRATCH;
 /// halves are callee saved. Live-across-call vectors spill at full width.
 pub use crate::isa::aarch64::regfile::{SIMD_BASE, SIMD_CALLER_SAVED, SIMD_SCRATCH};
 
-/// Independent integer and SIMD argument banks share one stack cursor.
-#[derive(Default)]
-pub(crate) struct ArgumentCursor {
-    general: u8,
-    simd: u8,
-    stack: u32,
-}
-
-impl ArgumentCursor {
-    pub(crate) fn extent(&self) -> (u8, u8, u64) {
-        (self.general, self.simd, u64::from(self.stack) * 8)
-    }
-    /// Once the GPR bank is exhausted, alignment is relative to the shared
-    /// stack cursor, which may already include spilled SIMD arguments.
-    pub(crate) fn general_pair_padding(&self) -> usize {
-        if self.general < 8 {
-            usize::from(self.general % 2)
-        } else {
-            (self.stack % 2) as usize
-        }
-    }
-    pub(crate) fn place(&mut self, class: RegClass) -> Result<u8, u32> {
-        let (next, base) = if class.is_simd() {
-            (&mut self.simd, SIMD_BASE)
-        } else {
-            (&mut self.general, 0)
-        };
-        if *next < 8 {
-            let number = base + *next;
-            *next += 1;
-            Ok(number)
-        } else {
-            let words = if class == RegClass::Simd128 { 2 } else { 1 };
-            self.stack = self.stack.next_multiple_of(words);
-            let slot = self.stack;
-            self.stack += words;
-            Err(slot)
-        }
-    }
-}
-
 /// The existing public allocated representation, specialized without conversion.
 pub type Allocated = crate::generic::allocation::Allocated<MInst, MTerm, RegClass>;
 
@@ -79,14 +38,19 @@ pub fn allocate(function: &MFunction) -> Result<Allocated, String> {
     allocate_for(Target::Darwin, function)
 }
 
-/// Platform-specific source admission still occurs before the shared allocator.
-pub fn allocate_for(_target: Target, function: &MFunction) -> Result<Allocated, String> {
-    crate::generic::allocation::allocate(&Aarch64Allocation, function)
+/// Platform-specific source admission still occurs before the shared allocator,
+/// which places boundary values with the target's own ABI table.
+pub fn allocate_for(target: Target, function: &MFunction) -> Result<Allocated, String> {
+    crate::generic::allocation::allocate(&Aarch64Allocation::for_target(target), function)
 }
 
 #[cfg(test)]
 fn scan(function: &MFunction, pins: &BTreeMap<u32, u8>) -> Result<BTreeMap<u32, u8>, Vec<u32>> {
-    crate::generic::allocation::scan(&Aarch64Allocation, function, pins)
+    crate::generic::allocation::scan(
+        &Aarch64Allocation::for_target(Target::Darwin),
+        function,
+        pins,
+    )
 }
 
 #[cfg(test)]

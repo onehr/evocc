@@ -11,6 +11,8 @@ use std::fmt::Write as _;
 
 use evocc_evoir::{GlobalObject, GlobalVisibility, Linkage, Module, SymbolAlias};
 
+use crate::generic::frame::{FrameObject, FrameRequest, ObjectLifetime};
+use crate::isa::aarch64::abi::{general_bank, vector_bank, Aarch64Abi, KERNEL};
 use crate::isa::aarch64::regfile::{
     self, FRAME_POINTER_X, LINK_REGISTER_X, SCRATCH_UNIT_W, SCRATCH_UNIT_X, SCRATCH_W, SCRATCH_X,
     SIMD_SCRATCH_D, SIMD_SCRATCH_UNIT_V, SIMD_SCRATCH_V, STACK_POINTER, ZERO_GPR32, ZERO_GPR64,
@@ -94,14 +96,11 @@ pub struct Frame {
     /// registers its named parameters consumed, and the area's offset above
     /// `sp`.
     ///
-    /// The 64-byte general-register area is followed by the 128-byte vector
-    /// area. Both sit above outgoing arguments and below every spill.
+    /// Section 6: the general-register area is "64-byte, 16-byte-aligned" and
+    /// is followed by the 128-byte vector area; both sizes are the ABI table's.
+    /// Both sit above outgoing arguments and below every spill.
     pub register_save: Option<(u8, u64)>,
 }
-
-/// Section 6: the area is "64-byte, 16-byte-aligned".
-const REGISTER_SAVE_BYTES: u64 = 64;
-const VECTOR_SAVE_BYTES: u64 = 128;
 
 const fn align_up(value: u64, alignment: u64) -> u64 {
     if alignment == 0 {
@@ -111,28 +110,15 @@ const fn align_up(value: u64, alignment: u64) -> u64 {
     }
 }
 
-#[derive(Clone, Copy)]
-struct LocalAccess {
-    block: usize,
-    first: usize,
-    last: usize,
-}
-
-impl LocalAccess {
-    fn overlaps(self, other: Self) -> bool {
-        self.block == other.block && self.first <= other.last && other.first <= self.last
-    }
-}
-
 /// This is physical storage reuse, not an object/lifetime transformation.
 /// Only a uniquely defined address used directly for bounded, nonvolatile
 /// memory accesses in its defining block qualifies. Copies, calls, spills,
 /// pointer arithmetic and edge transport conservatively retain separate bytes.
-fn private_object_accesses(allocated: &Allocated) -> BTreeMap<u64, LocalAccess> {
+fn private_object_accesses(allocated: &Allocated) -> BTreeMap<u64, ObjectLifetime> {
     struct Candidate {
         origin: u64,
         size: u64,
-        access: LocalAccess,
+        access: ObjectLifetime,
         safe: bool,
     }
     let mut candidates = BTreeMap::<u32, Candidate>::new();
@@ -150,7 +136,7 @@ fn private_object_accesses(allocated: &Allocated) -> BTreeMap<u64, LocalAccess> 
                     .or_insert(Candidate {
                         origin: *origin,
                         size: *size,
-                        access: LocalAccess {
+                        access: ObjectLifetime {
                             block,
                             first: index,
                             last: index,
@@ -221,10 +207,20 @@ fn private_object_accesses(allocated: &Allocated) -> BTreeMap<u64, LocalAccess> 
         .collect()
 }
 
-/// Compute the Section 6 layout of one allocated function.
+/// Compute the Section 6 layout of one allocated function under the Darwin
+/// ABI table, as `allocate` does.
 #[must_use]
 pub fn frame_of(allocated: &Allocated) -> Frame {
-    let mut automatic: Vec<(u64, u64, u64)> = Vec::new();
+    frame_of_for(Target::Darwin, allocated)
+}
+
+/// Compute the Section 6 layout of one allocated function under `target`'s
+/// ABI table. The shared frame driver places every area; this adapter only
+/// collects the AArch64 frame objects, save request and preserved vectors.
+#[must_use]
+pub fn frame_of_for(target: Target, allocated: &Allocated) -> Frame {
+    let abi = &target.abi().facts;
+    let mut objects = Vec::new();
     for block in &allocated.blocks {
         for inst in &block.insts {
             if let MInst::FrameSlot {
@@ -234,123 +230,66 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
                 ..
             } = inst
             {
-                automatic.push((*origin, *size, u64::from(*align)));
+                objects.push(FrameObject {
+                    origin: *origin,
+                    size: *size,
+                    align: u64::from(*align),
+                });
             }
         }
     }
-    automatic.sort_unstable();
-    automatic.dedup();
-    let alignment = automatic
-        .iter()
-        .map(|(_, _, align)| *align)
-        .max()
-        .unwrap_or(16)
-        .max(16);
 
-    let spill_bytes = u64::from(allocated.frame_slots) * 8;
-
-    // Section 6's frame layout puts "outgoing stack arguments (Linux only,
-    // revision 0.10)" last, which is lowest, so every other slot sits above
-    // the area and a call writes its arguments at `[sp, #8 * i]`.
-    let outgoing = allocated.outgoing;
-
-    // Section 6's two save areas are adjacent and sixteen-byte aligned.
-    let named = allocated.blocks.iter().find_map(|block| {
+    // Section 6's two variadic save areas are adjacent and aligned.
+    let variadic_named = allocated.blocks.iter().find_map(|block| {
         block.insts.iter().find_map(|inst| match inst {
             MInst::VaSaveArea { named } => Some(*named),
             _ => None,
         })
     });
-    let register_save = named.map(|named| (named, align_up(outgoing, 16)));
-    let above_save = register_save.map_or(outgoing, |(_, base)| {
-        base + REGISTER_SAVE_BYTES + VECTOR_SAVE_BYTES
-    });
 
-    let mut spills = BTreeMap::new();
-    for index in 0..allocated.frame_slots {
-        spills.insert(index, above_save + u64::from(index) * 8);
-    }
+    // Clobbered vector registers whose low 64 bits the ABI preserves.
+    let partially_preserved: BTreeSet<u8> =
+        allocated
+            .blocks
+            .iter()
+            .flat_map(|block| {
+                block
+                    .insts
+                    .iter()
+                    .filter_map(|inst| match inst {
+                        MInst::Asm(body) => Some(body),
+                        _ => None,
+                    })
+                    .chain(match &block.term {
+                        MTerm::AsmGoto { body, .. } => Some(body),
+                        _ => None,
+                    })
+                    .flat_map(|body| body.clobbers.iter())
+                    .filter_map(|clobber| match clobber {
+                        AsmClobber::VectorRegister(number)
+                            if regfile::SIMD_BASE.checked_add(*number).is_some_and(
+                                |physical| abi.partially_preserved.contains(&physical),
+                            ) =>
+                        {
+                            Some(*number)
+                        }
+                        _ => None,
+                    })
+            })
+            .collect();
 
-    // "one slot per `frame.slot` (its declared size, rounded to its declared
-    // alignment, laid out in origin order from the top of the frame
-    // downward)": walking the origins in reverse from the bottom of the area
-    // upward puts the lowest origin highest, which is that order, and gives
-    // each object an offset its own alignment divides. An object placed by
-    // subtracting its rounded size from the top instead would land wherever
-    // the object above it left the cursor, which is what the campaign's first
-    // assembler refusal was.
-    let mut slots = BTreeMap::new();
-    let mut cursor = above_save + spill_bytes;
-    let private = private_object_accesses(allocated);
-    // Keep each origin's logical entry. Only identical physical layouts whose
-    // closed access intervals cannot overlap may use the same bytes. Escaping
-    // objects never enter this pool, even when their last explicit use is early.
-    let mut reusable = BTreeMap::<(u64, u64), Vec<(u64, Vec<LocalAccess>)>>::new();
-    for (origin, object, align) in automatic.iter().rev() {
-        let access = private.get(origin).copied();
-        let pool = reusable.entry((*object, *align)).or_default();
-        if let Some(access) = access {
-            if let Some((offset, intervals)) = pool
-                .iter_mut()
-                .find(|(_, intervals)| intervals.iter().all(|other| !access.overlaps(*other)))
-            {
-                slots.insert(*origin, *offset);
-                intervals.push(access);
-                continue;
-            }
-        }
-        cursor = align_up(cursor, (*align).max(1));
-        slots.insert(*origin, cursor);
-        if let Some(access) = access {
-            pool.push((cursor, vec![access]));
-        }
-        cursor += *object;
-    }
-
-    // Section 6 addresses "every slot (object, spill, save area) ... from `sp`
-    // with a non-negative scaled offset", and an eight-byte transfer scales by
-    // eight, so the save area starts on an eight-byte boundary whatever the
-    // objects below it needed.
-    let saved_base = align_up(cursor, 8);
-    let saved_bytes = allocated.used_callee_saved.len() as u64 * 8;
-    let vectors: BTreeSet<u8> = allocated
-        .blocks
-        .iter()
-        .flat_map(|block| {
-            block
-                .insts
-                .iter()
-                .filter_map(|inst| match inst {
-                    MInst::Asm(body) => Some(body),
-                    _ => None,
-                })
-                .chain(match &block.term {
-                    MTerm::AsmGoto { body, .. } => Some(body),
-                    _ => None,
-                })
-                .flat_map(|body| body.clobbers.iter())
-                .filter_map(|clobber| match clobber {
-                    AsmClobber::VectorRegister(number)
-                        if regfile::SIMD_LOW64_PRESERVED_INDICES.contains(number) =>
-                    {
-                        Some(*number)
-                    }
-                    _ => None,
-                })
-        })
-        .collect();
-    let vector_base = saved_base + saved_bytes;
-    let saved_vectors: BTreeMap<u8, u64> = vectors
-        .into_iter()
-        .enumerate()
-        .map(|(index, number)| (number, vector_base + index as u64 * 8))
-        .collect();
-    let size = align_up(vector_base + saved_vectors.len() as u64 * 8, alignment) + alignment - 16;
-
-    let mut saved = BTreeMap::new();
-    for (index, number) in allocated.used_callee_saved.iter().enumerate() {
-        saved.insert(*number, saved_base + index as u64 * 8);
-    }
+    let layout = crate::generic::frame::layout(
+        abi,
+        &FrameRequest {
+            objects,
+            private: private_object_accesses(allocated),
+            spill_slots: allocated.frame_slots,
+            outgoing: allocated.outgoing,
+            variadic_named,
+            callee_saved: allocated.used_callee_saved.clone(),
+            partially_preserved,
+        },
+    );
 
     Frame {
         unwind_tables: false,
@@ -364,14 +303,14 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
                 .iter()
                 .any(|inst| matches!(inst, MInst::StackAlloc { .. }))
         }),
-        size,
-        alignment,
-        saved,
-        saved_vectors,
-        spills,
-        slots,
-        outgoing,
-        register_save,
+        size: layout.size,
+        alignment: layout.alignment,
+        saved: layout.saved,
+        saved_vectors: layout.partially_saved,
+        spills: layout.spills,
+        slots: layout.slots,
+        outgoing: layout.outgoing,
+        register_save: layout.register_save,
     }
 }
 
@@ -1219,14 +1158,15 @@ fn emit_function(
     options: &CodegenOptions,
     stack_protect: bool,
 ) {
-    let mut frame = frame_of(allocated);
+    let abi = target.abi();
+    let mut frame = frame_of_for(target, allocated);
     frame.unwind_tables = options.unwind_tables;
     frame.sign_returns = options.sign_returns;
     frame.strict_alignment = options.strict_alignment;
     frame.general_registers_only = options.general_registers_only;
     if stack_protect {
         frame.stack_guard = Some((frame.size, options.stack_guard.clone()));
-        frame.size += 16;
+        frame.size += KERNEL.stack_guard_slot_bytes;
     }
     let prefix = target.symbol_prefix();
     // Section 8 (revision 0.16): "An EvoIR function or global whose
@@ -1265,7 +1205,7 @@ fn emit_function(
     for _ in before..total {
         text.push_str("    nop\n");
     }
-    emit_prologue(text, &frame);
+    emit_prologue(text, &frame, abi);
 
     // Appendix A's width suffix, not the operand's declared class, decides how
     // an operand of a two-width form is spelled: the assembler admits only one
@@ -1414,7 +1354,7 @@ fn emit_blocks(
     }
 }
 
-fn emit_prologue(text: &mut String, frame: &Frame) {
+fn emit_prologue(text: &mut String, frame: &Frame, abi: &Aarch64Abi) {
     if frame.sign_returns {
         let _ = writeln!(text, "    paciasp");
         if frame.unwind_tables {
@@ -1482,12 +1422,13 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
     // `8 * k` to `56` in the prologue". Nothing before this point writes an
     // argument register, so the incoming anonymous arguments are still there.
     if let Some((named, base)) = frame.register_save {
-        for number in named..8 {
+        let general = abi.facts.argument_banks[general_bank()].count;
+        for number in named..general {
             emit_frame_access(
                 text,
                 "str",
                 &format!("{}{number}", regfile::GPR64_VIEW.prefix),
-                base + u64::from(number) * 8,
+                base + u64::from(number) * abi.general_save_bytes(),
                 frame,
             );
         }
@@ -1501,15 +1442,16 @@ fn emit_prologue(text: &mut String, frame: &Frame) {
                 "add",
                 SCRATCH_X,
                 STACK_POINTER,
-                base + REGISTER_SAVE_BYTES,
+                base + abi.general_save_area_bytes(),
             );
             let prefix = regfile::SIMD128_VIEW.prefix;
-            for number in (0..8).step_by(2) {
+            let vectors = abi.facts.argument_banks[vector_bank()].count;
+            for number in (0..vectors).step_by(2) {
                 let _ = writeln!(
                     text,
                     "    stp {prefix}{number}, {prefix}{}, [{SCRATCH_X}, #{}]",
                     number + 1,
-                    number * 16
+                    u64::from(number) * abi.vector_save_bytes()
                 );
             }
         }
@@ -2656,12 +2598,13 @@ fn emit_inst(
         // incoming stack slot)" and `gr_top` is "save area + 64".
         MInst::FrameAddress { dst, place } => match place {
             crate::FramePlace::IncomingStack => {
-                emit_add_immediate(text, "add", &name(*dst), FRAME_POINTER_X, 16);
+                let offset = target.abi().facts.incoming_argument_offset(0);
+                emit_add_immediate(text, "add", &name(*dst), FRAME_POINTER_X, offset);
             }
             crate::FramePlace::RegisterSaveTop => {
                 let top = frame
                     .register_save
-                    .map_or(0, |(_, base)| base + REGISTER_SAVE_BYTES);
+                    .map_or(0, |(_, base)| base + target.abi().general_save_area_bytes());
                 emit_frame_address(text, &name(*dst), top, frame);
             }
             // Section 5's activation-address rows (revision 0.17). The
@@ -2819,7 +2762,7 @@ fn emit_inst(
         // the prologue saves the pair first", and the caller writes its own
         // at increasing addresses from the `sp` it calls with.
         MInst::IncomingArg { dst, slot } => {
-            let offset = 16 + u64::from(*slot) * 8;
+            let offset = target.abi().facts.incoming_argument_offset(*slot);
             let _ = writeln!(
                 text,
                 "    ldr {}, [{FRAME_POINTER_X}, #{offset}]",
@@ -2827,7 +2770,7 @@ fn emit_inst(
             );
         }
         MInst::OutgoingArg { src, slot } => {
-            let offset = u64::from(*slot) * 8;
+            let offset = target.abi().facts.outgoing_argument_offset(*slot);
             let _ = writeln!(text, "    str {}, [{STACK_POINTER}, #{offset}]", name(*src));
         }
         MInst::Asm(body) => emit_assembly(text, target, body, &[], function, spell),

@@ -16,6 +16,8 @@ use evocc_mir::generic::ssa::{SsaInst, SsaTerm};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Class {
     Word,
+    /// A narrower view of the same physical registers as `Word`.
+    Half,
     Pair,
     Condition,
 }
@@ -48,6 +50,9 @@ fn r(id: u32) -> Reg {
 }
 fn q(id: u32) -> Reg {
     Reg::new(id, Class::Pair)
+}
+fn h(id: u32) -> Reg {
+    Reg::new(id, Class::Half)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -497,7 +502,7 @@ const TINY_ABI: AbiFacts = AbiFacts {
 
 /// Unequal per-bank counts, four-byte slots and 32-byte stack alignment.
 const TOY_ARGUMENTS: [RegisterBank; 2] = [
-    RegisterBank { first: 0, count: 3 },
+    RegisterBank { first: 0, count: 2 },
     RegisterBank {
         first: 16,
         count: 1,
@@ -968,26 +973,43 @@ fn stack_slots(allocated: &Allocated<Inst, Term, Class>) -> (Vec<u32>, Vec<u32>)
 
 #[test]
 fn boundary_driver_follows_the_toy_abi_counts_slots_and_alignment() {
-    let source = single(
-        vec![r(0), r(1), r(2), r(3), q(4), q(5)],
+    // Two general and one pair argument register: the third general value
+    // takes stack word 0, and the second pair piece aligns the shared stack
+    // cursor to word 2 before taking two words.
+    let entry = single(
+        vec![r(0), r(1), r(2), q(3), q(4)],
+        vec![Inst::Add(r(5), r(0), r(2))],
+        vec![r(5)],
+    );
+    let toy = allocate(&TOY, &entry).unwrap();
+    verify_allocation(&TOY, &toy).unwrap();
+    assert_eq!(stack_slots(&toy), (vec![0, 2], vec![]));
+    let tiny = allocate(&TINY, &entry).unwrap();
+    verify_allocation(&TINY, &tiny).unwrap();
+    assert_eq!(stack_slots(&tiny), (vec![0], vec![]));
+
+    let call = single(
+        vec![],
         vec![
+            Inst::Value(r(0), 1),
+            Inst::Value(r(1), 2),
+            Inst::Value(r(2), 3),
+            Inst::Value(q(3), 4),
+            Inst::Value(q(4), 5),
             Inst::Call {
-                args: vec![r(0), r(1), r(2), r(3), q(4), q(5), r(1)],
-                results: vec![r(6)],
+                args: vec![r(0), r(1), r(2), q(3), q(4)],
+                results: vec![r(5)],
                 opaque: 1,
             },
-            Inst::Add(r(7), r(6), r(3)),
         ],
-        vec![r(7)],
+        vec![r(5)],
     );
-    let toy = allocate(&TOY, &source).unwrap();
+    let toy = allocate(&TOY, &call).unwrap();
     verify_allocation(&TOY, &toy).unwrap();
-    // Three general registers and one pair register; the two-word pair piece
-    // aligns the shared stack cursor before it is placed.
-    assert_eq!(stack_slots(&toy), (vec![0, 2], vec![0, 2, 4]));
-    // Five four-byte words round to the toy's 32-byte stack alignment.
+    assert_eq!(stack_slots(&toy), (vec![], vec![0, 2]));
+    // Four four-byte words round up to the toy's 32-byte stack alignment.
     assert_eq!(toy.outgoing, 32);
-    let call = toy.blocks[0]
+    let results = toy.blocks[0]
         .insts
         .iter()
         .find_map(|inst| match inst {
@@ -995,10 +1017,31 @@ fn boundary_driver_follows_the_toy_abi_counts_slots_and_alignment() {
             _ => None,
         })
         .unwrap();
-    assert_eq!(toy.assignment[&call[0].id], 0);
-
-    let tiny = allocate(&TINY, &source).unwrap();
+    assert_eq!(toy.assignment[&results[0].id], 0);
+    // The same source under two eight-byte-slot banks of two registers.
+    let tiny = allocate(&TINY, &call).unwrap();
     verify_allocation(&TINY, &tiny).unwrap();
-    assert_eq!(stack_slots(&tiny), (vec![0, 1], vec![0, 1, 2]));
-    assert_eq!(tiny.outgoing, 32);
+    assert_eq!(stack_slots(&tiny), (vec![], vec![0]));
+    assert_eq!(tiny.outgoing, 16);
+}
+
+#[test]
+fn views_of_one_physical_register_cannot_both_hold_live_values() {
+    let source = single(
+        vec![],
+        vec![
+            Inst::Value(h(0), 7),
+            Inst::Value(r(1), 9),
+            Inst::Add(r(2), r(1), r(1)),
+            Inst::Add(h(3), h(0), h(0)),
+        ],
+        vec![r(2)],
+    );
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
+    assert_ne!(allocated.assignment[&0], allocated.assignment[&1]);
+    // The full-width write of %1 would overwrite the live narrow %0.
+    let mut forged = allocated.clone();
+    forged.assignment.insert(1, allocated.assignment[&0]);
+    assert!(verify_allocation(&TINY, &forged).is_err());
 }

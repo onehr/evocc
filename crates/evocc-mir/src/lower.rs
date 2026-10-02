@@ -19,6 +19,9 @@ use evocc_evoir::{
 };
 use evocc_types::{param_mark, EvoIRType, ParamMark, RecordShape};
 
+use crate::isa::aarch64::abi::{
+    general_bank, place, vector_bank, Aarch64Abi, ProfileFeature, KERNEL,
+};
 use crate::{
     inst_defs, AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond,
     ExtOp, FlagOp, FramePlace, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
@@ -44,13 +47,12 @@ const E4009: (&str, &str) = ("E4009", "not-lowered: unsupported-form");
 const E4010: (&str, &str) = ("E4010", "abi: too-many-register-arguments");
 const E4013: (&str, &str) = ("E4013", "abi: too-many-results");
 
-/// Section 6: "Integer and pointer arguments of at most 64 bits go in `x0` to
-/// `x7` in order ... A ninth integer argument is refused."
-const MAX_REGISTER_ARGUMENTS: usize = 8;
-
-/// Section 6: "an EvoMIR function returns up to eight integer or pointer
-/// results in `x0` to `x7` in order ... A ninth result is `E4013`."
-const MAX_REGISTER_RESULTS: usize = 8;
+// Section 6's argument and result register counts, the stack-argument rule
+// and the record, pair and variadic facts come from the target's generated
+// ABI table (`targets/aarch64/abi-*`): "Integer and pointer arguments of at
+// most 64 bits go in `x0` to `x7` in order", and "an EvoMIR function returns
+// up to eight integer or pointer results in `x0` to `x7` in order ... A ninth
+// result is `E4013`."
 
 /// Native-only obligation lowering. Neither choice changes EvoIR or C semantics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -506,7 +508,10 @@ fn scan_function(
         );
     }
     let plan = record_plan(target, &marked, true);
-    if plan.positions > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
+    // Section 10's `E4010` is "more than eight integer arguments on Darwin
+    // (Linux lowers stack arguments, revision 0.10)": the ABI table's
+    // `stack-arguments` fact.
+    if plan.positions > target.abi().general_arguments() && !target.abi().facts.stack_arguments {
         report(
             E4010,
             entry_block,
@@ -551,7 +556,7 @@ fn scan_function(
         }
     }
     let results = ordinary_types(&function.ret_tys);
-    if results.len() > MAX_REGISTER_RESULTS {
+    if results.len() > target.abi().general_results() {
         report(
             E4013,
             entry_block,
@@ -602,14 +607,6 @@ fn scan_function(
             &mut report,
         );
     }
-}
-
-/// Whether more than eight register arguments are refused rather than lowered.
-///
-/// Section 10: `E4010` is "more than eight integer arguments on Darwin (Linux
-/// lowers stack arguments, revision 0.10)".
-const fn refuses_stack_arguments(target: Target) -> bool {
-    matches!(target, Target::Darwin)
 }
 
 fn scan_inst(
@@ -818,7 +815,7 @@ fn scan_inst(
             let marks = call_argument_marks(marks, arg_marks, args.len());
             let positions =
                 record_plan(target, &marked_types(&arg_types(args), &marks), true).positions;
-            if positions > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
+            if positions > target.abi().general_arguments() && !target.abi().facts.stack_arguments {
                 report(
                     E4010,
                     block,
@@ -826,7 +823,7 @@ fn scan_inst(
                     format!("a call to @{callee} passes {positions} arguments"),
                 );
             }
-            if results.len() > MAX_REGISTER_RESULTS {
+            if results.len() > target.abi().general_results() {
                 report(
                     E4013,
                     block,
@@ -865,7 +862,7 @@ fn scan_inst(
             let marks = call_argument_marks(&marks, arg_marks, args.len());
             let positions =
                 record_plan(target, &marked_types(&arg_types(args), &marks), true).positions;
-            if positions > MAX_REGISTER_ARGUMENTS && refuses_stack_arguments(target) {
+            if positions > target.abi().general_arguments() && !target.abi().facts.stack_arguments {
                 report(
                     E4010,
                     block,
@@ -873,7 +870,7 @@ fn scan_inst(
                     format!("an indirect call passes {positions} arguments"),
                 );
             }
-            if results.len() > MAX_REGISTER_RESULTS {
+            if results.len() > target.abi().general_results() {
                 report(
                     E4013,
                     block,
@@ -916,6 +913,8 @@ fn unsupported_access(ty: &EvoIRType) -> Option<String> {
 // ---------------------------------------------------------------------------
 
 struct Lowerer {
+    /// The selected operating system's generated ABI table.
+    abi: &'static Aarch64Abi,
     ub_checks: UbCheckProfile,
     diagnostic_true_predicates: BTreeSet<u32>,
     dynamic_addresses: HashSet<u32>,
@@ -1663,6 +1662,7 @@ fn lower_function(
     let _ = entry;
 
     let mut lowerer = Lowerer {
+        abi: target.abi(),
         ub_checks,
         diagnostic_true_predicates,
         dynamic_addresses: dynamic_addresses(function),
@@ -1873,7 +1873,9 @@ fn lower_block(
                 // sixteen the caller's pointer arrives in `x8`, which the
                 // marker names and allocation pins.
                 Passing::Destination(shape) => {
-                    if shape.size <= RECORD_REGISTER_LIMIT || shape.simd_members().is_some() {
+                    if shape.size <= lowerer.abi.record_register_bytes
+                        || shape.simd_members().is_some()
+                    {
                         let slot = lowerer.fresh(RegClass::Gpr64);
                         prologue.push(MInst::FrameSlot {
                             dst: slot,
@@ -2051,17 +2053,20 @@ fn lower_block(
                         .map(|(count, size)| (u64::from(count), size)),
                     _ => None,
                 };
+                let va_list = lowerer.abi.va_list;
                 let offsets_field = if vector_group.is_some() {
-                    VA_VR_OFFS
+                    va_list.vector_offset
                 } else {
-                    VA_GR_OFFS
+                    va_list.general_offset
                 };
                 let top_field = if vector_group.is_some() {
-                    VA_VR_TOP
+                    va_list.vector_top
                 } else {
-                    VA_GR_TOP
+                    va_list.general_top
                 };
-                let register_slot = vector_group.map_or(slot, |(count, _)| count * 16);
+                let vector_save_bytes = lowerer.abi.vector_save_bytes();
+                let register_slot =
+                    vector_group.map_or(slot, |(count, _)| count * vector_save_bytes);
                 let ap = lowerer.reg(&access.list)?;
                 let mut carried = live_across(lowerer, block, index + 1);
                 // The destination is an input of this instruction, so a last
@@ -2262,7 +2267,7 @@ fn lower_block(
                     align: 0,
                     dst: raw,
                     base: list,
-                    offset: VA_STACK,
+                    offset: va_list.stack,
                     kind: LoadKind::P,
                     volatile: false,
                 });
@@ -2287,7 +2292,7 @@ fn lower_block(
                     align: 0,
                     src: bumped,
                     base: list,
-                    offset: VA_STACK,
+                    offset: va_list.stack,
                     kind: StoreKind::P,
                     volatile: false,
                 });
@@ -3069,7 +3074,7 @@ fn lower_inst(
             lowerer.bind(result, dst);
         }
         Inst::TlsAddr(a) => {
-            if target != Target::Linux {
+            if !KERNEL.admits(target, ProfileFeature::Tls) {
                 return Err("TLS requires AArch64 ELF".into());
             }
             let model = signatures
@@ -3827,7 +3832,7 @@ fn call_results(lowerer: &mut Lowerer, results: &[Value]) -> Result<Vec<VReg>, S
         lowerer.bind(value, reg);
         outputs.push(reg);
     }
-    if outputs.len() > MAX_REGISTER_RESULTS {
+    if outputs.len() > lowerer.abi.general_results() {
         return Err("a call with more than eight ordinary results".to_owned());
     }
     Ok(outputs)
@@ -4834,7 +4839,8 @@ fn named_argument_extent(target: Target, function: &Function) -> (u8, u8, u64) {
         true,
     );
     let marked = marked_types(&declared, &function.param_marks);
-    let mut cursor = crate::linscan::ArgumentCursor::default();
+    let abi = target.abi();
+    let mut cursor = abi.argument_cursor();
     for ((ty, _), placed) in marked.iter().zip(&plan.items) {
         let mut classes = vec![RegClass::Gpr64; placed.fillers];
         match &placed.passing {
@@ -4859,10 +4865,14 @@ fn named_argument_extent(target: Target, function: &Function) -> (u8, u8, u64) {
             Passing::Destination(_) => {}
         }
         for class in classes {
-            let _ = cursor.place(class);
+            let _ = place(&mut cursor, class);
         }
     }
-    cursor.extent()
+    (
+        cursor.used(general_bank()),
+        cursor.used(vector_bank()),
+        cursor.stack_bytes(abi),
+    )
 }
 
 /// The size rounded up to eight (`S8`) and the alignment (`A`) of one
@@ -4901,16 +4911,10 @@ fn variadic_slot(ty: &EvoIRType) -> Option<(u64, u64)> {
     }
 }
 
-/// The offsets of the list object's five fields (Section 6).
-const VA_STACK: i64 = 0;
-const VA_GR_TOP: i64 = 8;
-const VA_VR_TOP: i64 = 16;
-const VA_GR_OFFS: i64 = 24;
-const VA_VR_OFFS: i64 = 28;
-
 /// `va_start`: skips named incoming stack slots, then stores
 /// `gr_top = save area + 64`, `vr_top = gr_top + 128`, `gr_offs =
-/// -8 * (8 - k)` and `vr_offs = -128` (Section 6, revision 0.28).
+/// -8 * (8 - k)` and `vr_offs = -128` (Section 6, revision 0.28). The field
+/// offsets, register counts and save widths are the ABI table's.
 fn lower_va_start(
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
@@ -4920,6 +4924,8 @@ fn lower_va_start(
         .named_arguments
         .ok_or_else(|| "a va_start outside a variadic function".to_owned())?;
     let ap = lowerer.reg(list)?;
+    let abi = lowerer.abi;
+    let va_list = abi.va_list;
 
     let stack = lowerer.fresh(RegClass::Gpr64);
     insts.push(MInst::FrameAddress {
@@ -4935,7 +4941,7 @@ fn lower_va_start(
         align: 0,
         src: stack,
         base: ap,
-        offset: VA_STACK,
+        offset: va_list.stack,
         kind: StoreKind::P,
         volatile: false,
     });
@@ -4945,8 +4951,14 @@ fn lower_va_start(
         dst: top,
         place: FramePlace::RegisterSaveTop,
     });
-    let vector_top = lowerer.binary_imm(insts, BinOp::Add, top, 128, Width::X);
-    for (offset, address) in [(VA_GR_TOP, top), (VA_VR_TOP, vector_top)] {
+    let vector_top = lowerer.binary_imm(
+        insts,
+        BinOp::Add,
+        top,
+        abi.vector_save_area_bytes(),
+        Width::X,
+    );
+    for (offset, address) in [(va_list.general_top, top), (va_list.vector_top, vector_top)] {
         insts.push(MInst::Store {
             align: 0,
             src: address,
@@ -4957,7 +4969,8 @@ fn lower_va_start(
         });
     }
 
-    let offs = -8 * (8 - i64::from(named));
+    let general_save = abi.general_save_bytes() as i64;
+    let offs = -general_save * (abi.general_arguments() as i64 - i64::from(named));
     let gr_offs = lowerer.fresh(RegClass::Gpr32);
     insts.push(MInst::MovImm {
         dst: gr_offs,
@@ -4967,20 +4980,22 @@ fn lower_va_start(
         align: 0,
         src: gr_offs,
         base: ap,
-        offset: VA_GR_OFFS,
+        offset: va_list.general_offset,
         kind: StoreKind::W,
         volatile: false,
     });
     let vr_offs = lowerer.fresh(RegClass::Gpr32);
+    let vector_save = abi.vector_save_bytes() as i32;
+    let vector_count = abi.vector_arguments() as i32;
     insts.push(MInst::MovImm {
         dst: vr_offs,
-        imm: u64::from((-16 * (8 - i32::from(named_vectors))) as u32),
+        imm: u64::from((-vector_save * (vector_count - i32::from(named_vectors))) as u32),
     });
     insts.push(MInst::Store {
         align: 0,
         src: vr_offs,
         base: ap,
-        offset: VA_VR_OFFS,
+        offset: va_list.vector_offset,
         kind: StoreKind::W,
         volatile: false,
     });
@@ -5596,11 +5611,6 @@ fn lower_pair_compare(
 /// are taken from the top of the ordinal space so that the two never meet.
 const RECORD_ORIGIN_BASE: u64 = 1 << 62;
 
-/// Section 6: "a `byval` record of at most 16 bytes is loaded from the copy
-/// into the next one or two general registers as 8-byte chunks ... a `byval`
-/// record above 16 bytes stays a pointer to the caller's copy".
-const RECORD_REGISTER_LIMIT: u64 = 16;
-
 /// The eight-byte chunks a record of `size` bytes travels in.
 fn record_chunks(size: u64) -> Vec<u64> {
     let mut chunks = Vec::new();
@@ -5768,15 +5778,18 @@ fn record_plan(
     arguments: &[(EvoIRType, ParamMark)],
     pair_rounding: bool,
 ) -> RecordPlan {
+    let abi = target.abi();
+    let general = abi.general_arguments();
+    let vectors = abi.vector_arguments();
     let mut items = Vec::new();
     let mut next = 0_usize;
     let mut next_vector = 0_usize;
-    let mut cursor = crate::linscan::ArgumentCursor::default();
+    let mut cursor = abi.argument_cursor();
     let mut indirect_result = false;
     for (ty, mark) in arguments {
         match mark {
             ParamMark::Sret(shape) => {
-                if shape.size > RECORD_REGISTER_LIMIT && shape.simd_members().is_none() {
+                if shape.size > abi.record_register_bytes && shape.simd_members().is_none() {
                     indirect_result = true;
                 }
                 items.push(Placed {
@@ -5786,9 +5799,9 @@ fn record_plan(
             }
             ParamMark::ByVal(shape) if shape.simd_members().is_some() => {
                 let count = usize::from(shape.simd_members().unwrap().0);
-                let stack = next_vector + count > 8;
-                let mut skipped = if next_vector < 8 && next_vector + count > 8 {
-                    8 - next_vector
+                let stack = next_vector + count > vectors;
+                let mut skipped = if next_vector < vectors && next_vector + count > vectors {
+                    vectors - next_vector
                 } else {
                     0
                 };
@@ -5798,7 +5811,7 @@ fn record_plan(
                 // alone must not request this padding.
                 if stack
                     && shape.floating.is_some_and(|f| f.abi_align == 16)
-                    && cursor.extent().2 % 16 != 0
+                    && !cursor.stack_bytes(abi).is_multiple_of(16)
                 {
                     skipped += 1;
                 }
@@ -5812,7 +5825,7 @@ fn record_plan(
                     },
                 });
             }
-            ParamMark::ByVal(shape) if shape.size <= RECORD_REGISTER_LIMIT => {
+            ParamMark::ByVal(shape) if shape.size <= abi.record_register_bytes => {
                 let chunks = record_chunks(shape.size);
                 let mut fillers = 0;
                 // Section 6: "a record whose alignment is 16 starts at an even
@@ -5821,9 +5834,9 @@ fn record_plan(
                 // clang and `x2`:`x3` under GCC-14,
                 // `.evidence/builtin-probes/20260906-b10/`).
                 if shape.size != 0
-                    && matches!(target, Target::Linux)
+                    && abi.aligned_record_pair_rounding
                     && shape.align == 16
-                    && cursor.general_pair_padding() != 0
+                    && cursor.pair_padding(general_bank()) != 0
                 {
                     fillers += 1;
                 }
@@ -5832,11 +5845,9 @@ fn record_plan(
                 // goes to the stack and the remaining register is unused
                 // (measured: `after_seven_16` reads `ldp ..., [sp]` and leaves
                 // `x7` alone under both oracles).
-                if next + fillers + chunks.len() > MAX_REGISTER_ARGUMENTS
-                    && next + fillers < MAX_REGISTER_ARGUMENTS
-                {
-                    fillers = MAX_REGISTER_ARGUMENTS - next;
-                    if matches!(target, Target::Linux)
+                if next + fillers + chunks.len() > general && next + fillers < general {
+                    fillers = general - next;
+                    if abi.aligned_record_pair_rounding
                         && shape.align == 16
                         && (next + fillers) % 2 == 1
                     {
@@ -5866,7 +5877,7 @@ fn record_plan(
                 } else {
                     let count = usize::from(is_pair(ty)) + 1;
                     let fillers = if count == 2 && pair_rounding {
-                        cursor.general_pair_padding()
+                        cursor.pair_padding(general_bank())
                     } else {
                         0
                     };
@@ -5880,7 +5891,7 @@ fn record_plan(
         }
         let placed = items.last().expect("each source argument has a placement");
         for _ in 0..placed.fillers {
-            let _ = cursor.place(RegClass::Gpr64);
+            let _ = place(&mut cursor, RegClass::Gpr64);
         }
         let (class, count) = match &placed.passing {
             Passing::Chunks(chunks) => (RegClass::Gpr64, chunks.len()),
@@ -5890,10 +5901,10 @@ fn record_plan(
                 stack,
             } => {
                 for _ in 0..*skipped {
-                    let _ = cursor.place(RegClass::Simd64);
+                    let _ = place(&mut cursor, RegClass::Simd64);
                 }
                 for (_, size) in simd_argument_pieces(*shape, *stack) {
-                    let _ = cursor.place(simd_class(size));
+                    let _ = place(&mut cursor, simd_class(size));
                 }
                 continue;
             }
@@ -5903,7 +5914,7 @@ fn record_plan(
             Passing::Destination(_) => (RegClass::Gpr64, 0),
         };
         for _ in 0..count {
-            let _ = cursor.place(class);
+            let _ = place(&mut cursor, class);
         }
     }
     RecordPlan {
@@ -6084,7 +6095,8 @@ fn call_arguments(
             // argument, "which is what AAPCS64 does too".
             Passing::Pointer => registers.push(lowerer.reg(value)?),
             Passing::Destination(shape) => {
-                if shape.size > RECORD_REGISTER_LIMIT && shape.simd_members().is_none() {
+                if shape.size > lowerer.abi.record_register_bytes && shape.simd_members().is_none()
+                {
                     // The IR's fixed sret slot can precede anonymous
                     // arguments. Keep it out of their ordinary placement;
                     // the machine call's final slot always names x8.

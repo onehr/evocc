@@ -1,15 +1,29 @@
 //! AArch64 facts and borrowed constraint views for the shared allocator.
 
 use super::regfile;
+use crate::generic::abi::AbiFacts;
 use crate::generic::allocation::{
     AllocClass, AllocationTarget, ConstraintBody, ConstraintOperand, ConstraintValue,
 };
 use crate::generic::register::RegisterBank;
 use crate::{
-    AsmBody, AsmConstraint, AsmDirection, AsmImmediate, AsmOperand, AsmValue, RegClass, VReg,
+    AsmBody, AsmConstraint, AsmDirection, AsmImmediate, AsmOperand, AsmValue, RegClass, Target,
+    VReg,
 };
 
-pub struct Aarch64Allocation;
+/// The register pools and constraint views of AArch64 under one OS ABI.
+pub struct Aarch64Allocation {
+    abi: &'static AbiFacts,
+}
+
+impl Aarch64Allocation {
+    #[must_use]
+    pub const fn for_target(target: Target) -> Self {
+        Self {
+            abi: &target.abi().facts,
+        }
+    }
+}
 
 impl AllocClass for RegClass {
     fn bank(self) -> u8 {
@@ -45,11 +59,8 @@ impl AllocationTarget<RegClass> for Aarch64Allocation {
             &regfile::GPR_ALLOCATABLE
         }
     }
-    fn callee_saved(&self) -> &'static [u8] {
-        &regfile::CALLEE_SAVED
-    }
-    fn call_clobbers(&self) -> &'static [u8] {
-        &regfile::CALL_CLOBBERS
+    fn abi(&self) -> &AbiFacts {
+        self.abi
     }
     fn cycle_scratch(&self, class: RegClass) -> u8 {
         if class.is_simd() {
@@ -66,37 +77,6 @@ impl AllocationTarget<RegClass> for Aarch64Allocation {
     }
     fn clobber_classes(&self) -> &'static [RegClass] {
         &[RegClass::Gpr32, RegClass::Gpr64]
-    }
-    fn argument_bank(&self, class: RegClass) -> RegisterBank {
-        RegisterBank {
-            first: if class.is_simd() {
-                regfile::SIMD_BASE
-            } else {
-                0
-            },
-            count: 8,
-        }
-    }
-    fn argument_banks(&self) -> &'static [RegisterBank] {
-        &[
-            RegisterBank { first: 0, count: 8 },
-            RegisterBank {
-                first: regfile::SIMD_BASE,
-                count: 8,
-            },
-        ]
-    }
-    fn indirect_result_register(&self) -> u8 {
-        8
-    }
-    fn result_overflow_register(&self) -> u8 {
-        8
-    }
-    fn stack_slot_bytes(&self) -> u64 {
-        8
-    }
-    fn stack_alignment_words(&self) -> u32 {
-        2
     }
     fn fixed_binding_spelling(&self, number: u8) -> String {
         format!("x{number}")

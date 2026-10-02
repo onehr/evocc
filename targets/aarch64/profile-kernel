@@ -1,0 +1,12 @@
+version profile.v1
+target aarch64
+sha256 d61471addc623b6056a5e5d2c392e1e1159f5511bf5bab749a04f3ccc164f5df
+profile kernel
+abi linux eeee405a280b3735abdfad5c9076d94170677230d097c801d616a88a4b7bf526
+host-only function-sections
+host-only data-sections
+host-only explicit-sections
+host-only tls
+host-only patchable-entry
+host-only protected-visibility
+stack-guard-slot-bytes 16

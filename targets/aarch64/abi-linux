@@ -1,0 +1,29 @@
+version abi.v1
+target aarch64
+sha256 eeee405a280b3735abdfad5c9076d94170677230d097c801d616a88a4b7bf526
+abi linux
+regfile c61c9377d01087b9ff986c39bf2af1cf451bdeefc40966bb6008e7356561e379
+arguments gpr 8
+arguments simd 8
+results gpr 8
+results simd 8
+indirect-result gpr 8
+result-overflow gpr 8
+stack-slot-bytes 8
+stack-alignment-bytes 16
+stack-arguments admitted
+callee-saved @CALLEE_SAVED
+call-clobbers @GPR_CALL_CLOBBERS @SIMD_CALL_CLOBBERS
+partially-preserved @SIMD_LOW64_PRESERVED 8
+frame-record-bytes 16
+save-slot-bytes 8
+variadic-save gpr 8
+variadic-save simd 16
+variadic-save-alignment 16
+va-list stack 0
+va-list general-top 8
+va-list vector-top 16
+va-list general-offset 24
+va-list vector-offset 28
+record-register-bytes 16
+aligned-record-pair-rounding true

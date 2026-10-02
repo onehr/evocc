@@ -16,9 +16,10 @@ use std::process::Command;
 use evocc_evoir::Module;
 use evocc_types::EvoIRType;
 
+use crate::isa::aarch64::abi::{ProfileFeature, KERNEL};
 use crate::lane::is_register_type;
 use crate::{
-    allocate_for, emitted_functions, lower_module_for_profile, out_of_ssa, verify_allocation,
+    allocate_for, emitted_functions, lower_module_for_profile, out_of_ssa, verify_allocation_for,
     RelocationModel, Target,
 };
 
@@ -141,22 +142,28 @@ fn compile_module_with_guard_control(
     options: &crate::emit::CodegenOptions,
     true_predicates: Option<&std::collections::BTreeMap<String, std::collections::BTreeSet<u32>>>,
 ) -> Result<String, NativeStop> {
-    if target != Target::Linux && (options.function_sections || options.data_sections) {
+    // Linux-only features are the kernel profile's host-only facts.
+    let admits = |feature| KERNEL.admits(target, feature);
+    if (!admits(ProfileFeature::FunctionSections) && options.function_sections)
+        || (!admits(ProfileFeature::DataSections) && options.data_sections)
+    {
         return Err(NativeStop::Assembly(
             "individual function/data sections require the Linux ELF target".into(),
         ));
     }
-    if target != Target::Linux && module.functions.iter().any(|f| f.section.is_some()) {
+    if !admits(ProfileFeature::ExplicitSections)
+        && module.functions.iter().any(|f| f.section.is_some())
+    {
         return Err(NativeStop::Assembly(
             "explicit function sections require the Linux ELF target".into(),
         ));
     }
-    if target != Target::Linux && !module.tls.is_empty() {
+    if !admits(ProfileFeature::Tls) && !module.tls.is_empty() {
         return Err(NativeStop::Assembly(
             "ELF TLS requires the Linux target".into(),
         ));
     }
-    if target != Target::Linux
+    if !admits(ProfileFeature::PatchableEntry)
         && module
             .functions
             .iter()
@@ -166,7 +173,7 @@ fn compile_module_with_guard_control(
             "patchable function entries require the Linux ELF target".into(),
         ));
     }
-    if target != Target::Linux
+    if !admits(ProfileFeature::ProtectedVisibility)
         && module
             .functions
             .iter()
@@ -233,7 +240,7 @@ fn compile_module_with_guard_control(
             source.name == function.name
                 && source.visibility == evocc_evoir::GlobalVisibility::Internal
         });
-        verify_allocation(&allocated).map_err(|refusal| {
+        verify_allocation_for(target, &allocated).map_err(|refusal| {
             NativeStop::Verification(format!(
                 "@{}: {} {} in block {}: {}",
                 function.name, refusal.code, refusal.name, refusal.block, refusal.detail

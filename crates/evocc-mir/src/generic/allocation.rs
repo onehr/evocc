@@ -3,6 +3,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::abi::{AbiFacts, ArgumentCursor};
 use super::machine::{MachInst, MachineBlock, MachineFunction};
 use super::register::{RegisterBank, RegisterClass, VirtualReg};
 use super::ssa::{SsaInst, SsaTerm, SCRATCH_BASE, SCRATCH_LIMIT};
@@ -96,18 +97,12 @@ pub trait AllocTerm: SsaTerm {
 pub trait AllocationTarget<C: AllocClass> {
     fn bank(&self, class: C) -> RegisterBank;
     fn candidates(&self, class: C, across_call: bool) -> &'static [u8];
-    fn callee_saved(&self) -> &'static [u8];
-    fn call_clobbers(&self) -> &'static [u8];
+    /// Boundary locations, preservation and stack facts of the selected ABI.
+    fn abi(&self) -> &AbiFacts;
     fn cycle_scratch(&self, class: C) -> u8;
     fn flags_assignment_tag(&self) -> u8;
     fn fixed_assembly_registers(&self) -> &'static [u8];
     fn clobber_classes(&self) -> &'static [C];
-    fn argument_bank(&self, class: C) -> RegisterBank;
-    fn argument_banks(&self) -> &'static [RegisterBank];
-    fn indirect_result_register(&self) -> u8;
-    fn result_overflow_register(&self) -> u8;
-    fn stack_slot_bytes(&self) -> u64;
-    fn stack_alignment_words(&self) -> u32;
     fn fixed_binding_spelling(&self, number: u8) -> String;
 }
 
@@ -152,32 +147,10 @@ fn operand_register<R: Copy>(value: ConstraintValue<R>) -> Option<R> {
     }
 }
 
-#[derive(Default)]
-struct ArgumentCursor {
-    registers: BTreeMap<u8, u8>,
-    stack: u32,
-}
-
-impl ArgumentCursor {
-    fn place<C: AllocClass, A: AllocationTarget<C>>(
-        &mut self,
-        target: &A,
-        class: C,
-    ) -> Result<u8, u32> {
-        let bank = target.argument_bank(class);
-        let next = self.registers.entry(class.bank()).or_default();
-        if *next < bank.count {
-            let number = bank.first + *next;
-            *next += 1;
-            Ok(number)
-        } else {
-            let words = class.spill_words();
-            self.stack = self.stack.next_multiple_of(words);
-            let slot = self.stack;
-            self.stack += words;
-            Err(slot)
-        }
-    }
+/// Place one boundary value of `class`; a class occupies its spill width in
+/// stack slots.
+fn place<C: AllocClass>(cursor: &mut ArgumentCursor<'_>, class: C) -> Result<u8, u32> {
+    cursor.place(usize::from(class.bank()), class.spill_words())
 }
 
 const FRESH_BASE: u32 = SCRATCH_LIMIT;
@@ -213,7 +186,7 @@ where
                 let used_callee_saved = assignment
                     .values()
                     .copied()
-                    .filter(|number| target.callee_saved().contains(number))
+                    .filter(|number| target.abi().callee_saved.contains(number))
                     .collect::<BTreeSet<u8>>()
                     .into_iter()
                     .collect();
@@ -260,7 +233,7 @@ where
     for (index, block) in function.blocks.iter().enumerate() {
         let mut insts = Vec::new();
         if index == 0 {
-            let mut cursor = ArgumentCursor::default();
+            let mut cursor = ArgumentCursor::new(target.abi().argument_banks);
             let indirect = block
                 .insts
                 .first()
@@ -269,11 +242,11 @@ where
             for (position, parameter) in block.args.iter().enumerate() {
                 if indirect == Some(position) {
                     let incoming = fresh(next, parameter.class);
-                    pins.insert(incoming.id, target.indirect_result_register());
+                    pins.insert(incoming.id, target.abi().indirect_result);
                     insts.push(I::copy(*parameter, incoming));
                     continue;
                 }
-                let location = cursor.place(target, parameter.class);
+                let location = place(&mut cursor, parameter.class);
                 if let Err(slot) = location {
                     insts.push(I::incoming_arg(*parameter, slot));
                     continue;
@@ -345,14 +318,12 @@ where
             }
         } else if let Some(values) = block.term.return_values() {
             let mut moved = Vec::new();
-            let mut cursor = ArgumentCursor::default();
+            let mut cursor = ArgumentCursor::new(target.abi().result_banks);
             for value in values {
                 let outgoing = fresh(next, value.class);
                 pins.insert(
                     outgoing.id,
-                    cursor
-                        .place(target, value.class)
-                        .map_err(|_| "too many return registers")?,
+                    place(&mut cursor, value.class).map_err(|_| "too many return registers")?,
                 );
                 insts.push(I::copy(outgoing, *value));
                 moved.push(outgoing);
@@ -387,8 +358,7 @@ where
             blocks,
         },
         pins,
-        u64::from(outgoing_slots).next_multiple_of(u64::from(target.stack_alignment_words()))
-            * target.stack_slot_bytes(),
+        target.abi().outgoing_area_bytes(outgoing_slots),
     ))
 }
 fn pin_assembly<I, C, A>(
@@ -524,21 +494,21 @@ where
     // the destination of a record result and uses its indirect-result location.
     let indirect = indirect_result.then(|| args.len().saturating_sub(1));
     let mut moved = Vec::new();
-    let mut cursor = ArgumentCursor::default();
+    let mut cursor = ArgumentCursor::new(target.abi().argument_banks);
     for (position, arg) in args.iter().enumerate() {
         if indirect == Some(position) {
             let outgoing = fresh(next, arg.class);
-            pins.insert(outgoing.id, target.indirect_result_register());
+            pins.insert(outgoing.id, target.abi().indirect_result);
             insts.push(I::copy(outgoing, *arg));
             moved.push(outgoing);
             continue;
         }
-        // Section 6: the slots are "assigned in argument order at increasing
-        // addresses from the caller's `sp` at the call".
-        let location = cursor.place(target, arg.class);
+        // Stack slots are assigned in argument order at increasing addresses
+        // from the caller's stack pointer at the call.
+        let location = place(&mut cursor, arg.class);
         if let Err(slot) = location {
             insts.push(I::outgoing_arg(*arg, slot));
-            *outgoing_slots = (*outgoing_slots).max(cursor.stack);
+            *outgoing_slots = (*outgoing_slots).max(cursor.stack_words());
             continue;
         }
         let outgoing = fresh(next, arg.class);
@@ -547,14 +517,12 @@ where
         moved.push(outgoing);
     }
     let mut outputs = Vec::new();
-    let mut cursor = ArgumentCursor::default();
+    let mut cursor = ArgumentCursor::new(target.abi().result_banks);
     for result in results {
         let incoming = fresh(next, result.class);
         pins.insert(
             incoming.id,
-            cursor
-                .place(target, result.class)
-                .unwrap_or(target.result_overflow_register()),
+            place(&mut cursor, result.class).unwrap_or(target.abi().result_overflow),
         );
         outputs.push((incoming, *result));
     }

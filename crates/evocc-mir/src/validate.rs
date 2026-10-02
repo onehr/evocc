@@ -7,6 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use crate::isa::aarch64::abi::{general_bank, vector_bank};
 use crate::{
     inst_defs, inst_uses, term_edges, term_uses, writes_flags, MBlock, MFunction, MInst, MModule,
     MTerm, RegClass, VReg,
@@ -649,9 +650,12 @@ fn validate_term_shape(name: &str, block: u32, term: &MTerm) -> Result<(), Strin
         }
         MTerm::Ret { values } => {
             // Section 6: "an EvoMIR function returns up to eight integer or
-            // pointer results in x0 to x7 in order."
-            if values.iter().filter(|r| r.class.is_simd()).count() > 8
-                || values.iter().filter(|r| !r.class.is_simd()).count() > 8
+            // pointer results in x0 to x7 in order." The machine form is
+            // checked before a target is chosen, against every ABI table.
+            let limit = crate::isa::aarch64::abi::machine_result_registers;
+            let bank = |simd: bool| if simd { vector_bank() } else { general_bank() };
+            if values.iter().filter(|r| r.class.is_simd()).count() > limit(bank(true))
+                || values.iter().filter(|r| !r.class.is_simd()).count() > limit(bank(false))
             {
                 return Err(format!(
                     "@{name} block {block}: {} results exceed x0 to x7",

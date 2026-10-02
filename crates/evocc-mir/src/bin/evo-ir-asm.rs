@@ -101,7 +101,7 @@ fn emit(args: &[String]) -> Result<String, String> {
             after += lowered.blocks.iter().map(|b| b.insts.len()).sum::<usize>();
             dead_after += evocc_mir::regalloc::dead_computation_count(&lowered);
             let allocated = evocc_mir::allocate_for(target, &lowered)?;
-            evocc_mir::verify_allocation(&allocated).map_err(|e| format!("{e:?}"))?;
+            evocc_mir::verify_allocation_for(target, &allocated).map_err(|e| format!("{e:?}"))?;
             dead_allocated += evocc_mir::regalloc::dead_computation_count(&evocc_mir::MFunction {
                 name: allocated.name,
                 blocks: allocated.blocks,
