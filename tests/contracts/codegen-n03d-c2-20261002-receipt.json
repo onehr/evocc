@@ -1,0 +1,1047 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03d",
+  "slice": "C2",
+  "status": "CLOSED_WITH_COMPILE_BOUND_MISS",
+  "subject_commit": "b478bc7cb0351f24ace6f69ac44094fc456dee8d",
+  "implementation_commit": "b478bc7cb0351f24ace6f69ac44094fc456dee8d",
+  "red_commit": "504e012a",
+  "plan": "tests/contracts/codegen-n03d-local-20261002.json",
+  "specification": "EvoMIR 0.58",
+  "gates": {
+    "full_workspace": {
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 RUST_TEST_THREADS=1 tools/gate-changed.sh --full-workspace --offline",
+      "status": "PASS",
+      "path": ".evidence/codegen/n03d-c2/full-workspace-20261002.log",
+      "sha256": "db2b7fd9e6c710fbec30453219c823f5ff1414fe477312c4959ca62e83e05b01",
+      "suites_including_doc_tests": 392,
+      "passed": 3018,
+      "failed": 0,
+      "ignored": 5,
+      "clippy": "PASS",
+      "format": "PASS",
+      "subject_note": "Exact clean b478bc7c, unchanged throughout.",
+      "regeneration": "PASS"
+    },
+    "focused": {
+      "rust_passed": 20,
+      "python_passed": 83,
+      "native_value_nzcv_comparisons": 142336,
+      "driver_inputs": 4096,
+      "evidence": [
+        {
+          "path": ".evidence/codegen/n03d-c2/patterns-adapter-final-20261002.log",
+          "sha256": "b237a507fa738b35c780c88e98c1714b6520938eed8c5fd29ffb45a3a983d581"
+        },
+        {
+          "path": ".evidence/codegen/n03d-c2/driver-native-final-20261002.log",
+          "sha256": "3ddd6f7fecd0dce00660916c9531aff08fee889d87d6f70644ed9abdc603c982"
+        },
+        {
+          "path": ".evidence/codegen/n03d-c2/python-final-20261002.log",
+          "sha256": "f3c88eb0d18e8ca1a334976ce5f989478a6e9182f439c6862cd7fc8934ed123f"
+        }
+      ],
+      "red_evidence": [
+        {
+          "path": ".evidence/codegen/n03d-c2/driver-red-20261002.log",
+          "sha256": "7f539daf41ad4f62f064d6c2e1b14cf8afa760a5303f916eb6a3e8c468ee4fd2"
+        },
+        {
+          "path": ".evidence/codegen/n03d-c2/counters-red-20261002.log",
+          "sha256": "06b82f7ce278b7d6783e907b5fbc62a652b0404be9dd928d9d96efc0dc7e3188"
+        }
+      ]
+    },
+    "lean": "NOT_REQUIRED: no Lean, registry, interpreter or proof semantics change"
+  },
+  "baseline": {
+    "offDarwin": ".evidence/codegen/n03d/corpus-off-darwin-20261002.log",
+    "offLinux": ".evidence/codegen/n03d/corpus-off-linux-20261002.log",
+    "regressionA": ".evidence/codegen-trend/measure-aus453x6/receipt.json",
+    "regressionB": ".evidence/codegen-trend/measure-k9_v7iab/receipt.json",
+    "combinedC1A": ".evidence/codegen-trend/measure-m2u1p4ko/receipt.json",
+    "combinedC1B": ".evidence/codegen-trend/measure-0i__qrbr/receipt.json"
+  },
+  "bounds": {
+    "compile_median_ratio": 1.25,
+    "text_growth": 0,
+    "text_plus_rodata_growth": 0,
+    "default": "OFF",
+    "native_latency": "NOT_RUN"
+  },
+  "claim_ceiling": "Frozen opt-in adjacent emission idioms: correctness corpus and deterministic size results, with one failed compile-cost bound. Not full admission, verified EqSat benefit, default/kernel/full-application/latency or complete N03d/N07 acceptance. Combined frames retain signed Darwin unwind NOT_VALIDATED.",
+  "native_corpora": [
+    {
+      "lane": "darwin",
+      "option": "OFF",
+      "objects": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 384,
+      "changed_vs_off_objects": 0,
+      "path": ".evidence/codegen/n03d-c2/corpus-off-darwin-20261002.log",
+      "sha256": "e46bd272981a64461d1ebd149869c70599f52c38f715057a79099b7faf65f96a",
+      "elapsed_seconds": 300.28
+    },
+    {
+      "lane": "darwin",
+      "option": "local",
+      "objects": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null,
+      "changed_vs_off_objects": 48,
+      "path": ".evidence/codegen/n03d-c2/corpus-on-darwin-20261002.log",
+      "sha256": "26602bb94bf6fe4e3b7f78ba36e38e3739f07493d6302e7e35818bb7655e6035",
+      "elapsed_seconds": 320.41
+    },
+    {
+      "lane": "linux",
+      "option": "OFF",
+      "objects": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 384,
+      "changed_vs_off_objects": 0,
+      "path": ".evidence/codegen/n03d-c2/corpus-off-linux-20261002.log",
+      "sha256": "e34df085dd400726f1647f4541c840b7f65587bef06b14985358282e0e242d77",
+      "elapsed_seconds": 249.92
+    },
+    {
+      "lane": "linux",
+      "option": "local",
+      "objects": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null,
+      "changed_vs_off_objects": 48,
+      "path": ".evidence/codegen/n03d-c2/corpus-on-linux-20261002.log",
+      "sha256": "6e6bf6808acc9255cccd4243f2673e12eefc5bd18ad36c4a2a21d406ae801bf5",
+      "elapsed_seconds": 276.69
+    }
+  ],
+  "tools": {
+    "release_compiler": "c6e671a47475bc90ca1ba072ec42925aac88a6cd9266c340e7883f3179cfbff1",
+    "release_checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+    "native_debug_compiler": "d82887f4a873fc98b9db504172b9377c91886e1ba8449f7a08c058bc8ef1ada0",
+    "native_companion_checker": "6333fa5fd18f5a23e7685e27d3571b3bd94dec496ba93956a6ee305e7adee00f",
+    "release_build": {
+      "path": ".evidence/codegen/n03d-c2/release-20261002.log",
+      "sha256": "570a18d3e6bb6000ece8b454eed6998fa60fead452dfb1f765690aec75f3da4b"
+    }
+  },
+  "date": "2026-10-02",
+  "tables": {
+    "patterns_digest": "8e6e3c6b8524565ed8843dc1114a7192dd3f4a4f590acd33c33ea50cc196f9e2",
+    "patterns_file_sha256": "a45d9969f58206de0880a200faf7e8da81448b83fdd2da58d2a1638799ba3a48",
+    "costs_digest": "cbca86836f5467684fb90a21be5fec71fc8bb80ef122a0908c53b04cdea2283b",
+    "costs_file_sha256": "4ae228a6ccd7fc841b745369f7fa8dd8b51a7f2991b175bb03427ccc72ba6b3f"
+  },
+  "measurements": [
+    {
+      "variant": "regression-a",
+      "path": ".evidence/codegen-trend/measure-c_2x8fkl/receipt.json",
+      "sha256": "58d2415bc9f962c8a0c75cf7a748f383a220b394a8ff733be5e8d88ecb8ab67d",
+      "log": ".evidence/codegen/n03d-c2/measure-regression-a-20261002.log",
+      "log_sha256": "a6c61010664aa91b01a58348b8212cca1e30892aec134ad5f8ca4e0ee2a16b1a",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 1018706,
+      "validation": {
+        "NOT_ADMITTED_OPAQUE": 187,
+        "VALIDATED_ON_INPUT": 70
+      },
+      "source_bridge": {
+        "NOT_RUN": 256,
+        "MISMATCH_NOT_VALIDATED": 1
+      },
+      "baseline": {
+        "path": ".evidence/codegen-trend/measure-aus453x6/receipt.json",
+        "sha256": "24d34f5d4692253ed612d7af22cd5c425041f5bc7537430090cbe8c7e84c7bfe"
+      },
+      "baseline_hash_matches": 12
+    },
+    {
+      "variant": "regression-b",
+      "path": ".evidence/codegen-trend/measure-xef4bjdd/receipt.json",
+      "sha256": "38362a8f4596ccb5f584cd3855a544541a43cecf1e93626bd3e12e8c82d4926a",
+      "log": ".evidence/codegen/n03d-c2/measure-regression-b-20261002.log",
+      "log_sha256": "6dc25fc3eec5a7d8b535ff5a2647cae11ec9aad7e77d6d9febd86f4b2f6137cb",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 1022556,
+      "validation": {
+        "NOT_ADMITTED_OPAQUE": 187,
+        "VALIDATED_ON_INPUT": 70
+      },
+      "source_bridge": {
+        "NOT_RUN": 256,
+        "MISMATCH_NOT_VALIDATED": 1
+      },
+      "baseline": {
+        "path": ".evidence/codegen-trend/measure-k9_v7iab/receipt.json",
+        "sha256": "04ca329bca58737d45bedb074db6210ad4dc6e9591c8a7350e8b3f3054275fe6"
+      },
+      "baseline_hash_matches": 12
+    },
+    {
+      "variant": "local-a",
+      "path": ".evidence/codegen-trend/measure-gt0dkbv_/receipt.json",
+      "sha256": "b8800bca87917cb9aaa54e7bdc9d761c81be6b39fce362a2287ce1d512403b9c",
+      "log": ".evidence/codegen/n03d-c2/measure-local-a-20261002.log",
+      "log_sha256": "5fe4ee6e9286c1be5ca38382a1e457a22eb70a36a4b6a4f9485d9503af6fa821",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 1015839,
+      "validation": {
+        "NOT_ADMITTED_OPAQUE": 187,
+        "VALIDATED_ON_INPUT": 70
+      },
+      "source_bridge": {
+        "NOT_RUN": 256,
+        "MISMATCH_NOT_VALIDATED": 1
+      }
+    },
+    {
+      "variant": "local-b",
+      "path": ".evidence/codegen-trend/measure-4nryc2wy/receipt.json",
+      "sha256": "8747bc5e3059fe022d2e7c17ee1405d3c9f49719c386022614ae99f1622be53a",
+      "log": ".evidence/codegen/n03d-c2/measure-local-b-20261002.log",
+      "log_sha256": "9fc9e2f9120ac356a80639e2b240c1369ece550e31503341bf2a87741c29e0f2",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 1021794,
+      "validation": {
+        "NOT_ADMITTED_OPAQUE": 187,
+        "VALIDATED_ON_INPUT": 70
+      },
+      "source_bridge": {
+        "NOT_RUN": 256,
+        "MISMATCH_NOT_VALIDATED": 1
+      }
+    },
+    {
+      "variant": "combined-a",
+      "path": ".evidence/codegen-trend/measure-qm_uryma/receipt.json",
+      "sha256": "dfc361d3aacaf891a0ae09d6a488f82fb99be0a16ff6f27b0d666e6de6750a98",
+      "log": ".evidence/codegen/n03d-c2/measure-combined-a-20261002.log",
+      "log_sha256": "4a921bb6a61504ae31d6ea8e1e11eb5ae1d9ef4f6e0f393bdceac7d550e0e41d",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 942722,
+      "validation": {
+        "NOT_ADMITTED_OPAQUE": 187,
+        "VALIDATED_ON_INPUT": 70
+      },
+      "source_bridge": {
+        "NOT_RUN": 256,
+        "MISMATCH_NOT_VALIDATED": 1
+      }
+    },
+    {
+      "variant": "combined-b",
+      "path": ".evidence/codegen-trend/measure-5c0fl5j9/receipt.json",
+      "sha256": "751cc932bce987756828d67ba887ccb348f3015642af073f36f959c88cc84586",
+      "log": ".evidence/codegen/n03d-c2/measure-combined-b-20261002.log",
+      "log_sha256": "b38b849e7d9ba1f49f43507d9fb2aea5c8077bdc5115edc829848494806ad6ad",
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "retained_bytes": 940305,
+      "validation": {
+        "NOT_ADMITTED_OPAQUE": 187,
+        "VALIDATED_ON_INPUT": 70
+      },
+      "source_bridge": {
+        "NOT_RUN": 256,
+        "MISMATCH_NOT_VALIDATED": 1
+      }
+    }
+  ],
+  "results": [
+    {
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "gcc_o2_text_bytes": 96,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 7177000
+        },
+        "regression-b": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 21738125
+        },
+        "local-a": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 5936000
+        },
+        "local-b": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 21074959
+        },
+        "combined-a": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 6488458
+        },
+        "combined-b": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 19014500
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 128,
+      "local_b_category_delta": {},
+      "local_b_selected": {}
+    },
+    {
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "gcc_o2_text_bytes": 96,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 6690750
+        },
+        "regression-b": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 21504958
+        },
+        "local-a": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 6107708
+        },
+        "local-b": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 18497750
+        },
+        "combined-a": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 6496583
+        },
+        "combined-b": {
+          "text_bytes": 128,
+          "rodata_bytes": 0,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 21431791
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 128,
+      "local_b_category_delta": {},
+      "local_b_selected": {}
+    },
+    {
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "gcc_o2_text_bytes": 14432,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 30516,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 158620541
+        },
+        "regression-b": {
+          "text_bytes": 30184,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 749405958
+        },
+        "local-a": {
+          "text_bytes": 29716,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 161421500
+        },
+        "local-b": {
+          "text_bytes": 29536,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 643975583
+        },
+        "combined-a": {
+          "text_bytes": 26404,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 160148208
+        },
+        "combined-b": {
+          "text_bytes": 26184,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 640907750
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 26832,
+      "local_b_category_delta": {
+        "extend_mask": -232,
+        "compute": -416
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 32,
+        "local_extend_compare": 26,
+        "local_indexed_memory": 49,
+        "local_shift_arithmetic": 46
+      }
+    },
+    {
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "gcc_o2_text_bytes": 14432,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 29012,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 164571416
+        },
+        "regression-b": {
+          "text_bytes": 28668,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 693414458
+        },
+        "local-a": {
+          "text_bytes": 28212,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 151395209
+        },
+        "local-b": {
+          "text_bytes": 28020,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 666955750
+        },
+        "combined-a": {
+          "text_bytes": 24900,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 155342916
+        },
+        "combined-b": {
+          "text_bytes": 24668,
+          "rodata_bytes": 74,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 643729042
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 25316,
+      "local_b_category_delta": {
+        "extend_mask": -232,
+        "compute": -416
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 32,
+        "local_extend_compare": 26,
+        "local_indexed_memory": 49,
+        "local_shift_arithmetic": 46
+      }
+    },
+    {
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "gcc_o2_text_bytes": 9940,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 28404,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 187317000
+        },
+        "regression-b": {
+          "text_bytes": 28264,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 853183917
+        },
+        "local-a": {
+          "text_bytes": 28160,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 183237375
+        },
+        "local-b": {
+          "text_bytes": 28028,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 717531875
+        },
+        "combined-a": {
+          "text_bytes": 26772,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 186436625
+        },
+        "combined-b": {
+          "text_bytes": 26636,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 680259833
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 26872,
+      "local_b_category_delta": {
+        "extend_mask": -116,
+        "compute": -120
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 26,
+        "local_extend_compare": 3,
+        "local_indexed_memory": 10,
+        "local_shift_arithmetic": 18
+      }
+    },
+    {
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "gcc_o2_text_bytes": 9940,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 26664,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 175732666
+        },
+        "regression-b": {
+          "text_bytes": 26520,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 726077583
+        },
+        "local-a": {
+          "text_bytes": 26384,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 171481333
+        },
+        "local-b": {
+          "text_bytes": 26252,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 727915750
+        },
+        "combined-a": {
+          "text_bytes": 24996,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 173402458
+        },
+        "combined-b": {
+          "text_bytes": 24860,
+          "rodata_bytes": 558,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 675212917
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 25128,
+      "local_b_category_delta": {
+        "extend_mask": -148,
+        "compute": -120
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 34,
+        "local_extend_compare": 3,
+        "local_indexed_memory": 10,
+        "local_shift_arithmetic": 18
+      }
+    },
+    {
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "gcc_o2_text_bytes": 48760,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 124024,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1123171084
+        },
+        "regression-b": {
+          "text_bytes": 122972,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 3137231459
+        },
+        "local-a": {
+          "text_bytes": 122516,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1125525417
+        },
+        "local-b": {
+          "text_bytes": 122048,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 5639787292
+        },
+        "combined-a": {
+          "text_bytes": 101980,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1188949500
+        },
+        "combined-b": {
+          "text_bytes": 98484,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 3021037375
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 99408,
+      "local_b_category_delta": {
+        "extend_mask": -176,
+        "compute": -748
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 41,
+        "local_extend_compare": 3,
+        "local_indexed_memory": 52,
+        "local_multiply_arithmetic": 7,
+        "local_shift_arithmetic": 103
+      }
+    },
+    {
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "gcc_o2_text_bytes": 48760,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 121652,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1404755458
+        },
+        "regression-b": {
+          "text_bytes": 120592,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 3262679250
+        },
+        "local-a": {
+          "text_bytes": 120152,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1119095542
+        },
+        "local-b": {
+          "text_bytes": 119676,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 3299738791
+        },
+        "combined-a": {
+          "text_bytes": 99632,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1153894959
+        },
+        "combined-b": {
+          "text_bytes": 96128,
+          "rodata_bytes": 3336,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 3014039791
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 97044,
+      "local_b_category_delta": {
+        "extend_mask": -176,
+        "compute": -740
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 41,
+        "local_extend_compare": 3,
+        "local_indexed_memory": 52,
+        "local_multiply_arithmetic": 7,
+        "local_shift_arithmetic": 103
+      }
+    },
+    {
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "gcc_o2_text_bytes": 14492,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 33688,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 610345583
+        },
+        "regression-b": {
+          "text_bytes": 33300,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1686587584
+        },
+        "local-a": {
+          "text_bytes": 32940,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 562806250
+        },
+        "local-b": {
+          "text_bytes": 32708,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1178420834
+        },
+        "combined-a": {
+          "text_bytes": 25012,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 607849167
+        },
+        "combined-b": {
+          "text_bytes": 23612,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1157260541
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 24204,
+      "local_b_category_delta": {
+        "extend_mask": -36,
+        "compute": -556
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 8,
+        "local_extend_compare": 1,
+        "local_indexed_memory": 123,
+        "local_multiply_arithmetic": 5
+      }
+    },
+    {
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "gcc_o2_text_bytes": 14492,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 33440,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 597542958
+        },
+        "regression-b": {
+          "text_bytes": 33052,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1211335834
+        },
+        "local-a": {
+          "text_bytes": 32692,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 682068542
+        },
+        "local-b": {
+          "text_bytes": 32460,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1209347541
+        },
+        "combined-a": {
+          "text_bytes": 24764,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 549160291
+        },
+        "combined-b": {
+          "text_bytes": 23364,
+          "rodata_bytes": 712,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 1176921458
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 23956,
+      "local_b_category_delta": {
+        "extend_mask": -36,
+        "compute": -556
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 8,
+        "local_extend_compare": 1,
+        "local_indexed_memory": 123,
+        "local_multiply_arithmetic": 5
+      }
+    },
+    {
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "gcc_o2_text_bytes": 14400,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 30228,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 382472166
+        },
+        "regression-b": {
+          "text_bytes": 29496,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 628665625
+        },
+        "local-a": {
+          "text_bytes": 29604,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 158076083
+        },
+        "local-b": {
+          "text_bytes": 29104,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 641220333
+        },
+        "combined-a": {
+          "text_bytes": 24808,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 157736625
+        },
+        "combined-b": {
+          "text_bytes": 24356,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 575554750
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 24748,
+      "local_b_category_delta": {
+        "extend_mask": -188,
+        "compute": -204
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 41,
+        "local_extend_compare": 6,
+        "local_indexed_memory": 38,
+        "local_shift_arithmetic": 7
+      }
+    },
+    {
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "gcc_o2_text_bytes": 14400,
+      "variants": {
+        "regression-a": {
+          "text_bytes": 30116,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 196034208
+        },
+        "regression-b": {
+          "text_bytes": 29384,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 578310917
+        },
+        "local-a": {
+          "text_bytes": 29492,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 153628208
+        },
+        "local-b": {
+          "text_bytes": 28992,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 604674750
+        },
+        "combined-a": {
+          "text_bytes": 24696,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 158915792
+        },
+        "combined-b": {
+          "text_bytes": 24244,
+          "rodata_bytes": 80,
+          "padding_bytes": 0,
+          "literal_pool_or_intext_data_bytes": 0,
+          "compile_median_ns": 563499083
+        }
+      },
+      "previous_frame_c1_b_text_bytes": 24636,
+      "local_b_category_delta": {
+        "extend_mask": -188,
+        "compute": -204
+      },
+      "local_b_selected": {
+        "local_extend_arithmetic": 41,
+        "local_extend_compare": 6,
+        "local_indexed_memory": 38,
+        "local_shift_arithmetic": 7
+      }
+    }
+  ],
+  "attribution": {
+    "path": ".evidence/codegen/n03d-c2/category-summary.json",
+    "sha256": "5db3f5be1d08a2988052908a90d3e110e2649d7dd0068d8edc434c5d9b27cadb",
+    "objects": 72,
+    "unique_object_hashes": 61,
+    "disassembler_sha256": "a4498b0883383a2653530a8575b53c3058dfbfd9aeb36e9d0e77df1c77fde2f6",
+    "category_sums": "Equal S1 instruction bytes for every object; no text or text-plus-rodata growth.",
+    "counter_claim": "PRODUCER_TELEMETRY_NOT_PROVED"
+  },
+  "bound_outcome": {
+    "status": "NOT_ADMITTED",
+    "comparisons": 48,
+    "passed": 47,
+    "missed": 1,
+    "misses": [
+      {
+        "unit": "zstd:lib/compress/zstd_compress.c",
+        "profile": "checked",
+        "variant": "local-b",
+        "compile_median_ratio": 1.7976956325044935,
+        "text_delta_bytes": -924,
+        "text_plus_rodata_delta_bytes": -924,
+        "status": "BOUND_MISS"
+      }
+    ],
+    "max_remaining_compile_ratio": 1.1414552424530455,
+    "disposition": "Retain all frozen observations. No timing rerun or threshold change. The wall-time cause is not established; do not claim proven intrinsic compiler overhead or excuse the miss as noise. Correctness and size evidence do not satisfy the missed compile-cost gate. Implementation stays opt-in; no default or performance admission. Move to the next independent planned slice."
+  },
+  "semantic_validation": {
+    "checked_unchecked_bindings": "Same IR, chain record and bundle digests per unit; A identity chains separate from B P0 chains.",
+    "across_selection_variants": "A bindings match across OFF/local/combined, likewise B; all 257 output/step records and harness outcomes identical.",
+    "validated_on_input": 70,
+    "not_admitted_opaque": 187,
+    "source_bridge_mismatch": 1,
+    "source_bridge_not_run": 256,
+    "limitation": "Legacy C-HIR 1001 versus EvoIR 1002 event mismatch is retained, not repaired or relabeled by this emission slice."
+  },
+  "retention": {
+    "status": "RETIRED",
+    "object_files": 1608,
+    "object_bytes": 4732824,
+    "hash_check": "ALL_MATCH",
+    "cache_allocated_kib": 24123456,
+    "cache_implementation_snapshot_kib": 23972764,
+    "cache_delta_allocated_bytes": 154308608,
+    "evidence_note": "Exact historical runtime object payloads are no longer retained; reproduce using the pinned source, options and tools. Logs, manifests, receipts, attribution, source fixtures and all unrelated/open evidence remain.",
+    "open_handles": "NONE before removal; 10 exact directories inspected",
+    "evidence_net_allocated_bytes": 4186112,
+    "evidence_scope": "C2 evidence directory, six fresh measurement directories and C2 trend history, minus the 44 KiB implementation snapshot; excludes tracked source/docs and unrelated disk activity.",
+    "evidence_allocated_bytes": {
+      ".evidence/codegen/n03d-c2": 720896,
+      ".evidence/codegen-trend/measure-c_2x8fkl": 458752,
+      ".evidence/codegen-trend/measure-xef4bjdd": 466944,
+      ".evidence/codegen-trend/measure-gt0dkbv_": 462848,
+      ".evidence/codegen-trend/measure-4nryc2wy": 471040,
+      ".evidence/codegen-trend/measure-qm_uryma": 462848,
+      ".evidence/codegen-trend/measure-5c0fl5j9": 475136,
+      ".evidence/codegen-trend/n03d-local.jsonl": 712704
+    },
+    "free_bytes_after_cleanup": 108226052096,
+    "scope_net_allocated_bytes": 158494720
+  }
+}

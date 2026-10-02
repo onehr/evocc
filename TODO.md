@@ -2412,9 +2412,19 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     C2 is now frozen in [the local-selection plan](tests/contracts/codegen-n03d-local-20261002.json):
     adjacent single-use shift/extension/multiply and indexed-memory idioms,
     emission only, default OFF. The real-driver RED was reproduced at `504e012a`;
-    the implementation and focused boundary/native controls are in progress.
-    Full-workspace, both native corpora and the six-unit capture remain due;
-    no C2 acceptance or size result is recorded yet.
+    implementation `b478bc7c` now has full-workspace 3,018/0/5 ignored and
+    both 384-case native corpora ON/OFF green; all OFF historical hashes
+    match and all six TU captures complete without proof/bundle failures.
+    [C2 result](docs/notebook/codegen-local-selection-20261002.md),
+    [receipt](tests/contracts/codegen-n03d-c2-20261002-receipt.json):
+    **CLOSED_WITH_COMPILE_BOUND_MISS**, not full admission. Local-only B
+    checked zstd-compress is 1.7977x OFF versus the frozen 1.25x ceiling;
+    retain all samples, no resampling or default flip. Unchecked B savings
+    are 0/648/268/916/592/392 bytes, entirely compute/extension removal.
+    Cumulative library ratios are 1.612–2.501; all five still miss 1.4x.
+    Exact completed object payloads retired after hash/handle checks;
+    manifests, receipts and logs retained. Continue N03c/N07 independently;
+    remaining select/compare opportunities require their own measured scope.
 
   - [x] **N03e — EvoIR mid-level passes, bounded first slice** — `DONE_NEGATIVE`, P3.
     GVN/CSE, SCCP, dead-code elimination and simple loop-invariant motion on

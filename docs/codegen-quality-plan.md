@@ -400,7 +400,7 @@ sections above remain the contract.
 | N04 C checker | Done | [note](notebook/codegen-checker-20261002.md) |
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
 | N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
-| N03d | C1 closed, opt-in only; remaining selection patterns open | [result](notebook/codegen-constants-20261002.md), [receipt](../tests/contracts/codegen-n03d-c1-20261002-receipt.json): full workspace 3,005/0/5 ignored, both 384-case corpora ON/OFF, six-TU byte identity and size gates; default OFF |
+| N03d | C1 closed opt-in; C2 closed with compile-bound miss, not admitted; remaining selection patterns open | [C1](notebook/codegen-constants-20261002.md), [C2 result](notebook/codegen-local-selection-20261002.md), [C2 receipt](../tests/contracts/codegen-n03d-c2-20261002-receipt.json): full workspace 3,018/0/5 ignored, native and size controls green; local-only B checked zstd-compress compile median 1.7977x OFF exceeds 1.25x. Negative result frozen, no default flip. |
 | N03c | Not started | Includes the recorded bounded-termination repair |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Not started | Steps 1–3 landed inside N03a |
@@ -432,9 +432,14 @@ is emitted at every return; every function builds a frame record, with no leaf
 case. N03f's opt-in alternatives now pair saves, share epilogues and omit
 eligible leaf records without changing frame layout. On the five library
 units, all three enabled leave unchecked B at 1.717–2.546 times GCC-14 `-O2`.
-Adding N03d C1 leaves 1.653–2.528 times; the 1.4 target is still not met and
-default output has not changed. C1's measured reduction is entirely constant
-materialization, separate from frame and P0 gains.
+Adding N03d C1 leaves 1.653–2.528 times; C2's cumulative size observations
+leave 1.612–2.501 times, but its compile-cost ceiling was missed on one
+comparison. The 1.4 target is still not met and default output has not changed.
+C1's measured reduction is entirely constant materialization; C2 removes
+compute/extension instructions. Both are separate from frame and P0 gains.
+Do not reclassify C2's size/correctness results as full admission. Continue
+with the independent N03c bounded-termination and allocation work, then N07;
+remaining N03d selection opportunities require a separately frozen scope.
 
 **Rules that hold for the rest of N03.**
 
