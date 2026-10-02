@@ -1,0 +1,118 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N07",
+  "slice": "E3",
+  "date": "2026-10-03",
+  "status": "CLOSED_NEGATIVE_QUALIFICATION_NO_SMT_PROOF",
+  "implementation_commit": "98542c3f",
+  "plan_commit": "81374b99",
+  "red_commit": "20671add",
+  "plan": "tests/contracts/codegen-n07-smt-20261003.json",
+  "inventory": "tests/contracts/codegen-n07-e3-verdicts-20261003.json",
+  "behavior": "No compiler, model, interpreter, registry, policy default or trust change. Project obligation generation uses explicit Boolean conjunction bindings.",
+  "gates": {
+    "full_workspace": {
+      "status": "PASS",
+      "path": ".evidence/codegen/n07-e3/full-workspace-20261003.log",
+      "bytes": 292964,
+      "sha256": "008c49d0bef04485ece310f6dcad132656d6434451f61c71b479e7943bedf2cb",
+      "suites": 394,
+      "passed": 3032,
+      "failed": 0,
+      "ignored": 5,
+      "clippy": "PASS",
+      "format": "PASS",
+      "regeneration": "PASS"
+    },
+    "python": {
+      "status": "PASS",
+      "passed": 55,
+      "failed": 0,
+      "path": ".evidence/codegen/n07-e3/python-focused-final-20261003.log",
+      "bytes": 154,
+      "sha256": "4ca021f57940463408aab31025405ec618a315a65094d903ec34ce643c60d11a"
+    },
+    "red": {
+      "path": ".evidence/codegen/n07-e3/red-20261003.log",
+      "bytes": 842,
+      "sha256": "6c83536097e66c7d3b9696d4e504f8cfcb2e372f6270ea66e320ef64c20effd5",
+      "result": "EXPECTED_FAILURE: missing tools.isa_model_smt"
+    },
+    "lean": "NOT_REQUIRED: no Lean or registry change",
+    "native_and_six_tu": "NOT_RUN after failed tool qualification. E2's existing 768 native/24 TU two-build identity and execution records are inherited context, not E3 reruns."
+  },
+  "qualification": {
+    "status": "GENERATION_UNSUPPORTED",
+    "attempted_body": "model_add_64",
+    "opcode": "8b010000",
+    "failure_location": "targets/aarch64/isa/integer.sail:733",
+    "failure": "No generator z#z#undefined_bitvector",
+    "normal_attempt": {
+      "path": ".evidence/codegen/n07-e3/qualification-a6c3ss1t/receipt.json",
+      "bytes": 1286,
+      "sha256": "589b18135f2e41dd6c0cc17eb677c0735c0dfb846efeda5e6940a77f2ad719b6"
+    },
+    "normal_constant_fold_retry": {
+      "path": ".evidence/codegen/n07-e3/qualification-gmugorfs/receipt.json",
+      "bytes": 1339,
+      "sha256": "6f03355ff22f9515918683f6b3e42bd0608421128ba8c5f892a49e1267bc8e72"
+    },
+    "minimal_property": {
+      "path": ".evidence/codegen/n07-e3/properties/model_add_64.sail",
+      "bytes": 5195,
+      "sha256": "d4800f9a064261c21d965123f6debe07a4db6d64b18146648ee1b2ccd0858077"
+    },
+    "generator_exit_codes": [
+      1,
+      1
+    ],
+    "query_files": 0,
+    "solver_runs": 0,
+    "source_shapes": 89,
+    "remaining_bodies_not_run": 88,
+    "negative_solver_controls": "NOT_RUN: qualification gate failed before first real query",
+    "admitted_proofs": 0,
+    "counterexamples": 0,
+    "disposition": "N07-E3-D1: pinned translator cannot handle a verbatim decoder dependency. No model rewrite, undefined-value substitution, unsafe optimization or alternative unqualified translator. No source/model counterexample obtained.",
+    "rerun": "Regenerate properties with python3 -m tools.isa_model_smt --generate .evidence/codegen/n07-e3/properties; run --qualify with the exact pinned E2 toolchain and read-only model mounts recorded in the attempt receipt."
+  },
+  "rule_inventory": {
+    "inst_families": 59,
+    "section5_rows": 44,
+    "target_patterns": 9,
+    "specialized_paths": 28
+  },
+  "release_binary_identity": {
+    "compiler_sha256": "9d5aa180e790c2d9fd131a7866305d59dd1b5178d506c4884ed048437e339288",
+    "checker_sha256": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+    "unchanged_production_diff": "git diff 6cda1cc1 -- crates Cargo.toml Cargo.lock targets is empty",
+    "meaning": "Same already-tested release binaries, not a new native run or SMT result"
+  },
+  "disk": {
+    "capture_retained_logical_bytes": 416099,
+    "capture_allocated_bytes": 503808,
+    "frontend_before_kib": 24640536,
+    "frontend_after_kib": 24640536,
+    "scoped_net_bytes": 503808,
+    "accounting": "Owned E3 capture allocation plus measured target/frontend delta; excludes tracked files, Git metadata and unrelated volume activity. Oversized retired trace is recorded as a limit violation, not hidden from peak accounting.",
+    "retired_unexecuted_property_files": 88,
+    "retired_property_logical_bytes": 468449,
+    "retention": {
+      "path": ".evidence/codegen/n07-e3/retention.json",
+      "bytes": 15246,
+      "sha256": "9c82ff3b178dd27933b890dbfc9288843ae6f86853f79b3b1988f962ec9dd230"
+    },
+    "capture_limit_incident": {
+      "path": ".evidence/codegen/n07-e3/qualification-incident.json",
+      "bytes": 1084,
+      "sha256": "dd706b87bd0ce6593689772c0b94c7bcbe0402ce90fae3dfb50049c185871c9a",
+      "status": "ABORTED_CAPTURE_LIMIT_EXCEEDED_NOT_PASS",
+      "peak_log_bytes": 4266282358,
+      "retired": true,
+      "retired_log_sha256": "236a739c0a9aed6d9dedfc5df9e4eb5caeb7eb71eb59bea9d675bf3488368da6"
+    },
+    "final_free_kib": 67114932,
+    "protected": "E2 current native/TU objects, model runtime/toolchain, contracts, fixtures and Lean cache retained"
+  },
+  "claim_ceiling": "Negative tool qualification plus snapshot rule inventory. No B1/B6 proof acceptance, whole-backend or solver correctness, new native acceptance, size benefit or default promotion. E2 finite agreement is unchanged. Continue independent bounded N03c/N03d work."
+}

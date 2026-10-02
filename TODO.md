@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03c, N03d, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a, N03f, N04 and N05 are complete; N03b/N03e first slices are closed negative. N03d C1 and N03c T2 are closed opt-in; C2/T1 retain cost misses. Continue N07, then separately scoped selection/spill work; all new defaults remain OFF. Retain N02's admission limits and source-bridge mismatch; paused R items wait on the codegen track. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03c, N03d, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a, N03f, N04 and N05 are complete; N03b/N03e first slices are closed negative. N07 is dispositioned bounded, with E3 qualification negative and no SMT proof. N03d C1 and N03c T2 are closed opt-in; C2/T1 retain cost misses. Continue separately scoped spill/selection work; all new defaults remain OFF. Retain N02's admission limits and source-bridge mismatch; paused R items wait on the codegen track. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2532,7 +2532,9 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   own proof design. Reopen only after the N03 slices land, with a separate
   design and owner decision.
 
-- [ ] **N07 — Target description and ISA-model oracles** — `LATER`, P3.
+- [x] **N07 — Target description and ISA-model oracles** — `DONE`, P3;
+  bounded migration/differential closed, SMT qualification closed negative,
+  **not whole-backend proof acceptance**.
   Make the internal target description the only place a target fact is
   written. Steps 1–3 run inside N03a. Then: encoding legality with the
   assembler round trip; a pinned slice of the vendor ISA model with its
@@ -2557,7 +2559,21 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   No-op generation preserves mtimes. Retired duplicate E1 TU objects and
   temporary model products; current E2 replacements plus native baselines
   remain for E3. Scoped disk net at most +164,175,872 bytes; about 67 GiB free.
-  Bounded SMT remains a separate E3 step, not implied by finite agreement.
+  E3 is [closed negative](docs/notebook/codegen-bounded-smt-20261003.md):
+  implementation `98542c3f`; [inventory](tests/contracts/codegen-n07-e3-verdicts-20261003.json)
+  covers 59 instruction families, 44 specification rows, nine patterns and
+  28 specialized paths. The pinned SMT generator fails before the first
+  `add/64` query on `undefined_bitvector`; ordinary constant folding does not
+  help. The remaining 88 bodies/solver controls are NOT RUN; zero proofs and
+  zero counterexamples. **N07-E3-D1 is dispositioned as a tool limitation**,
+  not a compiler miscompile or permission to change the model. All uncovered
+  domains remain explicit. A verbose diagnostic exceeded the capture cap;
+  its 4.27 GB log was terminated, hashed and removed, with the incident retained.
+  Current E2 objects remain as regression baselines; no new native/size claim.
+  Full workspace 3,032 PASS / 0 FAIL / 5 existing ignored; 55 focused Python
+  PASS. [Receipt](tests/contracts/codegen-n07-e3-20261003-receipt.json).
+  Scoped retained disk increment +503,808 bytes, shared frontend cache unchanged;
+  about 64 GiB free. No B1/B6 proof acceptance.
 
 ## Benchmark coverage index
 

@@ -403,7 +403,7 @@ sections above remain the contract.
 | N03d | C1 closed opt-in; C2 closed with compile-bound miss, not admitted; remaining selection patterns open | [C1](notebook/codegen-constants-20261002.md), [C2 result](notebook/codegen-local-selection-20261002.md), [C2 receipt](../tests/contracts/codegen-n03d-c2-20261002-receipt.json): full workspace 3,018/0/5 ignored, native and size controls green; local-only B checked zstd-compress compile median 1.7977x OFF exceeds 1.25x. Negative result frozen, no default flip. |
 | N03c | T1 correctness closed with compile-bound misses; T2 copy hints closed opt-in; spill quality open | [T1 result](notebook/codegen-allocation-termination-20261003.md) preserves three compile-bound misses. [T2 result](notebook/codegen-copy-hints-20261003.md), [receipt](../tests/contracts/codegen-n03c-t2-20261003-receipt.json): full workspace 3,028/0/5 ignored; both 384-case corpora ON/OFF and 72 selected-TU harness executions green. Copy-only B unchecked savings 0/44/400/628/148/44 move bytes; all 48 size/cost comparisons within bounds, maximum compile ratio 1.021x. Defaults OFF; no full allocator closure. |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
-| N07 steps 4–6 | E1 encoding and E2 bounded model differential closed; E3 SMT open | [E1 result](notebook/codegen-encodings-20261003.md), [E2 result](notebook/codegen-vendor-model-20261003.md), [E2 receipt](../tests/contracts/codegen-n07-e2-20261003-receipt.json): 2,600 exact cases per interpreter/model/native/QEMU lane; full workspace 3,032/0/5 ignored. All 768 native and 24 A/B/profile TU objects remain byte-identical; original executions agree. Current baselines retained for E3. No SMT or full N07 acceptance claim. |
+| N07 steps 4–6 | Closed bounded; E3 qualification negative, no B1 proof acceptance | [E1 result](notebook/codegen-encodings-20261003.md), [E2 result](notebook/codegen-vendor-model-20261003.md), [E3 disposition](notebook/codegen-bounded-smt-20261003.md): E2 has 2,600 exact cases per interpreter/model/native/QEMU lane and unchanged native/TU objects. E3's pinned SMT generator rejects an unsupported undefined-bitvector dependency before its first query; zero proofs, explicit verdicts for 59 Inst families / 44 spec rows / nine patterns / 28 specialized paths. No model or trust-policy bypass; existing native baselines retained. |
 | N06 | Not scheduled | |
 
 **Order of the remaining slices, from N01.** Summed positive excess of
@@ -442,6 +442,9 @@ with N07 after N03c T1/T2. T2 copy hints save only move bytes on the frozen
 population; frame+C1+copy leaves library ratios 1.643–2.488 times GCC-O2,
 without including C2 or upgrading its negative cost result. Remaining N03c
 spill-quality and N03d selection work require separately frozen scopes.
+N07 E3 is now dispositioned negative at the pinned generator boundary; next
+is a bounded N03c redundant-reload slice, then remaining N03d selection. This
+order does not imply that model proof coverage or the 1.4 target was achieved.
 
 **Rules that hold for the rest of N03.**
 
