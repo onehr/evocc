@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03c, N03d, N03f, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a layering, N04 and N05 are complete; N03b/N03e first slices are closed negative without transforms. Retain N02's admission limits and legacy source-bridge mismatch; later backend slices build on the N03a layers; the paused R items wait on the codegen track. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03c, N03d, N06, N07 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a layering, N03f's opt-in frame slice, N04 and N05 are complete; N03b/N03e first slices are closed negative without transforms. Retain N02's admission limits and legacy source-bridge mismatch; N03d then N03c follow, with all new frame defaults OFF; the paused R items wait on the codegen track. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2406,11 +2406,11 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     under the frozen rules. The same closure receipt records zero transforms;
     broader passes require a new design before implementation.
 
-  - [ ] **N03f — Frame and call overhead** — `LATER`, P3.
+  - [x] **N03f — Frame and call overhead, opt-in slice** — `DONE`, P3.
     Leaf-frame elision, callee-saved minimization and argument shuffling
     through the ABI interface, with EvoMIR revision text and ABI corpora.
     After N03a.
-    **In progress, 2026-10-02.** [Frozen plan](tests/contracts/codegen-n03f-20261002.json)
+    **Closed opt-in, 2026-10-02.** [Frozen plan](tests/contracts/codegen-n03f-20261002.json)
     at `161d81d0`: three opt-in sub-steps behind `--frame-opt=LIST`, paired
     saves (F1), one shared epilogue per function (F2) and leaf-frame elision
     (F3); every default stays off in this slice and a default flip is a
@@ -2426,9 +2426,17 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     The Darwin PAC/unwind reference control itself fails (Clang-built subject,
     unsigned harness: exit 90, only two frames); that combination is explicitly
     NOT_VALIDATED, not counted as a successful unwind test.
-    Full-workspace validation is in progress. Options-on 384+384 corpora and
-    ABI probes, options-off object identity, six-TU measurements and admission
-    proposal remain pending: **N03f is not closed and defaults stay off.**
+    At `af8687f1`: full workspace 2,997 PASS / 0 FAIL / 5 ignored; Clippy,
+    format and regeneration PASS. OFF: 24/24 six-TU A/B and 384/384 per-OS
+    objects match the baseline. ON: both 384-case corpora execute/agree with
+    byte-identical twins, 17 ABI tests pass, all six unit harnesses run under
+    both profiles. B unchecked frame savings are 0/3,100/1,208/18,372/7,080/
+    4,660 bytes; five library ratios remain 1.717–2.546, above the 1.4 goal.
+    [Receipt](tests/contracts/codegen-n03f-20261002-receipt.json) and
+    [one-page result](docs/notebook/codegen-frame-variants-20261002.md)
+    separate frame gains from P0, preserve the original failed Clippy run and
+    source-bridge mismatch, and record the limited default-admission proposal.
+    **Defaults stay off; no kernel or Darwin signed-unwind acceptance.**
 
 - [x] **N04 — The C checker as a product** — `DONE`, P3.
   One command that runs the EvoIR interpreter as a precise undefined-behavior

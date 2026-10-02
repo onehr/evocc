@@ -399,7 +399,7 @@ sections above remain the contract.
 | N03a backend layering | Done, independently rechecked | [note](notebook/codegen-backend-layering-20261002.md): every one of the 384 Darwin and 384 Linux corpus object hashes equals the pre-refactor baseline; `src/generic/` holds no ISA name; gate 2,986 passed, 0 failed, 4 ignored |
 | N04 C checker | Done | [note](notebook/codegen-checker-20261002.md) |
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
-| N03f frame and calls | In progress, not accepted | [frozen plan](../tests/contracts/codegen-n03f-20261002.json), fresh baselines at `161d81d0`; reviewed F1 WIP integrated, F2/F3 implemented default-off. Focused and bounded native interaction tests pass; full gate, corpus identity/execution and size measurements pending. See [TODO](../TODO.md) for the failed Darwin signed-unwind reference control. |
+| N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
 | N03d, N03c | Not started | |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Not started | Steps 1–3 landed inside N03a |
@@ -420,14 +420,18 @@ unchecked EvoCC over GCC-14 `-O2` on the five library units:
 | Extension and masks | 4,132 | N03d |
 | Stack access, inflate only | 6,712 | N03c |
 
-So: **N03f, then N03d, then N03c.** N07 steps 4–6 follow once N03d has
+The census above predates N03f. With that opt-in slice closed, next:
+**N03d, then N03c.** N07 steps 4–6 follow once N03d has
 started. N03b and N03e are not next: their frozen preflight rules admitted
 nothing, and inlining in particular needs a new design before any transform.
 
-**What is known about today's frame code**, for N03f: callee-saved registers
+**What remains true of the default frame code**: callee-saved registers
 are saved and restored one at a time with `str` and `ldr`; the whole epilogue
 is emitted at every return; every function builds a frame record, with no leaf
-case. The first two can change without touching the frame layout.
+case. N03f's opt-in alternatives now pair saves, share epilogues and omit
+eligible leaf records without changing frame layout. On the five library
+units, all three enabled leave unchecked B at 1.717–2.546 times GCC-14 `-O2`;
+the 1.4 target is not met and default output has not changed.
 
 **Rules that hold for the rest of N03.**
 

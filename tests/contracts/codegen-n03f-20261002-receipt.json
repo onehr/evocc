@@ -1,0 +1,119 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03f",
+  "date": "2026-10-02",
+  "status": "DONE_OPT_IN",
+  "plan": "tests/contracts/codegen-n03f-20261002.json",
+  "subject_commit": "af8687f1f8106e253a766fb151911c0a1780eb83",
+  "implementation_commit": "a1b0d7f0ff4f58bc0a740ec37cb5474380916330",
+  "red_commits": ["0771b134", "fb12b2d9"],
+  "protection_amendment_commit": "718f155f",
+  "specification": "EvoMIR 0.56",
+  "default_admission": "NONE; all three options remain OFF. A default flip is separate owner-approved work with fresh baselines.",
+  "gates": {
+    "full_workspace": {
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 RUST_TEST_THREADS=1 tools/gate-changed.sh --full-workspace --offline",
+      "path": ".evidence/codegen/n03f/full-workspace-2-20261002.log",
+      "sha256": "d51e44cdcbd7035c5d7b288e6f999375392cb40da163b136dbb6c0bfba9279a7",
+      "suites_including_doc_tests": 389,
+      "passed": 2997, "failed": 0, "ignored": 5,
+      "clippy": "PASS", "format": "PASS", "regeneration": "PASS",
+      "status": "PASS"
+    },
+    "first_full_attempt": {
+      "status": "FAIL_CLIPPY_ITEMS_AFTER_TEST_MODULE",
+      "repair": "af8687f1 moved the identical test module after emitter definitions; no production-code change",
+      "path": ".evidence/codegen/n03f/full-workspace-20261002.log",
+      "sha256": "99aa64eb64b64c19b0ec222f914087d015d82f971b1b0b07e2fe439ca69d5f91"
+    },
+    "focused_frame_tests": {"passed": 9, "failed": 0, "also_in_full_workspace": true},
+    "abi_options_on": {
+      "passed": 17, "failed": 0, "ignored": 0, "suites": 4,
+      "tests": ["section9_calling_convention_probe", "section6_records", "section9_lowering_frontier_corpus", "section9_activation_addresses_natively"],
+      "path": ".evidence/codegen/n03f/abi-on-20261002.log",
+      "sha256": "592b0fd1aedfa7cd6005906956cbe50de7d9537394e430411bd9dd77f11ae908"
+    },
+    "linux_interactions": {
+      "passed_combinations": 8,
+      "population": "Four cumulative variants x PAC off/on; unwind, dynamic/over-aligned frames, variadic arguments, live callee values, canary normal exit 0 and corrupt exit 77",
+      "path": ".evidence/codegen/n03f/native-linux-final-20261002.log",
+      "sha256": "dd97488b3bc3c6c6e2e47ce4a2cf37efa6c639b22c6a16a868d1a54887db68a5"
+    },
+    "darwin_interactions": {
+      "passed_unsigned_combinations": 4,
+      "path": ".evidence/codegen/n03f/native-darwin-7-20261002.log",
+      "sha256": "df6e2545c9bc5410e95d7e5b137fc032a3ec832d3970daa569e66eb778125aab",
+      "signed_unwind": "NOT_VALIDATED: Clang signed subject with unsigned harness itself exits 90, two frames, unwind status 5; EvoCC options-off control also fails",
+      "retained_control": ".evidence/codegen/n03f/native-darwin-64416"
+    },
+    "python_census": {
+      "passed": 8, "failed": 0,
+      "path": ".evidence/codegen/n03f/python-census-20261002.log",
+      "sha256": "75ff54e727b57e4bd7b88956ed0c92c4b9a416e6f0976707e8fb54aa385ac0bd"
+    },
+    "lean": "NOT_REQUIRED; no Lean, registry or proof semantics changed"
+  },
+  "native_corpora": [
+    {"lane": "darwin", "options": "OFF", "objects": 384, "executed": 384, "agreeing": 384, "baseline_byte_matches": 384, "two_builds": "BYTE_IDENTICAL", "path": ".evidence/codegen/n03f/corpus-off-darwin-20261002.log", "sha256": "5dc9210c776bd0255e07aa065fa4d4963ae715c2931c2834adbda3f036196d75"},
+    {"lane": "linux", "options": "OFF", "objects": 384, "executed": 384, "agreeing": 384, "baseline_byte_matches": 384, "two_builds": "BYTE_IDENTICAL", "path": ".evidence/codegen/n03f/corpus-off-linux-20261002.log", "sha256": "886fdaa2053788a7340f96acb28a68ff4fc05a14fa441a5d83d79309ad3ea080"},
+    {"lane": "darwin", "options": "F1,F2,F3", "objects": 384, "executed": 384, "agreeing": 384, "two_builds": "BYTE_IDENTICAL", "path": ".evidence/codegen/n03f/corpus-on-darwin-20261002.log", "sha256": "5c71f2f881ebd1cb3aad530b86e6c5cf198a66e5ad0d40eab1809811dd42ac39"},
+    {"lane": "linux", "options": "F1,F2,F3", "objects": 384, "executed": 384, "agreeing": 384, "two_builds": "BYTE_IDENTICAL", "path": ".evidence/codegen/n03f/corpus-on-linux-20261002.log", "sha256": "1d62f831a42b54d234dedcf52529a2991c5ae303e5f09bdc9ba99b4f5025ead2"}
+  ],
+  "measurements": [
+    {"variant": "A_OFF_REGRESSION", "path": ".evidence/codegen-trend/measure-en6_n7bm/receipt.json", "sha256": "07c595c686f4f061b7adda99723afbbb0a44433ebfed3f5f28adf6f8b16923d2", "baseline_byte_matches": 12},
+    {"variant": "B_OFF_REGRESSION", "path": ".evidence/codegen-trend/measure-2l5y9zsr/receipt.json", "sha256": "dc082616d67fb1a1d9b2642070e783bc8c92f8b2dc78683dcffbc41938f2b280", "baseline_byte_matches": 12},
+    {"variant": "F1_B", "path": ".evidence/codegen-trend/measure-qtdp2ael/receipt.json", "sha256": "e3b72028ba8996ad52d12275c07788a48416bb05c86b3d53f2894e4652989173"},
+    {"variant": "F1_F2_B", "path": ".evidence/codegen-trend/measure-9naggk2m/receipt.json", "sha256": "c47caeda09a4dca65b44bc304e8de0dde14d57a79087d991c37094d781cab44d"},
+    {"variant": "F1_F2_F3_B", "path": ".evidence/codegen-trend/measure-9aavu7lu/receipt.json", "sha256": "53bacd19ffd0973483384cacab41a904858043ad1423f7163cc6c79cd35f7085"},
+    {"variant": "F1_F2_F3_A", "path": ".evidence/codegen-trend/measure-m3oc7dxm/receipt.json", "sha256": "b0efe7be0592e593304e4b12bed436edcc8ccf682b0543a8fff659d2cff8c4f4"}
+  ],
+  "per_measurement_acceptance": {
+    "status": "OBSERVED",
+    "unit_profile_twins": 12, "identical_twins": 12, "source_compiles": 36,
+    "native_executions": 12, "coalesced_matching_harness_results": 6,
+    "completed_proof_rejections": 0, "bundle_failures": 0,
+    "scope": "Six selected original TUs with reference-built dependencies; not complete applications",
+    "steps_cases": 257, "changed_steps_or_outputs": 0,
+    "translation_validation": {"VALIDATED_ON_INPUT": 70, "NOT_ADMITTED_OPAQUE": 187},
+    "source_bridge": "integer-mix remains MISMATCH_NOT_VALIDATED: C-HIR 1001 events, EvoIR 1002; no interpreter change or validated-pass default admission",
+    "timing": "Three compile observations per unit/profile, not a latency experiment or a default-admission claim"
+  },
+  "size_columns": ["A_OFF", "B_OFF", "F1_B", "F1_F2_B", "F1_F2_F3_B", "F1_F2_F3_A"],
+  "size_rows": [
+    {"unit": "integer-mix", "unchecked": [128,128,128,128,128,128], "checked": [128,128,128,128,128,128], "gcc14_o2": 96, "unchecked_final_ratio": 1.333333, "rodata": 0, "frame_category_delta_B": 0, "branch_category_delta_B": 0},
+    {"unit": "zlib:deflate.c", "unchecked": [29012,28668,27220,25592,25568,25912], "checked": [30516,30184,28736,27108,27084,27416], "gcc14_o2": 14432, "unchecked_final_ratio": 1.771619, "rodata": 74, "frame_category_delta_B": -3384, "branch_category_delta_B": 284},
+    {"unit": "zlib:inflate.c", "unchecked": [26664,26520,26008,25336,25312,25456], "checked": [28404,28264,27752,27080,27056,27196], "gcc14_o2": 9940, "unchecked_final_ratio": 2.546479, "rodata": 558, "frame_category_delta_B": -1356, "branch_category_delta_B": 148},
+    {"unit": "zstd:lib/compress/zstd_compress.c", "unchecked": [121652,120592,113812,102880,102220,103240], "checked": [124024,122972,116192,105260,104600,105612], "gcc14_o2": 48760, "unchecked_final_ratio": 2.096390, "rodata": 3336, "frame_category_delta_B": -20032, "branch_category_delta_B": 1660},
+    {"unit": "zstd:lib/decompress/zstd_decompress.c", "unchecked": [33440,33052,30172,26140,25972,26360], "checked": [33688,33300,30420,26388,26220,26608], "gcc14_o2": 14492, "unchecked_final_ratio": 1.792161, "rodata": 712, "frame_category_delta_B": -7848, "branch_category_delta_B": 768},
+    {"unit": "cjson:cJSON.c", "unchecked": [30116,29384,27576,25000,24724,25412], "checked": [30228,29496,27688,25112,24836,25524], "gcc14_o2": 14400, "unchecked_final_ratio": 1.716944, "rodata": 80, "frame_category_delta_B": -5212, "branch_category_delta_B": 552}
+  ],
+  "size_qualification": {
+    "metric": "S1 object .text + .text.* bytes; static instruction slots = bytes / 4 on these objects",
+    "padding_and_literal_pool": "Zero on every measured object; rodata unchanged across all variants",
+    "categories": "Frame and branch deltas apply to both profiles. The other 11 N01 category deltas are zero.",
+    "p0_separation": "Frame variants benefit A and B. Their deltas are not verified EqSat savings; P0 delta after F3 is measured separately and need not equal its pre-F3 delta. g0 is excluded.",
+    "quarter_target": "Five library TUs still exceed 1.4x GCC-14 -O2 with all three options enabled; default output is unchanged",
+    "category_path": ".evidence/codegen/n03f/category-summary.json",
+    "category_sha256": "9841a60a945f29d77442e9883e52385e03c25c8d977af0c7da545d8d7ea1577e",
+    "category_basis": "Frozen N01 syntactic classifier, 72 objects / 61 unique hashes; not a semantic backend proof"
+  },
+  "admission_recommendation": {
+    "F1": "Opt-in slice accepted; eligible for a separately gated default proposal, preserving protected profiles",
+    "F2": "Opt-in slice accepted; eligible for a separately gated default proposal, preserving protected profiles and unwind limitations",
+    "F3": "Opt-in slice accepted; keep default OFF until the separate frame-pointer and kernel rollout is approved",
+    "not_claimed": ["Default optimization admission", "Darwin signed unwind", "Kernel acceptance", "Complete application builds", "Proved backend", "Latency improvement", "GCC parity"]
+  },
+  "retention": {
+    "status": "RETIRED_COMPLETED_OBJECT_PAYLOADS",
+    "rule": "After hash/category capture and no-open-handle inspection, only completed N03f baseline/on object payloads were removed. All logs, manifests, receipts and the failed Darwin signed reference control remain. Historical exact runtime payloads are no longer retained; objects are rebuildable from the frozen inputs.",
+    "retired_objects": 1608,
+    "retired_logical_bytes": 4677064,
+    "evidence_net_increase_logical_bytes": 4573269,
+    "evidence_net_scope": "New N03f evidence roots and eight six-TU captures, after removing 1536 corpus objects and 72 six-TU objects. Excludes shared build cache and tracked source/docs.",
+    "capture_limit_bytes": 524288000,
+    "shared_target": "target/frontend only; two jobs, serialized",
+    "shared_target_allocated_bytes_after_gate": 24287363072,
+    "shared_target_net_delta": "UNMEASURED: no reliable N03f-start allocation snapshot; do not infer from whole-volume free-space changes"
+  },
+  "claim_ceiling": "Default-off, emission-only frame variants validated on the frozen population. No IR, interpreter, registry, allocation or ABI-layout changes. The remaining codegen goal and default admission are not closed by this receipt."
+}
