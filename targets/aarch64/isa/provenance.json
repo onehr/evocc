@@ -1,0 +1,156 @@
+{
+  "repository": "https://github.com/rems-project/sail-arm",
+  "commit": "1bf2e5574ba9d704639a28401b6a387dcb113cae",
+  "path": "arm-v9.4-a/src",
+  "inputs": {
+    "prelude.sail": "81260319293bbc6b1512cf6d10f181ad401ce20b147d46a5e8c80a3c89e2db41",
+    "builtins.sail": "ab4473cdfcb885e3abe8013cfe9f557e62e6c22d903af16263c5b6af06c6bf8f",
+    "v8_base.sail": "7c7a9c92e05cedb7202183160db96dd2b9c1de6cde73a70816159c6ddf2d1b49",
+    "instrs64.sail": "f46630385fb146b2f74254566a16528ae2c26d41246fca84beeb49a8d35c7fc8",
+    "decode_start.sail": "01ce1d2df4951dcdc4d4ab5fb6eb8c1f9436d3476707d290d42f235e609b644e",
+    "decode_end.sail": "be7d7b3a71e7b1b50cb53a031b670c70910b9ab1a2a1506a83e12eebde6760a6",
+    "LICENSE-arm-v9.4-a": "121df4677b246ccb78e33f257c131ee6164067a52c01235bd3d272c82e44dcc4"
+  },
+  "selector_sha256": "ec95cbe001a9aadfca30ed738e87ee25c6d9d950221aa841b91a5381dba8494a",
+  "spans": [
+    {
+      "source": "v8_base.sail",
+      "byte_start": 0,
+      "byte_end": 3160,
+      "sha256": "0b6acbfd2e9322bec9a11b60a719878b10fb7580bfb51ab1e13eeefdc8b27f14"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 46889,
+      "byte_end": 47461,
+      "sha256": "ea03e3ff3e6794bf098b75dc4da16d7f9243ae304ea1b2b8c5707465192b1a08"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 58837,
+      "byte_end": 64420,
+      "sha256": "609ab059d37b185ed2801ee280abcface823da3340addac177396acbbcee46b2"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 76870,
+      "byte_end": 76931,
+      "sha256": "113ea32c8d1a95ce6dea0b16191412300080445f76373b37df8f167072c3a811"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 76932,
+      "byte_end": 77010,
+      "sha256": "05488ac1535ac5fee3e75d3374ad1aa5df54a0c455e04e7fe42cd6f2954f29da"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 77011,
+      "byte_end": 77074,
+      "sha256": "bb53b24edd66d4ecca9cd1d5078538400c888a7855f5c3f2123a0f5f6eadbc8f"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 187158,
+      "byte_end": 187456,
+      "sha256": "f53de0d92e848f4b4a3af9a740a150527dc8397ac248ef58c21c1abd69967b34"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 638495,
+      "byte_end": 638834,
+      "sha256": "a34a98177aa7572efefaaefd22eadd0465f2e9ec3ca9a352e415ef2dbf5a412b"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 356348,
+      "byte_end": 356943,
+      "sha256": "a6f67b1151ce542424debc0626e33338c36418196f71f099e915fd36d33be3a0"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 1099057,
+      "byte_end": 1099437,
+      "sha256": "bd6b19fb6fa00e9e44094b6a5b331159977c5e4648fadc7267b2c7905916bf7b"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 1099438,
+      "byte_end": 1100047,
+      "sha256": "a12256d4c35429f787f4d32f84ecb806356fce38b4918755227ef98c518deae1"
+    },
+    {
+      "source": "v8_base.sail",
+      "byte_start": 936630,
+      "byte_end": 937739,
+      "sha256": "9c1e10d7944755d83caea35f588199e0198bdbcb3f5f47ea2c0a0c0d84c1de53"
+    },
+    {
+      "source": "decode_start.sail",
+      "byte_start": 0,
+      "byte_end": 5096,
+      "sha256": "01ce1d2df4951dcdc4d4ab5fb6eb8c1f9436d3476707d290d42f235e609b644e"
+    },
+    {
+      "source": "instrs64.sail",
+      "byte_start": 21724,
+      "byte_end": 28842,
+      "sha256": "b01cda9742bbfe7ad7760b789e4dae68a077b1eadd35fc8d8e2eb7997d02863a"
+    },
+    {
+      "source": "instrs64.sail",
+      "byte_start": 28843,
+      "byte_end": 35453,
+      "sha256": "9a121185af397409a602e13a8a9642765fd6dea762aecfa58338be7d5e8517e0"
+    },
+    {
+      "source": "instrs64.sail",
+      "byte_start": 64356,
+      "byte_end": 72368,
+      "sha256": "7647a321cf6fa2f2c37b0ade3024eabba8cf487e136db4a9225093d0ae97e6aa"
+    },
+    {
+      "source": "instrs64.sail",
+      "byte_start": 78311,
+      "byte_end": 93977,
+      "sha256": "92627944fc850a111a6a7ce7592788dfdd220a6cf9b18dc68eb73ac8963b6858"
+    },
+    {
+      "source": "instrs64.sail",
+      "byte_start": 93978,
+      "byte_end": 98457,
+      "sha256": "5b7fe6a1de72a889faae3c92b4f1651d86bd2ba44859971668d40f3844dc0c9b"
+    },
+    {
+      "source": "instrs64.sail",
+      "byte_start": 123318,
+      "byte_end": 129607,
+      "sha256": "e735914b0ea09562f19ed3c67d924a9a4af7049a66384ea23644256216e91cdf"
+    },
+    {
+      "source": "instrs64.sail",
+      "byte_start": 1490134,
+      "byte_end": 1493312,
+      "sha256": "b80fdfa95394fa96a723e7b6121fc76bae8f219ddc47c39e6311f280f499ad41"
+    },
+    {
+      "source": "instrs64.sail",
+      "byte_start": 1502295,
+      "byte_end": 1507080,
+      "sha256": "59a6757d3057ae1df2494de5a5bf8985f20af0bffd2185ccf05a1a44f4a690e3"
+    },
+    {
+      "source": "decode_end.sail",
+      "byte_start": 0,
+      "byte_end": 6330,
+      "sha256": "be7d7b3a71e7b1b50cb53a031b670c70910b9ab1a2a1506a83e12eebde6760a6"
+    }
+  ],
+  "outputs": {
+    "integer.sail": "31febfc91a37a900ab992573b321c6925029a94c750e1cc6fef0efd550bcd9ef",
+    "prelude.sail": "81260319293bbc6b1512cf6d10f181ad401ce20b147d46a5e8c80a3c89e2db41",
+    "builtins.sail": "ab4473cdfcb885e3abe8013cfe9f557e62e6c22d903af16263c5b6af06c6bf8f",
+    "LICENSE": "121df4677b246ccb78e33f257c131ee6164067a52c01235bd3d272c82e44dcc4"
+  },
+  "boundary": "boundary.sail and runtime.sail are project reset/I/O/domain glue, not vendor semantics"
+}

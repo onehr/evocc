@@ -1,6 +1,10 @@
 """The N07 integer lane needs a vendor body, not a local ISA substitute."""
+import hashlib
+import json
 import unittest
 from pathlib import Path
+
+from tools.isa_model_diff import check_results
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -13,6 +17,25 @@ class VendorSliceTest(unittest.TestCase):
         self.assertIn("function clause __DecodeA64_DataProcReg", source)
         self.assertIn("end __DecodeA64", source)
         self.assertIn("NO EXPRESS OR IMPLIED LICENSES", source)
+
+    def test_selected_source_matches_recorded_vendor_bytes(self):
+        directory = ROOT / "targets/aarch64/isa"
+        record = json.loads((directory / "provenance.json").read_text())
+        for name, expected in record["outputs"].items():
+            with self.subTest(name=name):
+                self.assertEqual(hashlib.sha256((directory / name).read_bytes()).hexdigest(), expected)
+        self.assertEqual(hashlib.sha256((ROOT / "tools/isa_model_slice.py").read_bytes()).hexdigest(),
+                         record["selector_sha256"])
+
+    def test_runtime_boundary_does_not_accept_missing_or_wrong_answers(self):
+        rows = [("model_add_64", 0, 5, 7, 12)]
+        self.assertEqual(check_results(rows, b"000000000000000c\n"), 1)
+        self.assertEqual(check_results(rows, b"000000000000000c 0\n", model=True), 1)
+        for output in (b"", b"000000000000000d\n", b"000000000000000c\n" * 2):
+            with self.subTest(output=output), self.assertRaises(ValueError):
+                check_results(rows, output)
+        with self.assertRaisesRegex(ValueError, "NZCV"):
+            check_results(rows, b"000000000000000c 1\n", model=True)
 
 
 if __name__ == "__main__":

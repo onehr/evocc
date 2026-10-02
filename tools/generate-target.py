@@ -1576,8 +1576,9 @@ def main() -> int:
                     raise TargetDescriptionError(f"generated file differs: {path}")
         else:
             for path, contents in outputs.items():
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(contents)
+                if not path.is_file() or path.read_bytes() != contents:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(contents)
     except (OSError, TargetDescriptionError) as error:
         print(f"generate-target: {error}", file=sys.stderr)
         return 2

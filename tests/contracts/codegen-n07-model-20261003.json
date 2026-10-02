@@ -70,6 +70,8 @@
     "shape_count": 81,
     "execution_cases": 2592,
     "seed_hex": "5037",
+    "concrete_vectors_sha256": "0cda785b9808edc5505f9c1fc7ed735e439ce8eac67031516c432a7eaf6dd530",
+    "concrete_evoir_sha256": "77103695c649c39c9f856042dcd06734bd030cb86f12bc828c1152bdc9dea012",
     "input_rule": "First eight pairs cover zero, one, all ones, sign edge and alternating bits; remaining 24 use a fixed documented xorshift64 generator. Map shift count modulo source width. Freeze concrete generated vectors with the implementation before acceptance.",
     "constant_controls_hex": [
       "0",
