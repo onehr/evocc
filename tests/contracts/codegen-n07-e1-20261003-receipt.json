@@ -1,0 +1,239 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N07",
+  "slice": "E1",
+  "date": "2026-10-03",
+  "status": "CLOSED_BEHAVIOR_PRESERVING",
+  "subject_commit": "4b945e9ee07257533ed47363402154e01465de3a",
+  "implementation_commit": "4b945e9ee07257533ed47363402154e01465de3a",
+  "plan": "tests/contracts/codegen-n07-encodings-20261003.json",
+  "plan_commit": "c9c37f5f",
+  "baseline_binding_commit": "2b534efe",
+  "red_commit": "cdd3c01e",
+  "specification": "EvoMIR 0.61; target description revision 2",
+  "encoding_digest": "96d58a17f4b979210e5fa38cb8fe2a3a76d311cc5707428505b7c568a072f203",
+  "behavior": "Existing encoding facts now have one generated owner. Public BinaryImm validation rejects out-of-domain immediates already excluded by normal lowering. Selection order, frame limits, relaxation margins, interpreter semantics and all option defaults are unchanged.",
+  "gates": {
+    "full_workspace": {
+      "status": "PASS",
+      "path": ".evidence/codegen/n07-e1/full-workspace-20261003.log",
+      "sha256": "dff0a4f13c0ae69d5bee5185c1533f2050536e77a0cffbea558c5e02ea19a758",
+      "suites": 394,
+      "passed": 3032,
+      "failed": 0,
+      "ignored": 5,
+      "clippy": "PASS",
+      "format": "PASS",
+      "regeneration": "PASS"
+    },
+    "focused": {
+      "passed": 52,
+      "failed": 0,
+      "suites": 10,
+      "logs": [
+        {
+          "path": ".evidence/codegen/n07-e1/focused-immediates-20261003.log",
+          "sha256": "fcada01b5de6f6be49552c7d6583d89451214bda350c7afd463ffcaf73784ae1",
+          "passed": 19
+        },
+        {
+          "path": ".evidence/codegen/n07-e1/focused-consumers-20261003.log",
+          "sha256": "3d81598f3f73e7ef2f15c5deddd14c66210740800ad3cb1b9bbe8d3ea06521ed",
+          "passed": 30
+        },
+        {
+          "path": ".evidence/codegen/n07-e1/encoding-oracle-20261003.log",
+          "sha256": "b3fac294385c2f2778cd417524441b7b75259fa22ad4b8892fe9826f33b51b6d",
+          "passed": 3
+        }
+      ]
+    },
+    "python": {
+      "passed": 45,
+      "failed": 0,
+      "path": ".evidence/codegen/n07-e1/python-focused-20261003.log",
+      "sha256": "168905b2a398dc16f545c08b4131e8e126f2cac8bf512175ea19191b60b02775"
+    },
+    "red": [
+      {
+        "path": ".evidence/codegen/n07-e1/red-validator-20261003.log",
+        "sha256": "75c10e3b74a5917b10e2936916959a6bf6dc748ca97217ee6dc98655964a2901",
+        "result": "EXPECTED_FAILURE: malformed add W immediate 4096 accepted"
+      },
+      {
+        "path": ".evidence/codegen/n07-e1/red-generator-20261003.log",
+        "sha256": "90adfc9156dd12a42034c5b92782c593d2788fd4c1aeb69ddaebaaff58973dad",
+        "result": "EXPECTED_FAILURE: missing generated encoding component/API"
+      }
+    ],
+    "lean": "NOT_REQUIRED: no Lean or registry change"
+  },
+  "tools": {
+    "checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+    "compiler": "9d5aa180e790c2d9fd131a7866305d59dd1b5178d506c4884ed048437e339288",
+    "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+    "steps": "dcfe04187db025d97727ee67157749304755f957e7fddb9581c90a238fb961e2"
+  },
+  "assembler_oracle": {
+    "targets": [
+      "aarch64-linux-gnu",
+      "arm64-apple-darwin"
+    ],
+    "instructions_per_target": 20142,
+    "text_bytes_per_target": 80568,
+    "logical_masks": {
+      "w": 1302,
+      "x": 5334
+    },
+    "logical_ops": [
+      "and",
+      "orr",
+      "eor"
+    ],
+    "invalid_forms_per_target": 21,
+    "tbz_adr_valid_edges_per_target": 4,
+    "result": "Exact assembled/disassembled/reassembled text equality; all boundary refusals expected. Not ISA semantics."
+  },
+  "native_corpora": [
+    {
+      "lane": "darwin",
+      "before": ".evidence/codegen/n07-e1/before-darwin-20261003.log",
+      "after": ".evidence/codegen/n07-e1/after-darwin-20261003.log",
+      "sha256": "dcb8c8e03e5db9c6b848960e8166d62c64a51812497a0d5186423cbd17da7eb5",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "object_bytes": 193392,
+      "twins": "BYTE_IDENTICAL",
+      "before_after": "BYTE_IDENTICAL"
+    },
+    {
+      "lane": "linux",
+      "before": ".evidence/codegen/n07-e1/before-linux-20261003.log",
+      "after": ".evidence/codegen/n07-e1/after-linux-20261003.log",
+      "sha256": "728f4f2802021332675d6ee128fc55ee94a11335d255da42d390231e2aa88aff",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "object_bytes": 383344,
+      "twins": "BYTE_IDENTICAL",
+      "before_after": "BYTE_IDENTICAL"
+    }
+  ],
+  "measurements": [
+    {
+      "arm": "A",
+      "plan": "tests/contracts/codegen-n07-e1-after-a-20261003.json",
+      "before": ".evidence/codegen-trend/measure-22zj828f/receipt.json",
+      "path": ".evidence/codegen-trend/measure-vfdko75f/receipt.json",
+      "sha256": "8196b23a3b9048db2613a586d03deba28fa72b0baf943d4b836063c629d3b984",
+      "status": "OBSERVED",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "before_after": "BYTE_IDENTICAL",
+      "bindings_equal": 6,
+      "steps_equal": 257,
+      "correctness_executions": 12,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      }
+    },
+    {
+      "arm": "B",
+      "plan": "tests/contracts/codegen-n07-e1-after-b-20261003.json",
+      "before": ".evidence/codegen-trend/measure-nj5j00_o/receipt.json",
+      "path": ".evidence/codegen-trend/measure-yv1cq7rj/receipt.json",
+      "sha256": "fc7b6da1c604a088949bb5188dff862957ac25942d6ae6cc577f2f992de4df3e",
+      "status": "OBSERVED",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "before_after": "BYTE_IDENTICAL",
+      "bindings_equal": 6,
+      "steps_equal": 257,
+      "correctness_executions": 12,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      }
+    }
+  ],
+  "text_bytes": [
+    {
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "a_checked": 128,
+      "a_unchecked": 128,
+      "b_checked": 128,
+      "b_unchecked": 128,
+      "migration_delta": 0
+    },
+    {
+      "unit": "zlib:deflate.c",
+      "a_checked": 30516,
+      "a_unchecked": 29012,
+      "b_checked": 30184,
+      "b_unchecked": 28668,
+      "migration_delta": 0
+    },
+    {
+      "unit": "zlib:inflate.c",
+      "a_checked": 28404,
+      "a_unchecked": 26664,
+      "b_checked": 28264,
+      "b_unchecked": 26520,
+      "migration_delta": 0
+    },
+    {
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "a_checked": 124024,
+      "a_unchecked": 121652,
+      "b_checked": 122972,
+      "b_unchecked": 120592,
+      "migration_delta": 0
+    },
+    {
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "a_checked": 33688,
+      "a_unchecked": 33440,
+      "b_checked": 33300,
+      "b_unchecked": 33052,
+      "migration_delta": 0
+    },
+    {
+      "unit": "cjson:cJSON.c",
+      "a_checked": 30228,
+      "a_unchecked": 30116,
+      "b_checked": 29496,
+      "b_unchecked": 29384,
+      "migration_delta": 0
+    }
+  ],
+  "coverage": {
+    "tv_admitted_inputs": 70,
+    "opaque_inputs": 187,
+    "source_bridge": "Legacy integer-mix C-HIR 1001 versus EvoIR 1002 event mismatch remains NOT_VALIDATED.",
+    "scope": "Six selected TUs with reference dependencies, not full applications.",
+    "native_latency": "NOT_RUN",
+    "model_and_smt": "NOT_RUN",
+    "defaults": "UNCHANGED"
+  },
+  "retention": {
+    "retired_objects": 24,
+    "retired_bytes": 1255664,
+    "checks": "Hash-checked against receipts, duplicate full bytes checked by the capture, no open handles before deletion.",
+    "disposition": "Exact historical before-TU runtime objects are no longer retained. All manifests, receipts, logs and summaries remain. The 24 current after-TU objects and 768 native baseline objects are the sole current open N07 E2/E3 migration baselines, not redundant captures.",
+    "current_objects": 792,
+    "current_object_bytes": 1832400,
+    "disk": {
+      "baseline_target_frontend_kib": 24554636,
+      "final_target_frontend_kib": 24606156,
+      "shared_cache_growth_bytes": 52756480,
+      "owned_evidence_kib": 7192,
+      "owned_evidence_growth_bytes": 7364608,
+      "scoped_net_growth_bytes": 60121088,
+      "free_kib": 77536184,
+      "note": "Scoped cache and owned evidence only; excludes tracked files and unrelated volume activity. Whole-volume free-space movement is not attributed to this slice."
+    }
+  },
+  "claim_ceiling": "Existing-form encoding legality and behavior-preserving migration, not ISA semantic validation, bounded SMT, size improvement, default optimization admission or complete N07."
+}

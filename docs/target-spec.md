@@ -11,8 +11,10 @@ units and both native corpora and a green full workspace gate
 bounded constant-materialization `patterns` and byte `costs`, with generated
 Rust and EvoMIR rows; C2 extends those tables to adjacent single-use emission
 idioms. Neither slice closes N07's encoding/model/SMT steps.
-N07 E1 has an encoding-fact implementation under validation against its
-[frozen plan](../tests/contracts/codegen-n07-encodings-20261003.json).
+N07 E1's encoding-fact migration is closed under its
+[frozen plan](../tests/contracts/codegen-n07-encodings-20261003.json):
+[full workspace and byte-identity evidence](notebook/codegen-encodings-20261003.md)
+cover all 24 A/B/profile TU objects and both 384-case native corpora.
 The model/emulator and SMT steps remain open
 under the [codegen quality plan](codegen-quality-plan.md).
 [EvoMIR](evomir-spec.md)

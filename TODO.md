@@ -2540,10 +2540,15 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   lowering rule. Lean statements for patterns start on RISC-V and only after
   those steps. No hand-written ISA specification, no full-ISA proofs.
   E1's [frozen plan](tests/contracts/codegen-n07-encodings-20261003.json)
-  has fresh retained pre-migration objects for both 384-case native corpora
-  and six A/B TUs in both profiles. The generated immediate/offset component
-  and existing BinaryImm validator repair are implemented; full-workspace
-  and post-migration byte comparisons are pending, not acceptance.
+  is closed by [implementation `4b945e9e`](docs/notebook/codegen-encodings-20261003.md)
+  and its [receipt](tests/contracts/codegen-n07-e1-20261003-receipt.json):
+  full workspace 3,032 PASS / 0 FAIL / 5 ignored; 52 focused Rust and 45
+  Python PASS. Both 384-case native corpora and 24 A/B/profile TU objects
+  are byte-identical before/after; all executions agree and proof replay has
+  zero rejection/bundle failure. The generated encoding owner and existing
+  BinaryImm validator repair change no selection or defaults. Retired 24
+  duplicate before-TU objects; keep 792 current objects as the sole open
+  E2/E3 migration baselines. Scoped disk net +60,121,088 bytes; about 74 GiB free.
   Model execution and bounded SMT (steps 5–6) have not started.
 
 ## Benchmark coverage index
