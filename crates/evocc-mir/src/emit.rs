@@ -1650,49 +1650,6 @@ fn save_groups(slots: &BTreeMap<u8, u64>, frame: &Frame) -> Vec<(u8, u64, Option
     groups
 }
 
-#[cfg(test)]
-mod paired_save_tests {
-    use super::*;
-
-    #[test]
-    fn pairs_require_adjacent_encodable_offsets_and_a_stable_stack_base() {
-        let mut frame = frame_of_for(
-            Target::Linux,
-            &Allocated {
-                name: "boundary".into(),
-                blocks: Vec::new(),
-                assignment: BTreeMap::new(),
-                spilled: 0,
-                frame_slots: 0,
-                used_callee_saved: Vec::new(),
-                parameters: 0,
-                outgoing: 0,
-                indirect_result: false,
-                internal: true,
-            },
-        );
-        for offset in [0, 496, 504] {
-            let slots = BTreeMap::from([(19, offset), (20, offset + 8), (21, offset + 16)]);
-            assert_eq!(
-                save_groups(&slots, &frame),
-                vec![(19, offset, Some(20)), (21, offset + 16, None)]
-            );
-        }
-        for slots in [
-            BTreeMap::from([(19, 512), (20, 520)]),
-            BTreeMap::from([(19, 0), (20, 16)]),
-            BTreeMap::from([(19, 4), (20, 12)]),
-        ] {
-            assert!(save_groups(&slots, &frame).iter().all(|g| g.2.is_none()));
-        }
-        frame.dynamic = true;
-        assert_eq!(
-            save_groups(&BTreeMap::from([(19, 0), (20, 8)]), &frame),
-            vec![(19, 0, None), (20, 8, None)]
-        );
-    }
-}
-
 /// Save (`restore == false`) or restore one save area as `save_groups`
 /// groups it. Each register keeps its own CFI rule: a `.cfi_offset` (or the
 /// over-aligned expression) after the store, a `.cfi_restore` after the load.
@@ -3272,5 +3229,48 @@ fn emit_term(
         MTerm::Brk { imm } => {
             let _ = writeln!(text, "    brk #{imm}");
         }
+    }
+}
+
+#[cfg(test)]
+mod paired_save_tests {
+    use super::*;
+
+    #[test]
+    fn pairs_require_adjacent_encodable_offsets_and_a_stable_stack_base() {
+        let mut frame = frame_of_for(
+            Target::Linux,
+            &Allocated {
+                name: "boundary".into(),
+                blocks: Vec::new(),
+                assignment: BTreeMap::new(),
+                spilled: 0,
+                frame_slots: 0,
+                used_callee_saved: Vec::new(),
+                parameters: 0,
+                outgoing: 0,
+                indirect_result: false,
+                internal: true,
+            },
+        );
+        for offset in [0, 496, 504] {
+            let slots = BTreeMap::from([(19, offset), (20, offset + 8), (21, offset + 16)]);
+            assert_eq!(
+                save_groups(&slots, &frame),
+                vec![(19, offset, Some(20)), (21, offset + 16, None)]
+            );
+        }
+        for slots in [
+            BTreeMap::from([(19, 512), (20, 520)]),
+            BTreeMap::from([(19, 0), (20, 16)]),
+            BTreeMap::from([(19, 4), (20, 12)]),
+        ] {
+            assert!(save_groups(&slots, &frame).iter().all(|g| g.2.is_none()));
+        }
+        frame.dynamic = true;
+        assert_eq!(
+            save_groups(&BTreeMap::from([(19, 0), (20, 8)]), &frame),
+            vec![(19, 0, None), (20, 8, None)]
+        );
     }
 }
