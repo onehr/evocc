@@ -682,6 +682,40 @@ fn allocate_copy_hints(source: &Function) -> Allocated<Inst, Term, Class> {
 }
 
 #[test]
+fn n03c_reload_reuse_removes_only_the_redundant_same_location_read() {
+    let source = single(
+        vec![],
+        vec![
+            Inst::Value(r(0), 19),
+            Inst::Save(r(0), 0),
+            Inst::Restore(r(1), 0),
+            Inst::Save(r(1), 1),
+            Inst::Restore(r(2), 0),
+        ],
+        vec![r(2)],
+    );
+    let off = allocate(&TINY, &source).unwrap();
+    let reloads = |value: &Allocated<Inst, Term, Class>| {
+        value
+            .blocks
+            .iter()
+            .flat_map(|b| &b.insts)
+            .filter(|i| matches!(i, Inst::Restore(..)))
+            .count()
+    };
+    verify_allocation(&TINY, &off).unwrap();
+    assert_eq!(straight_result(&off, BTreeMap::new()), vec![19]);
+    assert_eq!(reloads(&off), 2, "{off:?}");
+    let options = evocc_mir::generic::allocation::AllocationOptions::parse("reload-reuse")
+        .expect("the frozen opt-in reload policy is not implemented");
+    let on =
+        evocc_mir::generic::allocation::allocate_with_options(&TINY, &source, options).unwrap();
+    verify_allocation(&TINY, &on).unwrap();
+    assert_eq!(straight_result(&on, BTreeMap::new()), vec![19]);
+    assert_eq!(reloads(&on), 1, "OFF={off:?}\nON={on:?}");
+}
+
+#[test]
 fn n03c_copy_hint_reuses_a_dying_nonfirst_source() {
     let source = single(
         vec![r(0), r(1)],

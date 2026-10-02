@@ -173,6 +173,17 @@ fn n03c_copy_hint_driver_is_opt_in_and_records_the_request() {
 }
 
 #[test]
+fn n03c_reload_driver_records_a_canonical_opt_in_list() {
+    let off = assembly(&[]);
+    assert!(!off.contains("evocc-native-regalloc="));
+    let on = assembly(&["--regalloc-opt=reload-reuse"]);
+    assert!(on.contains("// evocc-native-regalloc=reload-reuse\n"));
+    let both = assembly(&["--regalloc-opt=copy-hints,reload-reuse"]);
+    assert!(both.contains("// evocc-native-regalloc=copy-hints,reload-reuse\n"));
+    assert_eq!(both, assembly(&["--regalloc-opt=reload-reuse,copy-hints"]));
+}
+
+#[test]
 fn n03c_copy_hint_protected_profiles_and_bad_requests_stay_closed() {
     for flag in [
         "-fno-omit-frame-pointer",
