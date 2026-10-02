@@ -3,6 +3,7 @@
   "package": "N03f",
   "date": "2026-10-02",
   "status": "PLAN_NOT_ACCEPTANCE",
+  "handoff_amendment": "2026-10-02: apply codegen-quality-plan section 11's newer, stricter protection literally. Explicit frame-pointer requests and kernel markers suppress ALL three frame variants, not just leaf-frame elision. This narrows the opt-in population until kernel validation; it changes no baseline or acceptance threshold.",
   "slice": "Frame and call overhead, first slice: opt-in paired saves, one shared epilogue and leaf-frame elision",
   "source_baseline": "fb02b7e3594eadc0d631d8be3277853256e7f7ef",
   "baseline_qualification": "Clean HEAD after N03a closure. The release compiler at this commit is the options-off reference. N03a retained baseline objects were deleted at its closure, so fresh A/B six-unit objects and both 384-case native object sets are re-recorded at this commit before any frame code changes.",
@@ -28,10 +29,10 @@
   },
   "options": {
     "driver_flag": "--frame-opt=LIST, LIST a comma-separated subset of paired-saves, shared-epilogue, leaf-frames; at most once per command; each name at most once; unknown names rejected; refused with --check like --ub-checks. The exact-input evo-ir-asm adapter accepts the same --frame-opt=LIST.",
-    "codegen_fields": "CodegenOptions.frame: FrameVariants { paired_saves, shared_epilogue, leaf_frames } (all false by default) and CodegenOptions.frame_pointer_required (false by default).",
-    "frame_pointer_requests": "-fno-omit-frame-pointer sets frame_pointer_required, -fomit-frame-pointer clears that request (last wins). -mno-omit-leaf-frame-pointer is newly admitted and sets an independent leaf request. Either request suppresses leaf-frames only; paired-saves and shared-epilogue never remove the frame record.",
-    "kernel_profile": "Kernel-profile markers suppress leaf-frames: -mgeneral-regs-only (unconditional in arm64 Kbuild), -mstack-protector-guard=sysreg, or a nonzero patchable entry on the function. The kernel command projection (tools/k1/cmdrecord.py) does not pass --frame-opt, so kernel objects keep today's output.",
-    "identity": "When any frame variant is on, the assembly header records it beside the existing evocc-native-ub-checks line. With every variant off the emitted text is unchanged.",
+    "codegen_fields": "CodegenOptions.frame: FrameVariants { paired_saves, shared_epilogue, leaf_frames } (all false by default), frame_pointer_required and leaf_frame_pointer_required (both false by default).",
+    "frame_pointer_requests": "-fno-omit-frame-pointer sets frame_pointer_required, -fomit-frame-pointer clears that request (last wins). -mno-omit-leaf-frame-pointer is newly admitted and sets an independent leaf request. Either request suppresses all frame variants under the newer section 11 handoff restriction.",
+    "kernel_profile": "Kernel-profile markers suppress all frame variants: -mgeneral-regs-only (unconditional in arm64 Kbuild), -mstack-protector-guard=sysreg, or a nonzero patchable entry on the function. The kernel command projection (tools/k1/cmdrecord.py) does not pass --frame-opt, so kernel objects keep today's output.",
+    "identity": "When any frame variant is requested, the assembly header records the canonical requested list beside the existing evocc-native-ub-checks line. Per-function eligibility and protection can decline it. With every variant off the emitted text is unchanged.",
     "default": "OFF for every sub-step in this slice."
   },
   "sub_steps": [

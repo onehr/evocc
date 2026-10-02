@@ -440,6 +440,10 @@ case. The first two can change without touching the frame layout.
   must execute and agree.
 - The kernel profile and any frame-pointer-requesting option keep today's
   output until the kernel gates have been run with the new code.
+  This protection also applies when a frame variant is explicitly requested:
+  all three variants are suppressed, not only leaf-frame elision. The N03f
+  plan's handoff amendment records this narrower opt-in population; its
+  assembly header records the request, not a claim that every function took it.
 - One writer in the tree at a time; all builds share `target/frontend`.
 
 **Open observation from N03a.** With a synthetic ABI whose argument registers
