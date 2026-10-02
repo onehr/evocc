@@ -1,0 +1,60 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N07",
+  "slice": "E1: immediate and offset facts, assembler round trips",
+  "date": "2026-10-03",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "0c115111",
+  "authority": [
+    "docs/target-spec.md sections 2–6, step 4 and B2/B5",
+    "docs/codegen-quality-plan.md sections 10 and 11",
+    "docs/evomir-spec.md immediate forms and emission"
+  ],
+  "observed": "Immediate constraints are repeated in immediate.rs, lower.rs, validate.rs and emit.rs. BinaryImm validation only checks logical masks: forged unshifted add/sub immediates and invalid shift counts are not rejected. Normal lowering already constrains them. This is the recorded Appendix A gap, not a new operation.",
+  "scope": {
+    "included": "Canonical encodings.v1 data and generated Rust for unshifted add/sub/compare imm12, shifted-add chunk size, signed imm9 and scaled imm12 memory offsets, signed imm7 pair offsets, mov-wide 16-bit fields/shift units, logical-mask element widths, scalar shift limits and the TBZ/ADR reach used by existing conservative relaxation thresholds. Reuse existing register-width facts. Migrate existing consumers without selecting more encodings.",
+    "policy_unchanged": "Preserve movz/movk order and zero behavior, C1/C2 tie ordering, memory folding block scan and byte-expansion guard, conservative 4-byte-scaled frame limit, 8-byte paired-save stride, and the exact relaxation margins. Encoding maxima are distinct from selection/frame policy.",
+    "validator": "Reject malformed BinaryImm forms against their existing EvoMIR contract: add/sub unshifted imm12, logical encodings, in-range shifts, general operands, and no immediate multiply/divide. Do not broaden validation for memory expansion forms or change interpreter semantics.",
+    "excluded": "Instruction selection changes, new forms/options/defaults, allocation/frame changes, a new DSL or handwritten ISA semantics, P0/g0/R03, latency, new audit layers. Vendor semantic execution and bounded SMT are separately frozen N07 E2/E3 work, not E1 acceptance."
+  },
+  "source": {
+    "repository": "https://github.com/rems-project/sail-arm",
+    "commit": "1bf2e5574ba9d704639a28401b6a387dcb113cae",
+    "path": "arm-v9.4-a/src/instrs64.sail",
+    "origin": "Automatically translated Arm 2023-03 ASL. Existing immediate/address decode fields checked read-only before this plan; no vendor model execution or correctness proof claimed."
+  },
+  "sequence": [
+    "Commit this work plan and fresh A/B baseline measurement plans before running. Existing T2 objects were retired; retain fresh baseline objects until after full-byte comparisons.",
+    "Record default-OFF Darwin and Linux 384-case object corpora and both six-TU arms on this unchanged implementation. Freeze after-plans binding the completed baseline receipts before implementation.",
+    "Commit REDs for the observed validator gap and missing generated encoding facts. Implement the migration, keeping all ordinary output byte-identical.",
+    "Run focused boundary/assembler tests, full workspace gate, both native corpora and six-TU after captures with existing byte comparator. Close with one-page note/receipt, retire only measured temporary objects and report disk delta."
+  ],
+  "red": [
+    "Rebound malformed/duplicate/missing encoding rows; checked-in regeneration and original fact owners consuming generated data.",
+    "All unshifted imm12 boundaries, signed/scaled offset boundaries/alignment, pair boundaries, wide halves/shifts and scalar shift boundaries, including wrong-width high bits.",
+    "Independent enumeration of all 1,302 W and 5,334 X logical masks and random nonencodings; assemble generated valid instances on both OS targets and disassemble/reassemble text bytes using the platform tools.",
+    "Malformed add/sub 4096/4097/MAX, shifts equal to register width, and immediate mul/div must be rejected by public MIR validation; existing valid public lowering continues to pass.",
+    "Assembler accept/reject at TBZ/ADR reach boundaries; conservative selection thresholds remain exactly unchanged."
+  ],
+  "acceptance": {
+    "objects": "Six S5 TUs, A/B, checked/unchecked: two identical builds each, full-byte equality with fresh pre-migration objects. Existing Darwin/Linux corpus: 384 cases each, two identical objects each and equality with pre-migration capture.",
+    "native": "Existing corpus execution, selected-TU harnesses, per-instance allocation validation and no-option lowering results stay unchanged. Focused ON-path boundary tests cover C1 constants/C2 local forms/frame-pair consumers without changing their admission dispositions.",
+    "gates": [
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "python3 -m unittest tools.tests.test_generate_target",
+      "python3 tools/generate-target.py --check",
+      "python3 tools/render-status.py --todo"
+    ],
+    "stop": "Any object difference is a migration failure, not an improvement. Preserve the failing case and fix or separate it. No model/SMT or whole-backend proof claim."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "serial": true,
+    "retention": "Keep compact logs, hashes, measurements and reproducers. No full disassembly retained. Baseline and candidate objects retired only after byte comparison and idle-handle checks; protected evidence and Lean cache untouched."
+  },
+  "claim_ceiling": "Encoding legality and text round-trip oracle for existing admitted forms; not semantic ISA/model validation, SMT proof, new size benefit, default optimization admission or complete N07."
+}
