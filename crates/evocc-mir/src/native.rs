@@ -255,8 +255,13 @@ fn compile_module_with_guard_control(
     let frame = options.frame.name().map_or_else(String::new, |name| {
         format!("// evocc-native-frame={name}\n")
     });
+    let selection = if options.compact_constants {
+        "// evocc-native-isel=constants\n"
+    } else {
+        ""
+    };
     Ok(format!(
-        "// evocc-native-ub-checks={}\n{frame}{assembly}",
+        "// evocc-native-ub-checks={}\n{frame}{selection}{assembly}",
         options.ub_checks.name()
     ))
 }

@@ -1,0 +1,6 @@
+version patterns.v1
+target aarch64
+sha256 4b419bed5c5b92fe94eb7147623066d47f15a2bae83aee86111cffd04a8ee2d4
+pattern const_movz root=mov_imm widths=32,64 sequence=movz_movk guard=any writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w
+pattern const_movn root=mov_imm widths=32,64 sequence=movn_movk guard=any writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w
+pattern const_orr root=mov_imm widths=32,64 sequence=orr_zero guard=logical_mask writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w

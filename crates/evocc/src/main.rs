@@ -295,6 +295,7 @@ fn main() -> ExitCode {
         eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
         eprintln!("       --ub-checks=checked|unchecked (native only; default checked)");
         eprintln!("       --frame-opt=paired-saves,shared-epilogue,leaf-frames (native only; default none)");
+        eprintln!("       --isel-opt=constants (native only; default none)");
         eprintln!("       --opt-pass=identity [--pass-report NEW_JSON_PATH] (development TV)");
         eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
         eprintln!("       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
@@ -381,6 +382,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut codegen = CodegenOptions::default();
     let mut ub_checks_selected = false;
     let mut frame_variants_selected = false;
+    let mut selection_variants_selected = false;
     let mut guard_is_sysreg = false;
     let mut guard_register = None;
     let mut guard_offset = None;
@@ -457,6 +459,15 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 frame_variants_selected = true;
                 codegen.frame = evocc_mir::emit::FrameVariants::parse(
                     arg.strip_prefix("--frame-opt=").unwrap(),
+                )?;
+            }
+            _ if arg.starts_with("--isel-opt=") => {
+                if selection_variants_selected {
+                    return Err("--isel-opt may appear only once".into());
+                }
+                selection_variants_selected = true;
+                codegen.compact_constants = evocc_mir::emit::parse_constant_selection(
+                    arg.strip_prefix("--isel-opt=").unwrap(),
                 )?;
             }
             _ if arg.starts_with("--eq-") => {
@@ -784,6 +795,9 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     }
     if mode == DriverMode::Check && frame_variants_selected {
         return Err("--frame-opt is native-only and has no meaning for --check".into());
+    }
+    if mode == DriverMode::Check && selection_variants_selected {
+        return Err("--isel-opt is native-only and has no meaning for --check".into());
     }
     Ok(DriverOptions {
         mode,

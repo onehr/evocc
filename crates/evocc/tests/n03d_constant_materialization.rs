@@ -114,3 +114,82 @@ fn driver_refuses_malformed_duplicate_and_interpreter_only_requests() {
         assert!(!run(&flags, "int main(void) { return 0; }").status.success());
     }
 }
+
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+#[test]
+fn native_sequences_preserve_flags_and_clear_upper_bits_of_writes() {
+    // Run exactly the driver's emitted constant instructions with a dirty
+    // destination and each NZCV combination. The wrapper uses no callee saves
+    // and returns value/flags in the standard two-GPR aggregate result.
+    let mut subject = String::from(".text\n");
+    let mut harness = String::from("typedef struct { unsigned long value, flags; } Pair;\n");
+    let mut checks = String::new();
+    let mut case = 0;
+    for (ty, width) in [("unsigned", 32), ("unsigned long", 64)] {
+        for value in [
+            0,
+            1,
+            u64::MAX,
+            0x1234_0000_0000_0000,
+            0x1234_0000,
+            0x00ff_00ff_00ff_00ff,
+            0xffff_4321_ffff_1234,
+            0x1234_5678_9abc_def0,
+        ] {
+            let value = if width == 32 {
+                value & 0xffff_ffff
+            } else {
+                value
+            };
+            let source = format!("{ty} f(void) {{ return ({ty})0x{value:x}UL; }}");
+            let emitted = assembly(&["--isel-opt=constants"], &source);
+            subject.push_str(&format!(
+                ".p2align 2\n.globl _constant_probe_{case}\n_constant_probe_{case}:\n    msr nzcv, x0\n    movn x0, #0\n"
+            ));
+            for line in constants(&emitted) {
+                let destination = line.split_whitespace().nth(1).unwrap();
+                assert!(destination == "x0," || destination == "w0,", "{emitted}");
+                subject.push_str(&format!("    {line}\n"));
+            }
+            subject.push_str("    mrs x1, nzcv\n    ret\n");
+            harness.push_str(&format!(
+                "extern Pair constant_probe_{case}(unsigned long);\n"
+            ));
+            checks.push_str(&format!(
+                "{{ Pair p = constant_probe_{case}(f << 28); if (p.value != 0x{value:x}UL || p.flags != (f << 28)) return {}; }}\n", case + 1
+            ));
+            case += 1;
+        }
+    }
+    harness.push_str(&format!(
+        "int main(void) {{ for (unsigned long f=0; f<16; ++f) {{ {checks} }} return 0; }}\n"
+    ));
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let dir = root.join(format!(
+        ".evidence/codegen/n03d/native-flags-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(dir.parent().unwrap()).unwrap();
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::write(dir.join("subject.s"), subject).unwrap();
+    std::fs::write(dir.join("harness.c"), harness).unwrap();
+    let output = Command::new("clang")
+        .args(["-O2", "subject.s", "harness.c", "-o", "probe"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "retained {}: {}",
+        dir.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = Command::new(dir.join("probe")).output().unwrap();
+    assert!(
+        output.status.success(),
+        "native failure {:?}; retained {}",
+        output.status,
+        dir.display()
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}

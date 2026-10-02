@@ -2398,6 +2398,9 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     opt-in GPR constant materialization using MOVZ/MOVK, MOVN/MOVK or a logical
     immediate ORR, with generated pattern/cost descriptors. Default OFF;
     frozen RED, OFF identity, native, size and interaction gates required.
+    C1 implementation checkpoint: generated pattern/cost tables and opt-in
+    emission are present; RED and fresh OFF baselines are recorded. Full
+    workspace, ON/OFF native corpora and six-TU size acceptance are pending.
     Addressing, shifted operands, compare/select and extension opportunities
     remain part of N03d after C1; no closure is inferred from this plan.
 

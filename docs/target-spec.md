@@ -7,7 +7,10 @@ consumers: register and operand facts, generic SSA destruction, allocation,
 its independent verifier, the argument cursor and the frame driver. Migration
 steps 1–3 are complete under N03a with byte-identical objects for the six S5
 units and both native corpora and a green full workspace gate
-([result](notebook/codegen-backend-layering-20261002.md)). N07 is still design work
+([result](notebook/codegen-backend-layering-20261002.md)). N03d C1 adds the first
+bounded constant-materialization `patterns` and byte `costs`, with generated
+Rust and EvoMIR rows; this does not close N07's encoding/model/SMT steps.
+N07 is still design work
 under the [codegen quality plan](codegen-quality-plan.md).
 [EvoMIR](evomir-spec.md)
 stays the normative specification of the machine IR; until a fact has been

@@ -1,5 +1,5 @@
-//! Opt-in N03f replay of existing native populations. Production code never
-//! reads this variable; an unset variable calls the original entry point.
+//! Opt-in N03f/N03d replay of existing native populations. Production code
+//! never reads these variables; both unset call the original entry point.
 #![allow(dead_code)]
 
 use evocc_evoir::Module;
@@ -10,11 +10,19 @@ pub fn compile_module_for(
     module: &Module,
     keep: &dyn Fn(&str) -> bool,
 ) -> Result<String, NativeStop> {
-    let Some(value) = std::env::var_os("EVOCC_MIR_FRAME_OPT") else {
+    let frame_value = std::env::var_os("EVOCC_MIR_FRAME_OPT");
+    let selection_value = std::env::var_os("EVOCC_MIR_ISEL_OPT");
+    if frame_value.is_none() && selection_value.is_none() {
         return evocc_mir::compile_module_for(target, module, keep);
-    };
-    let frame = FrameVariants::parse(value.to_str().expect("UTF-8 frame variant request"))
-        .expect("valid native-test frame variant request");
+    }
+    let frame = frame_value.map_or(FrameVariants::OFF, |value| {
+        FrameVariants::parse(value.to_str().expect("UTF-8 frame variant request"))
+            .expect("valid native-test frame variant request")
+    });
+    let compact_constants = selection_value.is_some_and(|value| {
+        evocc_mir::emit::parse_constant_selection(value.to_str().expect("UTF-8 selection request"))
+            .expect("valid native-test selection request")
+    });
     evocc_mir::compile_module_with_options(
         target,
         module,
@@ -22,6 +30,7 @@ pub fn compile_module_for(
         RelocationModel::PositionIndependent,
         &CodegenOptions {
             frame,
+            compact_constants,
             ..Default::default()
         },
     )

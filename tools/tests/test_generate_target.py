@@ -76,6 +76,24 @@ class ConstantPatternDescriptionTest(unittest.TestCase):
                 with self.assertRaises(gen.TargetDescriptionError):
                     gen.parse_patterns(changed)
 
+    def test_pattern_order_and_enabled_families_are_data(self):
+        lines = self.source().splitlines(keepends=True)
+        selected = with_valid_digest(b"".join(lines[:3] + [lines[5], lines[3]]))
+        rendered = gen.render_patterns(gen.parse_patterns(selected))
+        self.assertLess(rendered.index('id: "const_orr"'), rendered.index('id: "const_movz"'))
+        self.assertNotIn('id: "const_movn"', rendered)
+
+    def test_costs_count_actual_instruction_bytes_not_guessed_profit(self):
+        source = with_valid_digest(
+            b"version costs.v1\ntarget aarch64\nsha256 " + b"0" * 64 + b"\n"
+            b"bytes mov_wide 4\nbytes logical_immediate 4\n"
+        )
+        self.assertIn("WIDE_BYTES: u32 = 4", gen.render_costs(gen.parse_costs(source)))
+        for value in [b"0", b"1", b"8", b"-1"]:
+            changed = with_valid_digest(source.replace(b"mov_wide 4", b"mov_wide " + value))
+            with self.assertRaises(gen.TargetDescriptionError):
+                gen.parse_costs(changed)
+
 
 class RegisterDescriptionTest(unittest.TestCase):
     def setUp(self):

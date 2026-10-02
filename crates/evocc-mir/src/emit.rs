@@ -47,6 +47,8 @@ pub struct CodegenOptions {
     pub stack_guard: StackGuard,
     /// Opt-in frame variants (EvoMIR revision 0.56); all off by default.
     pub frame: FrameVariants,
+    /// C1 GPR constant materialization; all selection options default off.
+    pub compact_constants: bool,
     pub frame_pointer_required: bool,
     pub leaf_frame_pointer_required: bool,
 }
@@ -109,6 +111,17 @@ impl FrameVariants {
     }
 }
 
+/// The bounded native selection option, shared by the driver and IR adapter.
+pub fn parse_constant_selection(value: &str) -> Result<bool, String> {
+    if value == "constants" {
+        Ok(true)
+    } else {
+        Err(format!(
+            "unknown instruction selection variant {value:?}; supported: constants"
+        ))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum StackGuard {
     #[default]
@@ -139,6 +152,7 @@ pub struct Frame {
     pub paired_saves: bool,
     pub shared_epilogue: bool,
     pub frameless: bool,
+    pub compact_constants: bool,
     pub stack_guard: Option<(u64, StackGuard)>,
     /// Runtime allocations move sp; fixed slots must then stay relative to x29.
     pub dynamic: bool,
@@ -365,6 +379,7 @@ pub fn frame_of_for(target: Target, allocated: &Allocated) -> Frame {
         paired_saves: false,
         shared_epilogue: false,
         frameless: false,
+        compact_constants: false,
         stack_guard: None,
         dynamic: allocated.blocks.iter().any(|block| {
             block
@@ -1240,6 +1255,7 @@ fn emit_function(
         || patchable_entry.is_some_and(|(total, _)| total != 0);
     frame.paired_saves = options.frame.paired_saves && !protected;
     frame.shared_epilogue = options.frame.shared_epilogue && !protected;
+    frame.compact_constants = options.compact_constants && !protected;
     if stack_protect {
         frame.stack_guard = Some((frame.size, options.stack_guard.clone()));
         frame.size += KERNEL.stack_guard_slot_bytes;
@@ -2349,6 +2365,41 @@ fn emit_inst(
                     imm
                 );
             } else {
+                if frame.compact_constants {
+                    let width = if dst.class == RegClass::Gpr64 {
+                        Width::X
+                    } else {
+                        Width::W
+                    };
+                    if let Some(parts) = crate::isa::aarch64::constants::select(*imm, width) {
+                        use crate::isa::aarch64::constants::Part;
+                        let register = name(*dst);
+                        for part in parts {
+                            let (op, half, shift) = match part {
+                                Part::Zero { half, shift } => ("movz", half, shift),
+                                Part::Ones { half, shift } => ("movn", half, shift),
+                                Part::Keep { half, shift } => ("movk", half, shift),
+                                Part::Logical(value) => {
+                                    let zero = if width == Width::X {
+                                        ZERO_GPR64
+                                    } else {
+                                        ZERO_GPR32
+                                    };
+                                    let _ =
+                                        writeln!(text, "    orr {register}, {zero}, #{value:#x}");
+                                    continue;
+                                }
+                            };
+                            if shift == 0 {
+                                let _ = writeln!(text, "    {op} {register}, #{half}");
+                            } else {
+                                let _ =
+                                    writeln!(text, "    {op} {register}, #{half}, lsl #{shift}");
+                            }
+                        }
+                        return;
+                    }
+                }
                 emit_immediate(text, &name(*dst), dst.class, *imm);
             }
         }

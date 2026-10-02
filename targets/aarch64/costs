@@ -1,0 +1,5 @@
+version costs.v1
+target aarch64
+sha256 f4aa3cf51233bbfb23eae705a9dfce79f632e2306d2c4e78e0f02385ce6645a7
+bytes mov_wide 4
+bytes logical_immediate 4
