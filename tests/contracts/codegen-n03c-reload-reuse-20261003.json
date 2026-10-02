@@ -1,0 +1,62 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03c",
+  "slice": "T3: local same-location redundant spill reloads",
+  "date": "2026-10-03",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "98542c3f",
+  "authority": [
+    "docs/codegen-quality-plan.md sections 4a, 5, 10 and 11",
+    "docs/evomir-spec.md section 7",
+    "docs/target-spec.md B3"
+  ],
+  "observed": "generic/allocation.rs insert_spill_code creates a separate temporary/reload for every flag-chain group and terminator. It does not reuse a previous reload even if allocation leaves that slot's value in the same physical location. T1/T2 do not remove those reloads. N01's 6,712 excess stack-access bytes on inflate are an upper prioritization signal, not an expected gain.",
+  "scope": {
+    "included": "After successful scan and identity-copy removal, but before spill-slot compaction, optionally remove a repeated reload of the same logical spill slot and exact class into the same physical location. Require unique definitions for both virtual holders, destination uses confined to the current block, and a still-valid previous reload. Rewrite that destination's local uses to the retained holder; remove its unused assignment. No new live interval, location choice or spill victim is introduced.",
+    "validity": "Clear available reloads at block boundaries, calls, assembly and every non-discardable non-spill operation. A physical definition invalidates every overlapping register view in that bank. A spill store invalidates that slot; do not forward from stores. Class/width changes, nonlocal uses, multiple definitions and missing assignments are ineligible. No knowledge crosses edges or uses partially preserved SIMD state.",
+    "unchanged": "Original scan, pools, liveness, retry bound, constraints, spill insertion and slot compaction; independent allocation verifier; EvoIR/EvoMIR instruction semantics, interpreters, registry and EqSat. No load/store or user-memory optimization, rematerialization, global allocation, new audit layer or runtime latency.",
+    "default": "OFF. Existing protected-profile suppression applies to the entire requested allocation variant. The ordinary entry point stays byte-identical."
+  },
+  "interface": {
+    "driver": "Extend the existing --regalloc-opt list with reload-reuse. Allow an explicit comma-separated combination with copy-hints; reject unknown, empty and duplicate names, repeated options and --check combinations. Record effective request in the existing native assembly header.",
+    "generic": "Default-OFF AllocationOptions field and a target-independent local allocated-function transform. Reuse existing machine operand facts; no ISA names in generic code.",
+    "spec": "EvoMIR allocation implementation-policy revision only. No new MIR operation, value meaning, effect or interpreter rule."
+  },
+  "red": [
+    "An isolated repeated reload whose physical holder survives: OFF retains it and ON removes it, while independent allocation validation and actual transported values agree.",
+    "Intervening physical clobber, same-slot store, call, asm or ordinary memory operation prevents reuse; independent forged-allocation refusals remain unchanged.",
+    "Cross-class/width, full-width vector, block boundary, cross-block destination use and multiply-defined identity controls preserve required loads.",
+    "Flags-chain adjacency and terminator uses remain valid; long local reload sequences do not depend on a bounded alias chase.",
+    "Exercise the real allocator and public C/native option, not only the local helper. Include a pressure fixture and OFF/ON/reference execution."
+  ],
+  "acceptance": {
+    "native": "Existing 384 Darwin and 384 sealed Linux cases OFF/ON, serial. Same object twins; OFF hashes match E2. Allocation verifier unchanged and green. No latency measurement.",
+    "six_units": "Fresh six-TU A/B measurements with both UB profiles: OFF, reload-only and cumulative frame+C1+copy+reload. Exclude C2's unadmitted local selector. Use current E2 objects as OFF byte baselines; original selected-TU harnesses, zero completed proof rejection/bundle failure. Separate stack-access savings and frame consequences from P0, C1, T2 and guard gains.",
+    "bounds": {
+      "compile_median_ratio": 1.25,
+      "text_growth_bytes": 0,
+      "text_plus_rodata_growth_bytes": 0,
+      "interpreter_steps": "UNCHANGED (native-only choice)",
+      "comparison": "reload-only and cumulative each versus matched fresh OFF; also report incremental size versus admitted historical frame+C1+copy."
+    },
+    "coverage": "Retain N02's 70 admitted inputs, 187 opaque cases and integer-mix source-event mismatch. No whole-app, kernel, semantic spill proof or B1/B6 promotion from these tests.",
+    "gates": [
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "focused generic/target allocation and driver tests",
+      "python3 tools/generate-target.py --check",
+      "python3 tools/render-status.py --todo"
+    ],
+    "stop": "Freeze zero/negative size or cost observations. A failure of local eligibility must keep the original reload, never weaken validation. If the bounded transform cannot preserve existing semantics, retain the RED and close negative; do not broaden into global allocation to pursue the size target."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "serial": true,
+    "timebox": "One bounded implementation and one frozen measurement cohort; complete a concrete bounded repair or disposition remaining uncertainty instead of iterating the cohort.",
+    "retention": "Keep compact receipts, category summaries and reduced reproducers. Retire superseded owned objects after measurement and hash checks, preserving the current sole baseline until replacements exist. No target/workspace/kernel clone or new VM disk."
+  },
+  "claim_ceiling": "Optional same-location reload removal with unchanged independent allocation validation, not a complete/global allocator, native lowering proof, verified EqSat benefit or default admission. N07's negative SMT qualification remains unchanged."
+}
