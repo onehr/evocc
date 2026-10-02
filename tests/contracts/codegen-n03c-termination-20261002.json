@@ -1,0 +1,44 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03c",
+  "slice": "T1: bounded spill progress and saturated call boundaries",
+  "date": "2026-10-02",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "70f5c552",
+  "observed": "N03a's synthetic ABI can use the entire allocation pool for call arguments. pin_call currently pins those copies before a later stack argument. A reload for that stack argument then has no location, and repeated spilling of generated spill temporaries grows the retry body. The historical large reproducer will not be rerun.",
+  "scope": {
+    "call_preparation": "When the outgoing register pins exhaust a stack argument's candidate pool, schedule this call's existing stack-argument stores before its existing pinned copies. Preserve stack offsets, store order, copy order, call operands and indirect-result identity. No movement outside the compiler-generated preparation sequence. Nonsaturated preparations retain their exact order.",
+    "progress": "Never recursively spill the short-lived temporaries introduced by this allocation's spill rewrite. A retry must spill at least one previously unspilled pre-rewrite virtual value; otherwise return a bounded allocation refusal before generating more spill code. Keep the existing 64-retry ceiling. No arbitrary new instruction-count or memory limit, no silent invalid allocation and no relaxed verifier.",
+    "invariants": "No change to C/EvoIR/MIR instruction semantics, register pools, ABI layout, interpreter, proof registries or verifier. This is a fail-closed allocator implementation repair. Successful outputs still require independent allocation verification.",
+    "excluded": "Copy preferences/coalescing, global allocation, new spill placement heuristics, new options, default optimization flips, N07, timing experiments and semantic-domain expansion. Size improvements are not claimed for this repair."
+  },
+  "engineering_reference": {
+    "url": "https://llvm.org/docs/doxygen/RegAllocBasic_8cpp_source.html",
+    "detail": "RABasic tests isSpillable before recursively spilling and returns allocation failure for an unspillable interval. This motivates an explicit progress boundary, not a borrowed proof or a copied implementation."
+  },
+  "red": [
+    "Four or more scalar call arguments on a three-register synthetic pool whose ABI consumes all three registers; require finite allocation and independent verifier success.",
+    "The analogous saturated wide bank and mixed-bank stack slots; keep all values and ordered stack offsets.",
+    "An impossible constrained use occupying the whole bank must return an allocation refusal instead of repeatedly spilling reloads.",
+    "Test-local candidate-visit budgets abort before substantial growth in the old implementation; no unbounded or historical multi-GiB reproduction.",
+    "Existing pressure, full-width spill, fixed/tied/early-clobber and selected-edge tests remain green; nonsaturated boundary order is unchanged."
+  ],
+  "acceptance": {
+    "focused": "Bounded RED becomes finite success/refusal as specified; independent allocation verifier passes every admitted synthetic and AArch64 case. A removed reload or forged allocation remains rejected.",
+    "native": "Both existing 384-case native corpora execute and agree with object twins. Every OFF object matches the C2 OFF log hash; compare to hashes, not retired historical payloads.",
+    "six_units": "Two frozen A/B OFF measurement plans reuse the same six original TUs, checked/unchecked twins and original selected-TU harnesses; hashes equal C2 regression receipts. No expansion of source-bridge or opaque-input claims.",
+    "gate": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+    "stop": "Any AArch64 output drift or new refusal must be investigated, not relabeled behavior-preserving. If the progress rule cannot preserve existing admitted cases, retain the bounded counterexample and record a separate disposition before widening scope."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "serial": true,
+    "red_candidate_visits": 2048,
+    "retention": "Keep the small reproducer, logs, hashes, manifests and receipt. Remove successful intermediate objects after measurement and handle checks; do not retain full disassembly."
+  },
+  "claim_ceiling": "Bounded progress repair for the observed synthetic boundary failure, with unchanged frozen AArch64 outputs. Not coalescing/spill-size improvement, a complete allocator, a backend proof, default performance admission or closure of all N03c."
+}

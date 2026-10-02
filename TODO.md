@@ -2388,6 +2388,10 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     a target with few registers would be; give it a reduced reproducer and a
     bounded-termination fix in this slice.
     [N03a note](docs/notebook/codegen-backend-layering-20261002.md).
+    T1 is frozen in the [bounded-progress plan](tests/contracts/codegen-n03c-termination-20261002.json):
+    bounded synthetic RED, saturated call-preparation repair and refusal of
+    recursive spill-temporary expansion. No copy preference or size claim;
+    the historical multi-GiB reproducer must not be rerun unbounded.
 
   - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
     Addressing modes, immediates, shifted operands, conditional select and
