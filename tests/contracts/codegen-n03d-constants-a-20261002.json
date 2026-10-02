@@ -345,7 +345,7 @@
     "container": "/usr/local/bin/container",
     "steps": "target/frontend/release/examples/corpus"
   },
-  "variant": "O2-A-n03f-baseline",
+  "variant": "O2-A-n03d-constants",
   "eqsat": false,
   "retain_object_baseline": true
 }
