@@ -1,0 +1,63 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03d",
+  "slice": "C3: block-local repeated integer extension selection",
+  "date": "2026-10-03",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "61eff195",
+  "authority": [
+    "docs/codegen-quality-plan.md sections 4a, 5, 10 and 11",
+    "docs/target-spec.md sections 2-6",
+    "docs/evomir-spec.md sections 3, 5 and 7"
+  ],
+  "observed": "Lowerer::zero_extend and sign_extend create fresh native temporaries for each request. They do not reuse an identical same-source extension already selected in that block. Existing C2 combines only adjacent single-use emission idioms and remains unadmitted after its compile-bound miss. N01 recorded 4,132 excess extension/mask bytes across the library TUs; that is a prioritization ceiling, not predicted C3 gain. Existing comparison-to-branch and compared-value CSEL selection already exist and are not new work.",
+  "scope": {
+    "included": "After ordinary MIR lowering and before SSA destruction/allocation, optionally reuse an earlier identical integer extension result within the same block. Three bounded pattern families: Extend's existing signed/unsigned byte/half/word forms; Bfx with lsb=0 and a proper sub-register width; BinaryImm AND with a nonzero low contiguous mask narrower than its register. Keys retain opcode, sign, source identity/class, destination class, width and mask/extract size. Only unique definitions and local non-edge uses can be removed. Replace uses of the removed destination directly by the retained result. No algebraic identity, range reasoning or change of width is inferred.",
+    "boundaries": "Reset available expressions at block boundaries and every non-discardable instruction, including calls, asm, memory and strict fenv. Preserve ordered flags producer/consumer adjacency. Source and result definitions must be unique; multiple definitions, cross-block destination uses, edge transport and class/operation differences prevent reuse. No physical-register reuse assumption or hidden cross-block cache.",
+    "unchanged": "All EvoIR, MIR opcode meanings, interpreters, effect/UB rules, certificates, registries, ABI, allocator and independent allocation verifier. No guard folding, generic CSE/GVN, extension composition, mask strengthening, instruction speculation or new opcode.",
+    "default": "OFF. Existing protected-profile suppression remains. C2 stays excluded from measured admitted cumulative options.",
+    "placement": "Target-specific bounded selector under isa/aarch64, using the existing operand facts. Extend targets/aarch64/patterns and its existing generator with explicit C3 rows; no generic opcode language, new registry or new audit layer."
+  },
+  "interface": {
+    "driver": "Add extensions to the duplicate-free --isel-opt list. Canonical order constants,local,extensions; all old names and OFF output unchanged. Exact IR adapter and native corpus hook use the same parser. Reject empty, unknown, duplicate, repeated and --check combinations.",
+    "telemetry": "Reuse the existing producer-only native selection-count comments and S1/N01 measurements. Report selected/rejected pattern counts and actual bytes separately; no certificate credit.",
+    "spec": "EvoMIR implementation-policy revision describing repeated selection reuse only, not a new instruction or semantic contract. New patterns receive explicit finite-validation/no-SMT-proof dispositions because N07 E3's pinned generator limitation remains."
+  },
+  "red": [
+    "Public C/IR path showing an actually repeated extension after lowering; OFF preserves it, ON reuses it. If the proposed opportunity does not materialize, freeze a negative preflight instead of expanding scope.",
+    "Existing MIR interpreter and EvoIR comparison for each admitted extension family, W/X widths, signed/unsigned extrema, odd-width masks and full-register boundaries; allocation verifier remains unchanged.",
+    "Distinct signedness, widths, masks, source identities/classes, multiple definitions, nonlocal/edge uses, calls, asm, loads/stores and strict-FP barriers retain necessary computations.",
+    "Flags adjacency and selected terminator operands remain valid; long duplicate sequences use direct representatives rather than a bounded alias chase.",
+    "Default byte identity, protected profiles, malformed option lists, all admitted combinations, public native tests and exact IR adapter."
+  ],
+  "acceptance": {
+    "native": "384 Darwin and 384 sealed Linux cases OFF/ON, serial; object twins equal, OFF bytes match T3, actual execution agrees. Focused native references exercise each admitted family and fence/width negatives.",
+    "six_units": "Freeze six A/B plans before measurement: fresh OFF, extensions-only, and cumulative frame+C1+copy+reload+extensions. Both UB profiles, three compile observations and two object builds; current T3 OFF baselines retained. Original selected-TU harnesses and independent chain replay with zero completed rejection/bundle failure. No resampling to improve a result.",
+    "bounds": {
+      "compile_median_ratio": 1.25,
+      "text_growth_bytes": 0,
+      "text_plus_rodata_growth_bytes": 0,
+      "interpreter_steps": "UNCHANGED; native-only selection",
+      "comparison": "Each new arm versus matched fresh OFF; report incremental cumulative size versus T3 separately."
+    },
+    "coverage": "N02 stays 70 admitted inputs / 187 opaque; legacy integer-mix 1001/1002 source-event mismatch NOT_VALIDATED. No full applications, kernel, latency, default admission or B1/B6 proof inferred.",
+    "gates": [
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "focused MIR/interpreter/allocator and public-driver tests",
+      "existing touched Python generator/measurement tests",
+      "python3 tools/generate-target.py --check",
+      "python3 tools/render-status.py --todo"
+    ],
+    "stop": "One bounded implementation and frozen cohort. Preserve zero/negative results and cost misses; decline an unsafe pattern rather than broaden it. Remaining conditional-compare or control restructuring requiring new MIR semantics is outside this slice and receives an explicit unimplemented disposition, not speculative new instructions."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "serial": true,
+    "retention": "Only compact receipts, category summaries and minimal reproducers. Retire completed owned objects after hash/handle checks while preserving a current OFF and cumulative baseline. No raw captures in Git, new target/workspace/kernel tree or VM disk."
+  },
+  "claim_ceiling": "Opt-in repeated integer extension selection with finite MIR/native validation, not universal instruction correctness, verified EqSat benefit, default admission, complete instruction selection or the 1.4 product target."
+}
