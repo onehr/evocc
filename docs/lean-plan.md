@@ -6,7 +6,7 @@ Plan revision 1, **2026-10-04**; inspected implementation `19bb5f7d`.
 The owner requires a practical compiler-correctness path before the first public
 version, followed by verified rewrites on that path. This section is the current
 implementation plan; the scalar-proof plan below remains historical evidence.
-**V00–V06 are OPEN. No new compilation theorem or release acceptance is claimed.**
+**V00/V01 are in progress; V02–V06 are OPEN. No compilation theorem or release acceptance is claimed.**
 Execution is tracked only in [TODO.md](../TODO.md#first-public-release-verification).
 
 ### Release outcome and boundary
@@ -149,6 +149,84 @@ copies and compacts slots. Do not translate that checker unchanged and claim the
 larger theorem. CompCert's [two-program structural and value validation](https://compcert.org/doc/html/compcert.backend.Allocation.html)
 is the engineering reference, not a dependency on its implementation.
 
+### V00 constructor and snapshot contract
+
+`core-v1` is a selected typed-function closure, not an acceptance claim for its
+entire original translation unit. The pilot is frozen in
+[core-v1-pilot.json](../tests/contracts/core-v1-pilot.json). The Rust
+`evocc_chir::core_profile::inspect_core` inventory visits original nodes,
+including dead branches; it does not normalize them or certify compilation.
+Independent Lean well-formedness remains a V01 requirement.
+The pilot fixes `-O0 -fno-builtin`: ordinary-name `abs` recognition would
+otherwise bypass the very definition whose source/target relation is required.
+
+| Source row | Exact initial constructor set and restrictions |
+| --- | --- |
+| Types | `Int`, `UInt`, `Long`, `ULong`, `LongLong`, `ULongLong`; retain rank as well as width/signedness. Const is retained; volatile, atomic, explicit alignment and noninteger types refuse. |
+| Leaves | Integer `Lit`; `Ident` of an active parameter or scalar automatic object. No global object or implicit external memory. |
+| Unary | `Plus`, `Neg`, `BitNot`, `Not`; no address/dereference or builtin absolute-value substitution. |
+| Binary | Add/sub/mul/div/rem, bitwise and/or/xor, six comparisons, short-circuit and/or, unsigned-left shift and signed/unsigned-right shift, comma. Independently promoted count width is retained. Signed-left shift remains outside this first source whitelist; its ordinary GNU compiler semantics is unchanged. |
+| Conversion and choice | Integer `Cast`, three-operand `Ternary`, `Comma`. Implicit argument/return/assignment conversions retain their source and destination types; they are not erased in export. |
+| Objects | `Object` declaration with automatic/register/no storage specifier, optional single root `StoreScalar` initializer, scalar `Assign` and `Update` on a named local. No static, cleanup, alias, memory-place update, or implicit zero-initialization. |
+| Statements | `Null`, `Expr`, valued `Return`, `Compound`, `If`, `While`, `DoWhile`, `For`, loop-local `Break` and `Continue`. Explicit value-return on every conservatively reachable exit; no fall-off poison. |
+| Calls | `Call(Ident, args)` to one prototyped, nonvariadic definition in the selected acyclic closure. Check the complete declaration chain; no inline/asm-name/attribute semantic changes. |
+| All other constructors | Refuse, even if unreachable or accepted by the ordinary compiler. No opaque wildcard row. |
+
+The inventory's definite-initialization analysis intersects continuing branch
+states and uses incoming loop facts for body/continue/increment checks. It is
+deliberately conservative, not a proof that every defined C program is admitted.
+V01 independently checks lexical lifetimes, binding/type consistency, call
+signatures, initialization and the precise permitted evaluation order. The
+front-end's prior elaboration of macros/typedefs is a disclosed input boundary.
+
+**Source interface.** V01's `core-v1` export is a tagged tree, not `Debug` output
+or an expression selected from the middle of a body. It contains a format
+version, ordered entry symbol IDs, the ordered complete definition closure, each
+function's symbol/name/return type/ordered parameter bindings and complete body.
+Every object and identifier retains its numeric symbol ID and the six-way C
+integer type above. Every expression retains its resolved result type; casts,
+assignment operators, conditional arms, call arguments and initializer plans
+remain explicit. Literals carry source integer type and exact width-sized
+hexadecimal bits, never host floating-point or unbounded JSON numbers.
+Statements retain lexical scopes and original order. Locations are diagnostic
+metadata, not trusted semantic facts. No exporter exists yet; adding it without
+the independent reader/type checks does not close V01.
+
+**Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
+representations; certificates propose node/block/value correspondences and
+invariants between *two supplied programs*. Assembly input is final emitted
+text, not pre-frame MIR. Every always-on transformation lies between an explicit
+input/output pair. Phase readers must refuse unsupported constructors and
+ill-typed/dangling/duplicate bindings, rather than silently omit them.
+
+**States and observations.** Source state contains the current function, typed
+local bindings with lifetime/initialization, expression/statement continuation
+and a call stack. EvoIR state additionally contains block/PC, local SSA bindings
+and explicit private memory/world snapshots. Machine state contains PC,
+register views/flags, private stack bytes/initialization and call/frame state.
+Related entries have identical typed argument bits and valid ABI entry/adequate
+private storage. Private stores, edge copies and spills are silent; there is no
+external I/O in this profile. Observable completion is either returned typed
+bits or the **first** `E3002`/`E3003`/`E3004`/`E3005` diagnostic. Fuel exhaustion
+is not a program observation or proof. Unsupported memory/initialization faults
+must be excluded by well-formedness and the invariant, not mapped to a return.
+
+The refinement quantifies all admitted argument values and every execution:
+every finite target termination/diagnostic has the same source observation;
+every infinite target execution corresponds to an infinite source execution;
+and a nonterminal reachable target state is not stuck. Silent matching requires
+a decreasing natural-number rank, preventing administrative infinite loops.
+For this closed deterministic profile these obligations also rule out replacing
+source divergence by a return/trap. Internal calls are operational transitions,
+not new external trace events; their argument/result/private-frame relation is
+checked. Source locations and resource exhaustion remain outside the theorem.
+
+Per-stage REDs are the mutation rows in V01--V06 above. The existing executable
+pilot additionally requires a genuine allocated `SpillReload`, incoming stack
+arguments, unchanged original function excerpts, loops/joins and the `abs`
+minimum-value diagnostic. These observations freeze a useful population; they
+are not yet a source/target simulation theorem or native execution receipt.
+
 ### Release gate, budget and stop rules
 
 - **V04 before V05**: close baseline correctness before counting proved optimizer
@@ -182,11 +260,11 @@ Public wording after acceptance: *a proved, fail-closed compilation path for the
 listed Core C-HIR subset and target, with an explicit trusted boundary; existing
 scalar rewrites compose with that path.* Do not say "CompCert-equivalent GNU C",
 "all UB is caught", "the entire compiler is verified", or "Linux is proved".
-Current status is **planning only**. The October 1 numbers below remain unchanged.
-This documentation-only slice produced no build/capture artifacts; its retained
-tracked-text delta is approximately 22 KiB across five Markdown files, not a
-compiler/proof receipt. Filesystem-wide free-space changes are not attributed
-to this slice. The generated dashboard changes only its stale EvoMIR version.
+Current status is **implementation in progress**, not release acceptance.
+The initial documentation-only commit `409b84e3` produced approximately 22 KiB
+of tracked text and no build/capture artifacts. Subsequent slice measurements
+belong to their own records; filesystem-wide free-space changes are not assumed
+to be compiler artifact growth. The October 1 numbers below remain unchanged.
 
 ## Historical scalar proof plan
 

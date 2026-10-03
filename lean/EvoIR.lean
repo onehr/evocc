@@ -1,4 +1,5 @@
 import EvoIR.Sem
+import EvoIR.Core.CheckedInt
 import EvoIR.Term
 import EvoIR.Fact
 import EvoIR.Rule

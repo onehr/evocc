@@ -189,6 +189,14 @@ LATTICE_TARGETS = [
 # goes into the receipt with a digest, so a reviewer reads the correctness
 # definition once and then compares digests.
 RECORDED_DEFINITIONS = [
+    "EvoIR.Core.sourceArithmetic",
+    "EvoIR.Core.irArithmetic",
+    "EvoIR.Core.sourceNeg",
+    "EvoIR.Core.irNeg",
+    "EvoIR.Core.sourceAbs",
+    "EvoIR.Core.irAbs",
+    "EvoIR.Core.checkArithmeticFragment",
+    "EvoIR.Core.runArithmeticFragment",
     "EvoIR.denoteOp",
     "EvoIR.denoteTerm",
     "EvoIR.elabPat",
@@ -207,6 +215,29 @@ RECORDED_DEFINITIONS = [
     "EvoIR.TransferSound",
     "EvoIR.TransferRowSound",
     "EvoIR.capAmount",
+]
+
+CORE_PRIMITIVE_TARGETS = [
+    (
+        "EvoIR.Core.checked_arithmetic_lowering",
+        "∀ (op : EvoIR.Core.SignedArithmetic) {n : Nat} (x y : BitVec n), "
+        "EvoIR.Core.irArithmetic op x y = EvoIR.Core.sourceArithmetic op x y",
+    ),
+    (
+        "EvoIR.Core.checked_neg_lowering",
+        "∀ {n : Nat} (x : BitVec n), EvoIR.Core.irNeg x = EvoIR.Core.sourceNeg x",
+    ),
+    (
+        "EvoIR.Core.checked_abs_expression",
+        "∀ {n : Nat} (x : BitVec n), EvoIR.Core.irAbs x = EvoIR.Core.sourceAbs x",
+    ),
+    (
+        "EvoIR.Core.arithmetic_fragment_checker_sound",
+        "∀ (source : EvoIR.Core.SignedArithmetic) (candidate : EvoIR.Core.ArithmeticFragment), "
+        "EvoIR.Core.checkArithmeticFragment source candidate = true → "
+        "∀ {n : Nat} (x y : BitVec n), EvoIR.Core.runArithmeticFragment candidate x y = "
+        "EvoIR.Core.sourceArithmetic source x y",
+    ),
 ]
 
 EVALUATOR_TARGETS = [
@@ -558,7 +589,8 @@ def main(argv: list[str]) -> int:
         transfer_targets += [f"{base}_{n}" for n in ENUMERATED_WIDTHS]
     lattice_targets = [t[1] for t in LATTICE_TARGETS]
     evaluator_targets = [t[0] for t in EVALUATOR_TARGETS]
-    all_targets = rule_targets + transfer_targets + lattice_targets + evaluator_targets
+    core_targets = [t[0] for t in CORE_PRIMITIVE_TARGETS]
+    all_targets = rule_targets + transfer_targets + lattice_targets + evaluator_targets + core_targets
 
     dump = run_dump(repo / "lean", all_targets)
 
@@ -677,6 +709,13 @@ def main(argv: list[str]) -> int:
         for name, expected, why in EVALUATOR_TARGETS
     ]
 
+    core_primitives = []
+    for name, expected in CORE_PRIMITIVE_TARGETS:
+        entry = target_entry(byname, name, expected)
+        if entry["proof_kind"] != "kernel-only":
+            raise AuditFailure("compilation-core primitive is not kernel-only: " + name)
+        core_primitives.append(entry)
+
     definitions = []
     for entry in dump["definitions"]:
         if entry.get("missing"):
@@ -741,6 +780,11 @@ def main(argv: list[str]) -> int:
             },
         },
         "evaluator": evaluator,
+        "compilation_core_primitives": {
+            "claim": "Checked arithmetic primitive correspondence only; no CFG, "
+                     "source export, whole-function checker or compilation theorem yet",
+            "targets": core_primitives,
+        },
         "trust": TRUST,
         "status": "pass",
     }

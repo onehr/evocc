@@ -1,0 +1,87 @@
+{
+  "format": "evocc.core-v1.pilot.1",
+  "frozen_on": "2026-10-04",
+  "implementation_base": "409b84e3",
+  "contract": "docs/lean-plan.md#v00-constructor-and-snapshot-contract",
+  "target": "aarch64-unknown-linux-gnu",
+  "source_profile": "gnu11-checked-no-wrap",
+  "optional_optimizations": "off",
+  "standard_builtins": "off (-fno-builtin); calls exercise the original definitions",
+  "capture_retention_bytes": 524288000,
+  "claim_ceiling": "Frozen typed-function population; no compilation theorem or native acceptance yet.",
+  "original_functions": [
+    {
+      "family": "doomgeneric",
+      "function": "FixedMul",
+      "signature": "fixed_t FixedMul(fixed_t a, fixed_t b)",
+      "fixture": "tests/fixtures/verification/doom-fixedmul.c",
+      "source_commit": "dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284",
+      "source_path": "doomgeneric/m_fixed.c",
+      "source_sha256": "d5e13eb7d84416055a5981b8c9bf6495821795626114de40d9b1d4ca36bdc544",
+      "function_text_sha256": "b33653e80c2edba7ea2cc9a910879f13bb57147f3d1a33ee52013ebe6fab56bc",
+      "license": "GPL-2.0-or-later",
+      "header_boundary": "Linux LP64 typedef int fixed_t; typedef long int64_t; FRACBITS=16. Complete signature and body unchanged, no whole-TU proof claim.",
+      "expected_inventory": "ACCEPT",
+      "required_semantics": ["signed32-to-signed64", "checked-mul64", "arithmetic-right-shift-count32", "signed64-to-signed32"],
+      "nearby_refusal": "Pointer parameter, or signed-left-shift variant as in the neighboring FixedDiv body."
+    },
+    {
+      "family": "musl",
+      "version": "1.2.6",
+      "function": "abs",
+      "signature": "int abs(int a)",
+      "fixture": "tests/fixtures/verification/musl-abs.c",
+      "archive_sha256": "d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a",
+      "source_path": "src/stdlib/abs.c",
+      "source_sha256": "ac564f78ab8f3d301e1e6b31ae8145a460e515e31026f81da55775c800a37929",
+      "function_text_sha256": "c0aaa1954b223e0b22f9ab677c234a8892bc20bc5a9543909115272ae61fa4cc",
+      "license": "MIT",
+      "header_boundary": "Unused stdlib.h include omitted outside the typed-function boundary; complete signature and body unchanged.",
+      "expected_inventory": "ACCEPT",
+      "required_semantics": ["signed-compare", "conditional", "checked-neg32"],
+      "checked_boundary": "abs(INT_MIN) reports E3004; it must not become a successful INT_MIN result.",
+      "nearby_refusal": "External-call-only abs declaration, recursion, or volatile local."
+    }
+  ],
+  "synthetic_population": [
+    {
+      "fixture": "tests/fixtures/verification/control.c",
+      "entries": ["loop_join", "short_circuit"],
+      "required_shapes": ["join", "backedge", "while", "do-while", "for", "break", "continue", "short-circuit-side-effect"]
+    },
+    {
+      "fixture": "tests/fixtures/verification/pressure.c",
+      "entries": ["pressure"],
+      "closure": ["wide", "pressure"],
+      "required_shapes": ["actual-SpillStore", "actual-SpillReload", "32-argument-direct-call", "24-incoming-stack-arguments"]
+    }
+  ],
+  "tests": [
+    "crates/evocc-parser/tests/core_verification_profile.rs",
+    "crates/evocc/tests/core_verification_pilot.rs"
+  ],
+  "focused_results": {
+    "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test -p evocc-parser --test core_verification_profile -p evocc --test core_verification_pilot --offline -- --nocapture",
+    "passed": 9,
+    "failed": 0,
+    "interpretation": "C-HIR, EvoIR and virtual EvoMIR agree on the fixed tests; finite tests are not proof.",
+    "assembly_repeat": "Same-process repeated lowering and emitted assembly text equal; not an object/native reproducibility claim.",
+    "rows": [
+      {"case": "doom-fixedmul", "functions_with_wrapper": 2, "mir_blocks": 12, "spills": 0, "spill_stores": 0, "spill_reloads": 0, "incoming_stack_arguments": 0, "assembly_text_bytes": 1517},
+      {"case": "musl-abs", "functions_with_wrapper": 2, "mir_blocks": 15, "spills": 0, "spill_stores": 0, "spill_reloads": 0, "incoming_stack_arguments": 0, "assembly_text_bytes": 1187},
+      {"case": "checked-diagnostic", "functions_with_wrapper": 2, "mir_blocks": 10, "spills": 0, "spill_stores": 0, "spill_reloads": 0, "incoming_stack_arguments": 0, "assembly_text_bytes": 968, "diagnostic": "E3004"},
+      {"case": "control", "functions_with_wrapper": 3, "mir_blocks": 49, "spills": 0, "spill_stores": 0, "spill_reloads": 0, "incoming_stack_arguments": 0, "assembly_text_bytes": 4625},
+      {"case": "pressure", "functions_with_wrapper": 3, "mir_blocks": 3, "spills": 15, "spill_stores": 15, "spill_reloads": 15, "incoming_stack_arguments": 24, "assembly_text_bytes": 4947}
+    ]
+  },
+  "verification_state": {
+    "source_inventory": "IMPLEMENTED_NOT_A_PROOF",
+    "existing_pipeline_population": "FOCUSED_PASS_FULL_GATE_PENDING",
+    "V01_source_to_evoir": "PRIMITIVE_LEMMAS_ONLY_NOT_A_FUNCTION_CHECKER",
+    "V02_selection_and_copies": "NOT_IMPLEMENTED",
+    "V03_allocation": "NOT_IMPLEMENTED",
+    "V04_frame_emission_and_baseline": "NOT_IMPLEMENTED",
+    "V05_contextual_rewrites": "NOT_IMPLEMENTED",
+    "V06_proof_required_release": "NOT_IMPLEMENTED"
+  }
+}

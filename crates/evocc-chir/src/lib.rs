@@ -14,6 +14,7 @@
 
 pub mod allocation;
 pub mod constant;
+pub mod core_profile;
 pub mod floating;
 pub mod function_definitions;
 pub mod initializer;
