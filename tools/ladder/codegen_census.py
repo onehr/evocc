@@ -338,6 +338,89 @@ def validate_summary(data, disassembly, record):
     require(analyze(data, disassembly) == record, 'forged instruction category record')
 
 
+def control_windows(data, disassembly):
+    """Count C4's frozen local shapes, not proven or profitable rewrites.
+
+    `selected` means only that the syntactic filters passed. Physical aliases,
+    virtual liveness, flags equivalence and encoding legality remain unproved.
+    Reuse N01's exact object/decoder boundary and retain no disassembly dump.
+    """
+    bodies, code = _layout(data)
+    decoded = _parse(disassembly, code)
+    guards = _guards(decoded)
+    incoming = {(key[0], _target(inst)) for key, inst in decoded.items()
+                if inst['mnemonic'] in ('b', 'bl') or _conditional(inst['mnemonic'])}
+    names = ('boolean_branch', 'boolean_retest', 'compare_conjunction')
+    result = {name: dict(raw=0, selected=0, declined=Counter(), examples=[])
+              for name in names}
+    compares = {'cmp', 'cmn', 'tst'}
+
+    def parts(inst):
+        return [part.strip() for part in inst['operands'].split(',')]
+
+    def gpr(text):
+        return bool(re.fullmatch(r'[wx](?:[12]?\d|30)', text))
+
+    def register_shape(name, window):
+        first = parts(window[1])
+        if len(first) != 2 or not gpr(first[0]):
+            return False
+        boolean = first[0]
+        last = parts(window[-1])
+        if name == 'boolean_branch':
+            if window[-1]['mnemonic'] in ('cbz', 'cbnz'):
+                return len(last) == 2 and last[0] == boolean
+            return len(last) == 3 and last[0] == boolean and last[1] in ('#0', '#0x0')
+        if name == 'boolean_retest':
+            test = parts(window[2])
+            condition = (window[-1]['mnemonic'][2:] if
+                         window[-1]['mnemonic'].startswith('b.') else last[-1])
+            return test in ([boolean, '#0'], [boolean, '#0x0']) and condition in ('eq', 'ne')
+        second = parts(window[3])
+        return (len(second) == 2 and gpr(second[0]) and
+                second[0][0] == boolean[0] and second[0] != boolean and
+                len(last) == 3 and gpr(last[0]) and last[0][0] == boolean[0] and
+                last[1:] in ([boolean, second[0]], [second[0], boolean]))
+
+    for key in sorted(decoded):
+        prefix = [decoded.get((key[0], key[1]+4*i)) for i in range(5)]
+        if (not prefix[0] or not prefix[1] or
+                prefix[0]['mnemonic'] not in compares or prefix[1]['mnemonic'] != 'cset'):
+            continue
+        shapes = []
+        if prefix[2] and prefix[2]['mnemonic'] in ('cbz', 'cbnz', 'tbz', 'tbnz'):
+            shapes.append(('boolean_branch', 3))
+        if (prefix[2] and prefix[3] and prefix[2]['mnemonic'] == 'cmp' and
+                (prefix[3]['mnemonic'] in ('cset', 'csel') or prefix[3]['mnemonic'].startswith('b.'))):
+            shapes.append(('boolean_retest', 4))
+        if (prefix[2] and prefix[3] and prefix[4] and
+                prefix[2]['mnemonic'] in compares and prefix[3]['mnemonic'] == 'cset' and
+                prefix[4]['mnemonic'] in ('and', 'orr')):
+            shapes.append(('compare_conjunction', 5))
+        for name, length in shapes:
+            row = result[name]
+            row['raw'] += 1
+            window = prefix[:length]
+            keys = [(key[0], key[1]+4*i) for i in range(length)]
+            reason = next((reason for reject, reason in [
+                (any(inst['body'] != window[0]['body'] for inst in window), 'function_boundary'),
+                (any(k in incoming for k in keys[1:]), 'interior_branch_target'),
+                (any(inst['relocations'] for inst in window), 'relocation'),
+                (any(k in guards for k in keys), 'guard_site'),
+                (not register_shape(name, window), 'register_or_shape'),
+            ] if reject), None)
+            if reason:
+                row['declined'][reason] += 1
+                continue
+            row['selected'] += 1
+            if len(row['examples']) < 4:
+                row['examples'].append(dict(function=bodies[window[0]['body']]['name'],
+                                            section=key[0], offset=key[1]))
+    for row in result.values():
+        row['declined'] = dict(sorted(row['declined'].items()))
+    return dict(patterns=result, claim='SYNTACTIC_CANDIDATES_NOT_TRANSFORMS')
+
+
 def _decode(tool, obj, resources):
     # Communicate drains both pipes and gives a bounded one-object timeout.
     # The output is discarded after classification, never persisted in captures.
