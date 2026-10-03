@@ -1,0 +1,64 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03d",
+  "slice": "C4: bounded residual compare/control preflight",
+  "date": "2026-10-03",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "c78a41c6",
+  "authority": [
+    "docs/codegen-quality-plan.md sections 4a, 5, 10 and 11",
+    "docs/target-spec.md sections 2-6",
+    "docs/evomir-spec.md sections 2 and 5"
+  ],
+  "observed": "N01 counted 8,288 excess compare/select bytes and 11,336 branch bytes on the five library TUs. Current lowering already selects last-single-use ICmp branches, immediate compares, compared-value CSEL and checked flag branches; emission already chooses either adjacent successor as fallthrough. C1-C3 did not measure the residual conditional-compare/control scope. Category excess alone is not a transformable-byte estimate.",
+  "population": {
+    "closure_receipt": "tests/contracts/codegen-n03d-c3-20261003-receipt.json",
+    "arms": ["off-a", "off-b", "combined-a", "combined-b"],
+    "profiles": ["checked", "unchecked"],
+    "units": "All six frozen S5 TUs: 48 existing object rows, verified against their retained measurement receipts. Deduplicate decoding by object hash, not the reporting denominator.",
+    "reference": "Reuse the frozen N01 category table and GCC-O2 S5 bytes. No recompilation, new timing samples or application replay."
+  },
+  "scope": {
+    "method": "Reuse N01 ELF layout, instruction decoding, guard classification and exact category partition. Add only a read-only syntactic window counter to that census module, not an optimizer or a new audit layer. No disassembly file is retained.",
+    "windows": {
+      "boolean_branch": "Three contiguous instructions: integer CMP/CMN/TST, CSET, then CBZ/CBNZ of that exact W/X register or TBZ/TBNZ of its bit zero.",
+      "boolean_retest": "Four contiguous instructions: integer CMP/CMN/TST, CSET, CMP of that exact register against zero, then CSET, CSEL or B.cond. The final condition must be EQ or NE.",
+      "compare_conjunction": "Five contiguous instructions: integer CMP/CMN/TST, CSET, integer CMP/CMN/TST, CSET, then unshifted AND or ORR of the two distinct CSET destination registers with identical W/X class. Count either input order."
+    },
+    "filter": "All instructions must belong to one ELF function and one straight-line block: no incoming direct branch target at an interior instruction, relocation in the window, or N01 guard site. Register links and classes must match exactly. Unsupported consumers, floating comparisons, intervening instructions and masked/shifted boolean operands do not match. Count raw matches before these filters and declined reasons separately.",
+    "limit": "These are necessary syntactic candidates only. They do not establish virtual-register single use, liveness, flags-state equivalence, legal CCMP encoding or profitable allocation. No hypothetical instruction bytes are credited as actual savings. CFG short-circuit if-conversion, general select diamonds and nonlocal scheduling are explicitly outside this bounded emission scope, not declared absent.",
+    "baseline_inventory": "Record existing compared_value_csel, constant_compare_selection, checked_flag_branch and conditional_fallthrough tests and implementation entry points. Their existing coverage is baseline, not a new C4 gain."
+  },
+  "red": [
+    "Synthetic instruction streams exercise each frozen window and both branch/AND/ORR senses; the missing census entry point is the measurement RED, not a claimed compiler failure.",
+    "Changed register/class, nonzero tested bit, nonzero retest constant, shifted combine, floating compare, intervening instruction, interior branch target, function boundary, relocation and guard site must not become a selected candidate.",
+    "Reuse the existing N01 byte/section partition checks; do not invent new identity checks or acceptance layers."
+  ],
+  "disposition": {
+    "zero": "NO_LOCAL_CANDIDATE_IN_FROZEN_GRAMMAR. Close only this bounded preflight, preserve broad compare/control gaps explicitly.",
+    "nonzero": "Inspect the current B/unchecked candidates and retain compact function/offset examples. Either derive a minimal exact-MIR RED for an existing-operation composition or identify the concrete missing legality/semantic contract. Do not report no opportunity merely because no transform exists.",
+    "semantic_boundary": "A new MIR conditional-compare instruction, flags lifetime, CFG if-conversion/poison policy or interpreter model requires the standing owner boundary. Do not silently implement it or relax the single adjacent flags consumer rule.",
+    "stop": "One frozen population and grammar, no adaptive widening. An evidence-backed negative or explicit out-of-scope disposition closes the bounded N03d sequence, not general optimizing selection. The 1.4 target and all previous cost misses remain unchanged."
+  },
+  "acceptance": {
+    "outputs": "Per TU/arm/profile: S1 bytes, N01 compare/select and branch bytes, raw/selected/declined window counts and a bounded example list. Record actual new optimized bytes as zero because this preflight cannot emit code.",
+    "gates": [
+      "python3 -m unittest tools.ladder.tests.test_codegen_census",
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "python3 tools/render-status.py --todo"
+    ],
+    "receipt": "One compact receipt and a one-page note; preserve current native/TU acceptance as historical evidence, do not relabel it a fresh run."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "disassembler_output_limit_bytes": 16777216,
+    "disassembler_timeout_seconds": 60,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "serial": true,
+    "retention": "Keep only category/count summaries and bounded examples. No new object, full disassembly, target/workspace/kernel tree or VM disk. Record scoped disk delta; protect existing baselines, contracts, fixtures and Lean cache."
+  },
+  "claim_ceiling": "Read-only finite residual-selection census, not equivalence validation, model proof, speedup, new optimized bytes, default admission or absence of broader control-flow opportunities."
+}
