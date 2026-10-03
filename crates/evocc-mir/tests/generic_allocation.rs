@@ -676,7 +676,10 @@ fn allocate_copy_hints(source: &Function) -> Allocated<Inst, Term, Class> {
     evocc_mir::generic::allocation::allocate_with_options(
         &TINY,
         source,
-        evocc_mir::generic::allocation::AllocationOptions { copy_hints: true },
+        evocc_mir::generic::allocation::AllocationOptions {
+            copy_hints: true,
+            ..Default::default()
+        },
     )
     .unwrap()
 }
@@ -713,6 +716,153 @@ fn n03c_reload_reuse_removes_only_the_redundant_same_location_read() {
     verify_allocation(&TINY, &on).unwrap();
     assert_eq!(straight_result(&on, BTreeMap::new()), vec![19]);
     assert_eq!(reloads(&on), 1, "OFF={off:?}\nON={on:?}");
+    let mut forged = on.clone();
+    forged.blocks[0]
+        .insts
+        .retain(|inst| !matches!(inst, Inst::Restore(..)));
+    assert!(verify_allocation(&TINY, &forged).is_err());
+}
+
+fn allocate_reload_reuse(source: &Function) -> Allocated<Inst, Term, Class> {
+    let options = evocc_mir::generic::allocation::AllocationOptions::parse("reload-reuse").unwrap();
+    let result =
+        evocc_mir::generic::allocation::allocate_with_options(&TINY, source, options).unwrap();
+    verify_allocation(&TINY, &result).unwrap();
+    result
+}
+
+fn reload_count(value: &Allocated<Inst, Term, Class>) -> usize {
+    value
+        .blocks
+        .iter()
+        .flat_map(|b| &b.insts)
+        .filter(|i| matches!(i, Inst::Restore(..)))
+        .count()
+}
+
+fn reload_fixture(between: Vec<Inst>, destination: Reg) -> Function {
+    let mut insts = vec![
+        Inst::Value(r(0), 19),
+        Inst::Save(r(0), 0),
+        Inst::Restore(r(1), 0),
+        Inst::Save(r(1), 1),
+    ];
+    insts.extend(between);
+    insts.push(Inst::Restore(destination, 0));
+    single(vec![], insts, vec![destination])
+}
+
+#[test]
+fn n03c_reload_reuse_stops_at_clobbers_slot_writes_and_opaque_effects() {
+    for (label, between, value) in [
+        ("physical clobber", vec![Inst::Value(r(3), 42)], Some(19)),
+        ("narrow view clobber", vec![Inst::Value(h(3), 42)], Some(19)),
+        (
+            "slot write",
+            vec![Inst::Value(r(3), 23), Inst::Save(r(3), 0)],
+            Some(23),
+        ),
+        ("assembly", vec![Inst::Constraint(Body::default())], None),
+        (
+            "call",
+            vec![Inst::Call {
+                args: vec![],
+                results: vec![],
+                opaque: 0,
+            }],
+            None,
+        ),
+        ("other memory", vec![Inst::Outgoing(r(1), 0)], None),
+    ] {
+        let source = reload_fixture(between, r(2));
+        let off = allocate(&TINY, &source).unwrap();
+        let on = allocate_reload_reuse(&source);
+        assert_eq!(reload_count(&on), reload_count(&off), "{label}: {on:?}");
+        assert_eq!(reload_count(&on), 2, "{label}");
+        if let Some(value) = value {
+            assert_eq!(straight_result(&off, BTreeMap::new()), vec![value]);
+            assert_eq!(straight_result(&on, BTreeMap::new()), vec![value]);
+        }
+    }
+}
+
+#[test]
+fn n03c_reload_reuse_keeps_width_changes_and_redefined_identities() {
+    for destination in [h(2), r(1)] {
+        let source = reload_fixture(vec![], destination);
+        let on = allocate_reload_reuse(&source);
+        assert_eq!(reload_count(&on), 2, "{on:?}");
+        assert_eq!(straight_result(&on, BTreeMap::new()), vec![19]);
+    }
+}
+
+#[test]
+fn n03c_reload_reuse_excludes_reserved_expansion_scratch() {
+    let first = r(evocc_mir::generic::ssa::SCRATCH_BASE);
+    let second = r(evocc_mir::generic::ssa::SCRATCH_BASE + 1);
+    let source = single(
+        vec![],
+        vec![
+            Inst::Value(r(0), 19),
+            Inst::Save(r(0), 0),
+            Inst::Restore(first, 0),
+            Inst::Save(first, 1),
+            Inst::Restore(second, 0),
+        ],
+        vec![second],
+    );
+    let on = allocate_reload_reuse(&source);
+    assert_eq!(reload_count(&on), 2, "{on:?}");
+    assert_eq!(straight_result(&on, BTreeMap::new()), vec![19]);
+}
+
+#[test]
+fn n03c_reload_reuse_preserves_both_words_and_long_local_chains() {
+    let source = single(
+        vec![],
+        vec![
+            Inst::Value(q(0), u64::MAX),
+            Inst::Value(q(1), 1),
+            Inst::Add(q(2), q(0), q(1)),
+            Inst::Save(q(2), 0),
+            Inst::Restore(q(3), 0),
+            Inst::Save(q(3), 1),
+            Inst::Restore(q(4), 0),
+        ],
+        vec![q(4)],
+    );
+    let on = allocate_reload_reuse(&source);
+    assert_eq!(reload_count(&on), 1, "{on:?}");
+    assert_eq!(straight_result(&on, BTreeMap::new()), vec![1_u128 << 64]);
+    let mut insts = vec![Inst::Value(r(0), 19), Inst::Save(r(0), 0)];
+    for id in 1..=256 {
+        insts.push(Inst::Restore(r(id), 0));
+        insts.push(Inst::Save(r(id), 1));
+    }
+    let on = allocate_reload_reuse(&single(vec![], insts, vec![r(256)]));
+    assert_eq!(reload_count(&on), 1);
+    assert_eq!(straight_result(&on, BTreeMap::new()), vec![19]);
+}
+
+#[test]
+fn n03c_reload_reuse_does_not_transport_knowledge_or_aliases_across_blocks() {
+    for move_last_reload in [false, true] {
+        let mut source = reload_fixture(vec![], r(2));
+        let tail = if move_last_reload {
+            vec![source.blocks[0].insts.pop().unwrap()]
+        } else {
+            vec![]
+        };
+        source.blocks[0].term = Term::Jump(1, vec![]);
+        source.blocks.push(Block {
+            id: 1,
+            args: vec![],
+            insts: tail,
+            term: Term::Return(vec![r(2)]),
+        });
+        let on = allocate_reload_reuse(&source);
+        assert_eq!(reload_count(&on), 2, "{on:?}");
+    }
 }
 
 #[test]

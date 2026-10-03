@@ -22,15 +22,18 @@ fn copy_hints_are_shared_by_the_exact_ir_adapter_and_diagnostic_path() {
                 .output()
                 .unwrap()
         };
-        let normal = run(&["--regalloc-opt=copy-hints"]);
-        let report = run(&["--regalloc-opt=copy-hints", "--dce-report"]);
-        assert!(normal.status.success(), "{normal:?}");
-        assert!(report.status.success(), "{report:?}");
-        assert_eq!(normal.stdout, report.stdout);
-        assert!(String::from_utf8_lossy(&normal.stdout)
-            .contains("// evocc-native-regalloc=copy-hints\n"));
-        assert!(String::from_utf8_lossy(&report.stderr)
-            .contains("PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT"));
+        for option in ["copy-hints", "reload-reuse", "copy-hints,reload-reuse"] {
+            let flag = format!("--regalloc-opt={option}");
+            let normal = run(&[&flag]);
+            let report = run(&[&flag, "--dce-report"]);
+            assert!(normal.status.success(), "{normal:?}");
+            assert!(report.status.success(), "{report:?}");
+            assert_eq!(normal.stdout, report.stdout);
+            assert!(String::from_utf8_lossy(&normal.stdout)
+                .contains(&format!("// evocc-native-regalloc={option}\n")));
+            assert!(String::from_utf8_lossy(&report.stderr)
+                .contains("PRODUCER_DIAGNOSTIC_NOT_EQSAT_BENEFIT"));
+        }
         for flags in [
             vec!["--regalloc-opt="],
             vec!["--regalloc-opt=unknown"],

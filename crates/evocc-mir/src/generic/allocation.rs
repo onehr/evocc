@@ -155,20 +155,41 @@ fn place<C: AllocClass>(cursor: &mut ArgumentCursor<'_>, class: C) -> Result<u8,
 
 const FRESH_BASE: u32 = SCRATCH_LIMIT;
 
-/// Candidate-order policy only; constraints and spill policy are unchanged.
+/// Optional candidate order and local cleanup; constraints remain unchanged.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct AllocationOptions {
     pub copy_hints: bool,
+    pub reload_reuse: bool,
 }
 
 impl AllocationOptions {
     pub fn parse(value: &str) -> Result<Self, String> {
-        if value == "copy-hints" {
-            Ok(Self { copy_hints: true })
-        } else {
-            Err(format!(
-                "unknown allocation variant {value:?}; supported: copy-hints"
-            ))
+        let mut options = Self::default();
+        for name in value.split(',') {
+            let enabled = match name {
+                "copy-hints" => &mut options.copy_hints,
+                "reload-reuse" => &mut options.reload_reuse,
+                _ => {
+                    return Err(format!(
+                        "unknown allocation variant {name:?}; supported: copy-hints,reload-reuse"
+                    ))
+                }
+            };
+            if *enabled {
+                return Err(format!("duplicate allocation variant {name:?}"));
+            }
+            *enabled = true;
+        }
+        Ok(options)
+    }
+
+    #[must_use]
+    pub const fn name(self) -> Option<&'static str> {
+        match (self.copy_hints, self.reload_reuse) {
+            (false, false) => None,
+            (true, false) => Some("copy-hints"),
+            (false, true) => Some("reload-reuse"),
+            (true, true) => Some("copy-hints,reload-reuse"),
         }
     }
 }
@@ -215,6 +236,9 @@ where
                     name: current.name.clone(),
                     blocks: drop_identity_moves(&current, &mut assignment),
                 };
+                if options.reload_reuse {
+                    reuse_local_reloads(target, &mut compacted, &mut assignment);
+                }
                 let frame_slots = compact_spill_slots(&mut compacted);
                 let used_callee_saved = assignment
                     .values()
@@ -606,6 +630,141 @@ where
         outputs.push((incoming, *result));
     }
     (moved, outputs)
+}
+
+/// Remove only same-location reloads whose previous value is still present.
+/// Logical spill slots have not been compacted, so distinct slots cannot alias.
+/// Replacements point directly to a retained definition, never an alias chain.
+fn reuse_local_reloads<I, T, C, A>(
+    target: &A,
+    function: &mut MachineFunction<I, T, C>,
+    assignment: &mut BTreeMap<u32, u8>,
+) where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+    T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body>,
+    A: AllocationTarget<C>,
+{
+    if !function
+        .blocks
+        .iter()
+        .flat_map(|b| &b.insts)
+        .any(|inst| inst.spill().is_some_and(|s| s.kind == SpillKind::Reload))
+    {
+        return;
+    }
+    let mut definitions = BTreeMap::<u32, usize>::new();
+    let mut use_block = BTreeMap::<u32, Option<u32>>::new();
+    for block in &function.blocks {
+        for reg in block
+            .args
+            .iter()
+            .copied()
+            .chain(block.insts.iter().flat_map(MachInst::defs))
+            .chain(block.term.defs())
+        {
+            *definitions.entry(reg.id).or_default() += 1;
+        }
+        for reg in block
+            .insts
+            .iter()
+            .flat_map(MachInst::uses)
+            .chain(block.term.uses())
+        {
+            use_block
+                .entry(reg.id)
+                .and_modify(|owner| {
+                    if *owner != Some(block.id) {
+                        *owner = None;
+                    }
+                })
+                .or_insert(Some(block.id));
+        }
+        // Even an edge operand spelled in this block transports a value out
+        // of it. Keep those reloads; this cleanup has no cross-edge domain.
+        for (_, args) in block.term.edges() {
+            for reg in args {
+                use_block.insert(reg.id, None);
+            }
+        }
+    }
+    for block in &mut function.blocks {
+        let mut available = BTreeMap::<u32, VirtualReg<C>>::new();
+        let mut aliases = BTreeMap::<u32, VirtualReg<C>>::new();
+        let mut kept = Vec::with_capacity(block.insts.len());
+        for mut inst in std::mem::take(&mut block.insts) {
+            for reg in inst.operand_slots(false) {
+                if let Some(source) = aliases.get(&reg.id) {
+                    *reg = *source;
+                }
+            }
+            let spill = inst.spill();
+            if let Some(SpillView {
+                kind: SpillKind::Reload,
+                reg,
+                slot,
+            }) = spill
+            {
+                if definitions.get(&reg.id) == Some(&1)
+                    && use_block.get(&reg.id) == Some(&Some(block.id))
+                {
+                    if let Some(source) = available.get(&slot).copied().filter(|source| {
+                        source.class == reg.class
+                            && assignment.get(&reg.id).is_some_and(|location| {
+                                assignment.get(&source.id) == Some(location)
+                            })
+                    }) {
+                        aliases.insert(reg.id, source);
+                        assignment.remove(&reg.id);
+                        continue;
+                    }
+                }
+            }
+            if spill.is_none() && !inst.discardable() {
+                available.clear();
+            }
+            for reg in inst.defs() {
+                if reg.class.is_flags() {
+                    continue;
+                }
+                if let Some(location) = assignment.get(&reg.id) {
+                    available.retain(|_, held| {
+                        held.class.bank() != reg.class.bank()
+                            || assignment.get(&held.id) != Some(location)
+                    });
+                } else {
+                    available.clear();
+                }
+            }
+            if let Some(spill) = spill {
+                match spill.kind {
+                    SpillKind::Store => {
+                        available.remove(&spill.slot);
+                    }
+                    SpillKind::Reload => {
+                        if !spill.reg.class.is_flags()
+                            && definitions.get(&spill.reg.id) == Some(&1)
+                            && assignment.get(&spill.reg.id).is_some_and(|location| {
+                                // Reserved expansion scratch may be overwritten
+                                // by a spill pseudo-op without an ordinary def.
+                                target.candidates(spill.reg.class, false).contains(location)
+                                    || target.candidates(spill.reg.class, true).contains(location)
+                            })
+                        {
+                            available.insert(spill.slot, spill.reg);
+                        }
+                    }
+                }
+            }
+            kept.push(inst);
+        }
+        block.insts = kept;
+        for reg in block.term.operand_slots() {
+            if let Some(source) = aliases.get(&reg.id) {
+                *reg = *source;
+            }
+        }
+    }
 }
 
 pub(crate) fn compact_spill_slots<I, T, C>(function: &mut MachineFunction<I, T, C>) -> u32

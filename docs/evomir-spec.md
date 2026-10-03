@@ -1,6 +1,11 @@
 # EvoMIR Specification
 
-**Revision 0.61** | **Authoritative reference** | **2026-10-03**
+**Revision 0.62** | **Authoritative reference** | **2026-10-03**
+
+Allocation-policy addendum (revision 0.62, N03c T3): an explicit optional
+same-location reload cleanup follows successful allocation, before logical
+spill-slot compaction. Section 7 defines its conservative validity boundary.
+No instruction, memory, effect, interpreter or default semantics change.
 
 Encoding-fact addendum (revision 0.61, N07 E1): the existing immediate and
 offset facts now come from `targets/aarch64/encodings`, generated into the
@@ -1241,6 +1246,27 @@ fixed-register copies. Store order, copy order, offsets and call bindings
 remain unchanged; no instruction moves outside that call's generated
 preparation sequence. Nonsaturated preparations retain their prior order.
 
+**Local reload reuse (revision 0.62).** `--regalloc-opt=reload-reuse`, optionally
+combined with `copy-hints` in the same comma-separated list, can remove a
+repeated reload of the same logical spill slot and exact register class into
+the same assigned physical location. It runs after scan and identity-copy
+removal, before slot compaction. Both holders require unique definitions;
+the removed destination's uses must remain local to that block, with no edge
+transport. Uses are redirected to the retained definition. No live interval,
+physical assignment or spill decision is changed; a removed identity's unused
+assignment is dropped. The independent allocation verifier is unchanged.
+
+Availability is block-local and invalidated by any overlapping physical
+definition, a write to that logical spill slot, calls, assembly and every
+non-discardable non-spill instruction. Only locations in the unchanged
+ordinary candidate pools are remembered; reserved expansion scratch is not.
+Stores are not forwarded. Class/width changes, multiple definitions and
+nonlocal uses keep their reloads. The rewrite uses existing spill and operand
+facts and changes no instruction meaning. The same protected profiles suppress
+both allocation variants; omission remains OFF. Unknown, empty and duplicate
+list entries are refused. The header records the canonical request, not an
+eligibility, proof or benefit claim.
+
 The output is verified, not trusted (Section 9): every physical register
 read is defined on every path, no two simultaneously live values share a
 register, and every `flags` producer is adjacent to its consumer.
@@ -1569,6 +1595,7 @@ Description digest: 96d58a17f4b979210e5fa38cb8fe2a3a76d311cc5707428505b7c568a072
 
 | Revision | Date | Change |
 |---|---|---|
+| 0.62 | 2026-10-03 | Add opt-in local same-location reload reuse after allocation; preserve constraints, independent verification, instruction semantics and OFF output. |
 | 0.61 | 2026-10-03 | Generate existing immediate/addressing limits and enforce malformed BinaryImm rejection; preserve ordinary object bytes, frame policy and branch-relaxation margins. |
 | 0.59 | 2026-10-02 | Require progress when rewriting spills; refuse recursive spill-temporary expansion and prepare saturated-bank stack arguments before fixed copies. No instruction, ABI-layout or interpreter semantics change. |
 | 0.58 | 2026-10-02 | Opt-in adjacent single-use shift, extension, product and indexed-access emission; preserve live state, flags, access order and all protected/default paths. No MIR or interpreter operation added. |

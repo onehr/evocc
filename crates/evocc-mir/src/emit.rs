@@ -52,7 +52,7 @@ pub struct CodegenOptions {
     pub compact_constants: bool,
     /// C2 adjacent single-use emission idioms.
     pub local_selection: bool,
-    /// T2 candidate-order hints; constraints and verifier remain unchanged.
+    /// T2 hints / T3 reload reuse; constraints and verifier remain unchanged.
     pub allocation: crate::generic::allocation::AllocationOptions,
     pub frame_pointer_required: bool,
     pub leaf_frame_pointer_required: bool,

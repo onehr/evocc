@@ -269,11 +269,9 @@ fn compile_module_with_guard_control(
     }
     .name()
     .map_or_else(String::new, |name| format!("// evocc-native-isel={name}\n"));
-    let allocation = if options.allocation.copy_hints {
-        "// evocc-native-regalloc=copy-hints\n"
-    } else {
-        ""
-    };
+    let allocation = options.allocation.name().map_or_else(String::new, |name| {
+        format!("// evocc-native-regalloc={name}\n")
+    });
     Ok(format!(
         "// evocc-native-ub-checks={}\n{frame}{selection}{allocation}{assembly}",
         options.ub_checks.name()

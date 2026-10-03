@@ -338,7 +338,10 @@ fn verify_with_copy_hints(function: &MFunction) {
             let allocated = evocc_mir::allocate_for_with_options(
                 target,
                 function,
-                evocc_mir::generic::allocation::AllocationOptions { copy_hints },
+                evocc_mir::generic::allocation::AllocationOptions {
+                    copy_hints,
+                    ..Default::default()
+                },
             )
             .unwrap();
             evocc_mir::verify_allocation_for(target, &allocated).unwrap();

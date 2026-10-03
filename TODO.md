@@ -2417,8 +2417,17 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     (maximum compile ratio 1.021x). B unchecked move-byte savings are
     0/44/400/628/148/44; no stack-byte improvement. Cumulative frame+C1+copy
     library ratios are 1.643–2.488, still above 1.4. Defaults remain OFF;
-    T1/C2 negative cost results are not upgraded. Spill-quality work remains
-    open and needs its own bounded scope; continue the independent N07 lane.
+    T1/C2 negative cost results are not upgraded. T3's
+    [local reload plan](tests/contracts/codegen-n03c-reload-reuse-20261003.json)
+    is frozen in `22d8e3d1`, with REDs in `e44ed429`. The default-OFF
+    `reload-reuse` implementation removes only same-slot, same-class,
+    same-location local reloads after allocation; calls, physical clobbers,
+    stores, edge uses and reserved expansion scratch block reuse. No live
+    interval, assignment choice or independent verifier rule changes.
+    The seven focused allocator/ABI/SSA/driver suites pass 73 tests; public
+    C/native pressure and option controls pass 4 tests. Full-workspace,
+    OFF/ON native corpus and six-TU OFF/reload/cumulative measurement
+    acceptance remain pending. No T3 benefit or default admission yet.
 
   - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
     Addressing modes, immediates, shifted operands, conditional select and

@@ -30,7 +30,11 @@ fn run_source(flags: &[&str], source: &str) -> Output {
 #[test]
 fn native_copy_hints_match_off_and_clang_across_edges_and_calls() {
     use evocc_mir::emit::{CodegenOptions, FrameVariants};
-    let fixture = include_str!("../../../tests/fixtures/codegen/n03c-copy-hints.c");
+    let fixture = concat!(
+        include_str!("../../../tests/fixtures/codegen/n03c-copy-hints.c"),
+        "\n",
+        include_str!("../../../tests/fixtures/codegen/n03c-reload-reuse.c")
+    );
     let signatures = [
         ("U", "choose", "unsigned n, U x, U y", "n,x,y"),
         ("U", "rotate", "unsigned n, U a, U b, U c", "n%7,x,y,z"),
@@ -38,6 +42,7 @@ fn native_copy_hints_match_off_and_clang_across_edges_and_calls() {
         ("U", "shuffled", "U a, U b, U c", "x,y,z"),
         ("Wide", "wide_across", "Wide x, U y", "((Wide)x<<64)|y,z"),
         ("Vec", "vector_across", "Vec x, U y", "((Vec){x,y}),z"),
+        ("U", "reload_pressure", "unsigned n, U x, U y", "n%5,x,y"),
     ];
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let directory = root.join(format!(
@@ -48,7 +53,14 @@ fn native_copy_hints_match_off_and_clang_across_edges_and_calls() {
     std::fs::create_dir(&directory).unwrap();
     let mut harness = String::from("typedef unsigned long U; typedef unsigned __int128 Wide; typedef U Vec __attribute__((vector_size(16)));\n");
     let mut assemblies = Vec::new();
-    for prefix in ["off", "hint", "combined", "reference"] {
+    for prefix in [
+        "off",
+        "hint",
+        "combined",
+        "reload",
+        "copy_reload",
+        "reference",
+    ] {
         let mut source = fixture.to_owned();
         for (ret, name, params, _) in signatures {
             source = source.replace(&format!("{name}("), &format!("{prefix}_{name}("));
@@ -74,7 +86,8 @@ fn native_copy_hints_match_off_and_clang_across_edges_and_calls() {
                 &CodegenOptions {
                     ub_checks: evocc_mir::UbCheckProfile::Unchecked,
                     allocation: evocc_mir::generic::allocation::AllocationOptions {
-                        copy_hints: prefix != "off",
+                        copy_hints: matches!(prefix, "hint" | "combined" | "copy_reload"),
+                        reload_reuse: matches!(prefix, "reload" | "copy_reload"),
                     },
                     compact_constants: prefix == "combined",
                     frame: if prefix == "combined" {
@@ -107,7 +120,7 @@ fn native_copy_hints_match_off_and_clang_across_edges_and_calls() {
         "the choose function must exercise hints, not just the header"
     );
     harness.push_str("__attribute__((noinline)) U boundary(U a,U b,U c,U d){ __asm__ volatile(\"movi v8.16b, #165\" ::: \"v8\"); return ((a+b)^c)+d; }\nint main(void){U x=1,y=~0UL,z=1UL<<63; for(unsigned n=0;n<4096;++n){\n");
-    for prefix in ["off", "hint", "combined"] {
+    for prefix in ["off", "hint", "combined", "reload", "copy_reload"] {
         for (index, (ret, name, _, args)) in signatures.iter().enumerate() {
             if *ret == "Vec" {
                 harness.push_str(&format!("{{Vec a={prefix}_{name}({args}), b=reference_{name}({args}); if(a[0]!=b[0] || a[1]!=b[1]) return {};}}\n", index + 1));
@@ -127,6 +140,8 @@ fn native_copy_hints_match_off_and_clang_across_edges_and_calls() {
             "off.s",
             "hint.s",
             "combined.s",
+            "reload.s",
+            "copy_reload.s",
             "reference.c",
             "harness.c",
             "-o",
@@ -191,13 +206,15 @@ fn n03c_copy_hint_protected_profiles_and_bad_requests_stay_closed() {
         "-mgeneral-regs-only",
         "-fpatchable-function-entry=2",
     ] {
-        let off = assembly(&[flag]);
-        let on = assembly(&[flag, "--regalloc-opt=copy-hints"]);
-        assert_eq!(
-            off,
-            on.replace("// evocc-native-regalloc=copy-hints\n", ""),
-            "{flag}"
-        );
+        for option in ["copy-hints", "reload-reuse", "copy-hints,reload-reuse"] {
+            let off = assembly(&[flag]);
+            let on = assembly(&[flag, &format!("--regalloc-opt={option}")]);
+            assert_eq!(
+                off,
+                on.replace(&format!("// evocc-native-regalloc={option}\n"), ""),
+                "{flag} / {option}"
+            );
+        }
     }
     for flags in [
         vec!["--emit=asm", "--regalloc-opt="],
@@ -209,6 +226,9 @@ fn n03c_copy_hint_protected_profiles_and_bad_requests_stay_closed() {
             "--regalloc-opt=copy-hints",
         ],
         vec!["--check", "--regalloc-opt=copy-hints"],
+        vec!["--check", "--regalloc-opt=reload-reuse"],
+        vec!["--emit=asm", "--regalloc-opt=reload-reuse,reload-reuse"],
+        vec!["--emit=asm", "--regalloc-opt=copy-hints,"],
     ] {
         let output = run(&flags);
         assert!(!output.status.success(), "{flags:?}");
