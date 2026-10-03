@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "63c1f5b882f625dd04e936d3a10883e3f2703116",
+    "lean_commit": "1b99fae29018db0b74d4ef128a7cb7187e28f2bf",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -28,6 +28,7 @@
     "audited_modules": [
       "lean/EvoIR.lean",
       "lean/EvoIR/Core/CheckedInt.lean",
+      "lean/EvoIR/Core/Source.lean",
       "lean/EvoIR/Eval.lean",
       "lean/EvoIR/Fact.lean",
       "lean/EvoIR/GuardRegistry.lean",
@@ -63,9 +64,13 @@
       "lean/EvoIR/Core/CheckedInt.lean": [
         "EvoIR.Sem"
       ],
+      "lean/EvoIR/Core/Source.lean": [
+        "Lean.Data.Json"
+      ],
       "lean/EvoIR/Eval.lean": [
         "Lean.Data.Json",
-        "EvoIR.Registry"
+        "EvoIR.Registry",
+        "EvoIR.Core.Source"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -6000,6 +6005,16 @@
       "name": "EvoIR.Core.irAbs",
       "type": "{n : Nat} → BitVec n → EvoIR.Core.CheckedValue n",
       "sha256": "b2b1cf65f7a8085ac452299a648bc7ddb1170f5552089ae155a602285027920e"
+    },
+    {
+      "name": "EvoIR.Core.sourceFixedMul",
+      "type": "BitVec 32 → BitVec 32 → EvoIR.Core.CheckedValue 32",
+      "sha256": "2dca730ae09fea18b0e736e1ffcf110c08ecd100ed1f1aacdc5259a5eea8e57a"
+    },
+    {
+      "name": "EvoIR.Core.irFixedMul",
+      "type": "BitVec 32 → BitVec 32 → EvoIR.Core.CheckedValue 32",
+      "sha256": "eb86d387658c622b59814a0a2d7594b935e688f6c28c924962e7d4e4404a41bb"
     },
     {
       "name": "EvoIR.Core.checkArithmeticFragment",
@@ -15084,7 +15099,7 @@
     }
   ],
   "compilation_core_primitives": {
-    "claim": "Checked arithmetic primitive correspondence only; no CFG, source export, whole-function checker or compilation theorem yet",
+    "claim": "Checked arithmetic primitive correspondence only; no proof of source export, CFG, whole-function checker or compilation yet",
     "targets": [
       {
         "theorem": "EvoIR.Core.checked_arithmetic_lowering",
@@ -15111,6 +15126,17 @@
       {
         "theorem": "EvoIR.Core.checked_abs_expression",
         "proposition": "∀ {n : Nat} (x : BitVec n), EvoIR.Core.irAbs x = EvoIR.Core.sourceAbs x",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.checked_fixedmul_expression",
+        "proposition": "∀ (x y : BitVec 32), EvoIR.Core.irFixedMul x y = EvoIR.Core.sourceFixedMul x y",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Classical.choice",
