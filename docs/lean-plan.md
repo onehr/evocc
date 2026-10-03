@@ -156,7 +156,9 @@ entire original translation unit. The pilot is frozen in
 [core-v1-pilot.json](../tests/contracts/core-v1-pilot.json). The Rust
 `evocc_chir::core_profile::inspect_core` inventory visits original nodes,
 including dead branches; it does not normalize them or certify compilation.
-Independent Lean well-formedness remains a V01 requirement.
+Independent Lean input validation is implemented in `Core/WellFormed.lean`;
+its connection to the forthcoming execution semantics remains a V01 proof
+obligation. Successful validation is not a source-to-EvoIR result check.
 The pilot fixes `-O0 -fno-builtin`: ordinary-name `abs` recognition would
 otherwise bypass the very definition whose source/target relation is required.
 
@@ -173,11 +175,18 @@ otherwise bypass the very definition whose source/target relation is required.
 | All other constructors | Refuse, even if unreachable or accepted by the ordinary compiler. No opaque wildcard row. |
 
 The inventory's definite-initialization analysis intersects continuing branch
-states and uses incoming loop facts for body/continue/increment checks. It is
-deliberately conservative, not a proof that every defined C program is admitted.
-V01 independently checks lexical lifetimes, binding/type consistency, call
-signatures, initialization and the precise permitted evaluation order. The
-front-end's prior elaboration of macros/typedefs is a disclosed input boundary.
+states and uses incoming loop facts for body/continue/increment checks. The
+independent Lean check recomputes these properties from the exported tree;
+producer claims are not inputs. It additionally checks integer rank/result
+types, binding/place/conversion consistency, const writes, signatures, scoped
+lifetimes and unsequenced conflicting local accesses. Non-sequenced siblings
+cannot supply each other's initialization premises. Comma, short-circuit and
+conditional sequencing stay explicit. The policy conservatively refuses nested
+writes to an assignment target and some otherwise defined C inputs; it is not
+a claim to admit every defined C program. Calls must name preceding definitions
+in the acyclic closure. The front-end's prior elaboration of macros/typedefs is
+a disclosed input boundary. Proving this validator sufficient for the complete
+small-step semantics remains open, as does the source/target checker.
 
 **Source interface.** V01's `core-v1` export is a tagged tree, not `Debug` output
 or an expression selected from the middle of a body. It contains a format
@@ -192,7 +201,8 @@ Statements retain lexical scopes and original order. Locations are diagnostic
 metadata, not trusted semantic facts. The exporter is
 `crates/evocc/src/core_export.rs`; the independent grammar reader and source AST
 are `lean/EvoIR/Core/Source.lean`. Decoding is **not** well-formedness, a source
-execution semantics, or a compilation proof; those checks still block V01.
+execution semantics, or a compilation proof. The separate input validator
+below must not be confused with the still-unimplemented compilation checker.
 
 The dependency-free wire format is JSON with fixed-arity tagged arrays:
 
@@ -227,6 +237,14 @@ The reader prints `DECODED_NOT_VERIFIED`. Export refuses an unsupported selected
 closure before publishing any tree, checks every relevant prototype declaration,
 and does not modify ordinary compilation defaults or emit a verified artifact.
 Passing this command is not the V01 whole-function checker gate.
+
+Replacing `--read-core` by `--check-core-source` independently validates the
+source and prints `WELL_FORMED_NOT_COMPILATION_VERIFIED`. Malformed syntax exits
+2; a decoded but refused source exits 1; an accepted source exits 0 without any
+target program or proof-output label. All five frozen entry exports pass this
+input check, including the two-function pressure closure. Forty-four focused
+input tests cover both admission and refusal, but neither those tests nor the
+five existing primitive theorems prove this validator's execution safety.
 
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and

@@ -1,6 +1,7 @@
 import Lean.Data.Json
 import EvoIR.Registry
 import EvoIR.Core.Source
+import EvoIR.Core.WellFormedTests
 
 /-!
 # The executable evaluator
@@ -267,14 +268,24 @@ def selfTest : IO UInt32 := do
 /-! ## Entry point -/
 
 def usage : String :=
-  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json>"
+  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json>"
 
 def run (args : List String) : IO UInt32 := do
   match args with
   | ["--selftest"] => do
       let arithmetic ← selfTest
       let source ← EvoIR.Core.Source.readerSelfTest
-      return if arithmetic == 0 && source == 0 then 0 else 1
+      let wellFormed ← EvoIR.Core.Source.wellFormedSelfTest
+      return if arithmetic == 0 && source == 0 && wellFormed == 0 then 0 else 1
+  | ["--check-core-source", input] => do
+      match EvoIR.Core.Source.readProgram (← IO.FS.readFile input) with
+      | .error message => IO.eprintln message; return 2
+      | .ok program =>
+        match EvoIR.Core.Source.checkWellFormed program with
+        | .error message => IO.eprintln s!"CORE_SOURCE_REFUSED: {message}"; return 1
+        | .ok _ =>
+          IO.println s!"WELL_FORMED_NOT_COMPILATION_VERIFIED entries={program.entries.length} functions={program.functions.length}"
+          return 0
   | ["--read-core", input] => do
       match EvoIR.Core.Source.readProgram (← IO.FS.readFile input) with
       | .error message => IO.eprintln message; return 2

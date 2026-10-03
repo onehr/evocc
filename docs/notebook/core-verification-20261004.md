@@ -8,7 +8,8 @@ Population/commands: [core-v1-pilot.json](../../tests/contracts/core-v1-pilot.js
 | --- | --- | --- |
 | `63c1f5b8` — inventory, original functions, checked arithmetic | Nine focused Rust tests pass; initial four theorem targets are kernel-only. | Finite interpreter/pipeline tests and primitive correspondence, not compilation. |
 | `ffb862f2` — clean Lean receipt | Full Lean gate passed on clean `63c1f5b8`; all six historical vector groups retained. | Receipt covers that exact Lean source, not later work. |
-| Source-input follow-up | Fourteen focused Rust tests, ten Lean reader cases and five actual exporter/reader pairs pass; `FixedMul` expression theorem checked. | Source tree decoding is explicitly `DECODED_NOT_VERIFIED`; no independent source well-formedness or whole-function checker yet. |
+| `1b99fae2` / receipt `833982ed` — source input | Fourteen focused Rust tests, ten reader cases and five exporter/reader pairs pass; clean Lean gate passes, five kernel-only primitive targets. | `DECODED_NOT_VERIFIED`; no whole-function checker. |
+| Independent source validation | 44 input cases and all five frozen exports pass the separate Lean check. | `WELL_FORMED_NOT_COMPILATION_VERIFIED`; execution safety and source/target correspondence remain unproved. |
 
 | Existing-pipeline pilot | Functions with wrapper | Blocks | Spill store/reload pairs | Incoming stack args |
 | --- | ---: | ---: | ---: | ---: |
@@ -26,7 +27,9 @@ changing the compiler's input contract. An unprototyped declaration in an
 otherwise prototyped chain refuses at export rather than inventing a prototype.
 
 The first full-workspace attempt was interrupted during compilation for disk
-recovery (exit 143), not recorded as PASS. The follow-up full gate is pending.
+recovery (exit 143), not recorded as PASS. The sandboxed follow-up completed:
+3,077 passed, two container-permission failures, five ignored. A same-scope rerun
+with container access is pending; the two previously denied probes now pass.
 No optional compiler optimization, P0/g0 registry or public verification claim
 was enabled by this slice.
 
@@ -35,5 +38,6 @@ open handles. Cleanup removed 911,226 `.rcgu.o` directory entries; their summed
 logical size is **not** physical space recovered because many were hard-linked.
 Old test binaries (3.64 GiB logical) and incremental caches were also retired.
 Current executables, manifests, receipts, sealed fixtures, kernel runtimes and
-Lean `.lake` were preserved. Start/end project disk delta is recorded after
-the follow-up gate; host-wide free-space variation also includes unrelated swap.
+Lean `.lake` were preserved. `target/frontend` went from approximately 24 GiB
+to 10.1 GiB before the final gate; final slice net delta is recorded afterward.
+Host-wide free-space variation also includes unrelated swap.

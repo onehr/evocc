@@ -2330,8 +2330,12 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   with no native axioms. The structural fragment check does not cover
   operand bindings or the surrounding CFG. Complete typed-tree export and an
   independent grammar reader now exist, with a `DECODED_NOT_VERIFIED` result.
-  Independent well-formedness, small-step control, calls, local storage and
-  actual whole-function result checking remain open.
+  The separate Lean source validator independently checks binding/type/place
+  consistency, scopes, initialization, calls and unsequenced conflicting local
+  accesses: 44 input cases and all five exported entries pass. Its result is
+  `WELL_FORMED_NOT_COMPILATION_VERIFIED`. Validator soundness against execution,
+  small-step control, calls, local storage and actual whole-function result
+  checking remain open.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
