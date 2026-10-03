@@ -1,0 +1,65 @@
+{
+  "schema": "evocc-codegen-work-plan-v1",
+  "package": "N03d",
+  "slice": "C5: terminal Boolean branches and constant interval idioms",
+  "date": "2026-10-03",
+  "status": "PLAN_NOT_ACCEPTANCE",
+  "source_baseline": "937e657d",
+  "authority": [
+    "docs/codegen-quality-plan.md sections 4a, 5, 10 and 11",
+    "docs/target-spec.md sections 2-6",
+    "docs/evomir-spec.md sections 2 and 5"
+  ],
+  "observed": "C4's frozen 48-object census found 109 terminal CMP/CSET/Boolean-branch windows and 25 two-compare Boolean combinations in current B/unchecked library objects. All 25 combinations are inclusive intervals on one value with ordered nonnegative imm12 endpoints (22 zstd-compress, three cJSON). A retained deflateGetDictionary IR fragment demonstrates the missed branch: unused uninitialized definitions follow the ICmp, so source-adjacency fusion misses it; shared baseline DCE later removes those machine definitions. Syntactic counts are not eligibility or promised savings.",
+  "scope": {
+    "placement": "Target-specific bounded MIR selection after shared baseline DCE/SSA destruction and before allocation. Reuse existing instructions, terminators, generated operand facts and the unchanged allocation verifier. No change to DCE, its ordering or its attribution.",
+    "boolean_branch": "Only the final adjacent integer Cmp/CmpImm and Cset in a block followed by Tb of bit zero or Cb using that Cset destination. The Boolean must have exactly one definition and one use across the function; the flags have one definition and their one adjacent consumer. Remove only Cset and replace the existing branch by BCond using the same flags, original condition (inverted for a zero test), successors and edge arguments. Floating compares, flag-setting arithmetic, other bit tests, intervening instructions and live-out Boolean uses decline.",
+    "interval": "Only five adjacent instructions: CmpImm(f1,x,lo), Cset(a,f1,GE/HS), CmpImm(f2,x,hi), Cset(b,f2,LE/LS), Binary AND(r,a,b), with matching signedness, either Boolean input order, the identical W/X source and 0 <= lo <= hi <= 4095. Each flag and removed Boolean has one definition and one use. Replace by SUB tmp,x,#lo; CMP tmp,#(hi-lo); CSET r,LS. When lo=0 omit SUB. The temporary reuses the removed first Boolean's unique identity at the source register width; every reference to its old class is removed. The result retains its original GPR class. Do not generalize to OR, strict/reversed/mixed predicates, negative or wider endpoints, different values, extra users, intervening operations or CFG patterns.",
+    "semantic_argument": "For N=32/64 and nonnegative ordered imm12 endpoints, lo <= x <= hi is equivalent to unsigned((x-lo) mod 2^N) <= hi-lo, for either the admitted signed or unsigned comparisons. Signed negative inputs and values below lo fail the unsigned test; the interval length is strictly less than half the modulus. There is no source arithmetic insertion or deletion of a C UB obligation. Original internal flags and Boolean temporaries are unobservable after their sole uses. Final source result bits and control edges must agree.",
+    "unchanged": "No EvoIR, MIR opcode meaning, flags lifetime, interpreter, ABI, allocator, verifier, registry, certificate, fact lattice, alias or effect rule changes. No instruction motion, speculative arms, general CCMP or if-conversion. No new ISA operation or model slice.",
+    "default": "OFF. Kernel and frame-pointer protected profiles suppress the option. C2 remains excluded from the admitted cumulative arm."
+  },
+  "interface": {
+    "driver": "Add controls to the duplicate-free --isel-opt list, canonical order constants,local,extensions,controls. Use the same parser in the public driver, native corpus hook and exact-IR adapter. Reject malformed, repeated and --check combinations; OFF bytes unchanged.",
+    "patterns": "Add two bounded rows to the existing target pattern generator/table with explicit live-value/edge and adjacent-flags contracts. Finite validation, not an N07 SMT proof. No new matcher framework or audit.",
+    "telemetry": "Existing producer-only selected/declined comments, with named reasons. Report interval and branch instruction removals separately, including when the interval output also feeds an eligible branch.",
+    "spec": "EvoMIR implementation-policy revision only; existing operation semantics unchanged."
+  },
+  "red": [
+    "Minimal exact-IR Boolean branch with unused uninitialized definitions after ICmp, derived from retained deflate IR; baseline emits CSET, controls removes it without removing or moving any observable operation.",
+    "Existing MIR interpreter and native before/after comparison for W/X input, both branch senses, all admitted comparison conditions and interval boundaries including 0, 1, 4095, equal endpoints, signed minima/maxima and wrapped below-lower-bound inputs.",
+    "Multiple definitions or uses of Boolean/flags, outgoing transport/other-block uses, different input/class/width/sign, inverted bounds, imm12 overflow, nonzero bit tests, FP producers, intervening memory/call/asm/fenv operations, masks and malformed shapes decline.",
+    "Cycles, edge copies, spills, alias-prone assignments, multiple returns and both OS targets retain valid allocation and correct branch relaxation/fallthrough.",
+    "Default identity, protected profile suppression, invalid option lists, all option parser combinations and controls with frame/constants/extensions/copy/reload options.",
+    "Interval selection followed by terminal branch selection has separate counts and preserves both edge values; a second pass is idempotent. No new UB or poison interpretation."
+  ],
+  "acceptance": {
+    "native": "384 Darwin and 384 sealed Linux cases OFF/ON, serial; identical object twins, OFF byte hashes match C3, native outputs agree. Focused MIR and public Linux source tests must actually select each family, rather than count no-op corpus successes as pattern coverage.",
+    "six_units": "Freeze six A/B plans before measurements: fresh OFF, controls-only, and cumulative frame+C1+extensions+copy+reload+controls. Checked/unchecked separately; three compile observations and two object builds; unchanged source/IR/chain/bundle, original selected-TU harnesses, zero completed proof rejections or bundle failures.",
+    "bounds": {
+      "compile_median_ratio": 1.25,
+      "text_growth_bytes": 0,
+      "text_plus_rodata_growth_bytes": 0,
+      "interpreter_steps": "UNCHANGED; native-only selection"
+    },
+    "attribution": "Existing S1/N01 object categories and producer counts. Keep branch/compare/compute changes separate from P0, guard, frame, DCE and previous selectors. Report C5-only and incremental cumulative savings versus C3.",
+    "coverage": "N02 70 admitted / 187 opaque and legacy source-bridge mismatch remain; no full application, kernel, latency, default or proof promotion.",
+    "gates": [
+      "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "focused MIR/native/driver tests and existing touched Python tests",
+      "python3 tools/generate-target.py --check",
+      "python3 tools/render-status.py --todo"
+    ],
+    "stop": "One frozen bounded implementation/cohort. Preserve zero savings or compile-bound misses; decline unsafe patterns rather than widen them. General CCMP and control restructuring outside this measured idiom remain unimplemented, not proved absent. Do not resample to erase a miss."
+  },
+  "resources": {
+    "capture_limit_bytes": 524288000,
+    "min_start_free_bytes": 26843545600,
+    "stop_free_bytes": 16106127360,
+    "cargo_target_dir": "target/frontend",
+    "cargo_build_jobs": 2,
+    "serial": true,
+    "retention": "No new target/workspace/kernel tree or VM disk. Hash/measure and retire owned intermediate objects, preserving current OFF/cumulative baselines and compact evidence; record scoped disk delta."
+  },
+  "claim_ceiling": "Bounded opt-in selection of existing integer/control MIR operations, finite-validated only. No verified EqSat benefit, general CCMP/if-conversion, default admission, B1/B6 proof, or guarantee of the 1.4 target."
+}
