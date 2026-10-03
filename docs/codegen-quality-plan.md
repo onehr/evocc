@@ -5,6 +5,15 @@ supersedes the search-oriented part of the [Q2/Q3 design](framing-draft.md)
 (revision 7) for the next quarter. That design's verified chain, size contract
 and claim rules stay in force; its discovery tracks are paused, not cancelled.
 
+**First-public-release priority, 2026-10-04.** The bounded N01–N05/N07 batch
+remains closed with its recorded misses (Section 11). Next implement the
+[V00–V06 verification plan](lean-plan.md#first-public-release-verification):
+close a Core C-HIR-to-assembly semantic-preservation path, then compose the
+existing verified rewrites with it. These tasks block the first public release;
+they do not relabel N02's finite execution tests as proofs. No new size slice,
+default flip, timing run, R03 activity or guard-domain expansion is scheduled.
+This changes priority, not historical results or the 1.4x target outcome.
+
 ## 0. Why this plan, in numbers
 
 **Disk precondition (owner decision, 2026-10-02).** Complete the retention
@@ -389,8 +398,9 @@ table, claim ceiling. Nothing else.
 
 ## 11. Status and order of work, 2026-10-03
 
-This section is the entry point for whoever continues. It records state; the
-sections above remain the contract.
+This section records the completed codegen batch. The next implementation entry
+point is [V00](lean-plan.md#first-public-release-verification); the remaining
+sections here retain the codegen contract and historical results.
 
 | Package | State | Evidence |
 | --- | --- | --- |

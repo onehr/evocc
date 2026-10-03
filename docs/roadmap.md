@@ -1,5 +1,16 @@
 # EvoCC: An Equality-Native, Self-Contained C Compiler Architecture and Launch Plan
 
+**First-public-release verification priority, October 4:** implement
+[V00–V06](lean-plan.md#first-public-release-verification) before release: a
+composed correctness guarantee from the admitted Core C-HIR subset to AArch64
+assembly AST, followed by the existing P0/g0 rewrites on that path. This is a
+new release requirement, **not an existing end-to-end proof**. Broader GNU C,
+kernel and application support retain their tested/refused status and are not
+silently included in the theorem. Parsing/export, assembly decoding and external
+toolchain boundaries are explicit. The completed bounded codegen batch and its
+target misses stay frozen; no R03, timing, new fact domain or default flip is
+reopened. The October 1 Q2/Q3 decisions below remain in force for those tracks.
+
 **Current V1 owner scope, October 1, revision 7:** Q2 targets object code size;
 latency is NOT_MEASURABLE_ON_THIS_LANE and no further VM timing is scheduled.
 R03 V1 is a completed negative-admission study, all three tracks remain

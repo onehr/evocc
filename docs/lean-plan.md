@@ -1,4 +1,194 @@
-# Lean 4 integration plan for EvoCC (second version)
+# EvoCC verification plan
+
+## First public release verification
+
+Plan revision 1, **2026-10-04**; inspected implementation `19bb5f7d`.
+The owner requires a practical compiler-correctness path before the first public
+version, followed by verified rewrites on that path. This section is the current
+implementation plan; the scalar-proof plan below remains historical evidence.
+**V00–V06 are OPEN. No new compilation theorem or release acceptance is claimed.**
+Execution is tracked only in [TODO.md](../TODO.md#first-public-release-verification).
+
+### Release outcome and boundary
+
+Deliver a **verified compilation core**, not a claim that the entire supported
+GNU C language, Linux, or the application ladder has been formally verified.
+The release must contain one composed semantic-preservation theorem and an
+executable, proved result checker for the admitted `core-v1` path:
+
+```text
+typed Core C-HIR -> EvoIR -> virtual EvoMIR -> out-of-SSA EvoMIR
+    -> allocated EvoMIR -> framed AArch64 assembly AST
+
+baseline path closed first
+    -> existing P0/g0 rewrites admitted through a proved replacement path
+    -> the same backend theorem and final artifact
+```
+
+CompCert's relevant precedent is composition from a processed C AST to an
+assembly AST, with preprocessing/elaboration and assembling/linking boundaries
+stated separately; it is not a promise to prove every tool or all of GNU C.
+See its [semantic-preservation contract](https://compcert.org/man/manual001.html).
+An EvoIR-to-MIR theorem alone is a backend result, not this release outcome.
+
+The first theorem boundary is the serialized, typed Core C-HIR input and a
+restricted assembly AST decoded from the **actual final emitted assembly**.
+The current emitter produces text; this decoding boundary does not exist yet.
+V04 must connect that output to the target semantics, rather than checking an
+earlier MIR snapshot and assuming emission is correct. Preprocessing, parsing,
+elaboration, faithful C-HIR export and faithful assembly decoding are disclosed
+trusted boundaries. The platform assembler/linker/runtime and actual hardware
+are outside this first theorem. Native differential tests check those boundaries;
+they do not remove them from the trusted base. Do not insert an unproved semantic
+normalization into either decoder or silently reinterpret a complete function
+as a smaller arithmetic expression.
+
+### Fixed implementation envelope
+
+Use the existing compiler pipeline and existing Lean project, not a second toy
+compiler. Start with the Linux AArch64 LP64 target; Darwin and kernel execution
+remain existing tested capabilities, not automatically covered proofs.
+
+| Area | Required for `core-v1` | Explicitly outside this first proof |
+| --- | --- | --- |
+| Values | 32/64-bit signed and unsigned integers, conditions, integer conversions within this set; total integer IR operations and their existing source-definedness guards | FP, vectors, complex, 128-bit integers, arbitrary-width C objects |
+| Control | Structured sequencing, conditionals, short-circuiting, loops, break/continue, return; corresponding CFG joins and backedges | Computed goto, exceptions, setjmp/longjmp, arbitrary inline assembly |
+| Objects | Non-address-escaping scalar automatic objects with independently checked definite initialization; their private lowered storage and compiler spill slots | Pointer parameters, heap, arbitrary aliasing, aggregates, volatile/atomic/TLS/global objects |
+| Calls | Direct calls within an admitted, nonrecursive closure, integer arguments/results, including register exhaustion and stack arguments | Indirect/variadic/external calls and recursion |
+| Backend | Operand widths and aliases, flags, simultaneous edge copies, spill/reload, ABI entry/exit, call clobbers, frame layout and normal prologue/epilogue | Unproved optional frame/selection/allocation transforms, unwinding, stack-protector/PAC-specific profiles |
+| Optimization | First close a baseline with optional optimizations OFF; then compose admitted instances of frozen `p0.scalar.v4` / `g0.ub.v1` | New rewrite registries, branch-derived facts, interval-domain expansion, R03, memory rewrites |
+
+This is a planning envelope, not an implemented parser whitelist. V00 must turn
+it into an exact constructor/operation matrix using the existing source and IR
+semantics, including signed conversions and independent shift-count widths.
+Signed-left-shift rules excluded by the current guard contract stay excluded.
+No new C semantic choice is implicitly approved here. Constructs without a
+completed row must be rejected by the proof-required path, not treated as opaque
+instructions that preserve an invented state. The ordinary compiler retains its
+existing feature coverage and defaults.
+
+Before proof implementation, freeze a small population in the existing fixtures:
+at least one joined/backedge function, one actual spill/reload function, one
+admitted direct-call closure exercising stack arguments, one checked diagnostic,
+and **two unchanged function bodies from the existing pinned application sources**.
+Inputs/signatures may not be simplified to get acceptance. V00 names the exact
+functions, source identities and expected admission, plus nearby out-of-profile
+negative cases. If this envelope admits no useful original functions, stop at
+V00 and revise it explicitly; do not spend the next stages proving a zero-use
+profile. Acceptance covers every frozen in-profile function, not just survivors.
+
+### Theorem and execution contract
+
+The schematic release theorem is:
+
+```text
+well_formed_core(S) /\ admitted_profile(P) /\ check_pipeline(S, A, C, P) = true
+  -> refines(AsmSem(P, A), CoreSem(P, S))
+```
+
+`S` and `A` are both inputs to the checker; `C` contains proposed correspondences
+and annotations, not trusted assertions. State the refinement relation before
+implementing the checker: related entry states, returns, effects of admitted
+calls, normal termination and divergence, and the diagnostic observations promised
+by the checked profile. A finite interpreter fuel budget is not a proof of loop
+behavior. Administrative moves/spills require a progress argument as well as
+stuttering simulation; the compiler cannot introduce silent infinite execution.
+
+Baseline closure first uses the existing **checked** profile. Preserve the first
+supported diagnostic and prior observations; do not hide an incorrect trap behind
+C UB. A separate unchecked corollary may quantify only source-defined executions;
+it is not an automatic consequence of deleting `ub.assume`. Resource assumptions
+such as valid ABI entry and adequate private stack storage must be explicit.
+
+Prove small deterministic checkers in Lean; leave optimization, allocation and
+annotation search in Rust untrusted. Check annotations for inductiveness at the
+entry and on every reachable edge, including backedges; do not prove the search
+algorithm merely to accept its result. Check original/candidate structure and
+memory/frame separation as well as register liveness. Target `uses/defs` tables
+alone cannot establish arithmetic instruction semantics.
+
+New semantic/checker/composition theorems must be kernel-checked with no `sorry`,
+admitted lemma or new semantic axiom. Extend the existing Lean audit to these
+actual theorem declarations. Reuse old scalar lemmas only with their transitive
+dependencies visible: existing native-backed rows do not become kernel-only by
+being called from a new theorem. The first proved optimization profile admits
+only instances whose entire required proof path is closed; the ordinary scalar
+optimizer and its historical receipts are unchanged.
+
+The first executable integration uses the compiled proved Lean checker, rather
+than trusting agreement with a second Rust implementation. Its acceptance relies
+on Lean's compiler/runtime and the host toolchain as well as decoding; disclose
+that execution trusted base. A kernel-checked general soundness theorem is not
+the same as a kernel-checked proof term for every invocation. See
+[Lean's elaboration/compilation boundary](https://lean-lang.org/doc/reference/latest/Elaboration-and-Compilation/).
+Use one result-checking path, not another audit service or identity framework.
+Keep the pinned Lean toolchain and core-only dependency policy; do not make an
+Aeneas migration, Mathlib import or the blocked N07 SMT generator a prerequisite.
+
+### Work packages and concrete exits
+
+Work in dependency order. Every package starts with minimal positive/negative
+fixtures and ends with a bounded commit, theorem names, test results and claim
+ceiling in the existing notebook/receipt conventions. These are deliverables,
+not calendar estimates or already implemented interfaces.
+
+| ID | Implementation surface and work | Exit; passing tests alone never closes a proof task |
+| --- | --- | --- |
+| **V00** | Freeze profile, source/target state and observation relations, trusted boundaries and pilot population. Specify the input/export format in the existing specs/Lean plan. | Exact theorem statement, operation/constructor coverage matrix, named original functions, minimal unsupported cases and per-stage REDs. No unbound source/target pair or wildcard admission. |
+| **V01** | Core C-HIR and EvoIR small-step semantics in `lean/`; result-check the actual `evocc-lower` output against the source AST. Cover local storage, evaluation order, calls, guards and block arguments. | Source-to-EvoIR checker soundness for all admitted executions; reject missing effects, swapped evaluation, wrong conversions/edges and changed diagnostics. The existing N02 volatile-initializer mismatch remains a regression/refusal case, not silently normalized away. |
+| **V02** | EvoIR-to-EvoMIR selection and out-of-SSA checks in `evocc-mir`, backed by Lean semantics. Include baseline DCE and every always-on lowering transform. | Composable selection/copy simulation; reject wrong opcode/width, sequentialized copy cycles, missing edge transfers and deleted observable instructions. No hidden unproved pass between checked snapshots. |
+| **V03** | Replace the allocation guarantee with a proved two-input check around `generic/allocation.rs` / `generic/allocverify.rs`; track registers **and spill slots**, exact entry bindings and proposed block invariants. | Allocation soundness, including inserted copies/spills, slot reuse, calls and aliases. Reject wrong reload slot, clobbered live value, argument swap, changed source operation and false loop invariant. A self-consistent allocated program alone is insufficient. |
+| **V04** | Frame layout, prologue/epilogue and decoding the final emitted text into the restricted assembly AST at the `generic/frame.rs`, `emit` and `native.rs` boundary. Compose V01–V03 with this checker. | **Baseline compilation theorem** from Core C-HIR to framed assembly, plus the frozen original functions accepted. Reject overlapping frame areas, missing restores, wrong stack argument offsets, truncating width views and changes after allocation validation. Unknown semantic assembly/directives refuse; decoder/native correspondence is separately tested and remains disclosed. |
+| **V05** | Reuse current P0/g0 rules; prove admitted fact/poison/seed premises, replay, extraction and whole-function replacement in context. Integrate with `evocc-proofcheck` / `evocc-eqopt` without adding rules. | **Optimized compilation theorem** composed with V04; at least a P0 replacement and a g0 guard fold on the frozen path. Reject forged facts/rules, poison bypass, deleted obligations and splices outside the proved region. A local `RuleSound` theorem alone is insufficient. |
+| **V06** | Driver proof-required integration and R05 release acceptance, using the existing gate/bench paths and a compact coverage record. | Missing/rejected/timed-out proof or unsupported constructor publishes no verified output. One frozen release subject passes Lean, full workspace and selected native/original tests; reported scope matches the exact artifact and admitted call closure. Ordinary output never inherits the proof label. |
+
+V03's gap is already observable in the implementation: `verify_allocation`
+accepts only `Allocated`; its state is register-to-virtual-value and its transfer
+does not validate spill-slot contents. The allocator also inserts spills, drops
+copies and compacts slots. Do not translate that checker unchanged and claim the
+larger theorem. CompCert's [two-program structural and value validation](https://compcert.org/doc/html/compcert.backend.Allocation.html)
+is the engineering reference, not a dependency on its implementation.
+
+### Release gate, budget and stop rules
+
+- **V04 before V05**: close baseline correctness before counting proved optimizer
+  integration. Existing scalar proofs remain reusable assets throughout.
+- **V00–V06 block the first public release under this plan.** A missed proof does
+  not become a negative-result closure or an ordinary test PASS. Report the exact
+  missing lemma/unsupported path; do not lower the release promise silently.
+- A proof-required invocation must bind the actual source, all intermediate
+  correspondences and final emitted assembly. No silent fallback, mixed unproved
+  callee, or unsupported pass. Gate this in the existing driver/bundle boundary;
+  do not create another storage or attestation platform.
+- Run focused proof/tests during implementation; at completed integration slices
+  run `tools/gate-changed.sh --full-workspace --offline` and `tools/gate-lean.sh`.
+  V06 runs final acceptance once on a frozen subject. Reuse existing native and
+  application harnesses; do not schedule kernel rebuilds for each lemma. Existing
+  unresolved runtime/release tasks keep their own requirements and are not waived.
+- Follow TODO's disk discipline: inspect before any build, do not launch below
+  25 GiB, stop/clean below 15 GiB, only `target/frontend`, two build jobs and
+  serial Cargo. Captures are capped at 500 MiB by default; preserve Lean caches
+  and sealed evidence. Record each slice's disk net change. This planning edit
+  does not authorize deleting retained artifacts.
+- Do not reopen timing, AI discovery, new guard facts, memory EqSat, or the
+  1.4x size campaign as prerequisites. Defaults stay unchanged. Reuse existing
+  models and tools; N07's zero-proof SMT outcome is not a machine-semantics proof.
+- First implementation deliverable is **V00's frozen interface and real-function
+  admission**, followed by V01's first source/lowering checker theorem. Do not
+  postpone a missing source/target bridge until the final release gate, or spend
+  weeks adding theorem infrastructure without a checkable compiler output.
+
+Public wording after acceptance: *a proved, fail-closed compilation path for the
+listed Core C-HIR subset and target, with an explicit trusted boundary; existing
+scalar rewrites compose with that path.* Do not say "CompCert-equivalent GNU C",
+"all UB is caught", "the entire compiler is verified", or "Linux is proved".
+Current status is **planning only**. The October 1 numbers below remain unchanged.
+This documentation-only slice produced no build/capture artifacts; its retained
+tracked-text delta is approximately 22 KiB across five Markdown files, not a
+compiler/proof receipt. Filesystem-wide free-space changes are not attributed
+to this slice. The generated dashboard changes only its stale EvoMIR version.
+
+## Historical scalar proof plan
 
 **October 1 receipt refresh.** All six correspondence groups were rerun:
 1,325,045 P0 comparisons plus 162,644 guard comparisons, **1,487,689 total with

@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-10-03**, initially audited against `a83d803`; current clauses are
+Updated **2026-10-04**, initially audited against `a83d803`; current clauses are
 EvoIR **1.9.116** and EvoMIR **0.64**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -82,6 +82,15 @@ claimed. No build or benchmark ran. [Exact retention and recovery record][kernel
 
 ## Execution order
 
+**October 4 priority:** the first public version now requires the
+[V00–V06 compilation verification path](docs/lean-plan.md#first-public-release-verification).
+Start with V00; close baseline semantic preservation before integrating proved
+rewrites. These are OPEN implementation/proof tasks, not additional audit layers.
+They use the existing AUDIT/ACCEPTANCE scheduling buckets, without a new tracker.
+The bounded codegen batch remains closed with misses; no new optimization slice
+or default flip is scheduled. The older kernel/application queues below retain
+their independent acceptance obligations; none is marked complete by this plan.
+
 September 28 replan at `6bd69b7`: prioritize **bounded ARM64 acceptance**, then
 the remaining language breadth, then the wider research/release roadmap. This
 is sequencing, not approval to drop features or convert failures into passes.
@@ -102,12 +111,16 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
-| ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
+| AUDIT | V00, V01, V02, V03, V04, V05, T03 | First implement V00-V04's proved baseline compilation path, then V05's existing-rule composition. The bucket includes proof implementation, not new audit tooling. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. |
+| ACCEPTANCE | V06, T04, T02, K13, K14, B10, T05 | V06 blocks public release until V00-V05 compose and the frozen proof/native gates pass. Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
+
+The V00–V06 release dependency above takes priority over starting another codegen
+slice. The following table retains the separate runtime-closure sequence; it is
+not a claim that formal verification replaces those tests.
 
 | Stage | Work and dependency | Exit / stop condition |
 | --- | --- | --- |
@@ -2256,7 +2269,9 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   reproducibility and proof boundaries against the roadmap. Give each missing
   deliverable a child task before release. A Rust compiler compiling a C compiler
   is not literal self-hosting; tested scalar certificates are not a proof of the
-  entire compiler. Close with the actual release checklist and artifacts. [Roadmap][roadmap].
+  entire compiler. The October 4 V00–V06 correctness path is a mandatory first-
+  public-release dependency, not optional follow-up. Close with the actual release
+  checklist and artifacts only after V06. [Roadmap][roadmap].
 
 - [x] **R06 — Pinned Doom integration** — `DONE`, 2026-09-28, bounded headless profile.
   doomgeneric `dcb7a8db...` plus Freedoom 0.13.0 Phase 1: all 80 engine units
@@ -2271,6 +2286,71 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   expansion was necessary. Window/audio/live input, all maps and other ports
   are not covered. [Receipt](tests/contracts/ladder-doom-receipt.json),
   [profile and checks](tests/fixtures/doom-headless.out).
+
+## First public release verification
+
+Authority and exact envelope: [V1 verification plan](docs/lean-plan.md#first-public-release-verification).
+All seven tasks are release-blocking and currently OPEN. The first result must
+be a proved baseline path for a declared subset, then a proved optimized path;
+neither an allocation-only theorem nor existing rule proofs close the parent
+release requirement. Keep unsupported programs available in the ordinary
+compiler without implying a proof. No new registry, fact domain or AI campaign.
+
+- [ ] **V00 — Freeze the core compilation theorem and real pilot** — `OPEN`, P1.
+  Name the source/target states, observation/refinement relation, exact supported
+  constructors, trusted boundaries and snapshot interfaces at `19bb5f7d` or a
+  recorded successor. Freeze the joined/loop, spill, direct-call/stack-argument,
+  checked-diagnostic cases and two unchanged real application functions with
+  nearby refusal cases before implementation. Exit is an exact theorem contract
+  and existing-pipeline admission map, not a new benchmark framework or this
+  planning document alone.
+
+- [ ] **V01 — Prove the source-to-EvoIR result checker** — `OPEN`, P1.
+  After V00, define the admitted Core C-HIR and EvoIR small-step semantics in the
+  existing Lean project and check actual `evocc-lower` output. Prove evaluation,
+  local storage, guards, calls and CFG correspondence. Reject changed evaluation
+  order, conversions, diagnostics and missing effects. Preserve N02's recorded
+  volatile-initializer mismatch as an out-of-profile regression/refusal, not an
+  implied fix. Exit requires checker soundness, not interpreter agreement alone.
+
+- [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
+  After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
+  lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong
+  operation/width, lost effects, swapped edges and destructive copy cycles.
+  No unproved semantic pass may sit between the checked stage snapshots.
+
+- [ ] **V03 — Prove two-input allocation validation including spills** — `OPEN`, P1.
+  After V02, compare original/candidate MIR, track registers and stack slots,
+  validate exact ABI bindings and inductive block annotations. Include copies,
+  spills, slot reuse and call clobbers. Reject wrong reloads, original-operation
+  mutations, false loop invariants and width/alias errors. The existing one-input
+  register-holder checker is not this theorem; translating it unchanged cannot
+  close V03.
+
+- [ ] **V04 — Close frame/emission verification and compose the baseline** — `OPEN`, P1.
+  After V01–V03, prove frame separation, save/restore, stack arguments and the
+  correspondence to the AST decoded from the actual final emitted assembly.
+  Compose a Core C-HIR-to-assembly
+  theorem, accept all frozen in-profile original functions and retain native
+  tests at the disclosed decoder/toolchain boundary. An isolated backend proof
+  cannot close V04. Baseline closure precedes V05 optimizer integration.
+
+- [ ] **V05 — Compose existing verified rewrites with the proved pipeline** — `OPEN`, P1.
+  After V04, reuse frozen P0/g0 rules; close admitted seed/poison/fact premises,
+  certificate replay, extraction and replacement in context. Show both a P0
+  rewrite and g0 guard fold on the frozen path. Reject forged premises and
+  unauthorized obligation/effect/splice changes. Audit transitive assumptions;
+  native-backed historical rows do not silently become kernel-only. No new rules
+  or fact domain. Exit is the composed optimized-compilation theorem.
+
+- [ ] **V06 — Enforce proof-required compilation and final release acceptance** — `OPEN`, P1.
+  After V00–V05, integrate the compiled proved Lean checker at the driver output
+  boundary with no silent fallback or unproved callee. Unsupported/rejected/
+  timed-out proofs cannot publish verified output. Run full workspace, Lean and
+  existing selected native/original gates on one frozen subject; retain exact
+  coverage, theorem dependencies and execution trusted base. Bind actual source,
+  checked stages and emitted assembly through the existing artifact path. R05
+  cannot close until this gate is accepted; ordinary compilation remains distinct.
 
 ## Codegen quality track — next quarter
 
