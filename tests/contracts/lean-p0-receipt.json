@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "595272a2771a4f633524ea4eef239b8f2cc752b2",
+    "lean_commit": "63c1f5b882f625dd04e936d3a10883e3f2703116",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -27,6 +27,7 @@
   "scope": {
     "audited_modules": [
       "lean/EvoIR.lean",
+      "lean/EvoIR/Core/CheckedInt.lean",
       "lean/EvoIR/Eval.lean",
       "lean/EvoIR/Fact.lean",
       "lean/EvoIR/GuardRegistry.lean",
@@ -46,6 +47,7 @@
     "imports": {
       "lean/EvoIR.lean": [
         "EvoIR.Sem",
+        "EvoIR.Core.CheckedInt",
         "EvoIR.Term",
         "EvoIR.Fact",
         "EvoIR.Rule",
@@ -57,6 +59,9 @@
         "EvoIR.Proofs.GuardRules",
         "EvoIR.Proofs.Rules",
         "EvoIR.Eval"
+      ],
+      "lean/EvoIR/Core/CheckedInt.lean": [
+        "EvoIR.Sem"
       ],
       "lean/EvoIR/Eval.lean": [
         "Lean.Data.Json",
@@ -5966,6 +5971,46 @@
     }
   ],
   "definitions": [
+    {
+      "name": "EvoIR.Core.sourceArithmetic",
+      "type": "EvoIR.Core.SignedArithmetic → {n : Nat} → BitVec n → BitVec n → EvoIR.Core.CheckedValue n",
+      "sha256": "0412c062359f6f70d3d88c99d35c292db10cb4542086af0abcbd3a7e0d3ce00f"
+    },
+    {
+      "name": "EvoIR.Core.irArithmetic",
+      "type": "EvoIR.Core.SignedArithmetic → {n : Nat} → BitVec n → BitVec n → EvoIR.Core.CheckedValue n",
+      "sha256": "4452e0373e5b72677f44e9698d57c873b1cedcf96cb1d39d5ec62703463f63d0"
+    },
+    {
+      "name": "EvoIR.Core.sourceNeg",
+      "type": "{n : Nat} → BitVec n → EvoIR.Core.CheckedValue n",
+      "sha256": "af8ce1ae28667c9e85024af883682c6da5adac0b92b575ffa8da19653b4a6371"
+    },
+    {
+      "name": "EvoIR.Core.irNeg",
+      "type": "{n : Nat} → BitVec n → EvoIR.Core.CheckedValue n",
+      "sha256": "79fb0b42d7fc35dc192d8cabb2bcaad3b07e1e72d5f510f289ef8bad05c7cd23"
+    },
+    {
+      "name": "EvoIR.Core.sourceAbs",
+      "type": "{n : Nat} → BitVec n → EvoIR.Core.CheckedValue n",
+      "sha256": "2c553392fea62905accf0a3a1a325cd3378e4cb7f45f9dafdfb711c59e22529e"
+    },
+    {
+      "name": "EvoIR.Core.irAbs",
+      "type": "{n : Nat} → BitVec n → EvoIR.Core.CheckedValue n",
+      "sha256": "b2b1cf65f7a8085ac452299a648bc7ddb1170f5552089ae155a602285027920e"
+    },
+    {
+      "name": "EvoIR.Core.checkArithmeticFragment",
+      "type": "EvoIR.Core.SignedArithmetic → EvoIR.Core.ArithmeticFragment → Bool",
+      "sha256": "b5a6321807e5bbd0bb2939d1fb4dcd21d5842d7996001dfc44624eedfd198406"
+    },
+    {
+      "name": "EvoIR.Core.runArithmeticFragment",
+      "type": "EvoIR.Core.ArithmeticFragment → {n : Nat} → BitVec n → BitVec n → EvoIR.Core.CheckedValue n",
+      "sha256": "b5872fce443c0397103b533575352ab74a4e8b1c80aa939ae88b70cc8f3daa0b"
+    },
     {
       "name": "EvoIR.denoteOp",
       "type": "(o : EvoIR.Op) → o.dom → BitVec o.res",
@@ -15038,6 +15083,55 @@
       "source": "the evaluator may cap a shift amount it cannot shift by, and still compute this file's `denoteOp`"
     }
   ],
+  "compilation_core_primitives": {
+    "claim": "Checked arithmetic primitive correspondence only; no CFG, source export, whole-function checker or compilation theorem yet",
+    "targets": [
+      {
+        "theorem": "EvoIR.Core.checked_arithmetic_lowering",
+        "proposition": "∀ (op : EvoIR.Core.SignedArithmetic) {n : Nat} (x y : BitVec n), EvoIR.Core.irArithmetic op x y = EvoIR.Core.sourceArithmetic op x y",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.checked_neg_lowering",
+        "proposition": "∀ {n : Nat} (x : BitVec n), EvoIR.Core.irNeg x = EvoIR.Core.sourceNeg x",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.checked_abs_expression",
+        "proposition": "∀ {n : Nat} (x : BitVec n), EvoIR.Core.irAbs x = EvoIR.Core.sourceAbs x",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.arithmetic_fragment_checker_sound",
+        "proposition": "∀ (source : EvoIR.Core.SignedArithmetic) (candidate : EvoIR.Core.ArithmeticFragment), EvoIR.Core.checkArithmeticFragment source candidate = true → ∀ {n : Nat} (x y : BitVec n), EvoIR.Core.runArithmeticFragment candidate x y = EvoIR.Core.sourceArithmetic source x y",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      }
+    ]
+  },
   "trust": [
     "The audit script itself, and the fixed Lean modules under lean/EvoIR/.",
     "The Lean 4 kernel, at the pinned toolchain version.",
