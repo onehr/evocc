@@ -295,7 +295,9 @@ fn main() -> ExitCode {
         eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
         eprintln!("       --ub-checks=checked|unchecked (native only; default checked)");
         eprintln!("       --frame-opt=paired-saves,shared-epilogue,leaf-frames (native only; default none)");
-        eprintln!("       --isel-opt=constants,local,extensions (native only; default none)");
+        eprintln!(
+            "       --isel-opt=constants,local,extensions,controls (native only; default none)"
+        );
         eprintln!("       --regalloc-opt=copy-hints,reload-reuse (native only; default none)");
         eprintln!("       --opt-pass=identity [--pass-report NEW_JSON_PATH] (development TV)");
         eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
@@ -474,6 +476,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 codegen.compact_constants = selected.constants;
                 codegen.local_selection = selected.local;
                 codegen.reuse_extensions = selected.extensions;
+                codegen.select_controls = selected.controls;
             }
             _ if arg.starts_with("--regalloc-opt=") => {
                 if allocation_variants_selected {

@@ -1,6 +1,6 @@
 version patterns.v1
 target aarch64
-sha256 81f3c3cc7c299a32955e1b4dcad193c746586c9a687b0a79c567602503b29638
+sha256 2481549c2d4c47d9c4fedf48f2795c15ab9d2648dc5fa2b72b677ee739bcc929
 pattern const_movz root=mov_imm widths=32,64 sequence=movz_movk guard=any writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w
 pattern const_movn root=mov_imm widths=32,64 sequence=movn_movk guard=any writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w
 pattern const_orr root=mov_imm widths=32,64 sequence=orr_zero guard=logical_mask writes=dst flags=preserve memory=none claim=exact_bits_zero_upper_w
@@ -13,3 +13,5 @@ pattern local_multiply_arithmetic root=mul_alu widths=32,64 sequence=multiply_ar
 pattern reuse_integer_extend root=extend widths=32,64 sequence=reuse_extend guard=block_local_unique_exact writes=none flags=preserve memory=none claim=exact_value_reuse
 pattern reuse_low_extract root=low_extract widths=32,64 sequence=reuse_low_extract guard=block_local_unique_exact writes=none flags=preserve memory=none claim=exact_value_reuse
 pattern reuse_low_mask root=low_mask widths=32,64 sequence=reuse_low_mask guard=block_local_unique_exact writes=none flags=preserve memory=none claim=exact_value_reuse
+pattern control_boolean_branch root=cmp_cset_branch widths=32,64 sequence=compare_branch guard=adjacent_private_boolean_flags writes=control flags=adjacent_consumer memory=none claim=equal_live_state_edges
+pattern control_constant_interval root=compare_interval widths=32,64 sequence=sub_compare_set guard=adjacent_private_ordered_imm12 writes=dst flags=adjacent_consumer memory=none claim=equal_live_state_edges

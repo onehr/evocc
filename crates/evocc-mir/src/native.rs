@@ -260,12 +260,31 @@ fn compile_module_with_guard_control(
         } else {
             out_of_ssa(function)
         };
+        let controls = if options.select_controls && !protected {
+            let (selected, counts) = crate::isa::aarch64::controls::select(&destroyed);
+            for (pattern, count) in counts.selected {
+                let _ = writeln!(
+                    extension_report,
+                    "// evocc-local-selected {pattern}={count}"
+                );
+            }
+            for ((pattern, reason), count) in counts.declined {
+                let _ = writeln!(
+                    extension_report,
+                    "// evocc-local-declined {pattern}/{reason}={count}"
+                );
+            }
+            selected
+        } else {
+            None
+        };
+        let destroyed = controls.as_ref().unwrap_or(&destroyed);
         let allocation_options = if protected {
             crate::generic::allocation::AllocationOptions::default()
         } else {
             options.allocation
         };
-        let mut allocated = allocate_for_with_options(target, &destroyed, allocation_options)
+        let mut allocated = allocate_for_with_options(target, destroyed, allocation_options)
             .map_err(|detail| NativeStop::Allocation(format!("@{}: {detail}", function.name)))?;
         allocated.internal = source
             .is_some_and(|source| source.visibility == evocc_evoir::GlobalVisibility::Internal);
@@ -288,6 +307,7 @@ fn compile_module_with_guard_control(
         constants: options.compact_constants,
         local: options.local_selection,
         extensions: options.reuse_extensions,
+        controls: options.select_controls,
     }
     .name()
     .map_or_else(String::new, |name| format!("// evocc-native-isel={name}\n"));

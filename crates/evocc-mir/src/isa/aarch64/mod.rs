@@ -4,6 +4,7 @@ pub mod abi;
 mod abi_tables;
 pub mod allocation;
 pub mod constants;
+pub mod controls;
 pub mod costs;
 pub mod encodings;
 pub mod extensions;

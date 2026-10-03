@@ -228,6 +228,32 @@ class LocalPatternDescriptionTest(unittest.TestCase):
                     gen.parse_patterns(with_valid_digest(source.replace(old, new, 1)))
 
 
+class ControlPatternDescriptionTest(unittest.TestCase):
+    def test_both_control_families_are_generated_and_can_be_disabled(self):
+        source = (ROOT / "targets/aarch64/patterns").read_bytes()
+        rows = [row for row in gen.parse_patterns(source).rows if row["id"].startswith("control_")]
+        self.assertEqual(len(rows), 2)
+        for row in rows:
+            without = with_valid_digest(b"".join(
+                line for line in source.splitlines(keepends=True)
+                if not line.startswith(f'pattern {row["id"]} '.encode())))
+            self.assertNotIn(f'id: "{row["id"]}"', gen.render_patterns(gen.parse_patterns(without)))
+
+    def test_control_patterns_cannot_weaken_private_flags_or_edge_contract(self):
+        source = (ROOT / "targets/aarch64/patterns").read_bytes()
+        for row in source.splitlines():
+            if not row.startswith(b"pattern control_"):
+                continue
+            for field, replacement in [
+                (b"guard=", b"guard=any"), (b"flags=", b"flags=preserve"),
+                (b"memory=", b"memory=read"), (b"claim=", b"claim=equal_flags_only"),
+                (b"widths=", b"widths=16,32,64"),
+            ]:
+                old = next(token for token in row.split() if token.startswith(field))
+                with self.subTest(row=row, field=field), self.assertRaises(gen.TargetDescriptionError):
+                    gen.parse_patterns(with_valid_digest(source.replace(row, row.replace(old, replacement))))
+
+
 class ExtensionPatternDescriptionTest(unittest.TestCase):
     def test_three_bounded_families_are_generated_and_can_be_disabled(self):
         source = (ROOT / "targets/aarch64/patterns").read_bytes()

@@ -18,6 +18,14 @@ validation is separate from N07's encoding/model/SMT steps.
 C3 is [closed opt-in with finite evidence](notebook/codegen-extension-reuse-20261003.md):
 three new pattern verdicts are finite-tested, not SMT-proved; its six-TU
 increment is small and does not close the remaining compare/control scope.
+C4's [residual census](notebook/codegen-control-preflight-20261003.md) finds
+109 Boolean-branch and 25 constant-interval candidates. C5 adds two bounded
+existing-operation pattern rows behind `--isel-opt=controls`, after baseline
+DCE/SSA destruction and before allocation: terminal Boolean branches and
+inclusive same-input imm12 intervals. Complete-function private-use checks
+preserve edge values and adjacent flags. No general CCMP, range lattice or
+CFG if-conversion is admitted. [C5's frozen plan](../tests/contracts/codegen-n03d-controls-20261003.json)
+is not acceptance; new pattern tests do not upgrade N07's negative SMT result.
 N07 E1's encoding-fact migration is closed under its
 [frozen plan](../tests/contracts/codegen-n07-encodings-20261003.json):
 [full workspace and byte-identity evidence](notebook/codegen-encodings-20261003.md)

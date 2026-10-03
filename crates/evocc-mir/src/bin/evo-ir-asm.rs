@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 fn emit(args: &[String]) -> Result<String, String> {
     if args.len() < 3 {
-        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo [--ub-checks=checked|unchecked] [--frame-opt=LIST] [--isel-opt=constants,local,extensions] [--regalloc-opt=copy-hints,reload-reuse] [--retain-dead-computations] [--dce-report]".into());
+        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo [--ub-checks=checked|unchecked] [--frame-opt=LIST] [--isel-opt=constants,local,extensions,controls] [--regalloc-opt=copy-hints,reload-reuse] [--retain-dead-computations] [--dce-report]".into());
     }
     let mut profile = evocc_mir::UbCheckProfile::Checked;
     let mut frame = evocc_mir::emit::FrameVariants::OFF;
@@ -146,6 +146,7 @@ fn emit(args: &[String]) -> Result<String, String> {
             compact_constants: selection.constants,
             local_selection: selection.local,
             reuse_extensions: selection.extensions,
+            select_controls: selection.controls,
             allocation,
             ..Default::default()
         },

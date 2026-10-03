@@ -1176,6 +1176,10 @@ def parse_patterns(source: bytes) -> PatternDescription:
         "reuse_low_extract": ("low_extract", "reuse_low_extract"),
         "reuse_low_mask": ("low_mask", "reuse_low_mask"),
     }
+    controls = {
+        "control_boolean_branch": ("cmp_cset_branch", "compare_branch", "adjacent_private_boolean_flags", "control"),
+        "control_constant_interval": ("compare_interval", "sub_compare_set", "adjacent_private_ordered_imm12", "dst"),
+    }
     local = {
         "local_indexed_memory": ("address_memory", "64", "indexed_memory", "access_result", "preserve", "same_access", "add", "lsl"),
         "local_shift_arithmetic": ("shift_alu", "32,64", "shifted_arithmetic", "dst", "preserve", "none", "add,sub,and,orr,eor", "lsl,lsr,asr"),
@@ -1189,7 +1193,7 @@ def parse_patterns(source: bytes) -> PatternDescription:
         if len(parts) not in {10, 12} or parts[0] != "pattern":
             raise TargetDescriptionError("malformed selection pattern")
         name = parts[1]
-        if name not in families and name not in local and name not in extensions or name in seen:
+        if name not in families and name not in local and name not in extensions and name not in controls or name in seen:
             raise TargetDescriptionError("unknown or duplicate selection pattern")
         seen.add(name)
         row = {"id": name}
@@ -1211,6 +1215,13 @@ def parse_patterns(source: bytes) -> PatternDescription:
                 "root": root, "widths": "32,64", "sequence": kind,
                 "guard": "block_local_unique_exact", "writes": "none",
                 "flags": "preserve", "memory": "none", "claim": "exact_value_reuse",
+            }
+        elif name in controls:
+            root, kind, guard, writes = controls[name]
+            expected = {
+                "root": root, "widths": "32,64", "sequence": kind,
+                "guard": guard, "writes": writes, "flags": "adjacent_consumer",
+                "memory": "none", "claim": "equal_live_state_edges",
             }
         else:
             root, widths, kind, writes, flags, memory, ops, shifts = local[name]
@@ -1277,6 +1288,17 @@ def render_patterns(description: PatternDescription) -> str:
         if row["sequence"] not in extension_kinds:
             continue
         out.append(f'    ExtensionPattern {{ id: "{row["id"]}", kind: ExtensionKind::{extension_kinds[row["sequence"]]}, widths: &[{row["widths"]}] }},\n')
+    out.append("];\n")
+    control_kinds = {"compare_branch": "BooleanBranch", "sub_compare_set": "ConstantInterval"}
+    out.extend([
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum ControlKind {\n",
+        "".join(f"    {name},\n" for name in control_kinds.values()), "}\n",
+        "#[derive(Debug, Clone, Copy)]\npub struct ControlPattern {\n    pub id: &'static str,\n    pub kind: ControlKind,\n    pub widths: &'static [u32],\n}\n",
+        "#[rustfmt::skip]\npub const CONTROL_PATTERNS: &[ControlPattern] = &[\n",
+    ])
+    for row in description.rows:
+        if row["sequence"] in control_kinds:
+            out.append(f'    ControlPattern {{ id: "{row["id"]}", kind: ControlKind::{control_kinds[row["sequence"]]}, widths: &[{row["widths"]}] }},\n')
     out.append("];\n")
     return "".join(out)
 

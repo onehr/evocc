@@ -54,6 +54,8 @@ pub struct CodegenOptions {
     pub local_selection: bool,
     /// C3 exact repeated integer extensions before allocation.
     pub reuse_extensions: bool,
+    /// C5 existing-op Boolean branch / constant interval selection.
+    pub select_controls: bool,
     /// T2 hints / T3 reload reuse; constraints and verifier remain unchanged.
     pub allocation: crate::generic::allocation::AllocationOptions,
     pub frame_pointer_required: bool,
@@ -146,6 +148,7 @@ pub struct SelectionVariants {
     pub constants: bool,
     pub local: bool,
     pub extensions: bool,
+    pub controls: bool,
 }
 
 impl SelectionVariants {
@@ -156,9 +159,10 @@ impl SelectionVariants {
                 "constants" => &mut result.constants,
                 "local" => &mut result.local,
                 "extensions" => &mut result.extensions,
+                "controls" => &mut result.controls,
                 _ => {
                     return Err(format!(
-                    "unknown instruction selection variant {name:?}; supported: constants, local, extensions"
+                    "unknown instruction selection variant {name:?}; supported: constants, local, extensions, controls"
                 ))
                 }
             };
@@ -172,16 +176,28 @@ impl SelectionVariants {
     }
 
     pub fn name(self) -> Option<&'static str> {
-        match (self.constants, self.local, self.extensions) {
-            (false, false, false) => None,
-            (true, false, false) => Some("constants"),
-            (false, true, false) => Some("local"),
-            (true, true, false) => Some("constants,local"),
-            (false, false, true) => Some("extensions"),
-            (true, false, true) => Some("constants,extensions"),
-            (false, true, true) => Some("local,extensions"),
-            (true, true, true) => Some("constants,local,extensions"),
-        }
+        const NAMES: [Option<&str>; 16] = [
+            None,
+            Some("constants"),
+            Some("local"),
+            Some("constants,local"),
+            Some("extensions"),
+            Some("constants,extensions"),
+            Some("local,extensions"),
+            Some("constants,local,extensions"),
+            Some("controls"),
+            Some("constants,controls"),
+            Some("local,controls"),
+            Some("constants,local,controls"),
+            Some("extensions,controls"),
+            Some("constants,extensions,controls"),
+            Some("local,extensions,controls"),
+            Some("constants,local,extensions,controls"),
+        ];
+        NAMES[self.constants as usize
+            | (self.local as usize) << 1
+            | (self.extensions as usize) << 2
+            | (self.controls as usize) << 3]
     }
 }
 

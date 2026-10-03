@@ -46,6 +46,7 @@ pub fn compile_module_for(
             compact_constants: selection.constants,
             local_selection: selection.local,
             reuse_extensions: selection.extensions,
+            select_controls: selection.controls,
             allocation,
             ..Default::default()
         },
