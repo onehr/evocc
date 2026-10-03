@@ -1,0 +1,1195 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03c",
+  "slice": "T3",
+  "date": "2026-10-03",
+  "status": "CLOSED_OPT_IN",
+  "subject_commit": "f79373daef3d82988549e82cc13890d687f56c95",
+  "implementation_commit": "f79373daef3d82988549e82cc13890d687f56c95",
+  "red_commit": "e44ed429",
+  "plan_commit": "22d8e3d1",
+  "plan": "tests/contracts/codegen-n03c-reload-reuse-20261003.json",
+  "specification": "EvoMIR 0.62",
+  "behavior": "Optional same-slot, exact-class, same-location local reload reuse after allocation and before logical spill-slot compaction. Unique definitions and local non-edge uses are required. Calls, assembly, ordinary memory, physical clobbers, stores and reserved expansion scratch block reuse. No interval, register choice, spill policy or independent verifier change; protected profiles and all defaults remain OFF.",
+  "gates": {
+    "full_workspace": {
+      "status": "PASS",
+      "path": ".evidence/codegen/n03c-t3/full-workspace-20261003.log",
+      "sha256": "02fef8e93e027355b5e9a331bfecc3f83bddb8961668f9c70c1fff51fda6f98a",
+      "rust": {
+        "suites": 394,
+        "passed": 3039,
+        "failed": 0,
+        "ignored": 5
+      },
+      "clippy": "PASS",
+      "format": "PASS",
+      "regeneration": "PASS"
+    },
+    "focused": {
+      "path": ".evidence/codegen/n03c-t3/focused-20261003.log",
+      "sha256": "89a214c84b4908c0c59cb945f8052dd85a598e18e99541f0db394cc5044d151b",
+      "suites": 7,
+      "passed": 73,
+      "failed": 0
+    },
+    "driver": {
+      "path": ".evidence/codegen/n03c-t3/driver-native-20261003.log",
+      "sha256": "1830c0460dc494a436e5cc7f6912394f159e1170250cf7ce07763bf9e7c5cd2f",
+      "passed": 4,
+      "failed": 0,
+      "native_inputs": 4096,
+      "functions": [
+        "choose",
+        "rotate",
+        "dispatch",
+        "shuffled",
+        "wide_across",
+        "vector_across",
+        "reload_pressure"
+      ],
+      "variants": [
+        "off",
+        "hint",
+        "combined",
+        "reload",
+        "copy_reload",
+        "reference"
+      ]
+    },
+    "python": {
+      "path": ".evidence/codegen/n03c-t3/python-focused-20261003.log",
+      "sha256": "2cec3c6e63f0c65830fdf4fa90920aa49ddd08b258df13e4058ae6c8ee1a9cfb",
+      "passed": 48,
+      "failed": 0
+    },
+    "red": [
+      {
+        "path": ".evidence/codegen/n03c-t3/allocator-red-20261003.log",
+        "sha256": "54ed5509e80898df6ccc5589b9194afc607e182e591d0c56e6c3e7d212340c2f",
+        "result": "EXPECTED_FAILURE: OFF contains the required local repeated reload; unknown reload-reuse option prevents the ON variant."
+      },
+      {
+        "path": ".evidence/codegen/n03c-t3/driver-red-20261003.log",
+        "sha256": "ce96a3e56adc9e4cb1a581214a5e84655a3faa8f7cb8a1409869ab39827d93b8",
+        "result": "EXPECTED_FAILURE: public reload-reuse option unavailable."
+      }
+    ],
+    "lean": "NOT_REQUIRED: no Lean or registry changes"
+  },
+  "native_corpora": [
+    {
+      "path": ".evidence/codegen/n03c-t3/native-off-darwin-20261003.log",
+      "sha256": "a155a4f7198c615f61fc3bd18af578181c0a7a99262701c94ffe9efe892f0020",
+      "lane": "darwin",
+      "variant": "OFF",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "object_bytes": 193392,
+      "historical_hash_matches": 384,
+      "baseline": ".evidence/codegen/n07-e1/before-darwin"
+    },
+    {
+      "path": ".evidence/codegen/n03c-t3/native-on-darwin-20261003.log",
+      "sha256": "cc0342172ed20ea6b05a1bd6264f32022e4dcbba7a4b3e249b09e2914deb8a88",
+      "lane": "darwin",
+      "variant": "ON",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "object_bytes": 193392,
+      "changed_vs_off": 0
+    },
+    {
+      "path": ".evidence/codegen/n03c-t3/native-off-linux-20261003.log",
+      "sha256": "3eaf7a2190dc348bf552c69148983497de6fdc3139d70769d39ed482f7689f41",
+      "lane": "linux",
+      "variant": "OFF",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "object_bytes": 383344,
+      "historical_hash_matches": 384,
+      "baseline": ".evidence/codegen/n07-e1/before-linux"
+    },
+    {
+      "path": ".evidence/codegen/n03c-t3/native-on-linux-20261003.log",
+      "sha256": "5700cbe3842f68bc5a75905289120e16429eed905d4dce46da44bb4f90d3f87b",
+      "lane": "linux",
+      "variant": "ON",
+      "cases": 384,
+      "executed": 384,
+      "agreeing": 384,
+      "twin_objects": "BYTE_IDENTICAL",
+      "object_bytes": 383344,
+      "changed_vs_off": 0
+    }
+  ],
+  "measurements": [
+    {
+      "variant": "off-a",
+      "path": ".evidence/codegen-trend/measure-93tgmy4u/receipt.json",
+      "sha256": "03635f50f602fa072a63622d6ff63cfea4e303210a1f6f96f487190c7fa57fc5",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t3-off-a-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 12,
+      "retained_bytes_at_capture_end": 1023325
+    },
+    {
+      "variant": "off-b",
+      "path": ".evidence/codegen-trend/measure-n_feakz4/receipt.json",
+      "sha256": "029b3f0e20cbee3c05f7a195eda80d0582f70059b41302b7fc4784f41c668919",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t3-off-b-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 12,
+      "retained_bytes_at_capture_end": 1027178
+    },
+    {
+      "variant": "reload-a",
+      "path": ".evidence/codegen-trend/measure-4kg8e3bb/receipt.json",
+      "sha256": "4c087d290805d832e4e35f387c8a59bde25f3d5a7748b59f0b759d532d44f75d",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t3-reload-a-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null,
+      "retained_bytes_at_capture_end": 1020257
+    },
+    {
+      "variant": "reload-b",
+      "path": ".evidence/codegen-trend/measure-k3m9naqv/receipt.json",
+      "sha256": "3b290d722e740aa2460a7f0a86345c06b34a077d5c85eb6853978e6c17b8326a",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t3-reload-b-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null,
+      "retained_bytes_at_capture_end": 1024078
+    },
+    {
+      "variant": "combined-a",
+      "path": ".evidence/codegen-trend/measure-fkekffm9/receipt.json",
+      "sha256": "f8b787f1e7d1f1f5a023dca528ce5e1f7979227b78e7d38e076c83ddbbe3dbf3",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t3-combined-a-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null,
+      "retained_bytes_at_capture_end": 945756
+    },
+    {
+      "variant": "combined-b",
+      "path": ".evidence/codegen-trend/measure-skjejwqm/receipt.json",
+      "sha256": "127d8a485708a9cb42482a8be9081fa1903f3e09ea289ee2198ad2f30849c5c6",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": 257,
+      "bindings_equal": 6,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03c-t3-combined-b-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": null,
+      "retained_bytes_at_capture_end": 941232
+    }
+  ],
+  "tools": {
+    "release": {
+      "checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+      "compiler": "976f0f2b8641b2d934e3684f17c635d2924d5885e7b773bedf80333d2765f02d",
+      "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+      "steps": "8dc2ec6ef63dc9b8f34970c9dfb5b40ec68cef0639ec65f79f431632eb0b1387"
+    },
+    "native_debug_compiler": "e55948697fbde6e912a12a4b10f8ed62cfe2c2aec3553ccc4fe8d2eda23136d7",
+    "native_companion_checker": {
+      "name": "evocc-checker",
+      "sha256": "b955c4c273e5327bf5ad47cd5683bb56f0e1a00fbee27fd1564f659e24b3a43b",
+      "source": "Recorded independently in each native corpus log."
+    },
+    "darwin_reference": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "release_build": {
+      "path": ".evidence/codegen/n03c-t3/release-build-20261003.log",
+      "sha256": "38260e1a6058747af54692d83ef4f3cb77920d9c1aa3e0e7d1862615f740e086",
+      "result": "Compiler/checker build succeeded. Follow-up example command failed because the handoff named evocc-randgate instead of evocc-passes; no measurement started with that command."
+    },
+    "corpus_build": {
+      "path": ".evidence/codegen/n03c-t3/release-corpus-build-20261003.log",
+      "sha256": "5ba948def49f544e2fb15608f6574b1eabf09d307355fea04118eedf9ca1d3c4",
+      "result": "Corrected package evocc-passes; PASS before all measurements."
+    }
+  },
+  "size_and_compile_comparisons": [
+    {
+      "variant": "reload-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.98228766959774,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_t2_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "reload-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0156003118716401,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_t2_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "reload-a",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30516,
+      "text": 30512,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9894911008939545,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.114190687361419,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 4
+      }
+    },
+    {
+      "variant": "reload-a",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 29012,
+      "text": 29008,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9169394369881426,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0099778270509976,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 4
+      }
+    },
+    {
+      "variant": "reload-a",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28404,
+      "text": 28308,
+      "saving": 96,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9930026569279912,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.847887323943662,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 96
+      }
+    },
+    {
+      "variant": "reload-a",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26664,
+      "text": 26568,
+      "saving": 96,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9871238938695128,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.672837022132797,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 96
+      }
+    },
+    {
+      "variant": "reload-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 124024,
+      "text": 123964,
+      "saving": 60,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9833282352882821,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.5423297785069727,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 60
+      }
+    },
+    {
+      "variant": "reload-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 121652,
+      "text": 121592,
+      "saving": 60,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9889152204615405,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.4936833470057422,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 60
+      }
+    },
+    {
+      "variant": "reload-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33688,
+      "text": 33676,
+      "saving": 12,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9813330589020253,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.32376483577146,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 12
+      }
+    },
+    {
+      "variant": "reload-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33440,
+      "text": 33428,
+      "saving": 12,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0068639787978255,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.3066519459011867,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 12
+      }
+    },
+    {
+      "variant": "reload-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 30228,
+      "text": 30228,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9982135171259997,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0991666666666666,
+      "vs_t2_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "reload-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 30116,
+      "text": 30116,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.039347937538005,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.091388888888889,
+      "vs_t2_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "reload-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.2315424610051993,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_t2_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "reload-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0708593456577944,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_t2_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "reload-b",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30184,
+      "text": 30180,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0081772120579087,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0911862527716187,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 4
+      }
+    },
+    {
+      "variant": "reload-b",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 28668,
+      "text": 28664,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9934717741409078,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.9861419068736141,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 4
+      }
+    },
+    {
+      "variant": "reload-b",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28264,
+      "text": 28168,
+      "saving": 96,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9689999935664165,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.8338028169014087,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 96
+      }
+    },
+    {
+      "variant": "reload-b",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26520,
+      "text": 26424,
+      "saving": 96,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0138479977071184,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.658350100603622,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 96
+      }
+    },
+    {
+      "variant": "reload-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 122972,
+      "text": 122908,
+      "saving": 64,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9810638068524902,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.520672682526661,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 64
+      }
+    },
+    {
+      "variant": "reload-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 120592,
+      "text": 120528,
+      "saving": 64,
+      "rodata_delta": 0,
+      "compile_ratio": 0.97777173474764,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.471862182116489,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 64
+      }
+    },
+    {
+      "variant": "reload-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33300,
+      "text": 33288,
+      "saving": 12,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0121729412780047,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.296991443555065,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 12
+      }
+    },
+    {
+      "variant": "reload-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33052,
+      "text": 33040,
+      "saving": 12,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0104482010993825,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.2798785536847914,
+      "vs_t2_combined_saving": null,
+      "category_savings": {
+        "stack_access": 12
+      }
+    },
+    {
+      "variant": "reload-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 29496,
+      "text": 29496,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9875412885451211,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0483333333333333,
+      "vs_t2_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "reload-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 29384,
+      "text": 29384,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9896325580924444,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0405555555555557,
+      "vs_t2_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.94397803684399,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_t2_combined_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.993940334030941,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_t2_combined_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30516,
+      "text": 27156,
+      "saving": 3360,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9761661030652212,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.8816518847006651,
+      "vs_t2_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 212,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 29012,
+      "text": 25652,
+      "saving": 3360,
+      "rodata_delta": 0,
+      "compile_ratio": 0.8850931636042823,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7774390243902438,
+      "vs_t2_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 212,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28404,
+      "text": 26520,
+      "saving": 1884,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9904668880374576,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.6680080482897384,
+      "vs_t2_combined_saving": 96,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 180,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26664,
+      "text": 24780,
+      "saving": 1884,
+      "rodata_delta": 0,
+      "compile_ratio": 0.994008450721043,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.492957746478873,
+      "vs_t2_combined_saving": 96,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 180,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 124024,
+      "text": 102796,
+      "saving": 21228,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9647129674976205,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.1082034454470877,
+      "vs_t2_combined_saving": 56,
+      "category_savings": {
+        "prologue_epilogue": 20072,
+        "stack_access": 56,
+        "move": 636,
+        "const_materialize": 2124,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 121652,
+      "text": 100440,
+      "saving": 21212,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9677212504546979,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0598851517637407,
+      "vs_t2_combined_saving": 56,
+      "category_savings": {
+        "prologue_epilogue": 20072,
+        "stack_access": 56,
+        "move": 636,
+        "const_materialize": 2108,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33688,
+      "text": 25600,
+      "saving": 8088,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9355508132997203,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.766491857576594,
+      "vs_t2_combined_saving": 12,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 848,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33440,
+      "text": 25352,
+      "saving": 8088,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9706892976107524,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7493789677063207,
+      "vs_t2_combined_saving": 12,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 848,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 30228,
+      "text": 25388,
+      "saving": 4840,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9691085985430924,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7630555555555556,
+      "vs_t2_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 5256,
+        "move": 44,
+        "const_materialize": 92,
+        "branch": -552
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 30116,
+      "text": 25276,
+      "saving": 4840,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9744321951322755,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7552777777777777,
+      "vs_t2_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 5256,
+        "move": 44,
+        "const_materialize": 92,
+        "branch": -552
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.1597813466846396,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_t2_combined_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.041910986896322,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "vs_t2_combined_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30184,
+      "text": 26784,
+      "saving": 3400,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0559404066630063,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.8558758314855877,
+      "vs_t2_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 252,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 28668,
+      "text": 25268,
+      "saving": 3400,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9960310949657101,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.750831485587583,
+      "vs_t2_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 252,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28264,
+      "text": 26376,
+      "saving": 1888,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9831642311876965,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.6535211267605634,
+      "vs_t2_combined_saving": 96,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 184,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26520,
+      "text": 24632,
+      "saving": 1888,
+      "rodata_delta": 0,
+      "compile_ratio": 1.013019389837003,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.4780684104627766,
+      "vs_t2_combined_saving": 96,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 184,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 122972,
+      "text": 98720,
+      "saving": 24252,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9739542477524301,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0246103363412633,
+      "vs_t2_combined_saving": 60,
+      "category_savings": {
+        "prologue_epilogue": 20032,
+        "stack_access": 60,
+        "move": 628,
+        "const_materialize": 5192,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 120592,
+      "text": 96356,
+      "saving": 24236,
+      "rodata_delta": 0,
+      "compile_ratio": 0.956878709529831,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.9761279737489745,
+      "vs_t2_combined_saving": 60,
+      "category_savings": {
+        "prologue_epilogue": 20032,
+        "stack_access": 60,
+        "move": 628,
+        "const_materialize": 5176,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33300,
+      "text": 24044,
+      "saving": 9256,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9834390705280577,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.6591222743582665,
+      "vs_t2_combined_saving": 12,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 2016,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33052,
+      "text": 23796,
+      "saving": 9256,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9866151519777796,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.6420093844879933,
+      "vs_t2_combined_saving": 12,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 2016,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 29496,
+      "text": 24704,
+      "saving": 4792,
+      "rodata_delta": 0,
+      "compile_ratio": 0.979239334160487,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7155555555555555,
+      "vs_t2_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 5212,
+        "move": 44,
+        "const_materialize": 88,
+        "branch": -552
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 29384,
+      "text": 24592,
+      "saving": 4792,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9841325439242719,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7077777777777778,
+      "vs_t2_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 5212,
+        "move": 44,
+        "const_materialize": 88,
+        "branch": -552
+      }
+    }
+  ],
+  "bounds": {
+    "comparisons": 48,
+    "compile_median_limit_ratio": 1.25,
+    "compile_misses": 0,
+    "maximum_compile_ratio": 1.2315424610051993,
+    "text_growth_limit_bytes": 0,
+    "text_plus_rodata_growth_limit_bytes": 0,
+    "size_misses": 0,
+    "rodata_changed": 0,
+    "steps": "257 records unchanged in all six captures and versus T2; this is not 257 TV-admitted inputs."
+  },
+  "attribution": {
+    "path": ".evidence/codegen/n03c-t3/category-summary.json",
+    "sha256": "4ddfa756c03e277f9fff5408134d94b2a47aa4c7d07913d4f2ebcae02565b567",
+    "objects": 72,
+    "method": "Unchanged N01 classifier; category totals reconcile with S1 instruction bytes. All reload-only savings and all cumulative increments versus T2 are stack-access bytes. No new frame, move, constant, rodata, padding or literal-pool gain. Full disassembly not retained."
+  },
+  "coverage": {
+    "tv_admitted_inputs": 70,
+    "opaque_inputs": 187,
+    "source_bridge": "Legacy integer-mix event mismatch retained: C-HIR 1001 versus EvoIR 1002. NOT_VALIDATED; neither interpreter changed.",
+    "scope": "SIX_SELECTED_TUS_WITH_REFERENCE_DEPENDENCIES_NOT_FULL_APPLICATIONS",
+    "kernel": "NOT_RUN",
+    "native_latency": "NOT_RUN",
+    "new_optimization_defaults": "OFF"
+  },
+  "retention": {
+    "status": "RETIRED_AFTER_HASH_AND_IDLE_HANDLE_CHECK",
+    "record": ".evidence/codegen/n03c-t3/retirement-20261003.json",
+    "objects": 816,
+    "bytes": 3087376,
+    "allocated_bytes": 5734400,
+    "remaining": "All manifests, receipts, logs, category summaries and reduced fixtures remain. Exact historical runtime objects are no longer retained. T3 OFF and cumulative objects remain; T3 OFF replaces byte-identical E2 OFF. Native OFF baselines remain. No raw capture in Git.",
+    "disk": {
+      "baseline_target_frontend_kib": 24640536,
+      "final_target_frontend_kib": 24884136,
+      "shared_cache_growth_bytes": 249446400,
+      "owned_new_evidence_kib": 6444,
+      "owned_new_evidence_bytes": 6598656,
+      "retired_prior_e2_allocated_bytes": 1294336,
+      "scoped_net_growth_bytes": 254750720,
+      "free_kib": 55495108,
+      "scopes": [
+        "target/frontend",
+        ".evidence/codegen/n03c-t3",
+        ".evidence/codegen-trend/measure-93tgmy4u",
+        ".evidence/codegen-trend/measure-n_feakz4",
+        ".evidence/codegen-trend/measure-4kg8e3bb",
+        ".evidence/codegen-trend/measure-k3m9naqv",
+        ".evidence/codegen-trend/measure-fkekffm9",
+        ".evidence/codegen-trend/measure-skjejwqm",
+        ".evidence/codegen-trend/n03c-reload-reuse.jsonl"
+      ],
+      "note": "du allocated accounting after retirement, not physical APFS extent deduplication or a global-volume delta. Baseline is E3's ending shared-cache snapshot; T3 captures were new. Subtract the measured retired E2 object allocation. Tracked files and unrelated activity excluded."
+    }
+  },
+  "package_disposition": "N03c bounded T1/T2/T3 work is closed: termination correctness, copy-location hints and local reload quality have explicit evidence. T1 compile-bound misses remain frozen. No global allocator or complete elimination of spill overhead is claimed; inflate still contains 7,300 stack-access bytes in cumulative B unchecked.",
+  "claim_ceiling": "Opt-in reload reuse on the frozen population, with all 48 current size/cost comparisons within bounds. Not a complete allocator, verified EqSat gain, ISA proof, full application/kernel acceptance or default admission. Cumulative frame+C1+copy+reload excludes C2, and all five library ratios still exceed 1.4. Previous T1/C2 cost misses and N07's negative SMT qualification remain unchanged."
+}

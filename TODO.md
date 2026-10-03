@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03c, N03d, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a, N03f, N04 and N05 are complete; N03b/N03e first slices are closed negative. N07 is dispositioned bounded, with E3 qualification negative and no SMT proof. N03d C1 and N03c T2 are closed opt-in; C2/T1 retain cost misses. Continue separately scoped spill/selection work; all new defaults remain OFF. Retain N02's admission limits and source-bridge mismatch; paused R items wait on the codegen track. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03d, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a, N03f, N04 and N05 are complete; N03b/N03e first slices are closed negative. N07 is dispositioned bounded, with E3 qualification negative and no SMT proof. N03c's bounded T1/T2/T3 work is closed; broader spill quality and all five library size targets remain unmet. Continue separately scoped N03d selection; C2/T1 cost misses stay frozen and all new defaults stay OFF. Retain N02's admission limits and source-bridge mismatch; paused R items wait on the codegen track. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2378,7 +2378,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     recheck. Zero transformations, no gain or default admission. A broader
     inliner requires a new design before any transform.
 
-  - [ ] **N03c — Register allocation improvements** — `LATER`, P3.
+  - [x] **N03c — Register allocation improvements, bounded slices** — `DONE (bounded)`, P3.
     Coalescing and spill placement in the generic layer first; a different
     allocator only if N01 shows allocation dominates. The allocation verifier
     is the gate. After N03a.
@@ -2424,10 +2424,22 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     same-location local reloads after allocation; calls, physical clobbers,
     stores, edge uses and reserved expansion scratch block reuse. No live
     interval, assignment choice or independent verifier rule changes.
-    The seven focused allocator/ABI/SSA/driver suites pass 73 tests; public
-    C/native pressure and option controls pass 4 tests. Full-workspace,
-    OFF/ON native corpus and six-TU OFF/reload/cumulative measurement
-    acceptance remain pending. No T3 benefit or default admission yet.
+    T3 is now **closed opt-in** in the
+    [result](docs/notebook/codegen-reload-reuse-20261003.md) and
+    [receipt](tests/contracts/codegen-n03c-t3-20261003-receipt.json): full workspace
+    3,039/0/5 existing ignored; 73 focused and 4 public-driver tests PASS;
+    native ON/OFF each 384/384 on both platforms, all OFF hashes unchanged.
+    All 72 selected-TU harness executions and object-twin checks pass, with
+    zero proof/bundle failures. All 48 size/cost comparisons meet bounds
+    (maximum 1.232x). Reload-only B unchecked saves 0/4/96/64/12/0 stack
+    bytes; cumulative frame+C1+copy+reload saves another 0/4/96/60/12/0
+    versus T2, leaving library ratios 1.642–2.478. All five miss 1.4x.
+    N03c's T1/T2/T3 work is dispositioned, not a complete/global allocator:
+    cumulative inflate still has 7,300 stack-access bytes. No further global
+    redesign in this slice; defaults OFF, T1/C2 cost misses retained, and
+    N02's 70 admitted / 187 opaque inputs and source-bridge mismatch unchanged.
+    Retired 816 idle historical objects; compact evidence and current
+    OFF/cumulative baselines remain. Scoped disk net +254,750,720 bytes.
 
   - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
     Addressing modes, immediates, shifted operands, conditional select and

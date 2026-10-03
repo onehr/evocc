@@ -401,7 +401,7 @@ sections above remain the contract.
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
 | N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
 | N03d | C1 closed opt-in; C2 closed with compile-bound miss, not admitted; remaining selection patterns open | [C1](notebook/codegen-constants-20261002.md), [C2 result](notebook/codegen-local-selection-20261002.md), [C2 receipt](../tests/contracts/codegen-n03d-c2-20261002-receipt.json): full workspace 3,018/0/5 ignored, native and size controls green; local-only B checked zstd-compress compile median 1.7977x OFF exceeds 1.25x. Negative result frozen, no default flip. |
-| N03c | T1 correctness closed with compile-bound misses; T2 copy hints closed opt-in; spill quality open | [T1 result](notebook/codegen-allocation-termination-20261003.md) preserves three compile-bound misses. [T2 result](notebook/codegen-copy-hints-20261003.md), [receipt](../tests/contracts/codegen-n03c-t2-20261003-receipt.json): full workspace 3,028/0/5 ignored; both 384-case corpora ON/OFF and 72 selected-TU harness executions green. Copy-only B unchecked savings 0/44/400/628/148/44 move bytes; all 48 size/cost comparisons within bounds, maximum compile ratio 1.021x. Defaults OFF; no full allocator closure. |
+| N03c | Bounded T1/T2/T3 work closed; broader spill-quality gap remains | [T1](notebook/codegen-allocation-termination-20261003.md) retains cost misses; [T2](notebook/codegen-copy-hints-20261003.md) copy hints and [T3](notebook/codegen-reload-reuse-20261003.md) local reload reuse are closed opt-in. T3 full workspace 3,039/0/5 ignored; both 384-case corpora ON/OFF and 72 selected-TU executions green, zero proof/bundle failures. Reload-only B unchecked saves 0/4/96/64/12/0 stack bytes; all 48 size/cost comparisons meet bounds, maximum cost ratio 1.232x. Defaults OFF; not a complete/global allocator. |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Closed bounded; E3 qualification negative, no B1 proof acceptance | [E1 result](notebook/codegen-encodings-20261003.md), [E2 result](notebook/codegen-vendor-model-20261003.md), [E3 disposition](notebook/codegen-bounded-smt-20261003.md): E2 has 2,600 exact cases per interpreter/model/native/QEMU lane and unchanged native/TU objects. E3's pinned SMT generator rejects an unsupported undefined-bitvector dependency before its first query; zero proofs, explicit verdicts for 59 Inst families / 44 spec rows / nine patterns / 28 specialized paths. No model or trust-policy bypass; existing native baselines retained. |
 | N06 | Not scheduled | |
@@ -437,14 +437,15 @@ leave 1.612–2.501 times, but its compile-cost ceiling was missed on one
 comparison. The 1.4 target is still not met and default output has not changed.
 C1's measured reduction is entirely constant materialization; C2 removes
 compute/extension instructions. Both are separate from frame and P0 gains.
-Do not reclassify C2's size/correctness results as full admission. Continue
-with N07 after N03c T1/T2. T2 copy hints save only move bytes on the frozen
+Do not reclassify C2's size/correctness results as full admission.
+T2 copy hints save only move bytes on the frozen
 population; frame+C1+copy leaves library ratios 1.643–2.488 times GCC-O2,
-without including C2 or upgrading its negative cost result. Remaining N03c
-spill-quality and N03d selection work require separately frozen scopes.
-N07 E3 is now dispositioned negative at the pinned generator boundary; next
-is a bounded N03c redundant-reload slice, then remaining N03d selection. This
-order does not imply that model proof coverage or the 1.4 target was achieved.
+without including C2 or upgrading its negative cost result. T3's local reload
+reuse adds only stack-access savings: cumulative ratios are 1.642–2.478, with
+7,300 stack-access bytes still in inflate. N03c's bounded T1/T2/T3 sequence is
+closed, not the global allocation-quality problem. N07 E3 is dispositioned
+negative at the pinned generator boundary. Next is a separately frozen N03d
+selection slice; no model-proof coverage or 1.4-target achievement is implied.
 
 **Rules that hold for the rest of N03.**
 
