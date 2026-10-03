@@ -400,13 +400,14 @@ sections above remain the contract.
 | N04 C checker | Done | [note](notebook/codegen-checker-20261002.md) |
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
 | N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
-| N03d | C1/C3 closed opt-in; C2 cost miss retained; C4 positive preflight, C5 next | [C1](notebook/codegen-constants-20261002.md), [C2](notebook/codegen-local-selection-20261002.md), [C3](notebook/codegen-extension-reuse-20261003.md): C3 full workspace 3,051/0/5 ignored, both native corpora ON/OFF and all six A/B captures green; 48/48 size/cost bounds met, maximum 1.107x. [C4](notebook/codegen-control-preflight-20261003.md) finds 109 Boolean-branch and 25 interval candidates in current B/unchecked; full workspace 3,051/0/5 ignored and 16 Python tests PASS. Zero new optimized bytes from this census. C2's 1.7977x cost miss stays frozen and excluded from cumulative options; defaults OFF. |
+| N03d | Bounded C1–C5 sequence closed; C2/C5 cost misses retained | [C1](notebook/codegen-constants-20261002.md), [C2](notebook/codegen-local-selection-20261002.md), [C3](notebook/codegen-extension-reuse-20261003.md), [C4](notebook/codegen-control-preflight-20261003.md), [C5](notebook/codegen-control-selection-20261003.md). C5 full workspace 3,065/0/5 existing ignored; both 384-case native corpora OFF/ON and 72 selected-TU executions PASS. All 48 size bounds pass, but three compile-cost comparisons miss 1.25x (maximum 1.627x); C5 is not admitted. C2's earlier 1.7977x miss is frozen. Both stay outside the admitted C3 cumulative configuration; defaults OFF. General CCMP/CFG if-conversion remains unimplemented. |
 | N03c | Bounded T1/T2/T3 work closed; broader spill-quality gap remains | [T1](notebook/codegen-allocation-termination-20261003.md) retains cost misses; [T2](notebook/codegen-copy-hints-20261003.md) copy hints and [T3](notebook/codegen-reload-reuse-20261003.md) local reload reuse are closed opt-in. T3 full workspace 3,039/0/5 ignored; both 384-case corpora ON/OFF and 72 selected-TU executions green, zero proof/bundle failures. Reload-only B unchecked saves 0/4/96/64/12/0 stack bytes; all 48 size/cost comparisons meet bounds, maximum cost ratio 1.232x. Defaults OFF; not a complete/global allocator. |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Closed bounded; E3 qualification negative, no B1 proof acceptance | [E1 result](notebook/codegen-encodings-20261003.md), [E2 result](notebook/codegen-vendor-model-20261003.md), [E3 disposition](notebook/codegen-bounded-smt-20261003.md): E2 has 2,600 exact cases per interpreter/model/native/QEMU lane and unchanged native/TU objects. E3's pinned SMT generator rejects an unsupported undefined-bitvector dependency before its first query; zero proofs, explicit verdicts for 59 Inst families / 44 spec rows / nine patterns / 28 specialized paths. No model or trust-policy bypass; existing native baselines retained. |
+| N03 parent | Bounded batch closed with target miss | Every scheduled slice has implementation evidence or a frozen negative disposition. Five library TUs still exceed 1.4x. This closes the bounded work package, not the general optimizing compiler or the full roadmap. |
 | N06 | Not scheduled | |
 
-**Order of the remaining slices, from N01.** Summed positive excess of
+**Initial slice order, from N01 (historical).** Summed positive excess of
 unchecked EvoCC over GCC-14 `-O2` on the five library units:
 
 | Category | Excess bytes | Slice |
@@ -421,10 +422,11 @@ unchecked EvoCC over GCC-14 `-O2` on the five library units:
 | Extension and masks | 4,132 | N03d |
 | Stack access, inflate only | 6,712 | N03c |
 
-The census above predates N03f. With that opt-in slice closed, next:
-**N03d, then N03c.** N07 steps 4–6 follow once N03d has
-started. N03b and N03e are not next: their frozen preflight rules admitted
-nothing, and inlining in particular needs a new design before any transform.
+The census above predates N03f and set the sequence **N03d, then N03c**, with
+N07 steps 4–6 after N03d started. That bounded batch is now dispositioned.
+N03b/N03e's frozen preflights admitted nothing; broader inlining and mid-level
+transforms remain unimplemented and require newly scoped designs, not another
+identical preflight. No paused R activity or default change is authorized here.
 
 **What remains true of the default frame code**: callee-saved registers
 are saved and restored one at a time with `str` and `ldr`; the whole epilogue
@@ -446,11 +448,37 @@ reuse adds only stack-access savings: cumulative ratios are 1.642–2.478, with
 closed, not the global allocation-quality problem. N07 E3 is dispositioned
 negative at the pinned generator boundary. C3 repeated extension reuse adds
 only 8 bytes on deflate and 4 on inflate in B/unchecked; cumulative library
-ratios remain 1.642–2.478. C4's 48-object residual census is positive: 109
-Boolean branches and 25 inclusive constant intervals need bounded C5 selection
-with MIR liveness/flags guards. They are not measured savings. Existing
-CSEL/compare-branch selection is baseline, not new gain. No model-proof
+ratios remain 1.642–2.478. C4's positive residual census led to C5's bounded
+MIR private-use/flags selection. C5 saves 40/60/552/40/44 B unchecked library
+bytes, all compare/select; its measured cumulative ratios are 1.639–2.472.
+Three compile-cost comparisons miss the frozen ceiling, so C5 is **not admitted**
+and does not replace C3 as the admitted cumulative configuration. Existing
+CSEL/compare-branch selection remains baseline, not new gain. No model-proof
 coverage, default admission or 1.4-target achievement is implied.
+
+**Final six-TU disposition.** B/unchecked `.text / GCC-14 -O2`, not linked size
+or runtime latency. Initial numbers come from N01's per-TU receipt (Section 0's
+2.04–2.43 figures aggregate families and are not per-TU bounds). Both cumulative
+columns are opt-in; the released/default output remains the OFF baseline.
+
+| TU | Initial N01 / current OFF | Admitted cumulative C3 | Measured cumulative C5, not admitted | C5 bytes | 1.4x target |
+| --- | ---: | ---: | ---: | ---: | --- |
+| integer-mix | 1.333 | 1.333 | 1.333 | 128 | Met |
+| zlib deflate | 1.986 | 1.750 | 1.748 | 25,220 | Missed |
+| zlib inflate | 2.668 | 2.478 | 2.472 | 24,568 | Missed |
+| zstd compress | 2.473 | 1.976 | 1.965 | 95,804 | Missed |
+| zstd decompress | 2.281 | 1.642 | 1.639 | 23,756 | Missed |
+| cJSON | 2.041 | 1.708 | 1.705 | 24,548 | Missed |
+
+Remaining gaps are explicit: broad inlining/mid-level transforms were not
+implemented after negative bounded preflights; global spill-quality and general
+control selection remain beyond these slices; C2/C5 and T1 retain cost misses;
+N02 still admits only 70/257 inputs and retains the source-event mismatch; N07
+has no SMT proof; Darwin signed unwind remains unvalidated. Negative disposition
+is not a PASS for those capabilities. Preserve the frozen cohort and redesign
+the next bounded package from these measurements rather than repeat gates or
+expand proof/audit machinery. All unrelated kernel/application/semantic tasks
+remain in TODO; this batch does not close them.
 
 **Rules that hold for the rest of N03.**
 

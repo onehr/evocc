@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-10-03**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.116** and EvoMIR **0.60**. This is the Git-tracked execution backlog,
+EvoIR **1.9.116** and EvoMIR **0.64**. This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -104,7 +104,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03 | Existing compiler semantic/proof boundaries. R02b1/R02a1 are closed with frozen results; no further EqSat audit-tool expansion. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Freeze repaired subjects, build matching compositions once, run complete paired kernel and serial application gates, then refresh final health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N03, N03d, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. N01, N02's bounded framework, N03a, N03f, N04 and N05 are complete; N03b/N03e first slices are closed negative. N07 is dispositioned bounded, with E3 qualification negative and no SMT proof. N03c's bounded T1/T2/T3 work is closed; broader spill quality and all five library size targets remain unmet. Continue separately scoped N03d selection; C2/T1 cost misses stay frozen and all new defaults stay OFF. Retain N02's admission limits and source-bridge mismatch; paused R items wait on the codegen track. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
 ### Working sequence and release gates
@@ -2321,7 +2321,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   Keep `MISMATCH_NOT_VALIDATED`; do not normalize the event away, alter
   interpreter semantics in this slice, or admit an optimizing default pass.
 
-- [ ] **N03 — Codegen improvements, ordered by N01** — `LATER`, P3.
+- [x] **N03 — Codegen improvements, bounded batch** — `CLOSED_WITH_TARGET_MISS`, P3.
   Parent of the slices below. Product target declared before measurement:
   unchecked object text at or below 1.4× GCC-14 `-O2` per S5 unit by the end
   of the quarter. Each slice lands behind a flag, is measured on the six units
@@ -2332,7 +2332,16 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   materialization, 15,972 of memory access, 12,952 of register moves and
   6,712 of stack access on inflate alone. Work order: **N03f, then N03d, then
   N03c**; N03b and N03e wait on a redesign after their bounded negative
-  preflight. N03a is closed, so backend slices may start.
+  preflight. This was the initial ordering; the bounded slices below are now
+  dispositioned. Negative results are closure of this batch, not implementation
+  of every general transform or achievement of the product target.
+  [Final bounded status and six-TU table](docs/codegen-quality-plan.md#11-status-and-order-of-work-2026-10-03):
+  the admitted cumulative C3 configuration leaves five library ratios at
+  1.642–2.478; the measured C5 configuration leaves 1.639–2.472 but misses
+  three compile-cost bounds and is **not admitted**. Default output is unchanged.
+  Broader inlining, mid-level optimization, global spill quality and the missing
+  1.4x objective remain explicit gaps; reopening them requires a new bounded
+  design, not relabeling these negative measurements.
 
   - [x] **N03a — Backend layering, behavior-preserving** — `DONE`, P3.
     Separate the target-independent allocator, out-of-SSA, spill placement and
@@ -2442,7 +2451,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     Retired 816 idle historical objects; compact evidence and current
     OFF/cumulative baselines remain. Scoped disk net +254,750,720 bytes.
 
-  - [ ] **N03d — Instruction selection rules** — `LATER`, P3.
+  - [x] **N03d — Instruction selection, bounded C1–C5 sequence** — `CLOSED_WITH_COST_MISSES`, P3.
     Addressing modes, immediates, shifted operands, conditional select and
     compare forms, extension elimination. New rules enter through the target
     description's pattern table with EvoMIR revision text; existing match arms
@@ -2504,9 +2513,29 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     All 25 combinations are inclusive nonnegative imm12 intervals; one
     retained IR fragment explains missed branch fusion after baseline DCE.
     Syntactic candidates are not validated transforms; zero new optimized
-    bytes. Next: freeze C5 bounded existing-op selection, not general CCMP or
-    CFG if-conversion. N03d remains open. Scoped disk net +413,696 bytes;
+    bytes. This preflight led to bounded C5 selection below, not general CCMP
+    or CFG if-conversion. Scoped disk net +413,696 bytes;
     no object rebuild, full disassembly retention or new timing samples.
+
+    C5 is closed with compile-cost misses: [plan](tests/contracts/codegen-n03d-controls-20261003.json),
+    [result](docs/notebook/codegen-control-selection-20261003.md),
+    [receipt](tests/contracts/codegen-n03d-c5-20261003-receipt.json).
+    Implementation `d71b40c4`, measured clean subject `21edc5e8`; EvoMIR 0.64.
+    Bounded adjacent private-use Boolean branches and inclusive imm12 intervals
+    reuse existing MIR operations before unchanged allocation. Full workspace
+    3,065 PASS / 0 FAIL / 5 existing ignored; 19 focused Rust and 60 Python PASS.
+    Both 384-case native corpora pass OFF/ON, all OFF bytes match C3, and ON
+    changes zero corpus objects; focused native tests actually select both
+    patterns. All 72 original selected-TU executions and 72 object twins pass,
+    with zero proof/bundle failures and unchanged IR/chain/bundle/step records.
+    B unchecked savings are 0/40/60/552/40/44 compare/select bytes. All 48 size
+    bounds pass, but only 45/48 compile-cost comparisons meet 1.25x (maximum
+    1.627x). No resampling: C5 stays outside the admitted cumulative arm, alongside
+    C2's earlier cost miss. Prior C3 remains the admitted configuration; defaults
+    remain OFF. General CCMP/CFG if-conversion is unimplemented, not disproved.
+    Retired 792 hash-checked idle intermediates; exact intermediate runtimes are
+    no longer retained, but current/prior baselines and all compact records remain.
+    Scoped disk delta is recorded in the linked receipt and one-page result.
 
   - [x] **N03e — EvoIR mid-level passes, bounded first slice** — `DONE_NEGATIVE`, P3.
     GVN/CSE, SCCP, dead-code elimination and simple loop-invariant motion on

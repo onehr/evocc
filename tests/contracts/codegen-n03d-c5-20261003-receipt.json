@@ -1,0 +1,1070 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03d",
+  "slice": "C5: bounded terminal Boolean branches and inclusive constant intervals",
+  "date": "2026-10-03",
+  "status": "CLOSED_WITH_COMPILE_BOUND_MISSES",
+  "subject_commit": "21edc5e857e17258ad2c06225397a4c9ae83942d",
+  "implementation_commit": "d71b40c4c3225e3910608eb5d61d26f4ad84ea55",
+  "plan": "tests/contracts/codegen-n03d-controls-20261003.json",
+  "plan_commit": "b9ce3937",
+  "red_commit": "d46e2210",
+  "measurement_plan_commit": "21edc5e8",
+  "specification": "EvoMIR 0.64 selection policy; no operation/IR/interpreter/registry/ABI/allocator/verifier semantic change.",
+  "behavior": {
+    "option": "--isel-opt=controls",
+    "default": "OFF",
+    "scope": "Two adjacent private-use integer/control idioms before unchanged allocation; no motion, new opcode, general CCMP or CFG if-conversion.",
+    "admission": "NOT_ADMITTED: three frozen compile-cost misses; prior C3 cumulative configuration remains the admitted one.",
+    "measured_cumulative_options": [
+      "--frame-opt=paired-saves,shared-epilogue,leaf-frames",
+      "--isel-opt=constants,extensions,controls",
+      "--regalloc-opt=copy-hints,reload-reuse"
+    ],
+    "excluded": "C2 remains excluded; protected/kernel/frame-pointer/patchable profiles suppress controls."
+  },
+  "gates": {
+    "full_workspace": {
+      "path": ".evidence/codegen/n03d-c5/full-workspace-20261003.log",
+      "sha256": "8ad0325b626c390f54e271c503c101a5e4dc87d01bec21cae93202f6f12a5077",
+      "status": "PASS",
+      "exit_code": 0,
+      "suites": 398,
+      "passed": 3065,
+      "failed": 0,
+      "ignored": 5,
+      "clippy": "PASS",
+      "format": "PASS",
+      "regeneration": "PASS",
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline"
+    },
+    "focused_mir": {
+      "path": ".evidence/codegen/n03d-c5/complete-mir-focused-20261003.log",
+      "sha256": "5b2d294dc352dc6ee913affa9165693161b823e7d95174d8e2910f9ae4f11135",
+      "passed": 15,
+      "failed": 0,
+      "native": "304 shapes / 608 before-after Darwin functions x 1024 inputs; all 608 assemble for Linux."
+    },
+    "driver": {
+      "path": ".evidence/codegen/n03d-c5/driver-focused-20261003.log",
+      "sha256": "6bbb87171e695f1289d1dcebf15cbbc864b14e0be386ac03d297602bfc3fb12a",
+      "passed": 4,
+      "failed": 0,
+      "native": "65536 inputs x three functions x OFF/controls/cumulative against GCC14.2 and Clang19.1.7 on Linux."
+    },
+    "python": {
+      "path": ".evidence/codegen/n03d-c5/python-focused-20261003.log",
+      "sha256": "61287619fd1c4f8c2c6a4ab493479adb4550f9cc68a2fc630d9f0171e2b24128",
+      "passed": 60,
+      "failed": 0
+    },
+    "red": {
+      "path": ".evidence/codegen/n03d-c5/red-valid-20261003.log",
+      "sha256": "e64c896d55401fc3f63e20ca1e5e184ef55e0a6b49b6d454def488ad77c201db",
+      "result": "EXPECTED_FAILURE: valid exact IR retains three CSETs; controls option was unavailable."
+    },
+    "lean": "NOT_REQUIRED: no Lean/registry change",
+    "prior_attempts": [
+      {
+        "path": ".evidence/codegen/n03d-c5/native-on-linux-20261003.log",
+        "sha256": "2ae2ff32ce46add6adf54203e8c2cd17cba2b647899cdbd193fbc493be846258",
+        "status": "INFRA_BLOCKED_NOT_PASS",
+        "reason": "Sandbox denied container access before any case executed; authorized identical rerun is the separate completed log."
+      },
+      {
+        "path": ".evidence/codegen/n03d-c5/red-20261003.log",
+        "sha256": "b900e5a98561e6ab80cc3e678bf26c538f753adc0aa36d68b687f9d8b8631467",
+        "status": "INVALID_FIXTURE_NOT_RED"
+      },
+      {
+        "path": ".evidence/codegen/n03d-c5/red-actual-20261003.log",
+        "sha256": "44522955ba6c257390d6455385f55e9f8f6bb6073a5cde423249b89beae6b9d3",
+        "status": "INVALID_FIXTURE_NOT_RED"
+      },
+      {
+        "path": ".evidence/codegen/n03d-c5/final-mir-focused-20261003.log",
+        "sha256": "db8e50c24890c9b9728d10fcbfb83430cc2f78ac26aa994715d264b7be1d5173",
+        "status": "TEST_CODE_COMPILE_ERROR_NOT_PASS"
+      }
+    ]
+  },
+  "native_corpora": {
+    "rows": [
+      {
+        "lane": "darwin",
+        "variant": "off",
+        "path": ".evidence/codegen/n03d-c5/native-off-darwin-20261003.log",
+        "sha256": "c0c2cc04b79b6a8e3867da2265d742f35303ac9ec63f004e83bfdb920de65d1f",
+        "objects": 384,
+        "executed": 384,
+        "agreeing": 384,
+        "twins_equal": true,
+        "object_bytes": 193392
+      },
+      {
+        "lane": "darwin",
+        "variant": "on",
+        "path": ".evidence/codegen/n03d-c5/native-on-darwin-20261003.log",
+        "sha256": "bb5a60f5db5b8241a6022eecceab3096d685446ed777f86b0967755afc393b6c",
+        "objects": 384,
+        "executed": 384,
+        "agreeing": 384,
+        "twins_equal": true,
+        "object_bytes": 193392
+      },
+      {
+        "lane": "linux",
+        "variant": "off",
+        "path": ".evidence/codegen/n03d-c5/native-off-linux-20261003.log",
+        "sha256": "c978e64971a2560c8910a429c3c0ac3a0af0f32fd4611b1fe9b001c0020cf6ea",
+        "objects": 384,
+        "executed": 384,
+        "agreeing": 384,
+        "twins_equal": true,
+        "object_bytes": 383344
+      },
+      {
+        "lane": "linux",
+        "variant": "on",
+        "path": ".evidence/codegen/n03d-c5/native-on-linux-authorized-20261003.log",
+        "sha256": "3a0884b09ff378b9ca53e9138923898932edc18da4a892863d07886beb05c781",
+        "objects": 384,
+        "executed": 384,
+        "agreeing": 384,
+        "twins_equal": true,
+        "object_bytes": 383344
+      }
+    ],
+    "off_historical_matches": 768,
+    "on_changed_objects": 0,
+    "scope": "No-op 384-case corpus coverage is separate from focused tests that select both families.",
+    "tools": {
+      "target/frontend/debug/evocc": {
+        "sha256": "f42abac21d5f1ca83179afb878437727323987dd36d4f5687256df682664c2f1"
+      },
+      "target/frontend/debug/evocc-checker": {
+        "sha256": "ee595453562cd8258ecc818bc518c995ce515544f6f57ba5dd006707dd4dc7b2"
+      }
+    }
+  },
+  "measurements": [
+    {
+      "variant": "off-a",
+      "path": ".evidence/codegen-trend/measure-zrrsbn1m/receipt.json",
+      "sha256": "a92a968fc2d1201b89009627039cfe6bcfc66a05e50c33e0c137df57d1a533ae",
+      "plan": "tests/contracts/codegen-n03d-c5-off-a-20261003.json",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "correctness_executions": 12,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "steps_match_c3": true,
+      "bindings_match_c3": true,
+      "retained_bytes": 1024283,
+      "off_historical_byte_matches": 12
+    },
+    {
+      "variant": "off-b",
+      "path": ".evidence/codegen-trend/measure-6vflnat1/receipt.json",
+      "sha256": "e0ae44fac30f0f1b061ba9961cdef3a3028f2404a1e43d646bb7a369e87b8ed2",
+      "plan": "tests/contracts/codegen-n03d-c5-off-b-20261003.json",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "correctness_executions": 12,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "steps_match_c3": true,
+      "bindings_match_c3": true,
+      "retained_bytes": 1028103,
+      "off_historical_byte_matches": 12
+    },
+    {
+      "variant": "controls-a",
+      "path": ".evidence/codegen-trend/measure-9g8qkuib/receipt.json",
+      "sha256": "12de03ea4bbf56bbc759f58893fdde88764741a558f66f31259f686b7c04e30e",
+      "plan": "tests/contracts/codegen-n03d-c5-controls-a-20261003.json",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "correctness_executions": 12,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "steps_match_c3": true,
+      "bindings_match_c3": true,
+      "retained_bytes": 1020469
+    },
+    {
+      "variant": "controls-b",
+      "path": ".evidence/codegen-trend/measure-h6s876bt/receipt.json",
+      "sha256": "0e3ce08f9701330baeca15d8db48f5c94aad0d7ad525df144271186c9a3c4110",
+      "plan": "tests/contracts/codegen-n03d-c5-controls-b-20261003.json",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "correctness_executions": 12,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "steps_match_c3": true,
+      "bindings_match_c3": true,
+      "retained_bytes": 1024351
+    },
+    {
+      "variant": "combined-a",
+      "path": ".evidence/codegen-trend/measure-do00tjfr/receipt.json",
+      "sha256": "c32757dedc122f87e9bebf17ede349308a3b76d19b39aae87c9546040f445186",
+      "plan": "tests/contracts/codegen-n03d-c5-combined-a-20261003.json",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "correctness_executions": 12,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "steps_match_c3": true,
+      "bindings_match_c3": true,
+      "retained_bytes": 949541
+    },
+    {
+      "variant": "combined-b",
+      "path": ".evidence/codegen-trend/measure-vv8oe2g0/receipt.json",
+      "sha256": "0c55d11ec8c6348158f28eaf949c3577ab2e564a95e988835d463ad3b9df15eb",
+      "plan": "tests/contracts/codegen-n03d-c5-combined-b-20261003.json",
+      "objects": 12,
+      "twins": "BYTE_IDENTICAL",
+      "correctness_executions": 12,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "steps_match_c3": true,
+      "bindings_match_c3": true,
+      "retained_bytes": 944846
+    }
+  ],
+  "tools": {
+    "checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+    "compiler": "4073fb750fb0069c0cd18125ed76f0765b7a01c6cb138bb4d712117f6481de26",
+    "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+    "steps": "7c9f7c493ceec8534b40a56ebe9e7ab6d39e07f6505b67d56ad7552c880a65c0"
+  },
+  "bounds": {
+    "comparisons": 48,
+    "text_and_text_plus_rodata_pass": 48,
+    "compile_median_pass": 45,
+    "compile_median_ceiling": 1.25,
+    "max_compile_median_ratio": 1.6266742854758403,
+    "misses": [
+      {
+        "arm": "A",
+        "variant": "combined",
+        "unit": "zstd:lib/compress/zstd_compress.c",
+        "profile": "unchecked",
+        "observed": 1.391349331486795,
+        "ceiling": 1.25
+      },
+      {
+        "arm": "A",
+        "variant": "combined",
+        "unit": "cjson:cJSON.c",
+        "profile": "checked",
+        "observed": 1.6266742854758403,
+        "ceiling": 1.25
+      },
+      {
+        "arm": "B",
+        "variant": "controls",
+        "unit": "zlib:inflate.c",
+        "profile": "checked",
+        "observed": 1.3321784323711547,
+        "ceiling": 1.25
+      }
+    ],
+    "policy": "Frozen single cohort; no resampling, default flip or full admission."
+  },
+  "rows": [
+    {
+      "arm": "A",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_bytes": 128,
+      "controls_bytes": 128,
+      "controls_saving": 0,
+      "c3_cumulative_bytes": 128,
+      "c5_cumulative_bytes": 128,
+      "incremental_cumulative_saving": 0,
+      "gcc_o2_bytes": 96,
+      "c5_cumulative_gcc_ratio": 1.3333333333333333,
+      "controls_compile_median_ratio": 0.984157199597119,
+      "controls_category_savings": {},
+      "combined_compile_median_ratio": 1.0428788506489803,
+      "combined_category_savings": {},
+      "incremental_cumulative_category_savings": {},
+      "controls_selected": {}
+    },
+    {
+      "arm": "A",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_bytes": 128,
+      "controls_bytes": 128,
+      "controls_saving": 0,
+      "c3_cumulative_bytes": 128,
+      "c5_cumulative_bytes": 128,
+      "incremental_cumulative_saving": 0,
+      "gcc_o2_bytes": 96,
+      "c5_cumulative_gcc_ratio": 1.3333333333333333,
+      "controls_compile_median_ratio": 1.0768076819671974,
+      "controls_category_savings": {},
+      "combined_compile_median_ratio": 0.9788380975424019,
+      "combined_category_savings": {},
+      "incremental_cumulative_category_savings": {},
+      "controls_selected": {}
+    },
+    {
+      "arm": "A",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_bytes": 30516,
+      "controls_bytes": 30476,
+      "controls_saving": 40,
+      "c3_cumulative_bytes": 27148,
+      "c5_cumulative_bytes": 27108,
+      "incremental_cumulative_saving": 40,
+      "gcc_o2_bytes": 14432,
+      "c5_cumulative_gcc_ratio": 1.8783259423503327,
+      "controls_compile_median_ratio": 1.0197731289866887,
+      "controls_category_savings": {
+        "compare_select": 40
+      },
+      "combined_compile_median_ratio": 1.000104335085262,
+      "combined_category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 212,
+        "extend_mask": 8,
+        "compare_select": 40,
+        "branch": -284
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 40
+      },
+      "controls_selected": {
+        "control_boolean_branch": 10
+      }
+    },
+    {
+      "arm": "A",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_bytes": 29012,
+      "controls_bytes": 28972,
+      "controls_saving": 40,
+      "c3_cumulative_bytes": 25644,
+      "c5_cumulative_bytes": 25604,
+      "incremental_cumulative_saving": 40,
+      "gcc_o2_bytes": 14432,
+      "c5_cumulative_gcc_ratio": 1.7741130820399114,
+      "controls_compile_median_ratio": 1.0162205741384305,
+      "controls_category_savings": {
+        "compare_select": 40
+      },
+      "combined_compile_median_ratio": 1.1142821112370347,
+      "combined_category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 212,
+        "extend_mask": 8,
+        "compare_select": 40,
+        "branch": -284
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 40
+      },
+      "controls_selected": {
+        "control_boolean_branch": 10
+      }
+    },
+    {
+      "arm": "A",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_bytes": 28404,
+      "controls_bytes": 28344,
+      "controls_saving": 60,
+      "c3_cumulative_bytes": 26516,
+      "c5_cumulative_bytes": 26456,
+      "incremental_cumulative_saving": 60,
+      "gcc_o2_bytes": 9940,
+      "c5_cumulative_gcc_ratio": 2.661569416498994,
+      "controls_compile_median_ratio": 1.0266024855072318,
+      "controls_category_savings": {
+        "compare_select": 60
+      },
+      "combined_compile_median_ratio": 1.1500273423198202,
+      "combined_category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 180,
+        "extend_mask": 4,
+        "compare_select": 60,
+        "branch": -148
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 60
+      },
+      "controls_selected": {
+        "control_boolean_branch": 15
+      }
+    },
+    {
+      "arm": "A",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_bytes": 26664,
+      "controls_bytes": 26604,
+      "controls_saving": 60,
+      "c3_cumulative_bytes": 24776,
+      "c5_cumulative_bytes": 24716,
+      "incremental_cumulative_saving": 60,
+      "gcc_o2_bytes": 9940,
+      "c5_cumulative_gcc_ratio": 2.4865191146881287,
+      "controls_compile_median_ratio": 1.003346694194377,
+      "controls_category_savings": {
+        "compare_select": 60
+      },
+      "combined_compile_median_ratio": 1.2356887174766789,
+      "combined_category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 180,
+        "extend_mask": 4,
+        "compare_select": 60,
+        "branch": -148
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 60
+      },
+      "controls_selected": {
+        "control_boolean_branch": 15
+      }
+    },
+    {
+      "arm": "A",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_bytes": 124024,
+      "controls_bytes": 123472,
+      "controls_saving": 552,
+      "c3_cumulative_bytes": 102796,
+      "c5_cumulative_bytes": 102244,
+      "incremental_cumulative_saving": 552,
+      "gcc_o2_bytes": 48760,
+      "c5_cumulative_gcc_ratio": 2.096882690730107,
+      "controls_compile_median_ratio": 1.0226931233454075,
+      "controls_category_savings": {
+        "compare_select": 552
+      },
+      "combined_compile_median_ratio": 1.225893808789479,
+      "combined_category_savings": {
+        "prologue_epilogue": 20072,
+        "stack_access": 56,
+        "move": 636,
+        "const_materialize": 2124,
+        "compare_select": 552,
+        "branch": -1660
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 552
+      },
+      "controls_selected": {
+        "control_boolean_branch": 94,
+        "control_constant_interval": 22
+      }
+    },
+    {
+      "arm": "A",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_bytes": 121652,
+      "controls_bytes": 121100,
+      "controls_saving": 552,
+      "c3_cumulative_bytes": 100432,
+      "c5_cumulative_bytes": 99880,
+      "incremental_cumulative_saving": 552,
+      "gcc_o2_bytes": 48760,
+      "c5_cumulative_gcc_ratio": 2.048400328137818,
+      "controls_compile_median_ratio": 1.0153712635312921,
+      "controls_category_savings": {
+        "compare_select": 552
+      },
+      "combined_compile_median_ratio": 1.391349331486795,
+      "combined_category_savings": {
+        "prologue_epilogue": 20072,
+        "stack_access": 56,
+        "move": 636,
+        "const_materialize": 2108,
+        "extend_mask": 8,
+        "compare_select": 552,
+        "branch": -1660
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 552
+      },
+      "controls_selected": {
+        "control_boolean_branch": 94,
+        "control_constant_interval": 22
+      }
+    },
+    {
+      "arm": "A",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_bytes": 33688,
+      "controls_bytes": 33648,
+      "controls_saving": 40,
+      "c3_cumulative_bytes": 25596,
+      "c5_cumulative_bytes": 25556,
+      "incremental_cumulative_saving": 40,
+      "gcc_o2_bytes": 14492,
+      "c5_cumulative_gcc_ratio": 1.7634556996963842,
+      "controls_compile_median_ratio": 1.007569356623095,
+      "controls_category_savings": {
+        "compare_select": 40
+      },
+      "combined_compile_median_ratio": 1.0110272180221374,
+      "combined_category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 848,
+        "extend_mask": 4,
+        "compare_select": 40,
+        "branch": -768
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 40
+      },
+      "controls_selected": {
+        "control_boolean_branch": 10
+      }
+    },
+    {
+      "arm": "A",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_bytes": 33440,
+      "controls_bytes": 33400,
+      "controls_saving": 40,
+      "c3_cumulative_bytes": 25348,
+      "c5_cumulative_bytes": 25308,
+      "incremental_cumulative_saving": 40,
+      "gcc_o2_bytes": 14492,
+      "c5_cumulative_gcc_ratio": 1.746342809826111,
+      "controls_compile_median_ratio": 1.006430007614403,
+      "controls_category_savings": {
+        "compare_select": 40
+      },
+      "combined_compile_median_ratio": 1.1974031535985947,
+      "combined_category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 848,
+        "extend_mask": 4,
+        "compare_select": 40,
+        "branch": -768
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 40
+      },
+      "controls_selected": {
+        "control_boolean_branch": 10
+      }
+    },
+    {
+      "arm": "A",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_bytes": 30228,
+      "controls_bytes": 30184,
+      "controls_saving": 44,
+      "c3_cumulative_bytes": 25384,
+      "c5_cumulative_bytes": 25340,
+      "incremental_cumulative_saving": 44,
+      "gcc_o2_bytes": 14400,
+      "c5_cumulative_gcc_ratio": 1.7597222222222222,
+      "controls_compile_median_ratio": 1.0059840146688894,
+      "controls_category_savings": {
+        "compare_select": 44
+      },
+      "combined_compile_median_ratio": 1.6266742854758403,
+      "combined_category_savings": {
+        "prologue_epilogue": 5256,
+        "move": 44,
+        "const_materialize": 92,
+        "extend_mask": 4,
+        "compare_select": 44,
+        "branch": -552
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 44
+      },
+      "controls_selected": {
+        "control_boolean_branch": 5,
+        "control_constant_interval": 3
+      }
+    },
+    {
+      "arm": "A",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_bytes": 30116,
+      "controls_bytes": 30072,
+      "controls_saving": 44,
+      "c3_cumulative_bytes": 25272,
+      "c5_cumulative_bytes": 25228,
+      "incremental_cumulative_saving": 44,
+      "gcc_o2_bytes": 14400,
+      "c5_cumulative_gcc_ratio": 1.7519444444444445,
+      "controls_compile_median_ratio": 0.9972084945638473,
+      "controls_category_savings": {
+        "compare_select": 44
+      },
+      "combined_compile_median_ratio": 1.2473809004365728,
+      "combined_category_savings": {
+        "prologue_epilogue": 5256,
+        "move": 44,
+        "const_materialize": 92,
+        "extend_mask": 4,
+        "compare_select": 44,
+        "branch": -552
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 44
+      },
+      "controls_selected": {
+        "control_boolean_branch": 5,
+        "control_constant_interval": 3
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_bytes": 128,
+      "controls_bytes": 128,
+      "controls_saving": 0,
+      "c3_cumulative_bytes": 128,
+      "c5_cumulative_bytes": 128,
+      "incremental_cumulative_saving": 0,
+      "gcc_o2_bytes": 96,
+      "c5_cumulative_gcc_ratio": 1.3333333333333333,
+      "controls_compile_median_ratio": 1.059886811699205,
+      "controls_category_savings": {},
+      "combined_compile_median_ratio": 1.0686372061581613,
+      "combined_category_savings": {},
+      "incremental_cumulative_category_savings": {},
+      "controls_selected": {}
+    },
+    {
+      "arm": "B",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_bytes": 128,
+      "controls_bytes": 128,
+      "controls_saving": 0,
+      "c3_cumulative_bytes": 128,
+      "c5_cumulative_bytes": 128,
+      "incremental_cumulative_saving": 0,
+      "gcc_o2_bytes": 96,
+      "c5_cumulative_gcc_ratio": 1.3333333333333333,
+      "controls_compile_median_ratio": 1.0203891555145361,
+      "controls_category_savings": {},
+      "combined_compile_median_ratio": 1.0152418550992155,
+      "combined_category_savings": {},
+      "incremental_cumulative_category_savings": {},
+      "controls_selected": {}
+    },
+    {
+      "arm": "B",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_bytes": 30184,
+      "controls_bytes": 30144,
+      "controls_saving": 40,
+      "c3_cumulative_bytes": 26776,
+      "c5_cumulative_bytes": 26736,
+      "incremental_cumulative_saving": 40,
+      "gcc_o2_bytes": 14432,
+      "c5_cumulative_gcc_ratio": 1.852549889135255,
+      "controls_compile_median_ratio": 1.0510449962385666,
+      "controls_category_savings": {
+        "compare_select": 40
+      },
+      "combined_compile_median_ratio": 1.0147660072852756,
+      "combined_category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 252,
+        "extend_mask": 8,
+        "compare_select": 40,
+        "branch": -284
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 40
+      },
+      "controls_selected": {
+        "control_boolean_branch": 10
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_bytes": 28668,
+      "controls_bytes": 28628,
+      "controls_saving": 40,
+      "c3_cumulative_bytes": 25260,
+      "c5_cumulative_bytes": 25220,
+      "incremental_cumulative_saving": 40,
+      "gcc_o2_bytes": 14432,
+      "c5_cumulative_gcc_ratio": 1.7475055432372506,
+      "controls_compile_median_ratio": 1.021081284876165,
+      "controls_category_savings": {
+        "compare_select": 40
+      },
+      "combined_compile_median_ratio": 1.0163160761707164,
+      "combined_category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 252,
+        "extend_mask": 8,
+        "compare_select": 40,
+        "branch": -284
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 40
+      },
+      "controls_selected": {
+        "control_boolean_branch": 10
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_bytes": 28264,
+      "controls_bytes": 28204,
+      "controls_saving": 60,
+      "c3_cumulative_bytes": 26372,
+      "c5_cumulative_bytes": 26312,
+      "incremental_cumulative_saving": 60,
+      "gcc_o2_bytes": 9940,
+      "c5_cumulative_gcc_ratio": 2.647082494969819,
+      "controls_compile_median_ratio": 1.3321784323711547,
+      "controls_category_savings": {
+        "compare_select": 60
+      },
+      "combined_compile_median_ratio": 1.0785094680022806,
+      "combined_category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 184,
+        "extend_mask": 4,
+        "compare_select": 60,
+        "branch": -148
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 60
+      },
+      "controls_selected": {
+        "control_boolean_branch": 15
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_bytes": 26520,
+      "controls_bytes": 26460,
+      "controls_saving": 60,
+      "c3_cumulative_bytes": 24628,
+      "c5_cumulative_bytes": 24568,
+      "incremental_cumulative_saving": 60,
+      "gcc_o2_bytes": 9940,
+      "c5_cumulative_gcc_ratio": 2.4716297786720323,
+      "controls_compile_median_ratio": 1.1576303833139556,
+      "controls_category_savings": {
+        "compare_select": 60
+      },
+      "combined_compile_median_ratio": 1.0507109677250328,
+      "combined_category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 184,
+        "extend_mask": 4,
+        "compare_select": 60,
+        "branch": -148
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 60
+      },
+      "controls_selected": {
+        "control_boolean_branch": 15
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_bytes": 122972,
+      "controls_bytes": 122420,
+      "controls_saving": 552,
+      "c3_cumulative_bytes": 98720,
+      "c5_cumulative_bytes": 98168,
+      "incremental_cumulative_saving": 552,
+      "gcc_o2_bytes": 48760,
+      "c5_cumulative_gcc_ratio": 2.0132895816242824,
+      "controls_compile_median_ratio": 1.0940371028180487,
+      "controls_category_savings": {
+        "compare_select": 552
+      },
+      "combined_compile_median_ratio": 1.0152915581299435,
+      "combined_category_savings": {
+        "prologue_epilogue": 20032,
+        "stack_access": 60,
+        "move": 628,
+        "const_materialize": 5192,
+        "compare_select": 552,
+        "branch": -1660
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 552
+      },
+      "controls_selected": {
+        "control_boolean_branch": 94,
+        "control_constant_interval": 22
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_bytes": 120592,
+      "controls_bytes": 120040,
+      "controls_saving": 552,
+      "c3_cumulative_bytes": 96356,
+      "c5_cumulative_bytes": 95804,
+      "incremental_cumulative_saving": 552,
+      "gcc_o2_bytes": 48760,
+      "c5_cumulative_gcc_ratio": 1.9648072190319934,
+      "controls_compile_median_ratio": 1.0345121738782224,
+      "controls_category_savings": {
+        "compare_select": 552
+      },
+      "combined_compile_median_ratio": 1.0200139786264641,
+      "combined_category_savings": {
+        "prologue_epilogue": 20032,
+        "stack_access": 60,
+        "move": 628,
+        "const_materialize": 5176,
+        "compare_select": 552,
+        "branch": -1660
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 552
+      },
+      "controls_selected": {
+        "control_boolean_branch": 94,
+        "control_constant_interval": 22
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_bytes": 33300,
+      "controls_bytes": 33260,
+      "controls_saving": 40,
+      "c3_cumulative_bytes": 24044,
+      "c5_cumulative_bytes": 24004,
+      "incremental_cumulative_saving": 40,
+      "gcc_o2_bytes": 14492,
+      "c5_cumulative_gcc_ratio": 1.6563621308308032,
+      "controls_compile_median_ratio": 1.0519891216471653,
+      "controls_category_savings": {
+        "compare_select": 40
+      },
+      "combined_compile_median_ratio": 1.0177504073375043,
+      "combined_category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 2016,
+        "compare_select": 40,
+        "branch": -768
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 40
+      },
+      "controls_selected": {
+        "control_boolean_branch": 10
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_bytes": 33052,
+      "controls_bytes": 33012,
+      "controls_saving": 40,
+      "c3_cumulative_bytes": 23796,
+      "c5_cumulative_bytes": 23756,
+      "incremental_cumulative_saving": 40,
+      "gcc_o2_bytes": 14492,
+      "c5_cumulative_gcc_ratio": 1.63924924096053,
+      "controls_compile_median_ratio": 0.9946197824883877,
+      "controls_category_savings": {
+        "compare_select": 40
+      },
+      "combined_compile_median_ratio": 0.9365351414646395,
+      "combined_category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 2016,
+        "compare_select": 40,
+        "branch": -768
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 40
+      },
+      "controls_selected": {
+        "control_boolean_branch": 10
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_bytes": 29496,
+      "controls_bytes": 29452,
+      "controls_saving": 44,
+      "c3_cumulative_bytes": 24704,
+      "c5_cumulative_bytes": 24660,
+      "incremental_cumulative_saving": 44,
+      "gcc_o2_bytes": 14400,
+      "c5_cumulative_gcc_ratio": 1.7125,
+      "controls_compile_median_ratio": 1.0152023305221085,
+      "controls_category_savings": {
+        "compare_select": 44
+      },
+      "combined_compile_median_ratio": 0.9974887150839973,
+      "combined_category_savings": {
+        "prologue_epilogue": 5212,
+        "move": 44,
+        "const_materialize": 88,
+        "compare_select": 44,
+        "branch": -552
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 44
+      },
+      "controls_selected": {
+        "control_boolean_branch": 5,
+        "control_constant_interval": 3
+      }
+    },
+    {
+      "arm": "B",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_bytes": 29384,
+      "controls_bytes": 29340,
+      "controls_saving": 44,
+      "c3_cumulative_bytes": 24592,
+      "c5_cumulative_bytes": 24548,
+      "incremental_cumulative_saving": 44,
+      "gcc_o2_bytes": 14400,
+      "c5_cumulative_gcc_ratio": 1.7047222222222222,
+      "controls_compile_median_ratio": 1.1084195234053058,
+      "controls_category_savings": {
+        "compare_select": 44
+      },
+      "combined_compile_median_ratio": 1.0216014841304406,
+      "combined_category_savings": {
+        "prologue_epilogue": 5212,
+        "move": 44,
+        "const_materialize": 88,
+        "compare_select": 44,
+        "branch": -552
+      },
+      "incremental_cumulative_category_savings": {
+        "compare_select": 44
+      },
+      "controls_selected": {
+        "control_boolean_branch": 5,
+        "control_constant_interval": 3
+      }
+    }
+  ],
+  "attribution": {
+    "path": ".evidence/codegen/n03d-c5/category-summary.json",
+    "sha256": "6caadaa68f5176b66f267960a254ca4807546d77d469e36c470843523b205052",
+    "rows": 72,
+    "unique_objects": 61,
+    "incremental": "Every C5-only and incremental cumulative byte decrease is compare_select. No frame/P0/guard/DCE/reload attribution.",
+    "producer_telemetry": "Selected counts are producer telemetry, not proof."
+  },
+  "coverage": {
+    "step_rows_per_capture": 257,
+    "validated_on_input": 70,
+    "opaque": 187,
+    "legacy_source_event_cases_1001_1002": "NOT_VALIDATED",
+    "steps_and_ir_chain_bundle": "UNCHANGED_FROM_C3",
+    "correctness_executions": 72,
+    "twins": 72,
+    "completed_proof_rejections": 0,
+    "bundle_failures": 0
+  },
+  "pattern_verdicts": {
+    "boolean_branch": "FINITE_TESTED_NOT_SMT_PROVED",
+    "constant_interval": "FINITE_TESTED_NOT_SMT_PROVED",
+    "n07_e3": "Pinned generator limitation unchanged; zero SMT proofs."
+  },
+  "retention": {
+    "status": "COMPLETED",
+    "retired_objects": 792,
+    "retired_logical_bytes": 1829464,
+    "retired_allocated_bytes": 4440064,
+    "open_handles_before_retirement": 0,
+    "retired_scope": "768 native ON object copies identical to retained E1 baselines; 24 controls-only TU objects from measure-9g8qkuib and measure-h6s876bt. Exact intermediate runtimes no longer retained; reproducible from frozen plans.",
+    "preserved": "All records, manifests, tests/contracts, sealed/minimal tests, original E1 native baselines, C3 prior and C5 current OFF/measured-cumulative TU baselines, shared target and Lean cache.",
+    "disk_accounting": {
+      "shared_cache_before_kib": 25195312,
+      "shared_cache_after_kib": 25421540,
+      "shared_cache_delta_bytes": 231657472,
+      "retained_evidence_bytes": 6623232,
+      "net_bytes": 238280704,
+      "scope": "C5 shared target/frontend delta plus C5 evidence, six captures and new trend history; excludes tracked files/Git and unrelated filesystem activity.",
+      "free_kib_at_close": 49907508
+    },
+    "capture_limit_bytes": 524288000
+  },
+  "package_disposition": "N03d bounded C1-C5 sequence closed with C2/C5 cost misses retained; general CCMP/CFG transformations unimplemented. Five library targets remain missed; prior admitted cumulative C3 is unchanged.",
+  "claim_ceiling": "Correctness and size evidence for bounded opt-in MIR selection, with compile-cost admission failure. No default, verified EqSat, general optimization, full-application, kernel, timing, SMT proof or 1.4-target claim."
+}
