@@ -1,0 +1,2101 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03d",
+  "slice": "C3: exact repeated integer extension selection",
+  "date": "2026-10-03",
+  "status": "CLOSED_OPT_IN_BOUNDED",
+  "subject_commit": "938471963bb76822e12c3d9f05f84a2a9da4d765",
+  "implementation_commit": "938471963bb76822e12c3d9f05f84a2a9da4d765",
+  "red_commit": "7069e4af",
+  "plan_commit": "19769460",
+  "measurement_plan_commit": "d2fe7517",
+  "plan": "tests/contracts/codegen-n03d-extensions-20261003.json",
+  "specification": "EvoMIR 0.63 selection policy; no new opcode meaning, interpreter, registry, allocator or verifier semantics.",
+  "behavior": {
+    "option": "--isel-opt=extensions",
+    "default": "OFF",
+    "scope": "Reuse exact unique-definition, local non-edge Extend, low Bfx and contiguous-low-mask AND results before allocation. Reset availability at blocks and every non-discardable instruction; preserve classes, widths, signedness and effect barriers.",
+    "cumulative_options": [
+      "--frame-opt=paired-saves,shared-epilogue,leaf-frames",
+      "--isel-opt=constants,extensions",
+      "--regalloc-opt=copy-hints,reload-reuse"
+    ],
+    "excluded": "C2 local selection remains outside the admitted cumulative arm after its frozen cost miss. Protected/kernel and frame-pointer profiles keep prior output."
+  },
+  "gates": {
+    "full_workspace": {
+      "status": "PASS",
+      "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 tools/gate-changed.sh --full-workspace --offline",
+      "path": ".evidence/codegen/n03d-c3/full-workspace-20261003.log",
+      "sha256": "a0735b9e9e29927d3b4b4ad61f322935ea39cfbd49cffebafd9f3e358c64f619",
+      "exit_code": 0,
+      "rust": {
+        "suites": 396,
+        "passed": 3051,
+        "failed": 0,
+        "ignored": 5
+      },
+      "clippy": "PASS",
+      "format": "PASS",
+      "regeneration": "PASS"
+    },
+    "focused": {
+      "path": ".evidence/codegen/n03d-c3/mir-focused-20261003.log",
+      "sha256": "906c7b38bc1a2e4c8ad6cd6d68647fbd9e1489cef23505fa41d282cf87a00997",
+      "passed": 12,
+      "failed": 0,
+      "scope": "MIR/interpreter/allocation negatives and exact-IR adapter; 48 native Darwin MIR functions x 1024 inputs; Linux assembly for all 48."
+    },
+    "driver": {
+      "path": ".evidence/codegen/n03d-c3/driver-linux-20261003.log",
+      "sha256": "cea62890f6502bde04b037b4d40a80e4cac6f72c86a961ef0116a23d2fd248a9",
+      "passed": 4,
+      "failed": 0,
+      "native_inputs": 65536,
+      "functions": 2,
+      "variants": [
+        "off",
+        "extensions",
+        "combined"
+      ],
+      "oracles": [
+        "GCC 14.2.0-19",
+        "Clang 19.1.7"
+      ],
+      "scope": "Public Linux driver, crossed calls for signed char and unsigned short."
+    },
+    "python": [
+      {
+        "path": ".evidence/codegen/n03d-c3/python-focused-20261003.log",
+        "sha256": "243d07299b97e695f5fdc960204132016f4093fcc386fe1266786791fc77fb16",
+        "passed": 90,
+        "failed": 0
+      },
+      {
+        "path": ".evidence/codegen/n03d-c3/python-model-20261003.log",
+        "sha256": "feabb4add9e2ca3374e538560634d1ec97dc4f4ce89aab12f3d726e36ea9b2f6",
+        "passed": 4,
+        "failed": 0
+      }
+    ],
+    "red": {
+      "path": ".evidence/codegen/n03d-c3/driver-red-20261003.log",
+      "sha256": "6a2dec950677c9c20ee6f640d6bea431a30dd7c2c0cc182f92a2cd8c3278670d",
+      "result": "EXPECTED_FAILURE: OFF contains three byte or two halfword extensions; extensions option initially unavailable."
+    },
+    "lean": "NOT_REQUIRED: no Lean or registry change",
+    "prior_attempts": [
+      {
+        "path": ".evidence/codegen/n03d-c3/check-disposition-20261003.txt",
+        "status": "OPERATOR_INTERRUPTED_NOT_PASS"
+      },
+      {
+        "path": ".evidence/codegen/n03d-c3/target-boundary-20261003.txt",
+        "sha256": "be845da3338643912a50cfae420200cee91ea4af0b801c48c3ee0f37e4762d2a",
+        "status": "INVALID_CROSS_TARGET_PROBE",
+        "input": -128,
+        "off": 1920,
+        "extensions": 1920,
+        "combined": 1920,
+        "clang_darwin": -1920
+      },
+      {
+        "path": ".evidence/codegen/n03d-c3/driver-focused-20261003.log",
+        "sha256": "e08b201d75bc75fc35e5e5ce5c4df3adbadc35c6fa200f8ac7696a2f2455c75e",
+        "passed": 3,
+        "failed": 1,
+        "disposition": "INVALID_CROSS_TARGET_PROBE_NOT_PASS: Linux signed narrow C signatures were retargeted to Darwin without the frontend sign extension required by EvoMIR section 6. OFF and both ON variants returned 1920 for -128, Darwin Clang returned -1920. No production semantics or expected value was changed; the replacement test uses the supported Linux public driver. Original probe and diagnostic remain."
+      }
+    ]
+  },
+  "native_corpora": {
+    "rows": [
+      {
+        "lane": "darwin",
+        "variant": "off",
+        "log": ".evidence/codegen/n03d-c3/native-off-darwin-20261003.log",
+        "sha256": "2a4555368b7d2300094e6c61f218c0e54b097c819d67464c4deb4d889f763e54",
+        "objects": 384,
+        "executed": 384,
+        "agreeing": 384,
+        "twins_equal": true,
+        "object_bytes": 193392
+      },
+      {
+        "lane": "darwin",
+        "variant": "on",
+        "log": ".evidence/codegen/n03d-c3/native-on-darwin-20261003.log",
+        "sha256": "23fbd9b6ed04214a82b779295e94249a8d31dd3f7113cc0397320b01a2b8b02c",
+        "objects": 384,
+        "executed": 384,
+        "agreeing": 384,
+        "twins_equal": true,
+        "object_bytes": 193392
+      },
+      {
+        "lane": "linux",
+        "variant": "off",
+        "log": ".evidence/codegen/n03d-c3/native-off-linux-20261003.log",
+        "sha256": "a82d7bb4372e2eeb279214c5643b97049c76873ef4474578322ddbad94ee67a3",
+        "objects": 384,
+        "executed": 384,
+        "agreeing": 384,
+        "twins_equal": true,
+        "object_bytes": 383344
+      },
+      {
+        "lane": "linux",
+        "variant": "on",
+        "log": ".evidence/codegen/n03d-c3/native-on-linux-20261003.log",
+        "sha256": "6dabab2de9651740802054909739b0ac67579fce17070d784f1619c9e7e5c1df",
+        "objects": 384,
+        "executed": 384,
+        "agreeing": 384,
+        "twins_equal": true,
+        "object_bytes": 383344
+      }
+    ],
+    "off_historical_byte_matches": 768,
+    "on_vs_off_changed_objects": {
+      "darwin": [],
+      "linux": []
+    },
+    "tools": {
+      "evocc": {
+        "path": "target/frontend/debug/evocc",
+        "sha256": "e4b81c1891d39fa3c66c667008e55a0490e1f319ee5e3403bc5ac96ec807e771"
+      },
+      "evocc-checker": {
+        "path": "target/frontend/debug/evocc-checker",
+        "sha256": "0e2e29d927bbba4919ac93f419b79f3933b6d92bc0f5cf919c899e60155ea933"
+      }
+    },
+    "scope": "Both named 384-case populations execute and agree; each object twin is identical. No general Darwin signed-narrow C frontend bridge or full-program proof claim."
+  },
+  "measurements": [
+    {
+      "variant": "off-a",
+      "path": ".evidence/codegen-trend/measure-_gqcehz5/receipt.json",
+      "sha256": "07a8aeb6a57257c720db2172ce5de62141415b800aaa173664aeaa82e68fed5c",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": true,
+      "bindings_equal": true,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03d-c3-off-a-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 12,
+      "retained_bytes": 1023856,
+      "producer_selection_counts": [
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "cjson:cJSON.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "cjson:cJSON.c"
+        }
+      ]
+    },
+    {
+      "variant": "off-b",
+      "path": ".evidence/codegen-trend/measure-k_8j0hje/receipt.json",
+      "sha256": "7417b6ca7d325770573362b7c0fb233db34de574e0599d6a2f84d1895d8e896e",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": true,
+      "bindings_equal": true,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03d-c3-off-b-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 12,
+      "retained_bytes": 1027580,
+      "producer_selection_counts": [
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "cjson:cJSON.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "cjson:cJSON.c"
+        }
+      ]
+    },
+    {
+      "variant": "extensions-a",
+      "path": ".evidence/codegen-trend/measure-pfri0d7e/receipt.json",
+      "sha256": "e16faf3c0190d91f43f915fd25be85b0d199941063afd244c87204566582e1e9",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": true,
+      "bindings_equal": true,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03d-c3-extensions-a-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 0,
+      "retained_bytes": 1023797,
+      "producer_selection_counts": [
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 32,
+            "reuse_integer_extend/not-repeated-in-segment": 197,
+            "reuse_low_extract/not-repeated-in-segment": 2,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 189
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_low_mask": 2
+          },
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 25,
+            "reuse_integer_extend/not-repeated-in-segment": 204,
+            "reuse_low_extract/not-repeated-in-segment": 2,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 189
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_low_mask": 2
+          },
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 54,
+            "reuse_integer_extend/not-repeated-in-segment": 107,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 72
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_low_mask": 1
+          },
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 15,
+            "reuse_integer_extend/not-repeated-in-segment": 146,
+            "reuse_low_mask/nonlocal-destination-use": 2,
+            "reuse_low_mask/not-repeated-in-segment": 76
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_low_mask": 1
+          },
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 161,
+            "reuse_integer_extend/not-repeated-in-segment": 872,
+            "reuse_low_extract/not-repeated-in-segment": 1,
+            "reuse_low_mask/nonlocal-destination-use": 292,
+            "reuse_low_mask/not-repeated-in-segment": 206
+          },
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 124,
+            "reuse_integer_extend/not-repeated-in-segment": 907,
+            "reuse_low_extract/not-repeated-in-segment": 1,
+            "reuse_low_mask/nonlocal-destination-use": 287,
+            "reuse_low_mask/not-repeated-in-segment": 211
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_integer_extend": 2
+          },
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 21,
+            "reuse_integer_extend/not-repeated-in-segment": 313,
+            "reuse_low_mask/nonlocal-destination-use": 67,
+            "reuse_low_mask/not-repeated-in-segment": 36
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_integer_extend": 1
+          },
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 18,
+            "reuse_integer_extend/not-repeated-in-segment": 316,
+            "reuse_low_mask/nonlocal-destination-use": 65,
+            "reuse_low_mask/not-repeated-in-segment": 38
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_integer_extend": 1
+          },
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 37,
+            "reuse_integer_extend/not-repeated-in-segment": 268,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 52
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_integer_extend": 1
+          },
+          "unit": "cjson:cJSON.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 36,
+            "reuse_integer_extend/not-repeated-in-segment": 269,
+            "reuse_low_mask/nonlocal-destination-use": 5,
+            "reuse_low_mask/not-repeated-in-segment": 53
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_integer_extend": 1
+          },
+          "unit": "cjson:cJSON.c"
+        }
+      ]
+    },
+    {
+      "variant": "extensions-b",
+      "path": ".evidence/codegen-trend/measure-i4nis29s/receipt.json",
+      "sha256": "1b12890885f1035b5bfb85628fa1fd44532d8869b1264a59ef3b757e99e2665d",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": true,
+      "bindings_equal": true,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03d-c3-extensions-b-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 0,
+      "retained_bytes": 1027467,
+      "producer_selection_counts": [
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 17,
+            "reuse_integer_extend/not-repeated-in-segment": 160,
+            "reuse_low_extract/not-repeated-in-segment": 2,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 204
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_low_mask": 2
+          },
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 13,
+            "reuse_integer_extend/not-repeated-in-segment": 164,
+            "reuse_low_extract/not-repeated-in-segment": 2,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 204
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_low_mask": 2
+          },
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 39,
+            "reuse_integer_extend/not-repeated-in-segment": 95,
+            "reuse_low_mask/nonlocal-destination-use": 11,
+            "reuse_low_mask/not-repeated-in-segment": 75
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_low_mask": 1
+          },
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 4,
+            "reuse_integer_extend/not-repeated-in-segment": 130,
+            "reuse_low_mask/nonlocal-destination-use": 2,
+            "reuse_low_mask/not-repeated-in-segment": 84
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_low_mask": 1
+          },
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 12,
+            "reuse_integer_extend/not-repeated-in-segment": 206,
+            "reuse_low_extract/not-repeated-in-segment": 1,
+            "reuse_low_mask/nonlocal-destination-use": 288,
+            "reuse_low_mask/not-repeated-in-segment": 199
+          },
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 12,
+            "reuse_integer_extend/not-repeated-in-segment": 206,
+            "reuse_low_extract/not-repeated-in-segment": 1,
+            "reuse_low_mask/nonlocal-destination-use": 287,
+            "reuse_low_mask/not-repeated-in-segment": 200
+          },
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 8,
+            "reuse_integer_extend/not-repeated-in-segment": 25,
+            "reuse_low_mask/nonlocal-destination-use": 67,
+            "reuse_low_mask/not-repeated-in-segment": 33
+          },
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 5,
+            "reuse_integer_extend/not-repeated-in-segment": 28,
+            "reuse_low_mask/nonlocal-destination-use": 65,
+            "reuse_low_mask/not-repeated-in-segment": 35
+          },
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 10,
+            "reuse_integer_extend/not-repeated-in-segment": 180,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 54
+          },
+          "profile": "checked",
+          "selected": {},
+          "unit": "cjson:cJSON.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 9,
+            "reuse_integer_extend/not-repeated-in-segment": 181,
+            "reuse_low_mask/nonlocal-destination-use": 5,
+            "reuse_low_mask/not-repeated-in-segment": 55
+          },
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "cjson:cJSON.c"
+        }
+      ]
+    },
+    {
+      "variant": "combined-a",
+      "path": ".evidence/codegen-trend/measure-jcqky4k2/receipt.json",
+      "sha256": "07b81803faa28043f5de6a7553d04f7f5d5ec6e409d0813a8b1ab1bf93654f47",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": true,
+      "bindings_equal": true,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03d-c3-combined-a-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 0,
+      "retained_bytes": 949589,
+      "producer_selection_counts": [
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 32,
+            "reuse_integer_extend/not-repeated-in-segment": 197,
+            "reuse_low_extract/not-repeated-in-segment": 2,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 189
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_low_mask": 2
+          },
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 25,
+            "reuse_integer_extend/not-repeated-in-segment": 204,
+            "reuse_low_extract/not-repeated-in-segment": 2,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 189
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_low_mask": 2
+          },
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 54,
+            "reuse_integer_extend/not-repeated-in-segment": 107,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 72
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_low_mask": 1
+          },
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 15,
+            "reuse_integer_extend/not-repeated-in-segment": 146,
+            "reuse_low_mask/nonlocal-destination-use": 2,
+            "reuse_low_mask/not-repeated-in-segment": 76
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_low_mask": 1
+          },
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 161,
+            "reuse_integer_extend/not-repeated-in-segment": 872,
+            "reuse_low_extract/not-repeated-in-segment": 1,
+            "reuse_low_mask/nonlocal-destination-use": 292,
+            "reuse_low_mask/not-repeated-in-segment": 206
+          },
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 124,
+            "reuse_integer_extend/not-repeated-in-segment": 907,
+            "reuse_low_extract/not-repeated-in-segment": 1,
+            "reuse_low_mask/nonlocal-destination-use": 287,
+            "reuse_low_mask/not-repeated-in-segment": 211
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_integer_extend": 2
+          },
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 21,
+            "reuse_integer_extend/not-repeated-in-segment": 313,
+            "reuse_low_mask/nonlocal-destination-use": 67,
+            "reuse_low_mask/not-repeated-in-segment": 36
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_integer_extend": 1
+          },
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 18,
+            "reuse_integer_extend/not-repeated-in-segment": 316,
+            "reuse_low_mask/nonlocal-destination-use": 65,
+            "reuse_low_mask/not-repeated-in-segment": 38
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_integer_extend": 1
+          },
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 37,
+            "reuse_integer_extend/not-repeated-in-segment": 268,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 52
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_integer_extend": 1
+          },
+          "unit": "cjson:cJSON.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 36,
+            "reuse_integer_extend/not-repeated-in-segment": 269,
+            "reuse_low_mask/nonlocal-destination-use": 5,
+            "reuse_low_mask/not-repeated-in-segment": 53
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_integer_extend": 1
+          },
+          "unit": "cjson:cJSON.c"
+        }
+      ]
+    },
+    {
+      "variant": "combined-b",
+      "path": ".evidence/codegen-trend/measure-87owqyg8/receipt.json",
+      "sha256": "2c743e76c3d7036065f2e6a775a4301bb3aa6753c98bd85ea74d936418c1a073",
+      "status": "OBSERVED",
+      "objects": 12,
+      "steps_equal": true,
+      "bindings_equal": true,
+      "proof": {
+        "bundle_failures": 0,
+        "completed_rejections": 0
+      },
+      "correctness_executions": 12,
+      "plan": "tests/contracts/codegen-n03d-c3-combined-b-20261003.json",
+      "two_builds": "BYTE_IDENTICAL",
+      "historical_hash_matches": 0,
+      "retained_bytes": 944882,
+      "producer_selection_counts": [
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "checked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {},
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 17,
+            "reuse_integer_extend/not-repeated-in-segment": 160,
+            "reuse_low_extract/not-repeated-in-segment": 2,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 204
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_low_mask": 2
+          },
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 13,
+            "reuse_integer_extend/not-repeated-in-segment": 164,
+            "reuse_low_extract/not-repeated-in-segment": 2,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 204
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_low_mask": 2
+          },
+          "unit": "zlib:deflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 39,
+            "reuse_integer_extend/not-repeated-in-segment": 95,
+            "reuse_low_mask/nonlocal-destination-use": 11,
+            "reuse_low_mask/not-repeated-in-segment": 75
+          },
+          "profile": "checked",
+          "selected": {
+            "reuse_low_mask": 1
+          },
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 4,
+            "reuse_integer_extend/not-repeated-in-segment": 130,
+            "reuse_low_mask/nonlocal-destination-use": 2,
+            "reuse_low_mask/not-repeated-in-segment": 84
+          },
+          "profile": "unchecked",
+          "selected": {
+            "reuse_low_mask": 1
+          },
+          "unit": "zlib:inflate.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 12,
+            "reuse_integer_extend/not-repeated-in-segment": 206,
+            "reuse_low_extract/not-repeated-in-segment": 1,
+            "reuse_low_mask/nonlocal-destination-use": 288,
+            "reuse_low_mask/not-repeated-in-segment": 199
+          },
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 12,
+            "reuse_integer_extend/not-repeated-in-segment": 206,
+            "reuse_low_extract/not-repeated-in-segment": 1,
+            "reuse_low_mask/nonlocal-destination-use": 287,
+            "reuse_low_mask/not-repeated-in-segment": 200
+          },
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zstd:lib/compress/zstd_compress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 8,
+            "reuse_integer_extend/not-repeated-in-segment": 25,
+            "reuse_low_mask/nonlocal-destination-use": 67,
+            "reuse_low_mask/not-repeated-in-segment": 33
+          },
+          "profile": "checked",
+          "selected": {},
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 5,
+            "reuse_integer_extend/not-repeated-in-segment": 28,
+            "reuse_low_mask/nonlocal-destination-use": 65,
+            "reuse_low_mask/not-repeated-in-segment": 35
+          },
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "zstd:lib/decompress/zstd_decompress.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 10,
+            "reuse_integer_extend/not-repeated-in-segment": 180,
+            "reuse_low_mask/nonlocal-destination-use": 6,
+            "reuse_low_mask/not-repeated-in-segment": 54
+          },
+          "profile": "checked",
+          "selected": {},
+          "unit": "cjson:cJSON.c"
+        },
+        {
+          "claim": "PRODUCER_TELEMETRY_NOT_PROVED",
+          "declined": {
+            "reuse_integer_extend/nonlocal-destination-use": 9,
+            "reuse_integer_extend/not-repeated-in-segment": 181,
+            "reuse_low_mask/nonlocal-destination-use": 5,
+            "reuse_low_mask/not-repeated-in-segment": 55
+          },
+          "profile": "unchecked",
+          "selected": {},
+          "unit": "cjson:cJSON.c"
+        }
+      ]
+    }
+  ],
+  "tools": {
+    "checker": "7545704c5e73636232b7fc2131cc1e79ba09826e4986d2ba164e88f9aaa894d2",
+    "compiler": "b2d22d083383ea2b1a475b52b45a7823bac0a9dcb0da585b8e7599778877dc0a",
+    "container": "08d0cc13c9d34f8467488980e8b0be02925a10a8df9ad0aa1bded0025f458d43",
+    "steps": "7a056023c91d5df02d27bbbb70ddc517911ac814dbf4124d3f08198f6bd89356"
+  },
+  "size_and_compile_comparisons": [
+    {
+      "variant": "extensions-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.4831750982990701,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "gcc_text": 96,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.6169611458091321,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "gcc_text": 96,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30516,
+      "text": 30508,
+      "saving": 8,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9568214784139751,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.113913525498891,
+      "gcc_text": 14432,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 8
+      }
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 29012,
+      "text": 29004,
+      "saving": 8,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9525902986293652,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.00970066518847,
+      "gcc_text": 14432,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 8
+      }
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28404,
+      "text": 28400,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9819457592701546,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.857142857142857,
+      "gcc_text": 9940,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 4
+      }
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26664,
+      "text": 26660,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0052928955706988,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.682092555331992,
+      "gcc_text": 9940,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 4
+      }
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 124024,
+      "text": 124024,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9869276932798255,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.543560295324036,
+      "gcc_text": 48760,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 121652,
+      "text": 121644,
+      "saving": 8,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9949056363180045,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.4947497949138637,
+      "gcc_text": 48760,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 8
+      }
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33688,
+      "text": 33684,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9905434601772342,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.3243168644769527,
+      "gcc_text": 14492,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 4
+      }
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33440,
+      "text": 33436,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.982216057568235,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.3072039746066797,
+      "gcc_text": 14492,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 4
+      }
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 30228,
+      "text": 30224,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9883784875476952,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.098888888888889,
+      "gcc_text": 14400,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 4
+      }
+    },
+    {
+      "variant": "extensions-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 30116,
+      "text": 30112,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.989133175706059,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.091111111111111,
+      "gcc_text": 14400,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 4
+      }
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0150217484123019,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "gcc_text": 96,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0540124957869463,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "gcc_text": 96,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30184,
+      "text": 30176,
+      "saving": 8,
+      "rodata_delta": 0,
+      "compile_ratio": 0.993469616402836,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.090909090909091,
+      "gcc_text": 14432,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 8
+      }
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 28668,
+      "text": 28660,
+      "saving": 8,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0073279341352517,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.9858647450110865,
+      "gcc_text": 14432,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 8
+      }
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28264,
+      "text": 28260,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9992511640043586,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.8430583501006037,
+      "gcc_text": 9940,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 4
+      }
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26520,
+      "text": 26516,
+      "saving": 4,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9801069377563625,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.667605633802817,
+      "gcc_text": 9940,
+      "vs_t3_combined_saving": null,
+      "category_savings": {
+        "extend_mask": 4
+      }
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 122972,
+      "text": 122972,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9953317416205927,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.5219852337981954,
+      "gcc_text": 48760,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 120592,
+      "text": 120592,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9982961671844999,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.473174733388023,
+      "gcc_text": 48760,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33300,
+      "text": 33300,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.012776731634022,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.297819486613304,
+      "gcc_text": 14492,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33052,
+      "text": 33052,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0125060542850073,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.2807065967430304,
+      "gcc_text": 14492,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 29496,
+      "text": 29496,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9800042866228057,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0483333333333333,
+      "gcc_text": 14400,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "extensions-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 29384,
+      "text": 29384,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.021632653604106,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0405555555555557,
+      "gcc_text": 14400,
+      "vs_t3_combined_saving": null,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.5047041170607757,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "gcc_text": 96,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-a",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 0.6335114184581323,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "gcc_text": 96,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30516,
+      "text": 27148,
+      "saving": 3368,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9764913615338984,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.8810975609756098,
+      "gcc_text": 14432,
+      "vs_t3_combined_saving": 8,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 212,
+        "extend_mask": 8,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 29012,
+      "text": 25644,
+      "saving": 3368,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9650890174815324,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7768847006651884,
+      "gcc_text": 14432,
+      "vs_t3_combined_saving": 8,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 212,
+        "extend_mask": 8,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28404,
+      "text": 26516,
+      "saving": 1888,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9900140230916843,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.667605633802817,
+      "gcc_text": 9940,
+      "vs_t3_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 180,
+        "extend_mask": 4,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26664,
+      "text": 24776,
+      "saving": 1888,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0198165612953303,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.4925553319919516,
+      "gcc_text": 9940,
+      "vs_t3_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 180,
+        "extend_mask": 4,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 124024,
+      "text": 102796,
+      "saving": 21228,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9994073497249166,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.1082034454470877,
+      "gcc_text": 48760,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 20072,
+        "stack_access": 56,
+        "move": 636,
+        "const_materialize": 2124,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 121652,
+      "text": 100432,
+      "saving": 21220,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0056729160714337,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.059721082854799,
+      "gcc_text": 48760,
+      "vs_t3_combined_saving": 8,
+      "category_savings": {
+        "prologue_epilogue": 20072,
+        "stack_access": 56,
+        "move": 636,
+        "const_materialize": 2108,
+        "extend_mask": 8,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33688,
+      "text": 25596,
+      "saving": 8092,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9952784407263464,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7662158432238477,
+      "gcc_text": 14492,
+      "vs_t3_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 848,
+        "extend_mask": 4,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33440,
+      "text": 25348,
+      "saving": 8092,
+      "rodata_delta": 0,
+      "compile_ratio": 0.99559355679457,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7491029533535745,
+      "gcc_text": 14492,
+      "vs_t3_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 848,
+        "extend_mask": 4,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 30228,
+      "text": 25384,
+      "saving": 4844,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0113912572710395,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7627777777777778,
+      "gcc_text": 14400,
+      "vs_t3_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 5256,
+        "move": 44,
+        "const_materialize": 92,
+        "extend_mask": 4,
+        "branch": -552
+      }
+    },
+    {
+      "variant": "combined-a",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 30116,
+      "text": 25272,
+      "saving": 4844,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0061455296228066,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.755,
+      "gcc_text": 14400,
+      "vs_t3_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 5256,
+        "move": 44,
+        "const_materialize": 92,
+        "extend_mask": 4,
+        "branch": -552
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "checked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.1073853027373373,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "gcc_text": 96,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-b",
+      "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c",
+      "profile": "unchecked",
+      "off_text": 128,
+      "text": 128,
+      "saving": 0,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0868553619171994,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.3333333333333333,
+      "gcc_text": 96,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {}
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:deflate.c",
+      "profile": "checked",
+      "off_text": 30184,
+      "text": 26776,
+      "saving": 3408,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0158193934431021,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.855321507760532,
+      "gcc_text": 14432,
+      "vs_t3_combined_saving": 8,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 252,
+        "extend_mask": 8,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:deflate.c",
+      "profile": "unchecked",
+      "off_text": 28668,
+      "text": 25260,
+      "saving": 3408,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0153953010732455,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7502771618625277,
+      "gcc_text": 14432,
+      "vs_t3_combined_saving": 8,
+      "category_savings": {
+        "prologue_epilogue": 3384,
+        "stack_access": 4,
+        "move": 44,
+        "const_materialize": 252,
+        "extend_mask": 8,
+        "branch": -284
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:inflate.c",
+      "profile": "checked",
+      "off_text": 28264,
+      "text": 26372,
+      "saving": 1892,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0209892168097927,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.653118712273642,
+      "gcc_text": 9940,
+      "vs_t3_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 184,
+        "extend_mask": 4,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zlib:inflate.c",
+      "profile": "unchecked",
+      "off_text": 26520,
+      "text": 24628,
+      "saving": 1892,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9980195095132574,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.477665995975855,
+      "gcc_text": 9940,
+      "vs_t3_combined_saving": 4,
+      "category_savings": {
+        "prologue_epilogue": 1356,
+        "stack_access": 96,
+        "move": 400,
+        "const_materialize": 184,
+        "extend_mask": 4,
+        "branch": -148
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "checked",
+      "off_text": 122972,
+      "text": 98720,
+      "saving": 24252,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9916396632919434,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 2.0246103363412633,
+      "gcc_text": 48760,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 20032,
+        "stack_access": 60,
+        "move": 628,
+        "const_materialize": 5192,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/compress/zstd_compress.c",
+      "profile": "unchecked",
+      "off_text": 120592,
+      "text": 96356,
+      "saving": 24236,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9796970258669689,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.9761279737489745,
+      "gcc_text": 48760,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 20032,
+        "stack_access": 60,
+        "move": 628,
+        "const_materialize": 5176,
+        "branch": -1660
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "checked",
+      "off_text": 33300,
+      "text": 24044,
+      "saving": 9256,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0042092587937814,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.6591222743582665,
+      "gcc_text": 14492,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 2016,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "zstd:lib/decompress/zstd_decompress.c",
+      "profile": "unchecked",
+      "off_text": 33052,
+      "text": 23796,
+      "saving": 9256,
+      "rodata_delta": 0,
+      "compile_ratio": 1.0023515862275065,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.6420093844879933,
+      "gcc_text": 14492,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 7848,
+        "stack_access": 12,
+        "move": 148,
+        "const_materialize": 2016,
+        "branch": -768
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "checked",
+      "off_text": 29496,
+      "text": 24704,
+      "saving": 4792,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9722033784548992,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7155555555555555,
+      "gcc_text": 14400,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 5212,
+        "move": 44,
+        "const_materialize": 88,
+        "branch": -552
+      }
+    },
+    {
+      "variant": "combined-b",
+      "unit": "cjson:cJSON.c",
+      "profile": "unchecked",
+      "off_text": 29384,
+      "text": 24592,
+      "saving": 4792,
+      "rodata_delta": 0,
+      "compile_ratio": 0.9855771864516465,
+      "cost_within": true,
+      "size_within": true,
+      "gcc_ratio": 1.7077777777777778,
+      "gcc_text": 14400,
+      "vs_t3_combined_saving": 0,
+      "category_savings": {
+        "prologue_epilogue": 5212,
+        "move": 44,
+        "const_materialize": 88,
+        "branch": -552
+      }
+    }
+  ],
+  "bounds": {
+    "comparisons": 48,
+    "size_within": 48,
+    "cost_within": 48,
+    "max_compile_median_ratio": 1.1073853027373373,
+    "compile_limit": 1.25,
+    "text_growth_limit": 0,
+    "text_plus_rodata_growth_limit": 0,
+    "steps": "All 257 step records and all six IR/chain/bundle bindings per arm equal T3; native selection only.",
+    "sampling": "One frozen cohort, three compile observations, two object builds, no resampling."
+  },
+  "attribution": {
+    "category_summary": ".evidence/codegen/n03d-c3/category-summary.json",
+    "sha256": "7a9bb578c8def75a6ae059f8bace7932f784bbd9ae08dd4fcb48ba7539d586c7",
+    "rows": 72,
+    "unique_objects": 54,
+    "disassembly_retained": false,
+    "c3": "Only extension/mask bytes change in extensions-only versus OFF and in cumulative versus T3. No new frame, move, spill, constant, padding, literal-pool or rodata savings. B unchecked savings in frozen unit order: 0/8/4/0/0/0 bytes.",
+    "denominator": "The old 2.04..2.43 range was per-family, not per-TU. The 1.4 target is evaluated on each of the six units; no cross-family mean.",
+    "claims": "N01 categories are syntactic attribution. C3 is native selection, not verified EqSat gain."
+  },
+  "pattern_verdicts": [
+    {
+      "id": "reuse_integer_extend",
+      "verdict": "FINITE_VALIDATED_NOT_PROVED",
+      "widths": [
+        32,
+        64
+      ],
+      "evidence": "Focused MIR/native/allocator tests, full workspace and the native/TU captures above.",
+      "smt": "No query/proof. N07 E3's pinned undefined-bitvector generator limitation remains; the frozen nine-pattern E3 inventory is not rewritten."
+    },
+    {
+      "id": "reuse_low_extract",
+      "verdict": "FINITE_VALIDATED_NOT_PROVED",
+      "widths": [
+        32,
+        64
+      ],
+      "evidence": "Focused MIR/native/allocator tests, full workspace and the native/TU captures above.",
+      "smt": "No query/proof. N07 E3's pinned undefined-bitvector generator limitation remains; the frozen nine-pattern E3 inventory is not rewritten."
+    },
+    {
+      "id": "reuse_low_mask",
+      "verdict": "FINITE_VALIDATED_NOT_PROVED",
+      "widths": [
+        32,
+        64
+      ],
+      "evidence": "Focused MIR/native/allocator tests, full workspace and the native/TU captures above.",
+      "smt": "No query/proof. N07 E3's pinned undefined-bitvector generator limitation remains; the frozen nine-pattern E3 inventory is not rewritten."
+    }
+  ],
+  "coverage": {
+    "tv_admitted_inputs": 70,
+    "opaque_inputs": 187,
+    "source_bridge": "Legacy integer-mix 1001 C-HIR versus 1002 EvoIR volatile events remains NOT_VALIDATED. No interpreter changed.",
+    "scope": "SIX_SELECTED_TUS_WITH_REFERENCE_DEPENDENCIES_NOT_FULL_APPLICATIONS",
+    "kernel": "NOT_RUN",
+    "native_latency": "NOT_RUN",
+    "new_optimization_defaults": "OFF",
+    "proof_rejections": 0,
+    "bundle_failures": 0,
+    "correctness_executions": 72,
+    "identical_object_twins": 72
+  },
+  "retention": {
+    "record": ".evidence/codegen/n03d-c3/retirement-20261003.json",
+    "sha256": "b8e31d86ea8496279173aab71d36d8df16565013504a5d257eac61e661edd12d",
+    "retired_objects": 792,
+    "retired_logical_bytes": 1832336,
+    "retired_allocated_bytes": 4440064,
+    "kept": "C3 OFF/cumulative and preceding T3 baselines, native OFF baselines, all manifests/receipts/logs/category summaries/minimal reproducers. No sealed fixture, open unique evidence, source or Lean cache removed.",
+    "history": ".evidence/codegen-trend/n03d-extension-reuse.jsonl",
+    "history_sha256": "734829f083ef97a2d6d36475d7bbebeed6b001780a05fbe444cccef0fef8d66a",
+    "disk": {
+      "record": ".evidence/codegen/n03d-c3/disk-20261003.txt",
+      "cache_baseline_kib": 24884136,
+      "cache_final_kib": 25195312,
+      "cache_delta_bytes": 318644224,
+      "new_owned_evidence_bytes": 6725632,
+      "scoped_net_bytes": 325369856,
+      "free_kib_at_check": 33824720,
+      "scope": "Cache plus final retained C3 evidence; retired owned intermediates already excluded. Tracked files/Git and unrelated filesystem activity excluded. No previous-slice payload was removed or charged twice."
+    }
+  },
+  "package_disposition": {
+    "status": "BOUNDED_C3_SLICE_CLOSED_SELECTION_TRACK_OPEN",
+    "c1": "Closed opt-in.",
+    "c2": "Frozen compile-bound miss (1.7977x), not admitted; not resampled or included in cumulative options.",
+    "c3": "Closed opt-in, small measured benefit. All five library TUs still exceed 1.4x GCC-O2.",
+    "existing_control_selection": [
+      "crates/evocc-mir/tests/compared_value_csel.rs",
+      "crates/evocc-mir/tests/constant_compare_selection.rs",
+      "crates/evocc-mir/tests/checked_flag_branch.rs",
+      "crates/evocc-mir/tests/conditional_fallthrough.rs"
+    ],
+    "unimplemented": "No general conditional-compare MIR instruction or CFG if-conversion was added. Existing compared-value CSEL, immediate/checked branch fusion and fallthrough remain baseline, not new gains. General CCMP/control restructuring needs a separately specified flags/effects and admission design or a separately bounded emission rule; it is not claimed implemented or proved. No broader selection redesign in this slice.",
+    "remaining": "C2's unexamined compare/control opportunities still need a bounded measured disposition. C3 does not close them merely because its own tests passed."
+  },
+  "claim_ceiling": "Bounded opt-in native selection with finite correctness tests and small per-TU size gains. Not universal backend correctness, SMT proof, a general Darwin C frontend ABI bridge, default/release admission, full applications, kernel/latency acceptance, complete instruction selection, or achievement of the 1.4 product target."
+}

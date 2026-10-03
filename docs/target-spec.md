@@ -15,6 +15,9 @@ idioms. C3 adds three exact block-local repeated-extension families behind
 requirements and effect barriers. These are selection policies, not new machine
 instructions, range inference, or additions to an EqSat registry. Their finite
 validation is separate from N07's encoding/model/SMT steps.
+C3 is [closed opt-in with finite evidence](notebook/codegen-extension-reuse-20261003.md):
+three new pattern verdicts are finite-tested, not SMT-proved; its six-TU
+increment is small and does not close the remaining compare/control scope.
 N07 E1's encoding-fact migration is closed under its
 [frozen plan](../tests/contracts/codegen-n07-encodings-20261003.json):
 [full workspace and byte-identity evidence](notebook/codegen-encodings-20261003.md)

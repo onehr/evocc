@@ -2276,8 +2276,9 @@ Reopening any of them needs a new owner decision after the N03 slices land.
 
 Authority: [codegen quality plan](docs/codegen-quality-plan.md) and the
 [internal target description contract](docs/target-spec.md). The frozen S5
-comparison puts unchecked EvoCC object text at 2.04–2.43× GCC-14 `-O2` on the
-six subject units, while verified rewrites and the certified guard slice move
+comparison puts unchecked EvoCC object text at 2.04–2.43× GCC-14 `-O2` by
+library family (not per TU; N01 records 1.986–2.668× for the five library TUs),
+while verified rewrites and the certified guard slice move
 about 1–2.5%. This track closes that gap with standard passes under
 translation validation and builds the tooling around the compiler. Size under
 the S1 contract is the objective; no latency, parity or verified-optimization
@@ -2477,6 +2478,24 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     Exact completed object payloads retired after hash/handle checks;
     manifests, receipts and logs retained. Continue N03c/N07 independently;
     remaining select/compare opportunities require their own measured scope.
+
+    C3 is closed opt-in: [plan](tests/contracts/codegen-n03d-extensions-20261003.json),
+    [result](docs/notebook/codegen-extension-reuse-20261003.md),
+    [receipt](tests/contracts/codegen-n03d-c3-20261003-receipt.json), subject
+    `93847196`. Exact local repeated Extend/Bfx/low-mask reuse; no opcode,
+    interpreter, ABI, allocator or registry change. Full workspace
+    3,051 PASS / 0 FAIL / 5 existing ignored; 16 focused Rust and 94 Python
+    PASS. Both 384-case native corpora ON/OFF and 72 selected-TU executions
+    pass; zero proof/bundle failures. All 768 OFF hashes match the retained
+    baseline, and ON changes no corpus object. B unchecked savings are
+    0/8/4/0/0/0 extension/mask bytes. All 48 size/cost comparisons meet bounds,
+    maximum compile ratio 1.107x. Cumulative library ratios remain
+    1.642–2.478; all five miss 1.4x. Defaults OFF, C2 excluded from cumulative
+    options; 70 admitted/187 opaque and source-bridge limitations unchanged.
+    Invalid Linux-to-Darwin signed-narrow probe retained, not counted PASS.
+    Retired 792 idle intermediate objects; current baselines and records kept.
+    Scoped disk net +325,369,856 bytes; about 32 GiB free at closure.
+    Remaining compare/control work still needs a bounded measured disposition.
 
   - [x] **N03e — EvoIR mid-level passes, bounded first slice** — `DONE_NEGATIVE`, P3.
     GVN/CSE, SCCP, dead-code elimination and simple loop-invariant motion on
