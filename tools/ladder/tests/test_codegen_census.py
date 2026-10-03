@@ -127,5 +127,90 @@ class CensusTests(unittest.TestCase):
         self.assertEqual(r['category_bytes']['stack_access'], 8)
 
 
+class ControlWindowTests(unittest.TestCase):
+    """Syntactic census controls, not an instruction-encoding oracle."""
+
+    def count(self, instructions, **layout):
+        rows = [(0xd503201f, text) for text in instructions]
+        return census.control_windows(
+            object_bytes([w for w, _ in rows], **layout), disassembly(rows))
+
+    def test_boolean_branches(self):
+        for branch in ('cbz w4, 0xc', 'cbnz w4, 0xc',
+                       'tbz w4, #0, 0xc', 'tbnz w4, #0x0, 0xc'):
+            result = self.count(['cmp x0, x1', 'cset w4, eq', branch, 'ret'])
+            row = result['patterns']['boolean_branch']
+            self.assertEqual((row['raw'], row['selected']), (1, 1))
+
+    def test_boolean_retests(self):
+        for consumer in ('cset w5, eq', 'csel x5, x0, x1, ne', 'b.eq 0x10'):
+            result = self.count(['cmp x0, x1', 'cset w4, lt',
+                                 'cmp w4, #0x0', consumer, 'ret'])
+            row = result['patterns']['boolean_retest']
+            self.assertEqual((row['raw'], row['selected']), (1, 1))
+
+    def test_compare_conjunctions(self):
+        for op in ('and', 'orr'):
+            for inputs in ('w4, w5', 'w5, w4'):
+                result = self.count(['cmp x0, x1', 'cset w4, lt',
+                                     'tst x2, #0xff', 'cset w5, eq',
+                                     f'{op} w6, {inputs}', 'ret'])
+                row = result['patterns']['compare_conjunction']
+                self.assertEqual((row['raw'], row['selected']), (1, 1))
+
+    def test_register_width_bit_and_constant_negatives(self):
+        for branch in ('cbz x4, 0xc', 'cbz w3, 0xc', 'tbz w4, #1, 0xc'):
+            result = self.count(['cmp x0, x1', 'cset w4, eq', branch, 'ret'])
+            self.assertEqual(result['patterns']['boolean_branch']['selected'], 0)
+        for compare, consumer in [('cmp x4, #0', 'cset w5, eq'),
+                                  ('cmp w4, #1', 'cset w5, eq'),
+                                  ('cmp w4, #0', 'cset w5, lt')]:
+            result = self.count(['cmp x0, x1', 'cset w4, eq',
+                                 compare, consumer, 'ret'])
+            self.assertEqual(result['patterns']['boolean_retest']['selected'], 0)
+        for combine in ('and w6, w4, w5, lsl #1', 'orr x6, x4, x5',
+                        'and w6, w4, w4', 'and w6, w4, w7'):
+            result = self.count(['cmp x0, x1', 'cset w4, eq', 'cmp x2, x3',
+                                 'cset w5, eq', combine, 'ret'])
+            self.assertEqual(result['patterns']['compare_conjunction']['selected'], 0)
+
+    def test_no_floating_or_nonadjacent_match(self):
+        for instructions in [
+            ['fcmp d0, d1', 'cset w4, eq', 'cbz w4, 0xc', 'ret'],
+            ['cmp x0, x1', 'cset w4, eq', 'mov w5, w4', 'cbz w4, 0x10', 'ret'],
+        ]:
+            self.assertEqual(sum(r['selected'] for r in
+                                 self.count(instructions)['patterns'].values()), 0)
+
+    def test_interior_target_and_function_boundary_decline(self):
+        instructions = ['cmp x0, x1', 'cset w4, eq', 'cbz w4, 0x10',
+                        'b 0x4', 'ret']
+        row = self.count(instructions)['patterns']['boolean_branch']
+        self.assertEqual(row['declined'], {'interior_branch_target': 1})
+        row = self.count(instructions[:3], functions=[('f', 0, 8), ('g', 8, 4)])[
+            'patterns']['boolean_branch']
+        self.assertEqual(row['declined'], {'function_boundary': 1})
+
+    def test_guard_and_relocation_decline(self):
+        instructions = ['cmp x0, x1', 'cset w4, eq', 'cbz w4, 0x10',
+                        'ret', 'brk #0xbb9']
+        row = self.count(instructions)['patterns']['boolean_branch']
+        self.assertEqual(row['declined'], {'guard_site': 1})
+        rows = [(0xd503201f, text) for text in instructions[:4]]
+        result = census.control_windows(object_bytes([w for w, _ in rows]),
+                                        disassembly(rows) + '\n8: R_AARCH64_CONDBR19 external\n')
+        self.assertEqual(result['patterns']['boolean_branch']['declined'], {'relocation': 1})
+
+    def test_examples_are_bounded_and_counts_keep_all_sites(self):
+        instructions = []
+        for i in range(12):
+            instructions += ['cmp x0, x1', 'cset w4, eq', f'cbz w4, 0x{12*(i+1):x}']
+        instructions.append('ret')
+        result = self.count(instructions)
+        row = result['patterns']['boolean_branch']
+        self.assertEqual((row['raw'], row['selected']), (12, 12))
+        self.assertEqual(len(row['examples']), 4)
+
+
 if __name__ == '__main__':
     unittest.main()
