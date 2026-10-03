@@ -121,12 +121,52 @@ theorem checked_abs_expression {n : Nat} (x : BitVec n) :
     irAbs x = sourceAbs x := by
   simp [irAbs, sourceAbs, checked_neg_lowering]
 
+/-- The target's signed narrowing retains the low destination bits. This is
+the integer conversion boundary, not a floating or host-language cast. -/
+theorem signed_narrow_representation {w n : Nat} (x : BitVec w) (h : n ≤ w) :
+    BitVec.ofInt n x.toInt = BitVec.truncate n x := by
+  exact BitVec.signExtend_eq_setWidth_of_le x h
+
+/-- The unchanged Doom expression's mathematical signed conversions and right
+shift. As with `sourceAbs`, this is not yet its complete function/CFG semantics. -/
+def sourceFixedMul (x y : BitVec 32) : CheckedValue 32 := do
+  let product ← sourceArithmetic .mul (BitVec.ofInt 64 x.toInt) (BitVec.ofInt 64 y.toInt)
+  return BitVec.ofInt 32 (product.toInt >>> 16)
+
+def irFixedMul (x y : BitVec 32) : CheckedValue 32 := do
+  let a := denoteOp (.cast .sext 32 64) x
+  let b := denoteOp (.cast .sext 32 64) y
+  let product ← irArithmetic .mul a b
+  if denoteOp (.count true 64 32) (product, 16#32) = 1#1 then
+    return denoteOp (.cast .trunc 64 32) (denoteOp (.shift .ashr 64 32) (product, 16#32))
+  else .error 3005
+
+theorem checked_fixedmul_expression (x y : BitVec 32) :
+    irFixedMul x y = sourceFixedMul x y := by
+  have count (product : BitVec 64) :
+      denoteOp (.count true 64 32) (product, 16#32) = 1#1 := by rfl
+  have narrowed (product : BitVec 64) :
+      BitVec.ofInt 32 (product.toInt >>> 16) =
+        denoteOp (.cast .trunc 64 32) (denoteOp (.shift .ashr 64 32) (product, 16#32)) := by
+    change BitVec.ofInt 32 (product.toInt >>> 16) = BitVec.truncate 32 (product.sshiftRight 16)
+    rw [← BitVec.toInt_sshiftRight]
+    exact signed_narrow_representation _ (by decide)
+  simp only [irFixedMul, sourceFixedMul, checked_arithmetic_lowering, count, ↓reduceIte]
+  change (sourceArithmetic .mul (BitVec.ofInt 64 x.toInt) (BitVec.ofInt 64 y.toInt) >>= fun p =>
+      .ok (denoteOp (.cast .trunc 64 32) (denoteOp (.shift .ashr 64 32) (p, 16#32)))) = _
+  cases sourceArithmetic .mul (BitVec.ofInt 64 x.toInt) (BitVec.ofInt 64 y.toInt) with
+  | error _ => rfl
+  | ok product => exact congrArg Except.ok (narrowed product).symm
+
 -- Kernel-reduced boundary tests: deleting the obligation changes behavior.
 example : sourceAbs (0x80000000#32) = .error 3004 := by rfl
 example : sourceAbs (0x8000000000000000#64) = .error 3004 := by rfl
 example : sourceAbs (0xfffffff7#32) = .ok (9#32) := by rfl
 example : sourceArithmetic .add (0x7fffffff#32) (1#32) = .error 3004 := by rfl
 example : sourceArithmetic .mul (0x100000000#64) (0x100000000#64) = .error 3004 := by rfl
+example : sourceFixedMul (98304#32) (131072#32) = .ok (196608#32) := by rfl
+example : sourceFixedMul (0xfffe8000#32) (131072#32) = .ok (0xfffd0000#32) := by rfl
+example : sourceFixedMul (0x80000000#32) (0x80000000#32) = .ok (0#32) := by rfl
 example : checkArithmeticFragment .add ⟨.sub, .add, 3004⟩ = false := by decide
 example : checkArithmeticFragment .add ⟨.add, .mul, 3004⟩ = false := by decide
 example : checkArithmeticFragment .add ⟨.add, .add, 3002⟩ = false := by decide

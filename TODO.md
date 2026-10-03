@@ -2310,8 +2310,11 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   C-HIR inventory is implemented; the existing pipeline has exercised 15
   spill/reload pairs and 24 incoming stack arguments. The pilot explicitly
   disables standard-name builtin substitution so it calls the original `abs`.
-  Nine focused tests pass, including the final original-call population;
-  full gates are pending. This is not a compilation proof.
+  Fourteen focused tests pass, including the original-call population and
+  complete source-input export. All five selected entry exports decode through
+  the independent Lean grammar reader. Full Rust gate is pending after a
+  disk-recovery interruption; the clean primitive Lean receipt is committed.
+  This is not a compilation proof.
 
 - [ ] **V01 — Prove the source-to-EvoIR result checker** — `OPEN`, P1.
   After V00, define the admitted Core C-HIR and EvoIR small-step semantics in the
@@ -2321,11 +2324,14 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   volatile-initializer mismatch as an out-of-profile regression/refusal, not an
   implied fix. Exit requires checker soundness, not interpreter agreement alone.
   The first primitive bridge is `lean/EvoIR/Core/CheckedInt.lean`: signed
-  add/sub/mul/neg and the original `abs` expression preserve both value bits
-  and overflow diagnostics. Four audited theorem targets are kernel-only,
+  add/sub/mul/neg and the original `abs` / `FixedMul` expressions preserve
+  value bits, signed conversion/shift behavior and overflow diagnostics.
+  Five audited theorem targets are kernel-only,
   with no native axioms. The structural fragment check does not cover
-  operand bindings or the surrounding CFG. Typed export, small-step control,
-  calls, local storage and actual whole-function result checking remain open.
+  operand bindings or the surrounding CFG. Complete typed-tree export and an
+  independent grammar reader now exist, with a `DECODED_NOT_VERIFIED` result.
+  Independent well-formedness, small-step control, calls, local storage and
+  actual whole-function result checking remain open.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

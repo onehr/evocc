@@ -195,6 +195,8 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.irNeg",
     "EvoIR.Core.sourceAbs",
     "EvoIR.Core.irAbs",
+    "EvoIR.Core.sourceFixedMul",
+    "EvoIR.Core.irFixedMul",
     "EvoIR.Core.checkArithmeticFragment",
     "EvoIR.Core.runArithmeticFragment",
     "EvoIR.denoteOp",
@@ -230,6 +232,10 @@ CORE_PRIMITIVE_TARGETS = [
     (
         "EvoIR.Core.checked_abs_expression",
         "∀ {n : Nat} (x : BitVec n), EvoIR.Core.irAbs x = EvoIR.Core.sourceAbs x",
+    ),
+    (
+        "EvoIR.Core.checked_fixedmul_expression",
+        "∀ (x y : BitVec 32), EvoIR.Core.irFixedMul x y = EvoIR.Core.sourceFixedMul x y",
     ),
     (
         "EvoIR.Core.arithmetic_fragment_checker_sound",
@@ -781,8 +787,8 @@ def main(argv: list[str]) -> int:
         },
         "evaluator": evaluator,
         "compilation_core_primitives": {
-            "claim": "Checked arithmetic primitive correspondence only; no CFG, "
-                     "source export, whole-function checker or compilation theorem yet",
+            "claim": "Checked arithmetic primitive correspondence only; no proof of source "
+                     "export, CFG, whole-function checker or compilation yet",
             "targets": core_primitives,
         },
         "trust": TRUST,

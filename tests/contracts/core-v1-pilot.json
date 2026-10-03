@@ -58,8 +58,19 @@
   ],
   "tests": [
     "crates/evocc-parser/tests/core_verification_profile.rs",
-    "crates/evocc/tests/core_verification_pilot.rs"
+    "crates/evocc/tests/core_verification_pilot.rs",
+    "crates/evocc/tests/core_source_export.rs"
   ],
+  "source_interface_results": {
+    "exporter": "crates/evocc/src/core_export.rs",
+    "reader": "lean/EvoIR/Core/Source.lean",
+    "focused_command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test -p evocc-parser --test core_verification_profile -p evocc --test core_verification_pilot --test core_source_export --offline -- --nocapture",
+    "focused_passed": 14,
+    "focused_failed": 0,
+    "reader_selftest_passed": 10,
+    "paired_exports_decoded": ["FixedMul", "abs", "loop_join", "short_circuit", "pressure (including wide)"],
+    "claim_ceiling": "Complete source-tree export and independent grammar decoding only; not independent well-formedness, execution equivalence or a compilation proof."
+  },
   "focused_results": {
     "command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test -p evocc-parser --test core_verification_profile -p evocc --test core_verification_pilot --offline -- --nocapture",
     "passed": 9,
@@ -76,6 +87,7 @@
   },
   "verification_state": {
     "source_inventory": "IMPLEMENTED_NOT_A_PROOF",
+    "source_export_and_grammar_reader": "IMPLEMENTED_DECODED_NOT_VERIFIED",
     "existing_pipeline_population": "FOCUSED_PASS_FULL_GATE_PENDING",
     "V01_source_to_evoir": "PRIMITIVE_LEMMAS_ONLY_NOT_A_FUNCTION_CHECKER",
     "V02_selection_and_copies": "NOT_IMPLEMENTED",

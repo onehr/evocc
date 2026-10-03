@@ -189,8 +189,44 @@ assignment operators, conditional arms, call arguments and initializer plans
 remain explicit. Literals carry source integer type and exact width-sized
 hexadecimal bits, never host floating-point or unbounded JSON numbers.
 Statements retain lexical scopes and original order. Locations are diagnostic
-metadata, not trusted semantic facts. No exporter exists yet; adding it without
-the independent reader/type checks does not close V01.
+metadata, not trusted semantic facts. The exporter is
+`crates/evocc/src/core_export.rs`; the independent grammar reader and source AST
+are `lean/EvoIR/Core/Source.lean`. Decoding is **not** well-formedness, a source
+execution semantics, or a compilation proof; those checks still block V01.
+
+The dependency-free wire format is JSON with fixed-arity tagged arrays:
+
+```text
+["core-v1", "aarch64-unknown-linux-gnu", "checked", entry_ids, functions]
+["function", symbol, name, qualified_return, internal, parameters, body]
+["parameter", symbol, qualified_type, storage]
+qualified_type = [int_type, is_const]
+int_type = "int" | "uint" | "long" | "ulong" | "long_long" | "ulong_long"
+```
+
+Every expression starts with its constructor tag and unqualified result type;
+the complete operands follow in source order. Literal bits have exactly 8 or
+16 lowercase hexadecimal digits. Symbol IDs are unsigned 32-bit integers.
+Assignment/update nodes additionally retain the place ID/type and the original
+target expression. `argument`, `return` and `store_scalar` nodes record their
+destination type rather than silently applying a conversion. A `compound`
+contains the ordered declaration/statement list; absent optional syntax is
+JSON `null`, not an invented expression. The reader rejects unknown tags/types,
+extra/missing fields, noncanonical literal bits and excessive syntactic nesting.
+Its nesting bound is an input-reader resource limit, not execution fuel.
+
+The existing driver and Lean evaluator expose this **input-only** boundary:
+
+```sh
+target/frontend/debug/evocc --emit=core-c-hir --core-entry=abs -O0 -fno-builtin \
+  tests/fixtures/verification/musl-abs.c > /tmp/musl-abs.core.json
+(cd lean && lake exe evoir-sem --read-core /tmp/musl-abs.core.json)
+```
+
+The reader prints `DECODED_NOT_VERIFIED`. Export refuses an unsupported selected
+closure before publishing any tree, checks every relevant prototype declaration,
+and does not modify ordinary compilation defaults or emit a verified artifact.
+Passing this command is not the V01 whole-function checker gate.
 
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and

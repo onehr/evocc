@@ -1,5 +1,6 @@
 import Lean.Data.Json
 import EvoIR.Registry
+import EvoIR.Core.Source
 
 /-!
 # The executable evaluator
@@ -266,11 +267,21 @@ def selfTest : IO UInt32 := do
 /-! ## Entry point -/
 
 def usage : String :=
-  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry"
+  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json>"
 
 def run (args : List String) : IO UInt32 := do
   match args with
-  | ["--selftest"] => selfTest
+  | ["--selftest"] => do
+      let arithmetic ← selfTest
+      let source ← EvoIR.Core.Source.readerSelfTest
+      return if arithmetic == 0 && source == 0 then 0 else 1
+  | ["--read-core", input] => do
+      match EvoIR.Core.Source.readProgram (← IO.FS.readFile input) with
+      | .error message => IO.eprintln message; return 2
+      | .ok program =>
+        IO.println s!"DECODED_NOT_VERIFIED entries={program.entries.length} functions={program.functions.length}"
+        IO.println (reprStr program)
+        return 0
   | ["--registry"] => do
       for r in registry do IO.println r.render
       pure 0

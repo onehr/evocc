@@ -30,6 +30,7 @@ use evocc_mir::{compile_module_with_options, NativeStop, RelocationModel, Target
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
+mod core_export;
 mod diagnostics;
 mod dwarf;
 
@@ -39,6 +40,7 @@ enum DriverMode {
     ParseOnly,
     InterpretCHir,
     EmitCHir,
+    EmitCoreCHir,
     EmitEvoIr,
     EmitAsm,
     InterpretEvoIr,
@@ -50,6 +52,7 @@ enum ParsedAction {
     Validate,
     InterpretCHir,
     EmitCHir,
+    EmitCoreCHir,
     EmitEvoIr,
     EmitAsm,
     InterpretEvoIr,
@@ -120,6 +123,7 @@ struct DriverOptions {
     macro_prefix_maps: Vec<(String, String)>,
     macro_actions: Vec<MacroAction>,
     standard_includes: bool,
+    core_entries: Vec<String>,
     optimize_scalar_evoir: bool,
     opt_passes: Vec<String>,
     pass_report: Option<std::path::PathBuf>,
@@ -288,6 +292,7 @@ fn main() -> ExitCode {
         eprintln!("       evocc --parse-only [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-c-hir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --emit=evoir [--target={SUPPORTED_TARGET}] <file>");
+        eprintln!("       evocc --emit=core-c-hir --core-entry=NAME -O0 -fno-builtin <file> (source input only, not a proof)");
         eprintln!("       evocc --emit=asm [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --check [--error-format=text|json] <file>");
@@ -342,6 +347,7 @@ fn main() -> ExitCode {
         DriverMode::ParseOnly => run_parsed(&options, ParsedAction::Validate),
         DriverMode::InterpretCHir => run_parsed(&options, ParsedAction::InterpretCHir),
         DriverMode::EmitCHir => run_parsed(&options, ParsedAction::EmitCHir),
+        DriverMode::EmitCoreCHir => run_parsed(&options, ParsedAction::EmitCoreCHir),
         DriverMode::EmitEvoIr => run_parsed(&options, ParsedAction::EmitEvoIr),
         DriverMode::EmitAsm => run_parsed(&options, ParsedAction::EmitAsm),
         DriverMode::InterpretEvoIr => run_parsed(&options, ParsedAction::InterpretEvoIr),
@@ -360,6 +366,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut macro_prefix_maps = Vec::new();
     let mut macro_actions = Vec::new();
     let mut standard_includes = true;
+    let mut core_entries = Vec::new();
     let mut optimize_scalar_evoir = false;
     let mut opt_passes = Vec::new();
     let mut pass_report = None;
@@ -405,6 +412,16 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "--parse-only" => set_mode(&mut mode, DriverMode::ParseOnly)?,
             "--interpret-c-hir" => set_mode(&mut mode, DriverMode::InterpretCHir)?,
             "--emit=c-hir" => set_mode(&mut mode, DriverMode::EmitCHir)?,
+            "--emit=core-c-hir" => set_mode(&mut mode, DriverMode::EmitCoreCHir)?,
+            _ if arg.starts_with("--core-entry=") => {
+                let name = arg.strip_prefix("--core-entry=").unwrap();
+                if name.is_empty() || core_entries.iter().any(|entry| entry == name) {
+                    return Err(
+                        "--core-entry requires a nonempty, nonduplicate function name".into(),
+                    );
+                }
+                core_entries.push(name.to_owned());
+            }
             "--emit=evoir" => set_mode(&mut mode, DriverMode::EmitEvoIr)?,
             "--emit=asm" => set_mode(&mut mode, DriverMode::EmitAsm)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
@@ -754,6 +771,13 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, --emit=asm, or --interpret-evoir is required"
                 .to_string()
         })?;
+    if mode == DriverMode::EmitCoreCHir {
+        if core_entries.is_empty() || optimization != 0 || standard_builtins {
+            return Err("Core C-HIR export requires --core-entry=NAME, -O0 and -fno-builtin; it is not a compilation proof".into());
+        }
+    } else if !core_entries.is_empty() {
+        return Err("--core-entry requires --emit=core-c-hir".into());
+    }
     if optimize_scalar_evoir
         && !matches!(
             mode,
@@ -830,6 +854,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         macro_prefix_maps,
         macro_actions,
         standard_includes,
+        core_entries,
         optimize_scalar_evoir,
         opt_passes,
         pass_report,
@@ -1370,6 +1395,26 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         ParsedAction::Validate => ExitCode::SUCCESS,
         ParsedAction::InterpretCHir => interpret_chir(options, &pp, &unit),
         ParsedAction::EmitCHir => emit_chir(&unit),
+        ParsedAction::EmitCoreCHir => {
+            let entries = options
+                .core_entries
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            match core_export::export_core(&unit, &options.target_layout(), &entries) {
+                Ok(text) => {
+                    print!("{text}");
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    options.error_format.usage(&format!(
+                        "core-v1 source export refused: {:?}; no compilation proof was attempted",
+                        error.reason
+                    ));
+                    ExitCode::from(1)
+                }
+            }
+        }
         ParsedAction::EmitEvoIr | ParsedAction::EmitAsm | ParsedAction::InterpretEvoIr => {
             let target = options.target_layout();
             match evocc_lower::lower_unit_with_source(
