@@ -1,0 +1,341 @@
+{
+  "schema": "evocc.codegen.result.v1",
+  "package": "N03d",
+  "slice": "C4",
+  "date": "2026-10-03",
+  "status": "CLOSED_POSITIVE_PREFLIGHT",
+  "plan": "tests/contracts/codegen-n03d-control-20261003.json",
+  "plan_commit": "757c92ea",
+  "red_commit": "14007276",
+  "implementation_commit": "2ce2385c6663094e569e4f5dd2cd239a115d83f9",
+  "census": {
+    "path": ".evidence/codegen/n03d-c4/census-20261003.json",
+    "sha256": "d7ddc887c6f09cb7100ad044af93a98f12fde4fb959b69fe9e6eec1e82259d5f",
+    "rows": 48,
+    "unique_decoded_objects": 41,
+    "decoder": {
+      "path": "/opt/homebrew/opt/llvm/bin/llvm-objdump",
+      "sha256": "a4498b0883383a2653530a8575b53c3058dfbfd9aeb36e9d0e77df1c77fde2f6"
+    },
+    "input_captures": [
+      {
+        "arm": "off-a",
+        "path": ".evidence/codegen-trend/measure-_gqcehz5/receipt.json",
+        "sha256": "07a8aeb6a57257c720db2172ce5de62141415b800aaa173664aeaa82e68fed5c"
+      },
+      {
+        "arm": "off-b",
+        "path": ".evidence/codegen-trend/measure-k_8j0hje/receipt.json",
+        "sha256": "7417b6ca7d325770573362b7c0fb233db34de574e0599d6a2f84d1895d8e896e"
+      },
+      {
+        "arm": "combined-a",
+        "path": ".evidence/codegen-trend/measure-jcqky4k2/receipt.json",
+        "sha256": "07b81803faa28043f5de6a7553d04f7f5d5ec6e409d0813a8b1ab1bf93654f47"
+      },
+      {
+        "arm": "combined-b",
+        "path": ".evidence/codegen-trend/measure-87owqyg8/receipt.json",
+        "sha256": "2c743e76c3d7036065f2e6a775a4301bb3aa6753c98bd85ea74d936418c1a073"
+      }
+    ],
+    "method": "Existing N01/S1 layout, decoder and partition; frozen straight-line syntactic windows. No whole disassembly retained.",
+    "candidates_are_not_transforms": true,
+    "records": [
+      {"arm":"off-a","unit":"p0:tests/fixtures/eqsat-performance/integer-mix.c","profile":"checked","object_sha256":"d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363","text_bytes":128,"compare_select_bytes":8,"branch_bytes":16,"windows":{"boolean_branch":{"raw":0,"syntactic_candidates":0,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-a","unit":"p0:tests/fixtures/eqsat-performance/integer-mix.c","profile":"unchecked","object_sha256":"d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363","text_bytes":128,"compare_select_bytes":8,"branch_bytes":16,"windows":{"boolean_branch":{"raw":0,"syntactic_candidates":0,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-a","unit":"zlib:deflate.c","profile":"checked","object_sha256":"e8e76d5ece558ba7516f74d1bdd3ae901698fb507041306e8ac616b98d14cbba","text_bytes":30516,"compare_select_bytes":2464,"branch_bytes":4308,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-a","unit":"zlib:deflate.c","profile":"unchecked","object_sha256":"df57c1c673c9626811ca2d45955457762ba1992df61597835befc89de7cbafd0","text_bytes":29012,"compare_select_bytes":2252,"branch_bytes":3388,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-a","unit":"zlib:inflate.c","profile":"checked","object_sha256":"3bc3707c469e6d289d08fded93db74abfa3dcc1e5161dbe8b138205491324a59","text_bytes":28404,"compare_select_bytes":1864,"branch_bytes":4876,"windows":{"boolean_branch":{"raw":15,"syntactic_candidates":15,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-a","unit":"zlib:inflate.c","profile":"unchecked","object_sha256":"494b58af2ff1e5e6f35c9c3b1155d2fd2d03147182e74a4acdb538df8c7d6b71","text_bytes":26664,"compare_select_bytes":1528,"branch_bytes":3712,"windows":{"boolean_branch":{"raw":15,"syntactic_candidates":15,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-a","unit":"zstd:lib/compress/zstd_compress.c","profile":"checked","object_sha256":"e35ee3b2be14571f86abcddb2e001a4cf556c7a04f4aafb7f77ad26d33fa3a89","text_bytes":124024,"compare_select_bytes":10452,"branch_bytes":13208,"windows":{"boolean_branch":{"raw":72,"syntactic_candidates":72,"declined":{}},"boolean_retest":{"raw":24,"syntactic_candidates":0,"declined":{"register_or_shape":24}},"compare_conjunction":{"raw":24,"syntactic_candidates":22,"declined":{"register_or_shape":2}}}},
+      {"arm":"off-a","unit":"zstd:lib/compress/zstd_compress.c","profile":"unchecked","object_sha256":"34e9ecbab8d549431482bdcbc6e2c931af6a4b7a1adf941a0bc50bdabbaba2d5","text_bytes":121652,"compare_select_bytes":9964,"branch_bytes":12120,"windows":{"boolean_branch":{"raw":72,"syntactic_candidates":72,"declined":{}},"boolean_retest":{"raw":24,"syntactic_candidates":0,"declined":{"register_or_shape":24}},"compare_conjunction":{"raw":24,"syntactic_candidates":22,"declined":{"register_or_shape":2}}}},
+      {"arm":"off-a","unit":"zstd:lib/decompress/zstd_decompress.c","profile":"checked","object_sha256":"d53c80515265b8ddafe774a42195a1551e8598824985b6f1d717ae2f832cac83","text_bytes":33688,"compare_select_bytes":2556,"branch_bytes":3020,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-a","unit":"zstd:lib/decompress/zstd_decompress.c","profile":"unchecked","object_sha256":"3bbf0c403b52e166baab83f4ba0b40af46dbfa372a2b1a5eb1398f63901036f6","text_bytes":33440,"compare_select_bytes":2516,"branch_bytes":2924,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-a","unit":"cjson:cJSON.c","profile":"checked","object_sha256":"4d8895319f377e770029f8044ac53309375e397acc9e4fcc24607eec75160865","text_bytes":30228,"compare_select_bytes":2796,"branch_bytes":4016,"windows":{"boolean_branch":{"raw":2,"syntactic_candidates":2,"declined":{}},"boolean_retest":{"raw":3,"syntactic_candidates":0,"declined":{"register_or_shape":3}},"compare_conjunction":{"raw":3,"syntactic_candidates":3,"declined":{}}}},
+      {"arm":"off-a","unit":"cjson:cJSON.c","profile":"unchecked","object_sha256":"6c7ef69e61a8c1dad77c0a0a28ab6e22a7d239847dffc13717156abf0422812b","text_bytes":30116,"compare_select_bytes":2788,"branch_bytes":3984,"windows":{"boolean_branch":{"raw":2,"syntactic_candidates":2,"declined":{}},"boolean_retest":{"raw":3,"syntactic_candidates":0,"declined":{"register_or_shape":3}},"compare_conjunction":{"raw":3,"syntactic_candidates":3,"declined":{}}}},
+      {"arm":"off-b","unit":"p0:tests/fixtures/eqsat-performance/integer-mix.c","profile":"checked","object_sha256":"d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363","text_bytes":128,"compare_select_bytes":8,"branch_bytes":16,"windows":{"boolean_branch":{"raw":0,"syntactic_candidates":0,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-b","unit":"p0:tests/fixtures/eqsat-performance/integer-mix.c","profile":"unchecked","object_sha256":"d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363","text_bytes":128,"compare_select_bytes":8,"branch_bytes":16,"windows":{"boolean_branch":{"raw":0,"syntactic_candidates":0,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-b","unit":"zlib:deflate.c","profile":"checked","object_sha256":"0e933d68c8fa076781dbfd2ecee032cf8ac62adf68e8bbc51cd7e3b154fbfc61","text_bytes":30184,"compare_select_bytes":2464,"branch_bytes":4308,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-b","unit":"zlib:deflate.c","profile":"unchecked","object_sha256":"66cedd07afb17aa2658fefe7ed455100b479192c7f939a10cb16241efe319499","text_bytes":28668,"compare_select_bytes":2252,"branch_bytes":3388,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-b","unit":"zlib:inflate.c","profile":"checked","object_sha256":"3e74cc20a007af4e08a2847974fc6d7eeb0edad0d08208074c474941de05468b","text_bytes":28264,"compare_select_bytes":1864,"branch_bytes":4876,"windows":{"boolean_branch":{"raw":15,"syntactic_candidates":15,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-b","unit":"zlib:inflate.c","profile":"unchecked","object_sha256":"a8bfb5ad49e6154d757a4d84aa080271bbb76f298ceb78a6322090b46fe92741","text_bytes":26520,"compare_select_bytes":1528,"branch_bytes":3712,"windows":{"boolean_branch":{"raw":15,"syntactic_candidates":15,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-b","unit":"zstd:lib/compress/zstd_compress.c","profile":"checked","object_sha256":"2f96c7d15c24ca6f26833e40f74e88b40342bb7f28e8df63fa2ec19e54e063a2","text_bytes":122972,"compare_select_bytes":10444,"branch_bytes":13208,"windows":{"boolean_branch":{"raw":72,"syntactic_candidates":72,"declined":{}},"boolean_retest":{"raw":24,"syntactic_candidates":0,"declined":{"register_or_shape":24}},"compare_conjunction":{"raw":24,"syntactic_candidates":22,"declined":{"register_or_shape":2}}}},
+      {"arm":"off-b","unit":"zstd:lib/compress/zstd_compress.c","profile":"unchecked","object_sha256":"1a757ab021420055bc6ef9ca22c54751dbedce2e5b3174678115cfd13c41241c","text_bytes":120592,"compare_select_bytes":9956,"branch_bytes":12120,"windows":{"boolean_branch":{"raw":72,"syntactic_candidates":72,"declined":{}},"boolean_retest":{"raw":24,"syntactic_candidates":0,"declined":{"register_or_shape":24}},"compare_conjunction":{"raw":24,"syntactic_candidates":22,"declined":{"register_or_shape":2}}}},
+      {"arm":"off-b","unit":"zstd:lib/decompress/zstd_decompress.c","profile":"checked","object_sha256":"8ce98ea2cd34c647bb2a81640dc8796f68bcb5d19eb93f363c39833695646fe6","text_bytes":33300,"compare_select_bytes":2552,"branch_bytes":3020,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-b","unit":"zstd:lib/decompress/zstd_decompress.c","profile":"unchecked","object_sha256":"303490884e1c8fd40d02692bc35c6d41dada3dd9865647f23c12841fbd5053fd","text_bytes":33052,"compare_select_bytes":2512,"branch_bytes":2924,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"off-b","unit":"cjson:cJSON.c","profile":"checked","object_sha256":"ae98c5766419459083d4f62800833f995a804333f0b9bb52eb40fb51d09922bc","text_bytes":29496,"compare_select_bytes":2796,"branch_bytes":4016,"windows":{"boolean_branch":{"raw":2,"syntactic_candidates":2,"declined":{}},"boolean_retest":{"raw":3,"syntactic_candidates":0,"declined":{"register_or_shape":3}},"compare_conjunction":{"raw":3,"syntactic_candidates":3,"declined":{}}}},
+      {"arm":"off-b","unit":"cjson:cJSON.c","profile":"unchecked","object_sha256":"6c9111d63e3b9c1b961e09b77202393e51a0acd56b6c42ecdd6b1b63bba59a26","text_bytes":29384,"compare_select_bytes":2788,"branch_bytes":3984,"windows":{"boolean_branch":{"raw":2,"syntactic_candidates":2,"declined":{}},"boolean_retest":{"raw":3,"syntactic_candidates":0,"declined":{"register_or_shape":3}},"compare_conjunction":{"raw":3,"syntactic_candidates":3,"declined":{}}}},
+      {"arm":"combined-a","unit":"p0:tests/fixtures/eqsat-performance/integer-mix.c","profile":"checked","object_sha256":"d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363","text_bytes":128,"compare_select_bytes":8,"branch_bytes":16,"windows":{"boolean_branch":{"raw":0,"syntactic_candidates":0,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-a","unit":"p0:tests/fixtures/eqsat-performance/integer-mix.c","profile":"unchecked","object_sha256":"d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363","text_bytes":128,"compare_select_bytes":8,"branch_bytes":16,"windows":{"boolean_branch":{"raw":0,"syntactic_candidates":0,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-a","unit":"zlib:deflate.c","profile":"checked","object_sha256":"1afb0b22ae3529e2ebece685879f7b41035684f998fcc4c2a44b5b346f5d22a7","text_bytes":27148,"compare_select_bytes":2464,"branch_bytes":4592,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-a","unit":"zlib:deflate.c","profile":"unchecked","object_sha256":"ca6bfde924717f4e67a6fc1ec15bee1bed798c1588280738817cd33cc24c6b4d","text_bytes":25644,"compare_select_bytes":2252,"branch_bytes":3672,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-a","unit":"zlib:inflate.c","profile":"checked","object_sha256":"b1ce30c03d35f6856b97c357cfdcda9fc350db5ca6e33f17db9a389967d0c42f","text_bytes":26516,"compare_select_bytes":1864,"branch_bytes":5024,"windows":{"boolean_branch":{"raw":15,"syntactic_candidates":15,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-a","unit":"zlib:inflate.c","profile":"unchecked","object_sha256":"2f7028cf75921171b094c5471721902f66a875d276f96b63b0ea4b19afae8812","text_bytes":24776,"compare_select_bytes":1528,"branch_bytes":3860,"windows":{"boolean_branch":{"raw":15,"syntactic_candidates":15,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-a","unit":"zstd:lib/compress/zstd_compress.c","profile":"checked","object_sha256":"3266a610b74780bc28a85f05eb54f639747fb289844730db9b25c9f37e799af4","text_bytes":102796,"compare_select_bytes":10452,"branch_bytes":14868,"windows":{"boolean_branch":{"raw":72,"syntactic_candidates":72,"declined":{}},"boolean_retest":{"raw":24,"syntactic_candidates":0,"declined":{"register_or_shape":24}},"compare_conjunction":{"raw":24,"syntactic_candidates":22,"declined":{"register_or_shape":2}}}},
+      {"arm":"combined-a","unit":"zstd:lib/compress/zstd_compress.c","profile":"unchecked","object_sha256":"be19ed0a238a1ba6b5d0ff6d448eaa7430e3373b9199a6bccb5042a77d100db8","text_bytes":100432,"compare_select_bytes":9964,"branch_bytes":13780,"windows":{"boolean_branch":{"raw":72,"syntactic_candidates":72,"declined":{}},"boolean_retest":{"raw":24,"syntactic_candidates":0,"declined":{"register_or_shape":24}},"compare_conjunction":{"raw":24,"syntactic_candidates":22,"declined":{"register_or_shape":2}}}},
+      {"arm":"combined-a","unit":"zstd:lib/decompress/zstd_decompress.c","profile":"checked","object_sha256":"85cec1fff80f1c50495be584c5b8a392d448d208d47414df19e573e6e40c3bbb","text_bytes":25596,"compare_select_bytes":2556,"branch_bytes":3788,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-a","unit":"zstd:lib/decompress/zstd_decompress.c","profile":"unchecked","object_sha256":"ccc808b0dbbdf27f380bcb536c0499d62fa6910df1391f277949edb70d03114f","text_bytes":25348,"compare_select_bytes":2516,"branch_bytes":3692,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-a","unit":"cjson:cJSON.c","profile":"checked","object_sha256":"e7dd86d1c286b9decfb880c8f32e0852cb7a6f9c5388594db1a485a9f62f6df6","text_bytes":25384,"compare_select_bytes":2796,"branch_bytes":4568,"windows":{"boolean_branch":{"raw":2,"syntactic_candidates":2,"declined":{}},"boolean_retest":{"raw":3,"syntactic_candidates":0,"declined":{"register_or_shape":3}},"compare_conjunction":{"raw":3,"syntactic_candidates":3,"declined":{}}}},
+      {"arm":"combined-a","unit":"cjson:cJSON.c","profile":"unchecked","object_sha256":"e21cf954cae8cb02c7baa9c5510c2e2d8575104683dcf76de8e68fcd1a01adb6","text_bytes":25272,"compare_select_bytes":2788,"branch_bytes":4536,"windows":{"boolean_branch":{"raw":2,"syntactic_candidates":2,"declined":{}},"boolean_retest":{"raw":3,"syntactic_candidates":0,"declined":{"register_or_shape":3}},"compare_conjunction":{"raw":3,"syntactic_candidates":3,"declined":{}}}},
+      {"arm":"combined-b","unit":"p0:tests/fixtures/eqsat-performance/integer-mix.c","profile":"checked","object_sha256":"d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363","text_bytes":128,"compare_select_bytes":8,"branch_bytes":16,"windows":{"boolean_branch":{"raw":0,"syntactic_candidates":0,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-b","unit":"p0:tests/fixtures/eqsat-performance/integer-mix.c","profile":"unchecked","object_sha256":"d096aed3455a6ef50e32828265318282b626b5598a8687e5251514d897488363","text_bytes":128,"compare_select_bytes":8,"branch_bytes":16,"windows":{"boolean_branch":{"raw":0,"syntactic_candidates":0,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-b","unit":"zlib:deflate.c","profile":"checked","object_sha256":"8f656af042d30a5b3f08f0af2eecea031e143c8bb60b5e4209c960d6e96c3b29","text_bytes":26776,"compare_select_bytes":2464,"branch_bytes":4592,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-b","unit":"zlib:deflate.c","profile":"unchecked","object_sha256":"e6a8a0b23cf9cc361d4d000d4e171b9b1a98547810787912da72acbe83bdc3fd","text_bytes":25260,"compare_select_bytes":2252,"branch_bytes":3672,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-b","unit":"zlib:inflate.c","profile":"checked","object_sha256":"a9eafab4803765a39eb1ce7e29992e032de5301536f9d5c9060da90ea3fe39ec","text_bytes":26372,"compare_select_bytes":1864,"branch_bytes":5024,"windows":{"boolean_branch":{"raw":15,"syntactic_candidates":15,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-b","unit":"zlib:inflate.c","profile":"unchecked","object_sha256":"85fa6d8263ce43b71c0c7aeb4767f61587897e0a8ebc793e7d31d0b831bed92a","text_bytes":24628,"compare_select_bytes":1528,"branch_bytes":3860,"windows":{"boolean_branch":{"raw":15,"syntactic_candidates":15,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-b","unit":"zstd:lib/compress/zstd_compress.c","profile":"checked","object_sha256":"c6ef288423caf9ee07eea71375cf925c8807e057999195f3227176e4f6925ed8","text_bytes":98720,"compare_select_bytes":10444,"branch_bytes":14868,"windows":{"boolean_branch":{"raw":72,"syntactic_candidates":72,"declined":{}},"boolean_retest":{"raw":24,"syntactic_candidates":0,"declined":{"register_or_shape":24}},"compare_conjunction":{"raw":24,"syntactic_candidates":22,"declined":{"register_or_shape":2}}}},
+      {"arm":"combined-b","unit":"zstd:lib/compress/zstd_compress.c","profile":"unchecked","object_sha256":"230e372a0136f3ca9bb698547dbd68b3de8e97d1a9e308e182485c7451233fe9","text_bytes":96356,"compare_select_bytes":9956,"branch_bytes":13780,"windows":{"boolean_branch":{"raw":72,"syntactic_candidates":72,"declined":{}},"boolean_retest":{"raw":24,"syntactic_candidates":0,"declined":{"register_or_shape":24}},"compare_conjunction":{"raw":24,"syntactic_candidates":22,"declined":{"register_or_shape":2}}}},
+      {"arm":"combined-b","unit":"zstd:lib/decompress/zstd_decompress.c","profile":"checked","object_sha256":"e7c4f4ad5961030f8b0a82a64a879194389eec09d27998d92c5aa8876f4703c0","text_bytes":24044,"compare_select_bytes":2552,"branch_bytes":3788,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-b","unit":"zstd:lib/decompress/zstd_decompress.c","profile":"unchecked","object_sha256":"9fdf83433c2429297caf672689d56d0301af6cc3b777f0ae391d7a15a4444b22","text_bytes":23796,"compare_select_bytes":2512,"branch_bytes":3692,"windows":{"boolean_branch":{"raw":10,"syntactic_candidates":10,"declined":{}},"boolean_retest":{"raw":0,"syntactic_candidates":0,"declined":{}},"compare_conjunction":{"raw":0,"syntactic_candidates":0,"declined":{}}}},
+      {"arm":"combined-b","unit":"cjson:cJSON.c","profile":"checked","object_sha256":"65c801d7c393fc431fe3254555bccde2213ff5ec405cb3cacd62dbbdd8db4737","text_bytes":24704,"compare_select_bytes":2796,"branch_bytes":4568,"windows":{"boolean_branch":{"raw":2,"syntactic_candidates":2,"declined":{}},"boolean_retest":{"raw":3,"syntactic_candidates":0,"declined":{"register_or_shape":3}},"compare_conjunction":{"raw":3,"syntactic_candidates":3,"declined":{}}}},
+      {"arm":"combined-b","unit":"cjson:cJSON.c","profile":"unchecked","object_sha256":"7a29d1d91b76c7674ddd040448fad9bf4fa34d66cd1f87f60b42fd03d351d74a","text_bytes":24592,"compare_select_bytes":2788,"branch_bytes":4536,"windows":{"boolean_branch":{"raw":2,"syntactic_candidates":2,"declined":{}},"boolean_retest":{"raw":3,"syntactic_candidates":0,"declined":{"register_or_shape":3}},"compare_conjunction":{"raw":3,"syntactic_candidates":3,"declined":{}}}}
+    ]
+  },
+  "interval_followup": {
+    "path": ".evidence/codegen/n03d-c4/intervals-20261003.json",
+    "sha256": "ca7fb9f0feee7ea1511a5f87f019d96745b56a073b88df5da73dccddc5bfa79a",
+    "scope": "Inspect all 25 current B/unchecked combination candidates, not an expanded population or grammar.",
+    "records": [
+      {
+        "counted": 0,
+        "examples": [],
+        "expected_windows": 0,
+        "groups": {},
+        "unit": "p0:tests/fixtures/eqsat-performance/integer-mix.c"
+      },
+      {
+        "counted": 0,
+        "examples": [],
+        "expected_windows": 0,
+        "groups": {},
+        "unit": "zlib:deflate.c"
+      },
+      {
+        "counted": 0,
+        "examples": [],
+        "expected_windows": 0,
+        "groups": {},
+        "unit": "zlib:inflate.c"
+      },
+      {
+        "counted": 22,
+        "examples": [
+          {
+            "combine": "and",
+            "conditions": [
+              "hs",
+              "ls"
+            ],
+            "disposition": "ordered_nonnegative_imm12_interval",
+            "function": "ZSTD_cParam_getBounds",
+            "lower": [
+              "w19",
+              "#0x3ee"
+            ],
+            "offset": 6992,
+            "upper": [
+              "w19",
+              "#0x3ef"
+            ]
+          },
+          {
+            "combine": "and",
+            "conditions": [
+              "hs",
+              "ls"
+            ],
+            "disposition": "ordered_nonnegative_imm12_interval",
+            "function": "ZSTD_isUpdateAuthorized",
+            "lower": [
+              "w1",
+              "#0x66"
+            ],
+            "offset": 7824,
+            "upper": [
+              "w1",
+              "#0x6b"
+            ]
+          },
+          {
+            "combine": "and",
+            "conditions": [
+              "hs",
+              "ls"
+            ],
+            "disposition": "ordered_nonnegative_imm12_interval",
+            "function": "ZSTD_isUpdateAuthorized",
+            "lower": [
+              "w1",
+              "#0xc8"
+            ],
+            "offset": 7904,
+            "upper": [
+              "w1",
+              "#0xca"
+            ]
+          },
+          {
+            "combine": "and",
+            "conditions": [
+              "hs",
+              "ls"
+            ],
+            "disposition": "ordered_nonnegative_imm12_interval",
+            "function": "ZSTD_isUpdateAuthorized",
+            "lower": [
+              "w1",
+              "#0x190"
+            ],
+            "offset": 7952,
+            "upper": [
+              "w1",
+              "#0x192"
+            ]
+          }
+        ],
+        "expected_windows": 22,
+        "groups": {
+          "ordered_nonnegative_imm12_interval": 22
+        },
+        "unit": "zstd:lib/compress/zstd_compress.c"
+      },
+      {
+        "counted": 0,
+        "examples": [],
+        "expected_windows": 0,
+        "groups": {},
+        "unit": "zstd:lib/decompress/zstd_decompress.c"
+      },
+      {
+        "counted": 3,
+        "examples": [
+          {
+            "combine": "and",
+            "conditions": [
+              "ge",
+              "le"
+            ],
+            "disposition": "ordered_nonnegative_imm12_interval",
+            "function": "parse_number",
+            "lower": [
+              "w0",
+              "#0x30"
+            ],
+            "offset": 1584,
+            "upper": [
+              "w0",
+              "#0x39"
+            ]
+          },
+          {
+            "combine": "and",
+            "conditions": [
+              "ge",
+              "le"
+            ],
+            "disposition": "ordered_nonnegative_imm12_interval",
+            "function": "cJSON_Compare",
+            "lower": [
+              "w0",
+              "#0x1"
+            ],
+            "offset": 23724,
+            "upper": [
+              "w0",
+              "#0x2"
+            ]
+          },
+          {
+            "combine": "and",
+            "conditions": [
+              "ge",
+              "le"
+            ],
+            "disposition": "ordered_nonnegative_imm12_interval",
+            "function": "cJSON_Compare",
+            "lower": [
+              "w22",
+              "#0x1"
+            ],
+            "offset": 23880,
+            "upper": [
+              "w22",
+              "#0x2"
+            ]
+          }
+        ],
+        "expected_windows": 3,
+        "groups": {
+          "ordered_nonnegative_imm12_interval": 3
+        },
+        "unit": "cjson:cJSON.c"
+      }
+    ]
+  },
+  "source_trace": {
+    "path": ".evidence/eqsat-pilot/pilot-xb4aobn_/zlib/02-B-chain/output.evo",
+    "sha256": "5c3e74cdccbc5e198db48f57337bdad2df8b98d04e933da2f78c81420b7ca587",
+    "function": "deflateGetDictionary",
+    "finding": "Four unused uninitialized definitions follow its ICmp. Existing source-adjacency branch fusion misses it; baseline demand DCE later deletes the zero materializations but does not retry branch selection.",
+    "implementation": [
+      "crates/evocc-mir/src/lower.rs::lower_block",
+      "crates/evocc-mir/src/lower.rs::lower_inst (Uninitialized)",
+      "crates/evocc-mir/src/generic/ssa.rs::out_of_ssa_with_dce"
+    ]
+  },
+  "gates": {
+    "python": {
+      "status": "PASS",
+      "path": ".evidence/codegen/n03d-c4/python-focused-20261003.log",
+      "sha256": "d5b7036bbe23fe70d9478fd0fdcfe83ae4a268ef56cfc06a95c1c08d0049033a",
+      "passed": 16,
+      "failed": 0
+    },
+    "red": {
+      "path": ".evidence/codegen/n03d-c4/red-20261003.log",
+      "sha256": "9b41ec2bab34c02105d45b60152216b1a3bc38fb788831fa6082f497306aec18",
+      "expected_errors": 8,
+      "reason": "Missing control_windows measurement entry point, not a compiler correctness failure."
+    },
+    "full_workspace": {
+      "status": "PASS",
+      "source_commit": "2ce2385c6663094e569e4f5dd2cd239a115d83f9",
+      "path": ".evidence/codegen/n03d-c4/full-workspace-20261003.log",
+      "sha256": "1b8ba295abe2fc02528dbd322b113ed533702988757edeca7100e99fa241a3aa",
+      "suites": 396,
+      "passed": 3051,
+      "failed": 0,
+      "ignored": 5,
+      "ignored_scope": "Existing ignores",
+      "clippy": "PASS",
+      "format": "PASS",
+      "regeneration": "PASS"
+    }
+  },
+  "disposition": {
+    "status": "POSITIVE_PREFLIGHT_REQUIRES_BOUNDED_IMPLEMENTATION",
+    "current_b_unchecked": {
+      "boolean_branch": 109,
+      "boolean_retest": 0,
+      "compare_conjunction": 25
+    },
+    "interval_shapes": "All 25 are ordered nonnegative imm12 intervals on one value: 22 unsigned zstd-compress and three signed cJSON. Existing SUB/CMP/CSET operations can express a bounded follow-up; a new general CCMP instruction is not required for this measured population.",
+    "next": "Freeze C5 terminal-Boolean and inclusive-interval selection, with exact-MIR RED and unique-use/adjacent-flags guards. Syntactic candidates still need MIR admission.",
+    "unchanged": "No compiler, interpreter, registry, flags-lifetime, default or ABI change. General conditional compare and CFG if-conversion remain outside this bounded work."
+  },
+  "behavior": {
+    "new_optimized_bytes": 0,
+    "object_rebuilds": 0,
+    "new_timing_samples": 0,
+    "new_vm_disks": 0,
+    "compiler_cache_baseline_kib": 25195312,
+    "compiler_cache_final_kib": 25195312,
+    "compiler_cache_delta_bytes": 0,
+    "retained_evidence_bytes": 413696,
+    "scoped_disk_net_bytes": 413696,
+    "disk_scope": "Allocated C4 evidence plus unchanged shared compiler cache; excludes tracked files, Git and unrelated host activity. No generated object or whole disassembly retained.",
+    "free_kib_at_review": 34915412
+  },
+  "claim_ceiling": "Read-only residual-selection census and a concrete missed-pattern explanation, not a correctness proof, performance result, implemented optimization or N03d closure. Historical C3 native/size results remain separate."
+}

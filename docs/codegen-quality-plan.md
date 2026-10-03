@@ -400,7 +400,7 @@ sections above remain the contract.
 | N04 C checker | Done | [note](notebook/codegen-checker-20261002.md) |
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
 | N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
-| N03d | C1/C3 closed opt-in; C2 cost miss retained; compare/control disposition remains | [C1](notebook/codegen-constants-20261002.md), [C2](notebook/codegen-local-selection-20261002.md), [C3](notebook/codegen-extension-reuse-20261003.md): C3 full workspace 3,051/0/5 ignored, both native corpora ON/OFF and all six A/B captures green; 48/48 size/cost bounds met, maximum 1.107x. B unchecked C3 saves only 0/8/4/0/0/0 extension bytes. C2's 1.7977x cost miss stays frozen and excluded from cumulative options; defaults OFF. |
+| N03d | C1/C3 closed opt-in; C2 cost miss retained; C4 positive preflight, C5 next | [C1](notebook/codegen-constants-20261002.md), [C2](notebook/codegen-local-selection-20261002.md), [C3](notebook/codegen-extension-reuse-20261003.md): C3 full workspace 3,051/0/5 ignored, both native corpora ON/OFF and all six A/B captures green; 48/48 size/cost bounds met, maximum 1.107x. [C4](notebook/codegen-control-preflight-20261003.md) finds 109 Boolean-branch and 25 interval candidates in current B/unchecked; full workspace 3,051/0/5 ignored and 16 Python tests PASS. Zero new optimized bytes from this census. C2's 1.7977x cost miss stays frozen and excluded from cumulative options; defaults OFF. |
 | N03c | Bounded T1/T2/T3 work closed; broader spill-quality gap remains | [T1](notebook/codegen-allocation-termination-20261003.md) retains cost misses; [T2](notebook/codegen-copy-hints-20261003.md) copy hints and [T3](notebook/codegen-reload-reuse-20261003.md) local reload reuse are closed opt-in. T3 full workspace 3,039/0/5 ignored; both 384-case corpora ON/OFF and 72 selected-TU executions green, zero proof/bundle failures. Reload-only B unchecked saves 0/4/96/64/12/0 stack bytes; all 48 size/cost comparisons meet bounds, maximum cost ratio 1.232x. Defaults OFF; not a complete/global allocator. |
 | N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Closed bounded; E3 qualification negative, no B1 proof acceptance | [E1 result](notebook/codegen-encodings-20261003.md), [E2 result](notebook/codegen-vendor-model-20261003.md), [E3 disposition](notebook/codegen-bounded-smt-20261003.md): E2 has 2,600 exact cases per interpreter/model/native/QEMU lane and unchanged native/TU objects. E3's pinned SMT generator rejects an unsupported undefined-bitvector dependency before its first query; zero proofs, explicit verdicts for 59 Inst families / 44 spec rows / nine patterns / 28 specialized paths. No model or trust-policy bypass; existing native baselines retained. |
@@ -446,8 +446,9 @@ reuse adds only stack-access savings: cumulative ratios are 1.642–2.478, with
 closed, not the global allocation-quality problem. N07 E3 is dispositioned
 negative at the pinned generator boundary. C3 repeated extension reuse adds
 only 8 bytes on deflate and 4 on inflate in B/unchecked; cumulative library
-ratios remain 1.642–2.478. The remaining compare/control opportunities need a
-bounded measured disposition, not an inference from C3's green tests. Existing
+ratios remain 1.642–2.478. C4's 48-object residual census is positive: 109
+Boolean branches and 25 inclusive constant intervals need bounded C5 selection
+with MIR liveness/flags guards. They are not measured savings. Existing
 CSEL/compare-branch selection is baseline, not new gain. No model-proof
 coverage, default admission or 1.4-target achievement is implied.
 

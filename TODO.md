@@ -2495,7 +2495,18 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     Invalid Linux-to-Darwin signed-narrow probe retained, not counted PASS.
     Retired 792 idle intermediate objects; current baselines and records kept.
     Scoped disk net +325,369,856 bytes; about 32 GiB free at closure.
-    Remaining compare/control work still needs a bounded measured disposition.
+    C4 residual control preflight is closed positive:
+    [result](docs/notebook/codegen-control-preflight-20261003.md),
+    [receipt](tests/contracts/codegen-n03d-c4-20261003-receipt.json).
+    Subject `2ce2385c`; full workspace 3,051/0/5 existing ignored, 16 Python
+    PASS. Forty-eight retained object rows reconcile with S1; current
+    B/unchecked has 109 Boolean-branch and 25 compare-combination candidates.
+    All 25 combinations are inclusive nonnegative imm12 intervals; one
+    retained IR fragment explains missed branch fusion after baseline DCE.
+    Syntactic candidates are not validated transforms; zero new optimized
+    bytes. Next: freeze C5 bounded existing-op selection, not general CCMP or
+    CFG if-conversion. N03d remains open. Scoped disk net +413,696 bytes;
+    no object rebuild, full disassembly retention or new timing samples.
 
   - [x] **N03e — EvoIR mid-level passes, bounded first slice** — `DONE_NEGATIVE`, P3.
     GVN/CSE, SCCP, dead-code elimination and simple loop-invariant motion on
