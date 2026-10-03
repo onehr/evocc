@@ -184,3 +184,41 @@ fn local_selection_uses_the_same_canonical_option_list_without_changing_ir() {
     assert_eq!(fs::read_to_string(&path).unwrap(), text);
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn extension_selection_reuses_the_exact_ir_adapter_without_rewriting_its_input() {
+    let directory =
+        std::env::temp_dir().join(format!("evocc-ir-extension-test-{}", std::process::id()));
+    fs::create_dir(&directory).unwrap();
+    let path = directory.join("input.evo");
+    let text="func @duplicate(%arg0: bits<8>) -> (bits<64>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: bits<8>):\n    %v1 = sext.bits<64> %v0\n    %v2 = sext.bits<64> %v0\n    %v3 = add.bits<64> %v1, %v2\n    ret %v3\n}\n";
+    fs::write(&path, text).unwrap();
+    let digest = evocc_proof::sha256_hex(text.as_bytes());
+    for target in ["darwin-arm64", "linux-aarch64"] {
+        for flags in [
+            "extensions",
+            "constants,extensions",
+            "local,extensions",
+            "constants,local,extensions",
+        ] {
+            let output = Command::new(env!("CARGO_BIN_EXE_evo-ir-asm"))
+                .args([target, &digest])
+                .arg(&path)
+                .arg(format!("--isel-opt={flags}"))
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:?}");
+            let assembly = String::from_utf8(output.stdout).unwrap();
+            assert!(
+                assembly.contains(&format!("// evocc-native-isel={flags}\n")),
+                "{assembly}"
+            );
+            assert!(
+                assembly.contains("// evocc-local-selected reuse_integer_extend=1"),
+                "{assembly}"
+            );
+        }
+    }
+    assert_eq!(fs::read_to_string(path).unwrap(), text);
+    fs::remove_dir_all(directory).unwrap();
+}

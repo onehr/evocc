@@ -10,7 +10,11 @@ units and both native corpora and a green full workspace gate
 ([result](notebook/codegen-backend-layering-20261002.md)). N03d C1 adds the first
 bounded constant-materialization `patterns` and byte `costs`, with generated
 Rust and EvoMIR rows; C2 extends those tables to adjacent single-use emission
-idioms. Neither slice closes N07's encoding/model/SMT steps.
+idioms. C3 adds three exact block-local repeated-extension families behind
+`--isel-opt=extensions`, before allocation, with unique-definition and local-use
+requirements and effect barriers. These are selection policies, not new machine
+instructions, range inference, or additions to an EqSat registry. Their finite
+validation is separate from N07's encoding/model/SMT steps.
 N07 E1's encoding-fact migration is closed under its
 [frozen plan](../tests/contracts/codegen-n07-encodings-20261003.json):
 [full workspace and byte-identity evidence](notebook/codegen-encodings-20261003.md)

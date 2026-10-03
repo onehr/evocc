@@ -45,6 +45,7 @@ pub fn compile_module_for(
             frame,
             compact_constants: selection.constants,
             local_selection: selection.local,
+            reuse_extensions: selection.extensions,
             allocation,
             ..Default::default()
         },

@@ -228,6 +228,36 @@ class LocalPatternDescriptionTest(unittest.TestCase):
                     gen.parse_patterns(with_valid_digest(source.replace(old, new, 1)))
 
 
+class ExtensionPatternDescriptionTest(unittest.TestCase):
+    def test_three_bounded_families_are_generated_and_can_be_disabled(self):
+        source = (ROOT / "targets/aarch64/patterns").read_bytes()
+        description = gen.parse_patterns(source)
+        rows = [row for row in description.rows if row["id"].startswith("reuse_")]
+        self.assertEqual(len(rows), 3)
+        rendered = gen.render_patterns(description)
+        for name in ["Extend", "LowExtract", "LowMask"]:
+            self.assertIn("ExtensionKind::" + name, rendered)
+        without = with_valid_digest(b"".join(
+            line for line in source.splitlines(keepends=True)
+            if not line.startswith(b"pattern reuse_low_mask ")))
+        self.assertNotIn('id: "reuse_low_mask"', gen.render_patterns(gen.parse_patterns(without)))
+
+    def test_rebound_extension_domains_cannot_weaken_reuse_preconditions(self):
+        source = (ROOT / "targets/aarch64/patterns").read_bytes()
+        old_row = next(line for line in source.splitlines() if line.startswith(b"pattern reuse_integer_extend "))
+        for old, new in [
+            (b"guard=block_local_unique_exact", b"guard=block_local"),
+            (b"writes=none", b"writes=dst"),
+            (b"flags=preserve", b"flags=write"),
+            (b"memory=none", b"memory=read"),
+            (b"widths=32,64", b"widths=16,32,64"),
+            (b"claim=exact_value_reuse", b"claim=low_bits_only"),
+            (b"root=extend", b"root=arbitrary_pure"),
+        ]:
+            with self.subTest(new=new), self.assertRaises(gen.TargetDescriptionError):
+                gen.parse_patterns(with_valid_digest(source.replace(old_row, old_row.replace(old, new))))
+
+
 class RegisterDescriptionTest(unittest.TestCase):
     def setUp(self):
         self.original = DESCRIPTION.read_bytes()

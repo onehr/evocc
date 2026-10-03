@@ -1171,6 +1171,11 @@ def parse_patterns(source: bytes) -> PatternDescription:
         "const_movn": ("movn_movk", "any"),
         "const_orr": ("orr_zero", "logical_mask"),
     }
+    extensions = {
+        "reuse_integer_extend": ("extend", "reuse_extend"),
+        "reuse_low_extract": ("low_extract", "reuse_low_extract"),
+        "reuse_low_mask": ("low_mask", "reuse_low_mask"),
+    }
     local = {
         "local_indexed_memory": ("address_memory", "64", "indexed_memory", "access_result", "preserve", "same_access", "add", "lsl"),
         "local_shift_arithmetic": ("shift_alu", "32,64", "shifted_arithmetic", "dst", "preserve", "none", "add,sub,and,orr,eor", "lsl,lsr,asr"),
@@ -1184,7 +1189,7 @@ def parse_patterns(source: bytes) -> PatternDescription:
         if len(parts) not in {10, 12} or parts[0] != "pattern":
             raise TargetDescriptionError("malformed selection pattern")
         name = parts[1]
-        if name not in families and name not in local or name in seen:
+        if name not in families and name not in local and name not in extensions or name in seen:
             raise TargetDescriptionError("unknown or duplicate selection pattern")
         seen.add(name)
         row = {"id": name}
@@ -1199,6 +1204,13 @@ def parse_patterns(source: bytes) -> PatternDescription:
                 "root": "mov_imm", "widths": "32,64", "sequence": kind,
                 "guard": guard, "writes": "dst", "flags": "preserve",
                 "memory": "none", "claim": "exact_bits_zero_upper_w",
+            }
+        elif name in extensions:
+            root, kind = extensions[name]
+            expected = {
+                "root": root, "widths": "32,64", "sequence": kind,
+                "guard": "block_local_unique_exact", "writes": "none",
+                "flags": "preserve", "memory": "none", "claim": "exact_value_reuse",
             }
         else:
             root, widths, kind, writes, flags, memory, ops, shifts = local[name]
@@ -1245,11 +1257,26 @@ def render_patterns(description: PatternDescription) -> str:
         "#[rustfmt::skip]\npub const LOCAL_PATTERNS: &[LocalPattern] = &[\n",
     ])
     for row in description.rows:
-        if row["root"] == "mov_imm":
+        if row["sequence"] not in local_kinds:
             continue
         ops = ", ".join(f'"{op}"' for op in row["ops"].split(","))
         shifts = ", ".join(f'"{op}"' for op in row["shifts"].split(","))
         out.append(f'    LocalPattern {{ id: "{row["id"]}", kind: LocalKind::{local_kinds[row["sequence"]]}, widths: &[{row["widths"]}], ops: &[{ops}], shifts: &[{shifts}] }},\n')
+    out.append("];\n")
+    extension_kinds = {
+        "reuse_extend": "Extend", "reuse_low_extract": "LowExtract",
+        "reuse_low_mask": "LowMask",
+    }
+    out.extend([
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum ExtensionKind {\n",
+        "".join(f"    {name},\n" for name in extension_kinds.values()), "}\n",
+        "#[derive(Debug, Clone, Copy)]\npub struct ExtensionPattern {\n    pub id: &'static str,\n    pub kind: ExtensionKind,\n    pub widths: &'static [u32],\n}\n",
+        "#[rustfmt::skip]\npub const EXTENSION_PATTERNS: &[ExtensionPattern] = &[\n",
+    ])
+    for row in description.rows:
+        if row["sequence"] not in extension_kinds:
+            continue
+        out.append(f'    ExtensionPattern {{ id: "{row["id"]}", kind: ExtensionKind::{extension_kinds[row["sequence"]]}, widths: &[{row["widths"]}] }},\n')
     out.append("];\n")
     return "".join(out)
 

@@ -52,6 +52,8 @@ pub struct CodegenOptions {
     pub compact_constants: bool,
     /// C2 adjacent single-use emission idioms.
     pub local_selection: bool,
+    /// C3 exact repeated integer extensions before allocation.
+    pub reuse_extensions: bool,
     /// T2 hints / T3 reload reuse; constraints and verifier remain unchanged.
     pub allocation: crate::generic::allocation::AllocationOptions,
     pub frame_pointer_required: bool,
@@ -143,6 +145,7 @@ pub fn parse_constant_selection(value: &str) -> Result<bool, String> {
 pub struct SelectionVariants {
     pub constants: bool,
     pub local: bool,
+    pub extensions: bool,
 }
 
 impl SelectionVariants {
@@ -152,9 +155,10 @@ impl SelectionVariants {
             let slot = match name {
                 "constants" => &mut result.constants,
                 "local" => &mut result.local,
+                "extensions" => &mut result.extensions,
                 _ => {
                     return Err(format!(
-                    "unknown instruction selection variant {name:?}; supported: constants, local"
+                    "unknown instruction selection variant {name:?}; supported: constants, local, extensions"
                 ))
                 }
             };
@@ -168,11 +172,15 @@ impl SelectionVariants {
     }
 
     pub fn name(self) -> Option<&'static str> {
-        match (self.constants, self.local) {
-            (false, false) => None,
-            (true, false) => Some("constants"),
-            (false, true) => Some("local"),
-            (true, true) => Some("constants,local"),
+        match (self.constants, self.local, self.extensions) {
+            (false, false, false) => None,
+            (true, false, false) => Some("constants"),
+            (false, true, false) => Some("local"),
+            (true, true, false) => Some("constants,local"),
+            (false, false, true) => Some("extensions"),
+            (true, false, true) => Some("constants,extensions"),
+            (false, true, true) => Some("local,extensions"),
+            (true, true, true) => Some("constants,local,extensions"),
         }
     }
 }

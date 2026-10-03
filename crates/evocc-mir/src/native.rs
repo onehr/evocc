@@ -10,6 +10,7 @@
 //! assembler, the linker, or the run -- which is what the native campaign has
 //! to report.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -212,6 +213,7 @@ fn compile_module_with_guard_control(
         NativeStop::Lowering(codes)
     })?;
     let mut functions = Vec::new();
+    let mut extension_report = String::new();
     for function in &lowered.functions {
         if !keep(&function.name) {
             continue;
@@ -229,21 +231,40 @@ fn compile_module_with_guard_control(
         {
             return Err(NativeStop::Lowering(vec!["E4002"]));
         }
+        let source = module
+            .functions
+            .iter()
+            .find(|source| source.name == function.name);
+        let protected = options.protects_codegen(source.and_then(|source| source.patchable_entry));
+        let selected = if options.reuse_extensions && !protected {
+            let (selected, counts) = crate::isa::aarch64::extensions::select(function);
+            for (pattern, count) in counts.selected {
+                let _ = writeln!(
+                    extension_report,
+                    "// evocc-local-selected {pattern}={count}"
+                );
+            }
+            for ((pattern, reason), count) in counts.declined {
+                let _ = writeln!(
+                    extension_report,
+                    "// evocc-local-declined {pattern}/{reason}={count}"
+                );
+            }
+            selected
+        } else {
+            None
+        };
+        let function = selected.as_ref().unwrap_or(function);
         let destroyed = if options.retain_dead_computations {
             crate::regalloc::out_of_ssa_with_dce(function, false)
         } else {
             out_of_ssa(function)
         };
-        let source = module
-            .functions
-            .iter()
-            .find(|source| source.name == function.name);
-        let allocation_options =
-            if options.protects_codegen(source.and_then(|source| source.patchable_entry)) {
-                crate::generic::allocation::AllocationOptions::default()
-            } else {
-                options.allocation
-            };
+        let allocation_options = if protected {
+            crate::generic::allocation::AllocationOptions::default()
+        } else {
+            options.allocation
+        };
         let mut allocated = allocate_for_with_options(target, &destroyed, allocation_options)
             .map_err(|detail| NativeStop::Allocation(format!("@{}: {detail}", function.name)))?;
         allocated.internal = source
@@ -266,6 +287,7 @@ fn compile_module_with_guard_control(
     let selection = crate::emit::SelectionVariants {
         constants: options.compact_constants,
         local: options.local_selection,
+        extensions: options.reuse_extensions,
     }
     .name()
     .map_or_else(String::new, |name| format!("// evocc-native-isel={name}\n"));
@@ -273,7 +295,7 @@ fn compile_module_with_guard_control(
         format!("// evocc-native-regalloc={name}\n")
     });
     Ok(format!(
-        "// evocc-native-ub-checks={}\n{frame}{selection}{allocation}{assembly}",
+        "// evocc-native-ub-checks={}\n{frame}{selection}{allocation}{extension_report}{assembly}",
         options.ub_checks.name()
     ))
 }

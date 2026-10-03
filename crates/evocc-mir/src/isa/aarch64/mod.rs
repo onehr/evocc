@@ -6,6 +6,7 @@ pub mod allocation;
 pub mod constants;
 pub mod costs;
 pub mod encodings;
+pub mod extensions;
 pub mod insts;
 pub mod local;
 pub mod patterns;
