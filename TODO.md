@@ -2312,8 +2312,9 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   disables standard-name builtin substitution so it calls the original `abs`.
   Fourteen focused tests pass, including the original-call population and
   complete source-input export. All five selected entry exports decode through
-  the independent Lean grammar reader. Full Rust gate is pending after a
-  disk-recovery interruption; the clean primitive Lean receipt is committed.
+  the independent Lean grammar reader. The full Rust gate passes (3,079 / 0 / 5
+  ignored, plus Clippy and formatting), and the clean Lean gate passes at
+  `4483ef67`. Earlier interrupted/permission-failed attempts remain recorded.
   This is not a compilation proof.
 
 - [ ] **V01 — Prove the source-to-EvoIR result checker** — `OPEN`, P1.
@@ -2332,7 +2333,9 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   independent grammar reader now exist, with a `DECODED_NOT_VERIFIED` result.
   The separate Lean source validator independently checks binding/type/place
   consistency, scopes, initialization, calls and unsequenced conflicting local
-  accesses: 44 input cases and all five exported entries pass. Its result is
+  accesses: 44 input cases, all five exported entries and 36 ordered integer
+  type pairs pass; an actually exported unsequenced-access fixture refuses.
+  Its result is
   `WELL_FORMED_NOT_COMPILATION_VERIFIED`. Validator soundness against execution,
   small-step control, calls, local storage and actual whole-function result
   checking remain open.
