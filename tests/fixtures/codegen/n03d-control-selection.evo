@@ -1,0 +1,31 @@
+func @late_branch(%arg0: bits<32>) -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>):
+    %v1 = const.bits<32> 0
+    %v2 = icmp.ne %v0, %v1
+    %v3 = uninitialized.bits<32>
+    %v4 = uninitialized.ptr<generic>
+    cond_br %v2, ^b1(), ^b2()
+
+^b1():
+    %v5 = const.bits<32> 7
+    ret %v5
+
+^b2():
+    %v6 = const.bits<32> 3
+    ret %v6
+}
+
+func @interval(%arg0: bits<32>) -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>):
+    %v1 = const.bits<32> 48
+    %v2 = const.bits<32> 57
+    %v3 = icmp.sle %v1, %v0
+    %v4 = icmp.sle %v0, %v2
+    %v5 = and.bits<1> %v3, %v4
+    %v6 = zext.bits<32> %v5
+    ret %v6
+}
