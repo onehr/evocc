@@ -273,6 +273,40 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.comparison_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) "
+        "(op : EvoIR.Core.Symbolic.Comparison) (a b : EvoIR.Core.Symbolic.CWord Γ), "
+        "EvoIR.Core.Source.binaryValue op.source "
+        "(EvoIR.Core.Symbolic.CWord.denote σ a) (EvoIR.Core.Symbolic.CWord.denote σ b) = "
+        "Except.ok (EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.comparison op a b))",
+    ),
+    (
+        "EvoIR.Core.Symbolic.truth_term_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (value : EvoIR.Core.Symbolic.CWord Γ), "
+        "((EvoIR.denoteTerm σ value.truthTerm).toNat != 0) = "
+        "(EvoIR.Core.Symbolic.CWord.denote σ value).truth",
+    ),
+    (
+        "EvoIR.Core.Symbolic.unary_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (op : EvoIR.Core.Source.Unary) "
+        "(value : EvoIR.Core.Symbolic.CWord Γ), "
+        "(do EvoIR.Core.Symbolic.guards σ (EvoIR.Core.Symbolic.unary op value).1; "
+        "return EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.unary op value).2) = "
+        "EvoIR.Core.Source.unaryValue op (EvoIR.Core.Symbolic.CWord.denote σ value)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.ReturnPair.refines",
+        "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} "
+        "(pair : EvoIR.Core.Symbolic.ReturnPair source target) (args : List EvoIR.Core.Source.Value), "
+        "List.map EvoIR.Core.Source.Value.type args = "
+        "List.map (fun p => p.type.type) pair.sourceFunction.parameters → "
+        "∃ sourceEntry targetEntry, "
+        "EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ "
+        "EvoIR.Core.IR.initial target pair.targetFunction.name "
+        "(List.map EvoIR.Core.Symbolic.sourceValueIR args) = Except.ok targetEntry ∧ "
+        "EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+    ),
+    (
         "EvoIR.Core.Symbolic.bitwise_sound",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) "
         "(op : EvoIR.Core.Symbolic.Bitwise) "
@@ -1174,8 +1208,9 @@ def main(argv: list[str]) -> int:
         "compilation_core_primitives": {
             "claim": "Checked arithmetic primitive correspondence and source/IR-machine "
                      "determinism, finite-prefix and terminal-diagnostic properties; "
-                     "no proof of source export, input-validation soundness, source/IR "
-                     "simulation, whole-function checker or compilation yet",
+                     "structural straight-line and branching-return source/IR checker soundness. "
+                     "No proof of source export, input-validation safety, general loops/state/calls, "
+                     "backend compilation or verified-release acceptance",
             "targets": core_primitives,
         },
         "trust": TRUST,

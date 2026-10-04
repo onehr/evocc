@@ -2410,8 +2410,16 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   close the branching/looping/state/call cases or V01; the frozen scope is unchanged.
   The same checker now admits all 108 AND/OR/XOR and source-type pairs through
   a parametric source-semantics bridge; 108 target-op mutations are refused.
-  The local Lean build and self-test pass. Clean-checkpoint gate evidence for
-  this extension remains required; no backend or V01 completion claim follows.
+  The clean Lean gate passes at `2fb00d28` (35 kernel-only core targets).
+  The source/target return checker now covers conditional-expression CFGs:
+  `ReturnPair.refines` admits both original `FixedMul` and `abs` for every
+  signature value, without an exact-tree whitelist. Comparison/unary bridges
+  pass 888 runtime cases; 26 branching whole-return cases and eight kernel
+  examples cover changed pairs, swapped branches/joins, missing obligations,
+  wrong diagnostics and target cycles. Local build/self-tests pass. Its clean
+  checkpoint gate is pending. General expression combinations, short-circuit
+  state, div/rem, statement control/loops, mutable storage, calls/private-leaf
+  substitution and validator safety still block V01.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

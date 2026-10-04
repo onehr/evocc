@@ -23,6 +23,8 @@ private def accepts (s t : String) : Bool :=
   | .ok source, .ok target => AbsCorrespondence.checkPilotPair source target
   | _, _ => false
 
+def originalAbsTexts : String × String := (sourceText, targetText)
+
 def correspondenceSelfTest : IO UInt32 := do
   let mut failures := 0
   if !accepts sourceText targetText then

@@ -112,6 +112,33 @@ theorem evaluates_binary (p : Program) (locals : Locals) (functionId : Nat)
         exact path.trans (.next (by
           simp [Step, step, resumeValue, valueResult, result, type]) (.refl _))
 
+theorem evaluates_unary (p : Program) (locals : Locals) (functionId : Nat)
+    (t : IntType) (op : Unary) (e : Expr) (r : Result)
+    (noWrap : wrappingConstant (.unary t op e) = none)
+    (operand : Evaluates p locals functionId e r)
+    (typed : ∀ x v, r = .ok x → unaryValue op x = .ok v → v.type = t) :
+    Evaluates p locals functionId (.unary t op e)
+      (do let x ← r; unaryValue op x) := by
+  intro k
+  have first : Step p ⟨.expression (.unary t op e), locals, k, functionId⟩
+      ⟨.expression e, locals, .unary t op :: k, functionId⟩ := by
+    simp [Step, step, enterExpression, noWrap]
+  cases r with
+  | error fault =>
+    obtain ⟨failedK, path⟩ := operand (.unary t op :: k)
+    exact ⟨failedK, .next first path⟩
+  | ok x =>
+    have path := Steps.next first (operand (.unary t op :: k))
+    cases result : unaryValue op x with
+    | error fault =>
+      simp only [bind, Except.bind, result]
+      exact ⟨k, path.trans (.next (by
+        simp [Step, step, resumeValue, valueResult, result, fail]) (.refl _))⟩
+    | ok v =>
+      simp only [bind, Except.bind, result]
+      exact path.trans (.next (by
+        simp [Step, step, resumeValue, valueResult, result, typed x v rfl result]) (.refl _))
+
 end EvoIR.Core.Source
 
 namespace EvoIR.Core.Symbolic
@@ -163,6 +190,15 @@ inductive ExpressionDiagram {Γ : Var → Nat} (env : CBindings Γ) :
       (first : ExpressionDiagram env left a) (second : ExpressionDiagram env right b) :
       ExpressionDiagram env (.binary (bitwise op a.2 b.2).type op.source left right)
         (a.1 ++ b.1, bitwise op a.2 b.2)
+  | comparison (op : Comparison) (left right : Source.Expr) (a b : ExpressionResult Γ)
+      (first : ExpressionDiagram env left a) (second : ExpressionDiagram env right b) :
+      ExpressionDiagram env (.binary .int op.source left right)
+        (a.1 ++ b.1, comparison op a.2 b.2)
+  | unary (op : Source.Unary) (operand : Source.Expr) (r : ExpressionResult Γ)
+      (noWrap : Source.wrappingConstant (.unary (unary op r.2).2.type op operand) = none)
+      (inner : ExpressionDiagram env operand r) :
+      ExpressionDiagram env (.unary (unary op r.2).2.type op operand)
+        (r.1 ++ (unary op r.2).1, (unary op r.2).2)
 
 theorem expression_result_value {Γ : Var → Nat} (σ : Subst Γ)
     (r : ExpressionResult Γ) (v : Source.Value)
@@ -219,6 +255,30 @@ theorem expression_bitwise_result {Γ : Var → Nat} (σ : Subst Γ)
     | ok u =>
       cases u
       exact (bitwise_sound σ op a.2 b.2).symm
+
+theorem expression_comparison_result {Γ : Var → Nat} (σ : Subst Γ)
+    (op : Comparison) (a b : ExpressionResult Γ) :
+    ExpressionResult.denote σ (a.1 ++ b.1, comparison op a.2 b.2) =
+      (do let x ← a.denote σ; let y ← b.denote σ; Source.binaryValue op.source x y) := by
+  simp only [ExpressionResult.denote, guards_append]
+  cases guards σ a.1 with
+  | error fault => rfl
+  | ok u =>
+    cases u
+    cases guards σ b.1 with
+    | error fault => rfl
+    | ok u =>
+      cases u
+      exact (comparison_sound σ op a.2 b.2).symm
+
+theorem expression_unary_result {Γ : Var → Nat} (σ : Subst Γ)
+    (op : Source.Unary) (r : ExpressionResult Γ) :
+    ExpressionResult.denote σ (r.1 ++ (unary op r.2).1, (unary op r.2).2) =
+      (do let x ← r.denote σ; Source.unaryValue op x) := by
+  simp only [ExpressionResult.denote, guards_append]
+  cases guards σ r.1 with
+  | error fault => rfl
+  | ok u => cases u; exact unary_sound σ op r.2
 
 /-- Every accepted expression diagram runs on the original source machine,
 for arbitrary operand bits, actual related locals and surrounding continuation.
@@ -286,9 +346,36 @@ theorem ExpressionDiagram.sound {Γ : Var → Nat} {env : CBindings Γ}
       bitwise_sound σ op a.2 b.2] at hv
     cases Except.ok.inj hv
     rfl
+  | comparison op left right a b _ _ first second =>
+    rw [expression_comparison_result]
+    apply Source.evaluates_binary p locals functionId .int op.source left right
+      (a.denote σ) (b.denote σ) (by cases op <;> decide) (by cases op <;> decide)
+      (by cases op <;> rfl) first second
+    intro x y v hx hy hv
+    rw [expression_result_value σ a x hx, expression_result_value σ b y hy,
+      comparison_sound σ op a.2 b.2] at hv
+    cases Except.ok.inj hv
+    rfl
+  | unary op operand r noWrap _ ih =>
+    rw [expression_unary_result]
+    apply Source.evaluates_unary p locals functionId (EvoIR.Core.Symbolic.unary op r.2).2.type
+      op operand (r.denote σ) noWrap ih
+    intro x v hx hv
+    rw [expression_result_value σ r x hx, ← unary_sound σ op r.2] at hv
+    cases h : guards σ (EvoIR.Core.Symbolic.unary op r.2).1 with
+    | error fault => simp_all [bind, Except.bind]
+    | ok unitValue =>
+      simp only [h, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at hv
+      subst v
+      rfl
 
 private def sourceBitwise : Source.Binary → Option Bitwise
   | .bitAnd => some .and | .bitOr => some .or | .bitXor => some .xor
+  | _ => none
+
+private def sourceComparison : Source.Binary → Option Comparison
+  | .eq => some .eq | .ne => some .ne | .lt => some .lt
+  | .le => some .le | .gt => some .gt | .ge => some .ge
   | _ => none
 
 private def sourceArithmetic : Source.Binary → Option SignedArithmetic
@@ -324,6 +411,15 @@ def expression {Γ : Var → Nat} (env : CBindings Γ) (e : Source.Expr) :
           subst t
           exact .cast destination operand r.val r.property⟩
       else none
+    | .unary t op operand => do
+      let r ← expression env operand
+      if typed : (unary op r.val.2).2.type = t then
+        return ⟨(r.val.1 ++ (unary op r.val.2).1, (unary op r.val.2).2), by
+          have noWrap : Source.wrappingConstant
+              (.unary (unary op r.val.2).2.type op operand) = none := by
+            simpa only [typed] using wrap
+          simpa only [typed] using ExpressionDiagram.unary op operand r.val noWrap r.property⟩
+      else none
     | .binary t op left right => do
       let a ← expression env left
       let b ← expression env right
@@ -351,18 +447,27 @@ def expression {Γ : Var → Nat} (env : CBindings Γ) (e : Source.Expr) :
                   a.val b.val a.property b.property⟩
             else none
           else none
-        | none =>
-          let toLeft := op == .shl
-          if same : (if toLeft then Source.Binary.shl else .shr) = op then
-            if admitted : toLeft = false ∨ a.val.2.type.signed = false then
-              if typed : a.val.2.type = t then
-                return ⟨(a.val.1 ++ b.val.1 ++ (shift toLeft a.val.2 b.val.2).1,
-                  (shift toLeft a.val.2 b.val.2).2), by
-                    simpa only [typed, same] using ExpressionDiagram.shift toLeft left right
-                      a.val b.val admitted a.property b.property⟩
+        | none => match sourceComparison op with
+          | some cmpOp =>
+            if same : cmpOp.source = op then
+              if typed : t = .int then
+                return ⟨(a.val.1 ++ b.val.1, comparison cmpOp a.val.2 b.val.2), by
+                  simpa only [typed, same] using ExpressionDiagram.comparison cmpOp left right
+                    a.val b.val a.property b.property⟩
               else none
             else none
-          else none
+          | none =>
+            let toLeft := op == .shl
+            if same : (if toLeft then Source.Binary.shl else .shr) = op then
+              if admitted : toLeft = false ∨ a.val.2.type.signed = false then
+                if typed : a.val.2.type = t then
+                  return ⟨(a.val.1 ++ b.val.1 ++ (shift toLeft a.val.2 b.val.2).1,
+                    (shift toLeft a.val.2 b.val.2).2), by
+                      simpa only [typed, same] using ExpressionDiagram.shift toLeft left right
+                        a.val b.val admitted a.property b.property⟩
+                else none
+              else none
+            else none
     | _ => none
 
 /-- The source tree, not the producer, supplies the expected trace/result.

@@ -11,6 +11,7 @@ import EvoIR.Core.SymbolicSourceTests
 import EvoIR.Core.SourceExpressionTests
 import EvoIR.Core.SymbolicEdgeTests
 import EvoIR.Core.LeafCorrespondenceTests
+import EvoIR.Core.ReturnCorrespondenceTests
 import EvoIR.Term
 import EvoIR.Fact
 import EvoIR.Rule

@@ -388,9 +388,9 @@ original complete `FixedMul` pair and consistent changed pairs, not a named
 function or exact-tree whitelist. Sixty-five runtime cases include the original
 pair, source/target mutations, parameter order and all 36 return-conversion type
 pairs; fifteen kernel examples include a universal two-argument refinement.
-This is the straight-line leaf case of the required checker. Branching/looping
-functions, local writes/storage, direct calls and private-leaf substitution
-remain required; the command refuses them until their diagrams are implemented.
+This is the straight-line leaf case of the required checker. The branching
+extension below reuses its entry and return contracts. Loops, local writes and
+storage, direct calls and private-leaf substitution remain required.
 It grants no backend or first-release verification label and does not close V01.
 
 The source-derived expression path also covers bitwise AND/OR/XOR with C usual
@@ -400,6 +400,31 @@ actual source operation to the target term. Whole-leaf tests cover all 108
 operator/type pairs and refuse 108 mismatched target operators. These tests
 extend the same checker; they do not change the remaining control/state/call
 obligations or turn a passing local build into release acceptance.
+
+**Branching return checking.** `BranchExpression.lean` constructs a source
+decision tree with ordered guard failures and distinct conditional arms.
+`BranchTarget.lean` independently checks actual instruction lists, conditional
+terminators, joins and simultaneous edge transport. `ReturnPair.refines` in
+`ReturnCorrespondence.lean` connects both complete machines from their actual
+initial states for every original-signature argument, including first
+diagnostics, terminal observations and divergence/progress. The existing
+`--check-core-leaf-pair` entry now uses this structural checker for both original
+`FixedMul` and musl `abs`; neither name nor exact source/target tree is special.
+Changing both function names or the comparison threshold consistently still
+passes. Changing a branch, used join argument, guard or diagnostic refuses.
+An unused join argument may change because its value is not observed.
+
+Six comparisons retain C usual arithmetic conversions; the proved truth bridge
+connects C's int-valued comparison to the target's one-bit branch condition.
+All four unary operators preserve the source wrapping exception and ordinary
+negation guard. Local tests cover 216 comparison/type pairs, 648 mutations,
+24 unary/type pairs and 26 branching whole-return cases. Eight kernel examples
+include universal original-abs admission and refinement. This is still **not
+V01 completion**: the source condition in this component must have a linear
+expression diagram; arbitrary nested expression combinations, div/rem,
+short-circuit state, statement control/loops, local writes/storage, call closure
+and validator execution safety remain open. Its CFG exploration bound rejects
+cycles; it is not a bounded-execution proof of loops.
 
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`

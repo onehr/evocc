@@ -7,6 +7,7 @@ import EvoIR.Core.IRTests
 import EvoIR.Core.CorrespondenceTests
 import EvoIR.Core.SourceExpressionTests
 import EvoIR.Core.LeafCorrespondenceTests
+import EvoIR.Core.ReturnCorrespondenceTests
 
 /-!
 # The executable evaluator
@@ -287,14 +288,17 @@ def run (args : List String) : IO UInt32 := do
       let sourceExpression ← EvoIR.Core.Symbolic.ExpressionTests.sourceExpressionSelfTest
       let leaf ← EvoIR.Core.Symbolic.LeafTests.leafSelfTest
       let bitwise ← EvoIR.Core.Symbolic.LeafTests.bitwiseSelfTest
+      let operators ← EvoIR.Core.Symbolic.LeafTests.operatorSelfTest
+      let branches ← EvoIR.Core.Symbolic.ReturnTests.returnSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
-        ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 then 0 else 1
+        ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
+        operators == 0 && branches == 0 then 0 else 1
   | ["--check-core-leaf-pair", sourcePath, targetPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
       let .ok target := EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile targetPath)
         | IO.eprintln "CORE_PAIR_MALFORMED: target input"; return 2
-      let some accepted := EvoIR.Core.Symbolic.leafPair source target
+      let some accepted := EvoIR.Core.Symbolic.returnPair source target
         | IO.eprintln "CORE_PAIR_REFUSED: no checked whole-leaf diagram for this complete pair"; return 1
       IO.println s!"PROVED_LEAF_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
       return 0
