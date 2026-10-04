@@ -342,7 +342,7 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.AbsCorrespondence.pilot_pair_refines",
         "∀ (s : EvoIR.Core.Source.Program) (t : EvoIR.Core.IR.Program), "
         "EvoIR.Core.AbsCorrespondence.checkPilotPair s t = true → ∀ (x : BitVec 32), "
-        "∃ (s₀ : EvoIR.Core.Source.State) (t₀ : EvoIR.Core.IR.State), "
+        "∃ s₀ t₀, "
         "EvoIR.Core.Source.initial s 0 [{ type := EvoIR.Core.Source.IntType.int, bits := x }] = Except.ok s₀ ∧ "
         "EvoIR.Core.IR.initial t \"abs\" [EvoIR.Core.IR.Value.bits 32 x] = Except.ok t₀ ∧ "
         "EvoIR.Core.LoweringRefines s t EvoIR.Core.Source.IntType.int s₀ t₀",

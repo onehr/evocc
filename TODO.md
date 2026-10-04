@@ -88,6 +88,11 @@ compaction now succeeds. Project host-backed allocation **153.931 → 99.097 GiB
 target remains unmet, so heavy work stays blocked; this is not a new compiler
 or kernel PASS. [Retained artifacts and measurements][kernel].
 
+October 4 owner follow-up supersedes that temporary block: bounded V00–V06
+verification may resume below 80 GiB, retaining the 25/15 GiB start/stop lines,
+500 MiB capture cap and single two-job `target/frontend` tree. No new kernel
+build, runtime retirement or large disk is authorized by this exception.
+
 ## Execution order
 
 **October 4 priority:** the first public version now requires the
@@ -2361,8 +2366,10 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   exports pass `--check-core-pilot-pair`; 36 input/mutation cases pass. This is
   one exact-pair bootstrap, not the general checker or a narrower final profile.
   The proof module builds; its extended audit and clean integration gates are
-  pending the disk checkpoint (October 4 cleanup recovered headroom to about
-  62 GiB, below the owner-required 80 GiB cleanup target above).
+  pending integration. The owner reopened bounded verification after cleanup.
+  The resumed Lean gate exposed an exact-type audit expectation mismatch
+  (Lean omits inferable existential binder types); a RED and exact spelling
+  correction retain rejection of changed premises, widths, entries and relations.
   Validator soundness and generic source/target simulation for all frozen
   functions remain open. Test step limits are not proof or divergence outcomes.
 
