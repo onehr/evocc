@@ -717,6 +717,30 @@ post-return expression checking use this theorem. Private-storage composition,
 full frozen coverage and validator execution safety also remain required.
 V01 is OPEN; V02–V06 are not implemented. No scope or interpreter was changed.
 
+**Checked return construction (October 5 continuation).** Implementation
+`51b27bd2` constructs the post-call source/IR suffix instead of leaving its
+simulation as an external premise. `resumeExpression` continues a symbolic
+returned value through binary operations and conversions; the IR diagram starts
+at the actual post-call instruction position. `checkedReturn` reserves an
+independent return variable by proved renaming of all saved caller terms,
+locals and IR bindings. `LoopDiagram.call_checked_return` composes this
+constructed suffix with the cyclic callee's checked diagram.
+
+Six source continuation REDs now pass, including overflow, division by zero,
+right-operand effects/calls and first-fault order. The unchanged `call_loop`
+return suffix is accepted; eight suffix mutations refuse and 18 fresh-return
+controls pass. Clean Lean passes with 72 kernel-only core targets and 1,246,159
+vector answers. Full workspace passes 401 suites / 3,080 tests / zero failures /
+five ignored, plus Clippy/format; ten original whole pairs replay. The full
+`call_loop` entry still refuses: source argument/frontier and IR call-site
+prefix construction, and checked selection of the callee cutpoint proposal,
+remain required. A caller entry proposal is not a callee invariant. Private
+storage, full frozen coverage and validator safety still keep V01 OPEN;
+V02–V06 are unchanged. Receipt: `checked_return_continuation` in the pilot
+manifest. Artifact disk delta +3,252 KiB, target/frontend unchanged, 51 GiB free.
+Thirteen temporary intermediate logs/receipts (820 KiB) were retired; RED,
+final gates/replay and protected artifacts remain.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted

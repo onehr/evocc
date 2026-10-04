@@ -2551,6 +2551,18 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   Clippy/format pass; ten original pairs replay. Disk delta +3,108 KiB,
   target/frontend unchanged, 51 GiB free; protected artifacts retained.
 
+  **October 5 checked-return construction:** `51b27bd2` constructs the caller
+  suffix proof and composes it with a cyclic callee. Six continuation controls,
+  the original `call_loop` return suffix, eight mutation refusals and 18
+  fresh-return controls pass. Clean Lean: 72 kernel-only core targets;
+  full workspace: 401 suites / 3,080 passed / zero failed / five ignored,
+  Clippy/format pass. Whole `call_loop` admission still refuses: the actual
+  argument/frontier and IR call-site prefixes and the callee cutpoint proposal
+  must be connected. Private storage, full coverage and validator safety remain
+  required. Receipt: `checked_return_continuation` in the pilot manifest.
+  Artifact delta +3,252 KiB; target/frontend unchanged, 51 GiB free. Thirteen
+  temporary logs/development receipts were retired; final evidence retained.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

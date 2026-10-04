@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "854f6b9ecaa635f33cf52ff176777bb15e068a6f",
+    "lean_commit": "51b27bd22d3056a9d557f762263940979c40b382",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -59,6 +59,7 @@
       "lean/EvoIR/Core/Execution.lean",
       "lean/EvoIR/Core/ExecutionTests.lean",
       "lean/EvoIR/Core/FlowTree.lean",
+      "lean/EvoIR/Core/FreshReturn.lean",
       "lean/EvoIR/Core/IR.lean",
       "lean/EvoIR/Core/IRExecution.lean",
       "lean/EvoIR/Core/IRReader.lean",
@@ -71,6 +72,7 @@
       "lean/EvoIR/Core/LoopReturn.lean",
       "lean/EvoIR/Core/NumericTerm.lean",
       "lean/EvoIR/Core/RepeatedGuard.lean",
+      "lean/EvoIR/Core/ReturnContinuation.lean",
       "lean/EvoIR/Core/ReturnCorrespondence.lean",
       "lean/EvoIR/Core/ReturnCorrespondenceTests.lean",
       "lean/EvoIR/Core/Scalar.lean",
@@ -87,6 +89,8 @@
       "lean/EvoIR/Core/SourceExpression.lean",
       "lean/EvoIR/Core/SourceExpressionTests.lean",
       "lean/EvoIR/Core/SourceOperators.lean",
+      "lean/EvoIR/Core/SourceResumeTests.lean",
+      "lean/EvoIR/Core/SourceResumption.lean",
       "lean/EvoIR/Core/SourceSpan.lean",
       "lean/EvoIR/Core/StateEntry.lean",
       "lean/EvoIR/Core/StateExpression.lean",
@@ -218,7 +222,8 @@
         "EvoIR.Core.TargetCutpoint"
       ],
       "lean/EvoIR/Core/CallingLoopContext.lean": [
-        "EvoIR.Core.LoopReturn"
+        "EvoIR.Core.LoopReturn",
+        "EvoIR.Core.ReturnContinuation"
       ],
       "lean/EvoIR/Core/CallingLoopContextTests.lean": [
         "EvoIR.Core.CallingLoopContext",
@@ -283,6 +288,10 @@
       "lean/EvoIR/Core/FlowTree.lean": [
         "EvoIR.Core.StateEntry"
       ],
+      "lean/EvoIR/Core/FreshReturn.lean": [
+        "EvoIR.Core.SymbolicEntry",
+        "EvoIR.Core.SymbolicStorage"
+      ],
       "lean/EvoIR/Core/IR.lean": [
         "EvoIR.Core.Scalar"
       ],
@@ -326,6 +335,10 @@
       ],
       "lean/EvoIR/Core/RepeatedGuard.lean": [
         "EvoIR.Core.ConstantBranch"
+      ],
+      "lean/EvoIR/Core/ReturnContinuation.lean": [
+        "EvoIR.Core.CutpointInvariant",
+        "EvoIR.Core.FreshReturn"
       ],
       "lean/EvoIR/Core/ReturnCorrespondence.lean": [
         "EvoIR.Core.BranchTarget",
@@ -388,10 +401,20 @@
       "lean/EvoIR/Core/SourceOperators.lean": [
         "EvoIR.Core.SymbolicSource"
       ],
+      "lean/EvoIR/Core/SourceResumeTests.lean": [
+        "EvoIR.Core.SourceSpan",
+        "EvoIR.Core.CallLoopFixtures",
+        "EvoIR.Core.ReturnContinuation"
+      ],
+      "lean/EvoIR/Core/SourceResumption.lean": [
+        "EvoIR.Core.CallSourceDiagram",
+        "EvoIR.Core.SourceCutpoint"
+      ],
       "lean/EvoIR/Core/SourceSpan.lean": [
         "EvoIR.Core.SourceCutpoint",
         "EvoIR.Core.Correspondence",
-        "EvoIR.Core.CallSourceDiagram"
+        "EvoIR.Core.CallSourceDiagram",
+        "EvoIR.Core.SourceResumption"
       ],
       "lean/EvoIR/Core/StateEntry.lean": [
         "EvoIR.Core.StateExpression",
@@ -505,7 +528,8 @@
         "EvoIR.Core.SourceCallTests",
         "EvoIR.Core.CallControlTests",
         "EvoIR.Core.CallLoopTests",
-        "EvoIR.Core.CallingLoopContextTests"
+        "EvoIR.Core.CallingLoopContextTests",
+        "EvoIR.Core.SourceResumeTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -6563,8 +6587,8 @@
     },
     {
       "name": "EvoIR.Core.Symbolic.callingCutDiagram",
-      "type": "{Γ : EvoIR.Var → Nat} → (p : EvoIR.Core.IR.Program) → (f : EvoIR.Core.IR.Function) → (tokens : Bool) → EvoIR.Core.Source.IntType → List String → Nat → (advance : Bool) → (scope : EvoIR.Core.Symbolic.Scope Γ) → (label : String) → Option { tree // EvoIR.Core.Symbolic.CallingCutRuns p f tokens advance label 0 scope tree }",
-      "sha256": "04454e5b0c3f91a542c1f0784f76c30168f971b9f07e56b1bbdf3442334dba5d"
+      "type": "{Γ : EvoIR.Var → Nat} → (p : EvoIR.Core.IR.Program) → (f : EvoIR.Core.IR.Function) → (tokens : Bool) → EvoIR.Core.Source.IntType → List String → Nat → (advance : Bool) → (scope : EvoIR.Core.Symbolic.Scope Γ) → (label : String) → (pc : optParam Nat 0) → Option { tree // EvoIR.Core.Symbolic.CallingCutRuns p f tokens advance label pc scope tree }",
+      "sha256": "fc76a5a6dac1daa56ad9f59fc54ab168745cc60c9688a515cbf2a6112d4473d5"
     },
     {
       "name": "EvoIR.Core.Symbolic.TargetExit.callState",
@@ -16148,6 +16172,28 @@
       {
         "theorem": "EvoIR.Core.Symbolic.LoopDiagram.call_refines",
         "proposition": "∀ (σ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) {source : EvoIR.Core.Source.Function} {target : EvoIR.Core.IR.Function} (s : EvoIR.Core.Source.Program) (t : EvoIR.Core.IR.Program) (d : EvoIR.Core.Symbolic.LoopDiagram s t source target) (observationType : EvoIR.Core.Source.IntType) (caller : EvoIR.Core.Symbolic.SourceReturnContext) (a : EvoIR.Core.IR.Activation) (nextFrame : Nat) (stack : List EvoIR.Core.IR.ReturnFrame) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (inst : EvoIR.Core.IR.Instruction), List.find? (fun x => x.symbol == source.symbol) s.functions = some source → List.find? (fun x => x.name == a.function) t.functions = some f → List.find? (fun x => x.name == a.block) f.blocks = some b → b.instructions[a.pc]? = some inst → inst.op = EvoIR.Core.IR.Operation.call target.name → List.find? (fun x => x.name == target.name) t.functions = some target → List.mapM (EvoIR.Core.IR.lookup a.values) inst.operands = Except.ok (EvoIR.Core.Symbolic.loopInputValues d.tokens (List.map (EvoIR.Core.Symbolic.CWord.denote σ) (EvoIR.Core.Symbolic.parameterWords source.parameters))) → List.map EvoIR.Core.IR.Binding.type inst.results = target.returns → ∀ (resumed : EvoIR.Core.Source.State → EvoIR.Core.IR.State → Prop), EvoIR.Core.Transition.CheckpointSimulation (EvoIR.Core.Source.step s) (EvoIR.Core.IR.step t) EvoIR.Core.observeSource (EvoIR.Core.observeTarget observationType) resumed → (∀ (τ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) (word : EvoIR.Core.Symbolic.CWord EvoIR.Core.Symbolic.inputWidths) (afterCalls : Nat), word.type = source.returnType.type → resumed { control := EvoIR.Core.Source.Control.value (EvoIR.Core.Symbolic.CWord.denote τ word), locals := caller.locals, continuation := caller.continuation, functionId := caller.functionId } (EvoIR.Core.Symbolic.TargetExit.callState τ d.tokens target nextFrame afterCalls (EvoIR.Core.Symbolic.TargetExit.returned word) ({ caller := { function := a.function, block := a.block, pc := a.pc + 1, values := a.values, owner := a.owner }, results := inst.results } :: stack))) → EvoIR.Core.LoweringRefines s t observationType { control := EvoIR.Core.Source.Control.call source.symbol source.returnType.type (List.map (EvoIR.Core.Symbolic.CWord.denote σ) (EvoIR.Core.Symbolic.parameterWords source.parameters)), locals := caller.locals, continuation := caller.continuation, functionId := caller.functionId } { control := EvoIR.Core.IR.Control.running a, stack := stack, nextFrame := nextFrame }",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.ReturnContinuation.refines",
+        "proposition": "∀ {source : EvoIR.Core.Source.Program} {ir : EvoIR.Core.IR.Program} {fid : Nat} {target : EvoIR.Core.IR.Function} {tokens : Bool} {type : EvoIR.Core.Source.IntType} {cursor : EvoIR.Core.Symbolic.SourceCursor EvoIR.Core.Symbolic.inputWidths} {label : String} {pc : Nat} {scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths} (d : EvoIR.Core.Symbolic.ReturnContinuation source ir fid target tokens type cursor label pc scope) (σ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) (owner nextFrame : Nat), EvoIR.Core.LoweringRefines source ir type (EvoIR.Core.Symbolic.SourceCursor.denote σ fid cursor) (EvoIR.Core.Symbolic.cutTargetState σ target label pc owner nextFrame scope [])",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.LoopDiagram.call_checked_return",
+        "proposition": "∀ (argumentsσ callerσ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) {source : EvoIR.Core.Source.Function} {target : EvoIR.Core.IR.Function} (s : EvoIR.Core.Source.Program) (t : EvoIR.Core.IR.Program) (d : EvoIR.Core.Symbolic.LoopDiagram s t source target) (observationType : EvoIR.Core.Source.IntType) (fid : Nat) (locals : EvoIR.Core.Symbolic.LocalStore EvoIR.Core.Symbolic.inputWidths) (frames : List EvoIR.Core.Source.Frame) (scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths) (owner nextFrame pc : Nat) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (inst : EvoIR.Core.IR.Instruction) (callerTokens : Bool), List.find? (fun x => x.symbol == source.symbol) s.functions = some source → List.find? (fun x => x.name == f.name) t.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.instructions[pc]? = some inst → inst.op = EvoIR.Core.IR.Operation.call target.name → List.find? (fun x => x.name == target.name) t.functions = some target → List.mapM (EvoIR.Core.IR.lookup (EvoIR.Core.Symbolic.Scope.denote callerσ EvoIR.Core.Symbolic.callTokens scope)) inst.operands = Except.ok (EvoIR.Core.Symbolic.loopInputValues d.tokens (List.map (EvoIR.Core.Symbolic.CWord.denote argumentsσ) (EvoIR.Core.Symbolic.parameterWords source.parameters))) → List.map EvoIR.Core.IR.Binding.type inst.results = target.returns → ∀ (resumption : EvoIR.Core.Symbolic.CheckedReturn s t fid f callerTokens observationType source.returnType.type locals frames b.name (pc + 1) scope inst.results d.tokens), EvoIR.Core.LoweringRefines s t observationType { control := EvoIR.Core.Source.Control.call source.symbol source.returnType.type (List.map (EvoIR.Core.Symbolic.CWord.denote argumentsσ) (EvoIR.Core.Symbolic.parameterWords source.parameters)), locals := EvoIR.Core.Symbolic.LocalStore.denote callerσ locals, continuation := frames, functionId := fid } (EvoIR.Core.Symbolic.cutTargetState callerσ f b.name pc owner nextFrame scope [])",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Classical.choice",
