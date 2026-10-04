@@ -179,6 +179,37 @@ func @pressure(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<64>, mem
     ret %v67, %v68, %v69
 }"#
 
+/- Actual source export and target body from the unchanged source-execution.c.
+The original source calls frame; the O0 target has substituted its body. -/
+private def privateCaller := r#"["core-v1","aarch64-unknown-linux-gnu","checked",[52],[["function",50,"frame",["int",false],true,[["parameter",51,["int",false],"none"]],["compound",[["expr",["assign","int","add",51,["int",false],["ident","int",51],["lit","int","00000001"]]],["return",["int",false],["ident","int",51]]]]],["function",52,"caller",["int",false],true,[["parameter",53,["int",false],"none"]],["compound",[["object",54,"y",["int",false],"none",["store_scalar",["int",false],["call","int",50,[["argument",["int",false],["ident","int",53]]]]]],["compound",[["object",55,"z",["int",false],"none",["store_scalar",["int",false],["lit","int","00000008"]]],["expr",["assign","int","add",54,["int",false],["ident","int",54],["ident","int",55]]],["expr",["assign","int","add",53,["int",false],["ident","int",53],["lit","int","00000002"]]]]],["return",["int",false],["binary","int","add",["ident","int",53],["ident","int",54]]]]]]]]"#
+
+private def privateCallerTarget := r#"func @caller(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default visibility=internal
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = const.bits<32> 1
+    %v4 = signed_add_defined %v0, %v3
+    ub.assume.signed_overflow %v4
+    %v5 = add.bits<32> %v0, %v3
+    %v6 = uninitialized.bits<32>
+    br ^b1(%v0, %v5, %v6, %v5, %v1, %v2)
+
+^b1(%v7: bits<32>, %v8: bits<32>, %v9: bits<32>, %v10: bits<32>, %v11: mem<all>, %v12: world):
+    %v13 = const.bits<32> 8
+    %v14 = const.bits<32> 8
+    %v15 = signed_add_defined %v10, %v14
+    ub.assume.signed_overflow %v15
+    %v16 = add.bits<32> %v10, %v14
+    %v17 = const.bits<32> 2
+    %v18 = signed_add_defined %v7, %v17
+    ub.assume.signed_overflow %v18
+    %v19 = add.bits<32> %v7, %v17
+    %v20 = signed_add_defined %v19, %v16
+    ub.assume.signed_overflow %v20
+    %v21 = add.bits<32> %v19, %v16
+    ret %v21, %v11, %v12
+}"#
+
 private def outcome (text entry : String) (numbers : List Nat) :
     Option (Result × Nat) := do
   let p ← (readProgram text).toOption
@@ -230,7 +261,15 @@ def callSelfTest : IO UInt32 := do
     (checked_caller, "checked_caller", [0x7fffffff, 1], .error (.diagnostic 3004), 9),
     (nested_caller, "nested_caller", [13, 3], .ok (.ofNat .int 3), 12),
     (nested_caller, "nested_caller", [13, 0], .error (.diagnostic 3002), 6),
-    (pressure, "pressure", [17], .ok (.ofNat .ulong 1040), 33)]
+    (pressure, "pressure", [17], .ok (.ofNat .ulong 1040), 33),
+    (privateCaller, "caller", [5], .ok (.ofNat .int 21), 52),
+    (privateCaller, "caller", [0], .ok (.ofNat .int 11), 52),
+    (privateCaller, "caller", [0xfffffffb], .ok (.ofNat .int 1), 52),
+    (privateCaller, "caller", [1073741818], .ok (.ofNat .int 2147483647), 52),
+    (privateCaller, "caller", [1073741819], .error (.diagnostic 3004), 52),
+    (privateCaller, "caller", [2147483639], .error (.diagnostic 3004), 52),
+    (privateCaller, "caller", [2147483647], .error (.diagnostic 3004), 50),
+    (privateCaller, "caller", [2147483648], .error (.diagnostic 3004), 52)]
   let mut failures := 0
   for (source, entry, inputs, result, fid) in cases do
     let actual := outcome source entry inputs
@@ -244,7 +283,7 @@ def callSelfTest : IO UInt32 := do
     IO.eprintln "source call diagram accepted a malformed argument or callee boundary"
     failures := failures+1
   let pairs := [(converted_caller, directTarget), (checked_caller, directTarget),
-    (nested_caller, directTarget), (pressure, pressureTarget)]
+    (nested_caller, directTarget), (pressure, pressureTarget), (privateCaller, privateCallerTarget)]
   for (source, target) in pairs do
     if !(pairAccepted source target) then
       IO.eprintln "original whole-call pair refused"
@@ -273,8 +312,39 @@ def callSelfTest : IO UInt32 := do
     if changed == directTarget || pairAccepted source changed then
       IO.eprintln s!"whole-call mutation failed to refuse: {before}"
       failures := failures+1
+  let inlineMutations := [
+    ("br ^b1(%v0, %v5, %v6, %v5, %v1, %v2)", "br ^b1(%v5, %v0, %v6, %v5, %v1, %v2)"),
+    ("br ^b1(%v0, %v5, %v6, %v5, %v1, %v2)", "br ^b1(%v0, %v5, %v6, %v0, %v1, %v2)"),
+    ("br ^b1(%v0, %v5, %v6, %v5, %v1, %v2)", "br ^b1(%v0, %v5, %v6, %v6, %v1, %v2)"),
+    ("br ^b1(%v0, %v5, %v6, %v5, %v1, %v2)", "br ^b1(%v0, %v5, %v6, %v5, %v2, %v1)"),
+    ("br ^b1(", "br ^missing("),
+    ("uninitialized.bits<32>", "uninitialized.bits<64>"),
+    ("uninitialized.bits<32>", "uninitialized.bits<32> %v0"),
+    ("ret %v21, %v11, %v12", "ret %v9, %v11, %v12"),
+    ("signed_add_defined %v10, %v14", "signed_add_defined %v9, %v14"),
+    ("add.bits<32> %v19, %v16", "add.bits<32> %v19, %v9"),
+    ("    ub.assume.signed_overflow %v4\n", ""),
+    ("    ub.assume.signed_overflow %v15\n", ""),
+    ("    ub.assume.signed_overflow %v20\n", ""),
+    ("    ub.assume.signed_overflow %v4", "    ub.assume.division_by_zero %v4"),
+    ("may_trap=true", "may_trap=false")]
+  for (before, after) in inlineMutations do
+    let changed := privateCallerTarget.replace before after
+    if changed == privateCallerTarget || pairAccepted privateCaller changed then
+      IO.eprintln s!"private-leaf mutation failed to refuse: {before}"
+      failures := failures+1
+  -- A failed scope/parameter restoration must not be mistaken for the old source.
+  let sourceMutations := [
+    ("[\"ident\",\"int\",53],[\"ident\",\"int\",54]", "[\"ident\",\"int\",51],[\"ident\",\"int\",54]"),
+    ("[\"ident\",\"int\",53],[\"ident\",\"int\",54]", "[\"ident\",\"int\",53],[\"ident\",\"int\",55]"),
+    ("[\"lit\",\"int\",\"00000002\"]", "[\"lit\",\"int\",\"00000003\"]")]
+  for (before, after) in sourceMutations do
+    let changed := privateCaller.replace before after
+    if changed == privateCaller || pairAccepted changed privateCallerTarget then
+      IO.eprintln s!"private-leaf source mutation failed to refuse: {before}"
+      failures := failures+1
   if failures == 0 then
-    IO.println s!"{cases.length} original call execution/diagram cases, 4 whole-call pairs, 6 source refusals and {mutations.length} target mutations pass"
+    IO.println s!"{cases.length} original call execution/diagram cases, {pairs.length} whole-call pairs, 6 call-boundary refusals, {sourceMutations.length} source mutations and {mutations.length + inlineMutations.length} target mutations pass"
   return if failures == 0 then 0 else 1
 
 end EvoIR.Core.Source.CallTests

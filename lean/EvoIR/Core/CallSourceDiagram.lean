@@ -1,47 +1,14 @@
-import EvoIR.Core.CallExpression
+import EvoIR.Core.CallFlow
 
 /-! Executable proof construction for source call closures. The original
-source is retained. Finite no-call bodies reuse the existing statement checker;
-program-relative return expressions can contain nested calls and conversions.
-Other calling statement forms and cyclic call composition remain obligations. -/
+source is retained. Finite statements reuse the existing symbolic storage and
+flow trees; calls in initializers, branches and expressions execute the actual
+source machine. Cyclic call composition remains a separate obligation. -/
 namespace EvoIR.Core.Symbolic
 
 def ContextBody {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
     (body : Source.Stmt) (tree : StateTree Γ) : Prop :=
   ∀ σ fid, Source.ReturnsContext p (locals.denote σ) fid body (tree.denote σ)
-
-def ReturnScope {Γ : Var → Nat} (depth : Nat) (locals : LocalStore Γ)
-    (word : CWord Γ) (tree : StateTree Γ) : Prop :=
-  ∃ updated, locals.exitScope depth = some updated ∧ tree = .value updated word
-
-theorem context_compound {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
-    (body : Source.Stmt) (before after : StateTree Γ)
-    (path : ContextBody p locals body before)
-    (scope : TreeBind (ReturnScope locals.length) before after) :
-    ContextBody p locals (.compound [.statement body]) after := by
-  intro σ fid k
-  have length : (locals.denote σ).length = locals.length := by simp [LocalStore.denote]
-  have start : Source.Step p
-      ⟨.statement (.compound [.statement body]), locals.denote σ, k, fid⟩
-      ⟨.items [.statement body], locals.denote σ, .scope locals.length :: k, fid⟩ := by
-    simp [Source.Step, Source.step, Source.enterStatement, length]
-  have enter : Source.Step p
-      ⟨.items [.statement body], locals.denote σ, .scope locals.length :: k, fid⟩
-      ⟨.statement body, locals.denote σ, .sequence [] :: .scope locals.length :: k, fid⟩ := rfl
-  have inner := path σ fid (.sequence [] :: .scope locals.length :: k)
-  rcases scope.outcome σ with ⟨ls, fault, failed, output⟩ |
-    ⟨ls, word, tree, ⟨updated, exit, shape⟩, success, output⟩
-  · rw [output]
-    simp only [failed] at inner
-    obtain ⟨failedLocals, failedK, failedFid, steps⟩ := inner
-    exact ⟨failedLocals, failedK, failedFid, .next start (.next enter steps)⟩
-  · rw [output, shape]
-    simp only [success] at inner
-    have leave := local_scope_exit_sound σ ls updated locals.length exit
-      ⟨.flow (.returned (word.denote σ)), ls.denote σ, k, fid⟩ rfl
-      (.returned (word.denote σ))
-    exact .next start (.next enter (inner.trans (.next rfl
-      (.next (congrArg some leave) (.refl _)))))
 
 def closedBody {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
     (body : Source.Stmt) : Option {tree // ContextBody p locals body tree} := do
@@ -147,20 +114,76 @@ mutual
     | fuel+1, locals, body =>
       match closedBody p locals body with
       | some simple => some simple
-      | none => match body with
-        | .return destination expr => do
-          let r ← callExpression p fuel locals expr
-          return ⟨r.val.cast destination.type, by
-            intro σ fid
-            rw [StateTree.cast_sound]
-            exact Source.context_return destination expr _ (r.property σ fid)⟩
-        | .compound [.statement inner] => do
-          let r ← callBody p fuel locals inner
-          let exit ← r.val.bind? (next := ReturnScope locals.length) (fun ls word => do
-            match h : ls.exitScope locals.length with
+      | none => do
+        let flow ← callFlow p fuel locals (.statement body)
+        let returned ← flow.val.returns?
+        return ⟨returned.val, by
+          intro σ fid k
+          have path := flow.property σ fid k
+          rw [returned.property.sound σ] at path
+          cases result : (returned.val.denote σ).2 <;>
+            simpa only [result, Except.map] using path⟩
+
+  def callFlow {Γ : Var → Nat} (p : Source.Program) : (fuel : Nat) →
+      (locals : LocalStore Γ) → (control : Source.Control) →
+      Option {tree // ContextFlowDiagram p locals control tree}
+    | 0, _, _ => none
+    | fuel+1, locals, control =>
+      match flowDiagram (fuel+1) locals control with
+      | some simple => some ⟨simple.val, fun σ fid => (simple.property σ p fid).inContext⟩
+      | none => match control with
+        | .object object => do
+          let fresh : {ls // locals.declare object.symbol object.type = some ls} ←
+            match h : locals.declare object.symbol object.type with
             | none => none
-            | some updated => return ⟨.value updated word, updated, h, rfl⟩)
-          return ⟨exit.val, context_compound p locals inner r.val exit.val r.property exit.property⟩
+            | some ls => some ⟨ls, h⟩
+          match initialized : object.initializer with
+          | none => none -- The call-free checker already handles this case.
+          | some (destination, expr) =>
+            if same : destination = object.type then
+              let e ← callExpression p fuel fresh.val expr
+              let t ← e.val.bindFlow? (next := (ContextFrameDiagram p ·
+                  (.initialize object.symbol object.type) · ·)) (fun ls w => do
+                match written : ls.write object.symbol object.type (w.cast object.type.type) true with
+                | none => none
+                | some updated => return ⟨.value updated .normal, fun σ fid =>
+                    (initialize_frame ls updated w object.symbol object.type written σ p fid).inContext⟩)
+              return ⟨t.val, context_initialized_object p locals fresh.val object expr e.val t.val
+                (same ▸ initialized) fresh.property e.property t.property⟩
+            else none
+        | .items (item :: rest) => do
+          let a ← callFlow p fuel locals (itemControl item)
+          let b ← a.val.bindNormal? (next := fun ls tree => ContextFlowDiagram p ls (.items rest) tree)
+            (fun ls => callFlow p fuel ls (.items rest))
+          return ⟨b.val, context_sequence p locals item rest a.val b.val a.property b.property⟩
+        | .statement (.expression expr) => do
+          let a ← callExpression p fuel locals expr
+          let b ← a.val.bindFlow? (next := (ContextFrameDiagram p · .discard · ·))
+            (fun ls w => some ⟨.value ls .normal,
+              fun σ fid => (discard_frame ls w σ p fid).inContext⟩)
+          return ⟨b.val, context_expression_flow p locals locals _ expr .discard a.val b.val
+            (by intros; rfl) a.property b.property⟩
+        | .statement (.return destination expr) => do
+          let a ← callExpression p fuel locals expr
+          let b ← a.val.bindFlow? (next := (ContextFrameDiagram p · (.return destination) · ·))
+            (fun ls w => some ⟨.value ls (.returned (w.cast destination.type)),
+              fun σ fid => (return_frame ls w destination σ p fid).inContext⟩)
+          return ⟨b.val, context_expression_flow p locals locals _ expr (.return destination) a.val b.val
+            (by intros; rfl) a.property b.property⟩
+        | .statement (.ite condition yes no) => do
+          let a ← callExpression p fuel locals condition
+          let b ← a.val.bindFlow? (next := (ContextFrameDiagram p · (.branch yes no) · ·))
+            (fun ls w => do
+              let first ← callFlow p fuel ls (.statement yes)
+              let second ← callFlow p fuel ls (.statement (no.getD .null))
+              return ⟨.branch w.truthTerm first.val second.val,
+                context_branch_frame p ls w yes no first.val second.val first.property second.property⟩)
+          return ⟨b.val, context_expression_flow p locals locals _ condition (.branch yes no) a.val b.val
+            (by intros; rfl) a.property b.property⟩
+        | .statement (.compound items) => do
+          let a ← callFlow p fuel locals (.items items)
+          let b ← a.val.mapLeaves? (scopeExit locals.length)
+          return ⟨b.val, context_scope p locals items a.val b.val a.property b.property⟩
         | _ => none
 
   def callFunction {Γ : Var → Nat} (p : Source.Program) : (fuel : Nat) →
@@ -180,6 +203,18 @@ mutual
         else none
       else none
 end
+
+/-- Statements containing calls preserve scope exits and non-normal flow;
+faults may halt within a callee and never execute the remaining statements. -/
+theorem call_flow_sound {Γ : Var → Nat} (p : Source.Program) (fuel : Nat)
+    (locals : LocalStore Γ) (control : Source.Control) (tree : FlowTree Γ)
+    (accepted : (callFlow p fuel locals control).map Subtype.val = some tree) :
+    ContextFlowDiagram p locals control tree := by
+  cases built : callFlow p fuel locals control with
+  | none => simp [built] at accepted
+  | some result =>
+    simp only [built, Option.map_some, Option.some.injEq] at accepted
+    exact accepted ▸ result.property
 
 /-- A successful construction carries execution evidence for every typed
 valuation and every caller continuation, not only the vectors in the tests. -/

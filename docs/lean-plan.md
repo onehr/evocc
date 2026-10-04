@@ -595,6 +595,24 @@ Slice artifact net: **+4,196 KiB** across `.lake` and the capture;
 proposition dumps (8,512 bytes) were removed after a no-open-handle check; their
 statements/dependencies remain in the committed audit/receipt and are regenerable.
 
+**Private-leaf source/target correspondence (October 5 continuation).**
+The unchanged `source-execution.c` caller export retains its `frame` definition
+and call; the actual O0 EvoIR substitutes the private leaf. This complete pair
+now passes `--check-core-leaf-pair` for all signature arguments. `CallFlow.lean`
+extends the existing symbolic statement trees with program-relative execution:
+callee faults retain their real activation; successful calls restore the caller,
+then declarations, sequence and scope exits follow the original source machine.
+The target diagram now checks unconditional CFG edges and the actual final
+return block, including simultaneous argument transport. Uninitialized scalar
+placeholders retain poison and cannot be read as numeric terms or returned.
+No source rewriting, IR cleanup or changed compiler default is used for admission.
+Focused selftests pass 17 call execution/diagram controls, five complete pairs,
+six call-boundary refusals, three source mutations and 33 target mutations.
+The three added audit targets are kernel-only. Clean integration gates are
+pending at this implementation checkpoint. Calling expressions beyond the
+implemented forms, cyclic/private-storage call composition, complete constructor
+coverage and validator execution safety still block V01; V02–V06 remain open.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted

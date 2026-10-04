@@ -8,7 +8,12 @@ all admitted instructions and callees preserve it. -/
 namespace EvoIR.Core.Symbolic
 
 def callTokens (id : Nat) : IR.Value :=
-  if id == 0 then .memory ⟨1, []⟩ else .world
+  if id == 0 then .memory ⟨1, []⟩ else if id == 1 then .world else .poison (.bits (id-2))
+
+theorem call_poison (width : Nat) : callTokens (width+2) = .poison (.bits width) := by
+  have zero : (width+2 == 0) = false := by simp
+  have one : (width+2 == 1) = false := by simp only [beq_eq_false_iff_ne]; omega
+  simp [callTokens, zero, one]
 
 def callTokenTypes (id : Nat) : IR.Ty := (callTokens id).type
 
@@ -63,18 +68,21 @@ def CallTargetDiagram {Γ : Var → Nat} (p : IR.Program) (f : IR.Function) (b :
   ∀ σ owner nextFrame stack, ∃ last, IR.Steps p (callState σ f b pc owner nextFrame scope stack) last ∧
     match guards σ result.1 with
     | .error fault => last.control = .halted (.error fault)
-    | .ok _ => ∃ values afterCalls ids,
-        last = ⟨.running ⟨f.name, b.name, b.instructions.length, values, owner⟩, stack, afterCalls⟩ ∧
-        b.terminator = .return ids ∧ ids.mapM (IR.lookup values) =
+    | .ok _ => ∃ finalBlock values afterCalls ids,
+        f.blocks.find? (·.name == finalBlock.name) = some finalBlock ∧
+        last = ⟨.running ⟨f.name, finalBlock.name, finalBlock.instructions.length, values, owner⟩,
+          stack, afterCalls⟩ ∧
+        finalBlock.terminator = .return ids ∧ ids.mapM (IR.lookup values) =
           .ok ((callResults result.2).map (Slot.denote σ callTokens))
 
 theorem call_target_return {Γ : Var → Nat} (p : IR.Program) (f : IR.Function) (b : IR.Block)
     (scope : Scope Γ) (ids : List Nat) (word : CWord Γ)
+    (block : f.blocks.find? (·.name == b.name) = some b)
     (returned : b.terminator = .return ids)
     (lookup : ids.mapM (fun id => scope.lookup id) = some (callResults word)) :
     CallTargetDiagram p f b b.instructions.length scope ([], word) := by
   intro σ owner nextFrame stack
-  exact ⟨_, .refl _, scope.denote σ callTokens, nextFrame, ids, rfl, returned,
+  exact ⟨_, .refl _, b, scope.denote σ callTokens, nextFrame, ids, block, rfl, returned,
     slots_lookup_sound σ callTokens scope ids (callResults word) lookup⟩
 
 theorem call_target_instruction {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
@@ -105,6 +113,53 @@ theorem call_target_instruction {Γ : Var → Nat} (p : IR.Program) (f : IR.Func
       rw [execute, checked]
       rfl
     · exact outcome
+
+/-- Uninitialized data is transported as poison, never made into a symbolic
+integer or admitted as a numeric operand. Unused lowered placeholders may cross
+edges, but a read, arithmetic use, guard or return still refuses the diagram. -/
+theorem call_target_uninitialized {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
+    (b : IR.Block) (pc width : Nat) (scope next : Scope Γ) (inst : IR.Instruction)
+    (result : ExpressionResult Γ)
+    (function : p.functions.find? (·.name == f.name) = some f)
+    (block : f.blocks.find? (·.name == b.name) = some b)
+    (atPc : b.instructions[pc]? = some inst)
+    (op : inst.op = .uninitialized (.bits width)) (args : inst.operands = [])
+    (binding : scope.appendSlots inst.results [.opaque (width+2)] = some next)
+    (tail : CallTargetDiagram p f b (pc+1) next result) :
+    CallTargetDiagram p f b pc scope result := by
+  intro σ owner nextFrame stack
+  have bindings := append_slots_sound σ scope next inst.results [.opaque (width+2)] binding
+  simp only [List.map_cons, List.map_nil, Slot.denote, call_poison] at bindings
+  have execute := execute_instruction (p := p)
+    (s := callState σ f b pc owner nextFrame scope stack)
+    (a := ⟨f.name, b.name, pc, scope.denote σ callTokens, owner⟩)
+    function block atPc (by intro name; simp [op])
+  dsimp only [callState] at execute
+  obtain ⟨last, steps, outcome⟩ := tail σ owner nextFrame stack
+  refine ⟨last, .next (.execute ?_) steps, outcome⟩
+  simp only [IR.step, callState]
+  rw [execute]
+  simp [concreteInstruction, args, op, IR.evalOperation, bindings,
+    Bind.bind, Except.bind, pure, Except.pure]
+
+theorem call_target_branch {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
+    (b nextBlock : IR.Block) (scope next : Scope Γ) (successor : IR.Edge)
+    (result : ExpressionResult Γ)
+    (function : p.functions.find? (·.name == f.name) = some f)
+    (block : f.blocks.find? (·.name == b.name) = some b)
+    (terminator : b.terminator = .branch successor)
+    (name : nextBlock.name = successor.block)
+    (binding : edge callTokenTypes f scope successor = some next)
+    (tail : CallTargetDiagram p f nextBlock 0 next result) :
+    CallTargetDiagram p f b b.instructions.length scope result := by
+  intro σ owner nextFrame stack
+  have step := branch_execution_sound σ callTokens callTokenTypes (by intro id; rfl) p
+    (callState σ f b b.instructions.length owner nextFrame scope stack)
+    ⟨f.name, b.name, b.instructions.length, scope.denote σ callTokens, owner⟩
+    f b scope next successor rfl function block rfl terminator rfl
+    (by simp [checkEdge, binding])
+  obtain ⟨last, path, outcome⟩ := tail σ owner nextFrame stack
+  exact ⟨last, .next (.execute (by simpa only [callState, name] using step)) path, outcome⟩
 
 structure CallFunctionDiagram {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     (args : List (Slot Γ)) (result : ExpressionResult Γ) where
@@ -163,7 +218,7 @@ theorem call_target_call {Γ : Var → Nat} (p : IR.Program) (f callee : IR.Func
     exact ⟨last, prefixPath, by simpa only [checked, Bind.bind, Except.bind] using outcome⟩
   | ok unitValue =>
     simp only [checked] at outcome
-    obtain ⟨values, afterCalls, ids, state, terminator, returned⟩ := outcome
+    obtain ⟨finalBlock, values, afterCalls, ids, finalFound, state, terminator, returned⟩ := outcome
     subst last
     have types : ((callResults called.2).map (Slot.denote σ callTokens)).map IR.Value.type =
         callee.returns := by
@@ -174,11 +229,11 @@ theorem call_target_call {Γ : Var → Nat} (p : IR.Program) (f callee : IR.Func
         (callResults called.2).map (Slot.denote σ callTokens) := rfl
     have bindings := append_slots_sound σ scope next inst.results (callResults called.2) binding
     have resumed := IR.call_returns p
-      ⟨.running ⟨callee.name, body.block.name, body.block.instructions.length, values, nextFrame⟩,
+      ⟨.running ⟨callee.name, finalBlock.name, finalBlock.instructions.length, values, nextFrame⟩,
         frame :: stack, afterCalls⟩
-      ⟨callee.name, body.block.name, body.block.instructions.length, values, nextFrame⟩
-      callee body.block ids ((callResults called.2).map (Slot.denote σ callTokens)) frame stack
-      (next.denote σ callTokens) rfl found body.found rfl terminator returned types rfl
+      ⟨callee.name, finalBlock.name, finalBlock.instructions.length, values, nextFrame⟩
+      callee finalBlock ids ((callResults called.2).map (Slot.denote σ callTokens)) frame stack
+      (next.denote σ callTokens) rfl found finalFound rfl terminator returned types rfl
       (by simpa only [endFrame] using bindings)
     obtain ⟨final, rest, resultOutcome⟩ := tail σ owner afterCalls stack
     exact ⟨final, prefixPath.trans (.next resumed rest), resultOutcome⟩
@@ -208,9 +263,22 @@ mutual
                     let result : CWord Γ := ⟨type, width ▸ term⟩
                     if lookup : [id, mem, world].mapM (fun id => scope.lookup id) =
                         some (callResults result) then
-                      return ⟨([], result), atEnd ▸ call_target_return p f b scope _ result returned lookup⟩
+                      return ⟨([], result), atEnd ▸ call_target_return p f b scope _ result block returned lookup⟩
                     else none
                   else none
+              | .branch successor => do
+                let nextBlock : {nextBlock // f.blocks.find? (·.name == successor.block) = some nextBlock} ←
+                  match found : f.blocks.find? (·.name == successor.block) with
+                  | none => none
+                  | some nextBlock => some ⟨nextBlock, found⟩
+                let next : {next // edge callTokenTypes f scope successor = some next} ←
+                  match bound : edge callTokenTypes f scope successor with
+                  | none => none
+                  | some next => some ⟨next, bound⟩
+                let tail ← callTargetBlock p f nextBlock.val type fuel 0 next.val
+                return ⟨tail.val, atEnd ▸ call_target_branch p f b nextBlock.val scope next.val
+                  successor tail.val function block returned
+                  (by simpa using List.find?_some nextBlock.property) next.property tail.property⟩
               | _ => none
             else none
           | some inst =>
@@ -222,6 +290,16 @@ mutual
                   function block atPc code tail.property⟩
             | none =>
               match call : inst.op with
+              | .uninitialized (.bits width) => do
+                if args : inst.operands = [] then
+                  let next : {next // scope.appendSlots inst.results [.opaque (width+2)] = some next} ←
+                    match bound : scope.appendSlots inst.results [.opaque (width+2)] with
+                    | none => none
+                    | some next => some ⟨next, bound⟩
+                  let tail ← callTargetBlock p f b type fuel (pc+1) next.val
+                  return ⟨tail.val, call_target_uninitialized p f b pc width scope next.val inst
+                    tail.val function block atPc call args next.property tail.property⟩
+                else none
               | .call name => do
                 let callee : {callee // p.functions.find? (·.name == name) = some callee} ←
                   match found : p.functions.find? (·.name == name) with
@@ -297,13 +375,13 @@ theorem CallFunctionDiagram.completes {Γ : Var → Nat} (σ : Subst Γ)
     simpa only [ExpressionResult.denote, checked, Bind.bind, Except.bind, Except.map] using outcome
   | ok unitValue =>
     simp only [checked] at outcome
-    obtain ⟨values, afterCalls, ids, state, terminator, returned⟩ := outcome
+    obtain ⟨finalBlock, values, afterCalls, ids, finalFound, state, terminator, returned⟩ := outcome
     subst last
     rw [call_results_denote] at returned
     let final : IR.State := ⟨.halted (.ok
       [sourceValueIR (result.2.denote σ), .memory ⟨1, []⟩, .world]), [], afterCalls⟩
     refine ⟨entry, final, initial, path.trans (.next (.execute ?_) (.refl _)), ?_⟩
-    · simp [IR.step, IR.execute, function, diagram.found, terminator, returned,
+    · simp [IR.step, IR.execute, function, finalFound, terminator, returned,
         diagram.returns, sourceValueIR, CWord.denote, IR.Value.type, IR.Memory.endFrame,
         Bind.bind, Except.bind, pure, Except.pure, final]
     · simp [final, ExpressionResult.denote, checked, Bind.bind, Except.bind, Except.map, pure, Except.pure]

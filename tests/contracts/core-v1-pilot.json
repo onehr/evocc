@@ -438,6 +438,28 @@
     "capture_retention_bytes": 524288000,
     "claim_ceiling": "Finite call source-to-EvoIR correspondence, not V01 completion. More calling statement forms, cyclic/private-storage call composition, private-leaf substitution, validator safety, complete constructor/closure coverage and V02-V06 remain open. No native or release claim."
   },
+  "private_leaf_correspondence": {
+    "status": "FOCUSED_PASS_CLEAN_GATES_PENDING_V01_OPEN",
+    "theorem": "EvoIR.Core.Symbolic.CallPair.refines",
+    "new_audit_targets": ["EvoIR.Core.Symbolic.call_flow_sound", "EvoIR.Core.Symbolic.call_target_branch", "EvoIR.Core.Symbolic.call_target_uninitialized"],
+    "source_export": ".evidence/verification-core/20261004/source-execution/caller.json",
+    "source_sha256": "500fc4629e444cd212d21e18571b0a5f94d1d2e0626f7e6a6cf62a571983cc82",
+    "target_export": ".evidence/verification-core/20261004/source-execution/source-execution.evo",
+    "original_pair": "caller with original frame closure versus actual O0 private-leaf substitution",
+    "red_log": ".evidence/verification-core/20261004/source-execution/private-leaf-red.log",
+    "green_log": ".evidence/verification-core/20261004/source-execution/private-leaf-green.log",
+    "selftest_log": ".evidence/verification-core/20261004/source-execution/private-leaf-selftest.log",
+    "call_execution_controls": 17,
+    "complete_call_pairs": 5,
+    "call_boundary_refusals": 6,
+    "source_mutations": 3,
+    "target_mutations": 33,
+    "core_targets": 64,
+    "proof_kind": "kernel-only",
+    "native_axioms": [],
+    "capture_retention_bytes": 524288000,
+    "claim_ceiling": "Original private-leaf substitution and finite calling statements, not full V01. Calling-expression coverage, cyclic/private-storage call composition, validator safety and V02-V06 remain open. No backend or verified-release claim."
+  },
   "integration_gates": {
     "rust_implementation_commit": "1b859487046e52ca5e1c645469535bcf3b7703a8",
     "lean_implementation_commit": "1b859487046e52ca5e1c645469535bcf3b7703a8",

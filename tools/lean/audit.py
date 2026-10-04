@@ -287,6 +287,37 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.call_flow_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (fuel : Nat) (locals : "
+        "EvoIR.Core.Symbolic.LocalStore Γ) (control : EvoIR.Core.Source.Control) (tree : "
+        "EvoIR.Core.Symbolic.FlowTree Γ), Option.map Subtype.val (EvoIR.Core.Symbolic.callFlow p "
+        "fuel locals control) = some tree → EvoIR.Core.Symbolic.ContextFlowDiagram p locals control tree",
+    ),
+    (
+        "EvoIR.Core.Symbolic.call_target_uninitialized",
+        "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b : "
+        "EvoIR.Core.IR.Block) (pc width : Nat) (scope next : EvoIR.Core.Symbolic.Scope Γ) (inst : "
+        "EvoIR.Core.IR.Instruction) (result : EvoIR.Core.Symbolic.ExpressionResult Γ), List.find? "
+        "(fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) "
+        "f.blocks = some b → b.instructions[pc]? = some inst → inst.op = "
+        "EvoIR.Core.IR.Operation.uninitialized (EvoIR.Core.IR.Ty.bits width) → inst.operands = [] → "
+        "scope.appendSlots inst.results [EvoIR.Core.Symbolic.Slot.opaque (width + 2)] = some next → "
+        "EvoIR.Core.Symbolic.CallTargetDiagram p f b (pc + 1) next result → "
+        "EvoIR.Core.Symbolic.CallTargetDiagram p f b pc scope result",
+    ),
+    (
+        "EvoIR.Core.Symbolic.call_target_branch",
+        "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b "
+        "nextBlock : EvoIR.Core.IR.Block) (scope next : EvoIR.Core.Symbolic.Scope Γ) (successor : "
+        "EvoIR.Core.IR.Edge) (result : EvoIR.Core.Symbolic.ExpressionResult Γ), List.find? (fun x "
+        "=> x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) "
+        "f.blocks = some b → b.terminator = EvoIR.Core.IR.Terminator.branch successor → "
+        "nextBlock.name = successor.block → EvoIR.Core.Symbolic.edge "
+        "EvoIR.Core.Symbolic.callTokenTypes f scope successor = some next → "
+        "EvoIR.Core.Symbolic.CallTargetDiagram p f nextBlock 0 next result → "
+        "EvoIR.Core.Symbolic.CallTargetDiagram p f b b.instructions.length scope result",
+    ),
+    (
         "EvoIR.Core.Symbolic.CallPair.refines",
         "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} (pair : "
         "EvoIR.Core.Symbolic.CallPair source target) (args : List EvoIR.Core.Source.Value), List.map "

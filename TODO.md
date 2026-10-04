@@ -2494,6 +2494,17 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   substitution, validator safety and full constructor/closure coverage remain OPEN.
   The original `caller`/inlined-`frame` pair is the next recorded RED (exit 1).
 
+  **October 5 private-leaf continuation:** that unchanged original pair now
+  passes the all-input call correspondence checker. Calls in finite statements,
+  declaration initialization and scope exits have program-relative source
+  proofs; target unconditional edges transport all bindings simultaneously,
+  preserving unused poison without admitting numeric uses. The focused gate
+  passes 17 call execution controls, five pairs, six call-boundary refusals,
+  three source mutations and 33 target mutations. Clean integration gates are
+  pending at the implementation checkpoint. Calls combined with loops/private
+  storage, the remaining calling expression forms, full constructor coverage
+  and validator safety remain OPEN. V02–V06 have not advanced.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong
