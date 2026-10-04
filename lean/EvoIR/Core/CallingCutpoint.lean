@@ -12,21 +12,40 @@ def cutResults {Γ : Var → Nat} (tokens : Bool) (word : CWord Γ) : List (Slot
 def cutReturnTypes (tokens : Bool) (type : Source.IntType) : List IR.Ty :=
   [.bits type.width] ++ if tokens then [.memory, .world] else []
 
+/-- Restore the actual caller binding or retain the actual binding failure.
+The admitted returned token is empty memory, so ending the callee frame does
+not change it. This is not a private-storage return summary. -/
+def cutResume (values : List IR.Value) (nextFrame : Nat)
+    (stack : List IR.ReturnFrame) : IR.State :=
+  match stack with
+  | [] => ⟨.halted (.ok values), [], nextFrame⟩
+  | frame :: rest =>
+    match IR.appendResults frame.caller.values frame.results values with
+    | .ok bound => ⟨.running {frame.caller with values := bound}, rest, nextFrame⟩
+    | .error fault => ⟨.halted (.error fault), stack, nextFrame⟩
+
+def cutTargetState {Γ : Var → Nat} (σ : Subst Γ) (f : IR.Function)
+    (label : String) (pc owner nextFrame : Nat) (scope : Scope Γ)
+    (stack : List IR.ReturnFrame) : IR.State :=
+  {targetState σ callTokens f label pc owner nextFrame scope with stack}
+
 def TargetExit.callState {Γ : Var → Nat} (σ : Subst Γ) (tokens : Bool)
-    (f : IR.Function) (owner nextFrame : Nat) : TargetExit Γ → IR.State
-  | .returned word => ⟨.halted (.ok ((cutResults tokens word).map (Slot.denote σ callTokens))), [], nextFrame⟩
-  | .next label scope => targetState σ callTokens f label 0 owner nextFrame scope
+    (f : IR.Function) (owner nextFrame : Nat) (exit : TargetExit Γ)
+    (stack : List IR.ReturnFrame := []) : IR.State :=
+  match exit with
+  | .returned word => cutResume ((cutResults tokens word).map (Slot.denote σ callTokens)) nextFrame stack
+  | .next label scope => cutTargetState σ f label 0 owner nextFrame scope stack
 
 def CallingCutRuns {Γ : Var → Nat} (p : IR.Program) (f : IR.Function) (tokens : Bool)
     (advance : Bool) (label : String) (pc : Nat) (scope : Scope Γ)
     (tree : CutTree Γ (TargetExit Γ)) : Prop :=
-  ∀ σ owner nextFrame, ∃ final,
-    IR.Steps p (targetState σ callTokens f label pc owner nextFrame scope) final ∧
+  ∀ σ owner nextFrame stack, ∃ final,
+    IR.Steps p (cutTargetState σ f label pc owner nextFrame scope stack) final ∧
     (advance = true → Relation.TransGen (Transition.Predecessor (IR.step p)) final
-      (targetState σ callTokens f label pc owner nextFrame scope)) ∧
+      (cutTargetState σ f label pc owner nextFrame scope stack)) ∧
     match tree.eval σ with
     | .error fault => final.control = .halted (.error fault)
-    | .ok exit => ∃ afterCalls, final = exit.callState σ tokens f owner afterCalls
+    | .ok exit => ∃ afterCalls, final = exit.callState σ tokens f owner afterCalls stack
 
 theorem calling_cut_span {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     (tokens advance : Bool) (b : IR.Block) (scope : Scope Γ)
@@ -34,8 +53,8 @@ theorem calling_cut_span {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     (span : TargetInstructionSpan p f b 0 scope before)
     (continued : CutBind (CallingCutRuns p f tokens advance b.name b.instructions.length) before after) :
     CallingCutRuns p f tokens advance b.name 0 scope after := by
-  intro σ owner nextFrame
-  obtain ⟨middle, path, outcome⟩ := span σ owner nextFrame []
+  intro σ owner nextFrame stack
+  obtain ⟨middle, path, outcome⟩ := span σ owner nextFrame stack
   rcases continued.outcome σ with ⟨fault, failed, output⟩ |
     ⟨next, rest, success, resumed, output⟩
   · have halted : middle.control = .halted (.error fault) := by simpa [failed] using outcome
@@ -46,9 +65,9 @@ theorem calling_cut_span {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     rw [← same] at halted
     cases halted
   · obtain ⟨afterCalls, same⟩ := (by simpa [success] using outcome :
-      ∃ afterCalls, middle = callState σ f b b.instructions.length owner afterCalls next [])
+      ∃ afterCalls, middle = callState σ f b b.instructions.length owner afterCalls next stack)
     subst middle
-    obtain ⟨last, tail, positive, final⟩ := resumed σ owner afterCalls
+    obtain ⟨last, tail, positive, final⟩ := resumed σ owner afterCalls stack
     exact ⟨last, path.trans tail,
       fun h => path.toReaches.then_positive (positive h), by simpa [output] using final⟩
 
@@ -60,15 +79,16 @@ theorem calling_cut_return {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     (lookup : ids.mapM (fun id => scope.lookup id) = some (cutResults tokens word))
     (returns : f.returns = cutReturnTypes tokens word.type) :
     CallingCutRuns p f tokens advance b.name b.instructions.length scope (.leaf (.returned word)) := by
-  intro σ owner nextFrame
+  intro σ owner nextFrame stack
   have values := slots_lookup_sound σ callTokens scope ids (cutResults tokens word) lookup
-  have step : IR.step p (targetState σ callTokens f b.name b.instructions.length owner nextFrame scope) =
-      some ((TargetExit.returned word).callState σ tokens f owner nextFrame) := by
-    cases tokens <;>
+  have step : IR.step p (cutTargetState σ f b.name b.instructions.length owner nextFrame scope stack) =
+      some ((TargetExit.returned word).callState σ tokens f owner nextFrame stack) := by
+    cases tokens <;> cases stack <;>
       simp [IR.step, IR.execute, targetState, function, block, terminator, values, returns,
         cutResults, cutReturnTypes, callResults, TargetExit.callState, Slot.denote,
-        callTokens, IR.Value.type, Word.denote, CWord.word, IR.Memory.endFrame,
+        callTokens, IR.Value.type, Word.denote, CWord.word, IR.Memory.endFrame, cutTargetState, cutResume,
         bind, Except.bind, pure, Except.pure]
+    all_goals split <;> split at * <;> simp_all
   exact ⟨_, .next (.execute step) (.refl _), fun _ => .single step, nextFrame, rfl⟩
 
 theorem calling_cut_branch {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
@@ -80,12 +100,12 @@ theorem calling_cut_branch {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     (binding : edge callTokenTypes f scope successor = some next)
     (tail : CallingCutRuns p f tokens false successor.block 0 next tree) :
     CallingCutRuns p f tokens advance b.name b.instructions.length scope tree := by
-  intro σ owner nextFrame
+  intro σ owner nextFrame stack
   have step := branch_execution_sound σ callTokens callTokenTypes (by intro id; rfl) p
-    (targetState σ callTokens f b.name b.instructions.length owner nextFrame scope)
+    (cutTargetState σ f b.name b.instructions.length owner nextFrame scope stack)
     ⟨f.name, b.name, b.instructions.length, scope.denote σ callTokens, owner⟩
     f b scope next successor rfl function block rfl terminator rfl (by simp [checkEdge, binding])
-  obtain ⟨last, path, _, outcome⟩ := tail σ owner nextFrame
+  obtain ⟨last, path, _, outcome⟩ := tail σ owner nextFrame stack
   exact ⟨last, .next (.execute step) path, fun _ => path.toReaches.after_step step, outcome⟩
 
 theorem calling_cut_choice {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
@@ -100,19 +120,19 @@ theorem calling_cut_choice {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     (first : CallingCutRuns p f tokens false yes.block 0 yesScope a)
     (second : CallingCutRuns p f tokens false no.block 0 noScope c) :
     CallingCutRuns p f tokens advance b.name b.instructions.length scope (.branch condition a c) := by
-  intro σ owner nextFrame
+  intro σ owner nextFrame stack
   have step := conditional_execution_sound σ callTokens callTokenTypes (by intro id; rfl) p
-    (targetState σ callTokens f b.name b.instructions.length owner nextFrame scope)
+    (cutTargetState σ f b.name b.instructions.length owner nextFrame scope stack)
     ⟨f.name, b.name, b.instructions.length, scope.denote σ callTokens, owner⟩
     f b scope yesScope noScope id condition yes no rfl function block rfl terminator rfl test
     (by simp [checkEdge, firstEdge]) (by simp [checkEdge, secondEdge])
   by_cases zero : (denoteTerm σ condition).toNat == 0
-  · obtain ⟨last, path, _, outcome⟩ := second σ owner nextFrame
+  · obtain ⟨last, path, _, outcome⟩ := second σ owner nextFrame stack
     have actual := step
     simp only [zero] at actual
     exact ⟨last, .next (.execute actual) path, fun _ => path.toReaches.after_step actual,
       by simpa [CutTree.eval, bne, zero] using outcome⟩
-  · obtain ⟨last, path, _, outcome⟩ := first σ owner nextFrame
+  · obtain ⟨last, path, _, outcome⟩ := first σ owner nextFrame stack
     have actual := step
     simp only [zero] at actual
     exact ⟨last, .next (.execute actual) path, fun _ => path.toReaches.after_step actual,
@@ -124,7 +144,7 @@ def callingCutDiagram {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     Option {tree // CallingCutRuns p f tokens advance label 0 scope tree} :=
   if stopped : advance = false ∧ label ∈ cutpoints then
     some ⟨.leaf (.next label scope), by
-      intro σ owner nextFrame
+      intro σ owner nextFrame stack
       exact ⟨_, .refl _, by simp [stopped.1], nextFrame, rfl⟩⟩
   else match budget with
   | 0 => none

@@ -14,11 +14,12 @@ def StateTree.cutTree {Γ : Var → Nat} (k : List Source.Frame) :
   | .branch condition yes no => .branch condition (yes.cutTree k) (no.cutTree k)
 
 theorem StateTree.cut_eval {Γ : Var → Nat} (σ : Subst Γ) (fid : Nat)
-    (k : List Source.Frame) (tree : StateTree Γ) :
-    ((tree.cutTree k).eval σ).map (SourceCursor.denote σ fid) =
-      (tree.denote σ).2.map (fun v => ⟨.value v, (tree.denote σ).1, k, fid⟩) := by
+    (k : List Source.Frame) (tree : StateTree Γ) (context : Option SourceReturnContext) :
+    ((tree.cutTree k).eval σ).map (fun cursor => cursor.denote σ fid context) =
+      (tree.denote σ).2.map (fun v =>
+        ⟨.value v, (tree.denote σ).1, sourceContextFrames context k, fid⟩) := by
   induction tree with
-  | value locals word => rfl
+  | value locals word => cases context <;> rfl
   | checked locals guard tail ih =>
     simp only [cutTree, CutTree.eval, StateTree.denote]
     cases guards σ [guard] with
@@ -32,9 +33,13 @@ theorem expression_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : L
     (expr : Source.Expr) (k : List Source.Frame) (tree : StateTree Γ)
     (diagram : ContextDiagram p locals expr tree) :
     SourceCutRuns p true ⟨.expression expr, locals, k⟩ (tree.cutTree k) := by
-  intro σ fid
-  have path := diagram σ fid k
-  have same := tree.cut_eval σ fid k
+  intro σ fid context
+  have path := diagram σ fid (sourceContextFrames context k)
+  have same := tree.cut_eval σ fid k context
+  have start : (SourceCursor.mk (.expression expr) locals k).denote σ fid context =
+      ⟨.expression expr, locals.denote σ, sourceContextFrames context k, fid⟩ := by
+    cases context <;> rfl
+  rw [start]
   cases result : tree.denote σ with
   | mk ls value =>
     cases value with
@@ -50,7 +55,8 @@ theorem expression_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : L
     | ok word =>
       simp only [result] at path
       have output : ∃ exit, (tree.cutTree k).eval σ = .ok exit ∧
-          exit.denote σ fid = ⟨.value word, ls, k, fid⟩ := by
+          exit.denote σ fid context =
+            ⟨.value word, ls, sourceContextFrames context k, fid⟩ := by
         cases h : (tree.cutTree k).eval σ with
         | error fault => simp [h, result, Except.map] at same
         | ok exit => exact ⟨exit, rfl, by simpa [h, result, Except.map] using same⟩
@@ -67,11 +73,12 @@ def FlowTree.cutTree {Γ : Var → Nat} (k : List Source.Frame) :
   | .branch condition yes no => .branch condition (yes.cutTree k) (no.cutTree k)
 
 theorem FlowTree.cut_eval {Γ : Var → Nat} (σ : Subst Γ) (fid : Nat)
-    (k : List Source.Frame) (tree : FlowTree Γ) :
-    ((tree.cutTree k).eval σ).map (SourceCursor.denote σ fid) =
-      (tree.denote σ).2.map (fun v => ⟨.flow v, (tree.denote σ).1, k, fid⟩) := by
+    (k : List Source.Frame) (tree : FlowTree Γ) (context : Option SourceReturnContext) :
+    ((tree.cutTree k).eval σ).map (fun cursor => cursor.denote σ fid context) =
+      (tree.denote σ).2.map (fun v =>
+        ⟨.flow v, (tree.denote σ).1, sourceContextFrames context k, fid⟩) := by
   induction tree with
-  | value locals flow => rfl
+  | value locals flow => cases context <;> rfl
   | checked locals guard tail ih =>
     simp only [cutTree, CutTree.eval, FlowTree.denote]
     cases guards σ [guard] with
@@ -85,9 +92,13 @@ theorem object_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : Local
     (object : Source.Object) (k : List Source.Frame) (tree : FlowTree Γ)
     (diagram : ContextFlowDiagram p locals (.object object) tree) :
     SourceCutRuns p true ⟨.object object, locals, k⟩ (tree.cutTree k) := by
-  intro σ fid
-  have path := diagram σ fid k
-  have same := tree.cut_eval σ fid k
+  intro σ fid context
+  have path := diagram σ fid (sourceContextFrames context k)
+  have same := tree.cut_eval σ fid k context
+  have start : (SourceCursor.mk (.object object) locals k).denote σ fid context =
+      ⟨.object object, locals.denote σ, sourceContextFrames context k, fid⟩ := by
+    cases context <;> rfl
+  rw [start]
   cases result : tree.denote σ with
   | mk ls value =>
     cases value with
@@ -103,7 +114,8 @@ theorem object_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : Local
     | ok flow =>
       simp only [result] at path
       have output : ∃ exit, (tree.cutTree k).eval σ = .ok exit ∧
-          exit.denote σ fid = ⟨.flow flow, ls, k, fid⟩ := by
+          exit.denote σ fid context =
+            ⟨.flow flow, ls, sourceContextFrames context k, fid⟩ := by
         cases h : (tree.cutTree k).eval σ with
         | error fault => simp [h, result, Except.map] at same
         | ok exit => exact ⟨exit, rfl, by simpa [h, result, Except.map] using same⟩
@@ -116,26 +128,26 @@ theorem object_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : Local
 theorem CursorStep.runs {Γ : Var → Nat} (p : Source.Program) {cursor : SourceCursor Γ}
     {tree : CutTree Γ (SourceCursor Γ)} (step : CursorStep cursor tree) :
     SourceCutRuns p true cursor tree := by
-  intro σ fid
-  have actual := step σ p fid
+  intro σ fid context
+  have actual := step σ p fid context
   cases result : tree.eval σ with
   | error fault => simp [result] at actual
   | ok exit =>
     simp only [result] at actual
-    exact ⟨exit.denote σ fid, .next actual (.refl _), fun _ => .single actual, rfl⟩
+    exact ⟨exit.denote σ fid context, .next actual (.refl _), fun _ => .single actual, rfl⟩
 
 theorem source_cut_compose {Γ : Var → Nat} {p : Source.Program} {advance : Bool} {cursor : SourceCursor Γ}
     {before after : CutTree Γ (SourceCursor Γ)} (first : SourceCutRuns p advance cursor before)
     (continued : CutBind (SourceCutRuns p false) before after) : SourceCutRuns p advance cursor after := by
-  intro σ fid
-  obtain ⟨middle, path, positive, outcome⟩ := first σ fid
+  intro σ fid context
+  obtain ⟨middle, path, positive, outcome⟩ := first σ fid context
   rcases continued.outcome σ with ⟨fault, failed, output⟩ |
     ⟨exit, rest, success, resumed, output⟩
   · exact ⟨middle, path, positive, by simpa [output] using (by simpa [failed] using outcome :
         middle.control = .halted (.error fault))⟩
-  · have same : middle = exit.denote σ fid := by simpa [success] using outcome
+  · have same : middle = exit.denote σ fid context := by simpa [success] using outcome
     subst middle
-    obtain ⟨final, suffix, _, endState⟩ := resumed σ fid
+    obtain ⟨final, suffix, _, endState⟩ := resumed σ fid context
     exact ⟨final, path.trans suffix,
       fun h => Transition.positive_then_reaches (positive h) suffix.toReaches,
       by simpa [output] using endState⟩
@@ -143,8 +155,8 @@ theorem source_cut_compose {Γ : Var → Nat} {p : Source.Program} {advance : Bo
 theorem SourceCutRuns.relax {Γ : Var → Nat} {p : Source.Program} {cursor : SourceCursor Γ}
     {tree : CutTree Γ (SourceCursor Γ)} (first : SourceCutRuns p true cursor tree) (advance : Bool) :
     SourceCutRuns p advance cursor tree := by
-  intro σ fid
-  obtain ⟨final, path, positive, outcome⟩ := first σ fid
+  intro σ fid context
+  obtain ⟨final, path, positive, outcome⟩ := first σ fid context
   exact ⟨final, path, fun _ => positive rfl, outcome⟩
 
 def cursorStep {Γ : Var → Nat} (cursor : SourceCursor Γ) :
@@ -152,11 +164,14 @@ def cursorStep {Γ : Var → Nat} (cursor : SourceCursor Γ) :
   match cursor with
   | ⟨.statement stmt, locals, k⟩ =>
     some ⟨.leaf (cursorStatement locals k stmt), cursor_statement_sound locals k stmt⟩
-  | ⟨.items [], locals, k⟩ => some ⟨.leaf ⟨.flow .normal, locals, k⟩, by intro σ p fid; rfl⟩
+  | ⟨.items [], locals, k⟩ => some ⟨.leaf ⟨.flow .normal, locals, k⟩,
+      by intro σ p fid context; cases context <;> rfl⟩
   | ⟨.items (.statement stmt :: rest), locals, k⟩ =>
-    some ⟨.leaf ⟨.statement stmt, locals, .sequence rest :: k⟩, by intro σ p fid; rfl⟩
+    some ⟨.leaf ⟨.statement stmt, locals, .sequence rest :: k⟩,
+      by intro σ p fid context; cases context <;> rfl⟩
   | ⟨.items (.declaration object :: rest), locals, k⟩ =>
-    some ⟨.leaf ⟨.object object, locals, .sequence rest :: k⟩, by intro σ p fid; rfl⟩
+    some ⟨.leaf ⟨.object object, locals, .sequence rest :: k⟩,
+      by intro σ p fid context; cases context <;> rfl⟩
   | ⟨.flow flow, locals, k⟩ => cursorFlow locals k flow
   | ⟨.value word, locals, k⟩ => cursorValue locals k word
   | _ => none
@@ -181,8 +196,8 @@ def sourceCutDiagram {Γ : Var → Nat} (p : Source.Program) (cutpoints : List S
       ((cursor.site.any (fun site => cutpoints.contains site)) ||
         (match cursor.control with | .returned _ => true | _ => false)) = true then
     some ⟨.leaf cursor, by
-      intro σ fid
-      exact ⟨cursor.denote σ fid, .refl _, by simp [stopped.1], rfl⟩⟩
+      intro σ fid context
+      exact ⟨cursor.denote σ fid context, .refl _, by simp [stopped.1], rfl⟩⟩
   else match budget with
   | 0 => none
   | budget+1 => do

@@ -13,22 +13,26 @@ structure JointPoint (Γ : Var → Nat) where
   scope : Scope Γ
 
 def JointPoint.targetState {Γ : Var → Nat} (σ : Subst Γ) (f : IR.Function)
-    (nextFrame : Nat) (point : JointPoint Γ) : IR.State :=
-  Symbolic.targetState σ callTokens f point.label 0 1 nextFrame point.scope
+    (nextFrame : Nat) (point : JointPoint Γ) (owner : Nat := 1)
+    (stack : List IR.ReturnFrame := []) : IR.State :=
+  cutTargetState σ f point.label 0 owner nextFrame point.scope stack
 
 def CutpointRelated {Γ : Var → Nat} (entries : List (JointPoint Γ))
-    (fid : Nat) (target : IR.Function) (s : Source.State) (t : IR.State) : Prop :=
+    (fid : Nat) (target : IR.Function) (s : Source.State) (t : IR.State)
+    (context : Option SourceReturnContext := none) (owner : Nat := 1)
+    (stack : List IR.ReturnFrame := []) : Prop :=
   ∃ point ∈ entries, ∃ σ nextFrame,
-    s = point.source.denote σ fid ∧ t = point.targetState σ target nextFrame
+    s = point.source.denote σ fid context ∧ t = point.targetState σ target nextFrame owner stack
 
 inductive CutExitAgreement {Γ : Var → Nat} (entries : List (JointPoint Γ))
     (fid : Nat) (target : IR.Function) (tokens : Bool) (type : Source.IntType) :
     SourceCursor Γ → TargetExit Γ → Prop where
-  | returned {s word} (control : s.control = .returned word) (typed : word.type = type) :
+  | returned {s word} (control : s.control = .returned word) (typed : word.type = type)
+      (boundary : s.continuation = []) :
       CutExitAgreement entries fid target tokens type s (.returned word)
-  | successor {s t} (closed : ∀ σ nextFrame,
-      CutpointRelated entries fid target (s.denote σ fid)
-        (t.callState σ tokens target 1 nextFrame)) :
+  | successor {s t} (closed : ∀ σ nextFrame context owner stack,
+      CutpointRelated entries fid target (s.denote σ fid context)
+        (t.callState σ tokens target owner nextFrame stack) context owner stack) :
       CutExitAgreement entries fid target tokens type s t
 
 structure CheckedSpan {Γ : Var → Nat} (program : Source.Program) (ir : IR.Program)
@@ -72,8 +76,8 @@ theorem checked_cutpoint_simulation {Γ : Var → Nat} (entries : List (JointPoi
   intro s t related
   obtain ⟨point, member, σ, nextFrame, rfl, rfl⟩ := related
   let span := spans point member
-  obtain ⟨sf, sp, positiveSource, sourceOutcome⟩ := span.source σ fid
-  obtain ⟨tf, tp, positiveTarget, targetOutcome⟩ := span.targetDiagram σ 1 nextFrame
+  obtain ⟨sf, sp, positiveSource, sourceOutcome⟩ := span.source σ fid none
+  obtain ⟨tf, tp, positiveTarget, targetOutcome⟩ := span.targetDiagram σ 1 nextFrame []
   have agreement := span.agreement.sound σ
   rw [CutTree.normalize_trace_sound, CutTree.normalize_trace_sound] at agreement
   rcases agreement with ⟨fault, sourceFailed, targetFailed⟩ |
@@ -91,17 +95,17 @@ theorem checked_cutpoint_simulation {Γ : Var → Nat} (entries : List (JointPoi
     subst sf
     subst tf
     cases matched with
-    | returned control typed =>
+    | returned control typed boundary =>
       rename_i word
       refine .inl ⟨_, _, .returned type (word.denote σ).bits.toNat,
         sp.toReaches, tp.toReaches, ?_, rfl, ?_, ?_⟩
       · simp [Source.step, SourceCursor.denote, control, CutControl.denote]
       · simp [observeSource, SourceCursor.denote, control, CutControl.denote, CWord.denote, typed]
       · cases tokens <;>
-          simp [observeTarget, TargetExit.callState, cutResults, callResults,
+          simp [observeTarget, TargetExit.callState, cutResume, cutResults, callResults,
             Slot.denote, Word.denote, CWord.word, CWord.denote, typed, callTokens]
     | successor closed =>
-      exact .inr ⟨_, _, positiveSource rfl, positiveTarget rfl, closed σ afterCalls⟩
+      exact .inr ⟨_, _, positiveSource rfl, positiveTarget rfl, closed σ afterCalls none 1 []⟩
 
 theorem checked_cutpoint_refines {Γ : Var → Nat} (entries : List (JointPoint Γ))
     (fid : Nat) (type : Source.IntType) (source : Source.Program) (program : IR.Program)

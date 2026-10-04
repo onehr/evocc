@@ -214,11 +214,15 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Source.step",
     "EvoIR.Core.Transition.CheckpointSimulation",
     "EvoIR.Core.Symbolic.SourceCutRuns",
+    "EvoIR.Core.Symbolic.sourceContextFrames",
+    "EvoIR.Core.Symbolic.SourceCursor.denote",
     "EvoIR.Core.Symbolic.TargetCutRuns",
     "EvoIR.Core.Symbolic.TargetInstructionSpan",
     "EvoIR.Core.Symbolic.CallingCutRuns",
     "EvoIR.Core.Symbolic.callingCutDiagram",
     "EvoIR.Core.Symbolic.TargetExit.callState",
+    "EvoIR.Core.Symbolic.cutResume",
+    "EvoIR.Core.Symbolic.CallingLoopRelated",
     "EvoIR.Core.Symbolic.loopInputValues",
     "EvoIR.Core.Symbolic.CutpointRelated",
     "EvoIR.Core.Symbolic.CutExitAgreement",
@@ -525,6 +529,41 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.IR.initial target pair.targetFunction.name "
         "(EvoIR.Core.Symbolic.loopInputValues pair.diagram.tokens args) = Except.ok targetEntry ∧ "
         "EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+    ),
+    (
+        "EvoIR.Core.Symbolic.LoopDiagram.call_refines",
+        "∀ (σ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) {source : EvoIR.Core.Source.Function} "
+        "{target : EvoIR.Core.IR.Function} (s : EvoIR.Core.Source.Program) (t : EvoIR.Core.IR.Program) "
+        "(d : EvoIR.Core.Symbolic.LoopDiagram s t source target) (observationType : EvoIR.Core.Source.IntType) "
+        "(caller : EvoIR.Core.Symbolic.SourceReturnContext) (a : EvoIR.Core.IR.Activation) (nextFrame : Nat) "
+        "(stack : List EvoIR.Core.IR.ReturnFrame) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) "
+        "(inst : EvoIR.Core.IR.Instruction), "
+        "List.find? (fun x => x.symbol == source.symbol) s.functions = some source → "
+        "List.find? (fun x => x.name == a.function) t.functions = some f → "
+        "List.find? (fun x => x.name == a.block) f.blocks = some b → "
+        "b.instructions[a.pc]? = some inst → inst.op = EvoIR.Core.IR.Operation.call target.name → "
+        "List.find? (fun x => x.name == target.name) t.functions = some target → "
+        "List.mapM (EvoIR.Core.IR.lookup a.values) inst.operands = Except.ok "
+        "(EvoIR.Core.Symbolic.loopInputValues d.tokens (List.map (EvoIR.Core.Symbolic.CWord.denote σ) "
+        "(EvoIR.Core.Symbolic.parameterWords source.parameters))) → "
+        "List.map EvoIR.Core.IR.Binding.type inst.results = target.returns → "
+        "∀ (resumed : EvoIR.Core.Source.State → EvoIR.Core.IR.State → Prop), "
+        "EvoIR.Core.Transition.CheckpointSimulation (EvoIR.Core.Source.step s) (EvoIR.Core.IR.step t) "
+        "EvoIR.Core.observeSource (EvoIR.Core.observeTarget observationType) resumed → "
+        "(∀ (τ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) "
+        "(word : EvoIR.Core.Symbolic.CWord EvoIR.Core.Symbolic.inputWidths) (afterCalls : Nat), "
+        "word.type = source.returnType.type → resumed "
+        "{ control := EvoIR.Core.Source.Control.value (EvoIR.Core.Symbolic.CWord.denote τ word), "
+        "locals := caller.locals, continuation := caller.continuation, functionId := caller.functionId } "
+        "(EvoIR.Core.Symbolic.TargetExit.callState τ d.tokens target nextFrame afterCalls "
+        "(EvoIR.Core.Symbolic.TargetExit.returned word) "
+        "({ caller := { function := a.function, block := a.block, pc := a.pc + 1, values := a.values, "
+        "owner := a.owner }, results := inst.results } :: stack))) → "
+        "EvoIR.Core.LoweringRefines s t observationType "
+        "{ control := EvoIR.Core.Source.Control.call source.symbol source.returnType.type "
+        "(List.map (EvoIR.Core.Symbolic.CWord.denote σ) (EvoIR.Core.Symbolic.parameterWords source.parameters)), "
+        "locals := caller.locals, continuation := caller.continuation, functionId := caller.functionId } "
+        "{ control := EvoIR.Core.IR.Control.running a, stack := stack, nextFrame := nextFrame }",
     ),
     (
         "EvoIR.Core.Symbolic.source_cut_diagram_sound",

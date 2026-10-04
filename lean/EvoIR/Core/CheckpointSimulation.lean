@@ -162,5 +162,22 @@ theorem sound {s : S} {t : T} (entry : related s t) :
       obtain ⟨sf, o, _, _, _, observed⟩ := sim.terminal entry counted step
       exact .inr ⟨o, observed⟩
 
+/-- An actual positive entry prefix may precede a checked simulation. The
+new relation includes that entry; it cannot be justified by a zero-step loop. -/
+theorem prepend {s t s' t'} (entry : related s' t')
+    (sourcePath : Relation.TransGen (Predecessor sourceStep) s' s)
+    (targetPath : Relation.TransGen (Predecessor targetStep) t' t) :
+    Refines sourceStep targetStep sourceObserve targetObserve s t := by
+  let extended := fun a b => (a = s ∧ b = t) ∨ related a b
+  have joined : CheckpointSimulation sourceStep targetStep sourceObserve targetObserve extended := by
+    constructor
+    intro a b accepted
+    rcases accepted with ⟨rfl, rfl⟩ | existing
+    · exact .inr ⟨s', t', sourcePath, targetPath, Or.inr entry⟩
+    · rcases sim.advance a b existing with terminal | ⟨a', b', ap, bp, next⟩
+      · exact .inl terminal
+      · exact .inr ⟨a', b', ap, bp, Or.inr next⟩
+  exact joined.sound (Or.inl ⟨rfl, rfl⟩)
+
 end CheckpointSimulation
 end EvoIR.Core.Transition

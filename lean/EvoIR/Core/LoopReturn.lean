@@ -34,10 +34,11 @@ structure LoopDiagram (program : Source.Program) (ir : IR.Program)
   head : target.blocks.head? = some block
   returns : target.returns = cutReturnTypes tokens source.returnType.type
   spans : SpanList program ir points source.symbol target tokens source.returnType.type (points.map LayoutPoint.joint)
-  initialRelated : ∀ σ, CutpointRelated (points.map LayoutPoint.joint) source.symbol target
+  initialRelated : ∀ σ context owner nextFrame stack,
+    CutpointRelated (points.map LayoutPoint.joint) source.symbol target
     ((⟨.statement source.body, locals, [.function none source.returnType.type]⟩ :
-      SourceCursor inputWidths).denote σ source.symbol)
-    (targetState σ callTokens target block.name 0 1 2 scope)
+      SourceCursor inputWidths).denote σ source.symbol context)
+    (cutTargetState σ target block.name 0 owner nextFrame scope stack) context owner stack
 
 def loopDiagram (program : Source.Program) (ir : IR.Program) (source : Source.Function) (target : IR.Function)
     (layouts : List CutpointLayout) (budget : Nat) : Option (LoopDiagram program ir source target) := do
@@ -72,7 +73,10 @@ def loopDiagram (program : Source.Program) (ir : IR.Program) (source : Source.Fu
           points, signature, parameters, binding := scope.property,
           storage := locals.property, head := block.property,
           returns := returnsEq, spans,
-          initialRelated := by cases joined.down with | successor closed => exact fun σ => closed σ 2 }
+          initialRelated := by
+            cases joined.down with
+            | successor closed =>
+              exact fun σ context owner nextFrame stack => closed σ nextFrame context owner stack }
       else none
     else none
   else none
@@ -113,7 +117,8 @@ theorem LoopDiagram.refines (σ : Subst inputWidths)
   · simp [IR.initial, targetFound, boundTarget, bind, Except.bind, pure, Except.pure, te, targetState]
   apply checked_table_refines d.points source.symbol source.returnType.type s t target
     d.tokens d.spans se te
-  simpa only [se, te, SourceCursor.denote, CutControl.denote] using d.initialRelated σ
+  simpa only [se, te, SourceCursor.denote, CutControl.denote, cutTargetState, targetState]
+    using d.initialRelated σ none 1 2 []
 
 structure LoopPair (source : Source.Program) (target : IR.Program) where
   sourceFunction : Source.Function

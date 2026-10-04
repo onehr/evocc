@@ -13,12 +13,14 @@ def SourceSite.cursor {Γ : Var → Nat} (site : SourceSite) (locals : LocalStor
 
 theorem source_site_sound {Γ Δ : Var → Nat} (σ : Subst Γ) (τ : Subst Δ)
     (cursor : SourceCursor Γ) (site : SourceSite) (locals : LocalStore Δ) (fid : Nat)
-    (atSite : cursor.site = some site) (stored : cursor.locals.denote σ = locals.denote τ) :
-    cursor.denote σ fid = (site.cursor locals).denote τ fid := by
+    (atSite : cursor.site = some site) (stored : cursor.locals.denote σ = locals.denote τ)
+    (context : Option SourceReturnContext := none) :
+    cursor.denote σ fid context = (site.cursor locals).denote τ fid context := by
   rcases cursor with ⟨control, values, k⟩
   cases control <;> simp only [SourceCursor.site] at atSite
   all_goals first | contradiction | skip
   all_goals cases Option.some.inj atSite
+  all_goals cases context
   all_goals simp only [SourceSite.cursor, SourceCursor.denote, CutControl.denote] at stored ⊢
   all_goals rw [stored]
 
@@ -88,15 +90,16 @@ def checkSuccessor (points : List LayoutPoint) (candidate : {p // p ∈ points})
         if atLabel : label = point.layout.label then
           if projection : point.layout.project s.locals = some scope then
             return ⟨.successor (by
-              intro σ nextFrame
+              intro σ nextFrame context owner stack
               obtain ⟨τ, stored⟩ := canonical_store_of_shape σ s.locals point.layout.shape shape
               have source := source_site_sound σ τ s point.layout.site
-                (canonicalStore point.layout.shape) fid atSite stored.symm
+                (canonicalStore point.layout.shape) fid atSite stored.symm context
               have targetScope := project_cutpoint_congr σ τ point.layout
                 s.locals (canonicalStore point.layout.shape) scope point.scope
                 projection point.projected stored.symm
               refine ⟨point.joint, List.mem_map.mpr ⟨point, candidate.property, rfl⟩, τ, nextFrame, source, ?_⟩
-              simp only [TargetExit.callState, LayoutPoint.joint, JointPoint.targetState, targetState]
+              simp only [TargetExit.callState, LayoutPoint.joint, JointPoint.targetState,
+                cutTargetState, targetState]
               rw [atLabel, targetScope])⟩
           else none
         else none
@@ -110,7 +113,9 @@ def checkExit (points : List LayoutPoint) (fid : Nat) (target : IR.Function)
   | .returned a, .returned b =>
     if same : a = b then
       if typed : a.type = type then
-        some ⟨by subst b; exact .returned control typed⟩
+        if boundary : s.continuation = [] then
+          some ⟨by subst b; exact .returned control typed boundary⟩
+        else none
       else none
     else none
   | _, out => points.attach.findSome? (fun candidate => checkSuccessor points candidate fid target tokens type s out)
