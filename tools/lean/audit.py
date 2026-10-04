@@ -273,6 +273,42 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.parameter_words_cover",
+        "∀ (ps : List EvoIR.Core.Source.Parameter) (values : List EvoIR.Core.Source.Value), "
+        "List.map EvoIR.Core.Source.Value.type values = List.map (fun p => p.type.type) ps → "
+        "List.map (EvoIR.Core.Symbolic.CWord.denote (EvoIR.Core.Symbolic.inputSubst values)) "
+        "(EvoIR.Core.Symbolic.parameterWords ps) = values",
+    ),
+    (
+        "EvoIR.Core.Symbolic.scalar_entry_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) "
+        "(source : EvoIR.Core.Source.Function) (target : EvoIR.Core.IR.Function) "
+        "(args : List (EvoIR.Core.Symbolic.CWord Γ)) (env : EvoIR.Core.Symbolic.CBindings Γ) "
+        "(scope : EvoIR.Core.Symbolic.Scope Γ) (owner : Nat), "
+        "EvoIR.Core.Symbolic.scalarEntry source target args = some (env, scope) → "
+        "∃ locals block, EvoIR.Core.Source.parameterLocals source.parameters "
+        "(List.map (EvoIR.Core.Symbolic.CWord.denote σ) args) = Except.ok locals ∧ "
+        "EvoIR.Core.Symbolic.CBindings.Related σ env locals ∧ target.blocks.head? = some block ∧ "
+        "EvoIR.Core.IR.enter target "
+        "(List.map (fun v => EvoIR.Core.Symbolic.sourceValueIR "
+        "(EvoIR.Core.Symbolic.CWord.denote σ v)) args) owner = Except.ok "
+        "{ function := target.name, block := block.name, pc := 0, "
+        "values := EvoIR.Core.Symbolic.Scope.denote σ (fun x => EvoIR.Core.IR.Value.world) scope, "
+        "owner := owner }",
+    ),
+    (
+        "EvoIR.Core.Symbolic.LeafPair.refines",
+        "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} "
+        "(pair : EvoIR.Core.Symbolic.LeafPair source target) (args : List EvoIR.Core.Source.Value), "
+        "List.map EvoIR.Core.Source.Value.type args = "
+        "List.map (fun p => p.type.type) pair.sourceFunction.parameters → "
+        "∃ sourceEntry targetEntry, "
+        "EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ "
+        "EvoIR.Core.IR.initial target pair.targetFunction.name "
+        "(List.map EvoIR.Core.Symbolic.sourceValueIR args) = Except.ok targetEntry ∧ "
+        "EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+    ),
+    (
         "EvoIR.Core.Symbolic.edge_sound",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) "
         "(types : Nat → EvoIR.Core.IR.Ty), (∀ (id : Nat), (ρ id).type = types id) → "

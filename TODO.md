@@ -2401,6 +2401,13 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   until implemented. No frozen function or constructor is removed from V01.
   Validator soundness and generic source/target simulation for all frozen
   functions remain open. Test step limits are not proof or divergence outcomes.
+  The straight-line leaf case is now an executable proved checker:
+  `LeafPair.refines` covers all original-signature arguments, actual parameter
+  binding, complete return bodies/scopes, conversions, first diagnostics and
+  actual target returns. `--check-core-leaf-pair` admits original `FixedMul`
+  without an exact-tree whitelist; 65 runtime cases and 15 kernel examples
+  exercise admission, mutations and all 36 conversion pairs. This does not
+  close the branching/looping/state/call cases or V01; the frozen scope is unchanged.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

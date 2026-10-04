@@ -6,6 +6,7 @@ import EvoIR.Core.ExecutionTests
 import EvoIR.Core.IRTests
 import EvoIR.Core.CorrespondenceTests
 import EvoIR.Core.SourceExpressionTests
+import EvoIR.Core.LeafCorrespondenceTests
 
 /-!
 # The executable evaluator
@@ -272,7 +273,7 @@ def selfTest : IO UInt32 := do
 /-! ## Entry point -/
 
 def usage : String :=
-  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo>"
+  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo> | evoir-sem --check-core-leaf-pair <source.json> <target.evo>"
 
 def run (args : List String) : IO UInt32 := do
   match args with
@@ -284,8 +285,18 @@ def run (args : List String) : IO UInt32 := do
       let ir ← EvoIR.Core.IR.irSelfTest
       let correspondence ← EvoIR.Core.correspondenceSelfTest
       let sourceExpression ← EvoIR.Core.Symbolic.ExpressionTests.sourceExpressionSelfTest
+      let leaf ← EvoIR.Core.Symbolic.LeafTests.leafSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
-        ir == 0 && correspondence == 0 && sourceExpression == 0 then 0 else 1
+        ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 then 0 else 1
+  | ["--check-core-leaf-pair", sourcePath, targetPath] => do
+      let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
+        | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
+      let .ok target := EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile targetPath)
+        | IO.eprintln "CORE_PAIR_MALFORMED: target input"; return 2
+      let some accepted := EvoIR.Core.Symbolic.leafPair source target
+        | IO.eprintln "CORE_PAIR_REFUSED: no checked whole-leaf diagram for this complete pair"; return 1
+      IO.println s!"PROVED_LEAF_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+      return 0
   | ["--check-core-pilot-pair", sourcePath, targetPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2

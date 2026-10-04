@@ -97,6 +97,8 @@ private def fixedTarget := "func @FixedMul(%arg0: bits<32>, %arg1: bits<32>) -> 
   "%v6 = const.bits<32> 16\n%v7 = shift_count_defined.signed %v5, %v6\nub.assume.invalid_shift_count %v7\n" ++
   "%v8 = ashr.bits<64> %v5, %v6\n%v9 = trunc.bits<32> %v8\nret %v9\n}\n"
 
+def originalFixedMulTexts : String × String := (fixedSource, fixedTarget)
+
 private def fixedExpressionCheck (s t : String) : Bool :=
   match Source.readProgram s, IR.Reader.readProgram t with
   | .ok source, .ok target => Id.run do

@@ -376,6 +376,23 @@ The enclosing program checker still must establish entry-local/SSA relations,
 source control/loop invariants, calls/storage and private-leaf substitution.
 Neither a successful expression nor an edge check is whole-program admission.
 
+**Whole-leaf checking.** `Core/SymbolicEntry.lean` checks both machines' actual
+parameter binding and proves coverage of every argument representation of the
+original signature. `Core/LeafCorrespondence.lean` assembles source-derived
+expression diagrams, complete return bodies (including compound scopes), return
+conversion and the real target terminator. `LeafPair.refines` proves terminal
+observations, divergence and progress from actual initial states for all typed
+arguments, without an assumed local/SSA relation or execution fuel. The
+executable `evoir-sem --check-core-leaf-pair SOURCE.json TARGET.evo` admits the
+original complete `FixedMul` pair and consistent changed pairs, not a named
+function or exact-tree whitelist. Sixty-five runtime cases include the original
+pair, source/target mutations, parameter order and all 36 return-conversion type
+pairs; fifteen kernel examples include a universal two-argument refinement.
+This is the straight-line leaf case of the required checker. Branching/looping
+functions, local writes/storage, direct calls and private-leaf substitution
+remain required; the command refuses them until their diagrams are implemented.
+It grants no backend or first-release verification label and does not close V01.
+
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`
 options. Existing C-HIR private-leaf substitution removes `frame` and embeds
