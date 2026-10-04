@@ -8,8 +8,8 @@ namespace EvoIR.Core.Symbolic
 
 def SourceSite.cursor {Γ : Var → Nat} (site : SourceSite) (locals : LocalStore Γ) : SourceCursor Γ :=
   match site with
-  | .expression e k => ⟨.expression e, locals, k⟩
-  | .statement s k => ⟨.statement s, locals, k⟩
+  | .expression e k => ⟨.expression e, locals, SavedFrames.literal k⟩
+  | .statement s k => ⟨.statement s, locals, SavedFrames.literal k⟩
 
 theorem source_site_sound {Γ Δ : Var → Nat} (σ : Subst Γ) (τ : Subst Δ)
     (cursor : SourceCursor Γ) (site : SourceSite) (locals : LocalStore Δ) (fid : Nat)
@@ -19,10 +19,13 @@ theorem source_site_sound {Γ Δ : Var → Nat} (σ : Subst Γ) (τ : Subst Δ)
   rcases cursor with ⟨control, values, k⟩
   cases control <;> simp only [SourceCursor.site] at atSite
   all_goals first | contradiction | skip
-  all_goals cases Option.some.inj atSite
+  all_goals obtain ⟨frames, static, equal⟩ := Option.map_eq_some_iff.mp atSite
+  all_goals cases equal
+  all_goals have same := SavedFrames.static_sound σ k frames static
   all_goals cases context
-  all_goals simp only [SourceSite.cursor, SourceCursor.denote, CutControl.denote] at stored ⊢
-  all_goals rw [stored]
+  all_goals simp only [SourceSite.cursor, SourceCursor.denote, CutControl.denote,
+    SavedFrames.literal_denote] at stored ⊢
+  all_goals rw [stored, same]
 
 structure CutpointLayout where
   site : SourceSite

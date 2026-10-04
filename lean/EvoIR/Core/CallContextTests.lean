@@ -15,7 +15,9 @@ private def accepts (s t : String) : Bool := Id.run do
 
 def callContextSelfTest : IO UInt32 := do
   let cases := [(CallContextFixtures.conditionalCall, "conditional_call", 11),
-    (CallContextFixtures.assignedCall, "assigned_call", 14)]
+    (CallContextFixtures.assignedCall, "assigned_call", 14),
+    (CallContextFixtures.rightCall, "right_call", 8),
+    (CallContextFixtures.nestedCall, "nested_call", 17)]
   let target := CallContextFixtures.target
   let mut failed := 0
   let mut executions := 0
@@ -29,7 +31,9 @@ def callContextSelfTest : IO UInt32 := do
     let .ok s := Source.readProgram source | return 1
     let .ok t := IR.Reader.readProgram target | return 1
     for (x, n, result) in [(0, 0, 0), (7, 0, 7), (1, 3, 40), (0xffffffff, 1, 0xfffffffe)] do
-      let expected := if name == "conditional_call" then (if result == 0 then n else x) else result
+      let expected := if name == "conditional_call" then (if result == 0 then n else x)
+        else if name == "right_call" then (x + result) % 2^32
+        else if name == "nested_call" then (3 * result + 1) % 2^32 else result
       let args := [Source.Value.ofNat .uint x, Source.Value.ofNat .uint n]
       let .ok se := Source.initial s id args | return 1
       let .ok te := IR.initial t name (loopInputValues true args) | return 1
@@ -39,6 +43,16 @@ def callContextSelfTest : IO UInt32 := do
         failed := failed + 1
       executions := executions + 1
   let mutations := [
+    (CallContextFixtures.nestedCall, "call @loop_call(%v4, %v7, %v5, %v6)",
+      "call @loop_call(%v0, %v7, %v5, %v6)"),
+    (CallContextFixtures.nestedCall, "call @loop_call(%v4, %v7, %v5, %v6)",
+      "call @loop_call(%v4, %v1, %v5, %v6)"),
+    (CallContextFixtures.nestedCall, "ret %v8, %v9, %v10", "ret %v4, %v9, %v10"),
+    (CallContextFixtures.nestedCall, "call @loop_call(%v4, %v7, %v5, %v6)",
+      "call @loop_call(%v4, %v7, %v2, %v3)"),
+    (CallContextFixtures.rightCall, "add.bits<32> %v0, %v4", "add.bits<32> %v1, %v4"),
+    (CallContextFixtures.rightCall, "add.bits<32> %v0, %v4", "add.bits<32> %v4, %v4"),
+    (CallContextFixtures.rightCall, "add.bits<32> %v0, %v4", "sub.bits<32> %v0, %v4"),
     (CallContextFixtures.conditionalCall, "icmp.ne %v4, %v7", "icmp.eq %v4, %v7"),
     (CallContextFixtures.conditionalCall, "^b3(%v9, %v10, %v11, %v12, %v9)",
       "^b3(%v9, %v10, %v11, %v12, %v10)"),
@@ -66,7 +80,7 @@ def callContextSelfTest : IO UInt32 := do
       IO.eprintln s!"call continuation source mutation admitted: {before}"
       failed := failed + 1
   if failed == 0 then
-    IO.println s!"4 original/renamed call-context pairs, {mutations.length + sourceMutations.length} mutations and {executions} executions pass"
+    IO.println s!"{cases.length * 2} original/renamed call-context pairs, {mutations.length + sourceMutations.length} mutations and {executions} executions pass"
   return if failed == 0 then 0 else 1
 
 end EvoIR.Core.Symbolic.CallContextTests

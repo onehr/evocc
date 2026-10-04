@@ -1,15 +1,11 @@
 import EvoIR.Core.StatementDiagram
-import EvoIR.Core.SourceEquality
+import EvoIR.Core.SavedFrames
 import EvoIR.Core.CutTree
 import EvoIR.Core.CheckpointSimulation
 
 /-! Exact source states at cyclic cutpoints. Administrative transitions use
 the original source machine, including scope and loop-control continuations.
 Symbolic expressions retain their ordered diagnostics and local writes. -/
-namespace EvoIR.Core.Source
-deriving instance DecidableEq for Slot, Frame
-end EvoIR.Core.Source
-
 namespace EvoIR.Core.Symbolic
 
 inductive CutControl (Γ : Var → Nat) where
@@ -35,7 +31,7 @@ def CutControl.denote {Γ : Var → Nat} (σ : Subst Γ) : CutControl Γ → Sou
 structure SourceCursor (Γ : Var → Nat) where
   control : CutControl Γ
   locals : LocalStore Γ
-  continuation : List Source.Frame
+  continuation : SavedFrames Γ
 
 /-- The actual suspended caller, not an observation substituted for a return. -/
 structure SourceReturnContext where
@@ -54,13 +50,13 @@ def sourceContextFrames (context : Option SourceReturnContext)
 def SourceCursor.denote {Γ : Var → Nat} (σ : Subst Γ) (fid : Nat)
     (cursor : SourceCursor Γ) (context : Option SourceReturnContext := none) : Source.State :=
   match context with
-  | none => ⟨cursor.control.denote σ, cursor.locals.denote σ, cursor.continuation, fid⟩
+  | none => ⟨cursor.control.denote σ, cursor.locals.denote σ, cursor.continuation.denote σ, fid⟩
   | some caller =>
     match cursor.control with
     | .returned word => ⟨.value (word.denote σ), caller.locals,
-        sourceContextFrames context cursor.continuation, caller.functionId⟩
+        sourceContextFrames context (cursor.continuation.denote σ), caller.functionId⟩
     | _ => ⟨cursor.control.denote σ, cursor.locals.denote σ,
-        sourceContextFrames context cursor.continuation, fid⟩
+        sourceContextFrames context (cursor.continuation.denote σ), fid⟩
 
 inductive SourceSite where
   | expression (expr : Source.Expr) (continuation : List Source.Frame)
@@ -69,8 +65,8 @@ inductive SourceSite where
 
 def SourceCursor.site {Γ : Var → Nat} (cursor : SourceCursor Γ) : Option SourceSite :=
   match cursor.control with
-  | .expression e => some (.expression e cursor.continuation)
-  | .statement s => some (.statement s cursor.continuation)
+  | .expression e => (cursor.continuation.mapM Source.Frame.static?).map (.expression e)
+  | .statement s => (cursor.continuation.mapM Source.Frame.static?).map (.statement s)
   | _ => none
 
 def SourceCutRuns {Γ : Var → Nat} (p : Source.Program) (advance : Bool) (cursor : SourceCursor Γ)
@@ -90,7 +86,7 @@ def CursorStep {Γ : Var → Nat} (cursor : SourceCursor Γ)
     | .error _ => False
     | .ok exit => Source.Step p (cursor.denote σ fid context) (exit.denote σ fid context)
 
-def cursorStatement {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Frame)
+def cursorStatement {Γ : Var → Nat} (locals : LocalStore Γ) (k : SavedFrames Γ)
     (stmt : Source.Stmt) : SourceCursor Γ :=
   match stmt with
   | .null => ⟨.flow .normal, locals, k⟩
@@ -111,15 +107,15 @@ def cursorStatement {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source
       .scope locals.length :: k⟩
 
 theorem cursor_statement_sound {Γ : Var → Nat} (locals : LocalStore Γ)
-    (k : List Source.Frame) (stmt : Source.Stmt) :
+    (k : SavedFrames Γ) (stmt : Source.Stmt) :
     CursorStep ⟨.statement stmt, locals, k⟩ (.leaf (cursorStatement locals k stmt)) := by
   intro σ p fid context
   cases context <;> cases stmt <;> simp [CutTree.eval, cursorStatement, Source.Step,
     Source.step, Source.enterStatement, SourceCursor.denote, CutControl.denote,
-    SymbolicFlow.denote, LocalStore.denote, sourceContextFrames]
+    SymbolicFlow.denote, LocalStore.denote, sourceContextFrames, SavedFrames.denote, Source.Frame.map]
   all_goals split <;> rfl
 
-def cursorFlow {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Frame)
+def cursorFlow {Γ : Var → Nat} (locals : LocalStore Γ) (k : SavedFrames Γ)
     (flow : SymbolicFlow Γ) :
     Option {tree // CursorStep ⟨.flow flow, locals, k⟩ tree} :=
   match k with
@@ -131,10 +127,10 @@ def cursorFlow {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Fram
         intro σ p fid context
         cases context with
         | none => exact congrArg some (local_scope_exit_sound σ locals updated n h
-            ⟨.flow (flow.denote σ), locals.denote σ, rest, fid⟩ rfl (flow.denote σ))
+            ⟨.flow (flow.denote σ), locals.denote σ, SavedFrames.denote σ rest, fid⟩ rfl (flow.denote σ))
         | some caller => exact congrArg some (local_scope_exit_sound σ locals updated n h
             ⟨.flow (flow.denote σ), locals.denote σ,
-              sourceContextFrames (some caller) rest, fid⟩ rfl (flow.denote σ))⟩
+              sourceContextFrames (some caller) (SavedFrames.denote σ rest), fid⟩ rfl (flow.denote σ))⟩
   | .sequence items :: rest =>
     match flow with
     | .normal => some ⟨.leaf ⟨.items items, locals, rest⟩, by intro σ p fid context; cases context <;> rfl⟩
@@ -166,22 +162,49 @@ def cursorFlow {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Fram
           intro σ p fid context
           cases context <;> simp [CutTree.eval, Source.Step, Source.step, Source.resumeFlow,
             SourceCursor.denote, CutControl.denote, SymbolicFlow.denote,
-            CWord.denote, typed, LocalStore.denote, sourceContextFrames]⟩
+            CWord.denote, typed, LocalStore.denote, sourceContextFrames, SavedFrames.denote, Source.Frame.map]⟩
       else none
     | _ => none
   | _ => none
 
-def cursorValue {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Frame)
+def cursorArguments {Γ : Var → Nat} (locals : LocalStore Γ) (type : Source.IntType)
+    (callee : Nat) (arguments : List (Source.QualifiedType × Source.Expr))
+    (reverseWords : List (CWord Γ)) (k : SavedFrames Γ) : SourceCursor Γ :=
+  match arguments with
+  | [] => ⟨.call callee type reverseWords.reverse, locals, k⟩
+  | (destination, expr) :: rest =>
+    ⟨.expression expr, locals, .callArgument type callee destination rest reverseWords :: k⟩
+
+def cursorValue {Γ : Var → Nat} (locals : LocalStore Γ) (k : SavedFrames Γ)
     (word : CWord Γ) :
     Option {tree // CursorStep ⟨.value word, locals, k⟩ tree} :=
   match k with
+  | .callArgument type callee destination remaining reverseWords :: rest =>
+    some ⟨.leaf (cursorArguments locals type callee remaining
+      (word.cast destination.type :: reverseWords) rest), by
+        intro σ p fid context
+        cases context <;> cases remaining <;>
+          simp [CutTree.eval, cursorArguments, Source.Step, Source.step,
+            Source.resumeValue, Source.beginArguments, SourceCursor.denote,
+            CutControl.denote, sourceContextFrames, SavedFrames.denote, Source.Frame.map,
+            cast_sound, List.map_reverse]⟩
+  | .binaryLeft type op right :: rest =>
+    if notAnd : op ≠ .and then
+      if notOr : op ≠ .or then
+        some ⟨.leaf ⟨.expression right, locals, .binaryRight type op word :: rest⟩, by
+          intro σ p fid context
+          cases context <;> simp [CutTree.eval, Source.Step, Source.step,
+            Source.resumeValue, SourceCursor.denote, CutControl.denote, sourceContextFrames,
+            SavedFrames.denote, Source.Frame.map, notAnd, notOr]⟩
+      else none
+    else none
   | .discard :: rest => some ⟨.leaf ⟨.flow .normal, locals, rest⟩, by intro σ p fid context; cases context <;> rfl⟩
   | .return destination :: rest =>
     some ⟨.leaf ⟨.flow (.returned (word.cast destination.type)), locals, rest⟩, by
       intro σ p fid context
       cases context <;>
         simp [CutTree.eval, Source.Step, Source.step, Source.resumeValue, SourceCursor.denote,
-          CutControl.denote, SymbolicFlow.denote, cast_sound, sourceContextFrames]⟩
+          CutControl.denote, SymbolicFlow.denote, cast_sound, sourceContextFrames, SavedFrames.denote, Source.Frame.map]⟩
   | .initialize id destination :: rest =>
     match h : locals.write id destination (word.cast destination.type) true with
     | none => none
@@ -192,7 +215,7 @@ def cursorValue {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Fra
         rw [cast_sound] at write
         cases context <;>
           simp [CutTree.eval, Source.Step, Source.step, Source.resumeValue, SourceCursor.denote,
-            CutControl.denote, SymbolicFlow.denote, write, sourceContextFrames]⟩
+            CutControl.denote, SymbolicFlow.denote, write, sourceContextFrames, SavedFrames.denote, Source.Frame.map]⟩
   | .branch yes no :: rest =>
     some ⟨.branch word.truthTerm (.leaf ⟨.statement yes, locals, rest⟩)
       (.leaf ⟨.statement (no.getD .null), locals, rest⟩), by
@@ -200,7 +223,7 @@ def cursorValue {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Fra
         simp only [CutTree.eval, truth_term_sound]
         cases context <;> cases truth : (word.denote σ).truth <;>
           simp [truth, Source.Step, Source.step, Source.resumeValue, SourceCursor.denote,
-            CutControl.denote, sourceContextFrames]⟩
+            CutControl.denote, sourceContextFrames, SavedFrames.denote, Source.Frame.map]⟩
   | .choice type yes no :: rest =>
     some ⟨.branch word.truthTerm
       (.leaf ⟨.expression yes, locals, .convert type :: rest⟩)
@@ -209,7 +232,7 @@ def cursorValue {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Fra
         simp only [CutTree.eval, truth_term_sound]
         cases context <;> cases truth : (word.denote σ).truth <;>
           simp [truth, Source.Step, Source.step, Source.resumeValue, SourceCursor.denote,
-            CutControl.denote, sourceContextFrames]⟩
+            CutControl.denote, sourceContextFrames, SavedFrames.denote, Source.Frame.map]⟩
   | .loopTest condition increment body :: rest =>
     some ⟨.branch word.truthTerm
       (.leaf ⟨.statement body, locals, .loopBody condition increment body :: rest⟩)
@@ -218,7 +241,7 @@ def cursorValue {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Fra
         simp only [CutTree.eval, truth_term_sound]
         cases context <;> cases truth : (word.denote σ).truth <;>
           simp [truth, Source.Step, Source.step, Source.resumeValue, SourceCursor.denote,
-            CutControl.denote, SymbolicFlow.denote, sourceContextFrames]⟩
+            CutControl.denote, SymbolicFlow.denote, sourceContextFrames, SavedFrames.denote, Source.Frame.map]⟩
   | .loopIncrement condition increment body :: rest =>
     some ⟨.leaf ⟨.expression condition, locals, .loopTest condition (some increment) body :: rest⟩,
       by intro σ p fid context; cases context <;> rfl⟩

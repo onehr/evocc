@@ -27,6 +27,17 @@ theorem resumes_unary (p : Program) (locals : Locals) (fid : Nat)
   | ok answer =>
     exact .next (by simp [Step, step, resumeValue, valueResult, result, typed answer result]) (.refl _)
 
+theorem resumes_binary_right (p : Program) (locals : Locals) (fid : Nat)
+    (type : IntType) (op : Binary) (left value : Value)
+    (typed : ∀ answer, binaryValue op left value = .ok answer → answer.type = type) :
+    ResumesContext p locals fid (.binaryRight type op left) value (locals, binaryValue op left value) := by
+  intro k
+  cases result : binaryValue op left value with
+  | error fault =>
+    exact ⟨locals, k, fid, .next (by simp [Step, step, resumeValue, valueResult, result, fail]) (.refl _)⟩
+  | ok answer =>
+    exact .next (by simp [Step, step, resumeValue, valueResult, result, typed answer result]) (.refl _)
+
 theorem resumes_assignment (p : Program) (locals : Locals) (fid : Nat)
     (op : Assignment) (id : Nat) (destination : QualifiedType) (value : Value) :
     ResumesContext p locals fid (.assign destination.type op id destination) value
@@ -94,18 +105,30 @@ end EvoIR.Core.Source
 namespace EvoIR.Core.Symbolic
 
 structure ResumptionDiagram {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
-    (frame : Source.Frame) (word : CWord Γ) (tree : StateTree Γ) : Prop where
-  frames_stable : ∀ context rest, sourceContextFrames context (frame :: rest) =
-    frame :: sourceContextFrames context rest
-  runs : ∀ σ fid, Source.ResumesContext p (locals.denote σ) fid frame (word.denote σ) (tree.denote σ)
+    (frame : Source.Frame (CWord Γ)) (word : CWord Γ) (tree : StateTree Γ) : Prop where
+  frames_stable : ∀ σ context rest, sourceContextFrames context (frame.map (CWord.denote σ) :: rest) =
+    frame.map (CWord.denote σ) :: sourceContextFrames context rest
+  runs : ∀ σ fid, Source.ResumesContext p (locals.denote σ) fid (frame.map (CWord.denote σ)) (word.denote σ) (tree.denote σ)
 
 def resumeExpression {Γ : Var → Nat} (p : Source.Program) (budget : Nat)
-    (locals : LocalStore Γ) (frame : Source.Frame) (word : CWord Γ) :
+    (locals : LocalStore Γ) (frame : Source.Frame (CWord Γ)) (word : CWord Γ) :
     Option {tree // ResumptionDiagram p locals frame word tree} :=
   match frame with
+  | .binaryRight type op left => do
+    let r ← binaryResult op left word
+    if typed : r.val.2.type = type then
+      return ⟨.linear locals r.val, ⟨by intro σ context rest; cases context <;> rfl, by
+        intro σ fid
+        rw [StateTree.linear_sound, r.property σ]
+        apply Source.resumes_binary_right
+        intro answer calculated
+        rw [← r.property σ] at calculated
+        rw [expression_result_value σ r.val answer calculated]
+        exact typed⟩⟩
+    else none
   | .unary type op =>
     if typed : (unary op word).2.type = type then
-      some ⟨.linear locals (unary op word), ⟨by intro context rest; cases context <;> rfl, by
+      some ⟨.linear locals (unary op word), ⟨by intro σ context rest; cases context <;> rfl, by
         intro σ fid
         have result : ExpressionResult.denote σ (unary op word) = Source.unaryValue op (word.denote σ) :=
           unary_sound σ op word
@@ -125,7 +148,7 @@ def resumeExpression {Γ : Var → Nat} (p : Source.Program) (budget : Nat)
         let tree := (StateTree.value updated (r.val.2.cast destination.type)).prefix locals r.val.1
         have continuation : AssignmentContinuation op id destination locals word tree :=
           ⟨r.val, updated, r.property, written, rfl⟩
-        return ⟨tree, ⟨by intro context rest; cases context <;> rfl, by
+        return ⟨tree, ⟨by intro σ context rest; cases context <;> rfl, by
           intro σ fid
           rw [assignment_continuation_sound σ continuation, typed]
           exact Source.resumes_assignment p (locals.denote σ) fid op id destination (word.denote σ)⟩⟩
@@ -139,7 +162,7 @@ def resumeExpression {Γ : Var → Nat} (p : Source.Program) (budget : Nat)
           if typed : result.val.2.type = type then
             return ⟨.linear ls result.val, result.val, result.property, typed, rfl⟩
           else none)
-        return ⟨applied.val, ⟨by intro context rest; cases context <;> rfl, by
+        return ⟨applied.val, ⟨by intro σ context rest; cases context <;> rfl, by
           intro σ fid
           obtain ⟨result, typed⟩ := binary_continuation_result σ type op word r.val applied.val applied.property
           rw [result]
@@ -148,7 +171,7 @@ def resumeExpression {Γ : Var → Nat} (p : Source.Program) (budget : Nat)
       else none
     else none
   | .convert type => some ⟨.value locals (word.cast type), ⟨
-      by intro context rest; cases context <;> rfl,
+      by intro σ context rest; cases context <;> rfl,
       by intro σ fid k; simp only [StateTree.denote, cast_sound]; exact .next rfl (.refl _)⟩⟩
   | _ => none
 

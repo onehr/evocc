@@ -81,30 +81,51 @@ theorem ReturnContinuation.refines {source : Source.Program} {ir : IR.Program}
       (cutTargetState σ target label pc owner nextFrame scope []) :=
   d.simulation.sound ⟨σ, owner, nextFrame, rfl, rfl⟩
 
+def ContinuationRefines (source : Source.Program) (ir : IR.Program) (fid : Nat)
+    (target : IR.Function) (type : Source.IntType) (cursor : SourceCursor inputWidths)
+    (label : String) (pc : Nat) (scope : Scope inputWidths) : Prop :=
+  ∀ σ owner nextFrame, LoweringRefines source ir type (cursor.denote σ fid)
+    (cutTargetState σ target label pc owner nextFrame scope [])
+
+abbrev ContinuationBuilder (source : Source.Program) (ir : IR.Program) (fid : Nat)
+    (target : IR.Function) (type : Source.IntType) :=
+  (cursor : SourceCursor inputWidths) → (label : String) → (pc : Nat) → (scope : Scope inputWidths) →
+    Option (PLift (ContinuationRefines source ir fid target type cursor label pc scope))
+
 structure CheckedReturn (source : Source.Program) (ir : IR.Program) (fid : Nat)
     (target : IR.Function) (callerTokens : Bool) (type returnType : Source.IntType)
-    (locals : LocalStore inputWidths) (frames : List Source.Frame)
+    (locals : LocalStore inputWidths) (frames : SavedFrames inputWidths)
     (label : String) (pc : Nat) (scope : Scope inputWidths) (results : List IR.Binding)
     (calleeTokens : Bool) where
   boundScope : Scope inputWidths
   binding : scope.forReturn.appendSlots results (cutResults calleeTokens (inputWord returnType 0)) = some boundScope
-  diagram : ReturnContinuation source ir fid target callerTokens type
-    ⟨.value (inputWord returnType 0), locals.forReturn, frames⟩ label pc boundScope
+  refinement : ContinuationRefines source ir fid target type
+    ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc boundScope
 
-def checkedReturn (source : Source.Program) (ir : IR.Program) (fid : Nat)
+def checkedReturnWith (source : Source.Program) (ir : IR.Program) (fid : Nat)
     (target : IR.Function) (callerTokens : Bool) (type returnType : Source.IntType)
-    (locals : LocalStore inputWidths) (frames : List Source.Frame)
+    (locals : LocalStore inputWidths) (frames : SavedFrames inputWidths)
     (label : String) (pc : Nat) (scope : Scope inputWidths) (results : List IR.Binding)
-    (calleeTokens : Bool) (budget : Nat) :
+    (calleeTokens : Bool) (build : ContinuationBuilder source ir fid target type) :
     Option (CheckedReturn source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens) := do
   let bound : {out // scope.forReturn.appendSlots results
       (cutResults calleeTokens (inputWord returnType 0)) = some out} ←
     match binding : scope.forReturn.appendSlots results (cutResults calleeTokens (inputWord returnType 0)) with
     | none => none
     | some out => some ⟨out, binding⟩
-  let diagram ← returnContinuation source ir fid target callerTokens type
-    ⟨.value (inputWord returnType 0), locals.forReturn, frames⟩ label pc bound.val budget
-  return ⟨bound.val, bound.property, diagram⟩
+  let proof ← build ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc bound.val
+  return ⟨bound.val, bound.property, proof.down⟩
+
+def checkedReturn (source : Source.Program) (ir : IR.Program) (fid : Nat)
+    (target : IR.Function) (callerTokens : Bool) (type returnType : Source.IntType)
+    (locals : LocalStore inputWidths) (frames : SavedFrames inputWidths)
+    (label : String) (pc : Nat) (scope : Scope inputWidths) (results : List IR.Binding)
+    (calleeTokens : Bool) (budget : Nat) :
+    Option (CheckedReturn source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens) :=
+  checkedReturnWith source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens
+    (fun cursor label pc scope => do
+      let diagram ← returnContinuation source ir fid target callerTokens type cursor label pc scope budget
+      return ⟨diagram.refines⟩)
 
 def valueIRs (tokens : Bool) (value : Source.Value) : List IR.Value :=
   [sourceValueIR value] ++ if tokens then [.memory ⟨1, []⟩, .world] else []
@@ -118,14 +139,14 @@ changing any saved caller input. This discharges the return-site obligation;
 it makes no assumption about the callee's arithmetic or termination. -/
 theorem CheckedReturn.related {source : Source.Program} {ir : IR.Program} {fid : Nat}
     {target : IR.Function} {callerTokens : Bool} {type returnType : Source.IntType}
-    {locals : LocalStore inputWidths} {frames : List Source.Frame}
+    {locals : LocalStore inputWidths} {frames : SavedFrames inputWidths}
     {label : String} {pc : Nat} {scope : Scope inputWidths} {results : List IR.Binding}
     {calleeTokens : Bool}
     (d : CheckedReturn source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens)
     (σ : Subst inputWidths) (value : Source.Value) (typed : value.type = returnType)
     (owner nextFrame : Nat) :
-    ResumedAt fid target ⟨.value (inputWord returnType 0), locals.forReturn, frames⟩ label pc d.boundScope
-      ⟨.value value, locals.denote σ, frames, fid⟩
+    ResumedAt fid target ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc d.boundScope
+      ⟨.value value, locals.denote σ, frames.denote σ, fid⟩
       (cutResume (valueIRs calleeTokens value) nextFrame
         [⟨⟨target.name, label, pc, scope.denote σ callTokens, owner⟩, results⟩]) := by
   have fresh : (inputWord returnType 0).denote (returnSubst σ value) = value := by
@@ -137,7 +158,7 @@ theorem CheckedReturn.related {source : Source.Program} {ir : IR.Program} {fid :
     (cutResults calleeTokens (inputWord returnType 0)) d.binding
   rw [scope_for_return, resultValues] at bound
   refine ⟨returnSubst σ value, owner, nextFrame, ?_, ?_⟩
-  · simp only [SourceCursor.denote, CutControl.denote, fresh, local_store_for_return]
+  · simp only [SourceCursor.denote, CutControl.denote, fresh, local_store_for_return, saved_frames_for_return]
   · simp [cutResume, bound, cutTargetState, targetState]
 
 end EvoIR.Core.Symbolic

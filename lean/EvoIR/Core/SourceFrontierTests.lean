@@ -6,6 +6,12 @@ a sampled suspended caller. The checked diagram must stop before entering the
 callee and retain argument effects, conversion and the first diagnostic. -/
 namespace EvoIR.Core.Symbolic.SourceFrontierTests
 
+private def untilLoopCall (p : Source.Program) : Nat → Source.State → Option Source.State
+  | 0, _ => none
+  | fuel+1, state => match state.control with
+    | .call 2 .. => some state
+    | _ => (Source.step p state).bind (untilLoopCall p fuel)
+
 private def stops (p : Source.Program) (cursor : SourceCursor inputWidths)
     (args : List Source.Value) (expected : Except Source.Fault (List Source.Value)) : Bool := Id.run do
   let some built := sourceCallFrontier p 64 cursor | return false
@@ -13,8 +19,13 @@ private def stops (p : Source.Program) (cursor : SourceCursor inputWidths)
   match built.val.eval σ, expected with
   | .error actual, .error fault => return actual == fault
   | .ok exit, .ok values =>
-    let .call id type actual := (exit.denote σ 5).control | return false
-    return id == 2 && type == .uint && actual == values
+    let represented := exit.denote σ 5
+    let .call id type actual := represented.control | return false
+    let some reached := untilLoopCall p 1000 (cursor.denote σ 5) | return false
+    let .call realId realType realArgs := reached.control | return false
+    return id == 2 && type == .uint && actual == values && realId == id && realType == type &&
+      realArgs == actual && reached.locals == represented.locals &&
+      reached.continuation == represented.continuation && reached.functionId == represented.functionId
   | _, _ => return false
 
 def sourceFrontierSelfTest : IO UInt32 := do
@@ -36,6 +47,10 @@ def sourceFrontierSelfTest : IO UInt32 := do
     ("original caller entry", stops p entry [u 7, u 3] (.ok [u 7, u 3])),
     ("boundary caller arguments", stops p entry [u 0xffffffff, u 0] (.ok [u 0xffffffff, u 0])),
     ("assignment suspends before write", stops p assigned [u 7, u 3] (.ok [u 7, u 3])),
+    ("second argument call retains first argument", stops p
+      (expression [(⟨.uint, false⟩, .ident .uint 6),
+        (⟨.uint, false⟩, .call .uint 2 [(⟨.uint, false⟩, .literal .uint 0),
+          (⟨.uint, false⟩, .ident .uint 7)])]) [u 7, u 3] (.ok [u 0, u 3])),
     ("argument order retains writes", stops p
       (expression [(⟨.uint, false⟩, write), (⟨.uint, false⟩, .ident .uint 6)])
       [u 7, u 3] (.ok [u 9, u 9])),

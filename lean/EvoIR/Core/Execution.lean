@@ -57,15 +57,17 @@ inductive Control where
   | halted (result : Result)
   deriving Repr
 
-inductive Frame where
+/-- The machine instantiates this at `Value`; result checking maps symbolic
+payloads to the very same frame constructors. -/
+inductive Frame (V : Type := Value) where
   | unary (type : IntType) (op : Unary)
   | binaryLeft (type : IntType) (op : Binary) (right : Expr)
-  | binaryRight (type : IntType) (op : Binary) (left : Value)
+  | binaryRight (type : IntType) (op : Binary) (left : V)
   | choice (type : IntType) (yes no : Expr)
   | convert (type : IntType)
   | assign (type : IntType) (op : Assignment) (symbol : Nat) (destination : QualifiedType)
   | callArgument (type : IntType) (callee : Nat) (destination : QualifiedType)
-      (remaining : List (QualifiedType × Expr)) (reverseValues : List Value)
+      (remaining : List (QualifiedType × Expr)) (reverseValues : List V)
   | discard
   | return (destination : QualifiedType)
   | initialize (symbol : Nat) (destination : QualifiedType)

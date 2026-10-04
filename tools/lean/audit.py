@@ -297,6 +297,27 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Transition.refinement_simulation",
+        "∀ {S : Type u_1} {T : Type u_2} {O : Type u_3} (sourceStep : S → Option S) "
+        "(targetStep : T → Option T) (sourceObserve : S → Option O) (targetObserve : T → Option O), "
+        "EvoIR.Core.Transition.CheckpointSimulation sourceStep targetStep sourceObserve targetObserve "
+        "(EvoIR.Core.Transition.Refines sourceStep targetStep sourceObserve targetObserve)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.saved_frames_for_return",
+        "∀ (σ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) (value : EvoIR.Core.Source.Value) "
+        "(frames : EvoIR.Core.Symbolic.SavedFrames EvoIR.Core.Symbolic.inputWidths), "
+        "EvoIR.Core.Symbolic.SavedFrames.denote (EvoIR.Core.Symbolic.returnSubst σ value) frames.forReturn = "
+        "EvoIR.Core.Symbolic.SavedFrames.denote σ frames",
+    ),
+    (
+        "EvoIR.Core.Symbolic.checkedSuffix",
+        "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → (fid : Nat) → "
+        "(f : EvoIR.Core.IR.Function) → Bool → (type : EvoIR.Core.Source.IntType) → "
+        "EvoIR.Core.Symbolic.CalleeProposals → Nat → "
+        "EvoIR.Core.Symbolic.ContinuationBuilder source target fid f type",
+    ),
+    (
         "EvoIR.Core.Symbolic.CallFrontierPair.refines",
         "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} "
         "(pair : EvoIR.Core.Symbolic.CallFrontierPair source target) (args : List EvoIR.Core.Source.Value), "
@@ -597,8 +618,9 @@ CORE_PRIMITIVE_TARGETS = [
         "∀ (argumentsσ callerσ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) {source : EvoIR.Core.Source.Function} "
         "{target : EvoIR.Core.IR.Function} (s : EvoIR.Core.Source.Program) (t : EvoIR.Core.IR.Program) (d : "
         "EvoIR.Core.Symbolic.LoopDiagram s t source target) (observationType : EvoIR.Core.Source.IntType) (fid : Nat) "
-        "(locals : EvoIR.Core.Symbolic.LocalStore EvoIR.Core.Symbolic.inputWidths) (frames : List "
-        "EvoIR.Core.Source.Frame) (scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths) (owner nextFrame pc "
+        "(locals : EvoIR.Core.Symbolic.LocalStore EvoIR.Core.Symbolic.inputWidths) "
+        "(frames : EvoIR.Core.Symbolic.SavedFrames EvoIR.Core.Symbolic.inputWidths) "
+        "(scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths) (owner nextFrame pc "
         ": Nat) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (inst : EvoIR.Core.IR.Instruction) (callerTokens : "
         "Bool), List.find? (fun x => x.symbol == source.symbol) s.functions = some source → List.find? (fun x => x.name "
         "== f.name) t.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.instructions[pc]? "
@@ -611,7 +633,8 @@ CORE_PRIMITIVE_TARGETS = [
         "b.name (pc + 1) scope inst.results d.tokens), EvoIR.Core.LoweringRefines s t observationType { control := "
         "EvoIR.Core.Source.Control.call source.symbol source.returnType.type (List.map (EvoIR.Core.Symbolic.CWord.denote "
         "argumentsσ) (EvoIR.Core.Symbolic.parameterWords source.parameters)), locals := "
-        "EvoIR.Core.Symbolic.LocalStore.denote callerσ locals, continuation := frames, functionId := fid } "
+        "EvoIR.Core.Symbolic.LocalStore.denote callerσ locals, "
+        "continuation := EvoIR.Core.Symbolic.SavedFrames.denote callerσ frames, functionId := fid } "
         "(EvoIR.Core.Symbolic.cutTargetState callerσ f b.name pc owner nextFrame scope [])",
     ),
     (

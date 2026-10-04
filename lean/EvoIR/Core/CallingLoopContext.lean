@@ -55,7 +55,7 @@ theorem checked_call_context_simulation {Γ : Var → Nat} (entries : List (Join
       | returned control typed boundary =>
         apply Or.inr
         simpa only [SourceCursor.denote, control, boundary, sourceContextFrames,
-          List.map_nil, List.nil_append] using returns σ _ afterCalls typed
+          SavedFrames.denote, List.map_nil, List.nil_append] using returns σ _ afterCalls typed
       | successor closed => exact .inl (closed σ afterCalls (some caller) owner stack)
   · rcases continuation.advance s t continued with terminal | ⟨sf, tf, sp, tp, related⟩
     · exact .inl terminal
@@ -100,7 +100,7 @@ theorem LoopDiagram.context_refines (σ : Subst inputWidths)
     source.returnType.type observationType s t target d.tokens
     (fun point member => d.spans.get point member) caller owner stack resumed continuation returns
   simpa only [SourceCursor.denote, CutControl.denote, sourceContextFrames,
-    List.map_cons, List.map_nil, List.cons_append, List.nil_append]
+    SavedFrames.denote, Source.Frame.map, List.map_cons, List.map_nil, List.cons_append, List.nil_append]
     using d.initialRelated σ (some caller) owner nextFrame stack
 
 /-- Connect the open cyclic diagram to both actual call-entry transitions.
@@ -171,7 +171,7 @@ the argument/frontier construction must still supply the real call operands. -/
 theorem LoopDiagram.call_checked_return (argumentsσ callerσ : Subst inputWidths)
     {source : Source.Function} {target : IR.Function} (s : Source.Program) (t : IR.Program)
     (d : LoopDiagram s t source target) (observationType : Source.IntType)
-    (fid : Nat) (locals : LocalStore inputWidths) (frames : List Source.Frame)
+    (fid : Nat) (locals : LocalStore inputWidths) (frames : SavedFrames inputWidths)
     (scope : Scope inputWidths) (owner nextFrame pc : Nat)
     (f : IR.Function) (b : IR.Block) (inst : IR.Instruction) (callerTokens : Bool)
     (sourceFound : s.functions.find? (·.symbol == source.symbol) = some source)
@@ -188,15 +188,19 @@ theorem LoopDiagram.call_checked_return (argumentsσ callerσ : Subst inputWidth
     LoweringRefines s t observationType
       ⟨.call source.symbol source.returnType.type
           ((parameterWords source.parameters).map (CWord.denote argumentsσ)),
-        locals.denote callerσ, frames, fid⟩
+        locals.denote callerσ, frames.denote callerσ, fid⟩
       (cutTargetState callerσ f b.name pc owner nextFrame scope []) := by
   apply d.call_refines argumentsσ s t observationType
-    ⟨fid, locals.denote callerσ, frames⟩
+    ⟨fid, locals.denote callerσ, frames.denote callerσ⟩
     ⟨f.name, b.name, pc, scope.denote callerσ callTokens, owner⟩ nextFrame []
     f b inst sourceFound function block atPc call targetFound arguments results
-    _ resumption.diagram.simulation
+    _ (Transition.refinement_simulation (Source.step s) (IR.step t)
+      observeSource (observeTarget observationType))
   intro τ word afterCalls typed
-  have resumed := resumption.related callerσ (word.denote τ) typed owner afterCalls
-  simpa only [TargetExit.callState, cut_results_values] using resumed
+  obtain ⟨σ, savedOwner, savedFrame, sourceSame, targetSame⟩ :=
+    resumption.related callerσ (word.denote τ) typed owner afterCalls
+  have resumed := resumption.refinement σ savedOwner savedFrame
+  rw [← sourceSame, ← targetSame] at resumed
+  simpa only [TargetExit.callState, cut_results_values, LoweringRefines] using resumed
 
 end EvoIR.Core.Symbolic

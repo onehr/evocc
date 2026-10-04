@@ -180,4 +180,45 @@ theorem prepend {s t s' t'} (entry : related s' t')
   exact joined.sound (Or.inl ⟨rfl, rfl⟩)
 
 end CheckpointSimulation
+
+theorem terminal_of_accessible {step : α → Option α} {s : α}
+    (accessible : Acc (Predecessor step) s) :
+    ∃ final, Reaches step s final ∧ step final = none := by
+  induction accessible with
+  | intro current _ ih =>
+    cases edge : step current with
+    | none => exact ⟨current, .refl _, edge⟩
+    | some next =>
+      obtain ⟨final, tail, stop⟩ := ih next edge
+      exact ⟨final, .next edge tail, stop⟩
+
+/-- Already proved continuations can be composed through the same cyclic
+simulation interface. The relation is refinement itself; no search result or
+finite execution sample is used to manufacture a continuation proof. -/
+theorem refinement_simulation (sourceStep : S → Option S) (targetStep : T → Option T)
+    (sourceObserve : S → Option O) (targetObserve : T → Option O) :
+    CheckpointSimulation sourceStep targetStep sourceObserve targetObserve
+      (Refines sourceStep targetStep sourceObserve targetObserve) := by
+  constructor
+  intro s t proof
+  cases targetEdge : targetStep t with
+  | none =>
+    obtain ⟨sf, o, sp, ss, so, to⟩ := proof.terminal t (.refl _) targetEdge
+    exact .inl ⟨sf, t, o, sp, .refl _, ss, targetEdge, so, to⟩
+  | some t' =>
+    cases sourceEdge : sourceStep s with
+    | some s' =>
+      exact .inr ⟨s', t', .single sourceEdge, .single targetEdge,
+        proof.suffix (.next sourceEdge (.refl _)) (.next targetEdge (.refl _))⟩
+    | none =>
+      classical
+      have accessible : Acc (Predecessor targetStep) t := by
+        apply Classical.byContradiction
+        intro notAccessible
+        exact (Reaches.refl s).not_infinite sourceEdge
+          (proof.divergence (infinite_of_not_accessible notAccessible))
+      obtain ⟨tf, tp, ts⟩ := terminal_of_accessible accessible
+      obtain ⟨sf, o, sp, ss, so, to⟩ := proof.terminal tf tp ts
+      exact .inl ⟨sf, tf, o, sp, tp, ss, ts, so, to⟩
+
 end EvoIR.Core.Transition

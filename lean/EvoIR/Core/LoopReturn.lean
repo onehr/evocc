@@ -117,7 +117,8 @@ theorem LoopDiagram.refines (σ : Subst inputWidths)
   · simp [IR.initial, targetFound, boundTarget, bind, Except.bind, pure, Except.pure, te, targetState]
   apply checked_table_refines d.points source.symbol source.returnType.type s t target
     d.tokens d.spans se te
-  simpa only [se, te, SourceCursor.denote, CutControl.denote, cutTargetState, targetState]
+  simpa only [se, te, SourceCursor.denote, CutControl.denote, cutTargetState, targetState,
+    SavedFrames.denote, List.map_cons, List.map_nil, Source.Frame.map]
     using d.initialRelated σ none 1 2 []
 
 structure LoopPair (source : Source.Program) (target : IR.Program) where

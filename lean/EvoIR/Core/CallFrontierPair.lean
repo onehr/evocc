@@ -15,9 +15,9 @@ def CallFrontierAgreement (source : Source.Program) (target : IR.Program)
   ∀ σ owner nextFrame, LoweringRefines source target type (s.denote σ fid)
     (t.denote σ f owner nextFrame [])
 
-def checkCallFrontier (source : Source.Program) (target : IR.Program)
+def checkCallFrontierWith (source : Source.Program) (target : IR.Program)
     (fid : Nat) (f : IR.Function) (tokens : Bool) (type : Source.IntType)
-    (proposals : CalleeProposals) (budget : Nat)
+    (proposals : CalleeProposals) (continuation : ContinuationBuilder source target fid f type)
     (s : SourceCursor inputWidths) (t : TargetCallSite inputWidths) :
     Option (PLift (CallFrontierAgreement source target fid f type s t)) := do
   match sourceCursor : s with
@@ -50,8 +50,8 @@ def checkCallFrontier (source : Source.Program) (target : IR.Program)
             if operands : inst.val.operands.mapM (fun id => t.scope.lookup id) =
                 some (loopInputSlots diagram.tokens args) then
               if results : inst.val.results.map IR.Binding.type = tf.val.returns then
-                let resumed ← checkedReturn source target fid f tokens type sf.val.returnType.type
-                  locals frames b.val.name (t.pc+1) t.scope inst.val.results diagram.tokens budget
+                let resumed ← checkedReturnWith source target fid f tokens type sf.val.returnType.type
+                  locals frames b.val.name (t.pc+1) t.scope inst.val.results diagram.tokens continuation
                 return ⟨by
                   rw [sourceCursor]
                   intro σ owner nextFrame
@@ -109,6 +109,22 @@ theorem frontier_prefix_refines (source : Source.Program) (target : IR.Program)
     subst tf
     exact (continued σ owner nextFrame).prepend sp.toReaches tp.toReaches
 
+/-- Build a caller suffix, including further cyclic calls. The decreasing
+budget bounds construction, not callee iterations or the values returned. -/
+def checkedSuffix (source : Source.Program) (target : IR.Program) (fid : Nat)
+    (f : IR.Function) (tokens : Bool) (type : Source.IntType) (proposals : CalleeProposals) :
+    Nat → ContinuationBuilder source target fid f type
+  | 0, _, _, _, _ => none
+  | budget+1, cursor, label, pc, scope => do
+    if let some finite := returnContinuation source target fid f tokens type cursor label pc scope (budget+1) then
+      return ⟨finite.refines⟩
+    let sp ← sourceCallFrontier source (budget+1) cursor
+    let tp ← targetCallFrontier target f (budget+1) label pc scope
+    let joined ← cutMatch (checkCallFrontierWith source target fid f tokens type proposals
+      (checkedSuffix source target fid f tokens type proposals budget)) sp.val.normalizeTrace tp.val.normalizeTrace
+    return ⟨frontier_prefix_refines source target fid f type cursor label pc scope
+      sp.val tp.val sp.property tp.property joined.down⟩
+
 structure CallFrontierPair (source : Source.Program) (target : IR.Program) where
   sourceFunction : Source.Function
   targetFunction : IR.Function
@@ -159,8 +175,9 @@ def callFrontierPair (source : Source.Program) (target : IR.Program)
           ⟨.statement sf.val.body, locals.val, [.function none sf.val.returnType.type]⟩
         let sp ← sourceCallFrontier source budget cursor
         let tp ← targetCallFrontier target tf.val budget block.val.name 0 scope.val
-        let joined ← cutMatch (checkCallFrontier source target sf.val.symbol tf.val tokens
-          sf.val.returnType.type proposals budget) sp.val.normalizeTrace tp.val.normalizeTrace
+        let joined ← cutMatch (checkCallFrontierWith source target sf.val.symbol tf.val tokens
+          sf.val.returnType.type proposals (checkedSuffix source target sf.val.symbol tf.val tokens
+            sf.val.returnType.type proposals budget)) sp.val.normalizeTrace tp.val.normalizeTrace
         return {
           sourceFunction := sf.val, targetFunction := tf.val, tokens := tokens
           checked := by
@@ -192,7 +209,8 @@ def callFrontierPair (source : Source.Program) (target : IR.Program)
             rw [coverage] at stored
             refine ⟨cursor.denote σ sf.val.symbol, cutTargetState σ tf.val block.val.name 0 1 2 scope.val [], ?_, ?_, ?_⟩
             · simp [Source.initial, chosen, sourceFound, stored, Bind.bind, Except.bind,
-                pure, Except.pure, cursor, SourceCursor.denote, CutControl.denote]
+                pure, Except.pure, cursor, SourceCursor.denote, CutControl.denote,
+                SavedFrames.denote, Source.Frame.map]
             · simp [IR.initial, targetFound, entered, Bind.bind, Except.bind, pure, Except.pure,
                 cutTargetState, targetState]
             · exact frontier_prefix_refines source target sf.val.symbol tf.val sf.val.returnType.type

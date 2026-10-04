@@ -67,6 +67,22 @@ theorem Refines.prepend {sourceStep : S → Option S} {targetStep : T → Option
       obtain ⟨_, o, _, _, _, observed⟩ := terminal final path h
       exact .inr ⟨o, observed⟩
 
+/-- Remove actual deterministic prefixes. This does not identify arbitrary
+intermediate states or assume that either execution terminates. -/
+theorem Refines.suffix {sourceStep : S → Option S} {targetStep : T → Option T}
+    {sourceObserve : S → Option O} {targetObserve : T → Option O} {s s' : S} {t t' : T}
+    (whole : Refines sourceStep targetStep sourceObserve targetObserve s t)
+    (sourcePath : Reaches sourceStep s s') (targetPath : Reaches targetStep t t') :
+    Refines sourceStep targetStep sourceObserve targetObserve s' t' := by
+  constructor
+  · intro final path stop
+    obtain ⟨sf, o, sp, ss, so, to⟩ := whole.terminal final (targetPath.trans path) stop
+    exact ⟨sf, o, sourcePath.finish_from_prefix sp ss, ss, so, to⟩
+  · intro infinite
+    exact sourcePath.infinite_suffix (whole.divergence (targetPath.infinite_prefix infinite))
+  · intro final path
+    exact whole.progress final (targetPath.trans path)
+
 theorem reaches_of_positive {step : α → Option α} {a b : α}
     (h : Relation.TransGen (Predecessor step) b a) : Reaches step a b := by
   induction h with

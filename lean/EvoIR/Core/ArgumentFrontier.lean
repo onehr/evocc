@@ -103,14 +103,14 @@ def argumentFrontier {Γ : Var → Nat} (p : Source.Program) : (budget : Nat) �
       return ⟨tail.val, argument_frontier_cons p locals type callee destination expr pending
         reverseWords head.val tail.val head.property tail.property⟩
 
-def argumentCallTree {Γ : Var → Nat} (type : Source.IntType) (callee : Nat) (k : List Source.Frame) :
+def argumentCallTree {Γ : Var → Nat} (type : Source.IntType) (callee : Nat) (k : SavedFrames Γ) :
     CutTree Γ (ArgumentExit Γ) → CutTree Γ (SourceCursor Γ)
   | .leaf (locals, words) => .leaf ⟨.call callee type words, locals, k⟩
   | .checked guard tail => .checked guard (argumentCallTree type callee k tail)
   | .branch condition a b => .branch condition (argumentCallTree type callee k a) (argumentCallTree type callee k b)
 
 theorem argument_call_eval {Γ : Var → Nat} (σ : Subst Γ) (type : Source.IntType) (callee : Nat)
-    (k : List Source.Frame) (tree : CutTree Γ (ArgumentExit Γ)) :
+    (k : SavedFrames Γ) (tree : CutTree Γ (ArgumentExit Γ)) :
     (argumentCallTree type callee k tree).eval σ =
       (tree.eval σ).map (fun (locals, words) => ⟨.call callee type words, locals, k⟩) := by
   induction tree with
@@ -124,15 +124,15 @@ theorem argument_call_eval {Γ : Var → Nat} (σ : Subst Γ) (type : Source.Int
 
 theorem call_frontier_sound {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
     (type : Source.IntType) (callee : Nat) (arguments : List (Source.QualifiedType × Source.Expr))
-    (k : List Source.Frame) (tree : CutTree Γ (ArgumentExit Γ))
+    (k : SavedFrames Γ) (tree : CutTree Γ (ArgumentExit Γ))
     (built : ArgumentFrontierRuns p locals type callee arguments [] tree) :
     SourceCutRuns p true ⟨.expression (.call type callee arguments), locals, k⟩
       (argumentCallTree type callee k tree) := by
   intro σ fid context
-  have prefixPath := built σ fid (sourceContextFrames context k)
+  have prefixPath := built σ fid (sourceContextFrames context (k.denote σ))
   let start := (⟨.expression (.call type callee arguments), locals, k⟩ : SourceCursor Γ).denote σ fid context
   have step : Source.Step p start
-      (Source.beginArguments ⟨.flow .normal, locals.denote σ, sourceContextFrames context k, fid⟩
+      (Source.beginArguments ⟨.flow .normal, locals.denote σ, sourceContextFrames context (k.denote σ), fid⟩
         type callee arguments []) := by
     cases context <;> cases arguments <;> rfl
   rw [argument_call_eval]

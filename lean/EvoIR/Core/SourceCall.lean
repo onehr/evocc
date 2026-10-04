@@ -96,7 +96,7 @@ theorem invoke_body (p : Program) (callee : Function) (args : List Value)
     (typed : ∀ value, outcome.2 = .ok value → value.type = callee.returnType.type) :
     Invokes p callerLocals caller callee args outcome.2 := by
   intro k
-  let frame := Frame.function (some (caller, callerLocals)) callee.returnType.type
+  let frame : Frame := Frame.function (some (caller, callerLocals)) callee.returnType.type
   have entry : Step p
       ⟨.call callee.symbol callee.returnType.type args, callerLocals, k, caller⟩
       ⟨.statement callee.body, calleeLocals, frame :: k, callee.symbol⟩ := by

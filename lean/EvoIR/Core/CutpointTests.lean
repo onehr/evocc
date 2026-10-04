@@ -136,8 +136,8 @@ private def points (f : Source.Function) : Option (List Point) := do
 
 private def Point.cursor (point : Point) : SourceCursor widths :=
   match point.site with
-  | .expression e k => ⟨.expression e, point.locals.map localSlot, k⟩
-  | .statement s k => ⟨.statement s, point.locals.map localSlot, k⟩
+  | .expression e k => ⟨.expression e, point.locals.map localSlot, SavedFrames.literal k⟩
+  | .statement s k => ⟨.statement s, point.locals.map localSlot, SavedFrames.literal k⟩
 
 private def projectedScope (target : IR.Function) (point : Point) (ls : LocalStore widths) :
     Option (Scope widths) := do

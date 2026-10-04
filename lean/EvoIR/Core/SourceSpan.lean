@@ -8,17 +8,17 @@ bound is not an execution bound: a span must end at a checked successor or
 terminal, and its proof covers every valuation of the incoming symbolic state. -/
 namespace EvoIR.Core.Symbolic
 
-def StateTree.cutTree {Γ : Var → Nat} (k : List Source.Frame) :
+def StateTree.cutTree {Γ : Var → Nat} (k : SavedFrames Γ) :
     StateTree Γ → CutTree Γ (SourceCursor Γ)
   | .value locals word => .leaf ⟨.value word, locals, k⟩
   | .checked _ guard tail => .checked guard (tail.cutTree k)
   | .branch condition yes no => .branch condition (yes.cutTree k) (no.cutTree k)
 
 theorem StateTree.cut_eval {Γ : Var → Nat} (σ : Subst Γ) (fid : Nat)
-    (k : List Source.Frame) (tree : StateTree Γ) (context : Option SourceReturnContext) :
+    (k : SavedFrames Γ) (tree : StateTree Γ) (context : Option SourceReturnContext) :
     ((tree.cutTree k).eval σ).map (fun cursor => cursor.denote σ fid context) =
       (tree.denote σ).2.map (fun v =>
-        ⟨.value v, (tree.denote σ).1, sourceContextFrames context k, fid⟩) := by
+        ⟨.value v, (tree.denote σ).1, sourceContextFrames context (k.denote σ), fid⟩) := by
   induction tree with
   | value locals word => cases context <;> rfl
   | checked locals guard tail ih =>
@@ -31,14 +31,14 @@ theorem StateTree.cut_eval {Γ : Var → Nat} (σ : Subst Γ) (fid : Nat)
     split <;> assumption
 
 theorem expression_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
-    (expr : Source.Expr) (k : List Source.Frame) (tree : StateTree Γ)
+    (expr : Source.Expr) (k : SavedFrames Γ) (tree : StateTree Γ)
     (diagram : ContextDiagram p locals expr tree) :
     SourceCutRuns p true ⟨.expression expr, locals, k⟩ (tree.cutTree k) := by
   intro σ fid context
-  have path := diagram σ fid (sourceContextFrames context k)
+  have path := diagram σ fid (sourceContextFrames context (k.denote σ))
   have same := tree.cut_eval σ fid k context
   have start : (SourceCursor.mk (.expression expr) locals k).denote σ fid context =
-      ⟨.expression expr, locals.denote σ, sourceContextFrames context k, fid⟩ := by
+      ⟨.expression expr, locals.denote σ, sourceContextFrames context (k.denote σ), fid⟩ := by
     cases context <;> rfl
   rw [start]
   cases result : tree.denote σ with
@@ -57,7 +57,7 @@ theorem expression_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : L
       simp only [result] at path
       have output : ∃ exit, (tree.cutTree k).eval σ = .ok exit ∧
           exit.denote σ fid context =
-            ⟨.value word, ls, sourceContextFrames context k, fid⟩ := by
+            ⟨.value word, ls, sourceContextFrames context (k.denote σ), fid⟩ := by
         cases h : (tree.cutTree k).eval σ with
         | error fault => simp [h, result, Except.map] at same
         | ok exit => exact ⟨exit, rfl, by simpa [h, result, Except.map] using same⟩
@@ -67,17 +67,17 @@ theorem expression_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : L
         exact path.toReaches.positive_of_ne (by intro h; cases h)
       · simpa [success] using represented.symm
 
-def FlowTree.cutTree {Γ : Var → Nat} (k : List Source.Frame) :
+def FlowTree.cutTree {Γ : Var → Nat} (k : SavedFrames Γ) :
     FlowTree Γ → CutTree Γ (SourceCursor Γ)
   | .value locals flow => .leaf ⟨.flow flow, locals, k⟩
   | .checked _ guard tail => .checked guard (tail.cutTree k)
   | .branch condition yes no => .branch condition (yes.cutTree k) (no.cutTree k)
 
 theorem FlowTree.cut_eval {Γ : Var → Nat} (σ : Subst Γ) (fid : Nat)
-    (k : List Source.Frame) (tree : FlowTree Γ) (context : Option SourceReturnContext) :
+    (k : SavedFrames Γ) (tree : FlowTree Γ) (context : Option SourceReturnContext) :
     ((tree.cutTree k).eval σ).map (fun cursor => cursor.denote σ fid context) =
       (tree.denote σ).2.map (fun v =>
-        ⟨.flow v, (tree.denote σ).1, sourceContextFrames context k, fid⟩) := by
+        ⟨.flow v, (tree.denote σ).1, sourceContextFrames context (k.denote σ), fid⟩) := by
   induction tree with
   | value locals flow => cases context <;> rfl
   | checked locals guard tail ih =>
@@ -90,14 +90,14 @@ theorem FlowTree.cut_eval {Γ : Var → Nat} (σ : Subst Γ) (fid : Nat)
     split <;> assumption
 
 theorem object_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
-    (object : Source.Object) (k : List Source.Frame) (tree : FlowTree Γ)
+    (object : Source.Object) (k : SavedFrames Γ) (tree : FlowTree Γ)
     (diagram : ContextFlowDiagram p locals (.object object) tree) :
     SourceCutRuns p true ⟨.object object, locals, k⟩ (tree.cutTree k) := by
   intro σ fid context
-  have path := diagram σ fid (sourceContextFrames context k)
+  have path := diagram σ fid (sourceContextFrames context (k.denote σ))
   have same := tree.cut_eval σ fid k context
   have start : (SourceCursor.mk (.object object) locals k).denote σ fid context =
-      ⟨.object object, locals.denote σ, sourceContextFrames context k, fid⟩ := by
+      ⟨.object object, locals.denote σ, sourceContextFrames context (k.denote σ), fid⟩ := by
     cases context <;> rfl
   rw [start]
   cases result : tree.denote σ with
@@ -116,7 +116,7 @@ theorem object_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : Local
       simp only [result] at path
       have output : ∃ exit, (tree.cutTree k).eval σ = .ok exit ∧
           exit.denote σ fid context =
-            ⟨.flow flow, ls, sourceContextFrames context k, fid⟩ := by
+            ⟨.flow flow, ls, sourceContextFrames context (k.denote σ), fid⟩ := by
         cases h : (tree.cutTree k).eval σ with
         | error fault => simp [h, result, Except.map] at same
         | ok exit => exact ⟨exit, rfl, by simpa [h, result, Except.map] using same⟩
@@ -178,19 +178,19 @@ def cursorStep {Γ : Var → Nat} (cursor : SourceCursor Γ) :
   | _ => none
 
 theorem resumption_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
-    (frame : Source.Frame) (word : CWord Γ) (k : List Source.Frame) (tree : StateTree Γ)
+    (frame : Source.Frame (CWord Γ)) (word : CWord Γ) (k : SavedFrames Γ) (tree : StateTree Γ)
     (diagram : ResumptionDiagram p locals frame word tree) :
     SourceCutRuns p true ⟨.value word, locals, frame :: k⟩ (tree.cutTree k) := by
   intro σ fid context
-  have path := diagram.runs σ fid (sourceContextFrames context k)
+  have path := diagram.runs σ fid (sourceContextFrames context (k.denote σ))
   have same := tree.cut_eval σ fid k context
   have start : (SourceCursor.mk (.value word) locals (frame :: k)).denote σ fid context =
-      ⟨.value (word.denote σ), locals.denote σ, frame :: sourceContextFrames context k, fid⟩ := by
+      ⟨.value (word.denote σ), locals.denote σ, frame.map (CWord.denote σ) :: sourceContextFrames context (k.denote σ), fid⟩ := by
     cases context with
     | none => rfl
     | some caller =>
-      simp only [SourceCursor.denote, CutControl.denote]
-      rw [diagram.frames_stable]
+      simp only [SourceCursor.denote, CutControl.denote, SavedFrames.denote, List.map_cons]
+      rw [diagram.frames_stable σ]
   rw [start]
   cases result : tree.denote σ with
   | mk ls value =>
@@ -208,7 +208,7 @@ theorem resumption_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : L
       simp only [result] at path
       have output : ∃ exit, (tree.cutTree k).eval σ = .ok exit ∧
           exit.denote σ fid context =
-            ⟨.value answer, ls, sourceContextFrames context k, fid⟩ := by
+            ⟨.value answer, ls, sourceContextFrames context (k.denote σ), fid⟩ := by
         cases h : (tree.cutTree k).eval σ with
         | error fault => simp [h, result, Except.map] at same
         | ok exit => exact ⟨exit, rfl, by simpa [h, result, Except.map] using same⟩

@@ -8,7 +8,7 @@ check the actual source machine, including right-operand effects and faults. -/
 namespace EvoIR.Core.Symbolic.SourceResumeTests
 
 private def checks (p : Source.Program) (type : Source.IntType)
-    (frames : List Source.Frame) (locals : LocalStore inputWidths)
+    (frames : SavedFrames inputWidths) (locals : LocalStore inputWidths)
     (samples : List (Nat × Source.Result)) : Bool := Id.run do
   let cursor : SourceCursor inputWidths :=
     ⟨.value (inputWord type 0), locals,
@@ -54,7 +54,7 @@ private def originalSuffix (source ir : String) (pc : Nat := 1) : Bool := Id.run
   let words := parameterWords f.parameters
   let some locals := parameterStore f.parameters words | return false
   let some before := bindSlots callTokenTypes block.parameters (callInputSlots words) | return false
-  return (checkedReturn s t f.symbol g true f.returnType.type type locals suspended.continuation
+  return (checkedReturn s t f.symbol g true f.returnType.type type locals (SavedFrames.literal suspended.continuation)
     block.name pc before call.results true 64).isSome
 
 def sourceResumeSelfTest : IO UInt32 := do
@@ -105,7 +105,13 @@ def sourceResumeSelfTest : IO UInt32 := do
     ("post-call unary signed overflow", checks p .int [.unary .int .neg] []
       [(1, int 0xffffffff), (0x80000000, overflow)]),
     ("post-call unary boolean", checks p .int [.unary .int .not] []
-      [(0, int 1), (1, int 0), (0x80000000, int 0)])]
+      [(0, int 1), (1, int 0), (0x80000000, int 0)]),
+    ("saved left operand retains order", checks p .uint
+      [.binaryRight .uint .sub (CWord.literal (.ofNat .uint 100))] []
+      [(1, uint 99), (101, uint 0xffffffff)]),
+    ("saved dividend retains zero diagnostic", checks p .uint
+      [.binaryRight .uint .div (CWord.literal (.ofNat .uint 100))] []
+      [(0, divideZero), (4, uint 25)])]
   let mut failed := 0
   for (label, passed) in tests do
     if !passed then
@@ -140,8 +146,14 @@ def sourceResumeSelfTest : IO UInt32 := do
         ⟨70, ⟨type, false⟩, some (inputWord type 0).term⟩,
         ⟨71, ⟨type, false⟩, none⟩]
       let scope : Scope inputWidths := [(0, .word (inputWord type 0).word), (1, .opaque 0)]
+      let frames : SavedFrames inputWidths := [
+        .binaryRight type .sub (inputWord type 0),
+        .callArgument type 0 ⟨type, false⟩ [] [inputWord type 0],
+        .return ⟨type, false⟩, .function none type]
+      let capturedSite : SourceCursor inputWidths := ⟨.expression (.literal type 0), saved, frames⟩
       if (inputWord type 0).denote τ != value || saved.forReturn.denote τ != saved.denote σ ||
-          scope.forReturn.denote τ callTokens != scope.denote σ callTokens then
+          scope.forReturn.denote τ callTokens != scope.denote σ callTokens ||
+          frames.forReturn.denote τ != frames.denote σ || capturedSite.site.isSome then
         IO.eprintln s!"return value captured caller input: {repr type} {number}"
         failed := failed+1
       captures := captures+1

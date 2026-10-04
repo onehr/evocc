@@ -1,5 +1,6 @@
 import EvoIR.Core.SymbolicEntry
 import EvoIR.Core.SymbolicStorage
+import EvoIR.Core.SavedFrames
 
 /-! Reserve one independent symbolic return value without capturing any
 caller input. Renaming preserves exact typed terms, initializedness, source
@@ -54,6 +55,26 @@ def Scope.forReturn (scope : Scope inputWidths) : Scope inputWidths :=
   scope.map fun (id, slot) => (id, match slot with
     | .word ⟨n, term⟩ => .word ⟨n, term.renameInputs returnName⟩
     | .opaque id => .opaque id)
+
+def CWord.forReturn (word : CWord inputWidths) : CWord inputWidths :=
+  ⟨word.type, word.term.renameInputs returnName⟩
+
+@[simp] theorem word_for_return (σ : Subst inputWidths) (value : Source.Value)
+    (word : CWord inputWidths) :
+    word.forReturn.denote (returnSubst σ value) = word.denote σ := by
+  simp [CWord.forReturn, CWord.denote, Term.rename_inputs_sound, return_subst_old]
+  rfl
+
+def SavedFrames.forReturn (frames : SavedFrames inputWidths) : SavedFrames inputWidths :=
+  frames.map (Source.Frame.map CWord.forReturn)
+
+theorem saved_frames_for_return (σ : Subst inputWidths) (value : Source.Value)
+    (frames : SavedFrames inputWidths) :
+    frames.forReturn.denote (returnSubst σ value) = frames.denote σ := by
+  simp only [SavedFrames.forReturn, SavedFrames.denote, List.map_map]
+  apply List.map_congr_left
+  intro frame _
+  cases frame <;> simp [Source.Frame.map, Function.comp_def, List.map_map]
 
 theorem local_store_for_return (σ : Subst inputWidths) (value : Source.Value)
     (locals : LocalStore inputWidths) :
