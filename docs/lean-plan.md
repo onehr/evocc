@@ -473,8 +473,11 @@ proof on unrelated module functions. One observed representation mismatch
 branch normalization; runtime guards are retained and no P0 rule/allowlist
 changes. Local tests add 54 exact-store/source-machine comparisons, 23 kernel
 statement examples, five constant-branch examples and 28 complete-pair tests
-(four positive and 24 mutations). The clean Lean gate is pending for this
-checkpoint. Div/rem, cyclic control, calls/private-leaf substitution and input
+(four positive and 24 mutations). The clean Lean gate passes at `6c532776`
+(44 kernel-only core targets; 1,246,159 vector answers); seven actual export
+pairs replay successfully. Full workspace at that checkpoint passes 401 suites,
+3,080 tests, zero failures and five ignored, plus Clippy/format. Div/rem, cyclic
+control, calls/private-leaf substitution and input
 validator safety still block V01; no frozen constructor or pilot was removed.
 
 One concrete V01 correspondence obligation is now visible: the ten-function

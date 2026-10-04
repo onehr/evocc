@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "1746ceedf2a690ca8896fa689c1ce3e5e3c3ad49",
+    "lean_commit": "6c532776a481de6f499e8047826c83e60815888b",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -31,11 +31,13 @@
       "lean/EvoIR/Core/BranchExpression.lean",
       "lean/EvoIR/Core/BranchTarget.lean",
       "lean/EvoIR/Core/CheckedInt.lean",
+      "lean/EvoIR/Core/ConstantBranch.lean",
       "lean/EvoIR/Core/Correspondence.lean",
       "lean/EvoIR/Core/CorrespondenceTests.lean",
       "lean/EvoIR/Core/Divergence.lean",
       "lean/EvoIR/Core/Execution.lean",
       "lean/EvoIR/Core/ExecutionTests.lean",
+      "lean/EvoIR/Core/FlowTree.lean",
       "lean/EvoIR/Core/IR.lean",
       "lean/EvoIR/Core/IRExecution.lean",
       "lean/EvoIR/Core/IRReader.lean",
@@ -60,6 +62,10 @@
       "lean/EvoIR/Core/StateExpression.lean",
       "lean/EvoIR/Core/StateExpressionTests.lean",
       "lean/EvoIR/Core/StateReturnTests.lean",
+      "lean/EvoIR/Core/StatementDiagram.lean",
+      "lean/EvoIR/Core/StatementReturnTests.lean",
+      "lean/EvoIR/Core/StatementSource.lean",
+      "lean/EvoIR/Core/StatementTests.lean",
       "lean/EvoIR/Core/SymbolicBindings.lean",
       "lean/EvoIR/Core/SymbolicEdge.lean",
       "lean/EvoIR/Core/SymbolicEdgeTests.lean",
@@ -109,6 +115,8 @@
         "EvoIR.Core.ReturnCorrespondenceTests",
         "EvoIR.Core.StateExpressionTests",
         "EvoIR.Core.StateReturnTests",
+        "EvoIR.Core.StatementTests",
+        "EvoIR.Core.StatementReturnTests",
         "EvoIR.Term",
         "EvoIR.Fact",
         "EvoIR.Rule",
@@ -139,6 +147,9 @@
       "lean/EvoIR/Core/CheckedInt.lean": [
         "EvoIR.Sem"
       ],
+      "lean/EvoIR/Core/ConstantBranch.lean": [
+        "EvoIR.Core.BranchExpression"
+      ],
       "lean/EvoIR/Core/Correspondence.lean": [
         "EvoIR.Core.Execution",
         "EvoIR.Core.IRExecution",
@@ -156,6 +167,9 @@
       ],
       "lean/EvoIR/Core/ExecutionTests.lean": [
         "EvoIR.Core.Execution"
+      ],
+      "lean/EvoIR/Core/FlowTree.lean": [
+        "EvoIR.Core.StateEntry"
       ],
       "lean/EvoIR/Core/IR.lean": [
         "EvoIR.Core.Scalar"
@@ -188,7 +202,8 @@
       ],
       "lean/EvoIR/Core/ReturnCorrespondence.lean": [
         "EvoIR.Core.BranchTarget",
-        "EvoIR.Core.StateEntry"
+        "EvoIR.Core.StatementDiagram",
+        "EvoIR.Core.ConstantBranch"
       ],
       "lean/EvoIR/Core/ReturnCorrespondenceTests.lean": [
         "EvoIR.Core.ReturnCorrespondence",
@@ -247,6 +262,19 @@
       "lean/EvoIR/Core/StateReturnTests.lean": [
         "EvoIR.Core.ReturnCorrespondence",
         "EvoIR.Core.StateExpressionTests"
+      ],
+      "lean/EvoIR/Core/StatementDiagram.lean": [
+        "EvoIR.Core.StatementSource"
+      ],
+      "lean/EvoIR/Core/StatementReturnTests.lean": [
+        "EvoIR.Core.ReturnCorrespondence"
+      ],
+      "lean/EvoIR/Core/StatementSource.lean": [
+        "EvoIR.Core.FlowTree"
+      ],
+      "lean/EvoIR/Core/StatementTests.lean": [
+        "EvoIR.Core.StatementDiagram",
+        "EvoIR.Core.LeafCorrespondence"
       ],
       "lean/EvoIR/Core/SymbolicBindings.lean": [
         "EvoIR.Core.SymbolicScalar",
@@ -308,7 +336,9 @@
         "EvoIR.Core.SourceExpressionTests",
         "EvoIR.Core.LeafCorrespondenceTests",
         "EvoIR.Core.ReturnCorrespondenceTests",
-        "EvoIR.Core.StateReturnTests"
+        "EvoIR.Core.StateReturnTests",
+        "EvoIR.Core.StatementTests",
+        "EvoIR.Core.StatementReturnTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -15597,8 +15627,29 @@
     }
   ],
   "compilation_core_primitives": {
-    "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural straight-line and stateful branching-return source/IR checker soundness. No proof of source export, input-validation safety, general loops/state/calls, backend compilation or verified-release acceptance",
+    "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions and conditional CFGs. No proof of source export, input-validation safety, loops or calls, backend compilation or verified-release acceptance",
     "targets": [
+      {
+        "theorem": "EvoIR.Core.Symbolic.flow_diagram_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (depth : Nat) (locals : EvoIR.Core.Symbolic.LocalStore Γ) (control : EvoIR.Core.Source.Control) (tree : EvoIR.Core.Symbolic.FlowTree Γ), Option.map Subtype.val (EvoIR.Core.Symbolic.flowDiagram depth locals control) = some tree → EvoIR.Core.Symbolic.FlowDiagram locals control tree",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.normalized_trees_equal",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (a b : EvoIR.Core.Symbolic.ValueTree Γ), a.normalizeBranches = b.normalizeBranches → ∀ (σ : EvoIR.Subst Γ), EvoIR.Core.Symbolic.ValueTree.denote σ a = EvoIR.Core.Symbolic.ValueTree.denote σ b",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
       {
         "theorem": "EvoIR.Core.Symbolic.state_expression_sound",
         "proposition": "∀ {Γ : EvoIR.Var → Nat} (depth : Nat) (locals : EvoIR.Core.Symbolic.LocalStore Γ) (expr : EvoIR.Core.Source.Expr) (tree : EvoIR.Core.Symbolic.StateTree Γ), Option.map Subtype.val (EvoIR.Core.Symbolic.stateExpression depth locals expr) = some tree → EvoIR.Core.Symbolic.StateDiagram locals expr tree",

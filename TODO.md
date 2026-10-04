@@ -2444,7 +2444,9 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   the latter is selected from the untouched complete `control.evo` module.
   Local regressions add 54 source-machine comparisons and 28 whole-function
   cases (24 mutations), plus 28 kernel boundary examples. The clean Lean gate
-  is pending. Div/rem, loops, calls/private-leaf substitution and validator
+  passes at `6c532776` (44 kernel-only core targets); seven actual export pairs
+  replay successfully. Full workspace passes 401 suites / 3,080 tests / zero
+  failures / five ignored, with Clippy/format. Div/rem, loops, calls/private-leaf substitution and validator
   safety remain required; this does not close V01 or advance V02–V06.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
