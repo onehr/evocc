@@ -674,8 +674,13 @@ controls and 15 target, 11 proposal and three source mutations pass. The five
 frozen primary entries and original private-leaf pair replay. The first replay
 attempt accidentally paired `caller.json` with `pressure.evo` and correctly
 refused; the corrected original-target replay is retained separately. The
-development axiom/proposition audit passes. Final clean Lean and full-workspace
-acceptance are recorded in the pilot manifest when terminal.
+development axiom/proposition audit passes. Implementation `10f0c558` passes the
+clean Lean gate (69 kernel-only core targets, zero native dependencies,
+1,246,159 vector answers) and full workspace (401 suites, 3,080 passed, zero
+failed, five ignored; Clippy/format pass). Receipts are in the pilot manifest.
+Build/capture disk delta is **+4,612 KiB**, with `target/frontend` unchanged;
+the capture is 14,260 KiB of its 500 MiB cap and free space is 52 GiB. No new
+target, clone, kernel tree or VM disk was created; protected artifacts remain.
 
 `call_loop` still refuses with a valid entry proposal: calling a cyclic callee
 needs a continuation-aware simulation, not a larger finite call budget.

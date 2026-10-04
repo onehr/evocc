@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "0eec2a26c5ccdbea10622b575cdbfafe45268de3",
+    "lean_commit": "10f0c558fa3446fbf40d3a13ae5c97b323c7804a",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -34,10 +34,13 @@
       "lean/EvoIR/Core/CallCorrespondence.lean",
       "lean/EvoIR/Core/CallExpression.lean",
       "lean/EvoIR/Core/CallFlow.lean",
+      "lean/EvoIR/Core/CallLoopFixtures.lean",
+      "lean/EvoIR/Core/CallLoopTests.lean",
       "lean/EvoIR/Core/CallOperators.lean",
       "lean/EvoIR/Core/CallSourceDiagram.lean",
       "lean/EvoIR/Core/CallTargetDiagram.lean",
       "lean/EvoIR/Core/CallValueTree.lean",
+      "lean/EvoIR/Core/CallingCutpoint.lean",
       "lean/EvoIR/Core/CheckedInt.lean",
       "lean/EvoIR/Core/CheckpointSimulation.lean",
       "lean/EvoIR/Core/CheckpointTests.lean",
@@ -104,6 +107,7 @@
       "lean/EvoIR/Core/SymbolicStorage.lean",
       "lean/EvoIR/Core/SymbolicStorageTests.lean",
       "lean/EvoIR/Core/TargetCall.lean",
+      "lean/EvoIR/Core/TargetCallSpan.lean",
       "lean/EvoIR/Core/TargetCutpoint.lean",
       "lean/EvoIR/Core/Transition.lean",
       "lean/EvoIR/Core/WellFormed.lean",
@@ -188,6 +192,12 @@
       "lean/EvoIR/Core/CallFlow.lean": [
         "EvoIR.Core.CallOperators"
       ],
+      "lean/EvoIR/Core/CallLoopFixtures.lean": [
+        "EvoIR.Core.CutpointInput"
+      ],
+      "lean/EvoIR/Core/CallLoopTests.lean": [
+        "EvoIR.Core.CallLoopFixtures"
+      ],
       "lean/EvoIR/Core/CallOperators.lean": [
         "EvoIR.Core.CallExpression"
       ],
@@ -200,6 +210,10 @@
       ],
       "lean/EvoIR/Core/CallValueTree.lean": [
         "EvoIR.Core.CallSourceDiagram"
+      ],
+      "lean/EvoIR/Core/CallingCutpoint.lean": [
+        "EvoIR.Core.TargetCallSpan",
+        "EvoIR.Core.TargetCutpoint"
       ],
       "lean/EvoIR/Core/CheckedInt.lean": [
         "EvoIR.Sem"
@@ -291,11 +305,12 @@
       ],
       "lean/EvoIR/Core/LoopCorrespondence.lean": [
         "EvoIR.Core.SourceSpan",
-        "EvoIR.Core.TargetCutpoint",
+        "EvoIR.Core.CallingCutpoint",
         "EvoIR.Core.ReturnCorrespondence"
       ],
       "lean/EvoIR/Core/LoopReturn.lean": [
-        "EvoIR.Core.CutpointInvariant"
+        "EvoIR.Core.CutpointInvariant",
+        "EvoIR.Core.CallCorrespondence"
       ],
       "lean/EvoIR/Core/NumericTerm.lean": [
         "EvoIR.Term"
@@ -366,7 +381,8 @@
       ],
       "lean/EvoIR/Core/SourceSpan.lean": [
         "EvoIR.Core.SourceCutpoint",
-        "EvoIR.Core.Correspondence"
+        "EvoIR.Core.Correspondence",
+        "EvoIR.Core.CallSourceDiagram"
       ],
       "lean/EvoIR/Core/StateEntry.lean": [
         "EvoIR.Core.StateExpression",
@@ -444,6 +460,10 @@
       "lean/EvoIR/Core/TargetCall.lean": [
         "EvoIR.Core.IRExecution"
       ],
+      "lean/EvoIR/Core/TargetCallSpan.lean": [
+        "EvoIR.Core.CallTargetDiagram",
+        "EvoIR.Core.CutTree"
+      ],
       "lean/EvoIR/Core/TargetCutpoint.lean": [
         "EvoIR.Core.BranchTarget",
         "EvoIR.Core.CutTree",
@@ -474,7 +494,8 @@
         "EvoIR.Core.CutpointInput",
         "EvoIR.Core.DivisionTests",
         "EvoIR.Core.SourceCallTests",
-        "EvoIR.Core.CallControlTests"
+        "EvoIR.Core.CallControlTests",
+        "EvoIR.Core.CallLoopTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -6502,8 +6523,8 @@
     },
     {
       "name": "EvoIR.Core.Symbolic.SourceCutRuns",
-      "type": "{Γ : EvoIR.Var → Nat} → Bool → EvoIR.Core.Symbolic.SourceCursor Γ → EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.SourceCursor Γ) → Prop",
-      "sha256": "64a4490b4d4ca23d9193299ce6789c7606c4d14c3811aa4b6dccfbf1291808b8"
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Core.Source.Program → Bool → EvoIR.Core.Symbolic.SourceCursor Γ → EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.SourceCursor Γ) → Prop",
+      "sha256": "0a6205fc33035943830bb0f32ec381c680a0be9d849d5379760aa56155a31697"
     },
     {
       "name": "EvoIR.Core.Symbolic.TargetCutRuns",
@@ -6511,19 +6532,44 @@
       "sha256": "b72a55359356bfaf612e75701291f5789d7bc6eff2a9f26af529faf62c0a7faa"
     },
     {
+      "name": "EvoIR.Core.Symbolic.TargetInstructionSpan",
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Core.IR.Program → EvoIR.Core.IR.Function → EvoIR.Core.IR.Block → Nat → EvoIR.Core.Symbolic.Scope Γ → EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.Scope Γ) → Prop",
+      "sha256": "331891167ab88f5520ff4b1f3fb0f361f30e82c029e4086a6efce98b2e38727b"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.CallingCutRuns",
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Core.IR.Program → EvoIR.Core.IR.Function → Bool → Bool → String → Nat → EvoIR.Core.Symbolic.Scope Γ → EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.TargetExit Γ) → Prop",
+      "sha256": "59ec756da37ce1b5ae42b702f14f33244b480cc410250fa60dcd5f07eac9c792"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.callingCutDiagram",
+      "type": "{Γ : EvoIR.Var → Nat} → (p : EvoIR.Core.IR.Program) → (f : EvoIR.Core.IR.Function) → (tokens : Bool) → EvoIR.Core.Source.IntType → List String → Nat → (advance : Bool) → (scope : EvoIR.Core.Symbolic.Scope Γ) → (label : String) → Option { tree // EvoIR.Core.Symbolic.CallingCutRuns p f tokens advance label 0 scope tree }",
+      "sha256": "04454e5b0c3f91a542c1f0784f76c30168f971b9f07e56b1bbdf3442334dba5d"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.TargetExit.callState",
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Subst Γ → Bool → EvoIR.Core.IR.Function → Nat → Nat → EvoIR.Core.Symbolic.TargetExit Γ → EvoIR.Core.IR.State",
+      "sha256": "08b877ef0bb035ddcec021ae5ba1cb512f624904e960c8d05981af41d553aa3a"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.loopInputValues",
+      "type": "Bool → List EvoIR.Core.Source.Value → List EvoIR.Core.IR.Value",
+      "sha256": "35fd7c75bb4fcfea2d691ff1732102ff2d2a4b8331393822c187c6db48732dca"
+    },
+    {
       "name": "EvoIR.Core.Symbolic.CutpointRelated",
       "type": "{Γ : EvoIR.Var → Nat} → List (EvoIR.Core.Symbolic.JointPoint Γ) → Nat → EvoIR.Core.IR.Function → EvoIR.Core.Source.State → EvoIR.Core.IR.State → Prop",
-      "sha256": "2d3b0023beec637c4a0f95986caa1befdaf2c203fab5c143a773c99c09c5da08"
+      "sha256": "139350ca305556a776d59e77cc899c871cc491677db70286d1535083097ceb1d"
     },
     {
       "name": "EvoIR.Core.Symbolic.CutExitAgreement",
-      "type": "{Γ : EvoIR.Var → Nat} → List (EvoIR.Core.Symbolic.JointPoint Γ) → Nat → EvoIR.Core.IR.Function → EvoIR.Core.Source.IntType → EvoIR.Core.Symbolic.SourceCursor Γ → EvoIR.Core.Symbolic.TargetExit Γ → Prop",
-      "sha256": "15f12fe1905d8f9bc6593f9e4b11cc456cfb45e57c153eb9d593667ee84d3195"
+      "type": "{Γ : EvoIR.Var → Nat} → List (EvoIR.Core.Symbolic.JointPoint Γ) → Nat → EvoIR.Core.IR.Function → Bool → EvoIR.Core.Source.IntType → EvoIR.Core.Symbolic.SourceCursor Γ → EvoIR.Core.Symbolic.TargetExit Γ → Prop",
+      "sha256": "abef96dc183c1240bc90ec76cfc3baafb9f421331d443a6d7a6270a6a443f563"
     },
     {
       "name": "EvoIR.Core.Symbolic.CheckedSpan",
-      "type": "{Γ : EvoIR.Var → Nat} → List (EvoIR.Core.Symbolic.JointPoint Γ) → Nat → EvoIR.Core.IR.Function → EvoIR.Core.Source.IntType → EvoIR.Core.Symbolic.JointPoint Γ → Type",
-      "sha256": "d5df32a35285be0864e90e24334604100498593730461a0290b4e638956d269a"
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Core.Source.Program → EvoIR.Core.IR.Program → List (EvoIR.Core.Symbolic.JointPoint Γ) → Nat → EvoIR.Core.IR.Function → Bool → EvoIR.Core.Source.IntType → EvoIR.Core.Symbolic.JointPoint Γ → Type",
+      "sha256": "fc2e5ff938b14b94752c9bed75692996f486413b0e25e73cf45310f08945347f"
     },
     {
       "name": "EvoIR.Core.Symbolic.canonicalStore",
@@ -6536,29 +6582,34 @@
       "sha256": "f9da012e91bb1cbd2948db5f68de94cfec7f2535fafaa2fa6eeea7d89136a2b9"
     },
     {
+      "name": "EvoIR.Core.Symbolic.CutpointLayout.project",
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Core.Symbolic.CutpointLayout → EvoIR.Core.Symbolic.LocalStore Γ → Option (EvoIR.Core.Symbolic.Scope Γ)",
+      "sha256": "b37eb2d7ff698bb736482f3044bd91765aebb3106fd4b24a7b9fef997928ba8f"
+    },
+    {
       "name": "EvoIR.Core.Symbolic.checkSuccessor",
-      "type": "(points : List EvoIR.Core.Symbolic.LayoutPoint) → { p // p ∈ points } → (fid : Nat) → (target : EvoIR.Core.IR.Function) → (type : EvoIR.Core.Source.IntType) → (s : EvoIR.Core.Symbolic.SourceCursor EvoIR.Core.Symbolic.inputWidths) → (t : EvoIR.Core.Symbolic.TargetExit EvoIR.Core.Symbolic.inputWidths) → Option (PLift (EvoIR.Core.Symbolic.CutExitAgreement (List.map EvoIR.Core.Symbolic.LayoutPoint.joint points) fid target type s t))",
-      "sha256": "d1eb60a8b60c2df1c4581421c80656fb4637fbf546527f8b59d1f2c16affec66"
+      "type": "(points : List EvoIR.Core.Symbolic.LayoutPoint) → { p // p ∈ points } → (fid : Nat) → (target : EvoIR.Core.IR.Function) → (tokens : Bool) → (type : EvoIR.Core.Source.IntType) → (s : EvoIR.Core.Symbolic.SourceCursor EvoIR.Core.Symbolic.inputWidths) → (t : EvoIR.Core.Symbolic.TargetExit EvoIR.Core.Symbolic.inputWidths) → Option (PLift (EvoIR.Core.Symbolic.CutExitAgreement (List.map EvoIR.Core.Symbolic.LayoutPoint.joint points) fid target tokens type s t))",
+      "sha256": "afdad7ed38dd086dcf6449c5a71e07bd612ad7842166dac9c469518327b3f61c"
     },
     {
       "name": "EvoIR.Core.Symbolic.checkedSpans",
-      "type": "(points : List EvoIR.Core.Symbolic.LayoutPoint) → (fid : Nat) → (target : EvoIR.Core.IR.Function) → (type : EvoIR.Core.Source.IntType) → Nat → (remaining : List (EvoIR.Core.Symbolic.JointPoint EvoIR.Core.Symbolic.inputWidths)) → Option (EvoIR.Core.Symbolic.SpanList points fid target type remaining)",
-      "sha256": "3b971fd4e9287fd9f4b6f250b4ceeaf125323346eb929992bfd47891a400cf8e"
+      "type": "(program : EvoIR.Core.Source.Program) → (ir : EvoIR.Core.IR.Program) → (points : List EvoIR.Core.Symbolic.LayoutPoint) → (fid : Nat) → (target : EvoIR.Core.IR.Function) → (tokens : Bool) → (type : EvoIR.Core.Source.IntType) → Nat → (remaining : List (EvoIR.Core.Symbolic.JointPoint EvoIR.Core.Symbolic.inputWidths)) → Option (EvoIR.Core.Symbolic.SpanList program ir points fid target tokens type remaining)",
+      "sha256": "9dc636f0e836d7a709e836b48500cf82c331fa7a3dd390521febd2c762abe2ca"
     },
     {
       "name": "EvoIR.Core.Symbolic.loopDiagram",
-      "type": "(source : EvoIR.Core.Source.Function) → (target : EvoIR.Core.IR.Function) → List EvoIR.Core.Symbolic.CutpointLayout → Nat → Option (EvoIR.Core.Symbolic.LoopDiagram source target)",
-      "sha256": "0f1d42e7c186fbf01eaff8820f88a8aaf24b7f322652d5d03991ee21f0dd5b6a"
+      "type": "(program : EvoIR.Core.Source.Program) → (ir : EvoIR.Core.IR.Program) → (source : EvoIR.Core.Source.Function) → (target : EvoIR.Core.IR.Function) → List EvoIR.Core.Symbolic.CutpointLayout → Nat → Option (EvoIR.Core.Symbolic.LoopDiagram program ir source target)",
+      "sha256": "ce3ff0846e06f4e267eb728220cc76903f3687de54c2f709ff5c68d2a53b574d"
     },
     {
       "name": "EvoIR.Core.Symbolic.loopPair",
       "type": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → List EvoIR.Core.Symbolic.CutpointLayout → Nat → Option (EvoIR.Core.Symbolic.LoopPair source target)",
-      "sha256": "7251b500cb580ca72ad71252fd66b54e833acb2fed902051594d3e3dd96f8ade"
+      "sha256": "2972d586ade4affa65e4cdd5e084df465cd586f07e62ff9803bd9fb4d591210a"
     },
     {
       "name": "EvoIR.Core.Symbolic.readCutpoints",
       "type": "EvoIR.Core.Source.Function → String → Option (Nat × List EvoIR.Core.Symbolic.CutpointLayout)",
-      "sha256": "bb605449e1e7129c7619deb8a993ee56dc2d53d8e2b0cf71298bffc8df050760"
+      "sha256": "b5f473e814abbd9b5b911c75f990c5510d49ce55ebeb301b060471dd747eb987"
     },
     {
       "name": "EvoIR.Core.Source.Steps",
@@ -16055,7 +16106,7 @@
       },
       {
         "theorem": "EvoIR.Core.Symbolic.LoopPair.refines",
-        "proposition": "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} (pair : EvoIR.Core.Symbolic.LoopPair source target) (args : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type args = List.map (fun p => p.type.type) pair.sourceFunction.parameters → ∃ sourceEntry targetEntry, EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ EvoIR.Core.IR.initial target pair.targetFunction.name (List.map EvoIR.Core.Symbolic.sourceValueIR args) = Except.ok targetEntry ∧ EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+        "proposition": "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} (pair : EvoIR.Core.Symbolic.LoopPair source target) (args : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type args = List.map (fun p => p.type.type) pair.sourceFunction.parameters → ∃ sourceEntry targetEntry, EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ EvoIR.Core.IR.initial target pair.targetFunction.name (EvoIR.Core.Symbolic.loopInputValues pair.diagram.tokens args) = Except.ok targetEntry ∧ EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Classical.choice",
@@ -16066,7 +16117,7 @@
       },
       {
         "theorem": "EvoIR.Core.Symbolic.source_cut_diagram_sound",
-        "proposition": "∀ {Γ : EvoIR.Var → Nat} (cutpoints : List EvoIR.Core.Symbolic.SourceSite) (budget : Nat) (advance : Bool) (cursor : EvoIR.Core.Symbolic.SourceCursor Γ) (tree : EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.SourceCursor Γ)), Option.map Subtype.val (EvoIR.Core.Symbolic.sourceCutDiagram cutpoints budget advance cursor) = some tree → EvoIR.Core.Symbolic.SourceCutRuns advance cursor tree",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (cutpoints : List EvoIR.Core.Symbolic.SourceSite) (budget : Nat) (advance : Bool) (cursor : EvoIR.Core.Symbolic.SourceCursor Γ) (tree : EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.SourceCursor Γ)), Option.map Subtype.val (EvoIR.Core.Symbolic.sourceCutDiagram p cutpoints budget advance cursor) = some tree → EvoIR.Core.Symbolic.SourceCutRuns p advance cursor tree",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Classical.choice",
@@ -16087,7 +16138,7 @@
       },
       {
         "theorem": "EvoIR.Core.Symbolic.checked_cutpoint_refines",
-        "proposition": "∀ {Γ : EvoIR.Var → Nat} (entries : List (EvoIR.Core.Symbolic.JointPoint Γ)) (fid : Nat) (type : EvoIR.Core.Source.IntType) (source : EvoIR.Core.Source.Program) (program : EvoIR.Core.IR.Program) (target : EvoIR.Core.IR.Function), List.find? (fun x => x.name == target.name) program.functions = some target → target.returns = [EvoIR.Core.IR.Ty.bits type.width] → ∀ (spans : (point : EvoIR.Core.Symbolic.JointPoint Γ) → point ∈ entries → EvoIR.Core.Symbolic.CheckedSpan entries fid target type point) (s : EvoIR.Core.Source.State) (t : EvoIR.Core.IR.State), EvoIR.Core.Symbolic.CutpointRelated entries fid target s t → EvoIR.Core.LoweringRefines source program type s t",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (entries : List (EvoIR.Core.Symbolic.JointPoint Γ)) (fid : Nat) (type : EvoIR.Core.Source.IntType) (source : EvoIR.Core.Source.Program) (program : EvoIR.Core.IR.Program) (target : EvoIR.Core.IR.Function) (tokens : Bool) (spans : (point : EvoIR.Core.Symbolic.JointPoint Γ) → point ∈ entries → EvoIR.Core.Symbolic.CheckedSpan source program entries fid target tokens type point) (s : EvoIR.Core.Source.State) (t : EvoIR.Core.IR.State), EvoIR.Core.Symbolic.CutpointRelated entries fid target s t → EvoIR.Core.LoweringRefines source program type s t",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Classical.choice",

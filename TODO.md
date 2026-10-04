@@ -2531,6 +2531,12 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   continuation-aware proof, not finite unfolding. Private storage, complete
   coverage and validator safety remain required; V02–V06 remain OPEN.
 
+  Implementation `10f0c558` passes clean Lean (69 kernel-only core targets)
+  and full workspace (401 suites / 3,080 passed / zero failed / five ignored,
+  Clippy/format pass). Receipts: `cyclic_call_correspondence` in the pilot
+  manifest. Build/capture disk delta +4,612 KiB; target/frontend unchanged,
+  52 GiB free. Protected evidence, fixtures and Lean cache remain.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

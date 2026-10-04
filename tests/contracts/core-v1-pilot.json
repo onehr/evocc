@@ -516,9 +516,43 @@
     },
     "claim_ceiling": "Finite calling expressions and branching callee continuations. V01 still requires call/loop/private-storage composition, full constructor/closure coverage and validator execution safety. V02-V06 remain open. No backend or release verification."
   },
+  "cyclic_call_correspondence": {
+    "status": "COMPONENT_PASS_V01_OPEN",
+    "implementation_commit": "10f0c558fa3446fbf40d3a13ae5c97b323c7804a",
+    "compiled_lean_checker_sha256": "4f913e0877c9fa6caa287b2557b81c9faeb05936d4eca952e5192148f1c245b4",
+    "theorem": "EvoIR.Core.Symbolic.LoopPair.refines",
+    "proof_kind": "kernel-only",
+    "native_axioms": [],
+    "fixtures": [
+      {"path": "tests/fixtures/verification/call-loop.c", "sha256": "dc097131b05412722b6852991a38a3fe7accd3fdaa85c3044b8d76c51da5796c", "accepted_entries": ["loop_call"], "target_sha256": "2c112a3c4f64c885b912353907f16ea5ee16019c00d6a6642825e4dfc9e86448"},
+      {"path": "tests/fixtures/verification/call-loop-control.c", "sha256": "75197cbcaa9e8bfca5a017135bdba5afc330c65047c1fdd5b490c763d5c12d1d", "accepted_entries": ["loop_branch", "loop_checked", "loop_forever"], "target_sha256": "1ad59e234986cdf56133d7378b263174dd4ecde4b1dcc7927d94b1f48baeabb5"}
+    ],
+    "proposals": [
+      {"path": "tests/fixtures/verification/loop-call.cutpoints.json", "sha256": "47b4a339bda35cc423a5c172e5b012c126b662b027a16ebe9adbb6ef1ac39653"},
+      {"path": "tests/fixtures/verification/loop-checked.cutpoints.json", "sha256": "e46d574c3569e8249ad47861b92a6f5c514dd04929c1d736e04cf1feaa836042"},
+      {"path": "tests/fixtures/verification/loop-forever.cutpoints.json", "sha256": "2b55227388bdd3f9b7a5aca73086e5699f1d816a9846bc57d374c8a1a96980ba"}
+    ],
+    "complete_pairs": 4,
+    "execution_and_frame_controls": 10,
+    "target_mutations_refused": 15,
+    "proposal_mutations_refused": 11,
+    "source_mutations_refused": 3,
+    "tests": "lean/EvoIR/Core/CallLoopTests.lean",
+    "selftest_log": ".evidence/verification-core/20261004/source-execution/call-loop-selftest.log",
+    "original_green_log": ".evidence/verification-core/20261004/source-execution/call-loop-green.log",
+    "primary_replay_log": ".evidence/verification-core/20261004/source-execution/call-loop-original-replay-corrected.log",
+    "prior_replay_attempt": "The last command in call-loop-original-replay.log paired caller.json with pressure.evo instead of source-execution.evo and correctly refused. The corrected log contains all six original accepted pairs.",
+    "lean_gate": {"status": "PASS", "worktree_clean": true, "core_targets": 69, "vector_answers": 1246159, "log": ".evidence/verification-core/20261004/source-execution/call-loop-lean-gate.log"},
+    "full_workspace": {"status": "PASS", "suites": 401, "passed": 3080, "failed": 0, "ignored": 5, "clippy": "PASS", "format": "PASS", "log": ".evidence/verification-core/20261004/source-execution/call-loop-full-workspace.log"},
+    "artifact_disk_delta_kib": 4612,
+    "artifact_disk_scope": ".lake plus capture; target/frontend unchanged. No new target, clone, kernel tree or VM disk. Capture 14260 KiB of 500 MiB; 52 GiB free. No disposable object payload retained; protected receipts, fixtures, evidence and Lean cache retained.",
+    "capture_retention_bytes": 524288000,
+    "remaining_red": {"entry": "call_loop", "proposal": "tests/fixtures/verification/call-loop.cutpoints.json", "sha256": "9ac8792570a9c493ab53e9233e53a4586a1d113492061d96370016bfe1854a9c", "pair_status": "REFUSED_EXIT_1_NOT_PASS", "reason": "A cyclic callee needs continuation-aware simulation, not finite unfolding."},
+    "claim_ceiling": "Actual finite calls inside unbounded cyclic source/IR spans, preserving call tokens, owner, frame-counter progress and first diagnostics. Calls to cyclic callees, private storage, full constructor/closure coverage and validator safety remain OPEN. No V01 completion, backend theorem or release verification."
+  },
   "integration_gates": {
-    "rust_implementation_commit": "0eec2a26c5ccdbea10622b575cdbfafe45268de3",
-    "lean_implementation_commit": "0eec2a26c5ccdbea10622b575cdbfafe45268de3",
+    "rust_implementation_commit": "10f0c558fa3446fbf40d3a13ae5c97b323c7804a",
+    "lean_implementation_commit": "10f0c558fa3446fbf40d3a13ae5c97b323c7804a",
     "full_workspace_command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 tools/gate-changed.sh --full-workspace",
     "full_workspace": {"status": "PASS", "suites": 401, "passed": 3080, "failed": 0, "ignored": 5, "clippy": "PASS", "format": "PASS"},
     "prior_attempts": ["Interrupted during compilation for disk recovery, exit 143; not PASS.", "Sandboxed run: 3077 passed, 2 container-permission failures, 5 ignored; not PASS."],
@@ -529,8 +563,8 @@
     "core_primitive_targets": 69,
     "core_primitive_proof_kind": "kernel-only",
     "raw_logs": ".evidence/verification-core/20261004/source-execution",
-    "full_workspace_log": "call-control-full-workspace.log",
-    "lean_log": "call-control-lean-gate.log",
+    "full_workspace_log": "call-loop-full-workspace.log",
+    "lean_log": "call-loop-lean-gate.log",
     "previous_pass_logs": ["ir-full-workspace.log", "ir-lean-gate.log", "abs-full-workspace.log", "abs-lean-gate-fixed.log", "simulation-lean-gate.log", "symbolic-lean-gate.log", "source-fragment-full-workspace.log", "source-fragment-lean-gate.log"],
     "capture_retention_bytes": 524288000,
     "claim_ceiling": "Integration gates and the separately recorded source/IR component pairs pass. V01 constructor/closure coverage and validator safety, V02-V06, compiled-backend theorem and verified-release acceptance remain open."
