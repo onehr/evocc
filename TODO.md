@@ -2421,6 +2421,16 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   PASS is claimed for this Lean-only checkpoint. General expression combinations, short-circuit
   state, div/rem, statement control/loops, mutable storage, calls/private-leaf
   substitution and validator safety still block V01.
+  October 5 continuation: exact symbolic local storage and stateful expression
+  diagrams now feed the same `ReturnPair.refines` checker. Simple assignment,
+  comma, short-circuit AND/OR, nested conditional/cast and supported numeric
+  operations preserve the local store at the first diagnostic. The actual
+  `stateful-return.c` exporter pair and 11 mutations pass; 81 source-machine
+  comparisons, 18 storage boundaries and 26 expression examples pass locally.
+  Clean Lean/full-workspace validation is pending for this checkpoint. Div/rem,
+  compound assignment/update, statement/declaration integration, loops, calls,
+  private-leaf substitution and validator safety remain OPEN; V02–V06 are not
+  advanced by this component proof.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

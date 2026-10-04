@@ -419,12 +419,32 @@ connects C's int-valued comparison to the target's one-bit branch condition.
 All four unary operators preserve the source wrapping exception and ordinary
 negation guard. Local tests cover 216 comparison/type pairs, 648 mutations,
 24 unary/type pairs and 26 branching whole-return cases. Eight kernel examples
-include universal original-abs admission and refinement. This is still **not
-V01 completion**: the source condition in this component must have a linear
-expression diagram; arbitrary nested expression combinations, div/rem,
-short-circuit state, statement control/loops, local writes/storage, call closure
-and validator execution safety remain open. Its CFG exploration bound rejects
-cycles; it is not a bounded-execution proof of loops.
+include universal original-abs admission and refinement. Its CFG exploration
+bound rejects cycles; it is not a bounded-execution proof of loops.
+
+**Stateful expression extension (October 5).** `SymbolicStorage.lean` checks
+exact parameter/local storage, first-binding lookup, uninitialized masking,
+const initialization and assignment, declarations and scope exit. `StateExpression.lean`
+composes the supported numeric operators with casts, conditional expressions,
+comma, simple assignment and short-circuit AND/OR. Each diagnostic leaf retains
+the actual local store after preceding effects; an unselected arm is not run.
+`state_expression_sound` connects successful construction to the original
+source small-step machine for every valuation and continuation. `StateEntry.lean`
+checks exact parameter storage, successful scope depth and erasure of private
+locals from the return observation. The existing `ReturnPair.refines` path now
+uses these stateful diagrams; no separate program-pair checker or changed source
+semantics was introduced (`Source.place` was made public only for its proof).
+
+The actual exporter pair for `tests/fixtures/verification/stateful-return.c`
+passes, and 11 source/target mutations refuse. The previous original `FixedMul`
+and `abs` cases remain accepted. Local tests add 18 storage boundary examples,
+26 stateful expression outcome/refusal examples and 81 comparisons against
+actual source-machine execution. The current local build/self-test passes;
+the clean Lean and full-workspace gates are pending for this extension.
+This is **not V01 completion**: div/rem, compound assignment/update, statement
+sequencing/declaration integration, loops, calls/private-leaf substitution and
+validator execution safety remain required. Storage adapter lemmas alone do
+not admit a complete function containing local declarations or loops.
 
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`

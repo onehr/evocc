@@ -1,8 +1,55 @@
 import EvoIR.Core.BranchTarget
+import EvoIR.Core.StateEntry
 
 /-! Whole-function source/target checking for branching return expressions.
 This extends the structural leaf case to actual conditional CFGs; it does not
 replace V01's remaining loop, mutable-storage and direct-call obligations. -/
+namespace EvoIR.Core.Source
+
+def ReturnsState (p : Program) (locals : Locals) (fid : Nat) (body : Stmt)
+    (outcome : StateOutcome) : Prop :=
+  ∀ k, match outcome.2 with
+  | .ok value => Steps p ⟨.statement body, locals, k, fid⟩
+      ⟨.flow (.returned value), outcome.1, k, fid⟩
+  | .error fault => ∃ failedK, Steps p ⟨.statement body, locals, k, fid⟩
+      ⟨.halted (.error fault), outcome.1, failedK, fid⟩
+
+theorem ReturnShape.stateful_sound {body : Stmt} {d : QualifiedType} {e : Expr}
+    (shape : ReturnShape body d e) (p : Program) (locals : Locals) (fid : Nat)
+    (outcome : StateOutcome) (evaluated : EvaluatesState p locals fid e outcome)
+    (depth : ∀ v, outcome.2 = .ok v → outcome.1.length = locals.length) :
+    ReturnsState p locals fid body (outcome.1, outcome.2.map (Value.cast d.type)) := by
+  induction shape with
+  | direct d e =>
+    intro k
+    have first : Step p ⟨.statement (.return d e), locals, k, fid⟩
+        ⟨.expression e, locals, .return d :: k, fid⟩ := rfl
+    cases result : outcome.2 with
+    | error fault =>
+      simp only [EvaluatesState, result] at evaluated
+      obtain ⟨failedK, path⟩ := evaluated (.return d :: k)
+      exact ⟨failedK, .next first path⟩
+    | ok value =>
+      simp only [EvaluatesState, result] at evaluated
+      exact .next first ((evaluated (.return d :: k)).trans (.next rfl (.refl _)))
+  | @block body d e inner ih =>
+    intro k
+    have first : Steps p ⟨.statement (.compound [.statement body]), locals, k, fid⟩
+        ⟨.statement body, locals, .sequence [] :: .scope locals.length :: k, fid⟩ :=
+      .next rfl (.next rfl (.refl _))
+    have middle := ih evaluated
+    cases result : outcome.2 with
+    | error fault =>
+      simp only [ReturnsState, result, Except.map] at middle
+      obtain ⟨failedK, path⟩ := middle (.sequence [] :: .scope locals.length :: k)
+      exact ⟨failedK, first.trans path⟩
+    | ok value =>
+      simp only [ReturnsState, result, Except.map] at middle
+      exact first.trans ((middle (.sequence [] :: .scope locals.length :: k)).trans
+        (.next rfl (.next (by simp [Step, step, resumeFlow, depth value result]) (.refl _))))
+
+end EvoIR.Core.Source
+
 namespace EvoIR.Core.Symbolic
 
 theorem ValueTree.fault_observation {Γ : Var → Nat} (σ : Subst Γ)
@@ -30,16 +77,19 @@ structure ReturnDiagram {Γ : Var → Nat} (source : Source.Function)
     (target : IR.Function) (args : List (CWord Γ)) where
   env : CBindings Γ
   scope : Scope Γ
+  locals : LocalStore Γ
   block : IR.Block
   expr : Source.Expr
-  tree : ValueTree Γ
+  tree : StateTree Γ
   entry : scalarEntry source target args = some (env, scope)
+  storage : parameterStore source.parameters args = some locals
   head : target.blocks.head? = some block
   body : Source.ReturnShape source.body source.returnType expr
-  expression : BranchExpressionDiagram env expr tree
+  expression : StateDiagram locals expr tree
+  depth : tree.sameDepth locals.length = true
   returns : target.returns = [.bits source.returnType.type.width]
   targetDiagram : TargetDiagram (fun _ => .world) target source.returnType.type scope block.name
-    (tree.cast source.returnType.type)
+    (tree.erase.cast source.returnType.type)
 
 def returnDiagram {Γ : Var → Nat} (source : Source.Function) (target : IR.Function)
     (args : List (CWord Γ)) : Option (ReturnDiagram source target args) := do
@@ -56,16 +106,24 @@ def returnDiagram {Γ : Var → Nat} (source : Source.Function) (target : IR.Fun
     | some b => some ⟨b, h⟩
   let ⟨destination, expr, body⟩ ← Source.returnShape source.body
   if destinationEq : destination = source.returnType then
-    let s ← branchExpression entry.val.1 expr
+    let locals : {ls // parameterStore source.parameters args = some ls} ←
+      match stored : parameterStore source.parameters args with
+      | none => none
+      | some ls => some ⟨ls, stored⟩
+    let s ← stateExpression (Source.expressionDepth expr) locals.val expr
+    if depth : s.val.sameDepth locals.val.length = true then
     let t ← targetDiagram (fun _ => .world) target source.returnType.type
       (target.blocks.length+1) entry.val.2 block.val.name
     if returnsEq : target.returns = [.bits source.returnType.type.width] then
-      if same : t.val = s.val.cast source.returnType.type then
+      if same : t.val = s.val.erase.cast source.returnType.type then
         return {
-          env := entry.val.1, scope := entry.val.2, block := block.val, expr := expr, tree := s.val
+          env := entry.val.1, scope := entry.val.2, locals := locals.val,
+          block := block.val, expr := expr, tree := s.val
           entry := entry.property, head := block.property, body := destinationEq ▸ body.property
-          expression := s.property, returns := returnsEq, targetDiagram := same ▸ t.property }
+          storage := locals.property, depth := depth, expression := s.property,
+          returns := returnsEq, targetDiagram := same ▸ t.property }
       else none
+    else none
     else none
   else none
 
@@ -83,6 +141,8 @@ theorem ReturnDiagram.refines {Γ : Var → Nat} (σ : Subst Γ)
     scalar_entry_sound σ source target args d.env d.scope 1 d.entry
   have sameBlock : block = d.block := Option.some.inj (headBlock.symm.trans d.head)
   subst block
+  have stored := parameter_store_sound σ source.parameters args d.locals d.storage
+  have localsEq : locals = d.locals.denote σ := Except.ok.inj (boundSource.symm.trans stored)
   let se : Source.State :=
     ⟨.statement source.body, locals, [.function none source.returnType.type], source.symbol⟩
   let te := targetState σ (fun _ => .world) target d.block.name 0 1 2 d.scope
@@ -91,20 +151,23 @@ theorem ReturnDiagram.refines {Γ : Var → Nat} (σ : Subst Γ)
     simp [Source.initial, chosen, sourceFound, boundSource, bind, Except.bind,
       pure, Except.pure, se]
   · simp [IR.initial, targetFound, boundTarget, bind, Except.bind, pure, Except.pure, te, targetState]
-  have sourcePath := d.body.sound s locals source.symbol (d.tree.denote σ)
-    (d.expression.sound σ s locals source.symbol related)
+  have sourcePath := d.body.stateful_sound s locals source.symbol (d.tree.denote σ)
+    (by simpa only [localsEq] using d.expression σ s source.symbol)
+    (by intro v success; simpa [localsEq, LocalStore.denote] using
+      StateTree.same_depth_sound d.depth σ v success)
   obtain ⟨tf, targetPath, targetOutcome⟩ := d.targetDiagram.sound σ (fun _ => .world)
     (by intro id; rfl) t targetFound d.returns 1 2
-  have targetResult : (d.tree.cast source.returnType.type).irResult σ =
-      ((d.tree.denote σ).map (Source.Value.cast source.returnType.type)).map
+  have targetResult : (d.tree.erase.cast source.returnType.type).irResult σ =
+      (((d.tree.denote σ).2).map (Source.Value.cast source.returnType.type)).map
         (fun v => [sourceValueIR v]) := by
-    rw [ValueTree.irResult, ValueTree.cast_sound]
+    rw [ValueTree.irResult, ValueTree.cast_sound, StateTree.erase_sound]
   rw [targetResult] at targetOutcome
-  cases result : d.tree.denote σ with
+  cases result : (d.tree.denote σ).2 with
   | error fault =>
     simp only [result, Except.map] at sourcePath targetOutcome
     obtain ⟨failedK, path⟩ := sourcePath [.function none source.returnType.type]
-    obtain ⟨code, rfl, observed⟩ := d.tree.fault_observation σ fault result
+    obtain ⟨code, rfl, observed⟩ := d.tree.erase.fault_observation σ fault
+      (by simpa only [StateTree.erase_sound] using result)
     apply Transition.refines_of_terminals path.toReaches targetPath.toReaches
       (by rfl) (by simp [IR.step, targetOutcome]) (o := Observation.diagnostic code)
     · simpa [observeSource] using observed

@@ -273,6 +273,31 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.state_expression_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (depth : Nat) (locals : EvoIR.Core.Symbolic.LocalStore Γ) "
+        "(expr : EvoIR.Core.Source.Expr) (tree : EvoIR.Core.Symbolic.StateTree Γ), "
+        "Option.map Subtype.val (EvoIR.Core.Symbolic.stateExpression depth locals expr) = Option.some tree → "
+        "EvoIR.Core.Symbolic.StateDiagram locals expr tree",
+    ),
+    (
+        "EvoIR.Core.Symbolic.parameter_store_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ps : List EvoIR.Core.Source.Parameter) "
+        "(args : List (EvoIR.Core.Symbolic.CWord Γ)) (locals : EvoIR.Core.Symbolic.LocalStore Γ), "
+        "EvoIR.Core.Symbolic.parameterStore ps args = Option.some locals → "
+        "EvoIR.Core.Source.parameterLocals ps (List.map (EvoIR.Core.Symbolic.CWord.denote σ) args) = "
+        "Except.ok (EvoIR.Core.Symbolic.LocalStore.denote σ locals)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.local_write_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) "
+        "(locals updated : EvoIR.Core.Symbolic.LocalStore Γ) (symbol : Nat) "
+        "(destination : EvoIR.Core.Source.QualifiedType) (value : EvoIR.Core.Symbolic.CWord Γ) "
+        "(initialization : Bool), locals.write symbol destination value initialization = Option.some updated → "
+        "EvoIR.Core.Source.writeSlot (EvoIR.Core.Symbolic.LocalStore.denote σ locals) symbol destination "
+        "(EvoIR.Core.Symbolic.CWord.denote σ value) initialization = "
+        "Except.ok (EvoIR.Core.Symbolic.LocalStore.denote σ updated)",
+    ),
+    (
         "EvoIR.Core.Symbolic.comparison_sound",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) "
         "(op : EvoIR.Core.Symbolic.Comparison) (a b : EvoIR.Core.Symbolic.CWord Γ), "
@@ -1208,7 +1233,7 @@ def main(argv: list[str]) -> int:
         "compilation_core_primitives": {
             "claim": "Checked arithmetic primitive correspondence and source/IR-machine "
                      "determinism, finite-prefix and terminal-diagnostic properties; "
-                     "structural straight-line and branching-return source/IR checker soundness. "
+                     "structural straight-line and stateful branching-return source/IR checker soundness. "
                      "No proof of source export, input-validation safety, general loops/state/calls, "
                      "backend compilation or verified-release acceptance",
             "targets": core_primitives,

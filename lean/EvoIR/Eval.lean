@@ -8,6 +8,7 @@ import EvoIR.Core.CorrespondenceTests
 import EvoIR.Core.SourceExpressionTests
 import EvoIR.Core.LeafCorrespondenceTests
 import EvoIR.Core.ReturnCorrespondenceTests
+import EvoIR.Core.StateReturnTests
 
 /-!
 # The executable evaluator
@@ -290,9 +291,11 @@ def run (args : List String) : IO UInt32 := do
       let bitwise ← EvoIR.Core.Symbolic.LeafTests.bitwiseSelfTest
       let operators ← EvoIR.Core.Symbolic.LeafTests.operatorSelfTest
       let branches ← EvoIR.Core.Symbolic.ReturnTests.returnSelfTest
+      let stateExpressions ← EvoIR.Core.Symbolic.StateTests.stateExpressionSelfTest
+      let stateReturns ← EvoIR.Core.Symbolic.StateReturnTests.stateReturnSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
-        operators == 0 && branches == 0 then 0 else 1
+        operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 then 0 else 1
   | ["--check-core-leaf-pair", sourcePath, targetPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2

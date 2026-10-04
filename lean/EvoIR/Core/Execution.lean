@@ -95,7 +95,7 @@ def valueResult (s : State) (expected : IntType) (r : Result) : State :=
   | .ok v => if v.type == expected then {s with control := .value v}
       else fail s (.malformed "expression result type mismatch")
 
-private def place (s : State) (symbol : Nat) (destination : QualifiedType)
+def place (s : State) (symbol : Nat) (destination : QualifiedType)
     (target : Expr) : Bool :=
   match target, s.locals.find? (·.symbol == symbol) with
   | .ident type id, some slot =>
