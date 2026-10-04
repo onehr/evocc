@@ -1,6 +1,6 @@
 import EvoIR.Core.BranchTarget
 import EvoIR.Core.StatementDiagram
-import EvoIR.Core.ConstantBranch
+import EvoIR.Core.RepeatedGuard
 
 /-! Whole-function source/target checking for finite statements and conditional
 CFGs. Cyclic control and direct calls remain separate V01 obligations. -/
@@ -80,7 +80,7 @@ def returnDiagram {Γ : Var → Nat} (source : Source.Function) (target : IR.Fun
     let t ← targetDiagram (fun _ => .world) target source.returnType.type
       (target.blocks.length+1) entry.val.2 block.val.name
     if returnsEq : target.returns = [.bits source.returnType.type.width] then
-      if same : t.val.normalizeBranches = s.val.erase.normalizeBranches then
+      if same : t.val.normalizeTrace = s.val.erase.normalizeTrace then
         return {
           env := entry.val.1, scope := entry.val.2, locals := locals.val,
           block := block.val, tree := s.val
@@ -93,7 +93,7 @@ def returnDiagram {Γ : Var → Nat} (source : Source.Function) (target : IR.Fun
               simpa [Source.ReturnsState, outcome, Except.map] using path
           storage := locals.property, typed := StateTree.typed_sound typed,
           returns := returnsEq, targetTree := t.val,
-          sameResult := normalized_trees_equal t.val s.val.erase same,
+          sameResult := normalized_traces_equal t.val s.val.erase same,
           targetDiagram := t.property }
       else none
     else none

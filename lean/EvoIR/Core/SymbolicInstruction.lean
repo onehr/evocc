@@ -18,12 +18,33 @@ def guards {Γ : Var → Nat} (σ : Subst Γ) : List (Guard Γ) →
     if (denoteTerm σ g.condition).toNat == 0 then .error (.diagnostic g.reason.code)
     else guards σ rest
 
+def divisionGuards {Γ : Var → Nat} {n : Nat} (signed remainder : Bool) (a b : Term Γ n) :
+    List (Guard Γ) :=
+  ⟨if remainder then .remainderByZero else .divisionByZero, .nonzero b⟩ ::
+    (if signed then [⟨.signedOverflow, .guard .divRem a b⟩] else [])
+
+theorem division_trace_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat}
+    (signed remainder : Bool) (a b : Term Γ n) :
+    IR.evalDivision signed remainder n [.bits n (denoteTerm σ a), .bits n (denoteTerm σ b)] =
+      (do guards σ (divisionGuards signed remainder a b)
+          return IR.Value.bits n (denoteTerm σ (.division signed remainder a b))) := by
+  cases signed <;> cases remainder <;>
+    simp [IR.evalDivision, IR.Value.asBits, divisionGuards, guards, denoteTerm,
+      denoteOp, denoteNonzero, divisionBits, IR.Reason.code,
+      bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw, BitVec.toNat_eq]
+  all_goals split <;> try simp_all
+  all_goals split <;> simp_all
+
 def operation {Γ : Var → Nat} : IR.Operation → List (Word Γ) →
     Option (List (Guard Γ) × List (Word Γ))
   | .constant n bits, [] =>
     if n == 0 || bits ≥ 2^n then none
     else some ([], [⟨n, .const n (BitVec.ofNat n bits)⟩])
   | .scalar op, args => do return ([], [← scalar op args])
+  | .division signed remainder n, [a, b] => do
+    let x ← a.at n
+    let y ← b.at n
+    return (divisionGuards signed remainder x y, [⟨n, .division signed remainder x y⟩])
   | .assume reason, [arg] => do return ([⟨reason, ← arg.at 1⟩], [])
   | _, _ => none
 
@@ -67,6 +88,36 @@ theorem operation_sound {Γ : Var → Nat} (σ : Subst Γ) (owner : Nat)
           simp only [List.map_cons, List.map_nil, IR.evalOperation,
             word_at_sound σ arg 1 condition found, bind, Except.bind, guards]
           split <;> rfl
+  | division signed remainder n =>
+    cases args with
+    | nil => simp [operation] at accepted
+    | cons a rest =>
+      cases rest with
+      | nil => simp [operation] at accepted
+      | cons b rest =>
+        cases rest with
+        | cons _ _ => simp [operation] at accepted
+        | nil =>
+          simp only [operation, bind, Option.bind, pure] at accepted
+          split at accepted
+          · contradiction
+          · rename_i x hx
+            dsimp only at accepted
+            split at accepted
+            · contradiction
+            · rename_i y hy
+              cases Option.some.inj accepted
+              have ax := word_at_sound σ a n x hx
+              have byy := word_at_sound σ b n y hy
+              have concrete : IR.evalDivision signed remainder n [a.denote σ, b.denote σ] =
+                  IR.evalDivision signed remainder n [.bits n (denoteTerm σ x), .bits n (denoteTerm σ y)] := by
+                simp only [IR.evalDivision]
+                rw [ax, byy]
+                simp [IR.Value.asBits]
+              simp only [IR.evalOperation, List.map_cons, List.map_nil]
+              rw [concrete, division_trace_sound]
+              simp only [Word.denote]
+              cases guards σ (divisionGuards signed remainder x y) <;> rfl
   | _ => simp [operation] at accepted
 
 def Scope.appendWords {Γ : Var → Nat} (scope : Scope Γ)

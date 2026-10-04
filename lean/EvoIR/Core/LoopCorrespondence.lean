@@ -37,7 +37,7 @@ structure CheckedSpan {Γ : Var → Nat} (entries : List (JointPoint Γ))
   source : SourceCutRuns true point.source sourceTree
   targetDiagram : TargetCutDiagram (fun _ => .world) target type true point.scope point.label targetTree
   agreement : CutMatch (CutExitAgreement entries fid target type)
-    sourceTree.normalizeBranches targetTree.normalizeBranches
+    sourceTree.normalizeTrace targetTree.normalizeTrace
 
 theorem CutTree.fault_observation {Γ : Var → Nat} {α : Type} (σ : Subst Γ)
     (tree : CutTree Γ α) (fault : Source.Fault) (failed : tree.eval σ = .error fault) :
@@ -75,7 +75,7 @@ theorem checked_cutpoint_simulation {Γ : Var → Nat} (entries : List (JointPoi
   obtain ⟨tf, tp, positiveTarget, targetOutcome⟩ := span.targetDiagram.sound σ
     (fun _ => .world) (by intro id; rfl) program found returns 1 2
   have agreement := span.agreement.sound σ
-  rw [CutTree.normalize_branches_sound, CutTree.normalize_branches_sound] at agreement
+  rw [CutTree.normalize_trace_sound, CutTree.normalize_trace_sound] at agreement
   rcases agreement with ⟨fault, sourceFailed, targetFailed⟩ |
     ⟨se, te, sourceSuccess, targetSuccess, matched⟩
   · have sh : sf.control = .halted (.error fault) := by simpa [sourceFailed] using sourceOutcome

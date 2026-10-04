@@ -78,7 +78,12 @@ example : summarize (.comma .int (set 0xffffffff) (compound .add (.literal .uint
     some (.ok (.ofNat .int 0), .ok (.ofNat .int 0)) := by decide
 example : summarize (.comma .int (set 7) (compound .shr (.literal .long 0x100000001))) =
     some (.error (.diagnostic 3005), .ok (.ofNat .int 7)) := by decide
-example : (stateExpression 20 locals (compound .div (.literal .int 1))).isNone := by decide
+example : summarize (.comma .int (set 7) (compound .div (.literal .int 2))) =
+    some (.ok (.ofNat .int 3), .ok (.ofNat .int 3)) := by decide
+example : summarize (.comma .int (set 7) (compound .div (.literal .int 0))) =
+    some (.error (.diagnostic 3002), .ok (.ofNat .int 7)) := by decide
+example : summarize (.comma .int (set 0x80000000) (compound .rem (.literal .int 0xffffffff))) =
+    some (.error (.diagnostic 3004), .ok (.ofNat .int 0x80000000)) := by decide
 example : summarize (.comma .int (set 7) (update .postInc)) =
     some (.ok (.ofNat .int 7), .ok (.ofNat .int 8)) := by decide
 example : summarize (.comma .int (set 7) (update .preInc)) =

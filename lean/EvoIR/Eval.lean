@@ -13,6 +13,7 @@ import EvoIR.Core.StatementTests
 import EvoIR.Core.StatementReturnTests
 import EvoIR.Core.CutpointTests
 import EvoIR.Core.CutpointInput
+import EvoIR.Core.DivisionTests
 
 /-!
 # The executable evaluator
@@ -300,10 +301,11 @@ def run (args : List String) : IO UInt32 := do
       let statements ← EvoIR.Core.Symbolic.StatementTests.statementSelfTest
       let statementReturns ← EvoIR.Core.Symbolic.StatementReturnTests.statementReturnSelfTest
       let cutpoints ← EvoIR.Core.Symbolic.CutpointTests.cutpointSelfTest
+      let divisions ← EvoIR.Core.Symbolic.DivisionTests.divisionSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
-        statements == 0 && statementReturns == 0 && cutpoints == 0 then 0 else 1
+        statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 then 0 else 1
   | ["--check-core-loop-pair", sourcePath, targetPath, proposalPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2

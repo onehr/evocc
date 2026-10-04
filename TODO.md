@@ -2471,6 +2471,15 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   substitution and validator safety remain OPEN; no V02–V06 implementation or
   release claim is made. The original V01 scope is unchanged.
 
+  October 5 division continuation: the six original div/rem/compound pairs now
+  pass, plus original nested, conditional and cyclic division inputs. Numerical
+  and diagnostic correspondence is proved without extending P0; repeated-check
+  normalization changes proof diagrams only, with explicit source obligations
+  still required. Focused tests: 144 mixed-type pairs accepted, 1,060 mutations
+  refused, 11 original control cases passed; development kernel audit PASS.
+  Clean integration gates are pending. Calls/private-leaf substitution,
+  validator safety and complete frozen-population acceptance remain OPEN.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

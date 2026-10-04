@@ -52,6 +52,51 @@ theorem CutTree.normalize_branches_sound {Γ : Var → Nat} {α : Type}
       have same := constant_branch_sound σ condition value h
       cases value <;> simp [eval, same, ih, ih']
 
+/-- Repeated intrinsic traps and explicit obligations agree within one span.
+No passed-check facts are transported to a successor cutpoint. -/
+def CutTree.normalizeChecks {Γ : Var → Nat} {α : Type} (seen : List (Guard Γ)) :
+    CutTree Γ α → CutTree Γ α
+  | .leaf value => .leaf value
+  | .checked guard next =>
+    if guard ∈ seen then next.normalizeChecks seen
+    else .checked guard (next.normalizeChecks (guard :: seen))
+  | .branch condition yes no =>
+    .branch condition (yes.normalizeChecks seen) (no.normalizeChecks seen)
+
+theorem CutTree.normalize_checks_sound {Γ : Var → Nat} {α : Type} (σ : Subst Γ)
+    (tree : CutTree Γ α) (seen : List (Guard Γ))
+    (passed : ∀ g ∈ seen, (denoteTerm σ g.condition).toNat ≠ 0) :
+    (tree.normalizeChecks seen).eval σ = tree.eval σ := by
+  induction tree generalizing seen with
+  | leaf value => rfl
+  | checked guard next ih =>
+    simp only [normalizeChecks]
+    split
+    · rename_i member
+      rw [ih seen passed]
+      simp [eval, guards, passed guard member, bind, Except.bind]
+    · simp only [eval, guards]
+      by_cases zero : (denoteTerm σ guard.condition).toNat = 0
+      · simp [zero, bind, Except.bind]
+      · simp only [beq_iff_eq, zero, ↓reduceIte, bind, Except.bind]
+        exact ih (guard :: seen) (by
+          intro g member
+          rcases List.mem_cons.mp member with same | old
+          · subst g; exact zero
+          · exact passed g old)
+  | branch condition yes no first second =>
+    simp only [normalizeChecks, eval]
+    split
+    · exact first seen passed
+    · exact second seen passed
+
+def CutTree.normalizeTrace {Γ : Var → Nat} {α : Type} (tree : CutTree Γ α) : CutTree Γ α :=
+  (tree.normalizeChecks []).normalizeBranches
+
+theorem CutTree.normalize_trace_sound {Γ : Var → Nat} {α : Type}
+    (σ : Subst Γ) (tree : CutTree Γ α) : tree.normalizeTrace.eval σ = tree.eval σ := by
+  rw [normalizeTrace, normalize_branches_sound, normalize_checks_sound σ tree [] (by simp)]
+
 /-- The checker must establish the leaf relation independently. Matching a
 branch shape or observing the same diagnostic on a few inputs is insufficient. -/
 inductive CutMatch {Γ : Var → Nat} {α β : Type} (related : α → β → Prop) :

@@ -1,4 +1,5 @@
 import EvoIR.Core.SourceExpression
+import EvoIR.Core.SourceDivision
 
 /-! Checked numeric operation selection for stateful source diagrams. The
 operands are the already-evaluated source values, not rewritten source syntax;
@@ -15,6 +16,8 @@ def binaryResult {Γ : Var → Nat} (op : Source.Binary) (a b : CWord Γ) :
   | .add => some ⟨arithmetic .add a b, fun σ => arithmetic_sound σ .add a b⟩
   | .sub => some ⟨arithmetic .sub a b, fun σ => arithmetic_sound σ .sub a b⟩
   | .mul => some ⟨arithmetic .mul a b, fun σ => arithmetic_sound σ .mul a b⟩
+  | .div => some ⟨division false a b, fun σ => division_sound σ false a b⟩
+  | .rem => some ⟨division true a b, fun σ => division_sound σ true a b⟩
   | .bitAnd => some ⟨([], bitwise .and a b), fun σ => (bitwise_sound σ .and a b).symm⟩
   | .bitOr => some ⟨([], bitwise .or a b), fun σ => (bitwise_sound σ .or a b).symm⟩
   | .bitXor => some ⟨([], bitwise .xor a b), fun σ => (bitwise_sound σ .xor a b).symm⟩

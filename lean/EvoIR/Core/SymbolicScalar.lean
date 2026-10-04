@@ -1,5 +1,5 @@
 import EvoIR.Core.IR
-import EvoIR.Term
+import EvoIR.Core.NumericTerm
 
 /-!
 Symbolic scalar evaluation for the independent local-diagram checker. Reuse
@@ -12,7 +12,27 @@ those obligations stay with the enclosing source/IR checker.
 -/
 namespace EvoIR.Core.Symbolic
 
-deriving instance DecidableEq for Term
+@[simp] theorem denoteTerm_var {Γ : Var → Nat} (σ : Subst Γ) (v : Var) (n : Nat) (h : Γ v = n) :
+    denoteTerm σ (.var v n h) = h ▸ σ v := rfl
+
+@[simp] theorem denoteTerm_const {Γ : Var → Nat} (σ : Subst Γ) (n : Nat) (c : BitVec n) :
+    denoteTerm σ (Term.const n c) = c := rfl
+
+@[simp] theorem denoteTerm_bin {Γ : Var → Nat} (σ : Subst Γ) (o : BinOp) {n : Nat}
+    (a b : Term Γ n) :
+    denoteTerm σ (.bin o a b) = denoteOp (.bin o n) (denoteTerm σ a, denoteTerm σ b) := rfl
+
+@[simp] theorem denoteTerm_cmp {Γ : Var → Nat} (σ : Subst Γ) (o : CmpOp) {n : Nat}
+    (a b : Term Γ n) :
+    denoteTerm σ (.cmp o a b) = denoteOp (.cmp o n) (denoteTerm σ a, denoteTerm σ b) := rfl
+
+@[simp] theorem denoteTerm_shift {Γ : Var → Nat} (σ : Subst Γ) (o : ShOp) {n m : Nat}
+    (a : Term Γ n) (k : Term Γ m) :
+    denoteTerm σ (.shift o a k) = denoteOp (.shift o n m) (denoteTerm σ a, denoteTerm σ k) := rfl
+
+@[simp] theorem denoteTerm_cast {Γ : Var → Nat} (σ : Subst Γ) (o : CastOp) {w : Nat} (n : Nat)
+    (a : Term Γ w) :
+    denoteTerm σ (.cast o n a) = denoteOp (.cast o w n) (denoteTerm σ a) := rfl
 
 abbrev Word (Γ : Var → Nat) := (width : Nat) × Term Γ width
 

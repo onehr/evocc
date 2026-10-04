@@ -266,6 +266,7 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Symbolic.checkArithmetic",
     "EvoIR.denoteOp",
     "EvoIR.denoteTerm",
+    "EvoIR.Core.Symbolic.denoteTerm",
     "EvoIR.elabPat",
     "EvoIR.denotePat",
     "EvoIR.denoteRhs",
@@ -285,6 +286,39 @@ RECORDED_DEFINITIONS = [
 ]
 
 CORE_PRIMITIVE_TARGETS = [
+    (
+        "EvoIR.Core.Symbolic.Term.of_p0_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} (term : EvoIR.Term Γ n), "
+        "EvoIR.Core.Symbolic.denoteTerm σ (EvoIR.Core.Symbolic.Term.ofP0 term) = "
+        "EvoIR.denoteTerm σ term",
+    ),
+    (
+        "EvoIR.Core.Symbolic.division_trace_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} "
+        "(signed remainder : Bool) (a b : EvoIR.Core.Symbolic.Term Γ n), "
+        "EvoIR.Core.IR.evalDivision signed remainder n "
+        "[EvoIR.Core.IR.Value.bits n (EvoIR.Core.Symbolic.denoteTerm σ a), "
+        "EvoIR.Core.IR.Value.bits n (EvoIR.Core.Symbolic.denoteTerm σ b)] = "
+        "do EvoIR.Core.Symbolic.guards σ (EvoIR.Core.Symbolic.divisionGuards signed remainder a b) "
+        "pure (EvoIR.Core.IR.Value.bits n "
+        "(EvoIR.Core.Symbolic.denoteTerm σ (EvoIR.Core.Symbolic.Term.division signed remainder a b)))",
+    ),
+    (
+        "EvoIR.Core.Symbolic.division_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (remainder : Bool) "
+        "(a b : EvoIR.Core.Symbolic.CWord Γ), "
+        "(do EvoIR.Core.Symbolic.guards σ (EvoIR.Core.Symbolic.division remainder a b).fst "
+        "pure (EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.division remainder a b).snd)) = "
+        "EvoIR.Core.Source.binaryValue (if remainder = true then EvoIR.Core.Source.Binary.rem "
+        "else EvoIR.Core.Source.Binary.div) "
+        "(EvoIR.Core.Symbolic.CWord.denote σ a) (EvoIR.Core.Symbolic.CWord.denote σ b)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.normalized_traces_equal",
+        "∀ {Γ : EvoIR.Var → Nat} (a b : EvoIR.Core.Symbolic.ValueTree Γ), "
+        "a.normalizeTrace = b.normalizeTrace → "
+        "∀ (σ : EvoIR.Subst Γ), EvoIR.Core.Symbolic.ValueTree.denote σ a = EvoIR.Core.Symbolic.ValueTree.denote σ b",
+    ),
     (
         "EvoIR.Core.Symbolic.canonical_store_covers",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (locals : EvoIR.Core.Symbolic.LocalStore Γ), "
@@ -383,7 +417,7 @@ CORE_PRIMITIVE_TARGETS = [
     (
         "EvoIR.Core.Symbolic.truth_term_sound",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (value : EvoIR.Core.Symbolic.CWord Γ), "
-        "((EvoIR.denoteTerm σ value.truthTerm).toNat != 0) = "
+        "((EvoIR.Core.Symbolic.denoteTerm σ value.truthTerm).toNat != 0) = "
         "(EvoIR.Core.Symbolic.CWord.denote σ value).truth",
     ),
     (
@@ -488,7 +522,7 @@ CORE_PRIMITIVE_TARGETS = [
         "∀ (p : EvoIR.Core.IR.Program) (s : EvoIR.Core.IR.State) "
         "(a : EvoIR.Core.IR.Activation) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) "
         "(scope yesScope noScope : EvoIR.Core.Symbolic.Scope Γ) (id : Nat) "
-        "(condition : EvoIR.Term Γ 1) (yes no : EvoIR.Core.IR.Edge), "
+        "(condition : EvoIR.Core.Symbolic.Term Γ 1) (yes no : EvoIR.Core.IR.Edge), "
         "s.control = EvoIR.Core.IR.Control.running a → "
         "List.find? (fun x => x.name == a.function) p.functions = some f → "
         "List.find? (fun x => x.name == a.block) f.blocks = some b → "
@@ -499,8 +533,8 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.Symbolic.checkEdge types f scope no noScope = true → "
         "EvoIR.Core.IR.step p s = some { control := EvoIR.Core.IR.Control.running "
         "{ function := a.function, "
-        "block := if ((EvoIR.denoteTerm σ condition).toNat == 0) = true then no.block else yes.block, "
-        "pc := 0, values := if ((EvoIR.denoteTerm σ condition).toNat == 0) = true then "
+        "block := if ((EvoIR.Core.Symbolic.denoteTerm σ condition).toNat == 0) = true then no.block else yes.block, "
+        "pc := 0, values := if ((EvoIR.Core.Symbolic.denoteTerm σ condition).toNat == 0) = true then "
         "EvoIR.Core.Symbolic.Scope.denote σ ρ noScope else EvoIR.Core.Symbolic.Scope.denote σ ρ yesScope, "
         "owner := a.owner }, stack := s.stack, nextFrame := s.nextFrame }",
     ),

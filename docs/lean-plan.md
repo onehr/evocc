@@ -545,6 +545,23 @@ hard-coded admission logic. Malformed wire input exits 2; failed checking exits
 1; successful checking exits 0 and explicitly retains `backend=UNPROVED` and
 `core-v1=INCOMPLETE`. V01 and V02–V06 remain open.
 
+**Division correspondence (October 5 continuation).** A separate compilation
+term language adds div/rem without changing the frozen P0 language or registry;
+`Term.of_p0_sound` proves its existing-operation embedding. `division_sound`
+and `division_trace_sound` connect usual arithmetic conversions and exact
+truncation/remainder bits to the existing source and IR machines, including
+E3002/E3003/E3004. Finite and cyclic proof diagrams normalize repeated identical
+guards only after the first successful check; neither input IR is rewritten.
+Baseline target admission separately requires matching explicit div/rem
+obligations in the current block, so intrinsic traps cannot mask their deletion.
+All six original `division-return.c` pairs now pass the public interface, as do
+the nested, conditional and looping cases in `division-control.c`. The tests
+cover 144 mixed-type/compound pairs, 1,060 refused mutations and 11 original
+control cases. The development audit passes with kernel-only proof dependencies;
+clean Lean/full-workspace integration gates are pending for this slice. Calls,
+private-leaf substitution, validator safety and the complete frozen population
+still block V01; backend stages and release acceptance are unchanged.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted

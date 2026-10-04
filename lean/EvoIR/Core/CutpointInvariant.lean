@@ -88,7 +88,7 @@ def checkedSpan (points : List LayoutPoint) (fid : Nat) (target : IR.Function)
   let targetTree ← targetCutDiagram (fun _ => .world) target type (points.map (·.layout.label))
     (target.blocks.length+1) true point.scope point.label
   let same ← cutMatch (checkExit points fid target type)
-    source.val.normalizeBranches targetTree.val.normalizeBranches
+    source.val.normalizeTrace targetTree.val.normalizeTrace
   return ⟨source.val, targetTree.val, source.property, targetTree.property, same.down⟩
 
 inductive SpanList (points : List LayoutPoint) (fid : Nat) (target : IR.Function)

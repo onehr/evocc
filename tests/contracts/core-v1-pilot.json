@@ -390,6 +390,24 @@
     "capture_retention_bytes": 524288000,
     "claim_ceiling": "Whole-function cyclic source-to-EvoIR result checking with independently checked untrusted proposals, all typed arguments and unbounded execution. No target-name whitelist or branch/range fact extension. Div/rem, calls/private-leaf substitution and validator safety keep V01 open; V02-V06 are unimplemented."
   },
+  "division_correspondence": {
+    "status": "FOCUSED_PROOF_AND_REPLAY_PASS_CLEAN_GATES_PENDING",
+    "implementation": ["lean/EvoIR/Core/NumericTerm.lean", "lean/EvoIR/Core/SourceDivision.lean", "lean/EvoIR/Core/RepeatedGuard.lean"],
+    "theorems": ["EvoIR.Core.Symbolic.Term.of_p0_sound", "EvoIR.Core.Symbolic.division_sound", "EvoIR.Core.Symbolic.division_trace_sound", "EvoIR.Core.Symbolic.normalized_traces_equal"],
+    "tests": "lean/EvoIR/Core/DivisionTests.lean",
+    "fixtures": ["tests/fixtures/verification/division-return.c", "tests/fixtures/verification/division-control.c"],
+    "loop_proposal": "tests/fixtures/verification/division-loop.cutpoints.json",
+    "actual_source_ir_pairs_passed": ["signed_division", "signed_remainder", "unsigned_division", "unsigned_remainder", "compound_division", "compound_remainder", "division_order", "division_choice", "division_loop"],
+    "target_export_sha256": {"division-return.evo": "fb83217357dc0a97bf10f187e543b4b09a1ea473b41d6792d91f279e04b5c1b7", "division-control.evo": "c31849fb68ec92a00f92fbd022668114fbcc8d5abd99f2492bd29fee55d14f7a"},
+    "mixed_type_pairs_accepted": 144,
+    "mutations_refused": 1060,
+    "original_control_cases_passed": 11,
+    "development_audit": "PASS: kernel-only core targets; separate compilation term language, P0 unchanged",
+    "replay_log": ".evidence/verification-core/20261004/source-execution/division-pair-green.log",
+    "selftest_log": ".evidence/verification-core/20261004/source-execution/division-selftest.log",
+    "capture_retention_bytes": 524288000,
+    "claim_ceiling": "Source-to-EvoIR numerical/diagnostic correspondence, not V01 completion. Calls/private-leaf substitution, validator safety, full frozen population and V02-V06 remain open. No native or release claim."
+  },
   "integration_gates": {
     "rust_implementation_commit": "196d84a15426999e69f23f881312b05f9c0e1177",
     "lean_implementation_commit": "196d84a15426999e69f23f881312b05f9c0e1177",

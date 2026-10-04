@@ -52,6 +52,11 @@ def checkBlockTokens (f : Function) (b : Block) : Except String Unit := do
   let mut w := worlds.head?.map Binding.id
   let mut bindings := b.parameters
   let mut guard : Option (Nat × Nat × Nat × Nat) := none
+  -- Baseline C lowering retains explicit div/rem obligations even though the
+  -- raw IR operations also trap. Do not let intrinsic traps conceal a deleted
+  -- source obligation in a proposed checked compilation.
+  let mut definitions : List (Nat × (Operation × List Nat)) := []
+  let mut assumptions : List (Reason × Operation × List Nat) := []
   for i in b.instructions do
     let actual ← i.operands.mapM (Reader.operandType bindings)
     let memoryOperands := (i.operands.zip actual).filter (·.2 == .memory) |>.map Prod.fst
@@ -67,6 +72,16 @@ def checkBlockTokens (f : Function) (b : Block) : Except String Unit := do
       if worldOperands != w.toList || worldResults.length != 1 then throw "stale or duplicated world token"
     else if !worldResults.isEmpty then throw "world token manufactured"
     match i.op, i.operands with
+    | .assume reason, [id] =>
+      if let some (predicate, operands) := definitions.lookup id then
+        assumptions := (reason, predicate, operands) :: assumptions
+    | .division signed remainder n, [a, divisor] =>
+      let reason := if remainder then Reason.remainderByZero else Reason.divisionByZero
+      if !assumptions.contains (reason, .scalar (.nonzero n), [divisor]) then
+        throw "division lacks matching explicit nonzero obligation"
+      if signed && !assumptions.contains
+          (.signedOverflow, .scalar (.guard .divRem n), [a, divisor]) then
+        throw "signed division lacks matching explicit overflow obligation"
     | .load n, [mem, _, ptr] =>
       if guard != some (mem, ptr, n/8, n/8) then throw "load lacks matching current access guard"
     | .store, [mem, _, ptr, val] =>
@@ -81,6 +96,8 @@ def checkBlockTokens (f : Function) (b : Block) : Except String Unit := do
       let [_, ptr] := i.operands | throw "access shape"
       let some output := m | throw "access result"
       guard := some (output, ptr, size, align)
+    if let [result] := i.results then
+      definitions := (result.id, (i.op, i.operands)) :: definitions
     bindings := bindings ++ i.results
   let paths := match b.terminator with
     | .return ids => [ids]
