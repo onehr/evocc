@@ -355,6 +355,11 @@ source-directed add/sub/mul checks, including usual arithmetic conversions and
 their signed/unsigned diagnostic distinction. `segment_execution_sound` connects
 the complete finite instruction segment to actual `IR.Steps`, not just its local
 evaluator. These do not yet prove source expression, edge, loop or call diagrams.
+The `6321f218` checkpoint passes the clean Lean gate (25 kernel-only core
+targets) and full workspace (3,080 passed, zero failures, five ignored;
+Clippy/format pass). The pilot receipt records the scope, logs and 3.86 GiB
+cache/capture increase, mostly the reused frontend Cargo target. This remains
+V01 component evidence, not a stage-completion or verified-release claim.
 
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`

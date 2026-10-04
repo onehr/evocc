@@ -2383,7 +2383,13 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   own source expectation or admit a program pair. The clean gate at `88e7f458`
   records 22 kernel-only core targets. Source-directed arithmetic and conversion
   checking now preserves all six C ranks and signedness, and checked finite
-  instruction segments are connected to actual `IR.Steps`. The next step is checking the
+  instruction segments are connected to actual `IR.Steps`. At `6321f218`, the
+  clean Lean gate passes 25 kernel-only core targets (zero native axioms),
+  and full workspace passes 401 suites / 3,080 tests / zero failures / five
+  ignored, plus Clippy/format. The resumed slice's measured cache/capture net
+  growth is 3.86 GiB, principally the single frontend Cargo cache; 51.5 GiB
+  remains free. Temporary proof logs were removed; captures total 4.73 MiB.
+  The next step is checking the
   actual CFG/call/local-state diagrams, including private-leaf substitution.
   Validator soundness and generic source/target simulation for all frozen
   functions remain open. Test step limits are not proof or divergence outcomes.
