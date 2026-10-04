@@ -626,6 +626,32 @@ unchanged. The capture is 11,948 KiB against its
 500 MiB cap; host free space is 51 GiB. One regenerable proposition dump
 (2,520 bytes) was removed after checking for open handles.
 
+**Calling-control correspondence (October 5 continuation).** Implementation
+`0eec2a26` closes all five original `call-control.c` REDs without changing their
+source or target. Source diagrams compose unary, conditional, short-circuit,
+assignment and comma evaluation with actual callee execution. Target result
+trees retain conditional edges and bind the caller continuation only at a
+successful selected callee return. Proved diagram normalization handles literal
+width casts and the observed retest of an int-valued boolean; it does not change
+either input, interpreter, guard order or P0/g0 rules. Four additional original
+`call-branch-return.c` pairs cover branching callees, nested arguments, calls on
+both short-circuit sides and caller-local assignment. The new selftest passes
+nine whole pairs, 31 source/target execution controls and 21 target mutations;
+the prior call suite remains green. Clean Lean passes with 69 kernel-only core
+targets, zero native dependencies and 1,246,159 vector answers. Full workspace
+passes 401 suites / 3,080 tests / zero failures / five ignored, plus Clippy/format.
+All five frozen primary entries and the original private-leaf pair replay.
+The next minimal REDs are `loop_call` and `call_loop` in `call-loop.c`: both
+closures are well-formed and execute consistently, but correspondence refuses.
+The current loop interfaces must compose program-relative source spans and
+actual target call/token continuations. This, private storage, full constructor
+and closure coverage, and validator execution safety still block V01; V02–V06
+remain OPEN. No release or compiled-backend theorem is claimed.
+This slice's build/capture disk delta is **+4,748 KiB** (`.lake` plus capture;
+`target/frontend` unchanged); the capture is 13,132 KiB against its 500 MiB cap.
+The temporary diagram-inspection source was removed after an open-handle check.
+Receipts, fixtures and original inputs remain; host free space is 52 GiB.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted

@@ -2510,6 +2510,18 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   storage, the remaining calling expression forms, full constructor coverage
   and validator safety remain OPEN. V02–V06 have not advanced.
 
+  **October 5 calling-control continuation:** implementation `0eec2a26` closes
+  the five `call-control.c` REDs and four branching-callee pairs. Checked result
+  trees preserve the selected call/return path, caller locals, tokens and first
+  diagnostic. Nine complete pairs, 31 execution controls and 21 target mutations
+  pass; all earlier call controls remain green. The clean Lean gate passes with
+  69 kernel-only core targets; full workspace passes 401 suites / 3,080 tests /
+  zero failures / five ignored, with Clippy/format. The five
+  frozen primary entries and original private-leaf pair replay. New minimal
+  `call-loop.c` REDs isolate calls inside loops and calls to looping functions;
+  both validate and execute consistently but still refuse proof. Loop/call and
+  private-storage composition, full coverage and validator safety keep V01 OPEN.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

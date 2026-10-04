@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "b7a0a70ee4da4bfb2ed05869532a121a6504b26a",
+    "lean_commit": "0eec2a26c5ccdbea10622b575cdbfafe45268de3",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -30,11 +30,14 @@
       "lean/EvoIR/Core/AbsCorrespondence.lean",
       "lean/EvoIR/Core/BranchExpression.lean",
       "lean/EvoIR/Core/BranchTarget.lean",
+      "lean/EvoIR/Core/CallControlTests.lean",
       "lean/EvoIR/Core/CallCorrespondence.lean",
       "lean/EvoIR/Core/CallExpression.lean",
       "lean/EvoIR/Core/CallFlow.lean",
+      "lean/EvoIR/Core/CallOperators.lean",
       "lean/EvoIR/Core/CallSourceDiagram.lean",
       "lean/EvoIR/Core/CallTargetDiagram.lean",
+      "lean/EvoIR/Core/CallValueTree.lean",
       "lean/EvoIR/Core/CheckedInt.lean",
       "lean/EvoIR/Core/CheckpointSimulation.lean",
       "lean/EvoIR/Core/CheckpointTests.lean",
@@ -173,6 +176,9 @@
         "EvoIR.Core.BranchExpression",
         "EvoIR.Core.LeafCorrespondence"
       ],
+      "lean/EvoIR/Core/CallControlTests.lean": [
+        "EvoIR.Core.CallCorrespondence"
+      ],
       "lean/EvoIR/Core/CallCorrespondence.lean": [
         "EvoIR.Core.CallTargetDiagram"
       ],
@@ -180,14 +186,20 @@
         "EvoIR.Core.SourceCall"
       ],
       "lean/EvoIR/Core/CallFlow.lean": [
+        "EvoIR.Core.CallOperators"
+      ],
+      "lean/EvoIR/Core/CallOperators.lean": [
         "EvoIR.Core.CallExpression"
       ],
       "lean/EvoIR/Core/CallSourceDiagram.lean": [
         "EvoIR.Core.CallFlow"
       ],
       "lean/EvoIR/Core/CallTargetDiagram.lean": [
-        "EvoIR.Core.CallSourceDiagram",
+        "EvoIR.Core.CallValueTree",
         "EvoIR.Core.TargetCall"
+      ],
+      "lean/EvoIR/Core/CallValueTree.lean": [
+        "EvoIR.Core.CallSourceDiagram"
       ],
       "lean/EvoIR/Core/CheckedInt.lean": [
         "EvoIR.Sem"
@@ -461,7 +473,8 @@
         "EvoIR.Core.CutpointTests",
         "EvoIR.Core.CutpointInput",
         "EvoIR.Core.DivisionTests",
-        "EvoIR.Core.SourceCallTests"
+        "EvoIR.Core.SourceCallTests",
+        "EvoIR.Core.CallControlTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -15823,6 +15836,57 @@
     "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions, conditional CFGs, checked cyclic diagrams, div/rem, finite calls and private-leaf substitution. Full core-v1 constructor/call/loop composition remains incomplete. No proof of source export, input-validation execution safety, backend compilation or verified-release acceptance",
     "targets": [
       {
+        "theorem": "EvoIR.Core.Symbolic.call_target_conditional",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b yesBlock noBlock : EvoIR.Core.IR.Block) (scope yesScope noScope : EvoIR.Core.Symbolic.Scope Γ) (id : Nat) (condition : EvoIR.Core.Symbolic.Term Γ 1) (yes no : EvoIR.Core.IR.Edge) (a c : EvoIR.Core.Symbolic.ValueTree Γ), List.find? (fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.terminator = EvoIR.Core.IR.Terminator.conditional id yes no → yesBlock.name = yes.block → noBlock.name = no.block → scope.word id = some ⟨1, condition⟩ → EvoIR.Core.Symbolic.edge EvoIR.Core.Symbolic.callTokenTypes f scope yes = some yesScope → EvoIR.Core.Symbolic.edge EvoIR.Core.Symbolic.callTokenTypes f scope no = some noScope → EvoIR.Core.Symbolic.CallTargetDiagram p f yesBlock 0 yesScope a → EvoIR.Core.Symbolic.CallTargetDiagram p f noBlock 0 noScope c → EvoIR.Core.Symbolic.CallTargetDiagram p f b b.instructions.length scope (EvoIR.Core.Symbolic.ValueTree.branch condition a c)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.call_target_call",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f callee : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (pc : Nat) (scope : EvoIR.Core.Symbolic.Scope Γ) (inst : EvoIR.Core.IR.Instruction) (args : List (EvoIR.Core.Symbolic.Slot Γ)) (called result : EvoIR.Core.Symbolic.ValueTree Γ), List.find? (fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.instructions[pc]? = some inst → inst.op = EvoIR.Core.IR.Operation.call callee.name → List.find? (fun x => x.name == callee.name) p.functions = some callee → List.mapM (fun id => List.lookup id scope) inst.operands = some args → List.map EvoIR.Core.IR.Binding.type inst.results = callee.returns → ∀ (body : EvoIR.Core.Symbolic.CallFunctionDiagram p callee args called), EvoIR.Core.Symbolic.ValueBind (fun word tree => ∃ next, scope.appendSlots inst.results (EvoIR.Core.Symbolic.callResults word) = some next ∧ EvoIR.Core.Symbolic.CallTargetDiagram p f b (pc + 1) next tree) called result → EvoIR.Core.Symbolic.CallTargetDiagram p f b pc scope result",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.context_short_diagram",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (locals : EvoIR.Core.Symbolic.LocalStore Γ) (isOr : Bool) (left right : EvoIR.Core.Source.Expr) (first output : EvoIR.Core.Symbolic.StateTree Γ), EvoIR.Core.Symbolic.ContextDiagram p locals left first → EvoIR.Core.Symbolic.TreeBind (EvoIR.Core.Symbolic.ContextShort p isOr right) first output → EvoIR.Core.Symbolic.ContextDiagram p locals (EvoIR.Core.Source.Expr.binary EvoIR.Core.Source.IntType.int (if isOr = true then EvoIR.Core.Source.Binary.or else EvoIR.Core.Source.Binary.and) left right) output",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.Term.normalize_casts_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} (term : EvoIR.Core.Symbolic.Term Γ n), EvoIR.Core.Symbolic.denoteTerm σ term.normalizeCasts = EvoIR.Core.Symbolic.denoteTerm σ term",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.branch_condition_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (term : EvoIR.Core.Symbolic.Term Γ 1), ((EvoIR.Core.Symbolic.denoteTerm σ (EvoIR.Core.Symbolic.branchCondition term)).toNat != 0) = ((EvoIR.Core.Symbolic.denoteTerm σ term).toNat != 0)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
         "theorem": "EvoIR.Core.Symbolic.call_flow_sound",
         "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (fuel : Nat) (locals : EvoIR.Core.Symbolic.LocalStore Γ) (control : EvoIR.Core.Source.Control) (tree : EvoIR.Core.Symbolic.FlowTree Γ), Option.map Subtype.val (EvoIR.Core.Symbolic.callFlow p fuel locals control) = some tree → EvoIR.Core.Symbolic.ContextFlowDiagram p locals control tree",
         "proof_kind": "kernel-only",
@@ -15835,7 +15899,7 @@
       },
       {
         "theorem": "EvoIR.Core.Symbolic.call_target_uninitialized",
-        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (pc width : Nat) (scope next : EvoIR.Core.Symbolic.Scope Γ) (inst : EvoIR.Core.IR.Instruction) (result : EvoIR.Core.Symbolic.ExpressionResult Γ), List.find? (fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.instructions[pc]? = some inst → inst.op = EvoIR.Core.IR.Operation.uninitialized (EvoIR.Core.IR.Ty.bits width) → inst.operands = [] → scope.appendSlots inst.results [EvoIR.Core.Symbolic.Slot.opaque (width + 2)] = some next → EvoIR.Core.Symbolic.CallTargetDiagram p f b (pc + 1) next result → EvoIR.Core.Symbolic.CallTargetDiagram p f b pc scope result",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (pc width : Nat) (scope next : EvoIR.Core.Symbolic.Scope Γ) (inst : EvoIR.Core.IR.Instruction) (result : EvoIR.Core.Symbolic.ValueTree Γ), List.find? (fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.instructions[pc]? = some inst → inst.op = EvoIR.Core.IR.Operation.uninitialized (EvoIR.Core.IR.Ty.bits width) → inst.operands = [] → scope.appendSlots inst.results [EvoIR.Core.Symbolic.Slot.opaque (width + 2)] = some next → EvoIR.Core.Symbolic.CallTargetDiagram p f b (pc + 1) next result → EvoIR.Core.Symbolic.CallTargetDiagram p f b pc scope result",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Quot.sound",
@@ -15845,7 +15909,7 @@
       },
       {
         "theorem": "EvoIR.Core.Symbolic.call_target_branch",
-        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b nextBlock : EvoIR.Core.IR.Block) (scope next : EvoIR.Core.Symbolic.Scope Γ) (successor : EvoIR.Core.IR.Edge) (result : EvoIR.Core.Symbolic.ExpressionResult Γ), List.find? (fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.terminator = EvoIR.Core.IR.Terminator.branch successor → nextBlock.name = successor.block → EvoIR.Core.Symbolic.edge EvoIR.Core.Symbolic.callTokenTypes f scope successor = some next → EvoIR.Core.Symbolic.CallTargetDiagram p f nextBlock 0 next result → EvoIR.Core.Symbolic.CallTargetDiagram p f b b.instructions.length scope result",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b nextBlock : EvoIR.Core.IR.Block) (scope next : EvoIR.Core.Symbolic.Scope Γ) (successor : EvoIR.Core.IR.Edge) (result : EvoIR.Core.Symbolic.ValueTree Γ), List.find? (fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.terminator = EvoIR.Core.IR.Terminator.branch successor → nextBlock.name = successor.block → EvoIR.Core.Symbolic.edge EvoIR.Core.Symbolic.callTokenTypes f scope successor = some next → EvoIR.Core.Symbolic.CallTargetDiagram p f nextBlock 0 next result → EvoIR.Core.Symbolic.CallTargetDiagram p f b b.instructions.length scope result",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Quot.sound",
@@ -15877,7 +15941,7 @@
       },
       {
         "theorem": "EvoIR.Core.Symbolic.CallFunctionDiagram.completes",
-        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {p : EvoIR.Core.IR.Program} {f : EvoIR.Core.IR.Function} {args : List (EvoIR.Core.Symbolic.Slot Γ)} {result : EvoIR.Core.Symbolic.ExpressionResult Γ} (diagram : EvoIR.Core.Symbolic.CallFunctionDiagram p f args result), List.find? (fun x => x.name == f.name) p.functions = some f → ∃ entry last, EvoIR.Core.IR.initial p f.name (List.map (EvoIR.Core.Symbolic.Slot.denote σ EvoIR.Core.Symbolic.callTokens) args) = Except.ok entry ∧ EvoIR.Core.IR.Steps p entry last ∧ last.control = EvoIR.Core.IR.Control.halted (Except.map (fun value => [EvoIR.Core.Symbolic.sourceValueIR value, EvoIR.Core.IR.Value.memory { nextId := 1, objects := [] }, EvoIR.Core.IR.Value.world]) (EvoIR.Core.Symbolic.ExpressionResult.denote σ result))",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {p : EvoIR.Core.IR.Program} {f : EvoIR.Core.IR.Function} {args : List (EvoIR.Core.Symbolic.Slot Γ)} {result : EvoIR.Core.Symbolic.ValueTree Γ} (diagram : EvoIR.Core.Symbolic.CallFunctionDiagram p f args result), List.find? (fun x => x.name == f.name) p.functions = some f → ∃ entry last, EvoIR.Core.IR.initial p f.name (List.map (EvoIR.Core.Symbolic.Slot.denote σ EvoIR.Core.Symbolic.callTokens) args) = Except.ok entry ∧ EvoIR.Core.IR.Steps p entry last ∧ last.control = EvoIR.Core.IR.Control.halted (Except.map (fun value => [EvoIR.Core.Symbolic.sourceValueIR value, EvoIR.Core.IR.Value.memory { nextId := 1, objects := [] }, EvoIR.Core.IR.Value.world]) (EvoIR.Core.Symbolic.ValueTree.denote σ result))",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Quot.sound",
