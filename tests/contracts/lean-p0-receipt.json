@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "f12ce8459bd0f26f9dafc32d070c7b4865bfef49",
+    "lean_commit": "dbd98afbcaa4565443fe204242331f1f6b2066c0",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -39,8 +39,11 @@
       "lean/EvoIR/Core/IRReader.lean",
       "lean/EvoIR/Core/IRTests.lean",
       "lean/EvoIR/Core/IRWellFormed.lean",
+      "lean/EvoIR/Core/LocalStorage.lean",
       "lean/EvoIR/Core/Scalar.lean",
       "lean/EvoIR/Core/ScalarCorrectness.lean",
+      "lean/EvoIR/Core/Simulation.lean",
+      "lean/EvoIR/Core/SimulationTests.lean",
       "lean/EvoIR/Core/Source.lean",
       "lean/EvoIR/Core/SourceEquality.lean",
       "lean/EvoIR/Core/Transition.lean",
@@ -69,6 +72,8 @@
         "EvoIR.Core.ScalarCorrectness",
         "EvoIR.Core.Execution",
         "EvoIR.Core.Divergence",
+        "EvoIR.Core.SimulationTests",
+        "EvoIR.Core.LocalStorage",
         "EvoIR.Term",
         "EvoIR.Fact",
         "EvoIR.Rule",
@@ -95,7 +100,7 @@
       "lean/EvoIR/Core/Correspondence.lean": [
         "EvoIR.Core.Execution",
         "EvoIR.Core.IRExecution",
-        "EvoIR.Core.Transition"
+        "EvoIR.Core.Simulation"
       ],
       "lean/EvoIR/Core/CorrespondenceTests.lean": [
         "EvoIR.Core.AbsCorrespondence",
@@ -127,12 +132,21 @@
       "lean/EvoIR/Core/IRWellFormed.lean": [
         "EvoIR.Core.IRReader"
       ],
+      "lean/EvoIR/Core/LocalStorage.lean": [
+        "EvoIR.Core.Execution"
+      ],
       "lean/EvoIR/Core/Scalar.lean": [
         "EvoIR.Core.WellFormed",
         "EvoIR.Core.CheckedInt"
       ],
       "lean/EvoIR/Core/ScalarCorrectness.lean": [
         "EvoIR.Core.Scalar"
+      ],
+      "lean/EvoIR/Core/Simulation.lean": [
+        "EvoIR.Core.Transition"
+      ],
+      "lean/EvoIR/Core/SimulationTests.lean": [
+        "EvoIR.Core.Simulation"
       ],
       "lean/EvoIR/Core/Source.lean": [
         "Lean.Data.Json"
@@ -6276,6 +6290,16 @@
       "sha256": "d9bb9bab4561404d7cfaac4cc2d67040500ad8134738d79b0936bd7b94470cd6"
     },
     {
+      "name": "EvoIR.Core.Transition.Predecessor",
+      "type": "{α : Type u_1} → (α → Option α) → α → α → Prop",
+      "sha256": "2bd80f4c97041e911351e671c91a4a8ca84388e088c0608645efe0b563aaceb4"
+    },
+    {
+      "name": "EvoIR.Core.Transition.RankedSimulation",
+      "type": "{S : Type u_1} → {T : Type u_2} → {O : Type u_3} → (S → Option S) → (T → Option T) → (S → Option O) → (T → Option O) → (S → T → Prop) → (S → T → Nat) → Prop",
+      "sha256": "99818c3161970107358f598fa8e6eb46c33526cf6ede6e276e7d417e9ed014f2"
+    },
+    {
       "name": "EvoIR.Core.checkedDiagnostic",
       "type": "Nat → Option EvoIR.Core.Observation",
       "sha256": "6fb2b65f7bf2ed8c97b3732200aeab660a99c8882e2fbf13206152eb01e23fd4"
@@ -6294,6 +6318,11 @@
       "name": "EvoIR.Core.LoweringRefines",
       "type": "EvoIR.Core.Source.Program → EvoIR.Core.IR.Program → EvoIR.Core.Source.IntType → EvoIR.Core.Source.State → EvoIR.Core.IR.State → Prop",
       "sha256": "a1833c10577c71662a497990a452226078df3344695415fba19f4b2715a94cd9"
+    },
+    {
+      "name": "EvoIR.Core.LoweringSimulation",
+      "type": "EvoIR.Core.Source.Program → EvoIR.Core.IR.Program → EvoIR.Core.Source.IntType → (EvoIR.Core.Source.State → EvoIR.Core.IR.State → Prop) → (EvoIR.Core.Source.State → EvoIR.Core.IR.State → Nat) → Prop",
+      "sha256": "051847be49189104ed21adacabd302890be6732b84c1e1357012437601f7bd18"
     },
     {
       "name": "EvoIR.Core.AbsCorrespondence.sourceBody",
@@ -15390,6 +15419,56 @@
   "compilation_core_primitives": {
     "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; no proof of source export, input-validation soundness, source/IR simulation, whole-function checker or compilation yet",
     "targets": [
+      {
+        "theorem": "EvoIR.Core.Source.read_written_slot",
+        "proposition": "∀ (locals updated : EvoIR.Core.Source.Locals) (symbol : Nat) (destination : EvoIR.Core.Source.QualifiedType) (value : EvoIR.Core.Source.Value) (initialization : Bool), EvoIR.Core.Source.writeSlot locals symbol destination value initialization = Except.ok updated → EvoIR.Core.Source.readSlot updated symbol destination.type = Except.ok value",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.write_slot_length",
+        "proposition": "∀ (locals updated : EvoIR.Core.Source.Locals) (symbol : Nat) (destination : EvoIR.Core.Source.QualifiedType) (value : EvoIR.Core.Source.Value) (initialization : Bool), EvoIR.Core.Source.writeSlot locals symbol destination value initialization = Except.ok updated → List.length updated = List.length locals",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.read_other_slot",
+        "proposition": "∀ (locals updated : EvoIR.Core.Source.Locals) (symbol other : Nat) (destination : EvoIR.Core.Source.QualifiedType) (type : EvoIR.Core.Source.IntType) (value : EvoIR.Core.Source.Value) (initialization : Bool), other ≠ symbol → EvoIR.Core.Source.writeSlot locals symbol destination value initialization = Except.ok updated → EvoIR.Core.Source.readSlot updated other type = EvoIR.Core.Source.readSlot locals other type",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.ranked_lowering_refines",
+        "proposition": "∀ (s : EvoIR.Core.Source.Program) (t : EvoIR.Core.IR.Program) (resultType : EvoIR.Core.Source.IntType) (related : EvoIR.Core.Source.State → EvoIR.Core.IR.State → Prop) (rank : EvoIR.Core.Source.State → EvoIR.Core.IR.State → Nat), EvoIR.Core.LoweringSimulation s t resultType related rank → ∀ (s₀ : EvoIR.Core.Source.State) (t₀ : EvoIR.Core.IR.State), related s₀ t₀ → EvoIR.Core.LoweringRefines s t resultType s₀ t₀",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Transition.Refines.trans",
+        "proposition": "∀ {A : Type u_1} {B : Type u_2} {C : Type u_3} {O : Type u_4} {firstStep : A → Option A} {middleStep : B → Option B} {lastStep : C → Option C} {firstObserve : A → Option O} {middleObserve : B → Option O} {lastObserve : C → Option O} {a : A} {b : B} {c : C}, EvoIR.Core.Transition.Refines firstStep middleStep firstObserve middleObserve a b → EvoIR.Core.Transition.Refines middleStep lastStep middleObserve lastObserve b c → EvoIR.Core.Transition.Refines firstStep lastStep firstObserve lastObserve a c",
+        "proof_kind": "kernel-only",
+        "core_axioms": [],
+        "native_axioms": []
+      },
       {
         "theorem": "EvoIR.Core.checked_arithmetic_lowering",
         "proposition": "∀ (op : EvoIR.Core.SignedArithmetic) {n : Nat} (x y : BitVec n), EvoIR.Core.irArithmetic op x y = EvoIR.Core.sourceArithmetic op x y",

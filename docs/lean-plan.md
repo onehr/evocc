@@ -337,6 +337,18 @@ identifiers and scope-depth preservation for the existing execution functions.
 These are generic proof components, not an executable generic pair checker.
 Instantiating and independently checking the diagrams for actual CFG edges,
 calls and private-leaf substitution remains V01's next implementation obligation.
+The clean Lean gate at `dbd98afb` records 19 kernel-only core targets.
+
+**Executable target fragments.** `Core/SymbolicScalar.lean`,
+`SymbolicBindings.lean` and `SymbolicInstruction.lean` now check initialized
+integer instruction segments against typed symbolic expectations. Their
+soundness quantifies over every valuation, checks SSA/result widths and preserves
+the ordered assumption trace, including the first diagnostic. Unknown parameter
+values may be carried unchanged but cannot be consumed as integers. The
+single-instruction theorem is linked to the actual `IR.execute` arm. Calls,
+objects and CFG traversal are refused by this local component, not asserted to
+preserve state. The source expectation and the entry/edge relationships still
+need independent justification; a successful fragment check is not V01 admission.
 
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`

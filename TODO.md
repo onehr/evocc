@@ -2375,7 +2375,12 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   read-after-local-write, other-local noninterference and scope-depth preservation
   are now kernel-proved components. Administrative cycles and changed terminal
   observations are excluded by their regression proofs. This does not implement
-  the generic program-pair checker: the next step is independently checking the
+  the generic program-pair checker. The clean Lean gate at `dbd98afb` passes
+  19 kernel-only core targets. Executable symbolic integer-fragment checking now
+  has universal correctness theorems, an actual `IR.execute` bridge and negative
+  cases for SSA collisions, opaque/poison operands, width/operand changes,
+  missing obligations and changed diagnostic reasons. It does not justify its
+  own source expectation or admit a program pair. The next step is checking the
   actual CFG/call/local-state diagrams, including private-leaf substitution.
   Validator soundness and generic source/target simulation for all frozen
   functions remain open. Test step limits are not proof or divergence outcomes.
