@@ -42,15 +42,29 @@ theorem ValueTree.normalize_checks_sound {Γ : Var → Nat} (σ : Subst Γ)
     · exact first seen passed
     · exact second seen passed
 
+def ValueTree.normalizeCasts {Γ : Var → Nat} : ValueTree Γ → ValueTree Γ
+  | .value word => .value ⟨word.type, word.term.normalizeCasts⟩
+  | .checked guard next =>
+    .checked ⟨guard.reason, guard.condition.normalizeCasts⟩ next.normalizeCasts
+  | .branch condition yes no =>
+    .branch condition.normalizeCasts yes.normalizeCasts no.normalizeCasts
+
+theorem ValueTree.normalize_casts_sound {Γ : Var → Nat} (σ : Subst Γ)
+    (tree : ValueTree Γ) : tree.normalizeCasts.denote σ = tree.denote σ := by
+  induction tree <;> simp_all only [normalizeCasts, denote, guards, CWord.denote,
+    Term.normalize_casts_sound]
+
 def ValueTree.normalizeTrace {Γ : Var → Nat} (tree : ValueTree Γ) : ValueTree Γ :=
-  (tree.normalizeChecks []).normalizeBranches
+  (tree.normalizeCasts.normalizeChecks []).normalizeBranches
 
 theorem normalized_traces_equal {Γ : Var → Nat} (a b : ValueTree Γ)
     (equal : a.normalizeTrace = b.normalizeTrace) (σ : Subst Γ) :
     a.denote σ = b.denote σ := by
   have noChecks : ∀ g ∈ ([] : List (Guard Γ)), (denoteTerm σ g.condition).toNat ≠ 0 := by simp
-  have same := normalized_trees_equal (a.normalizeChecks []) (b.normalizeChecks []) equal σ
-  simpa only [ValueTree.normalize_checks_sound σ a [] noChecks,
-    ValueTree.normalize_checks_sound σ b [] noChecks] using same
+  have same := normalized_trees_equal (a.normalizeCasts.normalizeChecks [])
+    (b.normalizeCasts.normalizeChecks []) equal σ
+  simpa only [ValueTree.normalize_checks_sound σ a.normalizeCasts [] noChecks,
+    ValueTree.normalize_checks_sound σ b.normalizeCasts [] noChecks,
+    ValueTree.normalize_casts_sound] using same
 
 end EvoIR.Core.Symbolic

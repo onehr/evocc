@@ -47,6 +47,33 @@ def Term.ofP0 {Γ : Var → Nat} : {n : Nat} → EvoIR.Term Γ n → Term Γ n
   | _, .nonzero a => .nonzero (ofP0 a)
   | _, .count s a k => .count s (ofP0 a) (ofP0 k)
 
+/-- Canonicalize literal width conversions in proof diagrams, not input IR. -/
+def Term.constantCast {Γ : Var → Nat} (op : CastOp) {w : Nat} (n : Nat) :
+    Term Γ w → Term Γ n
+  | .const _ bits => .const n (denoteOp (.cast op w n) bits)
+  | term => .cast op n term
+
+theorem Term.constant_cast_sound {Γ : Var → Nat} (σ : Subst Γ)
+    (op : CastOp) {w : Nat} (n : Nat) (term : Term Γ w) :
+    denoteTerm σ (constantCast op n term) = denoteTerm σ (.cast op n term) := by
+  cases term <;> rfl
+
+def Term.normalizeCasts {Γ : Var → Nat} : {n : Nat} → Term Γ n → Term Γ n
+  | _, .var v n h => .var v n h
+  | _, .const n c => .const n c
+  | _, .bin op a b => .bin op a.normalizeCasts b.normalizeCasts
+  | _, .cmp op a b => .cmp op a.normalizeCasts b.normalizeCasts
+  | _, .shift op a k => .shift op a.normalizeCasts k.normalizeCasts
+  | _, .cast op n a => constantCast op n a.normalizeCasts
+  | _, .guard op a b => .guard op a.normalizeCasts b.normalizeCasts
+  | _, .nonzero a => .nonzero a.normalizeCasts
+  | _, .count s a k => .count s a.normalizeCasts k.normalizeCasts
+  | _, .division s r a b => .division s r a.normalizeCasts b.normalizeCasts
+
+theorem Term.normalize_casts_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat}
+    (term : Term Γ n) : denoteTerm σ term.normalizeCasts = denoteTerm σ term := by
+  induction term <;> simp_all only [normalizeCasts, constant_cast_sound, denoteTerm]
+
 theorem Term.of_p0_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat} (term : EvoIR.Term Γ n) :
     denoteTerm σ (ofP0 term) = EvoIR.denoteTerm σ term := by
   induction term <;> simp_all [ofP0, denoteTerm, EvoIR.denoteTerm]

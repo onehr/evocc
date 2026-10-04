@@ -1,4 +1,4 @@
-import EvoIR.Core.CallExpression
+import EvoIR.Core.CallOperators
 
 /-! Program-relative statement execution. A callee fault retains its actual
 activation; successful statements restore the caller and its continuation.

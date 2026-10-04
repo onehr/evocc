@@ -287,6 +287,59 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.call_target_conditional",
+        "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b yesBlock "
+        "noBlock : EvoIR.Core.IR.Block) (scope yesScope noScope : EvoIR.Core.Symbolic.Scope Γ) (id : "
+        "Nat) (condition : EvoIR.Core.Symbolic.Term Γ 1) (yes no : EvoIR.Core.IR.Edge) (a c : "
+        "EvoIR.Core.Symbolic.ValueTree Γ), List.find? (fun x => x.name == f.name) p.functions = some f → "
+        "List.find? (fun x => x.name == b.name) f.blocks = some b → b.terminator = "
+        "EvoIR.Core.IR.Terminator.conditional id yes no → yesBlock.name = yes.block → noBlock.name = "
+        "no.block → scope.word id = some ⟨1, condition⟩ → EvoIR.Core.Symbolic.edge "
+        "EvoIR.Core.Symbolic.callTokenTypes f scope yes = some yesScope → EvoIR.Core.Symbolic.edge "
+        "EvoIR.Core.Symbolic.callTokenTypes f scope no = some noScope → "
+        "EvoIR.Core.Symbolic.CallTargetDiagram p f yesBlock 0 yesScope a → "
+        "EvoIR.Core.Symbolic.CallTargetDiagram p f noBlock 0 noScope c → "
+        "EvoIR.Core.Symbolic.CallTargetDiagram p f b b.instructions.length scope "
+        "(EvoIR.Core.Symbolic.ValueTree.branch condition a c)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.call_target_call",
+        "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f callee : EvoIR.Core.IR.Function) (b : "
+        "EvoIR.Core.IR.Block) (pc : Nat) (scope : EvoIR.Core.Symbolic.Scope Γ) (inst : "
+        "EvoIR.Core.IR.Instruction) (args : List (EvoIR.Core.Symbolic.Slot Γ)) (called result : "
+        "EvoIR.Core.Symbolic.ValueTree Γ), List.find? (fun x => x.name == f.name) p.functions = some f → "
+        "List.find? (fun x => x.name == b.name) f.blocks = some b → b.instructions[pc]? = some inst → "
+        "inst.op = EvoIR.Core.IR.Operation.call callee.name → List.find? (fun x => x.name == "
+        "callee.name) p.functions = some callee → List.mapM (fun id => List.lookup id scope) "
+        "inst.operands = some args → List.map EvoIR.Core.IR.Binding.type inst.results = callee.returns → "
+        "∀ (body : EvoIR.Core.Symbolic.CallFunctionDiagram p callee args called), "
+        "EvoIR.Core.Symbolic.ValueBind (fun word tree => ∃ next, scope.appendSlots inst.results "
+        "(EvoIR.Core.Symbolic.callResults word) = some next ∧ EvoIR.Core.Symbolic.CallTargetDiagram p f "
+        "b (pc + 1) next tree) called result → EvoIR.Core.Symbolic.CallTargetDiagram p f b pc scope "
+        "result",
+    ),
+    (
+        "EvoIR.Core.Symbolic.context_short_diagram",
+        "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (locals : "
+        "EvoIR.Core.Symbolic.LocalStore Γ) (isOr : Bool) (left right : EvoIR.Core.Source.Expr) (first "
+        "output : EvoIR.Core.Symbolic.StateTree Γ), EvoIR.Core.Symbolic.ContextDiagram p locals left "
+        "first → EvoIR.Core.Symbolic.TreeBind (EvoIR.Core.Symbolic.ContextShort p isOr right) first "
+        "output → EvoIR.Core.Symbolic.ContextDiagram p locals (EvoIR.Core.Source.Expr.binary "
+        "EvoIR.Core.Source.IntType.int (if isOr = true then EvoIR.Core.Source.Binary.or else "
+        "EvoIR.Core.Source.Binary.and) left right) output",
+    ),
+    (
+        "EvoIR.Core.Symbolic.Term.normalize_casts_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} (term : EvoIR.Core.Symbolic.Term Γ n), "
+        "EvoIR.Core.Symbolic.denoteTerm σ term.normalizeCasts = EvoIR.Core.Symbolic.denoteTerm σ term",
+    ),
+    (
+        "EvoIR.Core.Symbolic.branch_condition_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (term : EvoIR.Core.Symbolic.Term Γ 1), "
+        "((EvoIR.Core.Symbolic.denoteTerm σ (EvoIR.Core.Symbolic.branchCondition term)).toNat != 0) = "
+        "((EvoIR.Core.Symbolic.denoteTerm σ term).toNat != 0)",
+    ),
+    (
         "EvoIR.Core.Symbolic.call_flow_sound",
         "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (fuel : Nat) (locals : "
         "EvoIR.Core.Symbolic.LocalStore Γ) (control : EvoIR.Core.Source.Control) (tree : "
@@ -297,7 +350,7 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.Symbolic.call_target_uninitialized",
         "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b : "
         "EvoIR.Core.IR.Block) (pc width : Nat) (scope next : EvoIR.Core.Symbolic.Scope Γ) (inst : "
-        "EvoIR.Core.IR.Instruction) (result : EvoIR.Core.Symbolic.ExpressionResult Γ), List.find? "
+        "EvoIR.Core.IR.Instruction) (result : EvoIR.Core.Symbolic.ValueTree Γ), List.find? "
         "(fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) "
         "f.blocks = some b → b.instructions[pc]? = some inst → inst.op = "
         "EvoIR.Core.IR.Operation.uninitialized (EvoIR.Core.IR.Ty.bits width) → inst.operands = [] → "
@@ -309,7 +362,7 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.Symbolic.call_target_branch",
         "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b "
         "nextBlock : EvoIR.Core.IR.Block) (scope next : EvoIR.Core.Symbolic.Scope Γ) (successor : "
-        "EvoIR.Core.IR.Edge) (result : EvoIR.Core.Symbolic.ExpressionResult Γ), List.find? (fun x "
+        "EvoIR.Core.IR.Edge) (result : EvoIR.Core.Symbolic.ValueTree Γ), List.find? (fun x "
         "=> x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) "
         "f.blocks = some b → b.terminator = EvoIR.Core.IR.Terminator.branch successor → "
         "nextBlock.name = successor.block → EvoIR.Core.Symbolic.edge "
@@ -340,13 +393,13 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.Symbolic.CallFunctionDiagram.completes",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {p : EvoIR.Core.IR.Program} {f : "
         "EvoIR.Core.IR.Function} {args : List (EvoIR.Core.Symbolic.Slot Γ)} {result : "
-        "EvoIR.Core.Symbolic.ExpressionResult Γ} (diagram : EvoIR.Core.Symbolic.CallFunctionDiagram p "
+        "EvoIR.Core.Symbolic.ValueTree Γ} (diagram : EvoIR.Core.Symbolic.CallFunctionDiagram p "
         "f args result), List.find? (fun x => x.name == f.name) p.functions = some f → ∃ entry last, "
         "EvoIR.Core.IR.initial p f.name (List.map (EvoIR.Core.Symbolic.Slot.denote σ "
         "EvoIR.Core.Symbolic.callTokens) args) = Except.ok entry ∧ EvoIR.Core.IR.Steps p entry last ∧ "
         "last.control = EvoIR.Core.IR.Control.halted (Except.map (fun value => "
         "[EvoIR.Core.Symbolic.sourceValueIR value, EvoIR.Core.IR.Value.memory { nextId := 1, objects "
-        ":= [] }, EvoIR.Core.IR.Value.world]) (EvoIR.Core.Symbolic.ExpressionResult.denote σ result))",
+        ":= [] }, EvoIR.Core.IR.Value.world]) (EvoIR.Core.Symbolic.ValueTree.denote σ result))",
     ),
     (
         "EvoIR.Core.IR.call_enters",

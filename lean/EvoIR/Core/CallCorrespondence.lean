@@ -25,7 +25,7 @@ structure CallPair (source : Source.Program) (target : IR.Program) where
   sourceTree : StateTree inputWidths
   sourceBody : ContextBody source locals sourceFunction.body sourceTree
   typed : sourceTree.HasType sourceFunction.returnType.type
-  targetResult : ExpressionResult inputWidths
+  targetResult : ValueTree inputWidths
   targetDiagram : CallFunctionDiagram target targetFunction
     (callInputSlots (parameterWords sourceFunction.parameters)) targetResult
   sameResult : ∀ σ, targetResult.denote σ = (sourceTree.denote σ).2
@@ -51,7 +51,7 @@ def callPair (source : Source.Program) (target : IR.Program) : Option (CallPair 
     if typed : body.val.Typed sf.val.returnType.type = true then
       let targetBody ← callTargetFunction target 512 tf.val sf.val.returnType.type
         (callInputSlots (parameterWords sf.val.parameters))
-      if same : targetBody.val.tree.normalizeTrace = body.val.erase.normalizeTrace then
+      if same : targetBody.val.normalizeTrace = body.val.erase.normalizeTrace then
         have id : sf.val.symbol = entry := by simpa using List.find?_some sf.property
         have name : tf.val.name = sf.val.name := by simpa using List.find?_some tf.property
         return {
@@ -63,8 +63,8 @@ def callPair (source : Source.Program) (target : IR.Program) : Option (CallPair 
           targetResult := targetBody.val, targetDiagram := targetBody.property
           sameResult := by
             intro σ
-            simpa only [ExpressionResult.tree_sound, StateTree.erase_sound]
-              using normalized_traces_equal targetBody.val.tree body.val.erase same σ }
+            simpa only [StateTree.erase_sound]
+              using normalized_traces_equal targetBody.val body.val.erase same σ }
       else none
     else none
   else none

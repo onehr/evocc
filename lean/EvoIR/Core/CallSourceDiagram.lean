@@ -55,6 +55,20 @@ mutual
               rw [StateTree.cast_sound]
               exact typed ▸ Source.context_cast destination operand _ (r.property σ fid)⟩
           else none
+        | .unary type op operand => do
+          if noWrap : Source.wrappingConstant (.unary type op operand) = none then
+            let a ← callExpression p fuel locals operand
+            let b ← a.val.bind? (next := UnaryContinuation type op) (fun next word => do
+              if typed : (unary op word).2.type = type then
+                return ⟨.linear next (unary op word), typed, rfl⟩
+              else none)
+            return ⟨b.val, context_unary_diagram p locals type op operand a.val b.val noWrap
+              a.property b.property⟩
+          else none
+        | .binary type .and left right =>
+          contextShortExpression p (callExpression p fuel) locals type false left right
+        | .binary type .or left right =>
+          contextShortExpression p (callExpression p fuel) locals type true left right
         | .binary type op left right => do
           if noWrap : Source.wrappingConstant (.binary type op left right) = none then
             if notAnd : op ≠ .and then
@@ -75,6 +89,40 @@ mutual
               else none
             else none
           else none
+        | .comma type left right => do
+          let a ← callExpression p fuel locals left
+          let b ← a.val.bind? (next := fun next _ tree =>
+              ContextDiagram p next right tree ∧ tree.HasType type) (fun next _ => do
+            let r ← callExpression p fuel next right
+            if typed : r.val.Typed type = true then
+              return ⟨r.val, r.property, StateTree.typed_sound typed⟩
+            else none)
+          return ⟨b.val, context_comma_diagram p locals type left right a.val b.val a.property b.property⟩
+        | .assign type op id destination (.ident targetType targetId) rhs => do
+          if typed : type = destination.type then
+            if targetEq : targetType = destination.type ∧ targetId = id then
+              if place : locals.writable id destination = true then
+                let a ← callExpression p fuel locals rhs
+                let b ← a.val.bind? (next := AssignmentContinuation op id destination) (fun next word => do
+                  let r ← assignmentResult next op id destination word
+                  match written : next.write id destination (r.val.2.cast destination.type) false with
+                  | none => none
+                  | some updated => return ⟨(StateTree.value updated (r.val.2.cast destination.type)).prefix next r.val.1,
+                      r.val, updated, r.property, written, rfl⟩)
+                return ⟨b.val, by
+                  simpa only [typed, targetEq.1, targetEq.2] using
+                    context_assignment_diagram p locals op id destination rhs a.val b.val place a.property b.property⟩
+              else none
+            else none
+          else none
+        | .conditional type condition yes no => do
+          let a ← callExpression p fuel locals condition
+          let b ← a.val.bind? (next := ContextChoice p type yes no) (fun next word => do
+            let first ← callExpression p fuel next yes
+            let second ← callExpression p fuel next no
+            return ⟨.branch word.truthTerm (first.val.cast type) (second.val.cast type),
+              first.val, second.val, first.property, second.property, rfl⟩)
+          return ⟨b.val, context_choice_diagram p locals type condition yes no a.val b.val a.property b.property⟩
         | _ => none
 
   def callArguments {Γ : Var → Nat} (p : Source.Program) : (fuel : Nat) →
