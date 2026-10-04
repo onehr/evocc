@@ -2433,7 +2433,8 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   stateful checker: actual mixed-signedness and consecutive-update exporter pairs
   pass, and discarded-update diagnostics remain checked. The local gate totals
   21 whole-return cases and 136 source-machine comparisons; the extension's
-  clean Lean gate is pending. Div/rem (including compound forms),
+  clean Lean gate passes at `1746ceed` (42 kernel-only core targets).
+  Div/rem (including compound forms),
   statement/declaration integration, loops, calls,
   private-leaf substitution and validator safety remain OPEN; V02–V06 are not
   advanced by this component proof.

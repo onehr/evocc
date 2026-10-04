@@ -448,7 +448,8 @@ diagnostic. Actual `compound-return.c` and `update-return.c` exporter pairs pass
 dropping the second update's guard is refused even though its stored value is
 dead at return. There are 21 whole-return cases, 37 stateful expression
 outcome/refusal examples, 18 storage boundaries and 136 comparisons against the
-actual source machine. The assignment-extension clean Lean gate is pending.
+actual source machine. The assignment-extension clean Lean gate passes at
+`1746ceed` (42 kernel-only core targets; 1,246,159 vector answers).
 This is **not V01 completion**: div/rem and their compound forms, statement
 sequencing/declaration integration, loops, calls/private-leaf substitution and
 validator execution safety remain required. Storage adapter lemmas alone do
