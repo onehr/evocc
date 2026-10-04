@@ -218,6 +218,13 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Symbolic.CutpointRelated",
     "EvoIR.Core.Symbolic.CutExitAgreement",
     "EvoIR.Core.Symbolic.CheckedSpan",
+    "EvoIR.Core.Symbolic.canonicalStore",
+    "EvoIR.Core.Symbolic.projectLocals",
+    "EvoIR.Core.Symbolic.checkSuccessor",
+    "EvoIR.Core.Symbolic.checkedSpans",
+    "EvoIR.Core.Symbolic.loopDiagram",
+    "EvoIR.Core.Symbolic.loopPair",
+    "EvoIR.Core.Symbolic.readCutpoints",
     "EvoIR.Core.Source.Steps",
     "EvoIR.Core.Source.Diverges",
     "EvoIR.Core.Source.runSteps",
@@ -278,6 +285,25 @@ RECORDED_DEFINITIONS = [
 ]
 
 CORE_PRIMITIVE_TARGETS = [
+    (
+        "EvoIR.Core.Symbolic.canonical_store_covers",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (locals : EvoIR.Core.Symbolic.LocalStore Γ), "
+        "EvoIR.Core.Symbolic.LocalStore.denote (EvoIR.Core.Symbolic.storeSubst σ locals) "
+        "(EvoIR.Core.Symbolic.canonicalStore (List.map EvoIR.Core.Symbolic.LocalSlot.shape locals)) = "
+        "EvoIR.Core.Symbolic.LocalStore.denote σ locals",
+    ),
+    (
+        "EvoIR.Core.Symbolic.LoopPair.refines",
+        "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} "
+        "(pair : EvoIR.Core.Symbolic.LoopPair source target) (args : List EvoIR.Core.Source.Value), "
+        "List.map EvoIR.Core.Source.Value.type args = "
+        "List.map (fun p => p.type.type) pair.sourceFunction.parameters → "
+        "∃ sourceEntry targetEntry, "
+        "EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ "
+        "EvoIR.Core.IR.initial target pair.targetFunction.name "
+        "(List.map EvoIR.Core.Symbolic.sourceValueIR args) = Except.ok targetEntry ∧ "
+        "EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+    ),
     (
         "EvoIR.Core.Symbolic.source_cut_diagram_sound",
         "∀ {Γ : EvoIR.Var → Nat} (cutpoints : List EvoIR.Core.Symbolic.SourceSite) "

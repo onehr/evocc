@@ -1,0 +1,10 @@
+["core-cutpoints-v1",160,[
+  [0,"entry",[[1,"uint",false,true],[2,"uint",false,true]],
+    [[1,2,"uint"],[0,1,"uint"]]],
+  [2,"b1",[[4,"uint",false,true],[3,"uint",false,true],[1,"uint",false,true],[2,"uint",false,true]],
+    [[7,3,"uint"],[6,2,"uint"],[5,1,"uint"],[4,4,"uint"]]],
+  [11,"b10",[[3,"uint",false,true],[1,"uint",false,true],[2,"uint",false,true]],
+    [[62,3,"uint"],[61,2,"uint"]]],
+  [14,"b13",[[3,"uint",false,true],[1,"uint",false,true],[2,"uint",false,true]],
+    [[72,3,"uint"],[71,2,"uint"]]]
+]]

@@ -2,10 +2,13 @@ import EvoIR.Core.SourceSpan
 import EvoIR.Core.TargetCutpoint
 import EvoIR.Core.CheckpointTests
 import EvoIR.Core.LoopCorrespondence
+import EvoIR.Core.CutpointInvariant
+import EvoIR.Core.LoopReturn
+import EvoIR.Core.CutpointInput
 
 /-! Frozen loop_join exports exercise actual for/while/do-while, break and
-continue spans. These tests do not yet claim a whole-function cyclic invariant
-or V01 admission: the complete table must still prove successor closure. -/
+continue spans. Whole-pair admission checks the complete cyclic table and
+actual entry; the proposed associations below are test data, not a whitelist. -/
 namespace EvoIR.Core.Symbolic.CutpointTests
 
 private def sourceText := r#"["core-v1","aarch64-unknown-linux-gnu","checked",[0],[["function",0,"loop_join",["uint",false],false,[["parameter",1,["uint",false],"none"],["parameter",2,["uint",false],"none"]],["compound",[["object",3,"total",["uint",false],"none",["store_scalar",["uint",false],["lit","int","00000000"]]],["for",["declarations",[["object",4,"i",["uint",false],"none",["store_scalar",["uint",false],["lit","int","00000000"]]]]],["binary","int","lt",["ident","uint",4],["ident","uint",2]],["update","uint","pre_inc",4,["uint",false],["ident","uint",4]],["compound",[["if",["binary","int","eq",["binary","uint","bit_and",["ident","uint",4],["lit","uint","00000003"]],["lit","uint","00000000"]],["continue"],null],["if",["binary","int","eq",["ident","uint",4],["lit","uint","00000011"]],["break"],null],["expr",["assign","uint","add",3,["uint",false],["ident","uint",3],["conditional","uint",["binary","uint","bit_and",["ident","uint",1],["lit","uint","00000001"]],["ident","uint",4],["binary","uint","bit_xor",["ident","uint",4],["ident","uint",1]]]]],["expr",["assign","uint","set",1,["uint",false],["ident","uint",1],["binary","uint","bit_or",["binary","uint","shr",["ident","uint",1],["lit","int","00000001"]],["binary","uint","shl",["ident","uint",1],["lit","int","0000001f"]]]]]]]],["while",["binary","int","gt",["ident","uint",2],["lit","uint","00000014"]],["expr",["assign","uint","sub",2,["uint",false],["ident","uint",2],["lit","uint","00000007"]]]],["do_while",["compound",[["expr",["assign","uint","add",3,["uint",false],["ident","uint",3],["ident","uint",2]]],["expr",["assign","uint","shr",2,["uint",false],["ident","uint",2],["lit","int","00000001"]]]]],["binary","int","ne",["ident","uint",2],["lit","uint","00000000"]]],["return",["uint",false],["ident","uint",3]]]]]]]"#
@@ -176,6 +179,55 @@ private def spans (source : Source.Function) (target : IR.Function) (ps : List P
       (ps.map Point.label) (target.blocks.length+1) true scope point.label
     return (point.label, s.val, t.val)
 
+private def layouts (source : Source.Function) (target : IR.Function) (ps : List Point) :
+    Option (List CutpointLayout) := do
+    let block ← target.blocks.head?
+    let entry : Point := ⟨.statement source.body [.function none source.returnType.type],
+      block.name, source.parameters.map Source.Parameter.symbol,
+      source.parameters.map Source.Parameter.symbol⟩
+    (entry :: ps).mapM fun (point : Point) => do
+      let block ← target.blocks.find? (fun (b : IR.Block) => b.name == point.label)
+      if block.parameters.length != point.arguments.length then none else
+      return ⟨point.site, (point.locals.map localSlot).map LocalSlot.shape, point.label,
+        ((block.parameters.zip point.arguments).map
+          (fun (pair : IR.Binding × Nat) => (pair.1.id, pair.2, Source.IntType.uint))).reverse⟩
+
+private def closedTable (source : Source.Function) (target : IR.Function) (ps : List Point) : Bool :=
+  (do
+    let proposed ← (← layouts source target ps).mapM layoutPoint
+    return (checkedSpans proposed source.symbol target source.returnType.type 160
+      (proposed.map LayoutPoint.joint)).isSome).getD false
+
+private def wholePair (source : Source.Function) (target : IR.Function) (ps : List Point) : Bool :=
+  (do
+    let proposed ← layouts source target ps
+    return (loopPair ⟨[source.symbol], [source]⟩ ⟨[target]⟩ proposed 160).isSome).getD false
+
+private def proposalText := r#"["core-cutpoints-v1",160,[
+  [0,"entry",[[1,"uint",false,true],[2,"uint",false,true]],[[1,2,"uint"],[0,1,"uint"]]],
+  [2,"b1",[[4,"uint",false,true],[3,"uint",false,true],[1,"uint",false,true],[2,"uint",false,true]],[[7,3,"uint"],[6,2,"uint"],[5,1,"uint"],[4,4,"uint"]]],
+  [11,"b10",[[3,"uint",false,true],[1,"uint",false,true],[2,"uint",false,true]],[[62,3,"uint"],[61,2,"uint"]]],
+  [14,"b13",[[3,"uint",false,true],[1,"uint",false,true],[2,"uint",false,true]],[[72,3,"uint"],[71,2,"uint"]]]
+]]"#
+
+private def wirePair (source : Source.Program) (target : IR.Program) (text : String) : Bool :=
+  (do
+    let [sf] := source.functions | none
+    let (budget, proposed) ← readCutpoints sf text
+    return (loopPair source target proposed budget).isSome).getD false
+
+private def infiniteSource : Source.Program :=
+  ⟨[0], [⟨0, "forever", ⟨.uint, false⟩, false, [],
+    .compound [.statement (.while (.literal .int 1) .null),
+      .statement (.return ⟨.uint, false⟩ (.literal .uint 0))]⟩]⟩
+
+private def infiniteTarget : IR.Program :=
+  ⟨[⟨"forever", [], [.bits 32], false, IR.Reader.emptyEffects,
+    [⟨"entry", [], [], .branch ⟨"loop", []⟩⟩,
+     ⟨"loop", [], [], .branch ⟨"loop", []⟩⟩]⟩]⟩
+
+private def infiniteProposal := r#"["core-cutpoints-v1",32,[[0,"entry",[],[]],[2,"loop",[],[]]]]"#
+
 def cutpointSelfTest : IO UInt32 := do
   let .ok source := Source.readProgram sourceText | IO.eprintln "loop source decode failed"; return 1
   let .ok target := IR.Reader.readProgram targetText | IO.eprintln "loop target decode failed"; return 1
@@ -184,6 +236,39 @@ def cutpointSelfTest : IO UInt32 := do
   let some ps := points s | IO.eprintln "frozen loop shape changed"; return 1
   let some results := spans s t ps | IO.eprintln "actual cyclic span refused"; return 1
   let mut failures := 0
+  if !wirePair source target proposalText then
+    IO.eprintln "wire proposal refused"
+    failures := failures+1
+  if !wirePair infiniteSource infiniteTarget infiniteProposal then
+    IO.eprintln s!"unbounded divergent pair refused: source={reprStr (Source.checkWellFormed infiniteSource)} target={reprStr (IR.checkProgram infiniteTarget)}"
+    failures := failures+1
+  let proposalMutations := [
+    ("version", "core-cutpoints-v1", "core-cutpoints-v0"),
+    ("zero span budget", ",160,", ",0,"),
+    ("unknown site", "[2,\"b1\"", "[900,\"b1\""),
+    ("wrong source site", "[2,\"b1\"", "[3,\"b1\""),
+    ("wrong destination", "[2,\"b1\"", "[2,\"b2\""),
+    ("wrong qualifier", "[4,\"uint\",false,true]", "[4,\"uint\",true,true]"),
+    ("uninitialized local", "[4,\"uint\",false,true]", "[4,\"uint\",false,false]"),
+    ("wrong rank", "[4,\"uint\",false,true]", "[4,\"int\",false,true]"),
+    ("wrong binding", "[4,4,\"uint\"]", "[4,3,\"uint\"]"),
+    ("swapped entry", "[[1,2,\"uint\"],[0,1,\"uint\"]]", "[[1,1,\"uint\"],[0,2,\"uint\"]]"),
+    ("empty proposal", proposalText, "[\"core-cutpoints-v1\",160,[]]")]
+  for (name, before, after) in proposalMutations do
+    if !proposalText.contains before || wirePair source target (proposalText.replace before after) then
+      IO.eprintln s!"cutpoint wire mutation escaped: {name}"
+      failures := failures+1
+  if !wholePair s t ps then
+    IO.eprintln "whole cyclic pair refused"
+    failures := failures+1
+  for altered in [{t with name := "wrong-entry"}, {t with parameters := []},
+      {t with internal := !t.internal}] do
+    if wholePair s altered ps then
+      IO.eprintln "entry contract mutation escaped whole-pair admission"
+      failures := failures+1
+  if !closedTable s t ps then
+    IO.eprintln "independent cyclic successor closure refused"
+    failures := failures+1
   for (name, a, b) in results do
     if !spansMatch t ps a b then
       IO.eprintln s!"cyclic span mismatch: {name}"
@@ -212,6 +297,12 @@ def cutpointSelfTest : IO UInt32 := do
     else
       let .ok changed := IR.Reader.readProgram (targetText.replace before after) | continue
       let [altered] := changed.functions | continue
+      if wholePair s altered ps then
+        IO.eprintln s!"whole cyclic pair mutation escaped: {name}"
+        failures := failures+1
+      if closedTable s altered ps then
+        IO.eprintln s!"cyclic invariant mutation escaped: {name}"
+        failures := failures+1
       if let some result := spans s altered ps then
         if result.all (fun (_, a, b) => spansMatch altered ps a b) then
           IO.eprintln s!"cyclic mutation escaped: {name}"
@@ -229,12 +320,21 @@ def cutpointSelfTest : IO UInt32 := do
       let .ok changed := Source.readProgram (sourceText.replace before after) | continue
       let [altered] := changed.functions | continue
       let some alteredPoints := points altered | continue
+      if wholePair altered t alteredPoints then
+        IO.eprintln s!"whole cyclic source mutation escaped: {name}"
+        failures := failures+1
+      if closedTable altered t alteredPoints then
+        IO.eprintln s!"cyclic source-invariant mutation escaped: {name}"
+        failures := failures+1
       if let some result := spans altered t alteredPoints then
         if result.all (fun (_, a, b) => spansMatch t alteredPoints a b) then
           IO.eprintln s!"cyclic mutation escaped: {name}"
           failures := failures+1
   let some first := ps.head? | return 1
   let badInvariant := {first with arguments := first.arguments.reverse} :: ps.tail
+  if closedTable s t badInvariant || closedTable s t ps.tail then
+    IO.eprintln "false or incomplete cyclic invariant admitted"
+    failures := failures+1
   if let some result := spans s t badInvariant then
     if result.all (fun (_, a, b) => spansMatch t badInvariant a b) then
       IO.eprintln "false entry/backedge association escaped"
@@ -242,7 +342,7 @@ def cutpointSelfTest : IO UInt32 := do
   if (spans s t ps.tail).isSome then
     IO.eprintln "uncovered cyclic path was bounded-unrolled"
     failures := failures+1
-  if failures == 0 then IO.println "4 frozen cyclic spans match; 6 zero-step roots and 16 mutations refuse; whole-loop admission pending"
+  if failures == 0 then IO.println "Finite and divergent whole-loop pairs pass; 4 frozen cyclic spans close; 6 zero-step roots and 30 mutations refuse"
   return if failures == 0 then 0 else 1
 
 end EvoIR.Core.Symbolic.CutpointTests

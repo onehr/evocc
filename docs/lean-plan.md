@@ -504,8 +504,42 @@ test's fixed point associations are test data, not a name-specific admission
 path. An executable, independently checked successor-invariant instantiation
 and connection to the actual function entry are still required before the
 whole-function checker may admit `loop_join`. Existing seven finite-function
-admissions are unchanged. Focused build/self-tests pass; this slice's clean
-Lean/full-workspace acceptance is pending. V01 and V02–V06 remain open.
+admissions are unchanged. At `8cf85cc6`, the clean Lean gate passes (47
+kernel-only core targets), and full workspace passes 3,080 tests with zero
+failures and five ignored, plus Clippy/format. The earlier sandboxed attempt
+had two container-permission failures and remains a failed attempt.
+
+**Whole-loop correspondence (October 5 continuation).** `CutpointStorage`,
+`CutpointInvariant` and `LoopReturn` now close those two obligations. Fresh
+valuations cover the complete typed store, including qualifiers and
+initializedness; checked projections relate it to target block arguments.
+Every proposed point and successor is checked, and `LoopPair.refines` connects
+the table to both actual function entries for all typed arguments. The original
+`loop_join.json` and complete `control.evo` pass the public interface; the seven
+finite-function admissions remain green. A divergent loop is also admitted;
+six zero-step roots and 30 mutations refuse. These are source-to-EvoIR results,
+not a V01-completion or backend claim. Clean gate receipt for this continuation
+is pending; div/rem, calls/private-leaf substitution and validator safety remain.
+
+```sh
+lean/.lake/build/bin/evoir-sem --check-core-loop-pair SOURCE.json TARGET.evo CUTPOINTS.json
+```
+
+`CUTPOINTS.json` is an untrusted proposal with grammar
+`["core-cutpoints-v1", span_budget, [[site_index, block_label, store_shape, links], ...]]`.
+`site_index` addresses `functionSites`' deterministic preorder over the actual
+source tree (statement sites and loop test sites, retaining continuations).
+A shape row is `[symbol, integer_type, is_const, initialized]`; a link is
+`[target_binding, source_symbol, integer_type]`, in complete target-scope order.
+Integer types use the source wire spellings. The budget is in `1..4096` and
+limits span construction, not execution or loop iterations. Wrong or incomplete
+proposals refuse; syntactic enumeration is not a trusted fact source. The
+interface takes one source function and may select its target from an unchanged
+multi-function IR module. Other target functions receive no proof label.
+`tests/fixtures/verification/loop-join.cutpoints.json` is proposal data, not
+hard-coded admission logic. Malformed wire input exits 2; failed checking exits
+1; successful checking exits 0 and explicitly retains `backend=UNPROVED` and
+`core-v1=INCOMPLETE`. V01 and V02–V06 remain open.
 
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and

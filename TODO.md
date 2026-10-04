@@ -2454,7 +2454,18 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   association mutations refuse. The whole-loop checker still needs independent
   successor-invariant instantiation and the actual entry connection; matching
   spans are not loop admission. Focused checks pass; clean Lean/full-workspace
-  gates for this slice are pending. The original V01 scope is unchanged.
+  gates subsequently passed at `8cf85cc6`: 47 kernel-only core targets and
+  full workspace 3,080 / 0 / 5 with Clippy/format (two container-permission
+  failures in the earlier sandboxed attempt remain recorded).
+  October 5 whole-loop continuation: independently checked successor/store
+  instantiation and actual entry binding are now implemented. `LoopPair.refines`
+  covers all typed arguments and unbounded execution. The public file interface
+  accepts the original `loop_join` source against the full unchanged target
+  module with an untrusted cutpoint proposal; the seven finite pairs still pass.
+  A divergent loop passes, while six zero-step roots and 30 mutations refuse.
+  Clean acceptance of this continuation is pending. Div/rem, calls/private-leaf
+  substitution and validator safety remain OPEN; no V02–V06 implementation or
+  release claim is made. The original V01 scope is unchanged.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

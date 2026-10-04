@@ -12,6 +12,7 @@ import EvoIR.Core.StateReturnTests
 import EvoIR.Core.StatementTests
 import EvoIR.Core.StatementReturnTests
 import EvoIR.Core.CutpointTests
+import EvoIR.Core.CutpointInput
 
 /-!
 # The executable evaluator
@@ -303,6 +304,19 @@ def run (args : List String) : IO UInt32 := do
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
         statements == 0 && statementReturns == 0 && cutpoints == 0 then 0 else 1
+  | ["--check-core-loop-pair", sourcePath, targetPath, proposalPath] => do
+      let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
+        | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
+      let .ok target := EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile targetPath)
+        | IO.eprintln "CORE_PAIR_MALFORMED: target input"; return 2
+      let [sf] := source.functions
+        | IO.eprintln "CORE_PAIR_REFUSED: cyclic single-function interface"; return 1
+      let some (budget, layouts) := EvoIR.Core.Symbolic.readCutpoints sf (← IO.FS.readFile proposalPath)
+        | IO.eprintln "CORE_PAIR_MALFORMED: cutpoint proposal"; return 2
+      let some accepted := EvoIR.Core.Symbolic.loopPair source target layouts budget
+        | IO.eprintln "CORE_PAIR_REFUSED: entry, span or successor closure"; return 1
+      IO.println s!"PROVED_LOOP_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits execution=unbounded scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+      return 0
   | ["--check-core-leaf-pair", sourcePath, targetPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2

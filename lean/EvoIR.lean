@@ -17,6 +17,7 @@ import EvoIR.Core.StateReturnTests
 import EvoIR.Core.StatementTests
 import EvoIR.Core.StatementReturnTests
 import EvoIR.Core.CutpointTests
+import EvoIR.Core.CutpointInput
 import EvoIR.Term
 import EvoIR.Fact
 import EvoIR.Rule
