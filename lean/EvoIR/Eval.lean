@@ -4,6 +4,7 @@ import EvoIR.Core.Source
 import EvoIR.Core.WellFormedTests
 import EvoIR.Core.ExecutionTests
 import EvoIR.Core.IRTests
+import EvoIR.Core.CorrespondenceTests
 
 /-!
 # The executable evaluator
@@ -270,7 +271,7 @@ def selfTest : IO UInt32 := do
 /-! ## Entry point -/
 
 def usage : String :=
-  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...]"
+  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo>"
 
 def run (args : List String) : IO UInt32 := do
   match args with
@@ -280,7 +281,18 @@ def run (args : List String) : IO UInt32 := do
       let wellFormed ← EvoIR.Core.Source.wellFormedSelfTest
       let execution ← EvoIR.Core.Source.executionSelfTest
       let ir ← EvoIR.Core.IR.irSelfTest
-      return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 && ir == 0 then 0 else 1
+      let correspondence ← EvoIR.Core.correspondenceSelfTest
+      return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 && ir == 0 && correspondence == 0 then 0 else 1
+  | ["--check-core-pilot-pair", sourcePath, targetPath] => do
+      let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
+        | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
+      let .ok target := EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile targetPath)
+        | IO.eprintln "CORE_PAIR_MALFORMED: target input"; return 2
+      if !EvoIR.Core.AbsCorrespondence.checkPilotPair source target then
+        IO.eprintln "CORE_PAIR_REFUSED: no proved correspondence for this complete pair"
+        return 1
+      IO.println "PROVED_PILOT_PAIR entry=abs arguments=all-bits32 scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+      return 0
   | ["--read-core-ir", input] => do
       match EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile input) with
       | .error message => IO.eprintln s!"CORE_IR_REFUSED: {message}"; return 2

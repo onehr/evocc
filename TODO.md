@@ -2346,9 +2346,16 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   access/effect checks and small-step execution now run the same frozen entries
   and whole closure; 51 target regressions pass. That closure has ten source
   functions but nine target functions because existing private-leaf substitution
-  inlines `frame`; V01 must prove that actual transformation too. Validator
-  soundness, two-input result checking and whole-function simulation remain
-  open. Test step limits are explicitly not proof or divergence outcomes.
+  inlines `frame`; V01 must prove that actual transformation too. The first
+  complete original-function proof is now `AbsCorrespondence.pilot_pair_refines`:
+  complete source/target structural admission, all 32-bit arguments, preserved
+  E3004, terminal observations, divergence and progress. The retained original
+  exports pass `--check-core-pilot-pair`; 36 input/mutation cases pass. This is
+  one exact-pair bootstrap, not the general checker or a narrower final profile.
+  The proof module builds; its extended audit and clean integration gates are
+  pending disk recovery (host fell to 12 GiB free; no new build below 25 GiB).
+  Validator soundness and generic source/target simulation for all frozen
+  functions remain open. Test step limits are not proof or divergence outcomes.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

@@ -271,7 +271,7 @@ the step bound prints `STEP_LIMIT_NOT_VERIFICATION`, never success or divergence
 Twenty-two focused cases, the five frozen entry exports, and the ten-function
 `source-execution.c` closure exercise this path. The unchanged original bodies
 remain in that closure; its result matches both existing Rust interpreters.
-The actual EvoIR result checker and its soundness theorem remain OPEN.
+The general EvoIR result checker and its soundness theorem remain OPEN.
 
 **Target execution.** `Core/IRReader.lean` independently reads the existing
 canonical EvoIR text into a distinct SSA/CFG tree. It retains all admitted
@@ -293,6 +293,33 @@ and reports only `EXECUTED_NOT_VERIFIED` or a non-verifying step limit.
 Neither command compares source and target or publishes a verified artifact.
 The five frozen entries and the whole original-body closure execute through
 this independent target path; 51 focused target cases pass.
+
+**First full-body correspondence case.** `Core/AbsCorrespondence.lean` now
+proves the complete original `abs` source body against its actual four-block
+EvoIR output for every 32-bit argument, including E3004 at INT_MIN. The theorem
+`pilot_pair_refines` takes both complete programs as inputs and accepts only
+the exact proved pair, using structurally recursive, proof-producing equality
+over the full source AST and target CFG. It does not extract an expression,
+ignore unused block arguments/effects, or compare a hash/pretty printer.
+
+The shared `LoweringRefines` proposition covers terminal observations,
+divergence and progress. The universally proved finite witnesses for this
+terminating function, together with deterministic-transition lemmas, exclude
+any different terminal outcome or added infinite execution. No execution-fuel
+bound appears in the final refinement proposition. This exact original-function
+case is a bootstrap for the general result checker, not a narrowed definition
+of `core-v1`: the other frozen functions, loops, calls and storage obligations
+remain required. It does not prove a backend pass or native artifact.
+
+`evoir-sem --check-core-pilot-pair SOURCE.json TARGET.evo` runs this proved
+decision procedure on independently decoded complete inputs, with no sample
+arguments or execution limit. It prints `PROVED_PILOT_PAIR` with explicit
+`scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE`; a decoded unproved
+pair exits 1, malformed input exits 2. The retained original exporter output
+passes, as do 36 positive/negative input cases. The proof module builds; the
+extended dependency audit and clean full integration gate are pending after
+the shared host fell below the owner disk stop line. No release admission is
+derived from these focused results.
 
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`

@@ -2,7 +2,8 @@
 
 Contract: [V00–V06](../lean-plan.md#first-public-release-verification).
 Population/commands: [core-v1-pilot.json](../../tests/contracts/core-v1-pilot.json).
-**V00/V01 remain open; there is no whole-function or compilation theorem.**
+**V00/V01 remain open. One original function has a source/IR theorem; there is
+no complete core-v1 or backend compilation theorem.**
 
 | Commit / slice | Result | Claim ceiling |
 | --- | --- | --- |
@@ -13,6 +14,7 @@ Population/commands: [core-v1-pilot.json](../../tests/contracts/core-v1-pilot.js
 | Integration gate on the same Rust implementation | 401 suites: **3,079 passed / 0 failed / 5 ignored**; Clippy and formatting pass. | No compilation or verified-release acceptance. |
 | `857d7d90` — source-machine slice | 22 semantic cases, six Rust source-interface tests and ten-function exported closure pass; both Rust interpreters agree. Full workspace: **401 suites, 3,080 passed / 0 failed / 5 ignored**; Clippy/format pass. Clean Lean gate: ten core targets, all kernel-only. | Unbounded source steps and kernel-only machine/primitive lemmas; no source/IR simulation or checker soundness. |
 | `02f88820` — target-machine slice | 51 target tests; five frozen entries and nine-function emitted closure agree. Clean Lean gate: 12 kernel-only core targets. Full workspace: **401 suites, 3,080 / 0 / 5 ignored**, Clippy/format pass. | Independent canonical reader, token/access/effect checks and unbounded execution; no validator or source/target checker soundness. |
+| Original `abs` correspondence slice (this commit) | `lake build evoir-sem` PASS; 36 complete-input/mutation cases PASS; actual retained source/IR export accepted. `pilot_pair_refines` elaborates for every bits32 argument. Extended audit/full integration **NOT RUN** after disk stop. | Exact complete pair, source-to-EvoIR observations/progress/divergence only. Not generic core-v1, backend proof or release acceptance. |
 
 | Existing-pipeline pilot | Functions with wrapper | Blocks | Spill store/reload pairs | Incoming stack args |
 | --- | ---: | ---: | ---: | ---: |
@@ -61,3 +63,20 @@ This slice's retained text/log growth is under 2 MiB, with build-cache growth
 removed; the host-wide free-space delta is not attributed solely to this task.
 Target-machine disk delta before integration: `.lake` +10,776 KiB,
 retained captures +under 1 MiB and source +under 64 KiB; no new Cargo target tree.
+
+The correspondence slice adds proof-producing complete-source equality and
+deterministic transition/refinement lemmas. `abs` retains its full compound,
+conditional, guard and four-block CFG. Its final theorem has no evaluator fuel
+parameter and preserves the first E3004 on INT_MIN. The exact-pair checker is
+only the first case; no other frozen function is dropped from V01.
+
+Disk stop: host free fell from 30,741,676 to 12,591,408 KiB while this slice's
+Lean cache grew only 8,832 KiB (3,318,344 to 3,327,176 KiB). Retained capture
+growth was under 1 MiB; tracked additions are under 64 KiB. `target/frontend`
+is now 2,546,216 KiB after the preceding post-gate cleanup. The host reports
+19,579.75 MiB swap in use and another project's active container build; neither
+measurement proves the cause of the whole free-space delta. No protected
+runtime, source tree, fixture, receipt or Lean cache was deleted, and no other
+project's process was stopped. New builds/gates are stopped until at least
+25 GiB is free. Final audit/receipt and full-workspace results must be obtained
+on the completed source commit; the older green receipt is not reused for it.

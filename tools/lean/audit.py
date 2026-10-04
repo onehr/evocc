@@ -227,6 +227,19 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.IR.runSteps",
     "EvoIR.Core.IR.Reader.readProgram",
     "EvoIR.Core.IR.checkProgram",
+    "EvoIR.Core.Source.exprDecEq",
+    "EvoIR.Core.Source.stmtDecEq",
+    "EvoIR.Core.Transition.Reaches",
+    "EvoIR.Core.Transition.Infinite",
+    "EvoIR.Core.Transition.Refines",
+    "EvoIR.Core.checkedDiagnostic",
+    "EvoIR.Core.observeSource",
+    "EvoIR.Core.observeTarget",
+    "EvoIR.Core.LoweringRefines",
+    "EvoIR.Core.AbsCorrespondence.sourceBody",
+    "EvoIR.Core.AbsCorrespondence.source",
+    "EvoIR.Core.AbsCorrespondence.target",
+    "EvoIR.Core.AbsCorrespondence.checkPilotPair",
     "EvoIR.denoteOp",
     "EvoIR.denoteTerm",
     "EvoIR.elabPat",
@@ -317,6 +330,22 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.IR.runSteps_prefix",
         "∀ (p : EvoIR.Core.IR.Program) (n : Nat) (s : EvoIR.Core.IR.State), "
         "EvoIR.Core.IR.Steps p s (EvoIR.Core.IR.runSteps p n s)",
+    ),
+    (
+        "EvoIR.Core.AbsCorrespondence.whole_body_refines",
+        "∀ (x : BitVec 32), EvoIR.Core.LoweringRefines "
+        "EvoIR.Core.AbsCorrespondence.source EvoIR.Core.AbsCorrespondence.target "
+        "EvoIR.Core.Source.IntType.int (EvoIR.Core.AbsCorrespondence.sourceEntry x) "
+        "(EvoIR.Core.AbsCorrespondence.targetEntry x)",
+    ),
+    (
+        "EvoIR.Core.AbsCorrespondence.pilot_pair_refines",
+        "∀ (s : EvoIR.Core.Source.Program) (t : EvoIR.Core.IR.Program), "
+        "EvoIR.Core.AbsCorrespondence.checkPilotPair s t = true → ∀ (x : BitVec 32), "
+        "∃ (s₀ : EvoIR.Core.Source.State) (t₀ : EvoIR.Core.IR.State), "
+        "EvoIR.Core.Source.initial s 0 [{ type := EvoIR.Core.Source.IntType.int, bits := x }] = Except.ok s₀ ∧ "
+        "EvoIR.Core.IR.initial t \"abs\" [EvoIR.Core.IR.Value.bits 32 x] = Except.ok t₀ ∧ "
+        "EvoIR.Core.LoweringRefines s t EvoIR.Core.Source.IntType.int s₀ t₀",
     ),
 ]
 
