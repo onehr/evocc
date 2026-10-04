@@ -113,6 +113,54 @@ theorem arithmetic_sound {Γ : Var → Nat} (σ : Subst Γ)
 
 def sourceValueIR (value : Source.Value) : IR.Value := .bits value.type.width value.bits
 
+def shift {Γ : Var → Nat} (left : Bool) (a b : CWord Γ) :
+    List (Guard Γ) × CWord Γ :=
+  ([⟨.invalidShiftCount, .count b.type.signed a.term b.term⟩],
+    ⟨a.type, .shift (if left then .shl else if a.type.signed then .ashr else .lshr)
+      a.term b.term⟩)
+
+private theorem number_toNat (v : Source.Value) (nonnegative : 0 ≤ v.number) :
+    v.number.toNat = v.bits.toNat := by
+  unfold Source.Value.number at nonnegative ⊢
+  split at *
+  · have same := BitVec.toInt_eq_toNat_of_lt
+      (BitVec.toInt_pos_iff.mp nonnegative)
+    simp [same]
+  · simp_all
+
+theorem shift_sound {Γ : Var → Nat} (σ : Subst Γ) (left : Bool) (a b : CWord Γ)
+    (admitted : left = false ∨ a.type.signed = false) :
+    (do guards σ (shift left a b).1; return (shift left a b).2.denote σ) =
+      Source.binaryValue (if left then .shl else .shr) (a.denote σ) (b.denote σ) := by
+  have countValue : denoteTerm σ (Term.count b.type.signed a.term b.term) =
+      BitVec.ofBool (decide (0 ≤ (b.denote σ).number ∧
+        (b.denote σ).number < (a.type.width : Int))) := by
+    simp only [denoteTerm, Source.Value.number, CWord.denote]
+    cases b.type.signed <;> simp [denoteOp]
+  have trace : guards σ (shift left a b).1 =
+      if 0 ≤ (b.denote σ).number ∧ (b.denote σ).number < (a.type.width : Int)
+      then .ok () else .error (.diagnostic 3005) := by
+    simp only [shift, guards, countValue]
+    split <;> simp_all [IR.Reason.code]
+  rw [trace]
+  by_cases valid : 0 ≤ (b.denote σ).number ∧ (b.denote σ).number < (a.type.width : Int)
+  · have count := number_toNat (b.denote σ) valid.1
+    have lower := Int.not_lt.mpr valid.1
+    have upper := Int.not_le.mpr valid.2
+    simp only [CWord.denote] at count lower upper
+    simp only [valid, bind, Except.bind]
+    cases left <;> cases signed : a.type.signed <;>
+      simp_all only [Bool.false_eq_true, Bool.true_eq_false, or_false, true_or, ↓reduceIte]
+    all_goals simp [Source.binaryValue, lower, upper, count, signed,
+      shift, CWord.denote, denoteOp, pure, Except.pure]
+    all_goals rfl
+  · have invalid : (b.denote σ).number < 0 ∨
+        (a.type.width : Int) ≤ (b.denote σ).number := by omega
+    simp only [valid, ↓reduceIte, bind, Except.bind]
+    simp only [CWord.denote] at invalid
+    cases left <;> simp [Source.binaryValue, CWord.denote, invalid,
+      throw, throwThe, MonadExceptOf.throw, bind, Except.bind]
+
 /-- A two-sided arithmetic check: the source operation chooses its promotion,
 overflow trace and result term; the target is the supplied instruction list.
 This does not assume the Rust lowering emitted a prescribed textual spelling. -/

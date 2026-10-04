@@ -361,6 +361,21 @@ Clippy/format pass). The pilot receipt records the scope, logs and 3.86 GiB
 cache/capture increase, mostly the reused frontend Cargo target. This remains
 V01 component evidence, not a stage-completion or verified-release claim.
 
+**Source-derived diagrams and edges.** `Core/SourceExpression.lean` now derives
+the target obligation from the original expression tree (initialized reads,
+literals, six-type casts, add/sub/mul and admitted shifts), rather than accepting
+an unproved expected term. Its theorem connects both actual small-step machines,
+for every valuation and source continuation, including ordered diagnostics and
+the literal-only wrapping exception. The original `FixedMul` expression, fifteen
+source/IR mutations and a consistently changed pair exercise this component;
+they do not constitute a second complete
+function proof. `Core/SymbolicEdge.lean` checks exact successor parameters and
+simultaneous integer/token transport against the supplied target CFG, with
+proved actual unconditional/conditional steps and backedge copy regressions.
+The enclosing program checker still must establish entry-local/SSA relations,
+source control/loop invariants, calls/storage and private-leaf substitution.
+Neither a successful expression nor an edge check is whole-program admission.
+
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`
 options. Existing C-HIR private-leaf substitution removes `frame` and embeds

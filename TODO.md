@@ -2389,8 +2389,16 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   ignored, plus Clippy/format. The resumed slice's measured cache/capture net
   growth is 3.86 GiB, principally the single frontend Cargo cache; 51.5 GiB
   remains free. Temporary proof logs were removed; captures total 4.73 MiB.
-  The next step is checking the
-  actual CFG/call/local-state diagrams, including private-leaf substitution.
+  Source-tree-driven expression checks now connect actual source/IR steps for
+  initialized reads, literals, conversions, arithmetic and admitted shifts;
+  `FixedMul`'s expression, source/IR mutations and a changed-pair control exercise
+  the component test. Actual
+  target branch/conditional edges now have independently checked simultaneous
+  parameter/token transport, including backedge/copy-cycle regressions. These
+  are not full-function admission. The next step is assembling the source CFG
+  and local-state diagrams with checked entry/join/backedge invariants, then
+  calls and private-leaf substitution; remaining expression rows also refuse
+  until implemented. No frozen function or constructor is removed from V01.
   Validator soundness and generic source/target simulation for all frozen
   functions remain open. Test step limits are not proof or divergence outcomes.
 

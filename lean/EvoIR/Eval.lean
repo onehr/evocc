@@ -5,6 +5,7 @@ import EvoIR.Core.WellFormedTests
 import EvoIR.Core.ExecutionTests
 import EvoIR.Core.IRTests
 import EvoIR.Core.CorrespondenceTests
+import EvoIR.Core.SourceExpressionTests
 
 /-!
 # The executable evaluator
@@ -282,7 +283,9 @@ def run (args : List String) : IO UInt32 := do
       let execution ← EvoIR.Core.Source.executionSelfTest
       let ir ← EvoIR.Core.IR.irSelfTest
       let correspondence ← EvoIR.Core.correspondenceSelfTest
-      return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 && ir == 0 && correspondence == 0 then 0 else 1
+      let sourceExpression ← EvoIR.Core.Symbolic.ExpressionTests.sourceExpressionSelfTest
+      return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
+        ir == 0 && correspondence == 0 && sourceExpression == 0 then 0 else 1
   | ["--check-core-pilot-pair", sourcePath, targetPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2

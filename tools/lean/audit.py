@@ -273,6 +273,108 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.edge_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) "
+        "(types : Nat → EvoIR.Core.IR.Ty), (∀ (id : Nat), (ρ id).type = types id) → "
+        "∀ (f : EvoIR.Core.IR.Function) (a : EvoIR.Core.IR.Activation) "
+        "(scope next : EvoIR.Core.Symbolic.Scope Γ) (successor : EvoIR.Core.IR.Edge), "
+        "a.values = EvoIR.Core.Symbolic.Scope.denote σ ρ scope → "
+        "EvoIR.Core.Symbolic.edge types f scope successor = some next → "
+        "EvoIR.Core.IR.jump f a successor = Except.ok "
+        "{ function := a.function, block := successor.block, pc := 0, "
+        "values := EvoIR.Core.Symbolic.Scope.denote σ ρ next, owner := a.owner }",
+    ),
+    (
+        "EvoIR.Core.Symbolic.branch_execution_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) "
+        "(types : Nat → EvoIR.Core.IR.Ty), (∀ (id : Nat), (ρ id).type = types id) → "
+        "∀ (p : EvoIR.Core.IR.Program) (s : EvoIR.Core.IR.State) "
+        "(a : EvoIR.Core.IR.Activation) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) "
+        "(scope next : EvoIR.Core.Symbolic.Scope Γ) (successor : EvoIR.Core.IR.Edge), "
+        "s.control = EvoIR.Core.IR.Control.running a → "
+        "List.find? (fun x => x.name == a.function) p.functions = some f → "
+        "List.find? (fun x => x.name == a.block) f.blocks = some b → "
+        "a.pc = b.instructions.length → b.terminator = EvoIR.Core.IR.Terminator.branch successor → "
+        "a.values = EvoIR.Core.Symbolic.Scope.denote σ ρ scope → "
+        "EvoIR.Core.Symbolic.checkEdge types f scope successor next = true → "
+        "EvoIR.Core.IR.step p s = some { control := EvoIR.Core.IR.Control.running "
+        "{ function := a.function, block := successor.block, pc := 0, "
+        "values := EvoIR.Core.Symbolic.Scope.denote σ ρ next, owner := a.owner }, "
+        "stack := s.stack, nextFrame := s.nextFrame }",
+    ),
+    (
+        "EvoIR.Core.Symbolic.conditional_execution_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) "
+        "(types : Nat → EvoIR.Core.IR.Ty), (∀ (id : Nat), (ρ id).type = types id) → "
+        "∀ (p : EvoIR.Core.IR.Program) (s : EvoIR.Core.IR.State) "
+        "(a : EvoIR.Core.IR.Activation) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) "
+        "(scope yesScope noScope : EvoIR.Core.Symbolic.Scope Γ) (id : Nat) "
+        "(condition : EvoIR.Term Γ 1) (yes no : EvoIR.Core.IR.Edge), "
+        "s.control = EvoIR.Core.IR.Control.running a → "
+        "List.find? (fun x => x.name == a.function) p.functions = some f → "
+        "List.find? (fun x => x.name == a.block) f.blocks = some b → "
+        "a.pc = b.instructions.length → b.terminator = EvoIR.Core.IR.Terminator.conditional id yes no → "
+        "a.values = EvoIR.Core.Symbolic.Scope.denote σ ρ scope → "
+        "scope.word id = some ⟨1, condition⟩ → "
+        "EvoIR.Core.Symbolic.checkEdge types f scope yes yesScope = true → "
+        "EvoIR.Core.Symbolic.checkEdge types f scope no noScope = true → "
+        "EvoIR.Core.IR.step p s = some { control := EvoIR.Core.IR.Control.running "
+        "{ function := a.function, "
+        "block := if ((EvoIR.denoteTerm σ condition).toNat == 0) = true then no.block else yes.block, "
+        "pc := 0, values := if ((EvoIR.denoteTerm σ condition).toNat == 0) = true then "
+        "EvoIR.Core.Symbolic.Scope.denote σ ρ noScope else EvoIR.Core.Symbolic.Scope.denote σ ρ yesScope, "
+        "owner := a.owner }, stack := s.stack, nextFrame := s.nextFrame }",
+    ),
+    (
+        "EvoIR.Core.Symbolic.shift_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (left : Bool) "
+        "(a b : EvoIR.Core.Symbolic.CWord Γ), "
+        "left = false ∨ a.type.signed = false → "
+        "(do EvoIR.Core.Symbolic.guards σ (EvoIR.Core.Symbolic.shift left a b).fst "
+        "pure (EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.shift left a b).snd)) = "
+        "EvoIR.Core.Source.binaryValue "
+        "(if left = true then EvoIR.Core.Source.Binary.shl else EvoIR.Core.Source.Binary.shr) "
+        "(EvoIR.Core.Symbolic.CWord.denote σ a) (EvoIR.Core.Symbolic.CWord.denote σ b)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.ExpressionDiagram.sound",
+        "∀ {Γ : EvoIR.Var → Nat} {env : EvoIR.Core.Symbolic.CBindings Γ} "
+        "{e : EvoIR.Core.Source.Expr} {r : EvoIR.Core.Symbolic.ExpressionResult Γ}, "
+        "EvoIR.Core.Symbolic.ExpressionDiagram env e r → "
+        "∀ (σ : EvoIR.Subst Γ) (p : EvoIR.Core.Source.Program) "
+        "(locals : EvoIR.Core.Source.Locals) (functionId : Nat), "
+        "EvoIR.Core.Symbolic.CBindings.Related σ env locals → "
+        "EvoIR.Core.Source.Evaluates p locals functionId e "
+        "(EvoIR.Core.Symbolic.ExpressionResult.denote σ r)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.expression_execution_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) "
+        "(env : EvoIR.Core.Symbolic.CBindings Γ) (e : EvoIR.Core.Source.Expr) "
+        "(scope : EvoIR.Core.Symbolic.Scope Γ) (code : List EvoIR.Core.IR.Instruction) "
+        "(output : Nat) (source : EvoIR.Core.Source.Program) "
+        "(locals : EvoIR.Core.Source.Locals) (functionId : Nat) "
+        "(target : EvoIR.Core.IR.Program) (s : EvoIR.Core.IR.State) "
+        "(a : EvoIR.Core.IR.Activation) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block), "
+        "EvoIR.Core.Symbolic.CBindings.Related σ env locals → "
+        "s.control = EvoIR.Core.IR.Control.running a → "
+        "List.find? (fun x => x.name == a.function) target.functions = some f → "
+        "List.find? (fun x => x.name == a.block) f.blocks = some b → "
+        "(∀ (i : Nat) (inst : EvoIR.Core.IR.Instruction), "
+        "code[i]? = some inst → b.instructions[a.pc + i]? = some inst) → "
+        "a.values = EvoIR.Core.Symbolic.Scope.denote σ ρ scope → "
+        "EvoIR.Core.Symbolic.checkExpression env e scope code output = true → "
+        "∃ result finalState, EvoIR.Core.Source.Evaluates source locals functionId e result ∧ "
+        "EvoIR.Core.IR.Steps target s finalState ∧ "
+        "match result with "
+        "| Except.error fault => finalState.control = EvoIR.Core.IR.Control.halted (Except.error fault) "
+        "| Except.ok v => ∃ bindings, "
+        "finalState = { control := EvoIR.Core.IR.Control.running "
+        "{ function := a.function, block := a.block, pc := a.pc + code.length, "
+        "values := bindings, owner := a.owner }, stack := s.stack, nextFrame := s.nextFrame } ∧ "
+        "EvoIR.Core.IR.lookup bindings output = Except.ok (EvoIR.Core.Symbolic.sourceValueIR v)",
+    ),
+    (
         "EvoIR.Core.Symbolic.cast_sound",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (t : EvoIR.Core.Source.IntType) "
         "(v : EvoIR.Core.Symbolic.CWord Γ), "
