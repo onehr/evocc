@@ -80,6 +80,14 @@ runtime hashes and 3,291 preserved records/fixtures are unchanged. The existing
 sparseimage was remounted after unsupported compaction; no compaction saving is
 claimed. No build or benchmark ran. [Exact retention and recovery record][kernel].
 
+October 4 follow-up: retire superseded runtime disks, generated objects, link
+temporaries and assembly/benchmark caches after recording hashes; preserve
+current runtime pairs, kernel products, sources and evidence. Official sparseimage
+compaction now succeeds. Project host-backed allocation **153.931 → 99.097 GiB**
+(net **−54.834 GiB**); host free **15.560 → 62.105 GiB**. The **80 GiB** cleanup
+target remains unmet, so heavy work stays blocked; this is not a new compiler
+or kernel PASS. [Retained artifacts and measurements][kernel].
+
 ## Execution order
 
 **October 4 priority:** the first public version now requires the
@@ -2353,7 +2361,8 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   exports pass `--check-core-pilot-pair`; 36 input/mutation cases pass. This is
   one exact-pair bootstrap, not the general checker or a narrower final profile.
   The proof module builds; its extended audit and clean integration gates are
-  pending disk recovery (host fell to 12 GiB free; no new build below 25 GiB).
+  pending the disk checkpoint (October 4 cleanup recovered headroom to about
+  62 GiB, below the owner-required 80 GiB cleanup target above).
   Validator soundness and generic source/target simulation for all frozen
   functions remain open. Test step limits are not proof or divergence outcomes.
 
