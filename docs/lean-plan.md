@@ -579,11 +579,21 @@ stripping state parameters. The original `converted_caller`, `checked_caller`,
 `nested_caller` and 32-argument `pressure` pairs pass the existing
 `--check-core-leaf-pair` interface, which prints `PROVED_CALL_PAIR` for this path.
 Nine execution/diagram controls, six source-boundary refusals and 18 target
-mutations pass. Development audit: 61 kernel-only core targets. Clean integration
-gates are pending. Calling statement forms beyond the implemented finite-return
+mutations pass. At `1b859487`, the clean Lean gate passes with 61 kernel-only core
+targets and 1,246,159 vector answers; full workspace passes 401 suites / 3,080
+tests / zero failures / five ignored, plus Clippy/format. All five original
+named pilot entries now replay successfully (`FixedMul`, `abs`, `short_circuit`,
+`loop_join`, `pressure`); this does not close the ten-function combined fixture.
+Calling statement forms beyond the implemented finite-return
 composition, calls combined with loops/private storage, private-leaf substitution,
-validator safety and the complete frozen population still block V01.
+validator safety and complete constructor/closure coverage still block V01.
 This is neither backend nor verified-release acceptance.
+The actual `caller` export still contains `frame`, while the unchanged target
+has inlined it; the pair refuses with exit 1 (`private-leaf-red.log`).
+Slice artifact net: **+4,196 KiB** across `.lake` and the capture;
+`target/frontend` unchanged, capture 10,780 KiB, host free 51 GiB. Three temporary
+proposition dumps (8,512 bytes) were removed after a no-open-handle check; their
+statements/dependencies remain in the committed audit/receipt and are regenerable.
 
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
