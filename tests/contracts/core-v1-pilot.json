@@ -121,8 +121,8 @@
     "claim_ceiling": "Independent target input and execution only. No input-validator safety, source/target checker soundness, or whole-function compilation proof. Finite test limits do not constrain the transition semantics."
   },
   "integration_gates": {
-    "rust_implementation_commit": "857d7d90a9bb80f7e6654f4334f0e37cbe2fc0af",
-    "lean_implementation_commit": "857d7d90a9bb80f7e6654f4334f0e37cbe2fc0af",
+    "rust_implementation_commit": "02f88820ade9628f9ae0b66a8b2fb08e712e8028",
+    "lean_implementation_commit": "02f88820ade9628f9ae0b66a8b2fb08e712e8028",
     "full_workspace_command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 tools/gate-changed.sh --full-workspace --offline",
     "full_workspace": {"status": "PASS", "suites": 401, "passed": 3080, "failed": 0, "ignored": 5, "clippy": "PASS", "format": "PASS"},
     "prior_attempts": ["Interrupted during compilation for disk recovery, exit 143; not PASS.", "Sandboxed run: 3077 passed, 2 container-permission failures, 5 ignored; not PASS."],
@@ -130,9 +130,11 @@
     "lean_status": "PASS",
     "lean_receipt": "tests/contracts/lean-p0-receipt.json",
     "lean_worktree_clean": true,
-    "core_primitive_targets": 10,
+    "core_primitive_targets": 12,
     "core_primitive_proof_kind": "kernel-only",
     "raw_logs": ".evidence/verification-core/20261004/source-execution",
+    "full_workspace_log": "ir-full-workspace.log",
+    "lean_log": "ir-lean-gate.log",
     "capture_retention_bytes": 524288000,
     "claim_ceiling": "Integration and primitive-proof evidence only. No whole-function, compilation, or verified-release acceptance."
   },
