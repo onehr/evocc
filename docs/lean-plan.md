@@ -316,10 +316,27 @@ decision procedure on independently decoded complete inputs, with no sample
 arguments or execution limit. It prints `PROVED_PILOT_PAIR` with explicit
 `scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE`; a decoded unproved
 pair exits 1, malformed input exits 2. The retained original exporter output
-passes, as do 36 positive/negative input cases. The proof module builds; the
-extended dependency audit and clean full integration gate are pending after
-the shared host fell below the owner disk stop line. No release admission is
-derived from these focused results.
+passes, as do 36 positive/negative input cases. After the owner reopened bounded
+verification, the clean Lean gate passed with 14 kernel-only core targets; the
+full workspace passed 3,080 tests, zero failures and five ignored, plus Clippy
+and formatting. An observed audit expected-type printing mismatch was corrected
+without relaxing exact proposition matching. This closes that case's integration,
+not V01's generic checker or any release admission.
+
+**Reusable simulation and local storage.** `Core/Simulation.lean` proves that
+checked local diagrams imply the same terminal/divergence/progress contract.
+A target step either matches a positive source path or strictly decreases a
+natural administrative rank while retaining the source state. Consequently a
+target-only loop cannot masquerade as compiler bookkeeping. Entry membership,
+terminal observations and progress remain separate obligations; proposing a
+relation or rank is not proof. `Refines.trans` composes checked stages without
+assuming equal step counts. The concrete `ranked_lowering_refines` adapter uses
+the actual source and IR machines, not replacement semantics.
+`Core/LocalStorage.lean` proves read-after-write, noninterference for other local
+identifiers and scope-depth preservation for the existing execution functions.
+These are generic proof components, not an executable generic pair checker.
+Instantiating and independently checking the diagrams for actual CFG edges,
+calls and private-leaf substitution remains V01's next implementation obligation.
 
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`

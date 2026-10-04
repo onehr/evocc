@@ -1,6 +1,6 @@
 import EvoIR.Core.Execution
 import EvoIR.Core.IRExecution
-import EvoIR.Core.Transition
+import EvoIR.Core.Simulation
 
 /-! Source/IR observations and relational adapters. Private memory snapshots
 are not external effects in core-v1, but malformed/poison failures are not
@@ -49,5 +49,22 @@ def LoweringRefines (s : Source.Program) (t : IR.Program)
     (resultType : Source.IntType) (s₀ : Source.State) (t₀ : IR.State) : Prop :=
   Transition.Refines (Source.step s) (IR.step t) observeSource
     (observeTarget resultType) s₀ t₀
+
+/-- The local invariant obligations for the actual source/IR machines. A
+relation/rank proposal alone conveys no authority: transfer, terminal and
+progress obligations must all be established independently for both inputs. -/
+def LoweringSimulation (s : Source.Program) (t : IR.Program)
+    (resultType : Source.IntType) (related : Source.State → IR.State → Prop)
+    (rank : Source.State → IR.State → Nat) : Prop :=
+  Transition.RankedSimulation (Source.step s) (IR.step t) observeSource
+    (observeTarget resultType) related rank
+
+theorem ranked_lowering_refines (s : Source.Program) (t : IR.Program)
+    (resultType : Source.IntType) (related : Source.State → IR.State → Prop)
+    (rank : Source.State → IR.State → Nat)
+    (obligations : LoweringSimulation s t resultType related rank)
+    (s₀ : Source.State) (t₀ : IR.State) (entry : related s₀ t₀) :
+    LoweringRefines s t resultType s₀ t₀ :=
+  obligations.sound entry
 
 end EvoIR.Core

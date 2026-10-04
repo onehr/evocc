@@ -2365,11 +2365,18 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   E3004, terminal observations, divergence and progress. The retained original
   exports pass `--check-core-pilot-pair`; 36 input/mutation cases pass. This is
   one exact-pair bootstrap, not the general checker or a narrower final profile.
-  The proof module builds; its extended audit and clean integration gates are
-  pending integration. The owner reopened bounded verification after cleanup.
+  The owner reopened bounded verification after cleanup. The complete `abs`
+  case now passes the clean Lean gate (14 kernel-only core targets) and full
+  workspace (3,080 / 0 / 5 ignored; Clippy/format pass) at `7f79966a`.
   The resumed Lean gate exposed an exact-type audit expectation mismatch
   (Lean omits inferable existential binder types); a RED and exact spelling
   correction retain rejection of changed premises, widths, entries and relations.
+  Generic ranked local-diagram soundness, cross-stage refinement composition,
+  read-after-local-write, other-local noninterference and scope-depth preservation
+  are now kernel-proved components. Administrative cycles and changed terminal
+  observations are excluded by their regression proofs. This does not implement
+  the generic program-pair checker: the next step is independently checking the
+  actual CFG/call/local-state diagrams, including private-leaf substitution.
   Validator soundness and generic source/target simulation for all frozen
   functions remain open. Test step limits are not proof or divergence outcomes.
 

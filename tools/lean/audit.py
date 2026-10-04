@@ -232,10 +232,13 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Transition.Reaches",
     "EvoIR.Core.Transition.Infinite",
     "EvoIR.Core.Transition.Refines",
+    "EvoIR.Core.Transition.Predecessor",
+    "EvoIR.Core.Transition.RankedSimulation",
     "EvoIR.Core.checkedDiagnostic",
     "EvoIR.Core.observeSource",
     "EvoIR.Core.observeTarget",
     "EvoIR.Core.LoweringRefines",
+    "EvoIR.Core.LoweringSimulation",
     "EvoIR.Core.AbsCorrespondence.sourceBody",
     "EvoIR.Core.AbsCorrespondence.source",
     "EvoIR.Core.AbsCorrespondence.target",
@@ -261,6 +264,50 @@ RECORDED_DEFINITIONS = [
 ]
 
 CORE_PRIMITIVE_TARGETS = [
+    (
+        "EvoIR.Core.Source.read_written_slot",
+        "∀ (locals updated : EvoIR.Core.Source.Locals) (symbol : Nat) "
+        "(destination : EvoIR.Core.Source.QualifiedType) (value : EvoIR.Core.Source.Value) "
+        "(initialization : Bool), "
+        "EvoIR.Core.Source.writeSlot locals symbol destination value initialization = Except.ok updated → "
+        "EvoIR.Core.Source.readSlot updated symbol destination.type = Except.ok value",
+    ),
+    (
+        "EvoIR.Core.Source.write_slot_length",
+        "∀ (locals updated : EvoIR.Core.Source.Locals) (symbol : Nat) "
+        "(destination : EvoIR.Core.Source.QualifiedType) (value : EvoIR.Core.Source.Value) "
+        "(initialization : Bool), "
+        "EvoIR.Core.Source.writeSlot locals symbol destination value initialization = Except.ok updated → "
+        "List.length updated = List.length locals",
+    ),
+    (
+        "EvoIR.Core.Source.read_other_slot",
+        "∀ (locals updated : EvoIR.Core.Source.Locals) (symbol other : Nat) "
+        "(destination : EvoIR.Core.Source.QualifiedType) (type : EvoIR.Core.Source.IntType) "
+        "(value : EvoIR.Core.Source.Value) (initialization : Bool), other ≠ symbol → "
+        "EvoIR.Core.Source.writeSlot locals symbol destination value initialization = Except.ok updated → "
+        "EvoIR.Core.Source.readSlot updated other type = EvoIR.Core.Source.readSlot locals other type",
+    ),
+    (
+        "EvoIR.Core.ranked_lowering_refines",
+        "∀ (s : EvoIR.Core.Source.Program) (t : EvoIR.Core.IR.Program) "
+        "(resultType : EvoIR.Core.Source.IntType) "
+        "(related : EvoIR.Core.Source.State → EvoIR.Core.IR.State → Prop) "
+        "(rank : EvoIR.Core.Source.State → EvoIR.Core.IR.State → Nat), "
+        "EvoIR.Core.LoweringSimulation s t resultType related rank → "
+        "∀ (s₀ : EvoIR.Core.Source.State) (t₀ : EvoIR.Core.IR.State), "
+        "related s₀ t₀ → EvoIR.Core.LoweringRefines s t resultType s₀ t₀",
+    ),
+    (
+        "EvoIR.Core.Transition.Refines.trans",
+        "∀ {A : Type u_1} {B : Type u_2} {C : Type u_3} {O : Type u_4} "
+        "{firstStep : A → Option A} {middleStep : B → Option B} {lastStep : C → Option C} "
+        "{firstObserve : A → Option O} {middleObserve : B → Option O} {lastObserve : C → Option O} "
+        "{a : A} {b : B} {c : C}, "
+        "EvoIR.Core.Transition.Refines firstStep middleStep firstObserve middleObserve a b → "
+        "EvoIR.Core.Transition.Refines middleStep lastStep middleObserve lastObserve b c → "
+        "EvoIR.Core.Transition.Refines firstStep lastStep firstObserve lastObserve a c",
+    ),
     (
         "EvoIR.Core.checked_arithmetic_lowering",
         "∀ (op : EvoIR.Core.SignedArithmetic) {n : Nat} (x y : BitVec n), "
