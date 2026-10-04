@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "2fb00d28d0197cec1115c48486356912526d9962",
+    "lean_commit": "f2d51bc84e4a92ca3db73311d2c65a383f00b14c",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -28,6 +28,8 @@
     "audited_modules": [
       "lean/EvoIR.lean",
       "lean/EvoIR/Core/AbsCorrespondence.lean",
+      "lean/EvoIR/Core/BranchExpression.lean",
+      "lean/EvoIR/Core/BranchTarget.lean",
       "lean/EvoIR/Core/CheckedInt.lean",
       "lean/EvoIR/Core/Correspondence.lean",
       "lean/EvoIR/Core/CorrespondenceTests.lean",
@@ -42,6 +44,8 @@
       "lean/EvoIR/Core/LeafCorrespondence.lean",
       "lean/EvoIR/Core/LeafCorrespondenceTests.lean",
       "lean/EvoIR/Core/LocalStorage.lean",
+      "lean/EvoIR/Core/ReturnCorrespondence.lean",
+      "lean/EvoIR/Core/ReturnCorrespondenceTests.lean",
       "lean/EvoIR/Core/Scalar.lean",
       "lean/EvoIR/Core/ScalarCorrectness.lean",
       "lean/EvoIR/Core/Simulation.lean",
@@ -95,6 +99,7 @@
         "EvoIR.Core.SourceExpressionTests",
         "EvoIR.Core.SymbolicEdgeTests",
         "EvoIR.Core.LeafCorrespondenceTests",
+        "EvoIR.Core.ReturnCorrespondenceTests",
         "EvoIR.Term",
         "EvoIR.Fact",
         "EvoIR.Rule",
@@ -114,6 +119,13 @@
         "EvoIR.Core.IRReader",
         "EvoIR.Core.SourceEquality",
         "EvoIR.Core.Correspondence"
+      ],
+      "lean/EvoIR/Core/BranchExpression.lean": [
+        "EvoIR.Core.SourceExpression"
+      ],
+      "lean/EvoIR/Core/BranchTarget.lean": [
+        "EvoIR.Core.BranchExpression",
+        "EvoIR.Core.LeafCorrespondence"
       ],
       "lean/EvoIR/Core/CheckedInt.lean": [
         "EvoIR.Sem"
@@ -164,6 +176,15 @@
       ],
       "lean/EvoIR/Core/LocalStorage.lean": [
         "EvoIR.Core.Execution"
+      ],
+      "lean/EvoIR/Core/ReturnCorrespondence.lean": [
+        "EvoIR.Core.BranchTarget"
+      ],
+      "lean/EvoIR/Core/ReturnCorrespondenceTests.lean": [
+        "EvoIR.Core.ReturnCorrespondence",
+        "EvoIR.Core.AbsCorrespondence",
+        "EvoIR.Core.CorrespondenceTests",
+        "EvoIR.Core.SourceExpressionTests"
       ],
       "lean/EvoIR/Core/Scalar.lean": [
         "EvoIR.Core.WellFormed",
@@ -247,7 +268,8 @@
         "EvoIR.Core.IRTests",
         "EvoIR.Core.CorrespondenceTests",
         "EvoIR.Core.SourceExpressionTests",
-        "EvoIR.Core.LeafCorrespondenceTests"
+        "EvoIR.Core.LeafCorrespondenceTests",
+        "EvoIR.Core.ReturnCorrespondenceTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -15536,8 +15558,51 @@
     }
   ],
   "compilation_core_primitives": {
-    "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; no proof of source export, input-validation soundness, source/IR simulation, whole-function checker or compilation yet",
+    "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural straight-line and branching-return source/IR checker soundness. No proof of source export, input-validation safety, general loops/state/calls, backend compilation or verified-release acceptance",
     "targets": [
+      {
+        "theorem": "EvoIR.Core.Symbolic.comparison_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (op : EvoIR.Core.Symbolic.Comparison) (a b : EvoIR.Core.Symbolic.CWord Γ), EvoIR.Core.Source.binaryValue op.source (EvoIR.Core.Symbolic.CWord.denote σ a) (EvoIR.Core.Symbolic.CWord.denote σ b) = Except.ok (EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.comparison op a b))",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.truth_term_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (value : EvoIR.Core.Symbolic.CWord Γ), ((EvoIR.denoteTerm σ value.truthTerm).toNat != 0) = (EvoIR.Core.Symbolic.CWord.denote σ value).truth",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.unary_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (op : EvoIR.Core.Source.Unary) (value : EvoIR.Core.Symbolic.CWord Γ), (do EvoIR.Core.Symbolic.guards σ (EvoIR.Core.Symbolic.unary op value).fst pure (EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.unary op value).snd)) = EvoIR.Core.Source.unaryValue op (EvoIR.Core.Symbolic.CWord.denote σ value)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.ReturnPair.refines",
+        "proposition": "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} (pair : EvoIR.Core.Symbolic.ReturnPair source target) (args : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type args = List.map (fun p => p.type.type) pair.sourceFunction.parameters → ∃ sourceEntry targetEntry, EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ EvoIR.Core.IR.initial target pair.targetFunction.name (List.map EvoIR.Core.Symbolic.sourceValueIR args) = Except.ok targetEntry ∧ EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
       {
         "theorem": "EvoIR.Core.Symbolic.bitwise_sound",
         "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (op : EvoIR.Core.Symbolic.Bitwise) (a b : EvoIR.Core.Symbolic.CWord Γ), EvoIR.Core.Source.binaryValue op.source (EvoIR.Core.Symbolic.CWord.denote σ a) (EvoIR.Core.Symbolic.CWord.denote σ b) = Except.ok (EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.bitwise op a b))",

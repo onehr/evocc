@@ -2416,8 +2416,9 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   signature value, without an exact-tree whitelist. Comparison/unary bridges
   pass 888 runtime cases; 26 branching whole-return cases and eight kernel
   examples cover changed pairs, swapped branches/joins, missing obligations,
-  wrong diagnostics and target cycles. Local build/self-tests pass. Its clean
-  checkpoint gate is pending. General expression combinations, short-circuit
+  wrong diagnostics and target cycles. The clean Lean gate passes at `f2d51bc8`
+  (39 kernel-only core targets; 1,246,159 vector answers). No full-workspace
+  PASS is claimed for this Lean-only checkpoint. General expression combinations, short-circuit
   state, div/rem, statement control/loops, mutable storage, calls/private-leaf
   substitution and validator safety still block V01.
 
