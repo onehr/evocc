@@ -27,14 +27,48 @@ structure CutpointLayout where
   shape : List LocalShape
   label : String
   links : List LocalLink
+  tokens : List (Nat × Nat) := []
+
+/-- Token links select only the admitted empty-memory/world values. Actual
+edge binding and exact scope equality must justify each proposed token. -/
+def CutpointLayout.project {Γ : Var → Nat} (layout : CutpointLayout)
+    (locals : LocalStore Γ) : Option (Scope Γ) := do
+  let words ← projectLocals locals layout.links
+  if layout.tokens.any (fun token => token.2 > 1) then none
+  else some (layout.tokens.map (fun (id, token) => (id, Slot.opaque token)) ++ words)
+
+theorem project_cutpoint_congr {Γ Δ : Var → Nat} (σ : Subst Γ) (τ : Subst Δ)
+    (layout : CutpointLayout) (a : LocalStore Γ) (b : LocalStore Δ)
+    (first : Scope Γ) (second : Scope Δ)
+    (left : layout.project a = some first) (right : layout.project b = some second)
+    (same : a.denote σ = b.denote τ) :
+    first.denote σ callTokens = second.denote τ callTokens := by
+  unfold CutpointLayout.project at left right
+  cases ha : projectLocals a layout.links with
+  | none => simp [ha] at left
+  | some ascope =>
+    cases hb : projectLocals b layout.links with
+    | none => simp [hb] at right
+    | some bscope =>
+      simp only [ha, hb, Bind.bind, Option.bind] at left right
+      split at left
+      · contradiction
+      · rename_i admitted
+        simp only [admitted] at right
+        cases Option.some.inj left
+        cases right
+        have words := project_locals_congr σ τ callTokens callTokens a b layout.links
+          ascope bscope ha hb same
+        simp only [Scope.denote, List.map_append, List.map_map, Function.comp_def, Slot.denote]
+        exact congrArg (List.append _) words
 
 structure LayoutPoint where
   layout : CutpointLayout
   scope : Scope inputWidths
-  projected : projectLocals (canonicalStore layout.shape) layout.links = some scope
+  projected : layout.project (canonicalStore layout.shape) = some scope
 
 def layoutPoint (layout : CutpointLayout) : Option LayoutPoint :=
-  match h : projectLocals (canonicalStore layout.shape) layout.links with
+  match h : layout.project (canonicalStore layout.shape) with
   | none => none
   | some scope => some ⟨layout, scope, h⟩
 
@@ -42,9 +76,9 @@ def LayoutPoint.joint (point : LayoutPoint) : JointPoint inputWidths :=
   ⟨point.layout.site.cursor (canonicalStore point.layout.shape), point.layout.label, point.scope⟩
 
 def checkSuccessor (points : List LayoutPoint) (candidate : {p // p ∈ points})
-    (fid : Nat) (target : IR.Function) (type : Source.IntType)
+    (fid : Nat) (target : IR.Function) (tokens : Bool) (type : Source.IntType)
     (s : SourceCursor inputWidths) (t : TargetExit inputWidths) :
-    Option (PLift (CutExitAgreement (points.map LayoutPoint.joint) fid target type s t)) :=
+    Option (PLift (CutExitAgreement (points.map LayoutPoint.joint) fid target tokens type s t)) :=
   match t with
   | .returned _ => none
   | .next label scope => do
@@ -52,17 +86,17 @@ def checkSuccessor (points : List LayoutPoint) (candidate : {p // p ∈ points})
     if atSite : s.site = some point.layout.site then
       if shape : s.locals.map LocalSlot.shape = point.layout.shape then
         if atLabel : label = point.layout.label then
-          if projection : projectLocals s.locals point.layout.links = some scope then
+          if projection : point.layout.project s.locals = some scope then
             return ⟨.successor (by
-              intro σ
+              intro σ nextFrame
               obtain ⟨τ, stored⟩ := canonical_store_of_shape σ s.locals point.layout.shape shape
               have source := source_site_sound σ τ s point.layout.site
                 (canonicalStore point.layout.shape) fid atSite stored.symm
-              have targetScope := project_locals_congr σ τ (fun _ => .world) (fun _ => .world)
-                s.locals (canonicalStore point.layout.shape) point.layout.links scope point.scope
+              have targetScope := project_cutpoint_congr σ τ point.layout
+                s.locals (canonicalStore point.layout.shape) scope point.scope
                 projection point.projected stored.symm
-              refine ⟨point.joint, List.mem_map.mpr ⟨point, candidate.property, rfl⟩, τ, source, ?_⟩
-              simp only [TargetExit.state, LayoutPoint.joint, JointPoint.targetState, targetState]
+              refine ⟨point.joint, List.mem_map.mpr ⟨point, candidate.property, rfl⟩, τ, nextFrame, source, ?_⟩
+              simp only [TargetExit.callState, LayoutPoint.joint, JointPoint.targetState, targetState]
               rw [atLabel, targetScope])⟩
           else none
         else none
@@ -70,8 +104,8 @@ def checkSuccessor (points : List LayoutPoint) (candidate : {p // p ∈ points})
     else none
 
 def checkExit (points : List LayoutPoint) (fid : Nat) (target : IR.Function)
-    (type : Source.IntType) (s : SourceCursor inputWidths) (t : TargetExit inputWidths) :
-    Option (PLift (CutExitAgreement (points.map LayoutPoint.joint) fid target type s t)) :=
+    (tokens : Bool) (type : Source.IntType) (s : SourceCursor inputWidths) (t : TargetExit inputWidths) :
+    Option (PLift (CutExitAgreement (points.map LayoutPoint.joint) fid target tokens type s t)) :=
   match control : s.control, t with
   | .returned a, .returned b =>
     if same : a = b then
@@ -79,39 +113,42 @@ def checkExit (points : List LayoutPoint) (fid : Nat) (target : IR.Function)
         some ⟨by subst b; exact .returned control typed⟩
       else none
     else none
-  | _, out => points.attach.findSome? (fun candidate => checkSuccessor points candidate fid target type s out)
+  | _, out => points.attach.findSome? (fun candidate => checkSuccessor points candidate fid target tokens type s out)
 
-def checkedSpan (points : List LayoutPoint) (fid : Nat) (target : IR.Function)
+def checkedSpan (program : Source.Program) (ir : IR.Program) (points : List LayoutPoint)
+    (fid : Nat) (target : IR.Function) (tokens : Bool)
     (type : Source.IntType) (budget : Nat) (point : JointPoint inputWidths) :
-    Option (CheckedSpan (points.map LayoutPoint.joint) fid target type point) := do
-  let source ← sourceCutDiagram (points.map (·.layout.site)) budget true point.source
-  let targetTree ← targetCutDiagram (fun _ => .world) target type (points.map (·.layout.label))
-    (target.blocks.length+1) true point.scope point.label
-  let same ← cutMatch (checkExit points fid target type)
+    Option (CheckedSpan program ir (points.map LayoutPoint.joint) fid target tokens type point) := do
+  let source ← sourceCutDiagram program (points.map (·.layout.site)) budget true point.source
+  let targetTree ← callingCutDiagram ir target tokens type (points.map (·.layout.label))
+    budget true point.scope point.label
+  let same ← cutMatch (checkExit points fid target tokens type)
     source.val.normalizeTrace targetTree.val.normalizeTrace
   return ⟨source.val, targetTree.val, source.property, targetTree.property, same.down⟩
 
-inductive SpanList (points : List LayoutPoint) (fid : Nat) (target : IR.Function)
-    (type : Source.IntType) : List (JointPoint inputWidths) → Type where
-  | nil : SpanList points fid target type []
-  | cons {point rest} : CheckedSpan (points.map LayoutPoint.joint) fid target type point →
-      SpanList points fid target type rest → SpanList points fid target type (point :: rest)
+inductive SpanList (program : Source.Program) (ir : IR.Program) (points : List LayoutPoint)
+    (fid : Nat) (target : IR.Function) (tokens : Bool) (type : Source.IntType) : List (JointPoint inputWidths) → Type where
+  | nil : SpanList program ir points fid target tokens type []
+  | cons {point rest} : CheckedSpan program ir (points.map LayoutPoint.joint) fid target tokens type point →
+      SpanList program ir points fid target tokens type rest → SpanList program ir points fid target tokens type (point :: rest)
 
-def checkedSpans (points : List LayoutPoint) (fid : Nat) (target : IR.Function)
+def checkedSpans (program : Source.Program) (ir : IR.Program) (points : List LayoutPoint)
+    (fid : Nat) (target : IR.Function) (tokens : Bool)
     (type : Source.IntType) (budget : Nat) :
-    (remaining : List (JointPoint inputWidths)) → Option (SpanList points fid target type remaining)
+    (remaining : List (JointPoint inputWidths)) → Option (SpanList program ir points fid target tokens type remaining)
   | [] => some .nil
   | point :: rest => do
-    let head ← checkedSpan points fid target type budget point
-    let tail ← checkedSpans points fid target type budget rest
+    let head ← checkedSpan program ir points fid target tokens type budget point
+    let tail ← checkedSpans program ir points fid target tokens type budget rest
     return .cons head tail
 
 /-- Only the proof uses classical equality to select the already checked
 member. Executable admission constructs every entry, not a sampled subset. -/
-noncomputable def SpanList.get {points : List LayoutPoint} {fid : Nat} {target : IR.Function}
+noncomputable def SpanList.get {program : Source.Program} {ir : IR.Program} {points : List LayoutPoint}
+    {fid : Nat} {target : IR.Function} {tokens : Bool}
     {type : Source.IntType} {remaining : List (JointPoint inputWidths)}
-    (checked : SpanList points fid target type remaining) (point : JointPoint inputWidths)
-    (member : point ∈ remaining) : CheckedSpan (points.map LayoutPoint.joint) fid target type point := by
+    (checked : SpanList program ir points fid target tokens type remaining) (point : JointPoint inputWidths)
+    (member : point ∈ remaining) : CheckedSpan program ir (points.map LayoutPoint.joint) fid target tokens type point := by
   classical
   induction checked with
   | nil => simp at member
@@ -121,13 +158,12 @@ noncomputable def SpanList.get {points : List LayoutPoint} {fid : Nat} {target :
 
 theorem checked_table_refines (points : List LayoutPoint) (fid : Nat) (type : Source.IntType)
     (source : Source.Program) (program : IR.Program) (target : IR.Function)
-    (found : program.functions.find? (·.name == target.name) = some target)
-    (returns : target.returns = [.bits type.width])
-    (table : SpanList points fid target type (points.map LayoutPoint.joint))
+    (tokens : Bool)
+    (table : SpanList source program points fid target tokens type (points.map LayoutPoint.joint))
     (s : Source.State) (t : IR.State)
     (entry : CutpointRelated (points.map LayoutPoint.joint) fid target s t) :
     LoweringRefines source program type s t :=
-  checked_cutpoint_refines (points.map LayoutPoint.joint) fid type source program target found
-    returns (fun point member => table.get point member) s t entry
+  checked_cutpoint_refines (points.map LayoutPoint.joint) fid type source program target tokens
+    (fun point member => table.get point member) s t entry
 
 end EvoIR.Core.Symbolic

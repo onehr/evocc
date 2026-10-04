@@ -16,6 +16,7 @@ import EvoIR.Core.CutpointInput
 import EvoIR.Core.DivisionTests
 import EvoIR.Core.SourceCallTests
 import EvoIR.Core.CallControlTests
+import EvoIR.Core.CallLoopTests
 
 /-!
 # The executable evaluator
@@ -306,18 +307,21 @@ def run (args : List String) : IO UInt32 := do
       let divisions ← EvoIR.Core.Symbolic.DivisionTests.divisionSelfTest
       let calls ← EvoIR.Core.Source.CallTests.callSelfTest
       let callControls ← EvoIR.Core.Source.CallControlTests.callControlSelfTest
+      let callLoops ← EvoIR.Core.Source.CallLoopTests.callLoopSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
         statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 &&
-        calls == 0 && callControls == 0 then 0 else 1
+        calls == 0 && callControls == 0 && callLoops == 0 then 0 else 1
   | ["--check-core-loop-pair", sourcePath, targetPath, proposalPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
       let .ok target := EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile targetPath)
         | IO.eprintln "CORE_PAIR_MALFORMED: target input"; return 2
-      let [sf] := source.functions
-        | IO.eprintln "CORE_PAIR_REFUSED: cyclic single-function interface"; return 1
+      let [entry] := source.entries
+        | IO.eprintln "CORE_PAIR_REFUSED: expected one selected entry"; return 1
+      let some sf := source.functions.find? (·.symbol == entry)
+        | IO.eprintln "CORE_PAIR_REFUSED: missing selected source function"; return 1
       let some (budget, layouts) := EvoIR.Core.Symbolic.readCutpoints sf (← IO.FS.readFile proposalPath)
         | IO.eprintln "CORE_PAIR_MALFORMED: cutpoint proposal"; return 2
       let some accepted := EvoIR.Core.Symbolic.loopPair source target layouts budget

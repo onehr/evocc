@@ -1,0 +1,4 @@
+["core-cutpoints-v2",256,[
+  [0,"entry",[[11,"uint",false,true]],[[0,11,"uint"]],[[2,"world"],[1,"mem"]]],
+  [2,"b1",[[11,"uint",false,true]],[[3,11,"uint"]],[[5,"world"],[4,"mem"]]]
+]]

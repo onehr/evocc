@@ -174,7 +174,7 @@ private def spans (source : Source.Function) (target : IR.Function) (ps : List P
     let cursor := if point.label == block.name then
       ({point.cursor with locals := initialLocals}) else point.cursor
     let scope ← projectedScope target point cursor.locals
-    let s ← sourceCutDiagram (ps.map Point.site) 160 true cursor
+    let s ← sourceCutDiagram ⟨[source.symbol], [source]⟩ (ps.map Point.site) 160 true cursor
     let t ← targetCutDiagram (fun _ => .world) target source.returnType.type
       (ps.map Point.label) (target.blocks.length+1) true scope point.label
     return (point.label, s.val, t.val)
@@ -190,12 +190,12 @@ private def layouts (source : Source.Function) (target : IR.Function) (ps : List
       if block.parameters.length != point.arguments.length then none else
       return ⟨point.site, (point.locals.map localSlot).map LocalSlot.shape, point.label,
         ((block.parameters.zip point.arguments).map
-          (fun (pair : IR.Binding × Nat) => (pair.1.id, pair.2, Source.IntType.uint))).reverse⟩
+          (fun (pair : IR.Binding × Nat) => (pair.1.id, pair.2, Source.IntType.uint))).reverse, []⟩
 
 private def closedTable (source : Source.Function) (target : IR.Function) (ps : List Point) : Bool :=
   (do
     let proposed ← (← layouts source target ps).mapM layoutPoint
-    return (checkedSpans proposed source.symbol target source.returnType.type 160
+    return (checkedSpans ⟨[source.symbol], [source]⟩ ⟨[target]⟩ proposed source.symbol target false source.returnType.type 160
       (proposed.map LayoutPoint.joint)).isSome).getD false
 
 private def wholePair (source : Source.Function) (target : IR.Function) (ps : List Point) : Bool :=
@@ -275,7 +275,7 @@ def cutpointSelfTest : IO UInt32 := do
       failures := failures+1
   for point in ps do
     let some scope := projectedScope t point point.cursor.locals | return 1
-    if (sourceCutDiagram (ps.map Point.site) 0 true point.cursor).isSome ||
+    if (sourceCutDiagram source (ps.map Point.site) 0 true point.cursor).isSome ||
         (targetCutDiagram (fun _ => .world) t .uint (ps.map Point.label) 0 true scope point.label).isSome then
       IO.eprintln "zero-step root was accepted"
       failures := failures+1

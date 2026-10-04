@@ -1,5 +1,5 @@
 import EvoIR.Core.SourceSpan
-import EvoIR.Core.TargetCutpoint
+import EvoIR.Core.CallingCutpoint
 import EvoIR.Core.ReturnCorrespondence
 
 /-! Composition of a checked cyclic cutpoint table. Every successor must
@@ -13,30 +13,32 @@ structure JointPoint (Γ : Var → Nat) where
   scope : Scope Γ
 
 def JointPoint.targetState {Γ : Var → Nat} (σ : Subst Γ) (f : IR.Function)
-    (point : JointPoint Γ) : IR.State :=
-  Symbolic.targetState σ (fun _ => .world) f point.label 0 1 2 point.scope
+    (nextFrame : Nat) (point : JointPoint Γ) : IR.State :=
+  Symbolic.targetState σ callTokens f point.label 0 1 nextFrame point.scope
 
 def CutpointRelated {Γ : Var → Nat} (entries : List (JointPoint Γ))
     (fid : Nat) (target : IR.Function) (s : Source.State) (t : IR.State) : Prop :=
-  ∃ point ∈ entries, ∃ σ, s = point.source.denote σ fid ∧ t = point.targetState σ target
+  ∃ point ∈ entries, ∃ σ nextFrame,
+    s = point.source.denote σ fid ∧ t = point.targetState σ target nextFrame
 
 inductive CutExitAgreement {Γ : Var → Nat} (entries : List (JointPoint Γ))
-    (fid : Nat) (target : IR.Function) (type : Source.IntType) :
+    (fid : Nat) (target : IR.Function) (tokens : Bool) (type : Source.IntType) :
     SourceCursor Γ → TargetExit Γ → Prop where
   | returned {s word} (control : s.control = .returned word) (typed : word.type = type) :
-      CutExitAgreement entries fid target type s (.returned word)
-  | successor {s t} (closed : ∀ σ,
+      CutExitAgreement entries fid target tokens type s (.returned word)
+  | successor {s t} (closed : ∀ σ nextFrame,
       CutpointRelated entries fid target (s.denote σ fid)
-        (t.state σ (fun _ => .world) target 1 2)) :
-      CutExitAgreement entries fid target type s t
+        (t.callState σ tokens target 1 nextFrame)) :
+      CutExitAgreement entries fid target tokens type s t
 
-structure CheckedSpan {Γ : Var → Nat} (entries : List (JointPoint Γ))
-    (fid : Nat) (target : IR.Function) (type : Source.IntType) (point : JointPoint Γ) where
+structure CheckedSpan {Γ : Var → Nat} (program : Source.Program) (ir : IR.Program)
+    (entries : List (JointPoint Γ)) (fid : Nat) (target : IR.Function)
+    (tokens : Bool) (type : Source.IntType) (point : JointPoint Γ) where
   sourceTree : CutTree Γ (SourceCursor Γ)
   targetTree : CutTree Γ (TargetExit Γ)
-  source : SourceCutRuns true point.source sourceTree
-  targetDiagram : TargetCutDiagram (fun _ => .world) target type true point.scope point.label targetTree
-  agreement : CutMatch (CutExitAgreement entries fid target type)
+  source : SourceCutRuns program true point.source sourceTree
+  targetDiagram : CallingCutRuns ir target tokens true point.label 0 point.scope targetTree
+  agreement : CutMatch (CutExitAgreement entries fid target tokens type)
     sourceTree.normalizeTrace targetTree.normalizeTrace
 
 theorem CutTree.fault_observation {Γ : Var → Nat} {α : Type} (σ : Subst Γ)
@@ -62,18 +64,16 @@ theorem CutTree.fault_observation {Γ : Var → Nat} {α : Type} (σ : Subst Γ)
 
 theorem checked_cutpoint_simulation {Γ : Var → Nat} (entries : List (JointPoint Γ))
     (fid : Nat) (type : Source.IntType) (source : Source.Program) (program : IR.Program)
-    (target : IR.Function) (found : program.functions.find? (·.name == target.name) = some target)
-    (returns : target.returns = [.bits type.width])
-    (spans : ∀ point ∈ entries, CheckedSpan entries fid target type point) :
+    (target : IR.Function) (tokens : Bool)
+    (spans : ∀ point ∈ entries, CheckedSpan source program entries fid target tokens type point) :
     Transition.CheckpointSimulation (Source.step source) (IR.step program)
       observeSource (observeTarget type) (CutpointRelated entries fid target) := by
   constructor
   intro s t related
-  obtain ⟨point, member, σ, rfl, rfl⟩ := related
+  obtain ⟨point, member, σ, nextFrame, rfl, rfl⟩ := related
   let span := spans point member
-  obtain ⟨sf, sp, positiveSource, sourceOutcome⟩ := span.source σ source fid
-  obtain ⟨tf, tp, positiveTarget, targetOutcome⟩ := span.targetDiagram.sound σ
-    (fun _ => .world) (by intro id; rfl) program found returns 1 2
+  obtain ⟨sf, sp, positiveSource, sourceOutcome⟩ := span.source σ fid
+  obtain ⟨tf, tp, positiveTarget, targetOutcome⟩ := span.targetDiagram σ 1 nextFrame
   have agreement := span.agreement.sound σ
   rw [CutTree.normalize_trace_sound, CutTree.normalize_trace_sound] at agreement
   rcases agreement with ⟨fault, sourceFailed, targetFailed⟩ |
@@ -86,8 +86,8 @@ theorem checked_cutpoint_simulation {Γ : Var → Nat} (entries : List (JointPoi
       by simpa [observeSource, sh] using observed,
       by simpa [observeTarget, th] using observed⟩
   · have sh : sf = se.denote σ fid := by simpa [sourceSuccess] using sourceOutcome
-    have th : tf = te.state σ (fun _ => .world) target 1 2 := by
-      simpa [targetSuccess] using targetOutcome
+    obtain ⟨afterCalls, th⟩ := (by simpa [targetSuccess] using targetOutcome :
+      ∃ afterCalls, tf = te.callState σ tokens target 1 afterCalls)
     subst sf
     subst tf
     cases matched with
@@ -97,17 +97,18 @@ theorem checked_cutpoint_simulation {Γ : Var → Nat} (entries : List (JointPoi
         sp.toReaches, tp.toReaches, ?_, rfl, ?_, ?_⟩
       · simp [Source.step, SourceCursor.denote, control, CutControl.denote]
       · simp [observeSource, SourceCursor.denote, control, CutControl.denote, CWord.denote, typed]
-      · simp [observeTarget, TargetExit.state, sourceValueIR, CWord.denote, typed]
+      · cases tokens <;>
+          simp [observeTarget, TargetExit.callState, cutResults, callResults,
+            Slot.denote, Word.denote, CWord.word, CWord.denote, typed, callTokens]
     | successor closed =>
-      exact .inr ⟨_, _, positiveSource rfl, positiveTarget rfl, closed σ⟩
+      exact .inr ⟨_, _, positiveSource rfl, positiveTarget rfl, closed σ afterCalls⟩
 
 theorem checked_cutpoint_refines {Γ : Var → Nat} (entries : List (JointPoint Γ))
     (fid : Nat) (type : Source.IntType) (source : Source.Program) (program : IR.Program)
-    (target : IR.Function) (found : program.functions.find? (·.name == target.name) = some target)
-    (returns : target.returns = [.bits type.width])
-    (spans : ∀ point ∈ entries, CheckedSpan entries fid target type point)
+    (target : IR.Function) (tokens : Bool)
+    (spans : ∀ point ∈ entries, CheckedSpan source program entries fid target tokens type point)
     (s : Source.State) (t : IR.State) (entry : CutpointRelated entries fid target s t) :
     LoweringRefines source program type s t :=
-  (checked_cutpoint_simulation entries fid type source program target found returns spans).sound entry
+  (checked_cutpoint_simulation entries fid type source program target tokens spans).sound entry
 
 end EvoIR.Core.Symbolic

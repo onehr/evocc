@@ -66,17 +66,28 @@ def readCutpoints (source : Source.Function) (text : String) :
     Option (Nat × List CutpointLayout) := do
   let input ← (Lean.Json.parse text).toOption
   let [version, fuel, proposals] ← fields input | none
-  if (← version.getStr?.toOption) != "core-cutpoints-v1" then none else
+  let version ← version.getStr?.toOption
+  if version != "core-cutpoints-v1" && version != "core-cutpoints-v2" then none else
   let budget ← natural fuel
   if budget == 0 || budget > 4096 then none else
   let sites := functionSites source
   let rows ← fields proposals
   let layouts ← rows.mapM fun row => do
-    let [site, label, shape, links] ← fields row | none
+    let row ← fields row
+    let (site, label, shape, links, tokens) ← match version, row with
+      | "core-cutpoints-v1", [site, label, shape, links] => some (site, label, shape, links, [])
+      | "core-cutpoints-v2", [site, label, shape, links, tokens] => do
+        let tokens ← (← fields tokens).mapM fun token => do
+          let [id, kind] ← fields token | none
+          let kind ← kind.getStr?.toOption
+          let index ← match kind with | "mem" => some 0 | "world" => some 1 | _ => none
+          return (← natural id, index)
+        some (site, label, shape, links, tokens)
+      | _, _ => none
     return {
       site := ← sites[← natural site]?, label := ← label.getStr?.toOption,
       shape := ← (← fields shape).mapM localShape,
-      links := ← (← fields links).mapM localLink : CutpointLayout }
+      links := ← (← fields links).mapM localLink, tokens : CutpointLayout }
   return (budget, layouts)
 
 end EvoIR.Core.Symbolic

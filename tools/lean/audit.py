@@ -215,11 +215,17 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Transition.CheckpointSimulation",
     "EvoIR.Core.Symbolic.SourceCutRuns",
     "EvoIR.Core.Symbolic.TargetCutRuns",
+    "EvoIR.Core.Symbolic.TargetInstructionSpan",
+    "EvoIR.Core.Symbolic.CallingCutRuns",
+    "EvoIR.Core.Symbolic.callingCutDiagram",
+    "EvoIR.Core.Symbolic.TargetExit.callState",
+    "EvoIR.Core.Symbolic.loopInputValues",
     "EvoIR.Core.Symbolic.CutpointRelated",
     "EvoIR.Core.Symbolic.CutExitAgreement",
     "EvoIR.Core.Symbolic.CheckedSpan",
     "EvoIR.Core.Symbolic.canonicalStore",
     "EvoIR.Core.Symbolic.projectLocals",
+    "EvoIR.Core.Symbolic.CutpointLayout.project",
     "EvoIR.Core.Symbolic.checkSuccessor",
     "EvoIR.Core.Symbolic.checkedSpans",
     "EvoIR.Core.Symbolic.loopDiagram",
@@ -517,16 +523,16 @@ CORE_PRIMITIVE_TARGETS = [
         "∃ sourceEntry targetEntry, "
         "EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ "
         "EvoIR.Core.IR.initial target pair.targetFunction.name "
-        "(List.map EvoIR.Core.Symbolic.sourceValueIR args) = Except.ok targetEntry ∧ "
+        "(EvoIR.Core.Symbolic.loopInputValues pair.diagram.tokens args) = Except.ok targetEntry ∧ "
         "EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
     ),
     (
         "EvoIR.Core.Symbolic.source_cut_diagram_sound",
-        "∀ {Γ : EvoIR.Var → Nat} (cutpoints : List EvoIR.Core.Symbolic.SourceSite) "
+        "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (cutpoints : List EvoIR.Core.Symbolic.SourceSite) "
         "(budget : Nat) (advance : Bool) (cursor : EvoIR.Core.Symbolic.SourceCursor Γ) "
         "(tree : EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.SourceCursor Γ)), "
-        "Option.map Subtype.val (EvoIR.Core.Symbolic.sourceCutDiagram cutpoints budget advance cursor) = some tree → "
-        "EvoIR.Core.Symbolic.SourceCutRuns advance cursor tree",
+        "Option.map Subtype.val (EvoIR.Core.Symbolic.sourceCutDiagram p cutpoints budget advance cursor) = some tree → "
+        "EvoIR.Core.Symbolic.SourceCutRuns p advance cursor tree",
     ),
     (
         "EvoIR.Core.Symbolic.target_cut_diagram_sound",
@@ -541,11 +547,9 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.Symbolic.checked_cutpoint_refines",
         "∀ {Γ : EvoIR.Var → Nat} (entries : List (EvoIR.Core.Symbolic.JointPoint Γ)) "
         "(fid : Nat) (type : EvoIR.Core.Source.IntType) (source : EvoIR.Core.Source.Program) "
-        "(program : EvoIR.Core.IR.Program) (target : EvoIR.Core.IR.Function), "
-        "List.find? (fun x => x.name == target.name) program.functions = some target → "
-        "target.returns = [EvoIR.Core.IR.Ty.bits type.width] → "
-        "∀ (spans : (point : EvoIR.Core.Symbolic.JointPoint Γ) → point ∈ entries → "
-        "EvoIR.Core.Symbolic.CheckedSpan entries fid target type point) "
+        "(program : EvoIR.Core.IR.Program) (target : EvoIR.Core.IR.Function) (tokens : Bool) "
+        "(spans : (point : EvoIR.Core.Symbolic.JointPoint Γ) → point ∈ entries → "
+        "EvoIR.Core.Symbolic.CheckedSpan source program entries fid target tokens type point) "
         "(s : EvoIR.Core.Source.State) (t : EvoIR.Core.IR.State), "
         "EvoIR.Core.Symbolic.CutpointRelated entries fid target s t → "
         "EvoIR.Core.LoweringRefines source program type s t",

@@ -2522,6 +2522,15 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   both validate and execute consistently but still refuse proof. Loop/call and
   private-storage composition, full coverage and validator safety keep V01 OPEN.
 
+  **October 5 calls-in-loops continuation:** `loop_call` now passes on its
+  unchanged source/IR. Program-relative spans compose finite actual callees
+  with cyclic invariants while retaining returned tokens and advanced frame
+  counters. Four original pairs (including branching, diagnostic and divergent
+  cases), ten execution controls and 29 input/proposal mutations pass. Existing
+  primary entries replay. `call_loop` still refuses: cyclic callees need a
+  continuation-aware proof, not finite unfolding. Private storage, complete
+  coverage and validator safety remain required; V02–V06 remain OPEN.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

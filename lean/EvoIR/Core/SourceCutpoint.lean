@@ -50,9 +50,9 @@ def SourceCursor.site {Γ : Var → Nat} (cursor : SourceCursor Γ) : Option Sou
   | .statement s => some (.statement s cursor.continuation)
   | _ => none
 
-def SourceCutRuns {Γ : Var → Nat} (advance : Bool) (cursor : SourceCursor Γ)
+def SourceCutRuns {Γ : Var → Nat} (p : Source.Program) (advance : Bool) (cursor : SourceCursor Γ)
     (tree : CutTree Γ (SourceCursor Γ)) : Prop :=
-  ∀ σ p fid, ∃ final, Source.Steps p (cursor.denote σ fid) final ∧
+  ∀ σ fid, ∃ final, Source.Steps p (cursor.denote σ fid) final ∧
     (advance = true → Relation.TransGen (Transition.Predecessor (Source.step p)) final
       (cursor.denote σ fid)) ∧
     match tree.eval σ with

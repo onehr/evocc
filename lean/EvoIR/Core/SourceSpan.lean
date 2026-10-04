@@ -1,5 +1,6 @@
 import EvoIR.Core.SourceCutpoint
 import EvoIR.Core.Correspondence
+import EvoIR.Core.CallSourceDiagram
 
 /-! Checked finite source spans between cyclic cutpoints. The exploration
 bound is not an execution bound: a span must end at a checked successor or
@@ -27,19 +28,19 @@ theorem StateTree.cut_eval {Γ : Var → Nat} (σ : Subst Γ) (fid : Nat)
     simp only [cutTree, CutTree.eval, StateTree.denote]
     split <;> assumption
 
-theorem expression_cut_sound {Γ : Var → Nat} (locals : LocalStore Γ)
+theorem expression_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
     (expr : Source.Expr) (k : List Source.Frame) (tree : StateTree Γ)
-    (diagram : StateDiagram locals expr tree) :
-    SourceCutRuns true ⟨.expression expr, locals, k⟩ (tree.cutTree k) := by
-  intro σ p fid
-  have path := diagram σ p fid k
+    (diagram : ContextDiagram p locals expr tree) :
+    SourceCutRuns p true ⟨.expression expr, locals, k⟩ (tree.cutTree k) := by
+  intro σ fid
+  have path := diagram σ fid k
   have same := tree.cut_eval σ fid k
   cases result : tree.denote σ with
   | mk ls value =>
     cases value with
     | error fault =>
       simp only [result] at path
-      obtain ⟨failedK, steps⟩ := path
+      obtain ⟨failedLocals, failedK, failedFid, steps⟩ := path
       have failed : (tree.cutTree k).eval σ = .error fault := by
         cases h : (tree.cutTree k).eval σ <;> simp_all [Except.map]
       refine ⟨_, steps, ?_, ?_⟩
@@ -80,19 +81,19 @@ theorem FlowTree.cut_eval {Γ : Var → Nat} (σ : Subst Γ) (fid : Nat)
     simp only [cutTree, CutTree.eval, FlowTree.denote]
     split <;> assumption
 
-theorem object_cut_sound {Γ : Var → Nat} (locals : LocalStore Γ)
+theorem object_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
     (object : Source.Object) (k : List Source.Frame) (tree : FlowTree Γ)
-    (diagram : FlowDiagram locals (.object object) tree) :
-    SourceCutRuns true ⟨.object object, locals, k⟩ (tree.cutTree k) := by
-  intro σ p fid
-  have path := diagram σ p fid k
+    (diagram : ContextFlowDiagram p locals (.object object) tree) :
+    SourceCutRuns p true ⟨.object object, locals, k⟩ (tree.cutTree k) := by
+  intro σ fid
+  have path := diagram σ fid k
   have same := tree.cut_eval σ fid k
   cases result : tree.denote σ with
   | mk ls value =>
     cases value with
     | error fault =>
       simp only [result] at path
-      obtain ⟨failedK, steps⟩ := path
+      obtain ⟨failedLocals, failedK, failedFid, steps⟩ := path
       have failed : (tree.cutTree k).eval σ = .error fault := by
         cases h : (tree.cutTree k).eval σ <;> simp_all [Except.map]
       refine ⟨_, steps, ?_, ?_⟩
@@ -112,10 +113,10 @@ theorem object_cut_sound {Γ : Var → Nat} (locals : LocalStore Γ)
         exact path.toReaches.positive_of_ne (by intro h; cases h)
       · simpa [success] using represented.symm
 
-theorem CursorStep.runs {Γ : Var → Nat} {cursor : SourceCursor Γ}
+theorem CursorStep.runs {Γ : Var → Nat} (p : Source.Program) {cursor : SourceCursor Γ}
     {tree : CutTree Γ (SourceCursor Γ)} (step : CursorStep cursor tree) :
-    SourceCutRuns true cursor tree := by
-  intro σ p fid
+    SourceCutRuns p true cursor tree := by
+  intro σ fid
   have actual := step σ p fid
   cases result : tree.eval σ with
   | error fault => simp [result] at actual
@@ -123,27 +124,27 @@ theorem CursorStep.runs {Γ : Var → Nat} {cursor : SourceCursor Γ}
     simp only [result] at actual
     exact ⟨exit.denote σ fid, .next actual (.refl _), fun _ => .single actual, rfl⟩
 
-theorem source_cut_compose {Γ : Var → Nat} {advance : Bool} {cursor : SourceCursor Γ}
-    {before after : CutTree Γ (SourceCursor Γ)} (first : SourceCutRuns advance cursor before)
-    (continued : CutBind (SourceCutRuns false) before after) : SourceCutRuns advance cursor after := by
-  intro σ p fid
-  obtain ⟨middle, path, positive, outcome⟩ := first σ p fid
+theorem source_cut_compose {Γ : Var → Nat} {p : Source.Program} {advance : Bool} {cursor : SourceCursor Γ}
+    {before after : CutTree Γ (SourceCursor Γ)} (first : SourceCutRuns p advance cursor before)
+    (continued : CutBind (SourceCutRuns p false) before after) : SourceCutRuns p advance cursor after := by
+  intro σ fid
+  obtain ⟨middle, path, positive, outcome⟩ := first σ fid
   rcases continued.outcome σ with ⟨fault, failed, output⟩ |
     ⟨exit, rest, success, resumed, output⟩
   · exact ⟨middle, path, positive, by simpa [output] using (by simpa [failed] using outcome :
         middle.control = .halted (.error fault))⟩
   · have same : middle = exit.denote σ fid := by simpa [success] using outcome
     subst middle
-    obtain ⟨final, suffix, _, endState⟩ := resumed σ p fid
+    obtain ⟨final, suffix, _, endState⟩ := resumed σ fid
     exact ⟨final, path.trans suffix,
       fun h => Transition.positive_then_reaches (positive h) suffix.toReaches,
       by simpa [output] using endState⟩
 
-theorem SourceCutRuns.relax {Γ : Var → Nat} {cursor : SourceCursor Γ}
-    {tree : CutTree Γ (SourceCursor Γ)} (first : SourceCutRuns true cursor tree) (advance : Bool) :
-    SourceCutRuns advance cursor tree := by
-  intro σ p fid
-  obtain ⟨final, path, positive, outcome⟩ := first σ p fid
+theorem SourceCutRuns.relax {Γ : Var → Nat} {p : Source.Program} {cursor : SourceCursor Γ}
+    {tree : CutTree Γ (SourceCursor Γ)} (first : SourceCutRuns p true cursor tree) (advance : Bool) :
+    SourceCutRuns p advance cursor tree := by
+  intro σ fid
+  obtain ⟨final, path, positive, outcome⟩ := first σ fid
   exact ⟨final, path, fun _ => positive rfl, outcome⟩
 
 def cursorStep {Γ : Var → Nat} (cursor : SourceCursor Γ) :
@@ -160,41 +161,41 @@ def cursorStep {Γ : Var → Nat} (cursor : SourceCursor Γ) :
   | ⟨.value word, locals, k⟩ => cursorValue locals k word
   | _ => none
 
-def sourceChunk {Γ : Var → Nat} (cursor : SourceCursor Γ) :
-    Option {tree // SourceCutRuns true cursor tree} :=
+def sourceChunk {Γ : Var → Nat} (p : Source.Program) (budget : Nat) (cursor : SourceCursor Γ) :
+    Option {tree // SourceCutRuns p true cursor tree} :=
   match cursor with
   | ⟨.expression expr, locals, k⟩ => do
-    let e ← stateExpression (Source.expressionDepth expr) locals expr
-    return ⟨e.val.cutTree k, expression_cut_sound locals expr k e.val e.property⟩
+    let e ← callExpression p budget locals expr
+    return ⟨e.val.cutTree k, expression_cut_sound p locals expr k e.val e.property⟩
   | ⟨.object object, locals, k⟩ => do
-    let e ← objectDiagram locals object
-    return ⟨e.val.cutTree k, object_cut_sound locals object k e.val e.property⟩
+    let e ← callFlow p budget locals (.object object)
+    return ⟨e.val.cutTree k, object_cut_sound p locals object k e.val e.property⟩
   | cursor => do
     let step ← cursorStep cursor
-    return ⟨step.val, step.property.runs⟩
+    return ⟨step.val, step.property.runs p⟩
 
-def sourceCutDiagram {Γ : Var → Nat} (cutpoints : List SourceSite) (budget : Nat)
+def sourceCutDiagram {Γ : Var → Nat} (p : Source.Program) (cutpoints : List SourceSite) (budget : Nat)
     (advance : Bool) (cursor : SourceCursor Γ) :
-    Option {tree // SourceCutRuns advance cursor tree} :=
+    Option {tree // SourceCutRuns p advance cursor tree} :=
   if stopped : advance = false ∧
       ((cursor.site.any (fun site => cutpoints.contains site)) ||
         (match cursor.control with | .returned _ => true | _ => false)) = true then
     some ⟨.leaf cursor, by
-      intro σ p fid
+      intro σ fid
       exact ⟨cursor.denote σ fid, .refl _, by simp [stopped.1], rfl⟩⟩
   else match budget with
   | 0 => none
   | budget+1 => do
-    let chunk ← sourceChunk cursor
-    let continued ← chunk.val.bindChecked (next := SourceCutRuns false)
-      (fun next => sourceCutDiagram cutpoints budget false next)
+    let chunk ← sourceChunk p (budget+1) cursor
+    let continued ← chunk.val.bindChecked (next := SourceCutRuns p false)
+      (fun next => sourceCutDiagram p cutpoints budget false next)
     return ⟨continued.val, source_cut_compose (chunk.property.relax advance) continued.property⟩
 
-theorem source_cut_diagram_sound {Γ : Var → Nat} (cutpoints : List SourceSite)
+theorem source_cut_diagram_sound {Γ : Var → Nat} (p : Source.Program) (cutpoints : List SourceSite)
     (budget : Nat) (advance : Bool) (cursor : SourceCursor Γ) (tree : CutTree Γ (SourceCursor Γ))
-    (accepted : (sourceCutDiagram cutpoints budget advance cursor).map Subtype.val = some tree) :
-    SourceCutRuns advance cursor tree := by
-  cases h : sourceCutDiagram cutpoints budget advance cursor with
+    (accepted : (sourceCutDiagram p cutpoints budget advance cursor).map Subtype.val = some tree) :
+    SourceCutRuns p advance cursor tree := by
+  cases h : sourceCutDiagram p cutpoints budget advance cursor with
   | none => simp [h] at accepted
   | some result =>
     simp only [h, Option.map_some, Option.some.injEq] at accepted

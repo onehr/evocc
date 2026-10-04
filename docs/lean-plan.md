@@ -652,6 +652,36 @@ This slice's build/capture disk delta is **+4,748 KiB** (`.lake` plus capture;
 The temporary diagram-inspection source was removed after an open-handle check.
 Receipts, fixtures and original inputs remain; host free space is 52 GiB.
 
+**Calls inside cyclic spans (October 5 continuation).** `loop_call` now passes
+against its unchanged original export. Source spans are relative to the actual
+program; target spans execute the actual callee, restore the caller stack and
+owner, and carry the advanced frame counter to the next invariant. A frame
+counter is not reset or assumed constant across a loop iteration. The shared
+whole-loop checker now supports scalar-only and memory/world signatures and
+checks the complete original closure. Empty-memory/world transport remains the
+admitted call profile; this is not private-allocation support.
+
+`core-cutpoints-v2` retains the v1 budget and source-site meanings and adds a
+fifth row field: token links `[[target_id,"mem"],[target_id,"world"],...]`.
+These links precede the numeric projection; exact entry and successor scope
+comparison must justify them. Unknown token kinds refuse. V1's four-field rows
+continue to work unchanged. Both formats are untrusted proposals, not new IR
+semantics, source facts or optimizer assumptions.
+
+Four complete original pairs pass: the initial RED, a branching callee,
+callee-side signed overflow and an infinite calling loop. Ten execution/frame
+controls and 15 target, 11 proposal and three source mutations pass. The five
+frozen primary entries and original private-leaf pair replay. The first replay
+attempt accidentally paired `caller.json` with `pressure.evo` and correctly
+refused; the corrected original-target replay is retained separately. The
+development axiom/proposition audit passes. Final clean Lean and full-workspace
+acceptance are recorded in the pilot manifest when terminal.
+
+`call_loop` still refuses with a valid entry proposal: calling a cyclic callee
+needs a continuation-aware simulation, not a larger finite call budget.
+That composition, private storage, full constructor/closure coverage and
+validator execution safety still block V01. V02–V06 remain OPEN.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted
