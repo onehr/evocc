@@ -105,7 +105,7 @@ def callLoopSelfTest : IO UInt32 := do
     IO.eprintln "call-to-loop boundary admitted without a continuation proof"
     failures := failures+1
   if failures == 0 then
-    IO.println s!"{pairs.length} call-in-loop pairs, {cases.length} executions, {mutations.length} target mutations, {plans.length} proposal mutations and {sources.length} source mutations pass; call-to-loop remains refused"
+    IO.println s!"{pairs.length} call-in-loop pairs, {cases.length} executions, {mutations.length} target mutations, {plans.length} proposal mutations and {sources.length} source mutations pass; caller-only proposal still refuses a cyclic callee"
   return if failures == 0 then 0 else 1
 
 end EvoIR.Core.Source.CallLoopTests

@@ -18,6 +18,7 @@ inductive CutControl (Γ : Var → Nat) where
   | items (items : List Source.BlockItem)
   | object (object : Source.Object)
   | value (word : CWord Γ)
+  | call (callee : Nat) (type : Source.IntType) (arguments : List (CWord Γ))
   | flow (flow : SymbolicFlow Γ)
   | returned (word : CWord Γ)
 
@@ -27,6 +28,7 @@ def CutControl.denote {Γ : Var → Nat} (σ : Subst Γ) : CutControl Γ → Sou
   | .items xs => .items xs
   | .object o => .object o
   | .value w => .value (w.denote σ)
+  | .call callee type arguments => .call callee type (arguments.map (CWord.denote σ))
   | .flow f => .flow (f.denote σ)
   | .returned w => .halted (.ok (w.denote σ))
 

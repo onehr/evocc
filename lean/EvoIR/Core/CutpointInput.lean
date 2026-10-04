@@ -90,4 +90,22 @@ def readCutpoints (source : Source.Function) (text : String) :
       links := ← (← fields links).mapM localLink, tokens : CutpointLayout }
   return (budget, layouts)
 
+/-- A closure proposal names a source function and embeds that function's
+ordinary untrusted cutpoint plan. Duplicate/unknown IDs refuse at decoding;
+every selected plan still needs an independently checked `LoopDiagram`. -/
+def readCallCutpoints (source : Source.Program) (text : String) :
+    Option (Nat × List (Nat × (Nat × List CutpointLayout))) := do
+  let input ← (Lean.Json.parse text).toOption
+  let [version, fuel, proposals] ← fields input | none
+  if (← version.getStr?.toOption) != "core-call-cutpoints-v1" then none else
+  let budget ← natural fuel
+  if budget == 0 || budget > 4096 then none else
+  let rows ← (← fields proposals).mapM fun row => do
+    let [id, plan] ← fields row | none
+    let id ← natural id
+    let f ← source.functions.find? (·.symbol == id)
+    return (id, ← readCutpoints f plan.compress)
+  if (rows.map Prod.fst).eraseDups.length != rows.length then none else
+  return (budget, rows)
+
 end EvoIR.Core.Symbolic

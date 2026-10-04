@@ -19,6 +19,8 @@ import EvoIR.Core.CallControlTests
 import EvoIR.Core.CallLoopTests
 import EvoIR.Core.CallingLoopContextTests
 import EvoIR.Core.SourceResumeTests
+import EvoIR.Core.SourceFrontierTests
+import EvoIR.Core.CallFrontierTests
 
 /-!
 # The executable evaluator
@@ -312,12 +314,14 @@ def run (args : List String) : IO UInt32 := do
       let callLoops ← EvoIR.Core.Source.CallLoopTests.callLoopSelfTest
       let callContexts ← EvoIR.Core.Source.CallingLoopContextTests.callingLoopContextSelfTest
       let sourceResumes ← EvoIR.Core.Symbolic.SourceResumeTests.sourceResumeSelfTest
+      let sourceFrontiers ← EvoIR.Core.Symbolic.SourceFrontierTests.sourceFrontierSelfTest
+      let callFrontiers ← EvoIR.Core.Symbolic.CallFrontierTests.callFrontierSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
         statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 &&
         calls == 0 && callControls == 0 && callLoops == 0 && callContexts == 0 &&
-        sourceResumes == 0 then 0 else 1
+        sourceResumes == 0 && sourceFrontiers == 0 && callFrontiers == 0 then 0 else 1
   | ["--check-core-loop-pair", sourcePath, targetPath, proposalPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
@@ -327,11 +331,17 @@ def run (args : List String) : IO UInt32 := do
         | IO.eprintln "CORE_PAIR_REFUSED: expected one selected entry"; return 1
       let some sf := source.functions.find? (·.symbol == entry)
         | IO.eprintln "CORE_PAIR_REFUSED: missing selected source function"; return 1
-      let some (budget, layouts) := EvoIR.Core.Symbolic.readCutpoints sf (← IO.FS.readFile proposalPath)
+      let proposal ← IO.FS.readFile proposalPath
+      if let some (budget, layouts) := EvoIR.Core.Symbolic.readCutpoints sf proposal then
+        let some accepted := EvoIR.Core.Symbolic.loopPair source target layouts budget
+          | IO.eprintln "CORE_PAIR_REFUSED: entry, span or successor closure"; return 1
+        IO.println s!"PROVED_LOOP_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits execution=unbounded scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+        return 0
+      let some (budget, rows) := EvoIR.Core.Symbolic.readCallCutpoints source proposal
         | IO.eprintln "CORE_PAIR_MALFORMED: cutpoint proposal"; return 2
-      let some accepted := EvoIR.Core.Symbolic.loopPair source target layouts budget
-        | IO.eprintln "CORE_PAIR_REFUSED: entry, span or successor closure"; return 1
-      IO.println s!"PROVED_LOOP_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits execution=unbounded scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+      let some accepted := EvoIR.Core.Symbolic.callFrontierPair source target (fun id => rows.lookup id) budget
+        | IO.eprintln "CORE_PAIR_REFUSED: caller prefixes, callee invariant or return continuation"; return 1
+      IO.println s!"PROVED_LOOP_CALL_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits execution=unbounded scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
       return 0
   | ["--check-core-leaf-pair", sourcePath, targetPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)

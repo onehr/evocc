@@ -22,6 +22,51 @@ theorem Reaches.trans {step : α → Option α} {a b c : α}
   | refl => exact bc
   | next h _ ih => exact .next h (ih bc)
 
+theorem Reaches.infinite_suffix {step : α → Option α} {a b : α}
+    (path : Reaches step a b) (infinite : Infinite step a) : Infinite step b := by
+  induction path with
+  | refl => exact infinite
+  | @next a next b edge rest ih =>
+    obtain ⟨trace, entry, edges⟩ := infinite
+    have same : next = trace 1 := Option.some.inj (edge.symm.trans (by simpa [entry] using edges 0))
+    exact ih ⟨fun n => trace (n+1), same.symm, fun n => edges (n+1)⟩
+
+theorem Reaches.infinite_prefix {step : α → Option α} {a b : α}
+    (path : Reaches step a b) (infinite : Infinite step b) : Infinite step a := by
+  induction path with
+  | refl => exact infinite
+  | @next a next b edge rest ih =>
+    obtain ⟨trace, entry, edges⟩ := ih infinite
+    refine ⟨(fun n => match n with | 0 => a | n+1 => trace n), rfl, ?_⟩
+    intro n
+    cases n with
+    | zero => simpa only [entry] using edge
+    | succ n => exact edges n
+
+/-- Attach finite, actual prefixes to an already proved continuation. One
+machine may already be at the call site, so either prefix may have zero steps;
+all subsequent divergence and progress obligations still come from `tail`. -/
+theorem Refines.prepend {sourceStep : S → Option S} {targetStep : T → Option T}
+    {sourceObserve : S → Option O} {targetObserve : T → Option O} {s s' : S} {t t' : T}
+    (tail : Refines sourceStep targetStep sourceObserve targetObserve s' t')
+    (sourcePath : Reaches sourceStep s s') (targetPath : Reaches targetStep t t') :
+    Refines sourceStep targetStep sourceObserve targetObserve s t := by
+  have terminal : ∀ final, Reaches targetStep t final → targetStep final = none →
+      ∃ sf o, Reaches sourceStep s sf ∧ sourceStep sf = none ∧
+        sourceObserve sf = some o ∧ targetObserve final = some o := by
+    intro final path stop
+    obtain ⟨sf, o, path, ss, so, to⟩ := tail.terminal final (targetPath.finish_from_prefix path stop) stop
+    exact ⟨sf, o, sourcePath.trans path, ss, so, to⟩
+  refine ⟨terminal, ?_, ?_⟩
+  · intro infinite
+    exact sourcePath.infinite_prefix (tail.divergence (targetPath.infinite_suffix infinite))
+  · intro final path
+    cases h : targetStep final with
+    | some next => exact .inl ⟨next, rfl⟩
+    | none =>
+      obtain ⟨_, o, _, _, _, observed⟩ := terminal final path h
+      exact .inr ⟨o, observed⟩
+
 theorem reaches_of_positive {step : α → Option α} {a b : α}
     (h : Relation.TransGen (Predecessor step) b a) : Reaches step a b := by
   induction h with

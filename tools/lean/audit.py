@@ -297,6 +297,23 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.CallFrontierPair.refines",
+        "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} "
+        "(pair : EvoIR.Core.Symbolic.CallFrontierPair source target) (args : List EvoIR.Core.Source.Value), "
+        "List.map EvoIR.Core.Source.Value.type args = List.map (fun p => p.type.type) pair.sourceFunction.parameters → "
+        "∃ sourceEntry targetEntry, EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = "
+        "Except.ok sourceEntry ∧ EvoIR.Core.IR.initial target pair.targetFunction.name "
+        "(EvoIR.Core.Symbolic.loopInputValues pair.tokens args) = Except.ok targetEntry ∧ "
+        "EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+    ),
+    # Audit the proof-producing executable too, not only the pair's projection theorem.
+    (
+        "EvoIR.Core.Symbolic.callFrontierPair",
+        "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → "
+        "EvoIR.Core.Symbolic.CalleeProposals → Nat → "
+        "Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+    ),
+    (
         "EvoIR.Core.Symbolic.call_target_conditional",
         "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b yesBlock "
         "noBlock : EvoIR.Core.IR.Block) (scope yesScope noScope : EvoIR.Core.Symbolic.Scope Γ) (id : "
