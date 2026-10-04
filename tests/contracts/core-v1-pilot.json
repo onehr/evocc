@@ -200,9 +200,18 @@
     },
     "claim_ceiling": "Source-directed checking for executed integer add/sub/mul with usual arithmetic conversions, and finite instruction segments related to actual IR.Steps. All six source integer ranks and signedness are retained. No source expression/control-flow, call or complete program-pair admission follows from these components."
   },
+  "source_expression_and_edges": {
+    "status": "INTEGRATION_PASS_COMPONENTS_ONLY",
+    "implementation_commit": "196d84a15426999e69f23f881312b05f9c0e1177",
+    "implementation": ["lean/EvoIR/Core/SourceExpression.lean", "lean/EvoIR/Core/SymbolicEdge.lean"],
+    "kernel_examples": 40,
+    "expression_runtime_cases": 17,
+    "claim_ceiling": "Source-tree-derived read-only expression diagrams and exact simultaneous target edge binding, connected to actual execution. Entry correspondence, source CFG/state invariants, calls and whole-program admission remain required.",
+    "disk": {"measured_cache_capture_delta_kib": 4244, "source_growth_upper_bound_kib": 1024, "free_after_kib": 52041628, "cleanup": "Removed two temporary development audit receipts. Protected contracts, current gate logs and Lean cache retained; no additional target/kernel tree or VM image."}
+  },
   "integration_gates": {
-    "rust_implementation_commit": "6321f2181c99137bcb2a9bd040238e86c97b0565",
-    "lean_implementation_commit": "6321f2181c99137bcb2a9bd040238e86c97b0565",
+    "rust_implementation_commit": "196d84a15426999e69f23f881312b05f9c0e1177",
+    "lean_implementation_commit": "196d84a15426999e69f23f881312b05f9c0e1177",
     "full_workspace_command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 tools/gate-changed.sh --full-workspace --offline",
     "full_workspace": {"status": "PASS", "suites": 401, "passed": 3080, "failed": 0, "ignored": 5, "clippy": "PASS", "format": "PASS"},
     "prior_attempts": ["Interrupted during compilation for disk recovery, exit 143; not PASS.", "Sandboxed run: 3077 passed, 2 container-permission failures, 5 ignored; not PASS."],
@@ -210,12 +219,12 @@
     "lean_status": "PASS",
     "lean_receipt": "tests/contracts/lean-p0-receipt.json",
     "lean_worktree_clean": true,
-    "core_primitive_targets": 25,
+    "core_primitive_targets": 31,
     "core_primitive_proof_kind": "kernel-only",
     "raw_logs": ".evidence/verification-core/20261004/source-execution",
-    "full_workspace_log": "source-fragment-full-workspace.log",
-    "lean_log": "source-fragment-lean-gate.log",
-    "previous_pass_logs": ["ir-full-workspace.log", "ir-lean-gate.log", "abs-full-workspace.log", "abs-lean-gate-fixed.log", "simulation-lean-gate.log", "symbolic-lean-gate.log"],
+    "full_workspace_log": "expression-edge-full-workspace.log",
+    "lean_log": "expression-edge-lean-gate.log",
+    "previous_pass_logs": ["ir-full-workspace.log", "ir-lean-gate.log", "abs-full-workspace.log", "abs-lean-gate-fixed.log", "simulation-lean-gate.log", "symbolic-lean-gate.log", "source-fragment-full-workspace.log", "source-fragment-lean-gate.log"],
     "capture_retention_bytes": 524288000,
     "claim_ceiling": "Integration and local proof evidence, plus the separately recorded exact abs source/IR pair. No generic source/IR checker, compiled-backend theorem or verified-release acceptance."
   },
