@@ -1,6 +1,7 @@
 import EvoIR.Core.SourceCutpoint
 import EvoIR.Core.Correspondence
 import EvoIR.Core.CallSourceDiagram
+import EvoIR.Core.SourceResumption
 
 /-! Checked finite source spans between cyclic cutpoints. The exploration
 bound is not an execution bound: a span must end at a checked successor or
@@ -176,6 +177,51 @@ def cursorStep {Γ : Var → Nat} (cursor : SourceCursor Γ) :
   | ⟨.value word, locals, k⟩ => cursorValue locals k word
   | _ => none
 
+theorem resumption_cut_sound {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
+    (frame : Source.Frame) (word : CWord Γ) (k : List Source.Frame) (tree : StateTree Γ)
+    (diagram : ResumptionDiagram p locals frame word tree) :
+    SourceCutRuns p true ⟨.value word, locals, frame :: k⟩ (tree.cutTree k) := by
+  intro σ fid context
+  have path := diagram.runs σ fid (sourceContextFrames context k)
+  have same := tree.cut_eval σ fid k context
+  have start : (SourceCursor.mk (.value word) locals (frame :: k)).denote σ fid context =
+      ⟨.value (word.denote σ), locals.denote σ, frame :: sourceContextFrames context k, fid⟩ := by
+    cases context with
+    | none => rfl
+    | some caller =>
+      simp only [SourceCursor.denote, CutControl.denote]
+      rw [diagram.frames_stable]
+  rw [start]
+  cases result : tree.denote σ with
+  | mk ls value =>
+    cases value with
+    | error fault =>
+      simp only [result] at path
+      obtain ⟨failedLocals, failedK, failedFid, steps⟩ := path
+      have failed : (tree.cutTree k).eval σ = .error fault := by
+        cases h : (tree.cutTree k).eval σ <;> simp_all [Except.map]
+      refine ⟨_, steps, ?_, ?_⟩
+      · intro _
+        exact steps.toReaches.positive_of_ne (by intro h; cases h)
+      · simp [failed]
+    | ok answer =>
+      simp only [result] at path
+      have output : ∃ exit, (tree.cutTree k).eval σ = .ok exit ∧
+          exit.denote σ fid context =
+            ⟨.value answer, ls, sourceContextFrames context k, fid⟩ := by
+        cases h : (tree.cutTree k).eval σ with
+        | error fault => simp [h, result, Except.map] at same
+        | ok exit => exact ⟨exit, rfl, by simpa [h, result, Except.map] using same⟩
+      obtain ⟨exit, success, represented⟩ := output
+      refine ⟨_, path, ?_, ?_⟩
+      · intro _
+        apply path.toReaches.positive_of_ne
+        intro equal
+        have lengths := congrArg (fun s : Source.State => s.continuation.length) equal
+        simp only [List.length_cons] at lengths
+        omega
+      · simpa [success] using represented.symm
+
 def sourceChunk {Γ : Var → Nat} (p : Source.Program) (budget : Nat) (cursor : SourceCursor Γ) :
     Option {tree // SourceCutRuns p true cursor tree} :=
   match cursor with
@@ -185,6 +231,12 @@ def sourceChunk {Γ : Var → Nat} (p : Source.Program) (budget : Nat) (cursor :
   | ⟨.object object, locals, k⟩ => do
     let e ← callFlow p budget locals (.object object)
     return ⟨e.val.cutTree k, object_cut_sound p locals object k e.val e.property⟩
+  | ⟨.value word, locals, frame :: k⟩ =>
+    match resumeExpression p budget locals frame word with
+    | some e => some ⟨e.val.cutTree k, resumption_cut_sound p locals frame word k e.val e.property⟩
+    | none => do
+      let step ← cursorStep ⟨.value word, locals, frame :: k⟩
+      return ⟨step.val, step.property.runs p⟩
   | cursor => do
     let step ← cursorStep cursor
     return ⟨step.val, step.property.runs p⟩

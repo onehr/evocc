@@ -48,11 +48,11 @@ def CallingCutRuns {Γ : Var → Nat} (p : IR.Program) (f : IR.Function) (tokens
     | .ok exit => ∃ afterCalls, final = exit.callState σ tokens f owner afterCalls stack
 
 theorem calling_cut_span {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
-    (tokens advance : Bool) (b : IR.Block) (scope : Scope Γ)
+    (tokens advance : Bool) (b : IR.Block) (pc : Nat) (scope : Scope Γ)
     (before : CutTree Γ (Scope Γ)) (after : CutTree Γ (TargetExit Γ))
-    (span : TargetInstructionSpan p f b 0 scope before)
+    (span : TargetInstructionSpan p f b pc scope before)
     (continued : CutBind (CallingCutRuns p f tokens advance b.name b.instructions.length) before after) :
-    CallingCutRuns p f tokens advance b.name 0 scope after := by
+    CallingCutRuns p f tokens advance b.name pc scope after := by
   intro σ owner nextFrame stack
   obtain ⟨middle, path, outcome⟩ := span σ owner nextFrame stack
   rcases continued.outcome σ with ⟨fault, failed, output⟩ |
@@ -140,11 +140,12 @@ theorem calling_cut_choice {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
 
 def callingCutDiagram {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     (tokens : Bool) (type : Source.IntType) (cutpoints : List String) (budget : Nat)
-    (advance : Bool) (scope : Scope Γ) (label : String) :
-    Option {tree // CallingCutRuns p f tokens advance label 0 scope tree} :=
-  if stopped : advance = false ∧ label ∈ cutpoints then
+    (advance : Bool) (scope : Scope Γ) (label : String) (pc : Nat := 0) :
+    Option {tree // CallingCutRuns p f tokens advance label pc scope tree} :=
+  if stopped : advance = false ∧ label ∈ cutpoints ∧ pc = 0 then
     some ⟨.leaf (.next label scope), by
       intro σ owner nextFrame stack
+      rw [stopped.2.2]
       exact ⟨_, .refl _, by simp [stopped.1], nextFrame, rfl⟩⟩
   else match budget with
   | 0 => none
@@ -157,7 +158,7 @@ def callingCutDiagram {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
       have name : block.val.name = label := by simpa using List.find?_some block.property
       have found : f.blocks.find? (·.name == block.val.name) = some block.val := by
         simpa only [name] using block.property
-      let span ← targetInstructionSpan p f block.val (budget+1) 0 scope
+      let span ← targetInstructionSpan p f block.val (budget+1) pc scope
       let tail ← span.val.bindChecked
         (next := CallingCutRuns p f tokens advance block.val.name block.val.instructions.length)
         (fun next => do
@@ -198,7 +199,7 @@ def callingCutDiagram {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
           )
       return ⟨tail.val, by
         simpa only [name] using
-          calling_cut_span p f tokens advance block.val scope span.val tail.val span.property tail.property⟩
+          calling_cut_span p f tokens advance block.val pc scope span.val tail.val span.property tail.property⟩
     else none
 
 end EvoIR.Core.Symbolic

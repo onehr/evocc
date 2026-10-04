@@ -1,4 +1,5 @@
 import EvoIR.Core.LoopReturn
+import EvoIR.Core.ReturnContinuation
 
 /-! A cyclic callee is an open simulation: its return rejoins a proved caller
 continuation instead of becoming a terminal observation. Both sides execute
@@ -163,5 +164,39 @@ theorem LoopDiagram.call_refines (σ : Subst inputWidths)
   apply simulation.prepend (Or.inl (d.initialRelated σ (some caller) nextFrame (nextFrame+1) _))
   · exact .single sourceStep
   · cases targetStep with | execute h => exact .single h
+
+/-- The caller suffix premise is discharged by the executable return checker.
+This is an actual call-site theorem, not yet a source-entry admission theorem:
+the argument/frontier construction must still supply the real call operands. -/
+theorem LoopDiagram.call_checked_return (argumentsσ callerσ : Subst inputWidths)
+    {source : Source.Function} {target : IR.Function} (s : Source.Program) (t : IR.Program)
+    (d : LoopDiagram s t source target) (observationType : Source.IntType)
+    (fid : Nat) (locals : LocalStore inputWidths) (frames : List Source.Frame)
+    (scope : Scope inputWidths) (owner nextFrame pc : Nat)
+    (f : IR.Function) (b : IR.Block) (inst : IR.Instruction) (callerTokens : Bool)
+    (sourceFound : s.functions.find? (·.symbol == source.symbol) = some source)
+    (function : t.functions.find? (·.name == f.name) = some f)
+    (block : f.blocks.find? (·.name == b.name) = some b)
+    (atPc : b.instructions[pc]? = some inst)
+    (call : inst.op = .call target.name)
+    (targetFound : t.functions.find? (·.name == target.name) = some target)
+    (arguments : inst.operands.mapM (IR.lookup (scope.denote callerσ callTokens)) =
+      .ok (loopInputValues d.tokens ((parameterWords source.parameters).map (CWord.denote argumentsσ))))
+    (results : inst.results.map IR.Binding.type = target.returns)
+    (resumption : CheckedReturn s t fid f callerTokens observationType source.returnType.type
+      locals frames b.name (pc+1) scope inst.results d.tokens) :
+    LoweringRefines s t observationType
+      ⟨.call source.symbol source.returnType.type
+          ((parameterWords source.parameters).map (CWord.denote argumentsσ)),
+        locals.denote callerσ, frames, fid⟩
+      (cutTargetState callerσ f b.name pc owner nextFrame scope []) := by
+  apply d.call_refines argumentsσ s t observationType
+    ⟨fid, locals.denote callerσ, frames⟩
+    ⟨f.name, b.name, pc, scope.denote callerσ callTokens, owner⟩ nextFrame []
+    f b inst sourceFound function block atPc call targetFound arguments results
+    _ resumption.diagram.simulation
+  intro τ word afterCalls typed
+  have resumed := resumption.related callerσ (word.denote τ) typed owner afterCalls
+  simpa only [TargetExit.callState, cut_results_values] using resumed
 
 end EvoIR.Core.Symbolic

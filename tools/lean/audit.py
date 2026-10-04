@@ -566,6 +566,38 @@ CORE_PRIMITIVE_TARGETS = [
         "{ control := EvoIR.Core.IR.Control.running a, stack := stack, nextFrame := nextFrame }",
     ),
     (
+        "EvoIR.Core.Symbolic.ReturnContinuation.refines",
+        "∀ {source : EvoIR.Core.Source.Program} {ir : EvoIR.Core.IR.Program} {fid : Nat} {target : "
+        "EvoIR.Core.IR.Function} {tokens : Bool} {type : EvoIR.Core.Source.IntType} {cursor : "
+        "EvoIR.Core.Symbolic.SourceCursor EvoIR.Core.Symbolic.inputWidths} {label : String} {pc : Nat} {scope : "
+        "EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths} (d : EvoIR.Core.Symbolic.ReturnContinuation source ir "
+        "fid target tokens type cursor label pc scope) (σ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) (owner nextFrame "
+        ": Nat), EvoIR.Core.LoweringRefines source ir type (EvoIR.Core.Symbolic.SourceCursor.denote σ fid cursor) "
+        "(EvoIR.Core.Symbolic.cutTargetState σ target label pc owner nextFrame scope [])",
+    ),
+    (
+        "EvoIR.Core.Symbolic.LoopDiagram.call_checked_return",
+        "∀ (argumentsσ callerσ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) {source : EvoIR.Core.Source.Function} "
+        "{target : EvoIR.Core.IR.Function} (s : EvoIR.Core.Source.Program) (t : EvoIR.Core.IR.Program) (d : "
+        "EvoIR.Core.Symbolic.LoopDiagram s t source target) (observationType : EvoIR.Core.Source.IntType) (fid : Nat) "
+        "(locals : EvoIR.Core.Symbolic.LocalStore EvoIR.Core.Symbolic.inputWidths) (frames : List "
+        "EvoIR.Core.Source.Frame) (scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths) (owner nextFrame pc "
+        ": Nat) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (inst : EvoIR.Core.IR.Instruction) (callerTokens : "
+        "Bool), List.find? (fun x => x.symbol == source.symbol) s.functions = some source → List.find? (fun x => x.name "
+        "== f.name) t.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.instructions[pc]? "
+        "= some inst → inst.op = EvoIR.Core.IR.Operation.call target.name → List.find? (fun x => x.name == target.name) "
+        "t.functions = some target → List.mapM (EvoIR.Core.IR.lookup (EvoIR.Core.Symbolic.Scope.denote callerσ "
+        "EvoIR.Core.Symbolic.callTokens scope)) inst.operands = Except.ok (EvoIR.Core.Symbolic.loopInputValues d.tokens "
+        "(List.map (EvoIR.Core.Symbolic.CWord.denote argumentsσ) (EvoIR.Core.Symbolic.parameterWords source.parameters))) "
+        "→ List.map EvoIR.Core.IR.Binding.type inst.results = target.returns → ∀ (resumption : "
+        "EvoIR.Core.Symbolic.CheckedReturn s t fid f callerTokens observationType source.returnType.type locals frames "
+        "b.name (pc + 1) scope inst.results d.tokens), EvoIR.Core.LoweringRefines s t observationType { control := "
+        "EvoIR.Core.Source.Control.call source.symbol source.returnType.type (List.map (EvoIR.Core.Symbolic.CWord.denote "
+        "argumentsσ) (EvoIR.Core.Symbolic.parameterWords source.parameters)), locals := "
+        "EvoIR.Core.Symbolic.LocalStore.denote callerσ locals, continuation := frames, functionId := fid } "
+        "(EvoIR.Core.Symbolic.cutTargetState callerσ f b.name pc owner nextFrame scope [])",
+    ),
+    (
         "EvoIR.Core.Symbolic.source_cut_diagram_sound",
         "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (cutpoints : List EvoIR.Core.Symbolic.SourceSite) "
         "(budget : Nat) (advance : Bool) (cursor : EvoIR.Core.Symbolic.SourceCursor Γ) "
