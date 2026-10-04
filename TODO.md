@@ -2537,6 +2537,20 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   manifest. Build/capture disk delta +4,612 KiB; target/frontend unchanged,
   52 GiB free. Protected evidence, fixtures and Lean cache remain.
 
+  **October 5 cyclic-callee context continuation:** `854f6b9e` proves
+  `LoopDiagram.call_refines`: actual call entry, context-relative cyclic spans,
+  preserved caller state/frame counters, diagnostics and unbounded composition
+  with a separately proved return continuation. Six suspended-context controls
+  and a residual-return negative pass; clean Lean has 70 kernel-only core
+  targets. The existing audit records the full conditional theorem. Automatic
+  argument/frontier and post-return expression admission is still missing:
+  original `call_loop` remains refused. Receipt: `cyclic_callee_context` in the
+  pilot manifest. V01, private storage, full coverage and validator safety
+  remain OPEN; no advancement of V02–V06 is claimed.
+  Full workspace: 401 suites / 3,080 passed / zero failed / five ignored,
+  Clippy/format pass; ten original pairs replay. Disk delta +3,108 KiB,
+  target/frontend unchanged, 51 GiB free; protected artifacts retained.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

@@ -687,6 +687,36 @@ needs a continuation-aware simulation, not a larger finite call budget.
 That composition, private storage, full constructor/closure coverage and
 validator execution safety still block V01. V02–V06 remain OPEN.
 
+**Cyclic callee contexts (October 5 continuation).** Implementation `854f6b9e`
+strengthens the same checked spans and successor associations to quantify over
+the actual suspended source caller and target return stack. A source return
+restores the caller's locals, continuation and function identity. An IR return
+uses the actual result bindings, owner and accumulated frame counter, retaining
+binding failures rather than fabricating a successful return. A returned source
+cursor with a residual callee continuation is refused.
+
+`LoopDiagram.call_refines` connects both actual call-entry transitions to the
+cyclic invariant and a separately proved caller continuation. Normal return
+rejoins that continuation; a callee diagnostic remains terminal; divergent
+callee execution is covered without assuming termination or unfolding a fixed
+number of iterations. The theorem is kernel-only and its complete conditional
+statement is recorded by the existing audit. The clean Lean gate passes with
+70 core targets and 1,246,159 vector answers. Six suspended-context execution
+controls and the residual-return negative pass, as do the existing pair and
+mutation tests. Acceptance details are in `cyclic_callee_context` in the pilot
+manifest. Full workspace completes with 401 suites / 3,080 passed / zero failed /
+five ignored, Clippy/format pass. Ten original pairs replay; `call_loop` remains
+an expected refusal. Build/capture disk delta is +3,108 KiB, target/frontend is
+unchanged, capture is 15,400 KiB of 500 MiB, and 51 GiB remains free. No disposable
+payload is retained and no protected artifacts were deleted.
+
+This is a **composition theorem, not automatic caller admission**. Its caller
+continuation premise must still be constructed from the actual source and IR.
+The unchanged `call_loop` remains refused until argument/frontier handling and
+post-return expression checking use this theorem. Private-storage composition,
+full frozen coverage and validator execution safety also remain required.
+V01 is OPEN; V02–V06 are not implemented. No scope or interpreter was changed.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted
