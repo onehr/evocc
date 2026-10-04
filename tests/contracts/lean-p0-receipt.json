@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "196d84a15426999e69f23f881312b05f9c0e1177",
+    "lean_commit": "7ec19c0c68a59c36f32a240e3977fc21cbfbb485",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -39,6 +39,8 @@
       "lean/EvoIR/Core/IRReader.lean",
       "lean/EvoIR/Core/IRTests.lean",
       "lean/EvoIR/Core/IRWellFormed.lean",
+      "lean/EvoIR/Core/LeafCorrespondence.lean",
+      "lean/EvoIR/Core/LeafCorrespondenceTests.lean",
       "lean/EvoIR/Core/LocalStorage.lean",
       "lean/EvoIR/Core/Scalar.lean",
       "lean/EvoIR/Core/ScalarCorrectness.lean",
@@ -51,6 +53,7 @@
       "lean/EvoIR/Core/SymbolicBindings.lean",
       "lean/EvoIR/Core/SymbolicEdge.lean",
       "lean/EvoIR/Core/SymbolicEdgeTests.lean",
+      "lean/EvoIR/Core/SymbolicEntry.lean",
       "lean/EvoIR/Core/SymbolicInstruction.lean",
       "lean/EvoIR/Core/SymbolicInstructionTests.lean",
       "lean/EvoIR/Core/SymbolicScalar.lean",
@@ -90,6 +93,7 @@
         "EvoIR.Core.SymbolicSourceTests",
         "EvoIR.Core.SourceExpressionTests",
         "EvoIR.Core.SymbolicEdgeTests",
+        "EvoIR.Core.LeafCorrespondenceTests",
         "EvoIR.Term",
         "EvoIR.Fact",
         "EvoIR.Rule",
@@ -148,6 +152,15 @@
       "lean/EvoIR/Core/IRWellFormed.lean": [
         "EvoIR.Core.IRReader"
       ],
+      "lean/EvoIR/Core/LeafCorrespondence.lean": [
+        "EvoIR.Core.SymbolicEntry",
+        "EvoIR.Core.Correspondence",
+        "EvoIR.Core.IRWellFormed"
+      ],
+      "lean/EvoIR/Core/LeafCorrespondenceTests.lean": [
+        "EvoIR.Core.LeafCorrespondence",
+        "EvoIR.Core.SourceExpressionTests"
+      ],
       "lean/EvoIR/Core/LocalStorage.lean": [
         "EvoIR.Core.Execution"
       ],
@@ -189,6 +202,10 @@
         "EvoIR.Core.SymbolicEdge",
         "EvoIR.Core.IRReader"
       ],
+      "lean/EvoIR/Core/SymbolicEntry.lean": [
+        "EvoIR.Core.SourceExpression",
+        "EvoIR.Core.SymbolicEdge"
+      ],
       "lean/EvoIR/Core/SymbolicInstruction.lean": [
         "EvoIR.Core.SymbolicBindings"
       ],
@@ -224,7 +241,8 @@
         "EvoIR.Core.ExecutionTests",
         "EvoIR.Core.IRTests",
         "EvoIR.Core.CorrespondenceTests",
-        "EvoIR.Core.SourceExpressionTests"
+        "EvoIR.Core.SourceExpressionTests",
+        "EvoIR.Core.LeafCorrespondenceTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -15515,6 +15533,39 @@
   "compilation_core_primitives": {
     "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; no proof of source export, input-validation soundness, source/IR simulation, whole-function checker or compilation yet",
     "targets": [
+      {
+        "theorem": "EvoIR.Core.Symbolic.parameter_words_cover",
+        "proposition": "∀ (ps : List EvoIR.Core.Source.Parameter) (values : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type values = List.map (fun p => p.type.type) ps → List.map (EvoIR.Core.Symbolic.CWord.denote (EvoIR.Core.Symbolic.inputSubst values)) (EvoIR.Core.Symbolic.parameterWords ps) = values",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.scalar_entry_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (source : EvoIR.Core.Source.Function) (target : EvoIR.Core.IR.Function) (args : List (EvoIR.Core.Symbolic.CWord Γ)) (env : EvoIR.Core.Symbolic.CBindings Γ) (scope : EvoIR.Core.Symbolic.Scope Γ) (owner : Nat), EvoIR.Core.Symbolic.scalarEntry source target args = some (env, scope) → ∃ locals block, EvoIR.Core.Source.parameterLocals source.parameters (List.map (EvoIR.Core.Symbolic.CWord.denote σ) args) = Except.ok locals ∧ EvoIR.Core.Symbolic.CBindings.Related σ env locals ∧ target.blocks.head? = some block ∧ EvoIR.Core.IR.enter target (List.map (fun v => EvoIR.Core.Symbolic.sourceValueIR (EvoIR.Core.Symbolic.CWord.denote σ v)) args) owner = Except.ok { function := target.name, block := block.name, pc := 0, values := EvoIR.Core.Symbolic.Scope.denote σ (fun x => EvoIR.Core.IR.Value.world) scope, owner := owner }",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.LeafPair.refines",
+        "proposition": "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} (pair : EvoIR.Core.Symbolic.LeafPair source target) (args : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type args = List.map (fun p => p.type.type) pair.sourceFunction.parameters → ∃ sourceEntry targetEntry, EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ EvoIR.Core.IR.initial target pair.targetFunction.name (List.map EvoIR.Core.Symbolic.sourceValueIR args) = Except.ok targetEntry ∧ EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
       {
         "theorem": "EvoIR.Core.Symbolic.edge_sound",
         "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) (types : Nat → EvoIR.Core.IR.Ty), (∀ (id : Nat), (ρ id).type = types id) → ∀ (f : EvoIR.Core.IR.Function) (a : EvoIR.Core.IR.Activation) (scope next : EvoIR.Core.Symbolic.Scope Γ) (successor : EvoIR.Core.IR.Edge), a.values = EvoIR.Core.Symbolic.Scope.denote σ ρ scope → EvoIR.Core.Symbolic.edge types f scope successor = some next → EvoIR.Core.IR.jump f a successor = Except.ok { function := a.function, block := successor.block, pc := 0, values := EvoIR.Core.Symbolic.Scope.denote σ ρ next, owner := a.owner }",
