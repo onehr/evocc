@@ -290,8 +290,8 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.Symbolic.unary_sound",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (op : EvoIR.Core.Source.Unary) "
         "(value : EvoIR.Core.Symbolic.CWord Γ), "
-        "(do EvoIR.Core.Symbolic.guards σ (EvoIR.Core.Symbolic.unary op value).1; "
-        "return EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.unary op value).2) = "
+        "(do EvoIR.Core.Symbolic.guards σ (EvoIR.Core.Symbolic.unary op value).fst "
+        "pure (EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.unary op value).snd)) = "
         "EvoIR.Core.Source.unaryValue op (EvoIR.Core.Symbolic.CWord.denote σ value)",
     ),
     (
