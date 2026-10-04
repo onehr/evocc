@@ -12,6 +12,7 @@ Population/commands: [core-v1-pilot.json](../../tests/contracts/core-v1-pilot.js
 | `4483ef67` — independent source validation | 44 input cases, five frozen exports and 36 integer-type pairs pass; an exported unsequenced-access case refuses. Clean Lean gate passes. | `WELL_FORMED_NOT_COMPILATION_VERIFIED`; execution safety and source/target correspondence remain unproved. |
 | Integration gate on the same Rust implementation | 401 suites: **3,079 passed / 0 failed / 5 ignored**; Clippy and formatting pass. | No compilation or verified-release acceptance. |
 | `857d7d90` — source-machine slice | 22 semantic cases, six Rust source-interface tests and ten-function exported closure pass; both Rust interpreters agree. Full workspace: **401 suites, 3,080 passed / 0 failed / 5 ignored**; Clippy/format pass. Clean Lean gate: ten core targets, all kernel-only. | Unbounded source steps and kernel-only machine/primitive lemmas; no source/IR simulation or checker soundness. |
+| Target-machine slice (gate pending) | 51 target tests; five frozen entries and nine-function emitted closure execute in Lean with matching bits/diagnostic. | Independent canonical reader, token/access/effect checks and unbounded execution; no validator or source/target checker soundness. |
 
 | Existing-pipeline pilot | Functions with wrapper | Blocks | Spill store/reload pairs | Incoming stack args |
 | --- | ---: | ---: | ---: | ---: |
@@ -58,3 +59,5 @@ were retired (about 6.6 GiB logical; all regenerable). Free space rose from
 20,841,272 to 27,393,504 KiB; compiler/checker executables and evidence remain.
 This slice's retained text/log growth is under 2 MiB, with build-cache growth
 removed; the host-wide free-space delta is not attributed solely to this task.
+Target-machine disk delta before integration: `.lake` +10,776 KiB,
+retained captures +under 1 MiB and source +under 64 KiB; no new Cargo target tree.

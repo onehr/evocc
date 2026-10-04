@@ -2342,9 +2342,13 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   closure pass; the latter agrees with both existing Rust interpreters. New
   kernel-only lemmas cover step determinism, finite prefixes, terminal
   diagnostics, an infinite loop trace and the typed arithmetic bridge. These
-  are not compilation theorems: validator soundness, actual EvoIR execution/
-  result checking and whole-function simulation remain open. Test step limits
-  are explicitly not proof or divergence outcomes.
+  are not compilation theorems. The distinct canonical EvoIR reader, token/
+  access/effect checks and small-step execution now run the same frozen entries
+  and whole closure; 51 target regressions pass. That closure has ten source
+  functions but nine target functions because existing private-leaf substitution
+  inlines `frame`; V01 must prove that actual transformation too. Validator
+  soundness, two-input result checking and whole-function simulation remain
+  open. Test step limits are explicitly not proof or divergence outcomes.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

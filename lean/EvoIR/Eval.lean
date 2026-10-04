@@ -3,6 +3,7 @@ import EvoIR.Registry
 import EvoIR.Core.Source
 import EvoIR.Core.WellFormedTests
 import EvoIR.Core.ExecutionTests
+import EvoIR.Core.IRTests
 
 /-!
 # The executable evaluator
@@ -269,7 +270,7 @@ def selfTest : IO UInt32 := do
 /-! ## Entry point -/
 
 def usage : String :=
-  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...]"
+  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...]"
 
 def run (args : List String) : IO UInt32 := do
   match args with
@@ -278,7 +279,51 @@ def run (args : List String) : IO UInt32 := do
       let source ← EvoIR.Core.Source.readerSelfTest
       let wellFormed ← EvoIR.Core.Source.wellFormedSelfTest
       let execution ← EvoIR.Core.Source.executionSelfTest
-      return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 then 0 else 1
+      let ir ← EvoIR.Core.IR.irSelfTest
+      return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 && ir == 0 then 0 else 1
+  | ["--read-core-ir", input] => do
+      match EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile input) with
+      | .error message => IO.eprintln s!"CORE_IR_REFUSED: {message}"; return 2
+      | .ok p =>
+        IO.println s!"DECODED_NOT_VERIFIED functions={p.functions.length}"
+        return 0
+  | "--run-core-ir" :: input :: entry :: limit :: args => do
+      let some fuel := limit.toNat? | IO.eprintln "invalid step limit"; return 2
+      let .ok p := EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile input)
+        | IO.eprintln "malformed core IR input"; return 2
+      match EvoIR.Core.IR.checkProgram p with
+      | .error message => IO.eprintln s!"CORE_IR_REFUSED: {message}"; return 2
+      | .ok _ => pure ()
+      let some f := p.functions.find? (·.name == entry)
+        | IO.eprintln "missing IR entry"; return 2
+      let mut arguments := args
+      let mut values := []
+      for type in f.parameters do
+        match type with
+        | .bits n =>
+          let arg :: rest := arguments | IO.eprintln "missing integer argument"; return 2
+          let some v := ofHex arg | IO.eprintln "invalid argument bits"; return 2
+          if v ≥ 2^n then IO.eprintln "out-of-width argument"; return 2
+          values := values ++ [EvoIR.Core.IR.Value.bits n (BitVec.ofNat n v)]
+          arguments := rest
+        | .memory => values := values ++ [.memory ⟨1, []⟩]
+        | .world => values := values ++ [.world]
+        | .pointer => IO.eprintln "pointer entry outside core"; return 2
+      if !arguments.isEmpty then IO.eprintln "extra argument"; return 2
+      let .ok s := EvoIR.Core.IR.initial p entry values
+        | IO.eprintln "IR entry refused"; return 2
+      match (EvoIR.Core.IR.runSteps p fuel s).control with
+      | .halted (.ok results) =>
+        let bits := results.filterMap fun v => match v with
+          | .bits _ b => some (toHex b.toNat) | _ => none
+        IO.println s!"EXECUTED_NOT_VERIFIED returns={bits}"
+        return 0
+      | .halted (.error (.diagnostic code)) =>
+        IO.println s!"EXECUTED_NOT_VERIFIED diagnostic=E{code}"
+        return 1
+      | .halted (.error (.malformed message)) =>
+        IO.eprintln s!"CORE_IR_MACHINE_MALFORMED: {message}"; return 2
+      | _ => IO.println "STEP_LIMIT_NOT_VERIFICATION"; return 3
   | "--run-core" :: input :: entry :: limit :: args => do
       let some fuel := limit.toNat? | IO.eprintln "invalid step limit"; return 2
       let .ok program := EvoIR.Core.Source.readProgram (← IO.FS.readFile input)

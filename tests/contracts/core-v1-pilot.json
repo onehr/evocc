@@ -99,6 +99,27 @@
     "infinite_execution_theorem": "EvoIR.Core.Source.while_true_diverges",
     "claim_ceiling": "Unbounded source semantics, primitive bridge and machine properties only. Finite execution is not a source/IR equivalence proof; step exhaustion is not termination or divergence. Validator soundness and the actual compilation checker remain open."
   },
+  "target_execution": {
+    "implementation": ["lean/EvoIR/Core/IR.lean", "lean/EvoIR/Core/IRReader.lean", "lean/EvoIR/Core/IRWellFormed.lean", "lean/EvoIR/Core/IRExecution.lean"],
+    "tests": "lean/EvoIR/Core/IRTests.lean",
+    "selftest_passed": 51,
+    "selftest_failed": 0,
+    "export_command": "target/frontend/debug/evocc --emit=evoir -O0 -fno-builtin tests/fixtures/verification/NAME.c",
+    "execute_command": "evoir-sem --run-core-ir TARGET.evo ENTRY 100000 [0xARG ...]",
+    "original_body_closure": {"source_functions": 10, "evoir_functions": 9, "main_return": "0x0", "correspondence_obligation": "Existing private_leaf substitution inlines frame into caller even at frozen -O0. Source/target checking must cover it; no post-inline source substitution."},
+    "results": [
+      {"entry": "FixedMul", "args": ["0x18000", "0x20000"], "return": "0x30000"},
+      {"entry": "FixedMul", "args": ["0xfffe8000", "0x20000"], "return": "0xfffd0000"},
+      {"entry": "abs", "args": ["0xfffffff7"], "return": "0x9"},
+      {"entry": "abs", "args": ["0x80000000"], "diagnostic": "E3004", "exit": 1},
+      {"entry": "loop_join", "args": ["0x1", "0x4"], "return": "0xc000000d"},
+      {"entry": "loop_join", "args": ["0x1", "0x40"], "return": "0xffe0007a"},
+      {"entry": "short_circuit", "args": ["0x0"], "return": "0x2"},
+      {"entry": "short_circuit", "args": ["0x1"], "return": "0xb"},
+      {"entry": "pressure", "args": ["0x11"], "return": "0x410"}
+    ],
+    "claim_ceiling": "Independent target input and execution only. No input-validator safety, source/target checker soundness, or whole-function compilation proof. Finite test limits do not constrain the transition semantics."
+  },
   "integration_gates": {
     "rust_implementation_commit": "857d7d90a9bb80f7e6654f4334f0e37cbe2fc0af",
     "lean_implementation_commit": "857d7d90a9bb80f7e6654f4334f0e37cbe2fc0af",
@@ -134,7 +155,7 @@
     "source_export_and_grammar_reader": "IMPLEMENTED_DECODED_NOT_VERIFIED",
     "independent_source_validation": "IMPLEMENTED_NO_EXECUTION_SAFETY_THEOREM",
     "existing_pipeline_population": "FOCUSED_AND_FULL_WORKSPACE_PASS_NOT_A_COMPILATION_PROOF",
-    "V01_source_to_evoir": "SOURCE_EXECUTION_AND_PRIMITIVE_LEMMAS_NOT_A_FUNCTION_CHECKER",
+    "V01_source_to_evoir": "SOURCE_AND_TARGET_EXECUTION_NOT_A_FUNCTION_CHECKER",
     "V02_selection_and_copies": "NOT_IMPLEMENTED",
     "V03_allocation": "NOT_IMPLEMENTED",
     "V04_frame_emission_and_baseline": "NOT_IMPLEMENTED",

@@ -215,6 +215,18 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Source.Steps",
     "EvoIR.Core.Source.Diverges",
     "EvoIR.Core.Source.runSteps",
+    "EvoIR.Core.IR.evalScalar",
+    "EvoIR.Core.IR.evalDivision",
+    "EvoIR.Core.IR.evalOperation",
+    "EvoIR.Core.IR.bind",
+    "EvoIR.Core.IR.jump",
+    "EvoIR.Core.IR.execute",
+    "EvoIR.Core.IR.step",
+    "EvoIR.Core.IR.Steps",
+    "EvoIR.Core.IR.Diverges",
+    "EvoIR.Core.IR.runSteps",
+    "EvoIR.Core.IR.Reader.readProgram",
+    "EvoIR.Core.IR.checkProgram",
     "EvoIR.denoteOp",
     "EvoIR.denoteTerm",
     "EvoIR.elabPat",
@@ -295,6 +307,16 @@ CORE_PRIMITIVE_TARGETS = [
         "{ control := EvoIR.Core.Source.Control.statement "
         "(EvoIR.Core.Source.Stmt.while (EvoIR.Core.Source.Expr.literal EvoIR.Core.Source.IntType.int 1) "
         "EvoIR.Core.Source.Stmt.null), locals := locals, continuation := k, functionId := functionId }",
+    ),
+    (
+        "EvoIR.Core.IR.step_deterministic",
+        "∀ (p : EvoIR.Core.IR.Program) (a b c : EvoIR.Core.IR.State), "
+        "EvoIR.Core.IR.Step p a b → EvoIR.Core.IR.Step p a c → b = c",
+    ),
+    (
+        "EvoIR.Core.IR.runSteps_prefix",
+        "∀ (p : EvoIR.Core.IR.Program) (n : Nat) (s : EvoIR.Core.IR.State), "
+        "EvoIR.Core.IR.Steps p s (EvoIR.Core.IR.runSteps p n s)",
     ),
 ]
 
@@ -839,7 +861,7 @@ def main(argv: list[str]) -> int:
         },
         "evaluator": evaluator,
         "compilation_core_primitives": {
-            "claim": "Checked arithmetic primitive correspondence and source-machine "
+            "claim": "Checked arithmetic primitive correspondence and source/IR-machine "
                      "determinism, finite-prefix and terminal-diagnostic properties; "
                      "no proof of source export, input-validation soundness, source/IR "
                      "simulation, whole-function checker or compilation yet",

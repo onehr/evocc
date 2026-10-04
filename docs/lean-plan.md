@@ -273,6 +273,34 @@ Twenty-two focused cases, the five frozen entry exports, and the ten-function
 remain in that closure; its result matches both existing Rust interpreters.
 The actual EvoIR result checker and its soundness theorem remain OPEN.
 
+**Target execution.** `Core/IRReader.lean` independently reads the existing
+canonical EvoIR text into a distinct SSA/CFG tree. It retains all admitted
+types, integer widths, block arguments, effect fields, obligation reasons,
+private allocation layouts, call signatures and memory/world operands.
+Unknown operations/metadata, duplicate or nonlocal bindings, wrong arities,
+widths and edges refuse. `IRWellFormed.lean` additionally recomputes acyclic
+call effects and checks current-token forwarding and matching access guards.
+Its execution-safety theorem, like the source validator's, remains open.
+
+`Core/IRExecution.lean` executes one instruction/edge/call transition at a time,
+with immutable byte/initializedness snapshots and frame-owned fresh objects.
+Edges simultaneously bind captured arguments; calls isolate SSA bindings and
+return ends their private object lifetimes. It preserves independent shift
+widths, poison transport versus consumption and the first reached diagnostic.
+`--read-core-ir TARGET.evo` reports `DECODED_NOT_VERIFIED`;
+`--run-core-ir TARGET.evo ENTRY LIMIT [0xARG ...]` also checks the target input
+and reports only `EXECUTED_NOT_VERIFIED` or a non-verifying step limit.
+Neither command compares source and target or publishes a verified artifact.
+The five frozen entries and the whole original-body closure execute through
+this independent target path; 51 focused target cases pass.
+
+One concrete V01 correspondence obligation is now visible: the ten-function
+source-execution fixture emits nine EvoIR functions at the frozen `-O0`
+options. Existing C-HIR private-leaf substitution removes `frame` and embeds
+its body in `caller` (`inline.rs`'s `private_leaf`). The actual source-to-target
+checker must cover that transformation, not silently substitute the post-inline
+tree for its declared original input or omit the callee from the source proof.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted
