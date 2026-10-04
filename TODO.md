@@ -2563,6 +2563,21 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   Artifact delta +3,252 KiB; target/frontend unchanged, 51 GiB free. Thirteen
   temporary logs/development receipts were retired; final evidence retained.
 
+  **October 5 whole cyclic caller entry:** `60adb247` closes the actual
+  argument/frontier and call-site prefixes and verifies the callee proposal;
+  unchanged `call_loop` is now a whole-entry PASS for all typed arguments and
+  unbounded execution. Eleven original pairs replay; six frontier controls,
+  three whole-pair controls, 21 mutation refusals and three execution/frame
+  controls pass. Clean Lean: 74 kernel-only targets; full workspace: 401 suites /
+  3,080 passed / zero failed / five ignored, Clippy/format pass. The old caller-
+  only proposal still refuses. `call-loop-context.c` adds four valid-source REDs:
+  right operand, conditional result, assignment and nested cyclic calls. Three
+  fail source-prefix construction; the conditional fails return resumption;
+  all target prefixes and callee diagrams construct. Complete these contexts,
+  private storage, full coverage and validator safety before closing V01.
+  Receipt: `whole_cyclic_caller`. Build/capture delta +4,292 KiB, target/frontend
+  unchanged, 51 GiB free; intermediate scratch retired, final evidence retained.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

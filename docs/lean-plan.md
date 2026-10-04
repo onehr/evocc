@@ -741,6 +741,35 @@ manifest. Artifact disk delta +3,252 KiB, target/frontend unchanged, 51 GiB free
 Thirteen temporary intermediate logs/receipts (820 KiB) were retired; RED,
 final gates/replay and protected artifacts remain.
 
+**Whole cyclic caller entry (October 5 continuation).** `60adb247` constructs
+the actual source argument/frontier and IR call-site prefixes, selects and checks
+the callee's own cutpoint proposal, and composes its proved return continuation.
+`CallFrontierPair.refines` covers all typed arguments, first diagnostics,
+progress and unbounded execution. The proof-producing executable is also in the
+existing dependency audit. The unchanged `call_loop` now passes whole-entry
+checking; the old caller-only proposal still refuses, as it must.
+
+The same `--check-core-loop-pair` command accepts function-scoped proposals:
+`["core-call-cutpoints-v1", caller_budget, [[source_function_id, cutpoint_plan], ...]]`.
+Each embedded plan uses the existing cutpoint grammar for that source function;
+duplicate/unknown function IDs refuse. This is untrusted proposal data, not a
+name-specific admission rule. The frozen source and IR are unchanged.
+
+Six source-frontier controls, three whole-pair controls, 21 mutation refusals,
+three execution/frame controls and 11 original pair replays pass. Clean Lean:
+74 kernel-only targets, 1,246,159 vector answers. Full workspace: 401 suites /
+3,080 passed / zero failed / five ignored, Clippy/format pass. The first-fault
+test uses runtime arithmetic, not the profile's separately handled wrapping
+constant expressions. Receipt: `whole_cyclic_caller` in the pilot manifest.
+Four valid-source REDs in `call-loop-context.c` retain the remaining gaps:
+right-operand, assignment and nested-call source frontiers, and post-call
+conditional resumption. Their target frontiers and callee diagrams already
+construct. They are not PASS. These contexts, private-storage composition,
+full coverage and validator safety keep V01 OPEN; V02–V06 remain unimplemented.
+Measured build/capture delta +4,292 KiB; target/frontend unchanged, 51 GiB free.
+Two intermediate logs and the temporary phase probe were retired; final
+evidence and protected artifacts remain. No backend/release label is granted.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted
