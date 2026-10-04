@@ -9,6 +9,9 @@ private def locals : LocalStore widths := [⟨1, ⟨.int, false⟩, some (.const
 private def set (n : Nat) : Source.Expr :=
   .assign .int .set 1 ⟨.int, false⟩ (.ident .int 1) (.literal .int n)
 private def read : Source.Expr := .ident .int 1
+private def compound (op : Source.Assignment) (rhs : Source.Expr) : Source.Expr :=
+  .assign .int op 1 ⟨.int, false⟩ read rhs
+private def update (op : Source.Update) : Source.Expr := .update .int op 1 ⟨.int, false⟩ read
 private def summarize (e : Source.Expr) : Option (Source.Result × Source.Result) := do
   let tree ← stateExpression 20 locals e
   let result := tree.val.denote σ
@@ -67,6 +70,26 @@ example : summarize (.binary .int .shr (set 7) (.literal .long 64)) =
     some (.error (.diagnostic 3005), .ok (.ofNat .int 7)) := by decide
 example : summarize (.binary .int .eq (set 7) (.literal .uint 7)) =
     some (.ok (.ofNat .int 1), .ok (.ofNat .int 7)) := by decide
+example : summarize (.comma .int (set 7) (compound .add (.literal .int 2))) =
+    some (.ok (.ofNat .int 9), .ok (.ofNat .int 9)) := by decide
+example : summarize (.comma .int (set 0x7fffffff) (compound .add (.literal .int 1))) =
+    some (.error (.diagnostic 3004), .ok (.ofNat .int 0x7fffffff)) := by decide
+example : summarize (.comma .int (set 0xffffffff) (compound .add (.literal .uint 1))) =
+    some (.ok (.ofNat .int 0), .ok (.ofNat .int 0)) := by decide
+example : summarize (.comma .int (set 7) (compound .shr (.literal .long 0x100000001))) =
+    some (.error (.diagnostic 3005), .ok (.ofNat .int 7)) := by decide
+example : (stateExpression 20 locals (compound .div (.literal .int 1))).isNone := by decide
+example : summarize (.comma .int (set 7) (update .postInc)) =
+    some (.ok (.ofNat .int 7), .ok (.ofNat .int 8)) := by decide
+example : summarize (.comma .int (set 7) (update .preInc)) =
+    some (.ok (.ofNat .int 8), .ok (.ofNat .int 8)) := by decide
+example : summarize (.comma .int (set 7) (update .postDec)) =
+    some (.ok (.ofNat .int 7), .ok (.ofNat .int 6)) := by decide
+example : summarize (.comma .int (set 7) (update .preDec)) =
+    some (.ok (.ofNat .int 6), .ok (.ofNat .int 6)) := by decide
+example : summarize (.comma .int (set 0x7fffffff) (update .postInc)) =
+    some (.error (.diagnostic 3004), .ok (.ofNat .int 0x7fffffff)) := by decide
+example : (stateExpression (Γ := widths) 20 [⟨1, ⟨.int, false⟩, none⟩] (update .postInc)).isNone := by decide
 
 -- Every returned diagram proves the actual source transition sequence for
 -- all valuations and continuations, including the local store at a fault.
@@ -109,7 +132,13 @@ def stateExpressionSelfTest : IO UInt32 := do
       fun op => ([0, 1, 0x7fffffff, 0x80000000, 0xffffffff].map fun value =>
         let type := if [Source.Binary.add, .sub, .mul, .bitAnd, .bitOr, .bitXor].contains op
           then Source.IntType.uint else .int
-        Source.Expr.binary type op (set value) (.literal .uint 1)))
+        Source.Expr.binary type op (set value) (.literal .uint 1))) ++
+    ([Source.Assignment.add, .sub, .mul, .shr, .bitAnd, .bitOr, .bitXor].flatMap fun op =>
+      [0, 1, 0x7fffffff, 0x80000000, 0xffffffff].map fun value =>
+        Source.Expr.comma .int (set value) (compound op (.literal .int 1))) ++
+    ([Source.Update.preInc, .preDec, .postInc, .postDec].flatMap fun op =>
+      [0, 1, 0x7fffffff, 0x80000000, 0xffffffff].map fun value =>
+        Source.Expr.comma .int (set value) (update op))
   for expr in expressions do
     cases := cases+1
     let some diagram := stateExpression (Source.expressionDepth expr) locals expr

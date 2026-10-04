@@ -24,6 +24,17 @@ private def accepts (s t : String) : Bool :=
   | .ok s, .ok t => (returnPair s t).isSome
   | _, _ => false
 
+private def compoundSource := r#"["core-v1","aarch64-unknown-linux-gnu","checked",[0],[["function",0,"compound_return",["int",false],false,[["parameter",1,["int",false],"none"],["parameter",2,["uint",false],"none"]],["compound",[["return",["int",false],["comma","int",["assign","int","add",1,["int",false],["ident","int",1],["ident","uint",2]],["ident","int",1]]]]]]]]"#
+private def compoundTarget := "func @compound_return(%arg0: bits<32>, %arg1: bits<32>) -> (bits<32>) cc = target_default\n" ++
+  "effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n" ++
+  "^entry(%v0: bits<32>, %v1: bits<32>):\n%v2 = add.bits<32> %v0, %v1\nret %v2\n}\n"
+private def updateSource := r#"["core-v1","aarch64-unknown-linux-gnu","checked",[0],[["function",0,"update_return",["int",false],false,[["parameter",1,["int",false],"none"]],["compound",[["return",["int",false],["comma","int",["update","int","post_inc",1,["int",false],["ident","int",1]],["update","int","post_inc",1,["int",false],["ident","int",1]]]]]]]]]"#
+private def updateTarget := "func @update_return(%arg0: bits<32>) -> (bits<32>) cc = target_default\n" ++
+  "effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }\n{\n" ++
+  "^entry(%v0: bits<32>):\n%v1 = const.bits<32> 1\n%v2 = signed_add_defined %v0, %v1\n" ++
+  "ub.assume.signed_overflow %v2\n%v3 = add.bits<32> %v0, %v1\n%v4 = const.bits<32> 1\n" ++
+  "%v5 = signed_add_defined %v3, %v4\nub.assume.signed_overflow %v5\n%v6 = add.bits<32> %v3, %v4\nret %v3\n}\n"
+
 def stateReturnSelfTest : IO UInt32 := do
   let mut failures := 0
   if !accepts source target then
@@ -51,7 +62,21 @@ def stateReturnSelfTest : IO UInt32 := do
     if changed == source || accepts changed target then
       IO.eprintln s!"stateful source mutation not refused: {name}"
       failures := failures+1
-  if failures == 0 then IO.println s!"{1+mutations.length+changes.length} stateful whole-return cases pass"
+  let assignmentCases := [
+    ("compound original", compoundSource, compoundTarget, true),
+    ("compound signedness", compoundSource.replace "\"uint\"" "\"int\"", compoundTarget, false),
+    ("compound wrong operation", compoundSource, compoundTarget.replace "add.bits" "sub.bits", false),
+    ("compound missing write", compoundSource, compoundTarget.replace "ret %v2" "ret %v0", false),
+    ("update original", updateSource, updateTarget, true),
+    ("update prefix changed", updateSource.replace "post_inc" "pre_inc", updateTarget, false),
+    ("update returns new not old", updateSource, updateTarget.replace "ret %v3" "ret %v6", false),
+    ("update second guard dropped", updateSource, updateTarget.replace "ub.assume.signed_overflow %v5\n" "", false),
+    ("update first guard dropped", updateSource, updateTarget.replace "ub.assume.signed_overflow %v2\n" "", false)]
+  for (name, s, t, expected) in assignmentCases do
+    if accepts s t != expected then
+      IO.eprintln s!"assignment whole-return case failed: {name}"
+      failures := failures+1
+  if failures == 0 then IO.println s!"{1+mutations.length+changes.length+assignmentCases.length} stateful whole-return cases pass"
   return if failures == 0 then 0 else 1
 
 end EvoIR.Core.Symbolic.StateReturnTests

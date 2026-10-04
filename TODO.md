@@ -2427,8 +2427,14 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   operations preserve the local store at the first diagnostic. The actual
   `stateful-return.c` exporter pair and 11 mutations pass; 81 source-machine
   comparisons, 18 storage boundaries and 26 expression examples pass locally.
-  Clean Lean/full-workspace validation is pending for this checkpoint. Div/rem,
-  compound assignment/update, statement/declaration integration, loops, calls,
+  Checkpoint `74b33c80` now passes the clean Lean gate (42 kernel-only core
+  targets) and full workspace (401 suites; 3,080/0/5 ignored; Clippy/format).
+  Supported compound assignments and all four pre/post updates now use the same
+  stateful checker: actual mixed-signedness and consecutive-update exporter pairs
+  pass, and discarded-update diagnostics remain checked. The local gate totals
+  21 whole-return cases and 136 source-machine comparisons; the extension's
+  clean Lean gate is pending. Div/rem (including compound forms),
+  statement/declaration integration, loops, calls,
   private-leaf substitution and validator safety remain OPEN; V02–V06 are not
   advanced by this component proof.
 

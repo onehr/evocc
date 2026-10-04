@@ -426,7 +426,7 @@ bound rejects cycles; it is not a bounded-execution proof of loops.
 exact parameter/local storage, first-binding lookup, uninitialized masking,
 const initialization and assignment, declarations and scope exit. `StateExpression.lean`
 composes the supported numeric operators with casts, conditional expressions,
-comma, simple assignment and short-circuit AND/OR. Each diagnostic leaf retains
+comma, assignment and short-circuit AND/OR. Each diagnostic leaf retains
 the actual local store after preceding effects; an unselected arm is not run.
 `state_expression_sound` connects successful construction to the original
 source small-step machine for every valuation and continuation. `StateEntry.lean`
@@ -437,11 +437,19 @@ semantics was introduced (`Source.place` was made public only for its proof).
 
 The actual exporter pair for `tests/fixtures/verification/stateful-return.c`
 passes, and 11 source/target mutations refuse. The previous original `FixedMul`
-and `abs` cases remain accepted. Local tests add 18 storage boundary examples,
-26 stateful expression outcome/refusal examples and 81 comparisons against
-actual source-machine execution. The current local build/self-test passes;
-the clean Lean and full-workspace gates are pending for this extension.
-This is **not V01 completion**: div/rem, compound assignment/update, statement
+and `abs` cases remain accepted. The first stateful checkpoint `74b33c80` passes
+the clean Lean gate (42 kernel-only core targets) and full workspace (401 suites,
+3,080 passed, zero failed, five existing ignored; Clippy/format pass).
+The extension now uses one assignment continuation for simple and supported
+compound operations, preserving the RHS evaluation, usual arithmetic conversion,
+destination conversion and write in their actual order. All four pre/post
+increment/decrement forms preserve the old/new result distinction and first
+diagnostic. Actual `compound-return.c` and `update-return.c` exporter pairs pass;
+dropping the second update's guard is refused even though its stored value is
+dead at return. There are 21 whole-return cases, 37 stateful expression
+outcome/refusal examples, 18 storage boundaries and 136 comparisons against the
+actual source machine. The assignment-extension clean Lean gate is pending.
+This is **not V01 completion**: div/rem and their compound forms, statement
 sequencing/declaration integration, loops, calls/private-leaf substitution and
 validator execution safety remain required. Storage adapter lemmas alone do
 not admit a complete function containing local declarations or loops.

@@ -106,28 +106,67 @@ theorem state_assign_error {p : Program} {locals finalLocals : Locals} {fid : Na
       locals, k, fid⟩ id destination (.ident destination.type id) = true := valid k
   simp [Step, step, enterExpression, wrappingConstant, good]
 
-theorem state_assign_set {p : Program} {locals middle finalLocals : Locals} {fid : Nat}
-    (id : Nat) (destination : QualifiedType) (rhs : Expr) (value : Value)
+/-- The numeric part of the existing assignment continuation, before its
+destination conversion and write. This is not a new source evaluation order. -/
+def assignmentCalculation (locals : Locals) (op : Assignment) (id : Nat)
+    (destination : QualifiedType) (rhs : Value) : Result :=
+  match op.binary with
+  | none => .ok rhs
+  | some binary => do binaryValue binary (← readSlot locals id destination.type) rhs
+
+def assignmentOutcome (locals : Locals) (op : Assignment) (id : Nat)
+    (destination : QualifiedType) (rhs : Value) : StateOutcome :=
+  match assignmentCalculation locals op id destination rhs with
+  | .error fault => (locals, .error fault)
+  | .ok raw =>
+    let value := raw.cast destination.type
+    match writeSlot locals id destination value false with
+    | .error fault => (locals, .error fault)
+    | .ok updated => (updated, .ok value)
+
+theorem state_assign_finish {p : Program} {locals middle : Locals} {fid : Nat}
+    (op : Assignment) (id : Nat) (destination : QualifiedType) (rhs : Expr) (value : Value)
     (valid : ∀ k, place ⟨.expression rhs, locals, k, fid⟩ id destination
       (.ident destination.type id) = true)
-    (path : EvaluatesState p locals fid rhs (middle, .ok value))
-    (written : writeSlot middle id destination (value.cast destination.type) false = .ok finalLocals) :
-    EvaluatesState p locals fid (.assign destination.type .set id destination
-      (.ident destination.type id) rhs) (finalLocals, .ok (value.cast destination.type)) := by
+    (path : EvaluatesState p locals fid rhs (middle, .ok value)) :
+    EvaluatesState p locals fid (.assign destination.type op id destination
+      (.ident destination.type id) rhs) (assignmentOutcome middle op id destination value) := by
   intro k
-  have start : Step p
-      ⟨.expression (.assign destination.type .set id destination (.ident destination.type id) rhs),
+  have first : Step p
+      ⟨.expression (.assign destination.type op id destination (.ident destination.type id) rhs),
         locals, k, fid⟩
-      ⟨.expression rhs, locals, .assign destination.type .set id destination :: k, fid⟩ := by
-    have good : place ⟨.expression (.assign destination.type .set id destination
+      ⟨.expression rhs, locals, .assign destination.type op id destination :: k, fid⟩ := by
+    have good : place ⟨.expression (.assign destination.type op id destination
         (.ident destination.type id) rhs), locals, k, fid⟩ id destination
         (.ident destination.type id) = true := valid k
     simp [Step, step, enterExpression, wrappingConstant, good]
-  exact .next start ((path (.assign destination.type .set id destination :: k)).trans
-    (.next (by
-      simp only [Step, step, resumeValue, Assignment.binary, bind, Except.bind,
-        pure, Except.pure, written]
-      simp [valueResult, Value.cast, Value.ofInt]) (.refl _)))
+  have steps := Steps.next first (path (.assign destination.type op id destination :: k))
+  have resume : resumeValue ⟨.value value, middle, k, fid⟩ (.assign destination.type op id destination) value =
+      match assignmentOutcome middle op id destination value with
+      | (ls, .error fault) => ⟨.halted (.error fault), ls, k, fid⟩
+      | (ls, .ok v) => ⟨.value v, ls, k, fid⟩ := by
+    simp only [resumeValue, assignmentOutcome, assignmentCalculation]
+    cases selected : op.binary with
+    | none =>
+      simp only [bind, Except.bind, pure, Except.pure]
+      cases written : writeSlot middle id destination (value.cast destination.type) false <;>
+        simp [fail, valueResult, Value.cast, Value.ofInt]
+    | some binary =>
+      cases read : readSlot middle id destination.type with
+      | error fault => simp [bind, Except.bind, fail]
+      | ok old =>
+        simp only [bind, Except.bind]
+        cases calculated : binaryValue binary old value with
+        | error fault => simp [fail]
+        | ok raw =>
+          dsimp only
+          cases written : writeSlot middle id destination (raw.cast destination.type) false <;>
+            simp [pure, Except.pure, fail, valueResult, Value.cast, Value.ofInt]
+  cases result : assignmentOutcome middle op id destination value with
+  | mk ls answer =>
+    cases answer with
+    | error fault => exact ⟨k, steps.trans (.next (by simpa only [Step, step, result] using congrArg some resume) (.refl _))⟩
+    | ok v => exact steps.trans (.next (by simpa only [Step, step, result] using congrArg some resume) (.refl _))
 
 theorem state_conditional_error {p : Program} {locals finalLocals : Locals} {fid : Nat}
     (type : IntType) (condition yes no : Expr) (fault : Fault)
@@ -459,32 +498,6 @@ theorem state_comma_diagram {Γ : Var → Nat} (locals : LocalStore Γ) (type : 
     exact Source.state_comma_ok type left right (word.denote σ) (tree.denote σ)
       (by simpa only [before] using a σ p fid) (diagram σ p fid) (typed σ)
 
-def SetContinuation {Γ : Var → Nat} (id : Nat) (destination : Source.QualifiedType)
-    (locals : LocalStore Γ) (word : CWord Γ) (tree : StateTree Γ) : Prop :=
-  ∃ updated, locals.write id destination (word.cast destination.type) false = some updated ∧
-    tree = .value updated (word.cast destination.type)
-
-theorem state_set_diagram {Γ : Var → Nat} (locals : LocalStore Γ) (id : Nat)
-    (destination : Source.QualifiedType) (rhs : Source.Expr) (first output : StateTree Γ)
-    (place : locals.writable id destination = true)
-    (a : StateDiagram locals rhs first)
-    (b : TreeBind (SetContinuation id destination) first output) :
-    StateDiagram locals (.assign destination.type .set id destination
-      (.ident destination.type id) rhs) output := by
-  intro σ p fid
-  have valid k := local_writable_sound σ locals id destination place
-    ⟨.expression rhs, locals.denote σ, k, fid⟩ rfl
-  rcases b.outcome σ with ⟨finalLocals, fault, before, after⟩ |
-      ⟨next, word, tree, ⟨updated, written, same⟩, before, after⟩
-  · rw [after]
-    exact Source.state_assign_error destination.type .set id destination rhs fault valid
-      (by simpa only [before] using a σ p fid)
-  · rw [after, same]
-    have write := local_write_sound σ next updated id destination (word.cast destination.type) false written
-    rw [cast_sound] at write
-    simpa only [StateTree.denote, cast_sound] using Source.state_assign_set id destination rhs
-      (word.denote σ) valid (by simpa only [before] using a σ p fid) write
-
 def ChoiceContinuation {Γ : Var → Nat} (type : Source.IntType) (yes no : Source.Expr)
     (locals : LocalStore Γ) (word : CWord Γ) (tree : StateTree Γ) : Prop :=
   ∃ a b, StateDiagram locals yes a ∧ StateDiagram locals no b ∧
@@ -511,6 +524,74 @@ theorem state_choice_diagram {Γ : Var → Nat} (locals : LocalStore Γ)
     · apply Source.state_conditional_ok type condition yes no (word.denote σ) (yesTree.denote σ)
         (by simpa only [before] using a σ p fid)
       simpa only [truth, ↓reduceIte] using firstArm σ p fid
+
+def AssignmentResult {Γ : Var → Nat} (locals : LocalStore Γ) (op : Source.Assignment)
+    (id : Nat) (destination : Source.QualifiedType) (word : CWord Γ)
+    (r : ExpressionResult Γ) : Prop :=
+  ∀ σ, r.denote σ = Source.assignmentCalculation (locals.denote σ) op id destination (word.denote σ)
+
+def assignmentResult {Γ : Var → Nat} (locals : LocalStore Γ) (op : Source.Assignment)
+    (id : Nat) (destination : Source.QualifiedType) (word : CWord Γ) :
+    Option {r // AssignmentResult locals op id destination word r} :=
+  match binary : op.binary with
+  | none => some ⟨([], word), by intro σ; simp [ExpressionResult.denote, guards,
+      Source.assignmentCalculation, binary, bind, Except.bind, pure, Except.pure]⟩
+  | some arithmetic => do
+    let before : {v // locals.read id destination.type = some v} ←
+      match read : locals.read id destination.type with
+      | none => none
+      | some v => some ⟨v, read⟩
+    let r ← binaryResult arithmetic before.val word
+    return ⟨r.val, by
+      intro σ
+      rw [r.property σ]
+      simp [Source.assignmentCalculation, binary,
+        (local_read_sound σ locals id destination.type before.val before.property).1,
+        bind, Except.bind]⟩
+
+def AssignmentContinuation {Γ : Var → Nat} (op : Source.Assignment) (id : Nat)
+    (destination : Source.QualifiedType) (locals : LocalStore Γ) (word : CWord Γ)
+    (tree : StateTree Γ) : Prop :=
+  ∃ r updated, AssignmentResult locals op id destination word r ∧
+    locals.write id destination (r.2.cast destination.type) false = some updated ∧
+    tree = (StateTree.value updated (r.2.cast destination.type)).prefix locals r.1
+
+theorem assignment_continuation_sound {Γ : Var → Nat} (σ : Subst Γ)
+    {op : Source.Assignment} {id : Nat} {destination : Source.QualifiedType}
+    {locals : LocalStore Γ} {word : CWord Γ} {tree : StateTree Γ}
+    (accepted : AssignmentContinuation op id destination locals word tree) :
+    tree.denote σ = Source.assignmentOutcome (locals.denote σ) op id destination (word.denote σ) := by
+  obtain ⟨r, updated, calculation, write, rfl⟩ := accepted
+  rw [StateTree.prefix_sound, Source.assignmentOutcome, ← calculation σ]
+  unfold ExpressionResult.denote
+  cases checks : guards σ r.1 with
+  | error fault => rfl
+  | ok _ =>
+    simp only [bind, Except.bind, pure, Except.pure]
+    have written := local_write_sound σ locals updated id destination (r.2.cast destination.type) false write
+    rw [cast_sound] at written
+    rw [written]
+    simp only [StateTree.denote, cast_sound]
+
+theorem state_assignment_diagram {Γ : Var → Nat} (locals : LocalStore Γ)
+    (op : Source.Assignment) (id : Nat) (destination : Source.QualifiedType)
+    (rhs : Source.Expr) (first output : StateTree Γ)
+    (place : locals.writable id destination = true)
+    (a : StateDiagram locals rhs first)
+    (b : TreeBind (AssignmentContinuation op id destination) first output) :
+    StateDiagram locals (.assign destination.type op id destination
+      (.ident destination.type id) rhs) output := by
+  intro σ p fid
+  have valid k := local_writable_sound σ locals id destination place
+    ⟨.expression rhs, locals.denote σ, k, fid⟩ rfl
+  rcases b.outcome σ with ⟨finalLocals, fault, before, after⟩ |
+      ⟨next, word, tree, continuation, before, after⟩
+  · rw [after]
+    exact Source.state_assign_error destination.type op id destination rhs fault valid
+      (by simpa only [before] using a σ p fid)
+  · rw [after, assignment_continuation_sound σ continuation]
+    exact Source.state_assign_finish op id destination rhs (word.denote σ) valid
+      (by simpa only [before] using a σ p fid)
 
 def BinaryContinuation {Γ : Var → Nat} (type : Source.IntType) (op : Source.Binary)
     (word : CWord Γ) (locals : LocalStore Γ) (right : CWord Γ) (tree : StateTree Γ) : Prop :=
@@ -632,6 +713,89 @@ def shortExpression {Γ : Var → Nat}
       state_short_diagram locals isOr left right a.val b.val a.property b.property⟩
   else none
 
+def updateBinary (op : Source.Update) : Source.Binary :=
+  if op == .preInc || op == .postInc then .add else .sub
+
+def updatePost (op : Source.Update) : Bool := op == .postInc || op == .postDec
+
+theorem state_update_diagram {Γ : Var → Nat} (locals updated : LocalStore Γ)
+    (op : Source.Update) (id : Nat) (destination : Source.QualifiedType)
+    (before : CWord Γ) (r : ExpressionResult Γ)
+    (place : locals.writable id destination = true)
+    (read : locals.read id destination.type = some before)
+    (calculation : BinaryResult (updateBinary op) before (CWord.constant (.ofNat .int 1)) r)
+    (write : locals.write id destination (r.2.cast destination.type) false = some updated) :
+    StateDiagram locals (.update destination.type op id destination (.ident destination.type id))
+      ((StateTree.value updated (if updatePost op then before else r.2.cast destination.type)).prefix locals r.1) := by
+  intro σ p fid
+  have readValue := local_read_sound σ locals id destination.type before read
+  have written := local_write_sound σ locals updated id destination (r.2.cast destination.type) false write
+  rw [cast_sound] at written
+  have computed := calculation σ
+  have one : (CWord.constant (Γ := Γ) (.ofNat .int 1)).denote σ = Source.Value.ofNat .int 1 := rfl
+  rw [one] at computed
+  unfold ExpressionResult.denote at computed
+  rw [StateTree.prefix_sound]
+  cases checked : guards σ r.1 with
+  | error fault =>
+    simp only [checked, bind, Except.bind] at computed
+    intro k
+    have valid := local_writable_sound σ locals id destination place
+      ⟨.expression (.update destination.type op id destination (.ident destination.type id)),
+        locals.denote σ, k, fid⟩ rfl
+    refine ⟨k, .next ?_ (.refl _)⟩
+    simp only [Source.Step, Source.step, Source.enterExpression, Source.wrappingConstant,
+      valid, Bool.not_true, Bool.false_eq_true, ↓reduceIte, readValue.1, bind, Except.bind]
+    change some (match (do
+      let value ← Source.binaryValue (updateBinary op) (before.denote σ) (Source.Value.ofNat .int 1)
+      let ls ← Source.writeSlot (locals.denote σ) id destination (value.cast destination.type) false
+      pure (if updatePost op then before.denote σ else value.cast destination.type, ls)) with
+      | .error f => Source.fail ⟨.expression _, locals.denote σ, k, fid⟩ f
+      | .ok (v, ls) => Source.valueResult ⟨.expression _, ls, k, fid⟩ destination.type (.ok v)) = _
+    rw [← computed]
+    rfl
+  | ok unitValue =>
+    simp only [checked, bind, Except.bind, pure, Except.pure] at computed
+    intro k
+    have valid := local_writable_sound σ locals id destination place
+      ⟨.expression (.update destination.type op id destination (.ident destination.type id)),
+        locals.denote σ, k, fid⟩ rfl
+    have type : (before.denote σ).type = destination.type := readValue.2
+    have step : Source.Step p
+        ⟨.expression (.update destination.type op id destination (.ident destination.type id)),
+          locals.denote σ, k, fid⟩
+        ⟨.value ((if updatePost op then before else r.2.cast destination.type).denote σ),
+          updated.denote σ, k, fid⟩ := by
+      simp only [Source.Step, Source.step, Source.enterExpression, Source.wrappingConstant,
+        valid, Bool.not_true, Bool.false_eq_true, ↓reduceIte, readValue.1, bind, Except.bind]
+      have operation : Source.binaryValue (if op == .preInc || op == .postInc then .add else .sub)
+          (before.denote σ) (Source.Value.ofNat .int 1) = .ok (r.2.denote σ) := computed.symm
+      rw [operation]
+      simp only [written, pure, Except.pure, Source.valueResult]
+      cases post : updatePost op <;>
+        simp_all [updatePost, cast_sound, Source.Value.cast, Source.Value.ofInt]
+    exact .next step (.refl _)
+
+def updateExpression {Γ : Var → Nat} (locals : LocalStore Γ) (type : Source.IntType)
+    (op : Source.Update) (id : Nat) (destination : Source.QualifiedType)
+    (targetType : Source.IntType) (targetId : Nat) :
+    Option {tree // StateDiagram locals (.update type op id destination (.ident targetType targetId)) tree} := do
+  if typed : type = destination.type ∧ targetType = destination.type ∧ targetId = id then
+    if place : locals.writable id destination = true then
+      let before : {word // locals.read id destination.type = some word} ←
+        match read : locals.read id destination.type with
+        | none => none
+        | some word => some ⟨word, read⟩
+      let r ← binaryResult (updateBinary op) before.val (CWord.constant (.ofNat .int 1))
+      match write : locals.write id destination (r.val.2.cast destination.type) false with
+      | none => none
+      | some updated => return ⟨(StateTree.value updated
+          (if updatePost op then before.val else r.val.2.cast destination.type)).prefix locals r.val.1,
+          by simpa only [typed.1, typed.2.1, typed.2.2] using
+            state_update_diagram locals updated op id destination before.val r.val place before.property r.property write⟩
+    else none
+  else none
+
 /-- The bound is syntax traversal only. It never accepts a loop by running it
 for finitely many steps; loop simulation is a separate CFG obligation. -/
 def stateExpression {Γ : Var → Nat} : (depth : Nat) → (locals : LocalStore Γ) →
@@ -641,6 +805,8 @@ def stateExpression {Γ : Var → Nat} : (depth : Nat) → (locals : LocalStore 
     match expression locals.bindings expr with
     | some r => some ⟨.linear locals r.val, state_linear locals r.property⟩
     | none => match expr with
+      | .update type op id destination (.ident targetType targetId) =>
+        updateExpression locals type op id destination targetType targetId
       | .unary type op operand => do
         if noWrap : Source.wrappingConstant (.unary type op operand) = none then
           let a ← stateExpression depth locals operand
@@ -688,19 +854,20 @@ def stateExpression {Γ : Var → Nat} : (depth : Nat) → (locals : LocalStore 
             return ⟨r.val, r.property, StateTree.typed_sound typed⟩
           else none)
         return ⟨b.val, state_comma_diagram locals type left right a.val b.val a.property b.property⟩
-      | .assign type .set id destination (.ident targetType targetId) rhs => do
+      | .assign type op id destination (.ident targetType targetId) rhs => do
         if typed : type = destination.type then
           if targetEq : targetType = destination.type ∧ targetId = id then
             if place : locals.writable id destination = true then
               let a ← stateExpression depth locals rhs
-              let b ← a.val.bind? (next := SetContinuation id destination) (fun next word => do
-                match written : next.write id destination (word.cast destination.type) false with
+              let b ← a.val.bind? (next := AssignmentContinuation op id destination) (fun next word => do
+                let r ← assignmentResult next op id destination word
+                match written : next.write id destination (r.val.2.cast destination.type) false with
                 | none => none
-                | some updated => return ⟨.value updated (word.cast destination.type),
-                    updated, written, rfl⟩)
+                | some updated => return ⟨(StateTree.value updated (r.val.2.cast destination.type)).prefix next r.val.1,
+                    r.val, updated, r.property, written, rfl⟩)
               return ⟨b.val, by
                 simpa only [typed, targetEq.1, targetEq.2] using
-                  state_set_diagram locals id destination rhs a.val b.val place a.property b.property⟩
+                  state_assignment_diagram locals op id destination rhs a.val b.val place a.property b.property⟩
             else none
           else none
         else none
