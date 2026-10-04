@@ -2500,8 +2500,13 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   proofs; target unconditional edges transport all bindings simultaneously,
   preserving unused poison without admitting numeric uses. The focused gate
   passes 17 call execution controls, five pairs, six call-boundary refusals,
-  three source mutations and 33 target mutations. Clean integration gates are
-  pending at the implementation checkpoint. Calls combined with loops/private
+  three source mutations and 33 target mutations. Implementation `b7a0a70e`
+  passes clean Lean (64 kernel-only core targets, 1,246,159 vector answers)
+  and full workspace (401 suites; 3,080 / 0 / 5 ignored; Clippy/format).
+  All five frozen named entries plus the original `caller` pair replay.
+  Five well-formed calling-expression REDs in `call-control.c` still refuse
+  correspondence checking, as does the complete original `main` closure.
+  Calls combined with loops/private
   storage, the remaining calling expression forms, full constructor coverage
   and validator safety remain OPEN. V02–V06 have not advanced.
 

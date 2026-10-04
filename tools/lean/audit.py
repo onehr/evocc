@@ -1472,9 +1472,11 @@ def main(argv: list[str]) -> int:
             "claim": "Checked arithmetic primitive correspondence and source/IR-machine "
                      "determinism, finite-prefix and terminal-diagnostic properties; "
                      "structural finite-statement source/IR checker soundness, including local "
-                     "declarations, scope, stateful expressions and conditional CFGs. "
-                     "No proof of source export, input-validation safety, loops or calls, "
-                     "backend compilation or verified-release acceptance",
+                     "declarations, scope, stateful expressions, conditional CFGs, checked "
+                     "cyclic diagrams, div/rem, finite calls and private-leaf substitution. "
+                     "Full core-v1 constructor/call/loop composition remains incomplete. "
+                     "No proof of source export, input-validation execution safety, backend "
+                     "compilation or verified-release acceptance",
             "targets": core_primitives,
         },
         "trust": TRUST,

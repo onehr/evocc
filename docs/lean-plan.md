@@ -608,10 +608,21 @@ placeholders retain poison and cannot be read as numeric terms or returned.
 No source rewriting, IR cleanup or changed compiler default is used for admission.
 Focused selftests pass 17 call execution/diagram controls, five complete pairs,
 six call-boundary refusals, three source mutations and 33 target mutations.
-The three added audit targets are kernel-only. Clean integration gates are
-pending at this implementation checkpoint. Calling expressions beyond the
+At implementation `b7a0a70e`, the clean Lean gate passes with 64 kernel-only
+core targets and 1,246,159 vector answers; full workspace passes 401 suites /
+3,080 tests / zero failures / five ignored, plus Clippy/format. All five frozen
+named entries and the original private-leaf pair replay successfully.
+Calling expressions beyond the
 implemented forms, cyclic/private-storage call composition, complete constructor
 coverage and validator execution safety still block V01; V02–V06 remain open.
+The complete `main` closure still refuses. Five isolated calling-expression
+REDs in `tests/fixtures/verification/call-control.c` independently validate as
+source but refuse pair checking: choice, short-circuit and/or, assignment and
+comma. They are next-work inputs, not passing proof evidence.
+Artifact growth at the gate checkpoint is **2,432 KiB** across `.lake` and the
+capture; `target/frontend` is unchanged. The capture is 11,940 KiB against its
+500 MiB cap; host free space is 51 GiB. One regenerable proposition dump
+(2,520 bytes) was removed after checking for open handles.
 
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and

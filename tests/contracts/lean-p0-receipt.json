@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "1b859487046e52ca5e1c645469535bcf3b7703a8",
+    "lean_commit": "b7a0a70ee4da4bfb2ed05869532a121a6504b26a",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -32,6 +32,7 @@
       "lean/EvoIR/Core/BranchTarget.lean",
       "lean/EvoIR/Core/CallCorrespondence.lean",
       "lean/EvoIR/Core/CallExpression.lean",
+      "lean/EvoIR/Core/CallFlow.lean",
       "lean/EvoIR/Core/CallSourceDiagram.lean",
       "lean/EvoIR/Core/CallTargetDiagram.lean",
       "lean/EvoIR/Core/CheckedInt.lean",
@@ -178,8 +179,11 @@
       "lean/EvoIR/Core/CallExpression.lean": [
         "EvoIR.Core.SourceCall"
       ],
-      "lean/EvoIR/Core/CallSourceDiagram.lean": [
+      "lean/EvoIR/Core/CallFlow.lean": [
         "EvoIR.Core.CallExpression"
+      ],
+      "lean/EvoIR/Core/CallSourceDiagram.lean": [
+        "EvoIR.Core.CallFlow"
       ],
       "lean/EvoIR/Core/CallTargetDiagram.lean": [
         "EvoIR.Core.CallSourceDiagram",
@@ -15816,8 +15820,39 @@
     }
   ],
   "compilation_core_primitives": {
-    "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions and conditional CFGs. No proof of source export, input-validation safety, loops or calls, backend compilation or verified-release acceptance",
+    "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions, conditional CFGs, checked cyclic diagrams, div/rem, finite calls and private-leaf substitution. Full core-v1 constructor/call/loop composition remains incomplete. No proof of source export, input-validation execution safety, backend compilation or verified-release acceptance",
     "targets": [
+      {
+        "theorem": "EvoIR.Core.Symbolic.call_flow_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (fuel : Nat) (locals : EvoIR.Core.Symbolic.LocalStore Γ) (control : EvoIR.Core.Source.Control) (tree : EvoIR.Core.Symbolic.FlowTree Γ), Option.map Subtype.val (EvoIR.Core.Symbolic.callFlow p fuel locals control) = some tree → EvoIR.Core.Symbolic.ContextFlowDiagram p locals control tree",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.call_target_uninitialized",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (pc width : Nat) (scope next : EvoIR.Core.Symbolic.Scope Γ) (inst : EvoIR.Core.IR.Instruction) (result : EvoIR.Core.Symbolic.ExpressionResult Γ), List.find? (fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.instructions[pc]? = some inst → inst.op = EvoIR.Core.IR.Operation.uninitialized (EvoIR.Core.IR.Ty.bits width) → inst.operands = [] → scope.appendSlots inst.results [EvoIR.Core.Symbolic.Slot.opaque (width + 2)] = some next → EvoIR.Core.Symbolic.CallTargetDiagram p f b (pc + 1) next result → EvoIR.Core.Symbolic.CallTargetDiagram p f b pc scope result",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.call_target_branch",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.IR.Program) (f : EvoIR.Core.IR.Function) (b nextBlock : EvoIR.Core.IR.Block) (scope next : EvoIR.Core.Symbolic.Scope Γ) (successor : EvoIR.Core.IR.Edge) (result : EvoIR.Core.Symbolic.ExpressionResult Γ), List.find? (fun x => x.name == f.name) p.functions = some f → List.find? (fun x => x.name == b.name) f.blocks = some b → b.terminator = EvoIR.Core.IR.Terminator.branch successor → nextBlock.name = successor.block → EvoIR.Core.Symbolic.edge EvoIR.Core.Symbolic.callTokenTypes f scope successor = some next → EvoIR.Core.Symbolic.CallTargetDiagram p f nextBlock 0 next result → EvoIR.Core.Symbolic.CallTargetDiagram p f b b.instructions.length scope result",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
       {
         "theorem": "EvoIR.Core.Symbolic.CallPair.refines",
         "proposition": "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} (pair : EvoIR.Core.Symbolic.CallPair source target) (args : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type args = List.map (fun p => p.type.type) pair.sourceFunction.parameters → ∃ sourceEntry targetEntry, EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ EvoIR.Core.IR.initial target pair.targetFunction.name (List.map EvoIR.Core.Symbolic.sourceValueIR args ++ [EvoIR.Core.IR.Value.memory { nextId := 1, objects := [] }, EvoIR.Core.IR.Value.world]) = Except.ok targetEntry ∧ EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
