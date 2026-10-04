@@ -201,6 +201,15 @@ def cursorValue {Γ : Var → Nat} (locals : LocalStore Γ) (k : List Source.Fra
         cases context <;> cases truth : (word.denote σ).truth <;>
           simp [truth, Source.Step, Source.step, Source.resumeValue, SourceCursor.denote,
             CutControl.denote, sourceContextFrames]⟩
+  | .choice type yes no :: rest =>
+    some ⟨.branch word.truthTerm
+      (.leaf ⟨.expression yes, locals, .convert type :: rest⟩)
+      (.leaf ⟨.expression no, locals, .convert type :: rest⟩), by
+        intro σ p fid context
+        simp only [CutTree.eval, truth_term_sound]
+        cases context <;> cases truth : (word.denote σ).truth <;>
+          simp [truth, Source.Step, Source.step, Source.resumeValue, SourceCursor.denote,
+            CutControl.denote, sourceContextFrames]⟩
   | .loopTest condition increment body :: rest =>
     some ⟨.branch word.truthTerm
       (.leaf ⟨.statement body, locals, .loopBody condition increment body :: rest⟩)

@@ -81,7 +81,31 @@ def sourceResumeSelfTest : IO UInt32 := do
       [.binaryLeft .uint .add (.call .uint 0 [(⟨.uint, false⟩, one)])] [] [(40, uint 44)]),
     ("first fault skips later continuation", checks p .int
       [.binaryLeft .int .add (.literal .int 1),
-       .binaryLeft .int .div (.literal .int 0)] [] [(0x7fffffff, overflow)])]
+       .binaryLeft .int .div (.literal .int 0)] [] [(0x7fffffff, overflow)]),
+    ("post-call conditional", checks p .uint
+      [.choice .uint (.literal .uint 17) (.literal .uint 29)] []
+      [(0, uint 29), (1, uint 17), (0xffffffff, uint 17)]),
+    ("conditional skips unselected fault", checks p .uint
+      [.choice .uint (.literal .uint 7)
+        (.binary .uint .div (.literal .uint 1) (.literal .uint 0))] []
+      [(1, uint 7), (0, divideZero)]),
+    ("post-call assignment updates later read", checks p .uint
+      [.assign .uint .set 71 ⟨.uint, false⟩,
+       .binaryLeft .uint .add (.ident .uint 71)] locals
+      [(0, uint 0), (21, uint 42), (0xffffffff, uint 0xfffffffe)]),
+    ("post-call compound assignment reads old local", checks p .uint
+      [.assign .uint .add 71 ⟨.uint, false⟩,
+       .binaryLeft .uint .add (.ident .uint 71)] locals
+      [(4, uint 14), (0xffffffff, uint 4)]),
+    ("compound assignment reports overflow before write", checks p .int
+      [.assign .int .add 72 ⟨.int, false⟩,
+       .binaryLeft .int .div (.literal .int 0)]
+      [⟨72, ⟨.int, false⟩, some (.const 32 0x7fffffff)⟩]
+      [(1, overflow)]),
+    ("post-call unary signed overflow", checks p .int [.unary .int .neg] []
+      [(1, int 0xffffffff), (0x80000000, overflow)]),
+    ("post-call unary boolean", checks p .int [.unary .int .not] []
+      [(0, int 1), (1, int 0), (0x80000000, int 0)])]
   let mut failed := 0
   for (label, passed) in tests do
     if !passed then

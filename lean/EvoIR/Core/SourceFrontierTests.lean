@@ -28,9 +28,14 @@ def sourceFrontierSelfTest : IO UInt32 := do
     ⟨.expression (.call .uint 2 xs), locals, [.return ⟨.uint, false⟩, .function none .uint]⟩
   let write : Source.Expr := .assign .uint .set 6 ⟨.uint, false⟩
     (.ident .uint 6) (.literal .uint 9)
+  let assigned : SourceCursor inputWidths := ⟨.expression (.assign .uint .set 6
+    ⟨.uint, false⟩ (.ident .uint 6) (.call .uint 2 [
+      (⟨.uint, false⟩, .ident .uint 6), (⟨.uint, false⟩, .ident .uint 7)])),
+    locals, [.return ⟨.uint, false⟩, .function none .uint]⟩
   let tests := [
     ("original caller entry", stops p entry [u 7, u 3] (.ok [u 7, u 3])),
     ("boundary caller arguments", stops p entry [u 0xffffffff, u 0] (.ok [u 0xffffffff, u 0])),
+    ("assignment suspends before write", stops p assigned [u 7, u 3] (.ok [u 7, u 3])),
     ("argument order retains writes", stops p
       (expression [(⟨.uint, false⟩, write), (⟨.uint, false⟩, .ident .uint 6)])
       [u 7, u 3] (.ok [u 9, u 9])),

@@ -16,6 +16,50 @@ def ResumesContext (p : Program) (locals : Locals) (fid : Nat)
       Steps p ⟨.value value, locals, frame :: k, fid⟩
         ⟨.halted (.error fault), failedLocals, failedK, failedFunction⟩
 
+theorem resumes_unary (p : Program) (locals : Locals) (fid : Nat)
+    (type : IntType) (op : Unary) (value : Value)
+    (typed : ∀ answer, unaryValue op value = .ok answer → answer.type = type) :
+    ResumesContext p locals fid (.unary type op) value (locals, unaryValue op value) := by
+  intro k
+  cases result : unaryValue op value with
+  | error fault =>
+    exact ⟨locals, k, fid, .next (by simp [Step, step, resumeValue, valueResult, result, fail]) (.refl _)⟩
+  | ok answer =>
+    exact .next (by simp [Step, step, resumeValue, valueResult, result, typed answer result]) (.refl _)
+
+theorem resumes_assignment (p : Program) (locals : Locals) (fid : Nat)
+    (op : Assignment) (id : Nat) (destination : QualifiedType) (value : Value) :
+    ResumesContext p locals fid (.assign destination.type op id destination) value
+      (assignmentOutcome locals op id destination value) := by
+  intro k
+  have resume : resumeValue ⟨.value value, locals, k, fid⟩
+      (.assign destination.type op id destination) value =
+      match assignmentOutcome locals op id destination value with
+      | (ls, .error fault) => ⟨.halted (.error fault), ls, k, fid⟩
+      | (ls, .ok v) => ⟨.value v, ls, k, fid⟩ := by
+    simp only [resumeValue, assignmentOutcome, assignmentCalculation]
+    cases selected : op.binary with
+    | none =>
+      simp only [bind, Except.bind, pure, Except.pure]
+      cases written : writeSlot locals id destination (value.cast destination.type) false <;>
+        simp [fail, valueResult, Value.cast, Value.ofInt]
+    | some binary =>
+      cases read : readSlot locals id destination.type with
+      | error fault => simp [bind, Except.bind, fail]
+      | ok old =>
+        simp only [bind, Except.bind]
+        cases calculated : binaryValue binary old value with
+        | error fault => simp [fail]
+        | ok raw =>
+          dsimp only
+          cases written : writeSlot locals id destination (raw.cast destination.type) false <;>
+            simp [pure, Except.pure, fail, valueResult, Value.cast, Value.ofInt]
+  cases result : assignmentOutcome locals op id destination value with
+  | mk updated answer =>
+    cases answer with
+    | error fault => exact ⟨updated, k, fid, .next (by simp [Step, step, resume, result]) (.refl _)⟩
+    | ok answer => exact .next (by simp [Step, step, resume, result]) (.refl _)
+
 theorem resumes_binary {p : Program} {locals : Locals} {fid : Nat}
     (type : IntType) (op : Binary) (right : Expr) (value : Value) (outcome : StateOutcome)
     (continueRight : (op == .and && !value.truth) = false ∧ (op == .or && value.truth) = false)
@@ -59,6 +103,33 @@ def resumeExpression {Γ : Var → Nat} (p : Source.Program) (budget : Nat)
     (locals : LocalStore Γ) (frame : Source.Frame) (word : CWord Γ) :
     Option {tree // ResumptionDiagram p locals frame word tree} :=
   match frame with
+  | .unary type op =>
+    if typed : (unary op word).2.type = type then
+      some ⟨.linear locals (unary op word), ⟨by intro context rest; cases context <;> rfl, by
+        intro σ fid
+        have result : ExpressionResult.denote σ (unary op word) = Source.unaryValue op (word.denote σ) :=
+          unary_sound σ op word
+        rw [StateTree.linear_sound, result]
+        apply Source.resumes_unary
+        intro answer calculated
+        rw [← result] at calculated
+        rw [expression_result_value σ (unary op word) answer calculated]
+        exact typed⟩⟩
+    else none
+  | .assign type op id destination => do
+    if typed : type = destination.type then
+      let r ← assignmentResult locals op id destination word
+      match written : locals.write id destination (r.val.2.cast destination.type) false with
+      | none => none
+      | some updated =>
+        let tree := (StateTree.value updated (r.val.2.cast destination.type)).prefix locals r.val.1
+        have continuation : AssignmentContinuation op id destination locals word tree :=
+          ⟨r.val, updated, r.property, written, rfl⟩
+        return ⟨tree, ⟨by intro context rest; cases context <;> rfl, by
+          intro σ fid
+          rw [assignment_continuation_sound σ continuation, typed]
+          exact Source.resumes_assignment p (locals.denote σ) fid op id destination (word.denote σ)⟩⟩
+    else none
   | .binaryLeft type op right => do
     if notAnd : op ≠ .and then
       if notOr : op ≠ .or then

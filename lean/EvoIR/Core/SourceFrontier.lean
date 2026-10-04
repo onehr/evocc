@@ -34,6 +34,23 @@ def cursorDescend {Γ : Var → Nat} (locals : LocalStore Γ) (expr : Source.Exp
         intro σ p fid context
         cases context <;> simp [CutTree.eval, Source.Step, Source.step, Source.enterExpression,
           SourceCursor.denote, CutControl.denote, sourceContextFrames, noWrap]⟩
+    | .assign type op id destination (.ident targetType targetId) rhs =>
+      if typed : type = destination.type ∧ targetType = destination.type ∧ targetId = id then
+        if writable : locals.writable id destination = true then
+          some ⟨.leaf ⟨.expression rhs, locals, .assign type op id destination :: k⟩, by
+            intro σ p fid context
+            rcases typed with ⟨rfl, rfl, rfl⟩
+            have valid := local_writable_sound σ locals targetId destination writable
+              (SourceCursor.mk (.expression (.assign destination.type op targetId destination
+                (.ident destination.type targetId) rhs)) locals k |>.denote σ fid context)
+              (by cases context <;> rfl)
+            cases context <;>
+              simp only [SourceCursor.denote, CutControl.denote, sourceContextFrames] at valid <;>
+              simp [CutTree.eval, Source.Step, Source.step, Source.enterExpression,
+                SourceCursor.denote, CutControl.denote, sourceContextFrames,
+                Source.wrappingConstant, valid]⟩
+        else none
+      else none
     | _ => none
   else none
 
