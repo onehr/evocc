@@ -210,7 +210,7 @@
     "disk": {"measured_cache_capture_delta_kib": 4244, "source_growth_upper_bound_kib": 1024, "free_after_kib": 52041628, "cleanup": "Removed two temporary development audit receipts. Protected contracts, current gate logs and Lean cache retained; no additional target/kernel tree or VM image."}
   },
   "whole_leaf_correspondence": {
-    "status": "CLEAN_LEAN_GATE_PASS_WORKSPACE_PENDING",
+    "status": "CLEAN_LEAN_GATE_PASS_WORKSPACE_INTERRUPTED",
     "implementation_commit": "7ec19c0c68a59c36f32a240e3977fc21cbfbb485",
     "implementation": ["lean/EvoIR/Core/SymbolicEntry.lean", "lean/EvoIR/Core/LeafCorrespondence.lean"],
     "theorem": "EvoIR.Core.Symbolic.LeafPair.refines",
@@ -232,8 +232,19 @@
     "compiled_lean_checker_sha256": "fe290ad1bb49d2b1500ab51097279b1982792c8a7e50745f0b23ffd4388c0fc9",
     "actual_export_result": "PROVED_LEAF_PAIR entry=FixedMul arguments=all-signature-bits scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE",
     "clean_lean_gate": "PASS at 7ec19c0c; 34 kernel-only core targets, no native axioms",
+    "workspace_attempt": "Stopped without a completion footer; process and session absent on revalidation. 249 completed suites, 2145 passed, 0 failed, 2 ignored. Not a full-workspace PASS.",
     "gate_logs": [".evidence/verification-core/20261004/source-execution/leaf-lean-gate.log", ".evidence/verification-core/20261004/source-execution/leaf-full-workspace.log", ".evidence/verification-core/20261004/source-execution/leaf-original-replay.log"],
     "claim_ceiling": "General structural straight-line leaf checking from complete original source/IR inputs, for every original-signature argument and first supported diagnostic; real entry/return and terminal/divergence/progress contract. No exact-tree or function-name whitelist. The compiled checker retains the disclosed Lean compiler/runtime trust boundary. Other expression rows, branching/looping functions, local writes/storage, calls, private-leaf substitution, validator safety, backend and release admission remain open."
+  },
+  "bitwise_extension": {
+    "implementation_commit": "2fb00d28d0197cec1115c48486356912526d9962",
+    "clean_lean_gate": "PASS; clean tree; 35 kernel-only core targets; no native axioms in those targets",
+    "gate_log": ".evidence/verification-core/20261004/source-execution/bitwise-lean-gate.log",
+    "positive_pairs": 108,
+    "operator_mutations_refused": 108,
+    "disk_delta_kib": 4620,
+    "disk_scope": "lean/.lake + target/frontend + retained source-execution capture; excludes source files and unrelated host use",
+    "claim_ceiling": "Source-directed bitwise expressions inside the structural leaf checker, not V01 completion or backend verification."
   },
   "integration_gates": {
     "rust_implementation_commit": "196d84a15426999e69f23f881312b05f9c0e1177",
@@ -273,7 +284,7 @@
     "source_export_and_grammar_reader": "IMPLEMENTED_DECODED_NOT_VERIFIED",
     "independent_source_validation": "IMPLEMENTED_NO_EXECUTION_SAFETY_THEOREM",
     "existing_pipeline_population": "FOCUSED_AND_FULL_WORKSPACE_PASS_NOT_A_COMPILATION_PROOF",
-    "V01_source_to_evoir": "FIRST_ORIGINAL_FUNCTION_PAIR_PROOF_GENERIC_CHECKER_OPEN",
+    "V01_source_to_evoir": "STRUCTURAL_LEAF_CHECKER_PROVED_FULL_PROFILE_OPEN",
     "V02_selection_and_copies": "NOT_IMPLEMENTED",
     "V03_allocation": "NOT_IMPLEMENTED",
     "V04_frame_emission_and_baseline": "NOT_IMPLEMENTED",
