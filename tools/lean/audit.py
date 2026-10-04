@@ -212,6 +212,12 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Source.enterFunction",
     "EvoIR.Core.Source.initial",
     "EvoIR.Core.Source.step",
+    "EvoIR.Core.Transition.CheckpointSimulation",
+    "EvoIR.Core.Symbolic.SourceCutRuns",
+    "EvoIR.Core.Symbolic.TargetCutRuns",
+    "EvoIR.Core.Symbolic.CutpointRelated",
+    "EvoIR.Core.Symbolic.CutExitAgreement",
+    "EvoIR.Core.Symbolic.CheckedSpan",
     "EvoIR.Core.Source.Steps",
     "EvoIR.Core.Source.Diverges",
     "EvoIR.Core.Source.runSteps",
@@ -272,6 +278,36 @@ RECORDED_DEFINITIONS = [
 ]
 
 CORE_PRIMITIVE_TARGETS = [
+    (
+        "EvoIR.Core.Symbolic.source_cut_diagram_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (cutpoints : List EvoIR.Core.Symbolic.SourceSite) "
+        "(budget : Nat) (advance : Bool) (cursor : EvoIR.Core.Symbolic.SourceCursor Γ) "
+        "(tree : EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.SourceCursor Γ)), "
+        "Option.map Subtype.val (EvoIR.Core.Symbolic.sourceCutDiagram cutpoints budget advance cursor) = some tree → "
+        "EvoIR.Core.Symbolic.SourceCutRuns advance cursor tree",
+    ),
+    (
+        "EvoIR.Core.Symbolic.target_cut_diagram_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (types : Nat → EvoIR.Core.IR.Ty) (f : EvoIR.Core.IR.Function) "
+        "(type : EvoIR.Core.Source.IntType) (cutpoints : List String) (budget : Nat) (advance : Bool) "
+        "(scope : EvoIR.Core.Symbolic.Scope Γ) (label : String) "
+        "(tree : EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.TargetExit Γ)), "
+        "Option.map Subtype.val (EvoIR.Core.Symbolic.targetCutDiagram types f type cutpoints budget advance scope label) = some tree → "
+        "EvoIR.Core.Symbolic.TargetCutDiagram types f type advance scope label tree",
+    ),
+    (
+        "EvoIR.Core.Symbolic.checked_cutpoint_refines",
+        "∀ {Γ : EvoIR.Var → Nat} (entries : List (EvoIR.Core.Symbolic.JointPoint Γ)) "
+        "(fid : Nat) (type : EvoIR.Core.Source.IntType) (source : EvoIR.Core.Source.Program) "
+        "(program : EvoIR.Core.IR.Program) (target : EvoIR.Core.IR.Function), "
+        "List.find? (fun x => x.name == target.name) program.functions = some target → "
+        "target.returns = [EvoIR.Core.IR.Ty.bits type.width] → "
+        "∀ (spans : (point : EvoIR.Core.Symbolic.JointPoint Γ) → point ∈ entries → "
+        "EvoIR.Core.Symbolic.CheckedSpan entries fid target type point) "
+        "(s : EvoIR.Core.Source.State) (t : EvoIR.Core.IR.State), "
+        "EvoIR.Core.Symbolic.CutpointRelated entries fid target s t → "
+        "EvoIR.Core.LoweringRefines source program type s t",
+    ),
     (
         "EvoIR.Core.Symbolic.flow_diagram_sound",
         "∀ {Γ : EvoIR.Var → Nat} (depth : Nat) (locals : EvoIR.Core.Symbolic.LocalStore Γ) "

@@ -2448,6 +2448,13 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   replay successfully. Full workspace passes 401 suites / 3,080 tests / zero
   failures / five ignored, with Clippy/format. Div/rem, loops, calls/private-leaf substitution and validator
   safety remain required; this does not close V01 or advance V02–V06.
+  October 5 cyclic-span continuation: proof-carrying source/target cutpoint
+  builders and the conditional unbounded composition theorem compile. Four
+  frozen `loop_join` spans match; six zero-step roots and 16 source/target/
+  association mutations refuse. The whole-loop checker still needs independent
+  successor-invariant instantiation and the actual entry connection; matching
+  spans are not loop admission. Focused checks pass; clean Lean/full-workspace
+  gates for this slice are pending. The original V01 scope is unchanged.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

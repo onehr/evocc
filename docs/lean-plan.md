@@ -487,6 +487,26 @@ its body in `caller` (`inline.rs`'s `private_leaf`). The actual source-to-target
 checker must cover that transformation, not silently substitute the post-inline
 tree for its declared original input or omit the callee from the source proof.
 
+**Cyclic span construction (October 5, not loop admission).** Source and target
+builders now construct proof-carrying finite spans between proposed cutpoints.
+Every root executes a positive number of actual machine steps; a cutpoint
+cannot justify itself by a zero-step edge. Source continuations preserve loop
+tests, increments, break/continue, scope exits and the first diagnostic. Target
+spans read actual terminators and perform simultaneous block-argument binding.
+The bound limits syntax exploration between cutpoints, not loop iterations.
+`checked_cutpoint_refines` proves unbounded refinement, including divergence,
+conditional on every outgoing span and its successor-invariant closure being
+checked. This is not an assumption that the loop terminates.
+
+The frozen `loop_join` exports have four matching symbolic spans (entry, for,
+while and do-while), six refused zero-step roots and 16 refused mutations. The
+test's fixed point associations are test data, not a name-specific admission
+path. An executable, independently checked successor-invariant instantiation
+and connection to the actual function entry are still required before the
+whole-function checker may admit `loop_join`. Existing seven finite-function
+admissions are unchanged. Focused build/self-tests pass; this slice's clean
+Lean/full-workspace acceptance is pending. V01 and V02–V06 remain open.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted
