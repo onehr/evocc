@@ -619,8 +619,10 @@ The complete `main` closure still refuses. Five isolated calling-expression
 REDs in `tests/fixtures/verification/call-control.c` independently validate as
 source but refuse pair checking: choice, short-circuit and/or, assignment and
 comma. They are next-work inputs, not passing proof evidence.
-Artifact growth at the gate checkpoint is **2,432 KiB** across `.lake` and the
-capture; `target/frontend` is unchanged. The capture is 11,940 KiB against its
+After the receipt synopsis correction, the clean gate at `0724fcc9` passes
+again and reproduces the committed receipt byte-for-byte. Final slice artifact
+growth is **2,440 KiB** across `.lake` and the capture; `target/frontend` is
+unchanged. The capture is 11,948 KiB against its
 500 MiB cap; host free space is 51 GiB. One regenerable proposition dump
 (2,520 bytes) was removed after checking for open handles.
 
