@@ -1,5 +1,8 @@
 import EvoIR.Sem
 import EvoIR.Core.CheckedInt
+import EvoIR.Core.ScalarCorrectness
+import EvoIR.Core.Execution
+import EvoIR.Core.Divergence
 import EvoIR.Term
 import EvoIR.Fact
 import EvoIR.Rule

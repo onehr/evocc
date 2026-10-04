@@ -199,6 +199,22 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.irFixedMul",
     "EvoIR.Core.checkArithmeticFragment",
     "EvoIR.Core.runArithmeticFragment",
+    "EvoIR.Core.Source.binaryValue",
+    "EvoIR.Core.Source.unaryValue",
+    "EvoIR.Core.Source.constantValue",
+    "EvoIR.Core.Source.wrappingConstant",
+    "EvoIR.Core.Source.readSlot",
+    "EvoIR.Core.Source.writeSlot",
+    "EvoIR.Core.Source.enterExpression",
+    "EvoIR.Core.Source.enterStatement",
+    "EvoIR.Core.Source.resumeValue",
+    "EvoIR.Core.Source.resumeFlow",
+    "EvoIR.Core.Source.enterFunction",
+    "EvoIR.Core.Source.initial",
+    "EvoIR.Core.Source.step",
+    "EvoIR.Core.Source.Steps",
+    "EvoIR.Core.Source.Diverges",
+    "EvoIR.Core.Source.runSteps",
     "EvoIR.denoteOp",
     "EvoIR.denoteTerm",
     "EvoIR.elabPat",
@@ -243,6 +259,42 @@ CORE_PRIMITIVE_TARGETS = [
         "EvoIR.Core.checkArithmeticFragment source candidate = true → "
         "∀ {n : Nat} (x y : BitVec n), EvoIR.Core.runArithmeticFragment candidate x y = "
         "EvoIR.Core.sourceArithmetic source x y",
+    ),
+    (
+        "EvoIR.Core.Source.typed_arithmetic_lowering",
+        "∀ (op : EvoIR.Core.SignedArithmetic) (t : EvoIR.Core.Source.IntType), "
+        "t.signed = true → ∀ (x y : BitVec t.width), "
+        "EvoIR.Core.Source.liftChecked t (EvoIR.Core.irArithmetic op x y) = "
+        "EvoIR.Core.Source.binaryValue (EvoIR.Core.Source.arithmeticSourceOp op) "
+        "{ type := t, bits := x } { type := t, bits := y }",
+    ),
+    (
+        "EvoIR.Core.Source.step_deterministic",
+        "∀ (p : EvoIR.Core.Source.Program) (s t u : EvoIR.Core.Source.State), "
+        "EvoIR.Core.Source.Step p s t → EvoIR.Core.Source.Step p s u → t = u",
+    ),
+    (
+        "EvoIR.Core.Source.runSteps_prefix",
+        "∀ (p : EvoIR.Core.Source.Program) (fuel : Nat) (s : EvoIR.Core.Source.State), "
+        "EvoIR.Core.Source.Steps p s (EvoIR.Core.Source.runSteps p fuel s)",
+    ),
+    (
+        "EvoIR.Core.Source.diagnostic_cannot_be_overwritten",
+        "∀ (p : EvoIR.Core.Source.Program) (code : Nat) (locals : EvoIR.Core.Source.Locals) "
+        "(k : List EvoIR.Core.Source.Frame) (functionId fuel : Nat), "
+        "EvoIR.Core.Source.runSteps p fuel "
+        "{ control := EvoIR.Core.Source.Control.halted (Except.error (EvoIR.Core.Source.Fault.diagnostic code)), "
+        "locals := locals, continuation := k, functionId := functionId } = "
+        "{ control := EvoIR.Core.Source.Control.halted (Except.error (EvoIR.Core.Source.Fault.diagnostic code)), "
+        "locals := locals, continuation := k, functionId := functionId }",
+    ),
+    (
+        "EvoIR.Core.Source.while_true_diverges",
+        "∀ (p : EvoIR.Core.Source.Program) (locals : EvoIR.Core.Source.Locals) "
+        "(k : List EvoIR.Core.Source.Frame) (functionId : Nat), EvoIR.Core.Source.Diverges p "
+        "{ control := EvoIR.Core.Source.Control.statement "
+        "(EvoIR.Core.Source.Stmt.while (EvoIR.Core.Source.Expr.literal EvoIR.Core.Source.IntType.int 1) "
+        "EvoIR.Core.Source.Stmt.null), locals := locals, continuation := k, functionId := functionId }",
     ),
 ]
 
@@ -787,8 +839,10 @@ def main(argv: list[str]) -> int:
         },
         "evaluator": evaluator,
         "compilation_core_primitives": {
-            "claim": "Checked arithmetic primitive correspondence only; no proof of source "
-                     "export, CFG, whole-function checker or compilation yet",
+            "claim": "Checked arithmetic primitive correspondence and source-machine "
+                     "determinism, finite-prefix and terminal-diagnostic properties; "
+                     "no proof of source export, input-validation soundness, source/IR "
+                     "simulation, whole-function checker or compilation yet",
             "targets": core_primitives,
         },
         "trust": TRUST,

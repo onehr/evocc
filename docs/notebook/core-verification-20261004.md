@@ -11,6 +11,7 @@ Population/commands: [core-v1-pilot.json](../../tests/contracts/core-v1-pilot.js
 | `1b99fae2` / receipt `833982ed` — source input | Fourteen focused Rust tests, ten reader cases and five exporter/reader pairs pass; clean Lean gate passes, five kernel-only primitive targets. | `DECODED_NOT_VERIFIED`; no whole-function checker. |
 | `4483ef67` — independent source validation | 44 input cases, five frozen exports and 36 integer-type pairs pass; an exported unsequenced-access case refuses. Clean Lean gate passes. | `WELL_FORMED_NOT_COMPILATION_VERIFIED`; execution safety and source/target correspondence remain unproved. |
 | Integration gate on the same Rust implementation | 401 suites: **3,079 passed / 0 failed / 5 ignored**; Clippy and formatting pass. | No compilation or verified-release acceptance. |
+| Source-machine slice (commit recorded below after integration) | 22 semantic cases, six Rust source-interface tests and ten-function exported closure pass; both Rust interpreters agree. | Unbounded source steps and kernel-only machine/primitive lemmas; no source/IR simulation or checker soundness. |
 
 | Existing-pipeline pilot | Functions with wrapper | Blocks | Spill store/reload pairs | Incoming stack args |
 | --- | ---: | ---: | ---: | ---: |
@@ -46,3 +47,9 @@ Lean `.lake` were preserved. After the gate and unused incremental-cache cleanup
 entry: its net footprint is roughly **15 GiB lower**, not an exact physical
 recovery or whole-project net measurement. New tracked text and retained logs
 are under 2 MiB. Host-wide free-space variation also includes unrelated swap.
+The source-machine slice retired another 400 idle single-link Mach-O test
+binaries (3.483 GiB logical), preserving compiler/checker binaries and evidence.
+Its bounded execution results are `EXECUTED_NOT_VERIFIED`; a step limit is not
+an observation or divergence proof. `while_true_diverges` instead constructs an
+infinite trace. The primitive bridge retains executed literal wrapping versus
+runtime overflow, independent count widths, and distinct div/rem diagnostics.

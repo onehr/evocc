@@ -2336,9 +2336,15 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   accesses: 44 input cases, all five exported entries and 36 ordered integer
   type pairs pass; an actually exported unsequenced-access fixture refuses.
   Its result is
-  `WELL_FORMED_NOT_COMPILATION_VERIFIED`. Validator soundness against execution,
-  small-step control, calls, local storage and actual whole-function result
-  checking remain open.
+  `WELL_FORMED_NOT_COMPILATION_VERIFIED`. The source small-step machine now
+  executes typed arithmetic, control, scoped locals and isolated call frames.
+  Twenty-two semantic regressions and the exported ten-function original-body
+  closure pass; the latter agrees with both existing Rust interpreters. New
+  kernel-only lemmas cover step determinism, finite prefixes, terminal
+  diagnostics, an infinite loop trace and the typed arithmetic bridge. These
+  are not compilation theorems: validator soundness, actual EvoIR execution/
+  result checking and whole-function simulation remain open. Test step limits
+  are explicitly not proof or divergence outcomes.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

@@ -157,7 +157,7 @@ entire original translation unit. The pilot is frozen in
 `evocc_chir::core_profile::inspect_core` inventory visits original nodes,
 including dead branches; it does not normalize them or certify compilation.
 Independent Lean input validation is implemented in `Core/WellFormed.lean`;
-its connection to the forthcoming execution semantics remains a V01 proof
+its connection to the small-step execution semantics remains a V01 proof
 obligation. Successful validation is not a source-to-EvoIR result check.
 The pilot fixes `-O0 -fno-builtin`: ordinary-name `abs` recognition would
 otherwise bypass the very definition whose source/target relation is required.
@@ -245,6 +245,33 @@ target program or proof-output label. All five frozen entry exports pass this
 input check, including the two-function pressure closure. Forty-four focused
 input tests cover both admission and refusal, but neither those tests nor the
 five existing primitive theorems prove this validator's execution safety.
+
+**Source execution.** `Core/Scalar.lean` and `Core/Execution.lean` now execute
+the complete exported source tree with typed integer values, initialized local
+slots, explicit expression/statement continuations, scope exit and isolated
+call frames. The transition relation is unbounded; `Core/Divergence.lean`
+constructs an actual infinite trace for `while (1) {}`. Kernel-only lemmas also
+establish deterministic steps, the bounded runner's finite-prefix property,
+terminal diagnostic preservation and the typed arithmetic/primitive bridge.
+These do not yet establish input-validator soundness or source/IR simulation.
+
+The machine preserves the existing executed source-literal wrapping rule for
+add/sub/mul/neg; object reads and comma expressions are not constant operands,
+and literal classification cannot erase a reached MIN/-1 failure. Ordinary
+variable overflow still reports E3004. Shifts decode the independently typed
+count before checking its bounds. Malformed states (including bad scope,
+uninitialized local or signature mismatch) are distinct from diagnostics; V01
+must prove they unreachable on the admitted path rather than label them safe
+termination. Source execution remains the existing deterministic left-to-right
+policy, not a new license for unsequenced conflicting accesses.
+
+`evoir-sem --run-core SOURCE.json ENTRY STEP_LIMIT [0xARG ...]` is a bounded
+test observer only. Returns/diagnostics print `EXECUTED_NOT_VERIFIED`; reaching
+the step bound prints `STEP_LIMIT_NOT_VERIFICATION`, never success or divergence.
+Twenty-two focused cases, the five frozen entry exports, and the ten-function
+`source-execution.c` closure exercise this path. The unchanged original bodies
+remain in that closure; its result matches both existing Rust interpreters.
+The actual EvoIR result checker and its soundness theorem remain OPEN.
 
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and

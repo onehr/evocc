@@ -8,7 +8,7 @@ closed acyclic calls, and a conservative unsequenced-access restriction.
 
 The recursion bound limits input syntax only. Loop bodies are checked once under
 conservative incoming initialization; no execution fuel or bounded-loop argument
-is used. Soundness with respect to the forthcoming small-step semantics remains
+is used. Soundness with respect to the small-step semantics in Execution.lean remains
 a separate V01 obligation. In particular this file makes no progress theorem.
 -/
 namespace EvoIR.Core.Source

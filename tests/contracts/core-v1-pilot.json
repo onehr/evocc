@@ -84,6 +84,21 @@
     "negative_result": "Export exits 0; independent source validation exits 1 for unsequenced conflicting operand accesses. Never executed as a C reference.",
     "claim_ceiling": "Input validation only; its execution-safety theorem and the source-to-target compilation checker remain unimplemented."
   },
+  "source_execution": {
+    "implementation": ["lean/EvoIR/Core/Scalar.lean", "lean/EvoIR/Core/Execution.lean"],
+    "tests": "lean/EvoIR/Core/ExecutionTests.lean",
+    "selftest_passed": 22,
+    "selftest_failed": 0,
+    "command": "evoir-sem --run-core SOURCE.json ENTRY STEP_LIMIT [0xARG ...]",
+    "paired_exports_executed": ["FixedMul", "abs", "loop_join", "short_circuit", "pressure (including wide)"],
+    "whole_closure_fixture": "tests/fixtures/verification/source-execution.c",
+    "whole_closure_functions": 10,
+    "whole_closure_result": "Lean source, C-HIR and EvoIR each return 0",
+    "targeted_rust_command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p evocc --test core_source_export --offline",
+    "targeted_rust_passed": 6,
+    "infinite_execution_theorem": "EvoIR.Core.Source.while_true_diverges",
+    "claim_ceiling": "Unbounded source semantics, primitive bridge and machine properties only. Finite execution is not a source/IR equivalence proof; step exhaustion is not termination or divergence. Validator soundness and the actual compilation checker remain open."
+  },
   "integration_gates": {
     "rust_implementation_commit": "1b99fae29018db0b74d4ef128a7cb7187e28f2bf",
     "lean_implementation_commit": "4483ef6778ee7412e8b97124373e1f6e2e0bd4b0",
@@ -119,7 +134,7 @@
     "source_export_and_grammar_reader": "IMPLEMENTED_DECODED_NOT_VERIFIED",
     "independent_source_validation": "IMPLEMENTED_NO_EXECUTION_SAFETY_THEOREM",
     "existing_pipeline_population": "FOCUSED_AND_FULL_WORKSPACE_PASS_NOT_A_COMPILATION_PROOF",
-    "V01_source_to_evoir": "PRIMITIVE_LEMMAS_ONLY_NOT_A_FUNCTION_CHECKER",
+    "V01_source_to_evoir": "SOURCE_EXECUTION_AND_PRIMITIVE_LEMMAS_NOT_A_FUNCTION_CHECKER",
     "V02_selection_and_copies": "NOT_IMPLEMENTED",
     "V03_allocation": "NOT_IMPLEMENTED",
     "V04_frame_emission_and_baseline": "NOT_IMPLEMENTED",

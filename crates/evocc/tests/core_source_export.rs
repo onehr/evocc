@@ -137,3 +137,36 @@ fn export_options_do_not_silently_change_other_compilation_paths() {
         assert!(output.stdout.is_empty());
     }
 }
+
+#[test]
+fn complete_source_execution_fixture_agrees_in_existing_interpreters() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/verification/source-execution.c");
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+            .args([mode, "-O0", "-fno-builtin"])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{mode}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args([
+            "--emit=core-c-hir",
+            "--core-entry=main",
+            "-O0",
+            "-fno-builtin",
+        ])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let tree = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(tree.matches("[\"function\"").count(), 10);
+    assert!(!tree.contains("VERIFIED"));
+}
