@@ -11,7 +11,7 @@ Population/commands: [core-v1-pilot.json](../../tests/contracts/core-v1-pilot.js
 | `1b99fae2` / receipt `833982ed` — source input | Fourteen focused Rust tests, ten reader cases and five exporter/reader pairs pass; clean Lean gate passes, five kernel-only primitive targets. | `DECODED_NOT_VERIFIED`; no whole-function checker. |
 | `4483ef67` — independent source validation | 44 input cases, five frozen exports and 36 integer-type pairs pass; an exported unsequenced-access case refuses. Clean Lean gate passes. | `WELL_FORMED_NOT_COMPILATION_VERIFIED`; execution safety and source/target correspondence remain unproved. |
 | Integration gate on the same Rust implementation | 401 suites: **3,079 passed / 0 failed / 5 ignored**; Clippy and formatting pass. | No compilation or verified-release acceptance. |
-| Source-machine slice (commit recorded below after integration) | 22 semantic cases, six Rust source-interface tests and ten-function exported closure pass; both Rust interpreters agree. | Unbounded source steps and kernel-only machine/primitive lemmas; no source/IR simulation or checker soundness. |
+| `857d7d90` — source-machine slice | 22 semantic cases, six Rust source-interface tests and ten-function exported closure pass; both Rust interpreters agree. Full workspace: **401 suites, 3,080 passed / 0 failed / 5 ignored**; Clippy/format pass. Clean Lean gate: ten core targets, all kernel-only. | Unbounded source steps and kernel-only machine/primitive lemmas; no source/IR simulation or checker soundness. |
 
 | Existing-pipeline pilot | Functions with wrapper | Blocks | Spill store/reload pairs | Incoming stack args |
 | --- | ---: | ---: | ---: | ---: |
@@ -53,3 +53,8 @@ Its bounded execution results are `EXECUTED_NOT_VERIFIED`; a step limit is not
 an observation or divergence proof. `while_true_diverges` instead constructs an
 infinite trace. The primitive bridge retains executed literal wrapping versus
 runtime overflow, independent count widths, and distinct div/rem diagnostics.
+After this gate, idle test/example binaries and release library/object caches
+were retired (about 6.6 GiB logical; all regenerable). Free space rose from
+20,841,272 to 27,393,504 KiB; compiler/checker executables and evidence remain.
+This slice's retained text/log growth is under 2 MiB, with build-cache growth
+removed; the host-wide free-space delta is not attributed solely to this task.
