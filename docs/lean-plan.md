@@ -518,8 +518,12 @@ the table to both actual function entries for all typed arguments. The original
 `loop_join.json` and complete `control.evo` pass the public interface; the seven
 finite-function admissions remain green. A divergent loop is also admitted;
 six zero-step roots and 30 mutations refuse. These are source-to-EvoIR results,
-not a V01-completion or backend claim. Clean gate receipt for this continuation
-is pending; div/rem, calls/private-leaf substitution and validator safety remain.
+not a V01-completion or backend claim. The clean Lean gate at `493aa9ac`
+passes with 49 kernel-only core targets and 1,246,159 vector answers; the
+workspace gate passes 401 suites / 3,080 tests / zero failures / five ignored,
+plus Clippy/format. Div/rem, calls/private-leaf substitution and validator safety
+remain. The six cases in `division-return.c` are the next observed RED, not
+admitted functions or a new P0 rewrite domain.
 
 ```sh
 lean/.lake/build/bin/evoir-sem --check-core-loop-pair SOURCE.json TARGET.evo CUTPOINTS.json

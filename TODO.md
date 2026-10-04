@@ -2463,7 +2463,11 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   accepts the original `loop_join` source against the full unchanged target
   module with an untrusted cutpoint proposal; the seven finite pairs still pass.
   A divergent loop passes, while six zero-step roots and 30 mutations refuse.
-  Clean acceptance of this continuation is pending. Div/rem, calls/private-leaf
+  Clean Lean acceptance at `493aa9ac` passes (49 kernel-only core targets,
+  1,246,159 vector answers); full workspace passes 401 suites / 3,080 tests /
+  zero failures / five ignored, plus Clippy/format. Six actual exported
+  division/remainder/compound-assignment pairs now reproduce the next RED.
+  Div/rem, calls/private-leaf
   substitution and validator safety remain OPEN; no V02–V06 implementation or
   release claim is made. The original V01 scope is unchanged.
 

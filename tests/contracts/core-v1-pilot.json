@@ -356,7 +356,9 @@
     "claim_ceiling": "Positive source/target spans and conditional unbounded composition, not a completed cyclic program-pair checker. Frozen point associations in regression tests are not an admission whitelist. V01 remains open; no V02-V06 or release claim."
   },
   "whole_loop_correspondence": {
-    "status": "FOCUSED_PASS_CLEAN_GATE_PENDING",
+    "status": "CLEAN_LEAN_AND_WORKSPACE_GATE_PASS_FULL_V01_OPEN",
+    "implementation_commit": "493aa9ac4fd6c45572c54cc28af9c633e6d0adec",
+    "compiled_lean_checker_sha256": "0df5dc277cd3559689b8f2ca8339b781c933785e0b0ceb66103fe63d9562533d",
     "theorem": "EvoIR.Core.Symbolic.LoopPair.refines",
     "implementation": ["lean/EvoIR/Core/CutpointStorage.lean", "lean/EvoIR/Core/CutpointInvariant.lean", "lean/EvoIR/Core/LoopReturn.lean", "lean/EvoIR/Core/CutpointInput.lean"],
     "tests": "lean/EvoIR/Core/CutpointTests.lean",
@@ -370,6 +372,21 @@
     "mutations_refused": 30,
     "red": "loop-entry-red.log: three entry contract mutations pass a span-only table, which is insufficient for whole-function admission",
     "green": "loop-wire-green.log: actual entry, all spans and successor closure checked",
+    "clean_lean_gate": "PASS at 493aa9ac; lean_worktree_clean=true; 49 kernel-only core targets; 1246159 vector answers",
+    "lean_gate_log": ".evidence/verification-core/20261004/source-execution/loop-lean-gate.log",
+    "full_workspace": "PASS: 401 suites / 3080 passed / 0 failed / 5 ignored; Clippy and format PASS. Rust code unchanged while the next Lean-only division slice began.",
+    "full_workspace_log": ".evidence/verification-core/20261004/source-execution/loop-full-workspace.log",
+    "followup_red": "division-return.c: signed/unsigned / and %, plus /= and %=, six original source/IR pairs all refused with exit 1; not PASS",
+    "disk_checkpoint": {
+      "lean_cache_before_kib": 3364664,
+      "lean_cache_after_kib": 3368636,
+      "frontend_target_kib": 6583708,
+      "capture_before_kib": 7068,
+      "capture_after_kib": 8500,
+      "cache_capture_net_delta_kib": 5404,
+      "free_after_kib": 53383256,
+      "scope": "Whole-loop acceptance plus initial division RED/proof work; source bytes separate. No new build target, clone, kernel tree or VM disk; no disposable object payload retained. Protected Lean cache and current receipts/fixtures/evidence retained."
+    },
     "capture_retention_bytes": 524288000,
     "claim_ceiling": "Whole-function cyclic source-to-EvoIR result checking with independently checked untrusted proposals, all typed arguments and unbounded execution. No target-name whitelist or branch/range fact extension. Div/rem, calls/private-leaf substitution and validator safety keep V01 open; V02-V06 are unimplemented."
   },

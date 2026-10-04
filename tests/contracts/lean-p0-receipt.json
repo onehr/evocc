@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "8cf85cc6c707e2157f0ae519529bc2adb7d64692",
+    "lean_commit": "493aa9ac4fd6c45572c54cc28af9c633e6d0adec",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -37,6 +37,9 @@
       "lean/EvoIR/Core/Correspondence.lean",
       "lean/EvoIR/Core/CorrespondenceTests.lean",
       "lean/EvoIR/Core/CutTree.lean",
+      "lean/EvoIR/Core/CutpointInput.lean",
+      "lean/EvoIR/Core/CutpointInvariant.lean",
+      "lean/EvoIR/Core/CutpointStorage.lean",
       "lean/EvoIR/Core/CutpointTests.lean",
       "lean/EvoIR/Core/Divergence.lean",
       "lean/EvoIR/Core/Execution.lean",
@@ -51,6 +54,7 @@
       "lean/EvoIR/Core/LeafCorrespondenceTests.lean",
       "lean/EvoIR/Core/LocalStorage.lean",
       "lean/EvoIR/Core/LoopCorrespondence.lean",
+      "lean/EvoIR/Core/LoopReturn.lean",
       "lean/EvoIR/Core/ReturnCorrespondence.lean",
       "lean/EvoIR/Core/ReturnCorrespondenceTests.lean",
       "lean/EvoIR/Core/Scalar.lean",
@@ -126,6 +130,7 @@
         "EvoIR.Core.StatementTests",
         "EvoIR.Core.StatementReturnTests",
         "EvoIR.Core.CutpointTests",
+        "EvoIR.Core.CutpointInput",
         "EvoIR.Term",
         "EvoIR.Fact",
         "EvoIR.Rule",
@@ -177,11 +182,24 @@
       "lean/EvoIR/Core/CutTree.lean": [
         "EvoIR.Core.ConstantBranch"
       ],
+      "lean/EvoIR/Core/CutpointInput.lean": [
+        "EvoIR.Core.LoopReturn"
+      ],
+      "lean/EvoIR/Core/CutpointInvariant.lean": [
+        "EvoIR.Core.CutpointStorage",
+        "EvoIR.Core.LoopCorrespondence"
+      ],
+      "lean/EvoIR/Core/CutpointStorage.lean": [
+        "EvoIR.Core.SourceSpan"
+      ],
       "lean/EvoIR/Core/CutpointTests.lean": [
         "EvoIR.Core.SourceSpan",
         "EvoIR.Core.TargetCutpoint",
         "EvoIR.Core.CheckpointTests",
-        "EvoIR.Core.LoopCorrespondence"
+        "EvoIR.Core.LoopCorrespondence",
+        "EvoIR.Core.CutpointInvariant",
+        "EvoIR.Core.LoopReturn",
+        "EvoIR.Core.CutpointInput"
       ],
       "lean/EvoIR/Core/Divergence.lean": [
         "EvoIR.Core.Execution"
@@ -228,6 +246,9 @@
         "EvoIR.Core.SourceSpan",
         "EvoIR.Core.TargetCutpoint",
         "EvoIR.Core.ReturnCorrespondence"
+      ],
+      "lean/EvoIR/Core/LoopReturn.lean": [
+        "EvoIR.Core.CutpointInvariant"
       ],
       "lean/EvoIR/Core/ReturnCorrespondence.lean": [
         "EvoIR.Core.BranchTarget",
@@ -383,7 +404,8 @@
         "EvoIR.Core.StateReturnTests",
         "EvoIR.Core.StatementTests",
         "EvoIR.Core.StatementReturnTests",
-        "EvoIR.Core.CutpointTests"
+        "EvoIR.Core.CutpointTests",
+        "EvoIR.Core.CutpointInput"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -6433,6 +6455,41 @@
       "name": "EvoIR.Core.Symbolic.CheckedSpan",
       "type": "{Γ : EvoIR.Var → Nat} → List (EvoIR.Core.Symbolic.JointPoint Γ) → Nat → EvoIR.Core.IR.Function → EvoIR.Core.Source.IntType → EvoIR.Core.Symbolic.JointPoint Γ → Type",
       "sha256": "d5df32a35285be0864e90e24334604100498593730461a0290b4e638956d269a"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.canonicalStore",
+      "type": "List EvoIR.Core.Symbolic.LocalShape → EvoIR.Core.Symbolic.LocalStore EvoIR.Core.Symbolic.inputWidths",
+      "sha256": "967821ae22c592d34f3bcccf81bf2abc8dc24193899a2103227daf7d1280976f"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.projectLocals",
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Core.Symbolic.LocalStore Γ → List EvoIR.Core.Symbolic.LocalLink → Option (EvoIR.Core.Symbolic.Scope Γ)",
+      "sha256": "f9da012e91bb1cbd2948db5f68de94cfec7f2535fafaa2fa6eeea7d89136a2b9"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.checkSuccessor",
+      "type": "(points : List EvoIR.Core.Symbolic.LayoutPoint) → { p // p ∈ points } → (fid : Nat) → (target : EvoIR.Core.IR.Function) → (type : EvoIR.Core.Source.IntType) → (s : EvoIR.Core.Symbolic.SourceCursor EvoIR.Core.Symbolic.inputWidths) → (t : EvoIR.Core.Symbolic.TargetExit EvoIR.Core.Symbolic.inputWidths) → Option (PLift (EvoIR.Core.Symbolic.CutExitAgreement (List.map EvoIR.Core.Symbolic.LayoutPoint.joint points) fid target type s t))",
+      "sha256": "d1eb60a8b60c2df1c4581421c80656fb4637fbf546527f8b59d1f2c16affec66"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.checkedSpans",
+      "type": "(points : List EvoIR.Core.Symbolic.LayoutPoint) → (fid : Nat) → (target : EvoIR.Core.IR.Function) → (type : EvoIR.Core.Source.IntType) → Nat → (remaining : List (EvoIR.Core.Symbolic.JointPoint EvoIR.Core.Symbolic.inputWidths)) → Option (EvoIR.Core.Symbolic.SpanList points fid target type remaining)",
+      "sha256": "3b971fd4e9287fd9f4b6f250b4ceeaf125323346eb929992bfd47891a400cf8e"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.loopDiagram",
+      "type": "(source : EvoIR.Core.Source.Function) → (target : EvoIR.Core.IR.Function) → List EvoIR.Core.Symbolic.CutpointLayout → Nat → Option (EvoIR.Core.Symbolic.LoopDiagram source target)",
+      "sha256": "0f1d42e7c186fbf01eaff8820f88a8aaf24b7f322652d5d03991ee21f0dd5b6a"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.loopPair",
+      "type": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → List EvoIR.Core.Symbolic.CutpointLayout → Nat → Option (EvoIR.Core.Symbolic.LoopPair source target)",
+      "sha256": "7251b500cb580ca72ad71252fd66b54e833acb2fed902051594d3e3dd96f8ade"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.readCutpoints",
+      "type": "EvoIR.Core.Source.Function → String → Option (Nat × List EvoIR.Core.Symbolic.CutpointLayout)",
+      "sha256": "bb605449e1e7129c7619deb8a993ee56dc2d53d8e2b0cf71298bffc8df050760"
     },
     {
       "name": "EvoIR.Core.Source.Steps",
@@ -15704,6 +15761,28 @@
   "compilation_core_primitives": {
     "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions and conditional CFGs. No proof of source export, input-validation safety, loops or calls, backend compilation or verified-release acceptance",
     "targets": [
+      {
+        "theorem": "EvoIR.Core.Symbolic.canonical_store_covers",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (locals : EvoIR.Core.Symbolic.LocalStore Γ), EvoIR.Core.Symbolic.LocalStore.denote (EvoIR.Core.Symbolic.storeSubst σ locals) (EvoIR.Core.Symbolic.canonicalStore (List.map EvoIR.Core.Symbolic.LocalSlot.shape locals)) = EvoIR.Core.Symbolic.LocalStore.denote σ locals",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.LoopPair.refines",
+        "proposition": "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} (pair : EvoIR.Core.Symbolic.LoopPair source target) (args : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type args = List.map (fun p => p.type.type) pair.sourceFunction.parameters → ∃ sourceEntry targetEntry, EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ EvoIR.Core.IR.initial target pair.targetFunction.name (List.map EvoIR.Core.Symbolic.sourceValueIR args) = Except.ok targetEntry ∧ EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
       {
         "theorem": "EvoIR.Core.Symbolic.source_cut_diagram_sound",
         "proposition": "∀ {Γ : EvoIR.Var → Nat} (cutpoints : List EvoIR.Core.Symbolic.SourceSite) (budget : Nat) (advance : Bool) (cursor : EvoIR.Core.Symbolic.SourceCursor Γ) (tree : EvoIR.Core.Symbolic.CutTree Γ (EvoIR.Core.Symbolic.SourceCursor Γ)), Option.map Subtype.val (EvoIR.Core.Symbolic.sourceCutDiagram cutpoints budget advance cursor) = some tree → EvoIR.Core.Symbolic.SourceCutRuns advance cursor tree",
