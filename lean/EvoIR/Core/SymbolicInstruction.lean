@@ -297,4 +297,74 @@ theorem fragment_sound {Γ : Var → Nat} (σ : Subst Γ) (ρ : Nat → IR.Value
       cases unitValue
       exact operands_sound σ ρ finalScope outputs expectedValues outputsFound
 
+/-- A checked instruction segment runs on the actual small-step machine.
+Its length bounds only this finite syntax segment, not loops or program runs.
+A failing assumption reaches the original halted diagnostic; no later
+instruction in the segment is allowed to overwrite it. -/
+theorem segment_execution_sound {Γ : Var → Nat} (σ : Subst Γ) (ρ : Nat → IR.Value)
+    {p : IR.Program} (s : IR.State) (a : IR.Activation) (f : IR.Function) (b : IR.Block)
+    (scope finalScope : Scope Γ) (code : List IR.Instruction) (checks : List (Guard Γ))
+    (running : s.control = .running a)
+    (function : p.functions.find? (·.name == a.function) = some f)
+    (block : f.blocks.find? (·.name == a.block) = some b)
+    (codeAt : ∀ i inst, code[i]? = some inst → b.instructions[a.pc+i]? = some inst)
+    (values : a.values = scope.denote σ ρ)
+    (accepted : instructions scope code = some (checks, finalScope)) :
+    ∃ finalState, IR.Steps p s finalState ∧
+      match guards σ checks with
+      | .error fault => finalState.control = .halted (.error fault)
+      | .ok _ => finalState =
+          {s with control := .running {a with pc := a.pc+code.length, values := finalScope.denote σ ρ}} := by
+  induction code generalizing s a scope finalScope checks with
+  | nil =>
+    cases Option.some.inj accepted
+    refine ⟨s, .refl s, ?_⟩
+    cases s with
+    | mk control stack nextFrame =>
+      dsimp only at running
+      subst control
+      cases a
+      simp_all [guards]
+  | cons inst rest ih =>
+    simp only [instructions, bind, Option.bind, pure] at accepted
+    split at accepted
+    · contradiction
+    · rename_i first hfirst
+      rcases first with ⟨trace, next⟩
+      dsimp only at accepted
+      split at accepted
+      · contradiction
+      · rename_i tail htail
+        rcases tail with ⟨later, final⟩
+        dsimp only at accepted
+        cases Option.some.inj accepted
+        have atPc : b.instructions[a.pc]? = some inst := by
+          simpa using codeAt 0 inst rfl
+        have execute := instruction_execution_sound σ ρ scope next trace
+          function block atPc values hfirst (s := s)
+        rw [guards_append]
+        cases firstChecks : guards σ trace with
+        | error fault =>
+          refine ⟨{s with control := .halted (.error fault)}, ?_, rfl⟩
+          exact .next (.execute (by simp [IR.step, running, execute, firstChecks]; rfl)) (.refl _)
+        | ok unitValue =>
+          cases unitValue
+          let a' : IR.Activation := {a with pc := a.pc+1, values := next.denote σ ρ}
+          let s' : IR.State := {s with control := .running a'}
+          have nextStep : IR.step p s = some s' := by
+            simp [IR.step, running, execute, firstChecks, a', s']
+            rfl
+          have tailAt : ∀ i item, rest[i]? = some item → b.instructions[a'.pc+i]? = some item := by
+            intro i item found
+            simpa [a', Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
+              codeAt (i+1) item (by simpa using found)
+          obtain ⟨finalState, steps, result⟩ := ih s' a' next finalScope later rfl
+            function block tailAt rfl htail
+          refine ⟨finalState, .next (.execute nextStep) steps, ?_⟩
+          simp only [bind, Except.bind]
+          cases lastChecks : guards σ later with
+          | error fault => simpa only [lastChecks] using result
+          | ok unitValue =>
+            simpa [lastChecks, s', a', Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using result
+
 end EvoIR.Core.Symbolic

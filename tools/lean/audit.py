@@ -248,6 +248,9 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Symbolic.instructions",
     "EvoIR.Core.Symbolic.checkFragment",
     "EvoIR.Core.Symbolic.guards",
+    "EvoIR.Core.Symbolic.CWord.cast",
+    "EvoIR.Core.Symbolic.arithmetic",
+    "EvoIR.Core.Symbolic.checkArithmetic",
     "EvoIR.denoteOp",
     "EvoIR.denoteTerm",
     "EvoIR.elabPat",
@@ -269,6 +272,48 @@ RECORDED_DEFINITIONS = [
 ]
 
 CORE_PRIMITIVE_TARGETS = [
+    (
+        "EvoIR.Core.Symbolic.cast_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (t : EvoIR.Core.Source.IntType) "
+        "(v : EvoIR.Core.Symbolic.CWord Γ), "
+        "EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.CWord.cast t v) = "
+        "EvoIR.Core.Source.Value.cast t (EvoIR.Core.Symbolic.CWord.denote σ v)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.arithmetic_fragment_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) "
+        "(owner : Nat) (op : EvoIR.Core.SignedArithmetic) (a b : EvoIR.Core.Symbolic.CWord Γ) "
+        "(scope : EvoIR.Core.Symbolic.Scope Γ) (code : List EvoIR.Core.IR.Instruction) (output : Nat), "
+        "EvoIR.Core.Symbolic.checkArithmetic op a b scope code output = true → "
+        "(do let values ← EvoIR.Core.Symbolic.concreteInstructions owner "
+        "(EvoIR.Core.Symbolic.Scope.denote σ ρ scope) code "
+        "List.mapM (EvoIR.Core.IR.lookup values) [output]) = "
+        "do let value ← EvoIR.Core.Source.binaryValue (EvoIR.Core.Source.arithmeticSourceOp op) "
+        "(EvoIR.Core.Symbolic.CWord.denote σ a) (EvoIR.Core.Symbolic.CWord.denote σ b) "
+        "pure [EvoIR.Core.Symbolic.sourceValueIR value]",
+    ),
+    (
+        "EvoIR.Core.Symbolic.segment_execution_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) "
+        "{p : EvoIR.Core.IR.Program} (s : EvoIR.Core.IR.State) (a : EvoIR.Core.IR.Activation) "
+        "(f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) "
+        "(scope finalScope : EvoIR.Core.Symbolic.Scope Γ) (code : List EvoIR.Core.IR.Instruction) "
+        "(checks : List (EvoIR.Core.Symbolic.Guard Γ)), "
+        "s.control = EvoIR.Core.IR.Control.running a → "
+        "List.find? (fun x => x.name == a.function) p.functions = some f → "
+        "List.find? (fun x => x.name == a.block) f.blocks = some b → "
+        "(∀ (i : Nat) (inst : EvoIR.Core.IR.Instruction), "
+        "code[i]? = some inst → b.instructions[a.pc + i]? = some inst) → "
+        "a.values = EvoIR.Core.Symbolic.Scope.denote σ ρ scope → "
+        "EvoIR.Core.Symbolic.instructions scope code = some (checks, finalScope) → "
+        "∃ finalState, EvoIR.Core.IR.Steps p s finalState ∧ "
+        "match EvoIR.Core.Symbolic.guards σ checks with "
+        "| Except.error fault => finalState.control = EvoIR.Core.IR.Control.halted (Except.error fault) "
+        "| Except.ok a_1 => finalState = { control := EvoIR.Core.IR.Control.running "
+        "{ function := a.function, block := a.block, pc := a.pc + code.length, "
+        "values := EvoIR.Core.Symbolic.Scope.denote σ ρ finalScope, owner := a.owner }, "
+        "stack := s.stack, nextFrame := s.nextFrame }",
+    ),
     (
         "EvoIR.Core.Symbolic.scalar_sound",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (op : EvoIR.Op) "

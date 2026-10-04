@@ -7,6 +7,7 @@ import EvoIR.Core.SimulationTests
 import EvoIR.Core.LocalStorage
 import EvoIR.Core.SymbolicScalarTests
 import EvoIR.Core.SymbolicInstructionTests
+import EvoIR.Core.SymbolicSourceTests
 import EvoIR.Term
 import EvoIR.Fact
 import EvoIR.Rule

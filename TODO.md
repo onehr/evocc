@@ -2380,7 +2380,10 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   has universal correctness theorems, an actual `IR.execute` bridge and negative
   cases for SSA collisions, opaque/poison operands, width/operand changes,
   missing obligations and changed diagnostic reasons. It does not justify its
-  own source expectation or admit a program pair. The next step is checking the
+  own source expectation or admit a program pair. The clean gate at `88e7f458`
+  records 22 kernel-only core targets. Source-directed arithmetic and conversion
+  checking now preserves all six C ranks and signedness, and checked finite
+  instruction segments are connected to actual `IR.Steps`. The next step is checking the
   actual CFG/call/local-state diagrams, including private-leaf substitution.
   Validator soundness and generic source/target simulation for all frozen
   functions remain open. Test step limits are not proof or divergence outcomes.

@@ -166,11 +166,20 @@
     "claim_ceiling": "Conditional local-diagram soundness, stage composition and actual source-local storage invariants. Entry and every local proof obligation must still be discharged by an independent program-pair checker. No additional original function, CFG, call, backend or release is admitted."
   },
   "symbolic_target_fragments": {
-    "status": "FOCUSED_KERNEL_PASS_CLEAN_GATE_PENDING",
+    "status": "CLEAN_LEAN_GATE_PASS",
     "implementation": ["lean/EvoIR/Core/SymbolicScalar.lean", "lean/EvoIR/Core/SymbolicBindings.lean", "lean/EvoIR/Core/SymbolicInstruction.lean"],
     "tests": ["lean/EvoIR/Core/SymbolicScalarTests.lean", "lean/EvoIR/Core/SymbolicInstructionTests.lean"],
     "theorems": ["EvoIR.Core.Symbolic.scalar_sound", "EvoIR.Core.Symbolic.instruction_execution_sound", "EvoIR.Core.Symbolic.fragment_sound"],
+    "clean_lean_gate": "PASS at 88e7f458; 22 kernel-only core targets, no native axioms",
+    "clean_gate_log": ".evidence/verification-core/20261004/source-execution/symbolic-lean-gate.log",
     "claim_ceiling": "Executable integer instruction-fragment checker, universally sound for typed initialized symbolic inputs and arbitrary untouched opaque values. Exact SSA result checks, ordered assumptions and actual IR.execute correspondence; no sampled-input premise. The source expectation, CFG, calls, object storage and entry relation remain independent obligations. No additional complete program pair is admitted."
+  },
+  "symbolic_source_and_segments": {
+    "status": "FOCUSED_KERNEL_PASS_CLEAN_GATE_PENDING",
+    "implementation": ["lean/EvoIR/Core/SymbolicSource.lean", "lean/EvoIR/Core/SymbolicInstruction.lean"],
+    "tests": ["lean/EvoIR/Core/SymbolicSourceTests.lean", "lean/EvoIR/Core/SymbolicInstructionTests.lean"],
+    "theorems": ["EvoIR.Core.Symbolic.cast_sound", "EvoIR.Core.Symbolic.arithmetic_fragment_sound", "EvoIR.Core.Symbolic.segment_execution_sound"],
+    "claim_ceiling": "Source-directed checking for executed integer add/sub/mul with usual arithmetic conversions, and finite instruction segments related to actual IR.Steps. All six source integer ranks and signedness are retained. No source expression/control-flow, call or complete program-pair admission follows from these components."
   },
   "integration_gates": {
     "rust_implementation_commit": "02f88820ade9628f9ae0b66a8b2fb08e712e8028",

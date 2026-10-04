@@ -349,6 +349,12 @@ single-instruction theorem is linked to the actual `IR.execute` arm. Calls,
 objects and CFG traversal are refused by this local component, not asserted to
 preserve state. The source expectation and the entry/edge relationships still
 need independent justification; a successful fragment check is not V01 admission.
+The clean gate at `88e7f458` records 22 kernel-only core targets.
+`SymbolicSource.lean` additionally proves the six source types' conversions and
+source-directed add/sub/mul checks, including usual arithmetic conversions and
+their signed/unsigned diagnostic distinction. `segment_execution_sound` connects
+the complete finite instruction segment to actual `IR.Steps`, not just its local
+evaluator. These do not yet prove source expression, edge, loop or call diagrams.
 
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`

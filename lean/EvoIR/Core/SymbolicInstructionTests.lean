@@ -59,6 +59,17 @@ example : guards σ [falseGuard .remainderByZero, falseGuard .divisionByZero] =
     .error (.diagnostic 3003) := by rfl
 example : guards σ [falseGuard .invalidShiftCount] = .error (.diagnostic 3005) := by rfl
 
+private def twoFailures (first second : IR.Reason) : List IR.Instruction := [
+  ⟨[⟨1, .bits 1⟩], .constant 1 0, []⟩,
+  ⟨[], .assume first, [1]⟩, ⟨[], .assume second, [1]⟩]
+
+example : checkFragment (Γ := widths) [] (twoFailures .divisionByZero .signedOverflow) []
+    [falseGuard .divisionByZero, falseGuard .signedOverflow] [] = true := by decide
+example : checkFragment (Γ := widths) [] (twoFailures .signedOverflow .divisionByZero) []
+    [falseGuard .divisionByZero, falseGuard .signedOverflow] [] = false := by decide
+example : checkFragment (Γ := widths) [] (twoFailures .divisionByZero .divisionByZero) []
+    [falseGuard .divisionByZero, falseGuard .signedOverflow] [] = false := by decide
+
 -- The universal theorem executes the same opaque caller value unchanged;
 -- a poison placeholder never becomes a used numeric input.
 example (value : BitVec 32) (callerValue : IR.Value) :
