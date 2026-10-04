@@ -1,9 +1,9 @@
 import EvoIR.Core.BranchTarget
-import EvoIR.Core.StateEntry
+import EvoIR.Core.StatementDiagram
+import EvoIR.Core.ConstantBranch
 
-/-! Whole-function source/target checking for branching return expressions.
-This extends the structural leaf case to actual conditional CFGs; it does not
-replace V01's remaining loop, mutable-storage and direct-call obligations. -/
+/-! Whole-function source/target checking for finite statements and conditional
+CFGs. Cyclic control and direct calls remain separate V01 obligations. -/
 namespace EvoIR.Core.Source
 
 def ReturnsState (p : Program) (locals : Locals) (fid : Nat) (body : Stmt)
@@ -13,40 +13,6 @@ def ReturnsState (p : Program) (locals : Locals) (fid : Nat) (body : Stmt)
       ⟨.flow (.returned value), outcome.1, k, fid⟩
   | .error fault => ∃ failedK, Steps p ⟨.statement body, locals, k, fid⟩
       ⟨.halted (.error fault), outcome.1, failedK, fid⟩
-
-theorem ReturnShape.stateful_sound {body : Stmt} {d : QualifiedType} {e : Expr}
-    (shape : ReturnShape body d e) (p : Program) (locals : Locals) (fid : Nat)
-    (outcome : StateOutcome) (evaluated : EvaluatesState p locals fid e outcome)
-    (depth : ∀ v, outcome.2 = .ok v → outcome.1.length = locals.length) :
-    ReturnsState p locals fid body (outcome.1, outcome.2.map (Value.cast d.type)) := by
-  induction shape with
-  | direct d e =>
-    intro k
-    have first : Step p ⟨.statement (.return d e), locals, k, fid⟩
-        ⟨.expression e, locals, .return d :: k, fid⟩ := rfl
-    cases result : outcome.2 with
-    | error fault =>
-      simp only [EvaluatesState, result] at evaluated
-      obtain ⟨failedK, path⟩ := evaluated (.return d :: k)
-      exact ⟨failedK, .next first path⟩
-    | ok value =>
-      simp only [EvaluatesState, result] at evaluated
-      exact .next first ((evaluated (.return d :: k)).trans (.next rfl (.refl _)))
-  | @block body d e inner ih =>
-    intro k
-    have first : Steps p ⟨.statement (.compound [.statement body]), locals, k, fid⟩
-        ⟨.statement body, locals, .sequence [] :: .scope locals.length :: k, fid⟩ :=
-      .next rfl (.next rfl (.refl _))
-    have middle := ih evaluated
-    cases result : outcome.2 with
-    | error fault =>
-      simp only [ReturnsState, result, Except.map] at middle
-      obtain ⟨failedK, path⟩ := middle (.sequence [] :: .scope locals.length :: k)
-      exact ⟨failedK, first.trans path⟩
-    | ok value =>
-      simp only [ReturnsState, result, Except.map] at middle
-      exact first.trans ((middle (.sequence [] :: .scope locals.length :: k)).trans
-        (.next rfl (.next (by simp [Step, step, resumeFlow, depth value result]) (.refl _))))
 
 end EvoIR.Core.Source
 
@@ -79,17 +45,17 @@ structure ReturnDiagram {Γ : Var → Nat} (source : Source.Function)
   scope : Scope Γ
   locals : LocalStore Γ
   block : IR.Block
-  expr : Source.Expr
   tree : StateTree Γ
   entry : scalarEntry source target args = some (env, scope)
   storage : parameterStore source.parameters args = some locals
   head : target.blocks.head? = some block
-  body : Source.ReturnShape source.body source.returnType expr
-  expression : StateDiagram locals expr tree
-  depth : tree.sameDepth locals.length = true
+  body : ∀ σ p fid, Source.ReturnsState p (locals.denote σ) fid source.body (tree.denote σ)
+  typed : tree.HasType source.returnType.type
   returns : target.returns = [.bits source.returnType.type.width]
+  targetTree : ValueTree Γ
+  sameResult : ∀ σ, targetTree.denote σ = tree.erase.denote σ
   targetDiagram : TargetDiagram (fun _ => .world) target source.returnType.type scope block.name
-    (tree.erase.cast source.returnType.type)
+    targetTree
 
 def returnDiagram {Γ : Var → Nat} (source : Source.Function) (target : IR.Function)
     (args : List (CWord Γ)) : Option (ReturnDiagram source target args) := do
@@ -104,26 +70,32 @@ def returnDiagram {Γ : Var → Nat} (source : Source.Function) (target : IR.Fun
     match h : target.blocks.head? with
     | none => none
     | some b => some ⟨b, h⟩
-  let ⟨destination, expr, body⟩ ← Source.returnShape source.body
-  if destinationEq : destination = source.returnType then
-    let locals : {ls // parameterStore source.parameters args = some ls} ←
-      match stored : parameterStore source.parameters args with
-      | none => none
-      | some ls => some ⟨ls, stored⟩
-    let s ← stateExpression (Source.expressionDepth expr) locals.val expr
-    if depth : s.val.sameDepth locals.val.length = true then
+  let locals : {ls // parameterStore source.parameters args = some ls} ←
+    match stored : parameterStore source.parameters args with
+    | none => none
+    | some ls => some ⟨ls, stored⟩
+  let body ← flowDiagram (Source.statementDepth source.body) locals.val (.statement source.body)
+  let s ← body.val.returns?
+  if typed : s.val.Typed source.returnType.type = true then
     let t ← targetDiagram (fun _ => .world) target source.returnType.type
       (target.blocks.length+1) entry.val.2 block.val.name
     if returnsEq : target.returns = [.bits source.returnType.type.width] then
-      if same : t.val = s.val.erase.cast source.returnType.type then
+      if same : t.val.normalizeBranches = s.val.erase.normalizeBranches then
         return {
           env := entry.val.1, scope := entry.val.2, locals := locals.val,
-          block := block.val, expr := expr, tree := s.val
-          entry := entry.property, head := block.property, body := destinationEq ▸ body.property
-          storage := locals.property, depth := depth, expression := s.property,
-          returns := returnsEq, targetDiagram := same ▸ t.property }
+          block := block.val, tree := s.val
+          entry := entry.property, head := block.property,
+          body := by
+            intro σ p fid k
+            have path := body.property σ p fid k
+            rw [s.property.sound σ] at path
+            cases outcome : (s.val.denote σ).2 <;>
+              simpa [Source.ReturnsState, outcome, Except.map] using path
+          storage := locals.property, typed := StateTree.typed_sound typed,
+          returns := returnsEq, targetTree := t.val,
+          sameResult := normalized_trees_equal t.val s.val.erase same,
+          targetDiagram := t.property }
       else none
-    else none
     else none
   else none
 
@@ -151,20 +123,18 @@ theorem ReturnDiagram.refines {Γ : Var → Nat} (σ : Subst Γ)
     simp [Source.initial, chosen, sourceFound, boundSource, bind, Except.bind,
       pure, Except.pure, se]
   · simp [IR.initial, targetFound, boundTarget, bind, Except.bind, pure, Except.pure, te, targetState]
-  have sourcePath := d.body.stateful_sound s locals source.symbol (d.tree.denote σ)
-    (by simpa only [localsEq] using d.expression σ s source.symbol)
-    (by intro v success; simpa [localsEq, LocalStore.denote] using
-      StateTree.same_depth_sound d.depth σ v success)
+  have sourcePath : Source.ReturnsState s locals source.symbol source.body (d.tree.denote σ) :=
+    by simpa only [localsEq] using d.body σ s source.symbol
   obtain ⟨tf, targetPath, targetOutcome⟩ := d.targetDiagram.sound σ (fun _ => .world)
     (by intro id; rfl) t targetFound d.returns 1 2
-  have targetResult : (d.tree.erase.cast source.returnType.type).irResult σ =
-      (((d.tree.denote σ).2).map (Source.Value.cast source.returnType.type)).map
+  have targetResult : d.targetTree.irResult σ =
+      ((d.tree.denote σ).2).map
         (fun v => [sourceValueIR v]) := by
-    rw [ValueTree.irResult, ValueTree.cast_sound, StateTree.erase_sound]
+    rw [ValueTree.irResult, d.sameResult, StateTree.erase_sound]
   rw [targetResult] at targetOutcome
   cases result : (d.tree.denote σ).2 with
   | error fault =>
-    simp only [result, Except.map] at sourcePath targetOutcome
+    simp only [Source.ReturnsState, result, Except.map] at sourcePath targetOutcome
     obtain ⟨failedK, path⟩ := sourcePath [.function none source.returnType.type]
     obtain ⟨code, rfl, observed⟩ := d.tree.erase.fault_observation σ fault
       (by simpa only [StateTree.erase_sound] using result)
@@ -173,18 +143,19 @@ theorem ReturnDiagram.refines {Γ : Var → Nat} (σ : Subst Γ)
     · simpa [observeSource] using observed
     · simpa [observeTarget, targetOutcome] using observed
   | ok raw =>
-    let value := raw.cast source.returnType.type
-    simp only [result, Except.map] at sourcePath targetOutcome
+    let value := raw
+    have valueTyped : raw.type = source.returnType.type := d.typed σ raw result
+    simp only [Source.ReturnsState, result, Except.map] at sourcePath targetOutcome
     let sf : Source.State := ⟨.halted (.ok value), [], [], source.symbol⟩
     have sourceFinish : Source.Steps s se sf :=
       (sourcePath [.function none source.returnType.type]).trans
         (.next (by simp [Source.Step, Source.step, Source.resumeFlow, value, sf,
-          Source.Value.cast, Source.Value.ofInt]) (.refl _))
+          valueTyped]) (.refl _))
     apply Transition.refines_of_terminals sourceFinish.toReaches targetPath.toReaches
       (by rfl) (by simp [IR.step, targetOutcome])
       (o := Observation.returned source.returnType.type value.bits.toNat)
-    · rfl
-    · simp [observeTarget, targetOutcome, sourceValueIR, value, Source.Value.cast, Source.Value.ofInt]
+    · simp [observeSource, sf, value, valueTyped]
+    · simp [observeTarget, targetOutcome, sourceValueIR, value, valueTyped]
 
 structure ReturnPair (source : Source.Program) (target : IR.Program) where
   sourceFunction : Source.Function
@@ -196,18 +167,24 @@ structure ReturnPair (source : Source.Program) (target : IR.Program) where
 
 def returnPair (source : Source.Program) (target : IR.Program) : Option (ReturnPair source target) := do
   if !(Source.checkWellFormed source).isOk || !(IR.checkProgram target).isOk then none else
-  match hs : source.functions, ht : target.functions with
-  | [sf], [tf] =>
+  match hs : source.functions with
+  | [sf] =>
     if chosen : source.entries = [sf.symbol] then
-      let d ← returnDiagram sf tf (parameterWords sf.parameters)
+      let tf : {f // target.functions.find? (·.name == sf.name) = some f} ←
+        match found : target.functions.find? (·.name == sf.name) with
+        | none => none
+        | some f => some ⟨f, found⟩
+      have name : tf.val.name = sf.name := by
+        simpa using List.find?_some tf.property
+      let d ← returnDiagram sf tf.val (parameterWords sf.parameters)
       return {
-        sourceFunction := sf, targetFunction := tf
+        sourceFunction := sf, targetFunction := tf.val
         selected := by simp [chosen]
         sourceFound := by simp [hs]
-        targetFound := by simp [ht]
+        targetFound := by simpa only [name] using tf.property
         diagram := d }
     else none
-  | _, _ => none
+  | _ => none
 
 theorem ReturnPair.refines {source : Source.Program} {target : IR.Program}
     (pair : ReturnPair source target) (args : List Source.Value)

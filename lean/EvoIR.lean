@@ -14,6 +14,8 @@ import EvoIR.Core.LeafCorrespondenceTests
 import EvoIR.Core.ReturnCorrespondenceTests
 import EvoIR.Core.StateExpressionTests
 import EvoIR.Core.StateReturnTests
+import EvoIR.Core.StatementTests
+import EvoIR.Core.StatementReturnTests
 import EvoIR.Term
 import EvoIR.Fact
 import EvoIR.Rule

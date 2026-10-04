@@ -2438,6 +2438,14 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   statement/declaration integration, loops, calls,
   private-leaf substitution and validator safety remain OPEN; V02–V06 are not
   advanced by this component proof.
+  October 5 finite-statement continuation: declarations/initialization, statement
+  sequencing, `if`, and real scope exits now compose into `ReturnPair.refines`.
+  The actual `statement-return.c` pair and frozen `short_circuit` pair pass;
+  the latter is selected from the untouched complete `control.evo` module.
+  Local regressions add 54 source-machine comparisons and 28 whole-function
+  cases (24 mutations), plus 28 kernel boundary examples. The clean Lean gate
+  is pending. Div/rem, loops, calls/private-leaf substitution and validator
+  safety remain required; this does not close V01 or advance V02–V06.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

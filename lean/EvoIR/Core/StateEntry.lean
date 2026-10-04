@@ -56,29 +56,6 @@ theorem parameter_store_sound {Γ : Var → Nat} (σ : Subst Γ)
             rw [value]
             rfl
 
-def StateTree.sameDepth {Γ : Var → Nat} (depth : Nat) : StateTree Γ → Bool
-  | .value locals _ => locals.length == depth
-  | .checked _ _ next => next.sameDepth depth
-  | .branch _ yes no => yes.sameDepth depth && no.sameDepth depth
-
-theorem StateTree.same_depth_sound {Γ : Var → Nat} {tree : StateTree Γ} {depth : Nat}
-    (accepted : tree.sameDepth depth = true) (σ : Subst Γ) (value : Source.Value)
-    (success : (tree.denote σ).2 = .ok value) : (tree.denote σ).1.length = depth := by
-  induction tree with
-  | value locals word => simpa [sameDepth, denote, LocalStore.denote] using accepted
-  | checked locals guard next ih =>
-    simp only [denote] at success ⊢
-    cases h : guards σ [guard] with
-    | error fault => simp [h] at success
-    | ok _ => exact ih accepted (by simpa only [h] using success)
-  | branch condition yes no ih ih' =>
-    simp only [sameDepth, Bool.and_eq_true] at accepted
-    simp only [denote] at success ⊢
-    cases h : (denoteTerm σ condition).toNat != 0 <;>
-      simp only [h, Bool.false_eq_true, ↓reduceIte] at success ⊢
-    · exact ih' accepted.2 success
-    · exact ih accepted.1 success
-
 def StateTree.erase {Γ : Var → Nat} : StateTree Γ → ValueTree Γ
   | .value _ word => .value word
   | .checked _ guard next => .checked guard next.erase

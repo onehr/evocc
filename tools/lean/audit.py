@@ -273,6 +273,19 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.flow_diagram_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (depth : Nat) (locals : EvoIR.Core.Symbolic.LocalStore Γ) "
+        "(control : EvoIR.Core.Source.Control) (tree : EvoIR.Core.Symbolic.FlowTree Γ), "
+        "Option.map Subtype.val (EvoIR.Core.Symbolic.flowDiagram depth locals control) = some tree → "
+        "EvoIR.Core.Symbolic.FlowDiagram locals control tree",
+    ),
+    (
+        "EvoIR.Core.Symbolic.normalized_trees_equal",
+        "∀ {Γ : EvoIR.Var → Nat} (a b : EvoIR.Core.Symbolic.ValueTree Γ), "
+        "a.normalizeBranches = b.normalizeBranches → ∀ (σ : EvoIR.Subst Γ), "
+        "EvoIR.Core.Symbolic.ValueTree.denote σ a = EvoIR.Core.Symbolic.ValueTree.denote σ b",
+    ),
+    (
         "EvoIR.Core.Symbolic.state_expression_sound",
         "∀ {Γ : EvoIR.Var → Nat} (depth : Nat) (locals : EvoIR.Core.Symbolic.LocalStore Γ) "
         "(expr : EvoIR.Core.Source.Expr) (tree : EvoIR.Core.Symbolic.StateTree Γ), "
@@ -1233,8 +1246,9 @@ def main(argv: list[str]) -> int:
         "compilation_core_primitives": {
             "claim": "Checked arithmetic primitive correspondence and source/IR-machine "
                      "determinism, finite-prefix and terminal-diagnostic properties; "
-                     "structural straight-line and stateful branching-return source/IR checker soundness. "
-                     "No proof of source export, input-validation safety, general loops/state/calls, "
+                     "structural finite-statement source/IR checker soundness, including local "
+                     "declarations, scope, stateful expressions and conditional CFGs. "
+                     "No proof of source export, input-validation safety, loops or calls, "
                      "backend compilation or verified-release acceptance",
             "targets": core_primitives,
         },

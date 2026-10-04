@@ -455,6 +455,28 @@ sequencing/declaration integration, loops, calls/private-leaf substitution and
 validator execution safety remain required. Storage adapter lemmas alone do
 not admit a complete function containing local declarations or loops.
 
+**Finite-statement integration (October 5).** The same whole-function checker
+now consumes `FlowDiagram` proofs for declarations (including const
+initialization), statement sequencing, conditional statements and scope exits.
+Normal, returned, break and continue exits stay distinct; only normal flow
+executes the rest of a block. Faults retain the preceding writes and the active
+scope rather than performing cleanup or later expressions. Successful scope
+exits are proved against `Source.resumeFlow`, replacing the older return-only
+same-depth shortcut. A function must return on every admitted successful path;
+fallthrough and escaping loop control refuse.
+
+The actual `statement-return.c` exports pass, and the unchanged frozen
+`short_circuit` source export is checked against the complete original
+`control.evo` module. Selection of a named target function does not confer a
+proof on unrelated module functions. One observed representation mismatch
+(C integer truth versus a one-bit IR constant) is handled by a proved literal
+branch normalization; runtime guards are retained and no P0 rule/allowlist
+changes. Local tests add 54 exact-store/source-machine comparisons, 23 kernel
+statement examples, five constant-branch examples and 28 complete-pair tests
+(four positive and 24 mutations). The clean Lean gate is pending for this
+checkpoint. Div/rem, cyclic control, calls/private-leaf substitution and input
+validator safety still block V01; no frozen constructor or pilot was removed.
+
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`
 options. Existing C-HIR private-leaf substitution removes `frame` and embeds
