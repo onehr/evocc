@@ -14,6 +14,7 @@ import EvoIR.Core.StatementReturnTests
 import EvoIR.Core.CutpointTests
 import EvoIR.Core.CutpointInput
 import EvoIR.Core.DivisionTests
+import EvoIR.Core.SourceCallTests
 
 /-!
 # The executable evaluator
@@ -302,10 +303,11 @@ def run (args : List String) : IO UInt32 := do
       let statementReturns ← EvoIR.Core.Symbolic.StatementReturnTests.statementReturnSelfTest
       let cutpoints ← EvoIR.Core.Symbolic.CutpointTests.cutpointSelfTest
       let divisions ← EvoIR.Core.Symbolic.DivisionTests.divisionSelfTest
+      let calls ← EvoIR.Core.Source.CallTests.callSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
-        statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 then 0 else 1
+        statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 && calls == 0 then 0 else 1
   | ["--check-core-loop-pair", sourcePath, targetPath, proposalPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
@@ -324,10 +326,14 @@ def run (args : List String) : IO UInt32 := do
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
       let .ok target := EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile targetPath)
         | IO.eprintln "CORE_PAIR_MALFORMED: target input"; return 2
-      let some accepted := EvoIR.Core.Symbolic.returnPair source target
-        | IO.eprintln "CORE_PAIR_REFUSED: no checked whole-leaf diagram for this complete pair"; return 1
-      IO.println s!"PROVED_LEAF_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
-      return 0
+      if let some accepted := EvoIR.Core.Symbolic.returnPair source target then
+        IO.println s!"PROVED_LEAF_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+        return 0
+      if let some accepted := EvoIR.Core.Symbolic.callPair source target then
+        IO.println s!"PROVED_CALL_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+        return 0
+      IO.eprintln "CORE_PAIR_REFUSED: no checked whole-function diagram for this complete pair"
+      return 1
   | ["--check-core-pilot-pair", sourcePath, targetPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2

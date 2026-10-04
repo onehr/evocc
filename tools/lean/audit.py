@@ -287,6 +287,104 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.CallPair.refines",
+        "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} (pair : "
+        "EvoIR.Core.Symbolic.CallPair source target) (args : List EvoIR.Core.Source.Value), List.map "
+        "EvoIR.Core.Source.Value.type args = List.map (fun p => p.type.type) "
+        "pair.sourceFunction.parameters → ∃ sourceEntry targetEntry, EvoIR.Core.Source.initial source "
+        "pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ EvoIR.Core.IR.initial target "
+        "pair.targetFunction.name (List.map EvoIR.Core.Symbolic.sourceValueIR args ++ "
+        "[EvoIR.Core.IR.Value.memory { nextId := 1, objects := [] }, EvoIR.Core.IR.Value.world]) = "
+        "Except.ok targetEntry ∧ EvoIR.Core.LoweringRefines source target "
+        "pair.sourceFunction.returnType.type sourceEntry targetEntry",
+    ),
+    (
+        "EvoIR.Core.Symbolic.call_function_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (p : EvoIR.Core.Source.Program) (fuel : Nat) (f : "
+        "EvoIR.Core.Source.Function) (args : List (EvoIR.Core.Symbolic.CWord Γ)) (tree : "
+        "EvoIR.Core.Symbolic.ValueTree Γ), Option.map Subtype.val (EvoIR.Core.Symbolic.callFunction p "
+        "fuel f args) = some tree → EvoIR.Core.Symbolic.InvocationDiagram p f args tree",
+    ),
+    (
+        "EvoIR.Core.Symbolic.CallFunctionDiagram.completes",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {p : EvoIR.Core.IR.Program} {f : "
+        "EvoIR.Core.IR.Function} {args : List (EvoIR.Core.Symbolic.Slot Γ)} {result : "
+        "EvoIR.Core.Symbolic.ExpressionResult Γ} (diagram : EvoIR.Core.Symbolic.CallFunctionDiagram p "
+        "f args result), List.find? (fun x => x.name == f.name) p.functions = some f → ∃ entry last, "
+        "EvoIR.Core.IR.initial p f.name (List.map (EvoIR.Core.Symbolic.Slot.denote σ "
+        "EvoIR.Core.Symbolic.callTokens) args) = Except.ok entry ∧ EvoIR.Core.IR.Steps p entry last ∧ "
+        "last.control = EvoIR.Core.IR.Control.halted (Except.map (fun value => "
+        "[EvoIR.Core.Symbolic.sourceValueIR value, EvoIR.Core.IR.Value.memory { nextId := 1, objects "
+        ":= [] }, EvoIR.Core.IR.Value.world]) (EvoIR.Core.Symbolic.ExpressionResult.denote σ result))",
+    ),
+    (
+        "EvoIR.Core.IR.call_enters",
+        "∀ (p : EvoIR.Core.IR.Program) (s : EvoIR.Core.IR.State) (a entered : EvoIR.Core.IR.Activation) "
+        "(f callee : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (inst : "
+        "EvoIR.Core.IR.Instruction) (args : List EvoIR.Core.IR.Value), s.control = "
+        "EvoIR.Core.IR.Control.running a → List.find? (fun x => x.name == a.function) p.functions = some "
+        "f → List.find? (fun x => x.name == a.block) f.blocks = some b → b.instructions[a.pc]? = some "
+        "inst → inst.op = EvoIR.Core.IR.Operation.call callee.name → List.find? (fun x => x.name == "
+        "callee.name) p.functions = some callee → List.mapM (EvoIR.Core.IR.lookup a.values) "
+        "inst.operands = Except.ok args → List.map EvoIR.Core.IR.Binding.type inst.results = "
+        "callee.returns → EvoIR.Core.IR.enter callee args s.nextFrame = Except.ok entered → "
+        "EvoIR.Core.IR.Step p s { control := EvoIR.Core.IR.Control.running entered, stack := { caller := "
+        "{ function := a.function, block := a.block, pc := a.pc + 1, values := a.values, owner := "
+        "a.owner }, results := inst.results } :: s.stack, nextFrame := s.nextFrame + 1 }",
+    ),
+    (
+        "EvoIR.Core.IR.call_returns",
+        "∀ (p : EvoIR.Core.IR.Program) (s : EvoIR.Core.IR.State) (a : EvoIR.Core.IR.Activation) (f : "
+        "EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (ids : List Nat) (values : List "
+        "EvoIR.Core.IR.Value) (frame : EvoIR.Core.IR.ReturnFrame) (rest : List "
+        "EvoIR.Core.IR.ReturnFrame) (bound : EvoIR.Core.IR.Bindings), s.control = "
+        "EvoIR.Core.IR.Control.running a → List.find? (fun x => x.name == a.function) p.functions = some "
+        "f → List.find? (fun x => x.name == a.block) f.blocks = some b → a.pc = b.instructions.length → "
+        "b.terminator = EvoIR.Core.IR.Terminator.return ids → List.mapM (EvoIR.Core.IR.lookup a.values) "
+        "ids = Except.ok values → List.map EvoIR.Core.IR.Value.type values = f.returns → s.stack = frame "
+        ":: rest → EvoIR.Core.IR.appendResults frame.caller.values frame.results "
+        "(EvoIR.Core.IR.returnedValues a.owner values) = Except.ok bound → EvoIR.Core.IR.Step p s { "
+        "control := EvoIR.Core.IR.Control.running (have __src := frame.caller; { function := "
+        "__src.function, block := __src.block, pc := __src.pc, values := bound, owner := __src.owner }), "
+        "stack := rest, nextFrame := s.nextFrame }",
+    ),
+    (
+        "EvoIR.Core.Source.invoke_body",
+        "∀ (p : EvoIR.Core.Source.Program) (callee : EvoIR.Core.Source.Function) "
+        "(args : List EvoIR.Core.Source.Value) (calleeLocals callerLocals : EvoIR.Core.Source.Locals) "
+        "(caller : Nat) (outcome : EvoIR.Core.Source.StateOutcome), "
+        "List.find? (fun x => x.symbol == callee.symbol) p.functions = some callee → "
+        "EvoIR.Core.Source.parameterLocals callee.parameters args = Except.ok calleeLocals → "
+        "EvoIR.Core.Source.ReturnsState p calleeLocals callee.symbol callee.body outcome → "
+        "(∀ (value : EvoIR.Core.Source.Value), outcome.snd = Except.ok value → "
+        "value.type = callee.returnType.type) → "
+        "EvoIR.Core.Source.Invokes p callerLocals caller callee args outcome.snd",
+    ),
+    (
+        "EvoIR.Core.Source.arguments_cons_ok",
+        "∀ {p : EvoIR.Core.Source.Program} {locals next : EvoIR.Core.Source.Locals} {fid : Nat} "
+        "(type : EvoIR.Core.Source.IntType) (callee : Nat) (destination : EvoIR.Core.Source.QualifiedType) "
+        "(expr : EvoIR.Core.Source.Expr) "
+        "(pending : List (EvoIR.Core.Source.QualifiedType × EvoIR.Core.Source.Expr)) "
+        "(reverseValues : List EvoIR.Core.Source.Value) (value : EvoIR.Core.Source.Value) "
+        "(outcome : EvoIR.Core.Source.Locals × Except EvoIR.Core.Source.Fault (List EvoIR.Core.Source.Value)), "
+        "EvoIR.Core.Source.EvaluatesContext p locals fid expr (next, Except.ok value) → "
+        "EvoIR.Core.Source.ArgumentsRun p next fid type callee pending "
+        "(EvoIR.Core.Source.Value.cast destination.type value :: reverseValues) outcome → "
+        "EvoIR.Core.Source.ArgumentsRun p locals fid type callee ((destination, expr) :: pending) reverseValues outcome",
+    ),
+    (
+        "EvoIR.Core.Source.evaluates_call",
+        "∀ {p : EvoIR.Core.Source.Program} {locals next : EvoIR.Core.Source.Locals} {fid : Nat} "
+        "(callee : EvoIR.Core.Source.Function) "
+        "(arguments : List (EvoIR.Core.Source.QualifiedType × EvoIR.Core.Source.Expr)) "
+        "(values : List EvoIR.Core.Source.Value) (result : EvoIR.Core.Source.Result), "
+        "EvoIR.Core.Source.ArgumentsRun p locals fid callee.returnType.type callee.symbol arguments [] "
+        "(next, Except.ok values) → EvoIR.Core.Source.Invokes p next fid callee values result → "
+        "EvoIR.Core.Source.EvaluatesContext p locals fid "
+        "(EvoIR.Core.Source.Expr.call callee.returnType.type callee.symbol arguments) (next, result)",
+    ),
+    (
         "EvoIR.Core.Symbolic.Term.of_p0_sound",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} (term : EvoIR.Term Γ n), "
         "EvoIR.Core.Symbolic.denoteTerm σ (EvoIR.Core.Symbolic.Term.ofP0 term) = "

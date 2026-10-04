@@ -17,6 +17,8 @@ import EvoIR.Core.StateReturnTests
 import EvoIR.Core.StatementTests
 import EvoIR.Core.StatementReturnTests
 import EvoIR.Core.DivisionTests
+import EvoIR.Core.SourceCallTests
+import EvoIR.Core.TargetCall
 import EvoIR.Core.CutpointTests
 import EvoIR.Core.CutpointInput
 import EvoIR.Term

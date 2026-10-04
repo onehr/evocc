@@ -2482,6 +2482,15 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   zero failures / five ignored, plus Clippy/format. Calls/private-leaf substitution,
   validator safety and complete frozen-population acceptance remain OPEN.
 
+  October 5 call continuation: four original complete pairs now pass the public
+  checker, including nested checked calls and `pressure` with 32 arguments.
+  `CallPair.refines` proves all-input source/IR correspondence with the real call
+  stack and memory/world signature, not sampled execution. Nine execution/diagram
+  controls, six source refusals and 18 target mutations pass; 61 kernel-only core
+  targets pass the development audit. Clean integration gates are pending. More
+  calling statement forms, cyclic/private-storage call composition, private-leaf
+  substitution, validator safety and full frozen acceptance remain OPEN.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

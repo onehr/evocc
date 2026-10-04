@@ -411,6 +411,25 @@
     "capture_retention_bytes": 524288000,
     "claim_ceiling": "Source-to-EvoIR numerical/diagnostic correspondence, not V01 completion. Calls/private-leaf substitution, validator safety, full frozen population and V02-V06 remain open. No native or release claim."
   },
+  "call_correspondence": {
+    "status": "FOCUSED_PROOF_AND_REPLAY_PASS_CLEAN_GATES_PENDING",
+    "theorem": "EvoIR.Core.Symbolic.CallPair.refines",
+    "implementation": ["lean/EvoIR/Core/SourceCall.lean", "lean/EvoIR/Core/CallExpression.lean", "lean/EvoIR/Core/CallSourceDiagram.lean", "lean/EvoIR/Core/TargetCall.lean", "lean/EvoIR/Core/CallTargetDiagram.lean", "lean/EvoIR/Core/CallCorrespondence.lean"],
+    "tests": "lean/EvoIR/Core/SourceCallTests.lean",
+    "actual_source_ir_pairs_passed": ["converted_caller", "checked_caller", "nested_caller", "pressure"],
+    "target_export_sha256": {"direct-calls.evo": "e7f055548061b9af55702f1a8d0f13832385b58acc1a477597d431ac58d4b7f7", "pressure.evo": "18f530fe7a3d0a67b83b166c9c9a866dba467e727e8f1b2b7e832d3149d30198"},
+    "source_fixture_sha256": {"tests/fixtures/verification/direct-calls.c": "14f7f59f2cb95407a538669b485300cbe5d48c61126bd6d7c0dfc97c3f3b6538"},
+    "source_execution_and_diagram_controls": 9,
+    "source_boundary_refusals": 6,
+    "target_mutations_refused": 18,
+    "development_core_targets": 61,
+    "proof_kind": "kernel-only",
+    "native_axioms": [],
+    "replay_log": ".evidence/verification-core/20261004/source-execution/call-pair-green.log",
+    "selftest_log": ".evidence/verification-core/20261004/source-execution/call-pair-selftest.log",
+    "capture_retention_bytes": 524288000,
+    "claim_ceiling": "Finite call source-to-EvoIR correspondence, not V01 completion. More calling statement forms, cyclic/private-storage call composition, private-leaf substitution, validator safety, full frozen population and V02-V06 remain open. No native or release claim."
+  },
   "integration_gates": {
     "rust_implementation_commit": "196d84a15426999e69f23f881312b05f9c0e1177",
     "lean_implementation_commit": "196d84a15426999e69f23f881312b05f9c0e1177",

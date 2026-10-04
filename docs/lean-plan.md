@@ -568,6 +568,23 @@ capture growth since the whole-loop checkpoint is 5,128 KiB; `target/frontend`
 is unchanged. Host free space is 51 GiB; capture is 10,404 KiB against its
 500 MiB cap. No extra build tree or runtime image was created.
 
+**Finite direct-call correspondence (October 5 continuation).**
+`CallPair.refines` connects original source closures to actual IR call/return
+frames, for every typed input. Program-relative source diagrams preserve argument
+order, destination conversions, caller-local restoration and the first fault,
+including faults halted inside a callee. Target diagrams check actual callees,
+arguments/results, signatures and forwarded memory/world tokens; they admit no
+allocation and preserve the core entry's empty private memory, rather than
+stripping state parameters. The original `converted_caller`, `checked_caller`,
+`nested_caller` and 32-argument `pressure` pairs pass the existing
+`--check-core-leaf-pair` interface, which prints `PROVED_CALL_PAIR` for this path.
+Nine execution/diagram controls, six source-boundary refusals and 18 target
+mutations pass. Development audit: 61 kernel-only core targets. Clean integration
+gates are pending. Calling statement forms beyond the implemented finite-return
+composition, calls combined with loops/private storage, private-leaf substitution,
+validator safety and the complete frozen population still block V01.
+This is neither backend nor verified-release acceptance.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted
