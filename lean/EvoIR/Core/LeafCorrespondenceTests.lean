@@ -67,6 +67,49 @@ private def conversionPair (src dst : Source.IntType) : Source.Program × IR.Pro
         .return [if src.width = dst.width then 0 else 1]⟩]⟩]
   (source, target)
 
+private def bitwisePair (op : Bitwise) (left right : Source.IntType) : Source.Program × IR.Program :=
+  let dst := Source.usualType left right
+  let source := Source.Program.mk [0] [
+    ⟨0, "bits", ⟨dst, false⟩, false, [p 1 left, p 2 right],
+      .compound [.statement (.return ⟨dst, false⟩
+        (.binary dst op.source (.ident left 1) (.ident right 2)))]⟩]
+  let convert := fun (src : Source.IntType) (input output : Nat) =>
+    if src.width = dst.width then [] else
+      [IR.Instruction.mk [⟨output, .bits dst.width⟩]
+        (.scalar (.cast (if src.signed then .sext else .zext) src.width dst.width)) [input]]
+  let code := convert left 0 2 ++ convert right 1 3 ++
+    [⟨[⟨4, .bits dst.width⟩], .scalar (.bin op.target dst.width),
+      [if left.width = dst.width then 0 else 2, if right.width = dst.width then 1 else 3]⟩]
+  let target := IR.Program.mk [
+    ⟨"bits", [.bits left.width, .bits right.width], [.bits dst.width], false, IR.Reader.emptyEffects,
+      [⟨"entry", [⟨0, .bits left.width⟩, ⟨1, .bits right.width⟩], code, .return [4]⟩]⟩]
+  (source, target)
+
+def bitwiseSelfTest : IO UInt32 := do
+  let types : List Source.IntType := [.int, .uint, .long, .ulong, .longLong, .ulongLong]
+  let ops : List Bitwise := [.and, .or, .xor]
+  let mut failed := 0
+  for op in ops do
+    for left in types do
+      for right in types do
+        let (s, t) := bitwisePair op left right
+        if (leafPair s t).isNone then
+          IO.eprintln s!"whole-leaf bitwise pair refused: {repr left}, {repr right}"
+          failed := failed+1
+        let wrong := if op == .and then BinOp.or else .and
+        let changed := {t with functions := t.functions.map fun f =>
+          {f with blocks := f.blocks.map fun b => {b with instructions := b.instructions.map fun i =>
+            match i.op with
+            | .scalar (.bin _ n) => {i with op := .scalar (.bin wrong n)}
+            | _ => i}}}
+        if (leafPair s changed).isSome then
+          IO.eprintln "whole-leaf bitwise operator mutation accepted"
+          failed := failed+1
+  if failed == 0 then
+    IO.println "216 mixed-type whole-leaf bitwise cases pass (108 admitted, 108 mutations refused)"
+    return 0
+  return 1
+
 def leafSelfTest : IO UInt32 := do
   let (sourceText, targetText) := ExpressionTests.originalFixedMulTexts
   let mut failures := 0

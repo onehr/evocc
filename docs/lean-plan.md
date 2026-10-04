@@ -393,6 +393,14 @@ functions, local writes/storage, direct calls and private-leaf substitution
 remain required; the command refuses them until their diagrams are implemented.
 It grants no backend or first-release verification label and does not close V01.
 
+The source-derived expression path also covers bitwise AND/OR/XOR with C usual
+arithmetic conversions and retained source ranks. The parametric
+`SourceOperators.bitwise_sound` bridge (namespace `Core.Symbolic`) connects the
+actual source operation to the target term. Whole-leaf tests cover all 108
+operator/type pairs and refuse 108 mismatched target operators. These tests
+extend the same checker; they do not change the remaining control/state/call
+obligations or turn a passing local build into release acceptance.
+
 One concrete V01 correspondence obligation is now visible: the ten-function
 source-execution fixture emits nine EvoIR functions at the frozen `-O0`
 options. Existing C-HIR private-leaf substitution removes `frame` and embeds

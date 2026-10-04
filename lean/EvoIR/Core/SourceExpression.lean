@@ -1,4 +1,5 @@
 import EvoIR.Core.SymbolicSource
+import EvoIR.Core.SourceOperators
 import EvoIR.Core.Execution
 
 /-! Source-tree-driven expression diagrams. The checker reads the original
@@ -158,6 +159,10 @@ inductive ExpressionDiagram {Γ : Var → Nat} (env : CBindings Γ) :
       (first : ExpressionDiagram env left a) (second : ExpressionDiagram env right b) :
       ExpressionDiagram env (.binary a.2.type (if toLeft then .shl else .shr) left right)
         (a.1 ++ b.1 ++ (shift toLeft a.2 b.2).1, (shift toLeft a.2 b.2).2)
+  | bitwise (op : Bitwise) (left right : Source.Expr) (a b : ExpressionResult Γ)
+      (first : ExpressionDiagram env left a) (second : ExpressionDiagram env right b) :
+      ExpressionDiagram env (.binary (bitwise op a.2 b.2).type op.source left right)
+        (a.1 ++ b.1, bitwise op a.2 b.2)
 
 theorem expression_result_value {Γ : Var → Nat} (σ : Subst Γ)
     (r : ExpressionResult Γ) (v : Source.Value)
@@ -199,6 +204,21 @@ theorem expression_shift_result {Γ : Var → Nat} (σ : Subst Γ)
     | ok u =>
       cases u
       exact shift_sound σ left a.2 b.2 admitted
+
+theorem expression_bitwise_result {Γ : Var → Nat} (σ : Subst Γ)
+    (op : Bitwise) (a b : ExpressionResult Γ) :
+    ExpressionResult.denote σ (a.1 ++ b.1, bitwise op a.2 b.2) =
+      (do let x ← a.denote σ; let y ← b.denote σ; Source.binaryValue op.source x y) := by
+  simp only [ExpressionResult.denote, guards_append]
+  cases guards σ a.1 with
+  | error fault => rfl
+  | ok u =>
+    cases u
+    cases guards σ b.1 with
+    | error fault => rfl
+    | ok u =>
+      cases u
+      exact (bitwise_sound σ op a.2 b.2).symm
 
 /-- Every accepted expression diagram runs on the original source machine,
 for arbitrary operand bits, actual related locals and surrounding continuation.
@@ -255,6 +275,22 @@ theorem ExpressionDiagram.sound {Γ : Var → Nat} {env : CBindings Γ}
       subst v
       rfl
 
+  | bitwise op left right a b _ _ first second =>
+    rw [expression_bitwise_result]
+    apply Source.evaluates_binary p locals functionId
+      (EvoIR.Core.Symbolic.bitwise op a.2 b.2).type op.source left right
+      (a.denote σ) (b.denote σ) (by cases op <;> decide) (by cases op <;> decide)
+      (by cases op <;> rfl) first second
+    intro x y v hx hy hv
+    rw [expression_result_value σ a x hx, expression_result_value σ b y hy,
+      bitwise_sound σ op a.2 b.2] at hv
+    cases Except.ok.inj hv
+    rfl
+
+private def sourceBitwise : Source.Binary → Option Bitwise
+  | .bitAnd => some .and | .bitOr => some .or | .bitXor => some .xor
+  | _ => none
+
 private def sourceArithmetic : Source.Binary → Option SignedArithmetic
   | .add => some .add | .sub => some .sub | .mul => some .mul
   | _ => none
@@ -306,18 +342,27 @@ def expression {Γ : Var → Nat} (env : CBindings Γ) (e : Source.Expr) :
                     a.property b.property⟩
           else none
         else none
-      | none =>
-        let toLeft := op == .shl
-        if same : (if toLeft then Source.Binary.shl else .shr) = op then
-          if admitted : toLeft = false ∨ a.val.2.type.signed = false then
-            if typed : a.val.2.type = t then
-              return ⟨(a.val.1 ++ b.val.1 ++ (shift toLeft a.val.2 b.val.2).1,
-                (shift toLeft a.val.2 b.val.2).2), by
-                  simpa only [typed, same] using ExpressionDiagram.shift toLeft left right
-                    a.val b.val admitted a.property b.property⟩
+      | none => match sourceBitwise op with
+        | some bitOp =>
+          if same : bitOp.source = op then
+            if typed : (bitwise bitOp a.val.2 b.val.2).type = t then
+              return ⟨(a.val.1 ++ b.val.1, bitwise bitOp a.val.2 b.val.2), by
+                simpa only [typed, same] using ExpressionDiagram.bitwise bitOp left right
+                  a.val b.val a.property b.property⟩
             else none
           else none
-        else none
+        | none =>
+          let toLeft := op == .shl
+          if same : (if toLeft then Source.Binary.shl else .shr) = op then
+            if admitted : toLeft = false ∨ a.val.2.type.signed = false then
+              if typed : a.val.2.type = t then
+                return ⟨(a.val.1 ++ b.val.1 ++ (shift toLeft a.val.2 b.val.2).1,
+                  (shift toLeft a.val.2 b.val.2).2), by
+                    simpa only [typed, same] using ExpressionDiagram.shift toLeft left right
+                      a.val b.val admitted a.property b.property⟩
+              else none
+            else none
+          else none
     | _ => none
 
 /-- The source tree, not the producer, supplies the expected trace/result.

@@ -286,8 +286,9 @@ def run (args : List String) : IO UInt32 := do
       let correspondence ← EvoIR.Core.correspondenceSelfTest
       let sourceExpression ← EvoIR.Core.Symbolic.ExpressionTests.sourceExpressionSelfTest
       let leaf ← EvoIR.Core.Symbolic.LeafTests.leafSelfTest
+      let bitwise ← EvoIR.Core.Symbolic.LeafTests.bitwiseSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
-        ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 then 0 else 1
+        ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 then 0 else 1
   | ["--check-core-leaf-pair", sourcePath, targetPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2

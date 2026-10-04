@@ -2408,6 +2408,10 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   without an exact-tree whitelist; 65 runtime cases and 15 kernel examples
   exercise admission, mutations and all 36 conversion pairs. This does not
   close the branching/looping/state/call cases or V01; the frozen scope is unchanged.
+  The same checker now admits all 108 AND/OR/XOR and source-type pairs through
+  a parametric source-semantics bridge; 108 target-op mutations are refused.
+  The local Lean build and self-test pass. Clean-checkpoint gate evidence for
+  this extension remains required; no backend or V01 completion claim follows.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline

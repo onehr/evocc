@@ -273,6 +273,15 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.bitwise_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) "
+        "(op : EvoIR.Core.Symbolic.Bitwise) "
+        "(a b : EvoIR.Core.Symbolic.CWord Γ), "
+        "EvoIR.Core.Source.binaryValue op.source "
+        "(EvoIR.Core.Symbolic.CWord.denote σ a) (EvoIR.Core.Symbolic.CWord.denote σ b) = "
+        "Except.ok (EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.bitwise op a b))",
+    ),
+    (
         "EvoIR.Core.Symbolic.parameter_words_cover",
         "∀ (ps : List EvoIR.Core.Source.Parameter) (values : List EvoIR.Core.Source.Value), "
         "List.map EvoIR.Core.Source.Value.type values = List.map (fun p => p.type.type) ps → "
