@@ -557,10 +557,16 @@ obligations in the current block, so intrinsic traps cannot mask their deletion.
 All six original `division-return.c` pairs now pass the public interface, as do
 the nested, conditional and looping cases in `division-control.c`. The tests
 cover 144 mixed-type/compound pairs, 1,060 refused mutations and 11 original
-control cases. The development audit passes with kernel-only proof dependencies;
-clean Lean/full-workspace integration gates are pending for this slice. Calls,
+control cases. At `b718a856`, the clean Lean gate passes with 53 kernel-only
+core targets and 1,246,159 vector answers. Full workspace passes 401 suites /
+3,080 tests / zero failures / five ignored, plus Clippy/format. Calls,
 private-leaf substitution, validator safety and the complete frozen population
 still block V01; backend stages and release acceptance are unchanged.
+
+Disk checkpoint including the developing call boundary: measured `.lake` plus
+capture growth since the whole-loop checkpoint is 5,128 KiB; `target/frontend`
+is unchanged. Host free space is 51 GiB; capture is 10,404 KiB against its
+500 MiB cap. No extra build tree or runtime image was created.
 
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and

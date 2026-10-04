@@ -2477,7 +2477,9 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   normalization changes proof diagrams only, with explicit source obligations
   still required. Focused tests: 144 mixed-type pairs accepted, 1,060 mutations
   refused, 11 original control cases passed; development kernel audit PASS.
-  Clean integration gates are pending. Calls/private-leaf substitution,
+  Clean Lean gate at `b718a856`: PASS, 53 kernel-only core targets and
+  1,246,159 vector answers. Full workspace: 401 suites / 3,080 passed /
+  zero failures / five ignored, plus Clippy/format. Calls/private-leaf substitution,
   validator safety and complete frozen-population acceptance remain OPEN.
 
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.

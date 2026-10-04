@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "493aa9ac4fd6c45572c54cc28af9c633e6d0adec",
+    "lean_commit": "b718a85672e21beb71b61700381b7a50570c0989",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -42,6 +42,7 @@
       "lean/EvoIR/Core/CutpointStorage.lean",
       "lean/EvoIR/Core/CutpointTests.lean",
       "lean/EvoIR/Core/Divergence.lean",
+      "lean/EvoIR/Core/DivisionTests.lean",
       "lean/EvoIR/Core/Execution.lean",
       "lean/EvoIR/Core/ExecutionTests.lean",
       "lean/EvoIR/Core/FlowTree.lean",
@@ -55,6 +56,8 @@
       "lean/EvoIR/Core/LocalStorage.lean",
       "lean/EvoIR/Core/LoopCorrespondence.lean",
       "lean/EvoIR/Core/LoopReturn.lean",
+      "lean/EvoIR/Core/NumericTerm.lean",
+      "lean/EvoIR/Core/RepeatedGuard.lean",
       "lean/EvoIR/Core/ReturnCorrespondence.lean",
       "lean/EvoIR/Core/ReturnCorrespondenceTests.lean",
       "lean/EvoIR/Core/Scalar.lean",
@@ -64,6 +67,7 @@
       "lean/EvoIR/Core/SimulationTests.lean",
       "lean/EvoIR/Core/Source.lean",
       "lean/EvoIR/Core/SourceCutpoint.lean",
+      "lean/EvoIR/Core/SourceDivision.lean",
       "lean/EvoIR/Core/SourceEquality.lean",
       "lean/EvoIR/Core/SourceExpression.lean",
       "lean/EvoIR/Core/SourceExpressionTests.lean",
@@ -129,6 +133,7 @@
         "EvoIR.Core.StateReturnTests",
         "EvoIR.Core.StatementTests",
         "EvoIR.Core.StatementReturnTests",
+        "EvoIR.Core.DivisionTests",
         "EvoIR.Core.CutpointTests",
         "EvoIR.Core.CutpointInput",
         "EvoIR.Term",
@@ -204,6 +209,10 @@
       "lean/EvoIR/Core/Divergence.lean": [
         "EvoIR.Core.Execution"
       ],
+      "lean/EvoIR/Core/DivisionTests.lean": [
+        "EvoIR.Core.ReturnCorrespondence",
+        "EvoIR.Core.CutpointInput"
+      ],
       "lean/EvoIR/Core/Execution.lean": [
         "EvoIR.Core.Scalar"
       ],
@@ -250,10 +259,16 @@
       "lean/EvoIR/Core/LoopReturn.lean": [
         "EvoIR.Core.CutpointInvariant"
       ],
+      "lean/EvoIR/Core/NumericTerm.lean": [
+        "EvoIR.Term"
+      ],
+      "lean/EvoIR/Core/RepeatedGuard.lean": [
+        "EvoIR.Core.ConstantBranch"
+      ],
       "lean/EvoIR/Core/ReturnCorrespondence.lean": [
         "EvoIR.Core.BranchTarget",
         "EvoIR.Core.StatementDiagram",
-        "EvoIR.Core.ConstantBranch"
+        "EvoIR.Core.RepeatedGuard"
       ],
       "lean/EvoIR/Core/ReturnCorrespondenceTests.lean": [
         "EvoIR.Core.ReturnCorrespondence",
@@ -269,7 +284,8 @@
         "EvoIR.Core.Scalar"
       ],
       "lean/EvoIR/Core/ScalarOperation.lean": [
-        "EvoIR.Core.SourceExpression"
+        "EvoIR.Core.SourceExpression",
+        "EvoIR.Core.SourceDivision"
       ],
       "lean/EvoIR/Core/Simulation.lean": [
         "EvoIR.Core.Transition"
@@ -285,6 +301,9 @@
         "EvoIR.Core.SourceEquality",
         "EvoIR.Core.CutTree",
         "EvoIR.Core.CheckpointSimulation"
+      ],
+      "lean/EvoIR/Core/SourceDivision.lean": [
+        "EvoIR.Core.SymbolicSource"
       ],
       "lean/EvoIR/Core/SourceEquality.lean": [
         "EvoIR.Core.Source"
@@ -359,7 +378,7 @@
       ],
       "lean/EvoIR/Core/SymbolicScalar.lean": [
         "EvoIR.Core.IR",
-        "EvoIR.Term"
+        "EvoIR.Core.NumericTerm"
       ],
       "lean/EvoIR/Core/SymbolicScalarTests.lean": [
         "EvoIR.Core.SymbolicScalar"
@@ -405,7 +424,8 @@
         "EvoIR.Core.StatementTests",
         "EvoIR.Core.StatementReturnTests",
         "EvoIR.Core.CutpointTests",
-        "EvoIR.Core.CutpointInput"
+        "EvoIR.Core.CutpointInput",
+        "EvoIR.Core.DivisionTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -6649,7 +6669,7 @@
     {
       "name": "EvoIR.Core.Symbolic.scalar",
       "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Op → List (EvoIR.Core.Symbolic.Word Γ) → Option (EvoIR.Core.Symbolic.Word Γ)",
-      "sha256": "2847fbbf4fe88568cdebd6da5fd602230316a23d4d8c1599edfd6798f824bbe2"
+      "sha256": "8a7c5dfe4278db3081f2498a9213b932fe84412d99684378a5b43b3d023c2a88"
     },
     {
       "name": "EvoIR.Core.Symbolic.instruction",
@@ -6674,12 +6694,12 @@
     {
       "name": "EvoIR.Core.Symbolic.CWord.cast",
       "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Core.Source.IntType → EvoIR.Core.Symbolic.CWord Γ → EvoIR.Core.Symbolic.CWord Γ",
-      "sha256": "b74b505595da8aca4e307c63c6b67e8960e7dd521e287b5f7351f3a20b7b25e8"
+      "sha256": "2de2f927aa0c91bec4cffad8d0e864a1bf0a6bd7f441b6d33d07cedb647a0efb"
     },
     {
       "name": "EvoIR.Core.Symbolic.arithmetic",
       "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Core.SignedArithmetic → EvoIR.Core.Symbolic.CWord Γ → EvoIR.Core.Symbolic.CWord Γ → List (EvoIR.Core.Symbolic.Guard Γ) × EvoIR.Core.Symbolic.CWord Γ",
-      "sha256": "175ae47c93f1dfe7b82615841904df71a14580998a36eb91aaed69c2df119e39"
+      "sha256": "164f94b90ed0660cd63c459e84c3b099876b3634f19c03a95f75c9c3584618d2"
     },
     {
       "name": "EvoIR.Core.Symbolic.checkArithmetic",
@@ -6695,6 +6715,11 @@
       "name": "EvoIR.denoteTerm",
       "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Subst Γ → {n : Nat} → EvoIR.Term Γ n → BitVec n",
       "sha256": "cde4166f555cff0e027a65ce94c5936b510a2d3be62d4ac631d34c524a878656"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.denoteTerm",
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Subst Γ → {n : Nat} → EvoIR.Core.Symbolic.Term Γ n → BitVec n",
+      "sha256": "f11beec08b0847ad63eebce1926c67bf6df5428026f526b02a497eef28da20dd"
     },
     {
       "name": "EvoIR.elabPat",
@@ -15762,6 +15787,49 @@
     "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions and conditional CFGs. No proof of source export, input-validation safety, loops or calls, backend compilation or verified-release acceptance",
     "targets": [
       {
+        "theorem": "EvoIR.Core.Symbolic.Term.of_p0_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} (term : EvoIR.Term Γ n), EvoIR.Core.Symbolic.denoteTerm σ (EvoIR.Core.Symbolic.Term.ofP0 term) = EvoIR.denoteTerm σ term",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.division_trace_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} (signed remainder : Bool) (a b : EvoIR.Core.Symbolic.Term Γ n), EvoIR.Core.IR.evalDivision signed remainder n [EvoIR.Core.IR.Value.bits n (EvoIR.Core.Symbolic.denoteTerm σ a), EvoIR.Core.IR.Value.bits n (EvoIR.Core.Symbolic.denoteTerm σ b)] = do EvoIR.Core.Symbolic.guards σ (EvoIR.Core.Symbolic.divisionGuards signed remainder a b) pure (EvoIR.Core.IR.Value.bits n (EvoIR.Core.Symbolic.denoteTerm σ (EvoIR.Core.Symbolic.Term.division signed remainder a b)))",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.division_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (remainder : Bool) (a b : EvoIR.Core.Symbolic.CWord Γ), (do EvoIR.Core.Symbolic.guards σ (EvoIR.Core.Symbolic.division remainder a b).fst pure (EvoIR.Core.Symbolic.CWord.denote σ (EvoIR.Core.Symbolic.division remainder a b).snd)) = EvoIR.Core.Source.binaryValue (if remainder = true then EvoIR.Core.Source.Binary.rem else EvoIR.Core.Source.Binary.div) (EvoIR.Core.Symbolic.CWord.denote σ a) (EvoIR.Core.Symbolic.CWord.denote σ b)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.normalized_traces_equal",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (a b : EvoIR.Core.Symbolic.ValueTree Γ), a.normalizeTrace = b.normalizeTrace → ∀ (σ : EvoIR.Subst Γ), EvoIR.Core.Symbolic.ValueTree.denote σ a = EvoIR.Core.Symbolic.ValueTree.denote σ b",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
         "theorem": "EvoIR.Core.Symbolic.canonical_store_covers",
         "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (locals : EvoIR.Core.Symbolic.LocalStore Γ), EvoIR.Core.Symbolic.LocalStore.denote (EvoIR.Core.Symbolic.storeSubst σ locals) (EvoIR.Core.Symbolic.canonicalStore (List.map EvoIR.Core.Symbolic.LocalSlot.shape locals)) = EvoIR.Core.Symbolic.LocalStore.denote σ locals",
         "proof_kind": "kernel-only",
@@ -15882,7 +15950,7 @@
       },
       {
         "theorem": "EvoIR.Core.Symbolic.truth_term_sound",
-        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (value : EvoIR.Core.Symbolic.CWord Γ), ((EvoIR.denoteTerm σ value.truthTerm).toNat != 0) = (EvoIR.Core.Symbolic.CWord.denote σ value).truth",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (value : EvoIR.Core.Symbolic.CWord Γ), ((EvoIR.Core.Symbolic.denoteTerm σ value.truthTerm).toNat != 0) = (EvoIR.Core.Symbolic.CWord.denote σ value).truth",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Quot.sound",
@@ -15978,7 +16046,7 @@
       },
       {
         "theorem": "EvoIR.Core.Symbolic.conditional_execution_sound",
-        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) (types : Nat → EvoIR.Core.IR.Ty), (∀ (id : Nat), (ρ id).type = types id) → ∀ (p : EvoIR.Core.IR.Program) (s : EvoIR.Core.IR.State) (a : EvoIR.Core.IR.Activation) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (scope yesScope noScope : EvoIR.Core.Symbolic.Scope Γ) (id : Nat) (condition : EvoIR.Term Γ 1) (yes no : EvoIR.Core.IR.Edge), s.control = EvoIR.Core.IR.Control.running a → List.find? (fun x => x.name == a.function) p.functions = some f → List.find? (fun x => x.name == a.block) f.blocks = some b → a.pc = b.instructions.length → b.terminator = EvoIR.Core.IR.Terminator.conditional id yes no → a.values = EvoIR.Core.Symbolic.Scope.denote σ ρ scope → scope.word id = some ⟨1, condition⟩ → EvoIR.Core.Symbolic.checkEdge types f scope yes yesScope = true → EvoIR.Core.Symbolic.checkEdge types f scope no noScope = true → EvoIR.Core.IR.step p s = some { control := EvoIR.Core.IR.Control.running { function := a.function, block := if ((EvoIR.denoteTerm σ condition).toNat == 0) = true then no.block else yes.block, pc := 0, values := if ((EvoIR.denoteTerm σ condition).toNat == 0) = true then EvoIR.Core.Symbolic.Scope.denote σ ρ noScope else EvoIR.Core.Symbolic.Scope.denote σ ρ yesScope, owner := a.owner }, stack := s.stack, nextFrame := s.nextFrame }",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) (ρ : Nat → EvoIR.Core.IR.Value) (types : Nat → EvoIR.Core.IR.Ty), (∀ (id : Nat), (ρ id).type = types id) → ∀ (p : EvoIR.Core.IR.Program) (s : EvoIR.Core.IR.State) (a : EvoIR.Core.IR.Activation) (f : EvoIR.Core.IR.Function) (b : EvoIR.Core.IR.Block) (scope yesScope noScope : EvoIR.Core.Symbolic.Scope Γ) (id : Nat) (condition : EvoIR.Core.Symbolic.Term Γ 1) (yes no : EvoIR.Core.IR.Edge), s.control = EvoIR.Core.IR.Control.running a → List.find? (fun x => x.name == a.function) p.functions = some f → List.find? (fun x => x.name == a.block) f.blocks = some b → a.pc = b.instructions.length → b.terminator = EvoIR.Core.IR.Terminator.conditional id yes no → a.values = EvoIR.Core.Symbolic.Scope.denote σ ρ scope → scope.word id = some ⟨1, condition⟩ → EvoIR.Core.Symbolic.checkEdge types f scope yes yesScope = true → EvoIR.Core.Symbolic.checkEdge types f scope no noScope = true → EvoIR.Core.IR.step p s = some { control := EvoIR.Core.IR.Control.running { function := a.function, block := if ((EvoIR.Core.Symbolic.denoteTerm σ condition).toNat == 0) = true then no.block else yes.block, pc := 0, values := if ((EvoIR.Core.Symbolic.denoteTerm σ condition).toNat == 0) = true then EvoIR.Core.Symbolic.Scope.denote σ ρ noScope else EvoIR.Core.Symbolic.Scope.denote σ ρ yesScope, owner := a.owner }, stack := s.stack, nextFrame := s.nextFrame }",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Classical.choice",
