@@ -202,7 +202,7 @@ def ActOK (p : Program) (T : Table) (a : Activation) : Prop :=
     ∀ k prm, b.parameters[k]? = some prm →
       ∃ v, a.values.lookup prm.id = some v ∧ Holds (T.param a.function a.block k) v
 
-def StateOK (p : Program) (T : Table) (s : State) : Prop :=
+abbrev StateOK (p : Program) (T : Table) (s : State) : Prop :=
   (∀ a, s.control = .running a → ActOK p T a) ∧ ∀ fr ∈ s.stack, ActOK p T fr.caller
 
 theorem ran_extends {vals vals' : Bindings} (e : Extends vals vals') {o : Nat} {inst : Instruction}
