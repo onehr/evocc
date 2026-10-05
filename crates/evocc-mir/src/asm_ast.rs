@@ -5,20 +5,118 @@
 //! only the core-v1 envelope and refuses every other form. The builder is not
 //! trusted: the Lean printer prints the AST and compares the text with the
 //! actual output of the same compilation, byte for byte.
+//!
+//! `export_core_asm` runs the native pipeline with default options on one
+//! EvoIR module. The binary `evo-asm-ast` and the proof-required driver call
+//! it. Export is not proof admission: the Lean print check and the Lean
+//! checker decide.
 
 use std::fmt::Write as _;
 
-use evocc_mir::emit::Frame;
-use evocc_mir::isa::aarch64::encodings;
-use evocc_mir::{
+use evocc_evoir::{GlobalVisibility, Linkage, Module};
+
+use crate::emit::Frame;
+use crate::isa::aarch64::encodings;
+use crate::{
     Allocated, BinOp, Cond, ExtOp, FlagOp, LoadKind, MInst, MTerm, RegClass, StoreKind, VReg,
     WideMul, Width,
 };
 
 pub type Result<T> = std::result::Result<T, String>;
 
+/// Export the assembly AST with the frame hints, and the assembly text, of one
+/// checked Linux AArch64 compilation with default options. The text is the
+/// text that `compile_module_with_options` writes. The function refuses a
+/// module outside the core assembly profile, and refuses if the allocated
+/// functions do not reproduce the compiler text.
+pub fn export_core_asm(module: &Module) -> Result<(String, String)> {
+    if !module.globals.is_empty()
+        || !module.aliases.is_empty()
+        || !module.assembly.is_empty()
+        || !module.lifecycle.is_empty()
+        || !module.tls.is_empty()
+        || !module.extern_objects.is_empty()
+        || !module.declares.is_empty()
+    {
+        return Err("module outside the core assembly profile".into());
+    }
+    for function in &module.functions {
+        if function.alignment != 4
+            || function.section.is_some()
+            || function.patchable_entry.is_some()
+            || function.stack_protect
+            || function.linkage == Linkage::Weak
+            || !matches!(
+                function.visibility,
+                GlobalVisibility::External | GlobalVisibility::Internal
+            )
+        {
+            return Err(format!(
+                "function {} outside the core assembly profile",
+                function.name
+            ));
+        }
+    }
+    let target = crate::Target::Linux;
+    let profile = crate::UbCheckProfile::Checked;
+    let keep = crate::emitted_functions(module);
+    let lowered =
+        crate::lower_module_for_profile(target, module, &|name| !keep.contains(name), profile)
+            .map_err(|e| format!("{e:?}"))?;
+    let mut functions = Vec::new();
+    for function in &lowered.functions {
+        if !keep.contains(&function.name) {
+            continue;
+        }
+        let destroyed = crate::out_of_ssa(function);
+        let mut allocated =
+            crate::allocate_for_with_options(target, &destroyed, Default::default())
+                .map_err(|detail| format!("@{}: {detail}", function.name))?;
+        allocated.internal = module
+            .functions
+            .iter()
+            .find(|source| source.name == function.name)
+            .is_some_and(|source| source.visibility == GlobalVisibility::Internal);
+        crate::verify_allocation_for(target, &allocated)
+            .map_err(|refusal| format!("@{}: {}", function.name, refusal.detail))?;
+        functions.push(allocated);
+    }
+    let unit = crate::emit_module_unit(target, &functions, &[], &[]);
+    let text = format!("// evocc-native-ub-checks={}\n{unit}", profile.name());
+    let actual = crate::compile_module_with_options(
+        target,
+        module,
+        &|_| true,
+        crate::RelocationModel::PositionIndependent,
+        &crate::emit::CodegenOptions::default(),
+    )
+    .map_err(|e| format!("{e:?}"))?;
+    if actual != text {
+        return Err("allocated functions do not reproduce the compiler text".into());
+    }
+    let mut nodes = Vec::new();
+    for allocated in &functions {
+        let frame = crate::frame_of_for(target, allocated);
+        nodes.push(function(allocated, &frame)?);
+    }
+    let root = Node::Array(vec![
+        Node::Text("core-asm-v1".into()),
+        Node::Text("aarch64-unknown-linux-gnu".into()),
+        Node::Text("checked".into()),
+        Node::Text(format!(
+            "EvoCC {} aarch64-unknown-linux-gnu",
+            env!("CARGO_PKG_VERSION")
+        )),
+        Node::Array(nodes),
+    ]);
+    let mut output = String::new();
+    root.render(&mut output);
+    output.push('\n');
+    Ok((output, actual))
+}
+
 /// A JSON value of the wire format.
-pub enum Node {
+enum Node {
     Text(String),
     Natural(u64),
     Integer(i64),
@@ -35,7 +133,7 @@ impl Node {
         Self::Array(std::iter::once(Self::text(tag)).chain(fields).collect())
     }
 
-    pub fn render(&self, out: &mut String) {
+    fn render(&self, out: &mut String) {
         match self {
             Self::Text(value) => {
                 out.push('"');
@@ -650,7 +748,7 @@ fn frame_hint(frame: &Frame) -> Node {
 }
 
 /// One function: `[name, global, lines, frame]`.
-pub fn function(allocated: &Allocated, frame: &Frame) -> Result<Node> {
+fn function(allocated: &Allocated, frame: &Frame) -> Result<Node> {
     if frame.alignment != 16
         || frame.dynamic
         || frame.register_save.is_some()
