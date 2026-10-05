@@ -6,14 +6,15 @@ a sampled suspended caller. The checked diagram must stop before entering the
 callee and retain argument effects, conversion and the first diagnostic. -/
 namespace EvoIR.Core.Symbolic.SourceFrontierTests
 
-private def untilLoopCall (p : Source.Program) : Nat → Source.State → Option Source.State
+private def untilCall (p : Source.Program) : Nat → Source.State → Option Source.State
   | 0, _ => none
   | fuel+1, state => match state.control with
-    | .call 2 .. => some state
-    | _ => (Source.step p state).bind (untilLoopCall p fuel)
+    | .call .. => some state
+    | _ => (Source.step p state).bind (untilCall p fuel)
 
 private def stops (p : Source.Program) (cursor : SourceCursor inputWidths)
-    (args : List Source.Value) (expected : Except Source.Fault (List Source.Value)) : Bool := Id.run do
+    (args : List Source.Value) (expected : Except Source.Fault (List Source.Value))
+    (callee : Nat := 2) : Bool := Id.run do
   let some built := sourceCallFrontier p 64 cursor | return false
   let σ := inputSubst args
   match built.val.eval σ, expected with
@@ -21,9 +22,9 @@ private def stops (p : Source.Program) (cursor : SourceCursor inputWidths)
   | .ok exit, .ok values =>
     let represented := exit.denote σ 5
     let .call id type actual := represented.control | return false
-    let some reached := untilLoopCall p 1000 (cursor.denote σ 5) | return false
+    let some reached := untilCall p 1000 (cursor.denote σ 5) | return false
     let .call realId realType realArgs := reached.control | return false
-    return id == 2 && type == .uint && actual == values && realId == id && realType == type &&
+    return id == callee && type == .uint && actual == values && realId == id && realType == type &&
       realArgs == actual && reached.locals == represented.locals &&
       reached.continuation == represented.continuation && reached.functionId == represented.functionId
   | _, _ => return false
@@ -64,9 +65,9 @@ def sourceFrontierSelfTest : IO UInt32 := do
     ("argument conversion", stops p
       (expression [(⟨.uint, false⟩, .literal .ulong 0x100000001), (⟨.uint, false⟩, .literal .uint 0)])
       [u 7, u 3] (.ok [u 1, u 0])),
-    ("finite call in argument", stops p
+    ("finite argument stops at its own call", stops p
       (expression [(⟨.uint, false⟩, .call .uint 0 [(⟨.uint, false⟩, .ident .uint 6)]),
-        (⟨.uint, false⟩, .ident .uint 7)]) [u 7, u 3] (.ok [u 22, u 3])),
+        (⟨.uint, false⟩, .ident .uint 7)]) [u 7, u 3] (.ok [u 7]) 0),
     ("first argument diagnostic", stops p
       (expression [(⟨.uint, false⟩, .binary .int .add
         (.cast .int ⟨.int, false⟩ (.ident .uint 6)) (.literal .int 1)),

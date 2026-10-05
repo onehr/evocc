@@ -88,15 +88,8 @@ def sourceCallFrontier {Γ : Var → Nat} (p : Source.Program) : (budget : Nat) 
     | ⟨.call callee type args, locals, k⟩ => some ⟨.leaf ⟨.call callee type args, locals, k⟩, by
         intro σ fid context
         exact ⟨_, .refl _, by simp, rfl⟩⟩
-    | ⟨.expression (.call type callee args), locals, k⟩ =>
-      match argumentFrontier p (budget+1) locals type callee args [] with
-      | some built => some ⟨argumentCallTree type callee k built.val,
-          (call_frontier_sound p locals type callee args k built.val built.property).relax false⟩
-      | none => do
-        let step ← cursorDescend locals (.call type callee args) k
-        let tail ← step.val.bindChecked (next := SourceCutRuns p false)
-          (fun next => sourceCallFrontier p budget next)
-        return ⟨tail.val, source_cut_compose ((step.property.runs p).relax false) tail.property⟩
+    -- Descend through call arguments as actual source steps. Eagerly executing
+    -- a finite argument callee would skip a call where the target stops.
     | cursor => do
       let chunk ← sourceFrontierChunk p (budget+1) cursor
       let tail ← chunk.val.bindChecked (next := SourceCutRuns p false)

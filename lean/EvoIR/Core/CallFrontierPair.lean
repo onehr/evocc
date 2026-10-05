@@ -9,6 +9,20 @@ namespace EvoIR.Core.Symbolic
 
 abbrev CalleeProposals := Nat → Option (Nat × List CutpointLayout)
 
+/-- Suggest the actual entry only when no callee plan was supplied. Every
+binding and the entire entry-to-return span still go through `loopDiagram`;
+this suggestion is not an invariant or a trusted function summary. -/
+def entryCutpoint (source : Source.Function) (target : IR.Function) : Option CutpointLayout := do
+  let block ← target.blocks.head?
+  return {
+    site := .statement source.body [.function none source.returnType.type]
+    shape := source.parameters.map fun p => ⟨p.symbol, p.type, true⟩
+    label := block.name
+    links := (block.parameters.zip source.parameters).reverse.map fun (binding, p) =>
+      (binding.id, p.symbol, p.type.type)
+    tokens := ((block.parameters.drop source.parameters.length).zip [0, 1]).reverse.map
+      fun (binding, token) => (binding.id, token) }
+
 def CallFrontierAgreement (source : Source.Program) (target : IR.Program)
     (fid : Nat) (f : IR.Function) (type : Source.IntType)
     (s : SourceCursor inputWidths) (t : TargetCallSite inputWidths)
@@ -18,7 +32,8 @@ def CallFrontierAgreement (source : Source.Program) (target : IR.Program)
 
 def checkCallFrontierWith (source : Source.Program) (target : IR.Program)
     (fid : Nat) (f : IR.Function) (tokens : Bool) (type : Source.IntType)
-    (proposals : CalleeProposals) (continuation : ContinuationBuilder source target fid f type)
+    (proposals : CalleeProposals) (budget : Nat)
+    (continuation : ContinuationBuilder source target fid f type)
     (path : PathConditions inputWidths)
     (s : SourceCursor inputWidths) (t : TargetCallSite inputWidths) :
     Option (PLift (CallFrontierAgreement source target fid f type s t path)) := do
@@ -36,7 +51,11 @@ def checkCallFrontierWith (source : Source.Program) (target : IR.Program)
           | none => none
           | some g => some ⟨g, found⟩
         have targetName : tf.val.name = sf.val.name := by simpa using List.find?_some tf.property
-        let (fuel, layouts) ← proposals sf.val.symbol
+        -- No annotation is needed for a finite callee. The fallback only
+        -- proposes its entry; every span and backedge must still be proved.
+        let (fuel, layouts) ← match proposals sf.val.symbol with
+          | some plan => some plan
+          | none => (entryCutpoint sf.val tf.val).map fun layout => (budget, [layout])
         let diagram ← loopDiagram source target sf.val tf.val layouts fuel
         if function : target.functions.find? (·.name == f.name) = some f then
           let b : {b // f.blocks.find? (·.name == t.label) = some b} ←
@@ -127,7 +146,7 @@ def checkedSuffix (source : Source.Program) (target : IR.Program) (fid : Nat)
       return ⟨finite.refines⟩
     let sp ← sourceCallFrontier source (budget+1) cursor
     let tp ← targetCallFrontier target f (budget+1) label pc scope
-    let joined ← cutMatchUnder (checkCallFrontierWith source target fid f tokens type proposals
+    let joined ← cutMatchUnder (checkCallFrontierWith source target fid f tokens type proposals (budget+1)
       (checkedSuffix source target fid f tokens type proposals budget)) (budget+1) path
       sp.val.normalizeTrace tp.val.normalizeTrace
     return ⟨fun σ holds owner nextFrame =>
@@ -185,7 +204,7 @@ def callFrontierPair (source : Source.Program) (target : IR.Program)
         let sp ← sourceCallFrontier source budget cursor
         let tp ← targetCallFrontier target tf.val budget block.val.name 0 scope.val
         let joined ← cutMatchUnder (checkCallFrontierWith source target sf.val.symbol tf.val tokens
-          sf.val.returnType.type proposals (checkedSuffix source target sf.val.symbol tf.val tokens
+          sf.val.returnType.type proposals budget (checkedSuffix source target sf.val.symbol tf.val tokens
             sf.val.returnType.type proposals budget)) budget [] sp.val.normalizeTrace tp.val.normalizeTrace
         return {
           sourceFunction := sf.val, targetFunction := tf.val, tokens := tokens
