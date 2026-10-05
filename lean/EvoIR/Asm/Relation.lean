@@ -125,31 +125,37 @@ def SavedRel (vis : Nat → BitVec 64) (st : Storage) : Prop :=
 /-- The suspended callers. `inner` is the frame of the activation that the
 first caller called, and `vis` gives the callee-saved registers as `inner`
 sees them. -/
-def Chain (ctx : Ctx) (high : Nat) (mem : Nat → BitVec 8) :
+def Chain (ctx : Ctx) (low high : Nat) (mem : Nat → BitVec 8) :
     Frame → (Nat → BitVec 64) → List ReturnFrame → List Frame → Prop
   | inner, _, [], [] =>
     inner.entry ≤ high ∧ decodeAddress (load64 mem (inner.fp + 8)) = none
   | inner, vis, rf :: rest, fr :: frs =>
     fr.sp = inner.entry ∧ fr.sp % 16 = 0 ∧
+    low + needOf ctx.p ctx.hints rf.caller.function ≤ fr.entry ∧
     load64 mem inner.fp = BitVec.ofNat 64 fr.fp ∧
     (∃ pos, Placed ctx rf.caller fr pos ∧ pos < functionSpan ∧
       load64 mem (inner.fp + 8) = codeAddress fr.index pos) ∧
     Shape rf.caller.storage ∧ OwnSlots high mem fr rf.caller.storage ∧
     SavedRel (restoreView inner mem vis) rf.caller.storage ∧
-    Chain ctx high mem fr (restoreView inner mem vis) rest frs
+    Chain ctx low high mem fr (restoreView inner mem vis) rest frs
   | _, _, _, _ => False
 
+/-- The function of the outermost activation. -/
+def outermost (a : Activation) (stack : List ReturnFrame) : String :=
+  (stack.getLast?.map (·.caller.function)).getD a.function
+
 /-- A running allocated state and the assembly state at the start of the
-code of its current instruction. -/
-def Running (ctx : Ctx) (s : Alloc.State) (t : Asm.State) : Prop :=
+code of its current instruction. `entry` is the outermost function. -/
+def Running (ctx : Ctx) (entry : String) (s : Alloc.State) (t : Asm.State) : Prop :=
   ∃ a cur frs pos,
     s.control = .running a ∧ t.control = .running cur.index pos ∧
+    outermost a s.stack = entry ∧
     Placed ctx a cur pos ∧
     t.sp = BitVec.ofNat 64 cur.sp ∧ cur.sp % 16 = 0 ∧
     t.regs 29 = BitVec.ofNat 64 cur.fp ∧
     t.low + needOf ctx.p ctx.hints a.function ≤ cur.entry ∧ t.high ≤ 2^64 ∧
     Shape a.storage ∧ RegsRel t.regs a.storage ∧ FlagsRel t.flags a.storage ∧
     OutgoingRel t.memory cur a.storage ∧ OwnSlots t.high t.memory cur a.storage ∧
-    Chain ctx t.high t.memory cur t.regs s.stack frs
+    Chain ctx t.low t.high t.memory cur t.regs s.stack frs
 
 end EvoIR.Asm.Proof

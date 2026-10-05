@@ -90,21 +90,21 @@ theorem OwnSlots_congr (high : Nat) (mem mem' : Nat → BitVec 8) (fr : Frame) (
 /-- The caller chain depends only on the memory from the frame pointer of
 the inner frame upward, on the save slots of the inner frame, and on the
 callee-saved registers that the inner frame does not save. -/
-theorem chain_congr (ctx : Ctx) (high : Nat) :
+theorem chain_congr (ctx : Ctx) (low high : Nat) :
     ∀ (callers : List ReturnFrame) (frs : List Frame) (inner : Frame)
       (mem mem' : Nat → BitVec 8) (vis vis' : Nat → BitVec 64),
       (∀ a, inner.fp ≤ a → mem' a = mem a) →
       (∀ r off, lookupOffset inner.hint.saved r = some off → ∀ j, j < 8 →
         mem' (inner.sp + off + j) = mem (inner.sp + off + j)) →
       (∀ r, isCalleeSaved r = true → lookupOffset inner.hint.saved r = none → vis' r = vis r) →
-      Chain ctx high mem inner vis callers frs → Chain ctx high mem' inner vis' callers frs
+      Chain ctx low high mem inner vis callers frs → Chain ctx low high mem' inner vis' callers frs
   | [], [], inner, mem, mem', vis, vis', above, _, _, chain => by
     obtain ⟨top, ret⟩ := chain
     refine ⟨top, ?_⟩
     rw [load64_congr mem mem' _ (fun j _ => above _ (by omega))]
     exact ret
   | rf :: rest, fr :: frs, inner, mem, mem', vis, vis', above, saves, regs, chain => by
-    obtain ⟨hsp, h16, hfp, ⟨pos, placed, span, hra⟩, shape, own, saved, tail⟩ := chain
+    obtain ⟨hsp, h16, hneed, hfp, ⟨pos, placed, span, hra⟩, shape, own, saved, tail⟩ := chain
     have view : ∀ r, isCalleeSaved r = true →
         restoreView inner mem' vis' r = restoreView inner mem vis r := by
       intro r hr
@@ -114,13 +114,14 @@ theorem chain_congr (ctx : Ctx) (high : Nat) :
       | some off => exact load64_congr mem mem' _ (fun j hj => saves r off ho j hj)
     have above' : ∀ a, fr.sp ≤ a → mem' a = mem a := fun a h =>
       above a (by unfold Frame.entry at hsp; unfold Frame.fp; omega)
-    refine ⟨hsp, h16, ?_, ⟨pos, placed, span, ?_⟩, shape, OwnSlots_congr high mem mem' fr _ above' own,
+    refine ⟨hsp, h16, hneed, ?_, ⟨pos, placed, span, ?_⟩, shape,
+      OwnSlots_congr high mem mem' fr _ above' own,
       ?_, ?_⟩
     · rw [load64_congr mem mem' _ (fun j _ => above _ (by omega))]; exact hfp
     · rw [load64_congr mem mem' _ (fun j _ => above _ (by omega))]; exact hra
     · intro r b d hr hc
       rw [view r hr]; exact saved r b d hr hc
-    · apply chain_congr ctx high rest frs fr mem mem' _ _
+    · apply chain_congr ctx low high rest frs fr mem mem' _ _
         (fun a h => above' a (by unfold Frame.fp at h; omega))
         (fun r off _ j _ => above' _ (by omega))
         (fun r hr _ => view r hr) tail
