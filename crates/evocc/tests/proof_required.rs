@@ -142,15 +142,29 @@ fn digest(path: &Path) -> String {
     evocc_proof::sha256_hex(&std::fs::read(path).unwrap())
 }
 
-const SCOPE: &str = "checked to allocated EvoMIR, not to final assembly";
+const SCOPE: &str = "checked from typed Core source to final assembly text";
 
 /// The record assertions of every accepted compilation. `checked` lists the
 /// stages with the status CHECKED. The other stages are NOT_CHECKED.
 fn assert_record(record: &str, checked: &[&str]) {
-    assert!(record.contains("\"result\": \"CHECKED_TO_ALLOCATED_EVOMIR\""));
+    assert!(record.contains("\"result\": \"CHECKED_TO_FINAL_ASSEMBLY\""));
     assert!(record.contains(&format!("\"scope\": \"{SCOPE}\"")));
-    assert!(record.contains("\"all_stages_checked\": false"));
+    assert!(record.contains("\"all_stages_checked\": true"));
+    assert!(record.contains("\"checked\": true"));
     assert!(!record.to_lowercase().contains("verified"), "{record}");
+    for trusted in [
+        "the Lean kernel",
+        "the readers of the input files",
+        "the printer of the assembly AST",
+        "the AArch64 subset",
+        "AbiEntry",
+        "the assembler, the linker",
+    ] {
+        assert!(
+            record.contains(trusted),
+            "the trusted list must name {trusted}"
+        );
+    }
     let order = ["V01", "V05", "V02", "V03", "V04"]
         .map(|stage| record.find(&format!("\"id\": \"{stage}\",")).unwrap());
     assert!(order.is_sorted(), "stage order {order:?}");
@@ -163,27 +177,44 @@ fn assert_record(record: &str, checked: &[&str]) {
         let expected = format!("\"status\": \"{status}\"");
         assert!(row(record, stage).contains(&expected), "{stage}: {status}");
     }
-    assert!(row(record, "V04").contains("\"reason\": \"not integrated\""));
     assert!(row(record, "V03").contains("\"path\": \"inputs/post-ssa-evomir.json\""));
     assert!(row(record, "V03").contains("\"path\": \"inputs/allocation.json\""));
     assert!(row(record, "V03").contains("scope=post-ssa-mir-to-allocated-mir"));
+    for path in [
+        "inputs/allocation.json",
+        "inputs/asm-ast.json",
+        "inputs/assembly.s",
+    ] {
+        assert!(row(record, "V04").contains(&format!("\"path\": \"{path}\"")));
+    }
+    assert!(row(record, "V04").contains("scope=allocated-mir-to-assembly-text"));
 }
 
 /// The digest chain of the record: each pair of files names one link, in
-/// stage order. Both files of a pair must have the same digest.
-fn assert_chain(directory: &Path, record: &str, pairs: &[(&str, &str)]) {
-    let inputs = directory.join("inputs");
+/// stage order. Both files of a pair must have the same digest. `links` are
+/// the links before the post-SSA file. The chain then has three fixed links:
+/// the post-SSA file of V02 and V03, the allocation export of V03 and V04, and
+/// the text that V04 checked and the published `output.s`.
+fn assert_chain(directory: &Path, record: &str, links: &[(&str, &str)]) {
+    let mut pairs = links
+        .iter()
+        .map(|(left, right)| (format!("inputs/{left}"), format!("inputs/{right}")))
+        .collect::<Vec<_>>();
+    for file in ["post-ssa-evomir.json", "allocation.json"] {
+        pairs.push((format!("inputs/{file}"), format!("inputs/{file}")));
+    }
+    pairs.push(("inputs/assembly.s".into(), "output.s".into()));
     let chain = &record[record.find("\"chain\"").unwrap()..];
     let mut at = 0;
-    for (left, right) in pairs {
-        let link = digest(&inputs.join(left));
-        assert_eq!(link, digest(&inputs.join(right)), "{left} and {right}");
+    for (left, right) in &pairs {
+        let link = digest(&directory.join(left));
+        assert_eq!(link, digest(&directory.join(right)), "{left} and {right}");
         at += chain[at..]
             .find(&link)
             .expect("the chain names each link in order")
             + 1;
     }
-    assert!(chain[at..].contains("\"stage\": \"V03\""));
+    assert!(chain[at..].contains("\"stage\": \"publication\""));
     assert_eq!(chain.matches("\"read_by\"").count(), pairs.len());
 }
 
@@ -206,20 +237,13 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
     assert!(!ordinary.contains("CHECKED") && !ordinary.to_lowercase().contains("verified"));
 
     let record = std::fs::read_to_string(directory.join("record.json")).unwrap();
-    assert_record(&record, &["V01", "V02", "V03"]);
+    assert_record(&record, &["V01", "V02", "V03", "V04"]);
     // Without -Oeq-scalar, the V05 row says that no rewrite ran, and V01 and
     // V02 read the same EvoIR file.
     assert!(row(&record, "V05").contains("no rewrite ran"));
     assert!(!directory.join("inputs/rewrite-000.proof.evp").exists());
     assert!(!record.contains("rewrite_checker"));
-    assert_chain(
-        &directory,
-        &record,
-        &[
-            ("evoir.evo", "evoir.evo"),
-            ("post-ssa-evomir.json", "post-ssa-evomir.json"),
-        ],
-    );
+    assert_chain(&directory, &record, &[("evoir.evo", "evoir.evo")]);
     for digest in [
         evocc_proof::sha256_hex(&ordinary.into_bytes()),
         evocc_proof::sha256_hex(&std::fs::read(lean_checker()).unwrap()),
@@ -238,14 +262,25 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
 }
 
 #[test]
-fn pilot_entries_are_checked_to_allocated_evomir() {
+fn pilot_entries_are_checked_to_final_assembly_text() {
     let (directory, record) = accept(&fixture("musl-abs.c"), &["--core-entry=abs"]);
-    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 3);
-    // The allocation export is the frozen V03 fixture of this module.
-    assert_eq!(
-        std::fs::read(directory.join("inputs/allocation.json")).unwrap(),
-        std::fs::read(repository().join("lean/EvoIR/Alloc/Fixtures/musl-abs.json")).unwrap()
-    );
+    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 4);
+    // The allocation export, the AST and the text are the frozen V03 and V04
+    // fixtures of this module.
+    for (exported, frozen) in [
+        ("allocation.json", "lean/EvoIR/Alloc/Fixtures/musl-abs.json"),
+        (
+            "asm-ast.json",
+            "tests/fixtures/verification/asm/musl-abs.ast.json",
+        ),
+        ("assembly.s", "tests/fixtures/verification/asm/musl-abs.s"),
+    ] {
+        assert_eq!(
+            std::fs::read(directory.join("inputs").join(exported)).unwrap(),
+            std::fs::read(repository().join(frozen)).unwrap(),
+            "{exported}"
+        );
+    }
     drop(directory);
     accept(&fixture("doom-fixedmul.c"), &["--core-entry=FixedMul"]);
     let proposal = format!(
@@ -262,7 +297,7 @@ fn pilot_entries_are_checked_to_allocated_evomir() {
     );
     assert!(directory.join("inputs/proposal-loop_join.json").is_file());
     assert!(record.contains("entry=loop_join route=loop"));
-    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 6);
+    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 8);
     drop(directory);
     let (_, record) = accept(
         &fixture("pressure.c"),
@@ -270,6 +305,7 @@ fn pilot_entries_are_checked_to_allocated_evomir() {
     );
     assert!(record.contains("entry=pressure route=call"));
     assert!(record.contains("stage=V03 entry=wide functions=2"));
+    assert!(record.contains("stage=V04 entry=wide functions=2"));
 }
 
 /// `-Oeq-scalar` with the pinned Rust certificate checker of this build.
@@ -307,7 +343,7 @@ fn accept_rewrites(source: &Path, entries: &[&str], rewrite: &[String]) -> (Scra
     );
 
     let record = std::fs::read_to_string(directory.join("record.json")).unwrap();
-    assert_record(&record, &["V01", "V05", "V02", "V03"]);
+    assert_record(&record, &["V01", "V05", "V02", "V03", "V04"]);
     assert!(row(&record, "V01").contains("\"path\": \"inputs/evoir.evo\""));
     assert!(row(&record, "V02").contains("\"path\": \"inputs/evoir-rewritten.evo\""));
     // The record names the Rust certificate checker that accepted each step.
@@ -335,11 +371,10 @@ fn accept_rewrites(source: &Path, entries: &[&str], rewrite: &[String]) -> (Scra
         files.push(format!("rewrite-{step:03}.after.evo"));
     }
     files.push("evoir-rewritten.evo".to_owned());
-    let mut pairs = files
+    let pairs = files
         .chunks(2)
         .map(|pair| (pair[0].as_str(), pair[1].as_str()))
         .collect::<Vec<_>>();
-    pairs.push(("post-ssa-evomir.json", "post-ssa-evomir.json"));
     assert_chain(&directory, &record, &pairs);
     for input in std::fs::read_dir(&inputs).unwrap() {
         let digest = digest(&input.unwrap().path());
@@ -403,13 +438,14 @@ fn rewrites_are_checked_between_v01_and_v02() {
     assert!(record.contains("entry=loop_join route=loop"));
 }
 
-/// A test checker. For each binding of the role `EVOCC_TEST_ROLE`, it applies
-/// the sed program `EVOCC_TEST_SED` to the proof input. Then it runs the real
-/// Lean checker.
+/// A test checker. For each binding of a role in the space-separated list
+/// `EVOCC_TEST_ROLE`, it applies the sed program `EVOCC_TEST_SED` to the proof
+/// input. Then it runs the real Lean checker.
 const CHANGING_ROLE_CHECKER: &str = r#"#!/bin/sh
 for binding in "$@"; do
-    case "$binding" in
-        "$EVOCC_TEST_ROLE"=*)
+    role=${binding%%=*}
+    case " $EVOCC_TEST_ROLE " in
+        *" $role "*)
             file=${binding#*=}
             sed -e "$EVOCC_TEST_SED" "$file" > "$file.changed" && mv "$file.changed" "$file"
             ;;
@@ -496,6 +532,118 @@ fn changed_allocation_exports_are_rejected() {
     assert!(std::fs::read_to_string(post_ssa)
         .unwrap()
         .contains(r#"[0,"gpr32"],0,"w"]"#));
+}
+
+#[test]
+fn changed_assembly_inputs_are_rejected() {
+    let read = |directory: &Path, file: &str| {
+        std::fs::read_to_string(directory.join("inputs").join(file)).unwrap()
+    };
+
+    // One changed instruction in the text that the driver would publish.
+    let directory = new_directory();
+    let output = run_changed(
+        &directory,
+        &["--core-entry=abs"],
+        &fixture("musl-abs.c"),
+        "text",
+        "s/cmp w0, #0/cmp w0, #1/",
+    );
+    assert_refused(&output, &directory, REJECTED, "stage V04");
+    assert_refused(
+        &output,
+        &directory,
+        REJECTED,
+        "the printed AST is not the assembly text at line 11",
+    );
+    assert!(read(&directory, "assembly.s").contains("cmp w0, #1"));
+    drop(directory);
+
+    // The prologue of `wide` saves x19 and x20 in exchanged slots, and the
+    // AST and the text agree. The print check passes; checkAsm refuses.
+    // The second change puts x19 at a wrong stack offset.
+    let pressure = ["--core-entry=pressure", "--core-entry=wide"];
+    for (sed, changed) in [
+        (
+            r#"1s/\["str","x",19,"sp",56],\["str","x",20,"sp",64]/["str","x",20,"sp",56],["str","x",19,"sp",64]/;11s/x19/x20/;12s/x20/x19/"#,
+            r#"["str","x",20,"sp",56],["str","x",19,"sp",64]"#,
+        ),
+        (
+            r#"1s/\["str","x",19,"sp",56]/["str","x",19,"sp",48]/;11s/#56/#48/"#,
+            r#"["str","x",19,"sp",48]"#,
+        ),
+    ] {
+        let directory = new_directory();
+        let output = run_changed(
+            &directory,
+            &pressure,
+            &fixture("pressure.c"),
+            "asm text",
+            sed,
+        );
+        assert_refused(&output, &directory, REJECTED, "stage V04");
+        assert_refused(
+            &output,
+            &directory,
+            REJECTED,
+            "frame layout or emission not confirmed",
+        );
+        assert!(read(&directory, "asm-ast.json").contains(changed));
+    }
+}
+
+#[test]
+fn private_frame_objects_are_refused() {
+    // A source that keeps a private frame object is outside core-v1. The
+    // driver refuses it before any stage runs.
+    let source =
+        source_file("unsigned f(unsigned x) { unsigned a = x; unsigned *p = &a; return *p; }");
+    let directory = new_directory();
+    let output = run_proof(
+        &directory,
+        &lean_checker(),
+        &["--core-entry=f"],
+        &source,
+        &[],
+    );
+    assert_refused(&output, &directory, UNSUPPORTED, "outside core-v1");
+    assert!(!directory.exists());
+    std::fs::remove_file(source).unwrap();
+
+    // V04 itself refuses the frozen private frame objects of `machine-private`:
+    // the printed AST is the text, but checkAsm does not accept the frame.
+    let scratch = new_directory();
+    std::fs::create_dir(&*scratch).unwrap();
+    let entry = scratch.join("source.json");
+    let exported = evocc(
+        &[
+            "--emit=core-c-hir",
+            "--core-entry=private_word",
+            "-O0",
+            "-fno-builtin",
+        ],
+        &fixture("machine-private.c"),
+        &[],
+    );
+    assert!(exported.status.success());
+    std::fs::write(&entry, exported.stdout).unwrap();
+    let frozen = fixture("asm");
+    let binding = |role: &str, path: &Path| format!("{role}={}", path.display());
+    let output = Command::new(lean_checker())
+        .args(["--check-stage", "V04"])
+        .arg(binding("source", &entry))
+        .arg(binding(
+            "allocation",
+            &frozen.join("machine-private.alloc.json"),
+        ))
+        .arg(binding("asm", &frozen.join("machine-private.ast.json")))
+        .arg(binding("text", &frozen.join("machine-private.s")))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains(
+        "STAGE_REJECTED stage=V04 entry=private_word frame layout or emission not confirmed"
+    ));
 }
 
 #[test]

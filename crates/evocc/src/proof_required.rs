@@ -19,6 +19,11 @@
 //! reads the same post-SSA file as V02, and the allocated program and the
 //! hints from the export.
 //!
+//! The directory also holds the assembly AST with the frame hints, and the
+//! assembly text that the driver publishes. V04 reads the allocation export
+//! that V03 reads, the AST and this text. The driver publishes `output.s` only
+//! with the bytes that V04 checked.
+//!
 //! The compiled Lean checker is the one result-checking path. This module does
 //! not check a compilation result. It collects the inputs, runs the checker and
 //! records its answers.
@@ -71,6 +76,10 @@ enum Role {
     Certificate,
     /// The allocation export: the allocated program and the hints.
     Allocation,
+    /// The assembly AST and the frame hints.
+    Asm,
+    /// The assembly text that the driver publishes.
+    Text,
 }
 
 impl Role {
@@ -85,6 +94,8 @@ impl Role {
             Self::After => "after",
             Self::Certificate => "certificate",
             Self::Allocation => "allocation",
+            Self::Asm => "asm",
+            Self::Text => "text",
         }
     }
 }
@@ -150,26 +161,32 @@ const STAGES: &[Stage] = &[
     },
     Stage {
         id: "V04",
-        name: "frame layout and final assembly",
+        name: "allocated EvoMIR to final assembly text",
         reaches: "final assembly",
         place: Place::Last,
-        roles: None,
-        theorem: "",
+        roles: Some(&[Role::Source, Role::Allocation, Role::Asm, Role::Text]),
+        theorem: "EvoIR.Asm.Proof.checkAsm_sound; composition EvoIR.Asm.Proof.source_asm_refines",
     },
 ];
 
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 
-const OUTPUT_NOTE: &str = "The ordinary backend makes this assembly from the same EvoIR. \
-    Frame layout and emission are not checked.";
+/// The scope of a result in which every stage is integrated.
+const COMPLETE_SCOPE: &str = "checked from typed Core source to final assembly text";
 
-/// The trusted boundaries of every proof-required result.
-const TRUSTED: [&str; 5] = [
+const OUTPUT_NOTE: &str = "V04 checked these bytes: the printed assembly AST is equal to them.";
+
+/// The trusted boundaries of every proof-required result. Each exported
+/// snapshot is an untrusted input that a stage checks. The chain binds the
+/// stages to each other and the last stage to the published text.
+const TRUSTED: &[&str] = &[
     "preprocessing, parsing, elaboration and typed source export",
-    "the machine and allocation snapshots come from a second run of the deterministic lowering, SSA removal and register allocation of the backend",
-    "file decoding by the Lean readers",
-    "the Lean compiler and runtime and the host toolchain",
-    "the assembler, linker, runtime libraries and processor",
+    "the Lean kernel, which checks the theorems, and the compiled Lean checker with the Lean compiler, its runtime and the host toolchain",
+    "the readers of the input files",
+    "the printer of the assembly AST (EvoIR.Asm.File.print)",
+    "the Lean semantics of typed Core C and of the AArch64 subset",
+    "the ABI entry assumption (EvoIR.Asm.Proof.AbiEntry): the caller obeys the AArch64 procedure call standard and gives sufficient stack",
+    "the assembler, the linker, the runtime libraries and the hardware",
 ];
 
 fn sha256(bytes: impl AsRef<[u8]>) -> String {
@@ -364,7 +381,7 @@ pub(crate) fn run(
         ));
         ExitCode::from(failure as u8)
     };
-    let (artifacts, closures) = match export(options, proof, unit, module, rewrites) {
+    let (mut artifacts, closures) = match export(options, proof, unit, module, rewrites) {
         Ok(exported) => exported,
         Err(refusal) => return refuse(refusal),
     };
@@ -372,6 +389,10 @@ pub(crate) fn run(
         Ok(assembly) => assembly,
         Err(code) => return code,
     };
+    // V04 checks the text that the driver publishes.
+    let path = "inputs/assembly.s".into();
+    let bytes = assembly.clone().into_bytes();
+    artifacts.push(Artifact::new(Role::Text, None, None, path, bytes));
     match check_and_record(
         options, proof, source, &artifacts, closures, rewrites, &assembly,
     ) {
@@ -517,6 +538,12 @@ fn export(
     let path = "inputs/allocation.json".into();
     let bytes = allocation.into_bytes();
     artifacts.push(Artifact::new(Role::Allocation, None, None, path, bytes));
+    // The assembly AST and the frame hints of the same module, from the same
+    // lowering, allocation and frame layout.
+    let (ast, _) = evocc_mir::asm_ast::export_core_asm(module)
+        .map_err(|error| unsupported(format!("assembly AST snapshot refused: {error}")))?;
+    let path = "inputs/asm-ast.json".into();
+    artifacts.push(Artifact::new(Role::Asm, None, None, path, ast.into_bytes()));
     for (entry, path) in &proof.proposals {
         let bytes = fs::read(path).map_err(|error| {
             let path = path.display();
@@ -553,7 +580,16 @@ fn check_and_record(
         .iter()
         .filter(|a| a.role == Role::Certificate)
         .count();
-    let chain = chain(artifacts, steps)?;
+    // The published text. Its digest must be the digest of the text that V04
+    // checks; `chain` compares them.
+    let published = Artifact::new(
+        Role::Text,
+        None,
+        None,
+        "output.s".into(),
+        assembly.as_bytes().to_vec(),
+    );
+    let chain = chain(artifacts, steps, &published)?;
     write_new(&proof.directory, artifacts)?;
     let mut stages = Vec::new();
     for stage in STAGES {
@@ -637,22 +673,12 @@ fn check_and_record(
     let checked = STAGES.iter().take_while(|stage| stage.roles.is_some());
     let reaches = checked.last().map_or("nothing", |stage| stage.reaches);
     let complete = STAGES.iter().all(|stage| stage.roles.is_some());
-    let (result, scope) = if complete {
-        (
-            "VERIFIED_TO_FINAL_ASSEMBLY".to_owned(),
-            "verified to final assembly".to_owned(),
-        )
-    } else if reaches == "final assembly" {
-        (
-            "CHECKED_TO_FINAL_ASSEMBLY".to_owned(),
-            "checked to final assembly; not every stage is checked".to_owned(),
-        )
+    let label = reaches.to_ascii_uppercase().replace(['-', ' '], "_");
+    let result = format!("CHECKED_TO_{label}");
+    let scope = if complete {
+        COMPLETE_SCOPE.to_owned()
     } else {
-        let label = reaches.to_ascii_uppercase().replace(['-', ' '], "_");
-        (
-            format!("CHECKED_TO_{label}"),
-            format!("checked to {reaches}, not to final assembly"),
-        )
+        format!("checked to {reaches}, not to final assembly")
     };
     let compiler = std::env::current_exe().unwrap_or_default();
     let compiler_sha256 = fs::read(&compiler).map_or_else(|_| String::new(), sha256);
@@ -664,7 +690,7 @@ fn check_and_record(
     };
     let output = vec![
         ("path", Json::text("output.s")),
-        ("sha256", Json::text(&sha256(assembly.as_bytes()))),
+        ("sha256", Json::text(&published.sha256)),
         ("checked", Json::Flag(complete)),
         ("note", Json::text(OUTPUT_NOTE)),
     ];
@@ -700,13 +726,16 @@ fn check_and_record(
         ("stages", Json::List(stages)),
         ("chain", chain),
         ("output", Json::Object(output)),
-        ("trusted", Json::List(TRUSTED.map(Json::text).into())),
+        (
+            "trusted",
+            Json::List(TRUSTED.iter().map(|t| Json::text(t)).collect()),
+        ),
     ]);
     let record = Json::Object(record);
     let mut text = String::new();
     record.render(0, &mut text);
     text.push('\n');
-    create_new(&proof.directory.join("output.s"), assembly.as_bytes())?;
+    create_new(&proof.directory.join("output.s"), &published.bytes)?;
     create_new(&proof.directory.join("record.json"), text.as_bytes())?;
     let record = proof.directory.join("record.json");
     Ok(format!("{result}: {scope}; record {}", record.display()))
@@ -715,10 +744,12 @@ fn check_and_record(
 /// The files that adjacent stages read, in stage order. V01 reads the EvoIR
 /// before step 0. Step K of V05 reads the EvoIR before step K and the EvoIR
 /// after step K. V02 reads the EvoIR after the last step and the post-SSA file.
-/// V03 reads the same post-SSA file. Two adjacent stages must read the same
-/// bytes. A different digest is a gap and stops the compilation. The result is
-/// one link for each pair of adjacent stages.
-fn chain(artifacts: &[Artifact], steps: usize) -> Result<Json, Refusal> {
+/// V03 reads the same post-SSA file and the allocation export. V04 reads the
+/// same allocation export and the assembly text. `published` is the text that
+/// the driver publishes as `output.s`; it must be the text that V04 reads. Two
+/// adjacent readers must read the same bytes. A different digest is a gap and
+/// stops the compilation. The result is one link for each pair of readers.
+fn chain(artifacts: &[Artifact], steps: usize, published: &Artifact) -> Result<Json, Refusal> {
     let file = |role: Role, step: Option<usize>, reader: String| match artifacts
         .iter()
         .find(|a| a.role == role && a.step == step)
@@ -749,14 +780,18 @@ fn chain(artifacts: &[Artifact], steps: usize) -> Result<Json, Refusal> {
     }
     let post_ssa = |reader: &str| file(Role::PostSsa, None, reader.into());
     pairs.push((post_ssa("V02")?, post_ssa("V03")?));
+    let allocation = |reader: &str| file(Role::Allocation, None, reader.into());
+    pairs.push((allocation("V03")?, allocation("V04")?));
+    let checked = file(Role::Text, None, "V04".into())?;
+    pairs.push((checked, (published, "publication".into())));
     let mut links = Vec::new();
     for (left, right) in pairs {
         if left.0.sha256 != right.0.sha256 {
             return Err((
                 Failure::Input,
                 format!(
-                    "the stage chain has a gap: stage {} reads `{}` and stage {} reads `{}`, and their digests differ",
-                    left.1, left.0.path, right.1, right.0.path
+                    "the stage chain has a gap: `{}` of {} and `{}` of {} have different digests",
+                    left.0.path, left.1, right.0.path, right.1
                 ),
             ));
         }
