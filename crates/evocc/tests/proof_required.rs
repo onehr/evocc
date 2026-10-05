@@ -142,12 +142,57 @@ fn digest(path: &Path) -> String {
     evocc_proof::sha256_hex(&std::fs::read(path).unwrap())
 }
 
+const SCOPE: &str = "checked to allocated EvoMIR, not to final assembly";
+
+/// The record assertions of every accepted compilation. `checked` lists the
+/// stages with the status CHECKED. The other stages are NOT_CHECKED.
+fn assert_record(record: &str, checked: &[&str]) {
+    assert!(record.contains("\"result\": \"CHECKED_TO_ALLOCATED_EVOMIR\""));
+    assert!(record.contains(&format!("\"scope\": \"{SCOPE}\"")));
+    assert!(record.contains("\"all_stages_checked\": false"));
+    assert!(!record.to_lowercase().contains("verified"), "{record}");
+    let order = ["V01", "V05", "V02", "V03", "V04"]
+        .map(|stage| record.find(&format!("\"id\": \"{stage}\",")).unwrap());
+    assert!(order.is_sorted(), "stage order {order:?}");
+    for stage in ["V01", "V05", "V02", "V03", "V04"] {
+        let status = if checked.contains(&stage) {
+            "CHECKED"
+        } else {
+            "NOT_CHECKED"
+        };
+        let expected = format!("\"status\": \"{status}\"");
+        assert!(row(record, stage).contains(&expected), "{stage}: {status}");
+    }
+    assert!(row(record, "V04").contains("\"reason\": \"not integrated\""));
+    assert!(row(record, "V03").contains("\"path\": \"inputs/post-ssa-evomir.json\""));
+    assert!(row(record, "V03").contains("\"path\": \"inputs/allocation.json\""));
+    assert!(row(record, "V03").contains("scope=post-ssa-mir-to-allocated-mir"));
+}
+
+/// The digest chain of the record: each pair of files names one link, in
+/// stage order. Both files of a pair must have the same digest.
+fn assert_chain(directory: &Path, record: &str, pairs: &[(&str, &str)]) {
+    let inputs = directory.join("inputs");
+    let chain = &record[record.find("\"chain\"").unwrap()..];
+    let mut at = 0;
+    for (left, right) in pairs {
+        let link = digest(&inputs.join(left));
+        assert_eq!(link, digest(&inputs.join(right)), "{left} and {right}");
+        at += chain[at..]
+            .find(&link)
+            .expect("the chain names each link in order")
+            + 1;
+    }
+    assert!(chain[at..].contains("\"stage\": \"V03\""));
+    assert_eq!(chain.matches("\"read_by\"").count(), pairs.len());
+}
+
 fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
     let directory = new_directory();
     let output = run_proof(&directory, &lean_checker(), extra, source, &[]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
-    assert!(stderr.contains("checked to post-SSA EvoMIR, not to final assembly"));
+    assert!(stderr.contains(SCOPE));
 
     // The proof mode changes no byte of the assembly.
     let ordinary = evocc(&["--emit=asm", "-O0", "-fno-builtin"], source, &[]);
@@ -161,20 +206,20 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
     assert!(!ordinary.contains("CHECKED") && !ordinary.to_lowercase().contains("verified"));
 
     let record = std::fs::read_to_string(directory.join("record.json")).unwrap();
-    assert!(record.contains("\"result\": \"CHECKED_TO_POST_SSA_EVOMIR\""));
-    assert!(record.contains("\"scope\": \"checked to post-SSA EvoMIR, not to final assembly\""));
-    assert!(record.contains("\"all_stages_checked\": false"));
-    assert!(!record.to_lowercase().contains("verified"), "{record}");
-    for stage in ["V03", "V04"] {
-        assert!(row(&record, stage).contains("\"reason\": \"not integrated\""));
-    }
-    // Without -Oeq-scalar, the V05 row says that no rewrite ran.
-    assert!(row(&record, "V05").contains("\"status\": \"NOT_CHECKED\""));
+    assert_record(&record, &["V01", "V02", "V03"]);
+    // Without -Oeq-scalar, the V05 row says that no rewrite ran, and V01 and
+    // V02 read the same EvoIR file.
     assert!(row(&record, "V05").contains("no rewrite ran"));
-    assert!(
-        !record.contains("\"chain\"") && !directory.join("inputs/rewrite-000.proof.evp").exists()
+    assert!(!directory.join("inputs/rewrite-000.proof.evp").exists());
+    assert!(!record.contains("rewrite_checker"));
+    assert_chain(
+        &directory,
+        &record,
+        &[
+            ("evoir.evo", "evoir.evo"),
+            ("post-ssa-evomir.json", "post-ssa-evomir.json"),
+        ],
     );
-    assert_eq!(record.matches("\"status\": \"CHECKED\"").count(), 2);
     for digest in [
         evocc_proof::sha256_hex(&ordinary.into_bytes()),
         evocc_proof::sha256_hex(&std::fs::read(lean_checker()).unwrap()),
@@ -193,9 +238,15 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
 }
 
 #[test]
-fn pilot_entries_are_checked_to_post_ssa_evomir() {
-    let (_, record) = accept(&fixture("musl-abs.c"), &["--core-entry=abs"]);
-    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 2);
+fn pilot_entries_are_checked_to_allocated_evomir() {
+    let (directory, record) = accept(&fixture("musl-abs.c"), &["--core-entry=abs"]);
+    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 3);
+    // The allocation export is the frozen V03 fixture of this module.
+    assert_eq!(
+        std::fs::read(directory.join("inputs/allocation.json")).unwrap(),
+        std::fs::read(repository().join("lean/EvoIR/Alloc/Fixtures/musl-abs.json")).unwrap()
+    );
+    drop(directory);
     accept(&fixture("doom-fixedmul.c"), &["--core-entry=FixedMul"]);
     let proposal = format!(
         "--proof-proposal=loop_join={}",
@@ -211,12 +262,14 @@ fn pilot_entries_are_checked_to_post_ssa_evomir() {
     );
     assert!(directory.join("inputs/proposal-loop_join.json").is_file());
     assert!(record.contains("entry=loop_join route=loop"));
-    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 4);
+    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 6);
+    drop(directory);
     let (_, record) = accept(
         &fixture("pressure.c"),
         &["--core-entry=pressure", "--core-entry=wide"],
     );
     assert!(record.contains("entry=pressure route=call"));
+    assert!(record.contains("stage=V03 entry=wide functions=2"));
 }
 
 /// `-Oeq-scalar` with the pinned Rust certificate checker of this build.
@@ -232,7 +285,7 @@ fn rewrite_arguments(policy: Option<&str>) -> Vec<String> {
 }
 
 /// Accept an optimized compilation. Check the stage order, the assembly and
-/// the digest chain from V01 through each V05 step to V02.
+/// the digest chain from V01 through each V05 step to V02 and V03.
 fn accept_rewrites(source: &Path, entries: &[&str], rewrite: &[String]) -> (Scratch, String) {
     let directory = new_directory();
     let mut extra = entries.to_vec();
@@ -240,7 +293,7 @@ fn accept_rewrites(source: &Path, entries: &[&str], rewrite: &[String]) -> (Scra
     let output = run_proof(&directory, &lean_checker(), &extra, source, &[]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
-    assert!(stderr.contains("checked to post-SSA EvoMIR, not to final assembly"));
+    assert!(stderr.contains(SCOPE));
 
     // The assembly is the assembly of the ordinary optimized compilation.
     let mut ordinary = vec!["--emit=asm", "-O0", "-fno-builtin"];
@@ -254,21 +307,16 @@ fn accept_rewrites(source: &Path, entries: &[&str], rewrite: &[String]) -> (Scra
     );
 
     let record = std::fs::read_to_string(directory.join("record.json")).unwrap();
-    assert!(record.contains("\"result\": \"CHECKED_TO_POST_SSA_EVOMIR\""));
-    assert!(record.contains("\"scope\": \"checked to post-SSA EvoMIR, not to final assembly\""));
-    assert!(record.contains("\"all_stages_checked\": false"));
-    assert!(!record.to_lowercase().contains("verified"), "{record}");
-    let order = ["V01", "V05", "V02", "V03", "V04"]
-        .map(|stage| record.find(&format!("\"id\": \"{stage}\",")).unwrap());
-    assert!(order.is_sorted(), "stage order {order:?}");
-    for stage in ["V01", "V05", "V02"] {
-        assert!(row(&record, stage).contains("\"status\": \"CHECKED\""));
-    }
-    for stage in ["V03", "V04"] {
-        assert!(row(&record, stage).contains("\"status\": \"NOT_CHECKED\""));
-    }
+    assert_record(&record, &["V01", "V05", "V02", "V03"]);
     assert!(row(&record, "V01").contains("\"path\": \"inputs/evoir.evo\""));
     assert!(row(&record, "V02").contains("\"path\": \"inputs/evoir-rewritten.evo\""));
+    // The record names the Rust certificate checker that accepted each step.
+    let rust_checker = digest(Path::new(env!("CARGO_BIN_EXE_evocc-checker")));
+    let at = record.find("\"rewrite_checker\"").unwrap();
+    assert!(record[at..].starts_with(&format!(
+        "\"rewrite_checker\": {{\n    \"path\": \"{}\",\n    \"sha256\": \"{rust_checker}\"",
+        env!("CARGO_BIN_EXE_evocc-checker")
+    )));
 
     // Adjacent stages read the same bytes, and the record names each link in
     // stage order.
@@ -287,16 +335,12 @@ fn accept_rewrites(source: &Path, entries: &[&str], rewrite: &[String]) -> (Scra
         files.push(format!("rewrite-{step:03}.after.evo"));
     }
     files.push("evoir-rewritten.evo".to_owned());
-    let chain = &row(&record, "V05")[row(&record, "V05").find("\"chain\"").unwrap()..];
-    let mut at = 0;
-    for pair in files.chunks(2) {
-        let link = digest(&inputs.join(&pair[0]));
-        assert_eq!(link, digest(&inputs.join(&pair[1])), "{pair:?}");
-        at += chain[at..]
-            .find(&link)
-            .expect("the chain names each link in order")
-            + 1;
-    }
+    let mut pairs = files
+        .chunks(2)
+        .map(|pair| (pair[0].as_str(), pair[1].as_str()))
+        .collect::<Vec<_>>();
+    pairs.push(("post-ssa-evomir.json", "post-ssa-evomir.json"));
+    assert_chain(&directory, &record, &pairs);
     for input in std::fs::read_dir(&inputs).unwrap() {
         let digest = digest(&input.unwrap().path());
         assert!(
@@ -359,6 +403,101 @@ fn rewrites_are_checked_between_v01_and_v02() {
     assert!(record.contains("entry=loop_join route=loop"));
 }
 
+/// A test checker. For each binding of the role `EVOCC_TEST_ROLE`, it applies
+/// the sed program `EVOCC_TEST_SED` to the proof input. Then it runs the real
+/// Lean checker.
+const CHANGING_ROLE_CHECKER: &str = r#"#!/bin/sh
+for binding in "$@"; do
+    case "$binding" in
+        "$EVOCC_TEST_ROLE"=*)
+            file=${binding#*=}
+            sed -e "$EVOCC_TEST_SED" "$file" > "$file.changed" && mv "$file.changed" "$file"
+            ;;
+    esac
+done
+exec "$EVOCC_TEST_LEAN_CHECKER" "$@"
+"#;
+
+/// Run proof-required mode with `CHANGING_ROLE_CHECKER`: the proof input of
+/// `role` changes after export and before the Lean checker reads it.
+fn run_changed(directory: &Path, extra: &[&str], source: &Path, role: &str, sed: &str) -> Output {
+    use std::os::unix::fs::PermissionsExt;
+    let tools = new_directory();
+    std::fs::create_dir(&*tools).unwrap();
+    let script = tools.join("changing-role-checker.sh");
+    std::fs::write(&script, CHANGING_ROLE_CHECKER).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    run_proof(
+        directory,
+        &script,
+        extra,
+        source,
+        &[
+            ("EVOCC_TEST_LEAN_CHECKER", &lean_checker()),
+            ("EVOCC_TEST_ROLE", Path::new(role)),
+            ("EVOCC_TEST_SED", Path::new(sed)),
+        ],
+    )
+}
+
+#[test]
+fn changed_allocation_exports_are_rejected() {
+    let read = |directory: &Path| {
+        std::fs::read_to_string(directory.join("inputs/allocation.json")).unwrap()
+    };
+
+    // Two exchanged registers: `subs` computes x - 0 instead of 0 - x.
+    let directory = new_directory();
+    let output = run_changed(
+        &directory,
+        &["--core-entry=abs"],
+        &fixture("musl-abs.c"),
+        "allocation",
+        r#"s/\["gpr",2,"w"],\["gpr",0,"w"],"w"]/["gpr",0,"w"],["gpr",2,"w"],"w"]/"#,
+    );
+    assert_refused(&output, &directory, REJECTED, "stage V03");
+    assert_refused(&output, &directory, REJECTED, "allocation not confirmed");
+    assert!(read(&directory).contains(r#"["flags"],["gpr",0,"w"],["gpr",2,"w"],"w"]"#));
+    drop(directory);
+
+    // A reload from a wrong spill slot before an outgoing stack argument.
+    let directory = new_directory();
+    let output = run_changed(
+        &directory,
+        &["--core-entry=pressure", "--core-entry=wide"],
+        &fixture("pressure.c"),
+        "allocation",
+        r#"s/\["spill_reload",\["gpr",8,"x"],7]/["spill_reload",["gpr",8,"x"],0]/"#,
+    );
+    assert_refused(&output, &directory, REJECTED, "stage V03");
+    assert_refused(
+        &output,
+        &directory,
+        REJECTED,
+        "allocation not confirmed in function pressure",
+    );
+    assert!(!read(&directory).contains(r#"["spill_reload",["gpr",8,"x"],7]"#));
+    drop(directory);
+
+    // The program before allocation in the export is not the post-SSA file
+    // that V02 accepted: the comparison constant changes from 0 to 1.
+    let directory = new_directory();
+    let output = run_changed(
+        &directory,
+        &["--core-entry=abs"],
+        &fixture("musl-abs.c"),
+        "allocation",
+        r#"s/\[0,"gpr32"],0,"w"]/[0,"gpr32"],1,"w"]/"#,
+    );
+    assert_refused(&output, &directory, REJECTED, "stage V03");
+    assert_refused(&output, &directory, REJECTED, "is not the post-SSA input");
+    assert!(read(&directory).contains(r#"[0,"gpr32"],1,"w"]"#));
+    let post_ssa = directory.join("inputs/post-ssa-evomir.json");
+    assert!(std::fs::read_to_string(post_ssa)
+        .unwrap()
+        .contains(r#"[0,"gpr32"],0,"w"]"#));
+}
+
 #[test]
 fn rejected_rewrites_give_no_output() {
     // The Lean checker does not support the p0 alias form. There is no
@@ -385,26 +524,16 @@ fn rejected_rewrites_give_no_output() {
 
     // A certificate that changes after export: the premise says that the
     // guard is false.
-    let tools = new_directory();
-    std::fs::create_dir(&*tools).unwrap();
-    let script = tools.join("changing-certificate.sh");
-    std::fs::write(
-        &script,
-        "#!/bin/sh\nfor binding in \"$@\"; do\n  case \"$binding\" in\n    certificate=*)\n      file=${binding#certificate=}\n      sed 's/premises c6:1:1/premises c6:1:0/' \"$file\" > \"$file.changed\" && mv \"$file.changed\" \"$file\" ;;\n  esac\ndone\nexec \"$EVOCC_TEST_LEAN_CHECKER\" \"$@\"\n",
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
     let directory = new_directory();
     let mut extra = vec!["--core-entry=FixedMul"];
     let g0 = rewrite_arguments(Some("guard-known-true"));
     extra.extend(g0.iter().map(String::as_str));
-    let output = run_proof(
+    let output = run_changed(
         &directory,
-        &script,
         &extra,
         &fixture("doom-fixedmul.c"),
-        &[("EVOCC_TEST_LEAN_CHECKER", &lean_checker())],
+        "certificate",
+        "s/premises c6:1:1/premises c6:1:0/",
     );
     assert_refused(&output, &directory, REJECTED, "stage V05");
     assert_refused(&output, &directory, REJECTED, "for entry `FixedMul` step 0");

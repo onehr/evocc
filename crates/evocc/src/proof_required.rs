@@ -15,6 +15,10 @@
 //! the same bytes. A rejected step gives a failure and no output. There is no
 //! fallback to the program without the rewrite.
 //!
+//! The directory also holds the allocation export of the post-SSA EvoMIR. V03
+//! reads the same post-SSA file as V02, and the allocated program and the
+//! hints from the export.
+//!
 //! The compiled Lean checker is the one result-checking path. This module does
 //! not check a compilation result. It collects the inputs, runs the checker and
 //! records its answers.
@@ -65,6 +69,8 @@ enum Role {
     After,
     /// The `evp2` certificate of one rewrite step.
     Certificate,
+    /// The allocation export: the allocated program and the hints.
+    Allocation,
 }
 
 impl Role {
@@ -78,6 +84,7 @@ impl Role {
             Self::Before => "before",
             Self::After => "after",
             Self::Certificate => "certificate",
+            Self::Allocation => "allocation",
         }
     }
 }
@@ -135,11 +142,11 @@ const STAGES: &[Stage] = &[
     },
     Stage {
         id: "V03",
-        name: "register allocation",
+        name: "post-SSA EvoMIR to allocated EvoMIR",
         reaches: "allocated EvoMIR",
         place: Place::Last,
-        roles: None,
-        theorem: "",
+        roles: Some(&[Role::Source, Role::PostSsa, Role::Allocation]),
+        theorem: "EvoIR.Alloc.checkAllocation_sound; composition EvoIR.Alloc.source_allocated_refines",
     },
     Stage {
         id: "V04",
@@ -154,12 +161,12 @@ const STAGES: &[Stage] = &[
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 
 const OUTPUT_NOTE: &str = "The ordinary backend makes this assembly from the same EvoIR. \
-    Register allocation, frame layout and emission are not checked.";
+    Frame layout and emission are not checked.";
 
 /// The trusted boundaries of every proof-required result.
 const TRUSTED: [&str; 5] = [
     "preprocessing, parsing, elaboration and typed source export",
-    "the machine snapshots come from a second run of the deterministic lowering and SSA removal of the backend",
+    "the machine and allocation snapshots come from a second run of the deterministic lowering, SSA removal and register allocation of the backend",
     "file decoding by the Lean readers",
     "the Lean compiler and runtime and the host toolchain",
     "the assembler, linker, runtime libraries and processor",
@@ -325,10 +332,22 @@ impl Artifact {
     }
 }
 
+/// The rewrite chain of one `-Oeq-scalar` compilation.
+pub(crate) struct Rewrites {
+    /// The module before the first rewrite step.
+    pub initial: Module,
+    /// The proof bundle of each transaction, in chain order. `--eq-proof-dir`
+    /// writes the same data.
+    pub steps: Vec<ProofBundle>,
+    /// The Rust certificate checker that accepted each step.
+    pub checker: PathBuf,
+    /// The SHA-256 digest of that checker.
+    pub checker_sha256: String,
+}
+
 /// Compile in proof-required mode. `module` is the module that the backend
-/// compiles. `rewrites` is `None` without `-Oeq-scalar`. Otherwise it is the
-/// module before the first rewrite step and the steps of the chain. On success,
-/// the assembly goes to standard output after the record exists. On failure,
+/// compiles. `rewrites` is `None` without `-Oeq-scalar`. On success, the
+/// assembly goes to standard output after the record exists. On failure,
 /// nothing goes to standard output.
 pub(crate) fn run(
     options: &DriverOptions,
@@ -336,7 +355,7 @@ pub(crate) fn run(
     source: &[u8],
     unit: &CHirUnit<'_>,
     module: &Module,
-    rewrites: Option<(&Module, &[ProofBundle])>,
+    rewrites: Option<&Rewrites>,
     resolved: &CHirUnit<'_>,
 ) -> ExitCode {
     let refuse = |(failure, message): Refusal| {
@@ -353,7 +372,9 @@ pub(crate) fn run(
         Ok(assembly) => assembly,
         Err(code) => return code,
     };
-    match check_and_record(options, proof, source, &artifacts, closures, &assembly) {
+    match check_and_record(
+        options, proof, source, &artifacts, closures, rewrites, &assembly,
+    ) {
         Ok(record) => {
             if options.error_format == crate::diagnostics::Format::Text {
                 eprintln!("evocc: proof-required result: {record}");
@@ -375,7 +396,7 @@ fn export(
     proof: &ProofOptions,
     unit: &CHirUnit<'_>,
     module: &Module,
-    rewrites: Option<(&Module, &[ProofBundle])>,
+    rewrites: Option<&Rewrites>,
 ) -> Result<(Vec<Artifact>, Vec<Json>), Refusal> {
     let unsupported = |message: String| (Failure::Unsupported, message);
     let target = options.target_layout();
@@ -431,7 +452,7 @@ fn export(
     // V01 reads the EvoIR before the first rewrite step. Each step is the
     // triple that `--eq-proof-dir` also writes. V02 reads the EvoIR of the
     // module that the backend compiles.
-    let (initial, steps) = rewrites.unwrap_or((module, &[]));
+    let (initial, steps) = rewrites.map_or((module, &[][..]), |r| (&r.initial, &r.steps));
     if rewrites.is_some() && steps.is_empty() {
         return Err((Failure::Input, "-Oeq-scalar gave no rewrite step".into()));
     }
@@ -489,6 +510,13 @@ fn export(
             .map_err(|error| unsupported(format!("machine snapshot refused: {error}")))?;
         artifacts.push(Artifact::new(role, None, None, path.into(), text.into()));
     }
+    // The same register allocator as the ordinary backend, with the default
+    // options that `admit` requires, on the same post-SSA module.
+    let allocation = evocc_mir::verify_alloc::export_core_allocation(&post)
+        .map_err(|error| unsupported(format!("allocation snapshot refused: {error}")))?;
+    let path = "inputs/allocation.json".into();
+    let bytes = allocation.into_bytes();
+    artifacts.push(Artifact::new(Role::Allocation, None, None, path, bytes));
     for (entry, path) in &proof.proposals {
         let bytes = fs::read(path).map_err(|error| {
             let path = path.display();
@@ -517,6 +545,7 @@ fn check_and_record(
     source: &[u8],
     artifacts: &[Artifact],
     closures: Vec<Json>,
+    rewrites: Option<&Rewrites>,
     assembly: &str,
 ) -> Result<String, Refusal> {
     let (checker, checker_sha256) = locate_checker(proof)?;
@@ -524,7 +553,7 @@ fn check_and_record(
         .iter()
         .filter(|a| a.role == Role::Certificate)
         .count();
-    let mut chain = Some(chain(artifacts, steps)?);
+    let chain = chain(artifacts, steps)?;
     write_new(&proof.directory, artifacts)?;
     let mut stages = Vec::new();
     for stage in STAGES {
@@ -584,17 +613,13 @@ fn check_and_record(
                 results.push(Json::Object(result));
             }
         }
-        let mut row = vec![
+        stages.push(Json::Object(vec![
             ("id", Json::text(stage.id)),
             ("name", Json::text(stage.name)),
             ("status", Json::text("CHECKED")),
             ("theorem", Json::text(stage.theorem)),
             ("results", Json::List(results)),
-        ];
-        if let Some(chain) = chain.take_if(|_| each) {
-            row.push(("chain", chain));
-        }
-        stages.push(Json::Object(row));
+        ]));
     }
 
     // The checker must not change an input that the record names.
@@ -643,7 +668,7 @@ fn check_and_record(
         ("checked", Json::Flag(complete)),
         ("note", Json::text(OUTPUT_NOTE)),
     ];
-    let record = Json::Object(vec![
+    let mut record = vec![
         ("schema", Json::text("evocc-proof-required-record-v1")),
         ("result", Json::text(&result)),
         ("scope", Json::text(&scope)),
@@ -664,11 +689,20 @@ fn check_and_record(
             Json::Flag(proof.checker_sha256.is_some()),
         ),
         ("checker_timeout_ms", Json::Number(proof.timeout_ms)),
+    ];
+    // The Rust certificate checker that accepted each rewrite step.
+    if let Some(rewrites) = rewrites {
+        let path = rewrites.checker.display().to_string();
+        record.push(("rewrite_checker", file(&path, &rewrites.checker_sha256)));
+    }
+    record.extend([
         ("entries", Json::List(closures)),
         ("stages", Json::List(stages)),
+        ("chain", chain),
         ("output", Json::Object(output)),
         ("trusted", Json::List(TRUSTED.map(Json::text).into())),
     ]);
+    let record = Json::Object(record);
     let mut text = String::new();
     record.render(0, &mut text);
     text.push('\n');
@@ -678,15 +712,16 @@ fn check_and_record(
     Ok(format!("{result}: {scope}; record {}", record.display()))
 }
 
-/// The EvoIR files of the rewrite chain, in stage order. V01 reads the file
-/// before step 0. Step K of V05 reads the file before step K and the file after
-/// step K. V02 reads the file after the last step. Two adjacent stages must read
-/// the same bytes. A different digest is a gap and stops the compilation. The
-/// result is one link for each pair of adjacent stages.
+/// The files that adjacent stages read, in stage order. V01 reads the EvoIR
+/// before step 0. Step K of V05 reads the EvoIR before step K and the EvoIR
+/// after step K. V02 reads the EvoIR after the last step and the post-SSA file.
+/// V03 reads the same post-SSA file. Two adjacent stages must read the same
+/// bytes. A different digest is a gap and stops the compilation. The result is
+/// one link for each pair of adjacent stages.
 fn chain(artifacts: &[Artifact], steps: usize) -> Result<Json, Refusal> {
-    let file = |role: Role, step: usize, reader: String| match artifacts
+    let file = |role: Role, step: Option<usize>, reader: String| match artifacts
         .iter()
-        .find(|a| a.role == role && a.step == Some(step))
+        .find(|a| a.role == role && a.step == step)
     {
         Some(artifact) => Ok((artifact, reader)),
         None => {
@@ -697,23 +732,30 @@ fn chain(artifacts: &[Artifact], steps: usize) -> Result<Json, Refusal> {
             ))
         }
     };
-    let mut links = Vec::new();
+    let mut pairs = Vec::new();
     for step in 0..=steps {
         let left = if step == 0 {
-            file(Role::Ir, 0, "V01".into())?
+            file(Role::Ir, Some(0), "V01".into())?
         } else {
-            file(Role::After, step - 1, format!("V05 step {}", step - 1))?
+            let reader = format!("V05 step {}", step - 1);
+            file(Role::After, Some(step - 1), reader)?
         };
         let right = if step == steps {
-            file(Role::Ir, steps, "V02".into())?
+            file(Role::Ir, Some(steps), "V02".into())?
         } else {
-            file(Role::Before, step, format!("V05 step {step}"))?
+            file(Role::Before, Some(step), format!("V05 step {step}"))?
         };
+        pairs.push((left, right));
+    }
+    let post_ssa = |reader: &str| file(Role::PostSsa, None, reader.into());
+    pairs.push((post_ssa("V02")?, post_ssa("V03")?));
+    let mut links = Vec::new();
+    for (left, right) in pairs {
         if left.0.sha256 != right.0.sha256 {
             return Err((
                 Failure::Input,
                 format!(
-                    "the EvoIR chain has a gap: stage {} reads `{}` and stage {} reads `{}`, and their digests differ",
+                    "the stage chain has a gap: stage {} reads `{}` and stage {} reads `{}`, and their digests differ",
                     left.1, left.0.path, right.1, right.0.path
                 ),
             ));

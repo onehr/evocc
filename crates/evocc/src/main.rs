@@ -1459,13 +1459,9 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                             return ExitCode::from(1);
                         }
                     };
-                    // Proof-required mode keeps the module before the first
-                    // rewrite step for stage V01.
-                    let initial = (options.proof.is_some() && options.optimize_scalar_evoir)
-                        .then(|| module.clone());
-                    let (module, steps) = if options.optimize_scalar_evoir {
+                    let (module, rewrites) = if options.optimize_scalar_evoir {
                         match optimize_scalar_evoir(module, options) {
-                            Ok(optimized) => optimized,
+                            Ok((module, rewrites)) => (module, Some(rewrites)),
                             Err(detail) => {
                                 options
                                     .error_format
@@ -1482,17 +1478,20 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                                 return ExitCode::from(1);
                             }
                         }
-                        (module, Vec::new())
+                        (module, None)
                     };
                     match action {
                         ParsedAction::EmitEvoIr => emit_evoir(&module),
                         ParsedAction::EmitAsm => match &options.proof {
-                            Some(proof) => {
-                                let rewrites = initial.as_ref().map(|i| (i, steps.as_slice()));
-                                proof_required::run(
-                                    options, proof, &src, &unit, &module, rewrites, resolved,
-                                )
-                            }
+                            Some(proof) => proof_required::run(
+                                options,
+                                proof,
+                                &src,
+                                &unit,
+                                &module,
+                                rewrites.as_ref(),
+                                resolved,
+                            ),
                             None => emit_asm(options, &module, resolved),
                         },
                         ParsedAction::InterpretEvoIr => interpret_evoir(options, &module),
@@ -1550,12 +1549,11 @@ fn apply_development_passes(module: Module, options: &DriverOptions) -> Result<M
     Ok(output.module)
 }
 
-/// The result is the optimized module and the proof bundle of each
-/// transaction, in chain order.
+/// The result is the optimized module and the rewrite chain that gives it.
 fn optimize_scalar_evoir(
     module: evocc_evoir::Module,
     options: &DriverOptions,
-) -> Result<(evocc_evoir::Module, Vec<evocc_eqopt::ProofBundle>), String> {
+) -> Result<(evocc_evoir::Module, proof_required::Rewrites), String> {
     let checker = match &options.eq_checker {
         Some(binary) => {
             evocc_proof::StandaloneProofChecker::new(binary.clone(), std::env::temp_dir())
@@ -1572,8 +1570,13 @@ fn optimize_scalar_evoir(
             if let Some(path) = &options.eq_proof_dir {
                 run.write_bundle(path)?;
             }
-            let steps = run.transactions.into_iter().map(|t| t.bundle).collect();
-            Ok((run.module, steps))
+            let rewrites = proof_required::Rewrites {
+                initial: module,
+                steps: run.transactions.into_iter().map(|t| t.bundle).collect(),
+                checker: checker.binary().clone(),
+                checker_sha256: run.checker_digest.unwrap_or_default(),
+            };
+            Ok((run.module, rewrites))
         }
         Err(failure) => {
             if let Some(path) = &options.eq_proof_dir {
