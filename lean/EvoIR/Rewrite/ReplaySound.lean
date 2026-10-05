@@ -34,8 +34,6 @@ theorem holds_default (v : Value) : Holds default v := by
   | bits n x => intro _; exact gamma_mask_zero _ x
   | _ => trivial
 
-theorem holds_poison (a : RFact) (t : Ty) : Holds a (.poison t) := trivial
-
 /-! ## Partition -/
 
 theorem findF_sound {I : Nat → Value} {parent : List Nat}
@@ -71,9 +69,6 @@ theorem cons_union {I : Nat → Value} {st : St} {l r : Nat} (h : Cons I st) (e 
       · simp [Nat.max_def, Nat.min_def, hlr, e]
     · cases hp
   · exact h c p hp
-
-theorem union_nodes (st : St) (l r : Nat) : (st.union l r).nodes = st.nodes := rfl
-theorem union_sorts (st : St) (l r : Nat) : (st.union l r).sorts = st.sorts := rfl
 
 /-! ## Class facts -/
 
@@ -214,13 +209,6 @@ theorem classFacts_sound {I : Nat → Value} {ctx : Ctx} {st : St} {fs : List RF
 
 theorem bind_some {α β : Type} {o : Option α} {f : α → Option β} {b : β} :
     (o >>= f) = some b ↔ ∃ a, o = some a ∧ f a = some b := Option.bind_eq_some_iff
-
-theorem guard_some {p : Prop} [Decidable p] {β : Type} {f : Unit → Option β} {b : β} :
-    (guard p >>= f) = some b ↔ p ∧ f () = some b := by
-  by_cases hp : p
-  · simp [guard, hp]
-  · simp only [guard, hp, if_false, false_and, iff_false]
-    exact fun h => by cases h
 
 theorem guard_unit {p : Prop} [Decidable p] {u : Unit} : (guard p : Option Unit) = some u ↔ p := by
   by_cases hp : p <;> simp [guard, hp]

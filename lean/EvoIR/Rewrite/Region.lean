@@ -36,14 +36,6 @@ theorem pairs_get {α β : Type} {P : α → β → Prop} :
   | _, _, .cons hp t, 0, _, h => by cases h; exact ⟨_, rfl, hp⟩
   | _, _, .cons _ t, i+1, x, h => pairs_get t i x h
 
-theorem pairs_map {α β : Type} {xs : List α} {ys : List β} (g : α → β) (P : α → β → Prop)
-    (hp : Pairs P xs ys) (h : ∀ (i : Nat) x y, xs[i]? = some x → ys[i]? = some y → P x y → y = g x) :
-    ys = xs.map g := by
-  induction hp with
-  | nil => rfl
-  | cons hxy _ ih =>
-    rw [List.map_cons, h 0 _ _ rfl rfl hxy, ih fun i x y hx hy hp => h (i+1) x y hx hy hp]
-
 theorem typed_args (o : Op) {args : List Value}
     (h : Pairs (fun v w => ∃ x, v = .bits w x) args (opInputs o)) : ∃ d, args = opValues o d := by
   cases o <;> simp only [opInputs] at h

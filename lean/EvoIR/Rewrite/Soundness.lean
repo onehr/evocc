@@ -80,33 +80,6 @@ theorem evalOperation_silent {o : Nat} {op : Operation} {args : List Value} {e :
     · exact evalScalar_silent h
     · cases h
 
-theorem appendResults_silent {vals : Bindings} {rs : List Binding} {args : List Value}
-    {e : Source.Fault} (h : appendResults vals rs args = .error e) : Silent e := by
-  intro c hc
-  subst hc
-  unfold appendResults at h
-  rcases except_bind_error h with h | ⟨_, -, h⟩
-  · simp only [EvoIR.Core.IR.bind] at h
-    split at h
-    · revert h; simp [throw, throwThe, MonadExceptOf.throw, Bind.bind, Except.bind, Pure.pure, Except.pure]
-    · rcases except_bind_error h with h | ⟨_, -, h⟩
-      · revert h
-        generalize ([] : Bindings) = acc
-        induction rs.zip args generalizing acc with
-        | nil => intro h; cases h
-        | cons x l ih =>
-          intro h
-          simp only [List.forIn_cons] at h
-          rcases except_bind_error h with h | ⟨r, -, h⟩
-          · revert h; split <;> (try split) <;> simp [throw, throwThe, MonadExceptOf.throw, Bind.bind, Except.bind, Pure.pure, Except.pure]
-          · cases r with
-            | done _ => cases h
-            | yield acc' => exact ih acc' h
-      · cases h
-  · split at h
-    · revert h; simp [throw, throwThe, MonadExceptOf.throw, Bind.bind, Except.bind, Pure.pure, Except.pure]
-    · cases h
-
 theorem silent_unobserved {e : Source.Fault} (h : Silent e) (rt : Source.IntType) (s : State) :
     observeTarget rt {s with control := .halted (.error e)} = none := by
   cases e with
