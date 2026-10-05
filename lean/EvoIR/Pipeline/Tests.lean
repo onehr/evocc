@@ -110,8 +110,68 @@ def run : IO Unit := do
   source refuses this EvoIR at V01. -/
   let ir ← edit "ir" fixedMulG0.ir "%v6 = const.bits<32> 16" "%v6 = const.bits<32> 17"
   expectRejected "FixedMul, changed EvoIR" "V01" {fixedMulG0 with ir, rewrites := []}
+  /- The entry view check accepts each pilot entry. It refuses a copy of the
+  post-SSA program in which each block argument has a 64-bit register. -/
+  for (label, texts) in [("abs", abs), ("FixedMul", fixedMul)] do
+    let .ok input := readInput texts | throw (IO.userError s!"FAIL {label}: input not read")
+    let some f := selectEntry input.source | throw (IO.userError s!"FAIL {label}: no entry")
+    if !entryViewsOk input.postSSA f then
+      throw (IO.userError s!"FAIL {label}: entry views refused")
+    let wide : Machine.Program := ⟨input.postSSA.functions.map fun g =>
+      {g with blocks := g.blocks.map fun b =>
+        {b with args := b.args.map fun r => {r with «class» := .gpr64}}}⟩
+    if entryViewsOk wide f then
+      throw (IO.userError s!"FAIL {label}: 64-bit entry registers accepted")
+    IO.println s!"PASS {label}: entry views accepted, 64-bit entry registers refused"
 
 #eval run
+
+/-! The entry assumption with arbitrary upper bits. The kernel checks these
+examples. The function `f` has one 32-bit parameter and returns `w0`. In the
+entry state, `x0` holds the argument 5 in its low 32 bits and the value
+`0xFFFFFFFF` in its upper 32 bits. -/
+
+/-- The allocated program, the assembly file and the frame hints of `f`. -/
+def entryCtx : Asm.Proof.Ctx :=
+  ⟨⟨[⟨"f", [⟨0, [], .ret [.gpr 0 .w]⟩]⟩]⟩, ⟨[], "f"⟩, [⟨0, [], [], [], 0⟩]⟩
+
+/-- The entry state: `x0` is `0xFFFFFFFF00000005`, the stack pointer is
+4096, and the stack region is the bytes 0 to 8192. -/
+def entryState : Asm.State where
+  control := .running 0 0
+  regs := fun n => if n = 0 then 0xFFFFFFFF00000005#64 else 0#64
+  sp := 4096#64
+  flags := ⟨false, false, false, false⟩
+  memory := fun _ => 0#8
+  low := 0
+  high := 8192
+
+/-- The source argument: the `int` value 5. -/
+def entryArgs : List Core.Source.Value := [⟨.int, 5#32⟩]
+
+/-- The upper 32 bits of the argument register are not zero. -/
+example : entryState.regs 0 >>> 32 ≠ 0#64 := by decide
+
+/-- The new entry assumption holds. -/
+example : Asm.Proof.AbiSourceEntry entryCtx "f" entryArgs entryState 4096 where
+  function := ⟨0, _, rfl, rfl, rfl⟩
+  sp := rfl
+  aligned := by decide
+  registers n v small found := by
+    match n, found with
+    | 0, found => cases found; decide
+  stackArgs k v found := by simp [entryArgs] at found
+  returnAddress := by decide
+  stackLow := by decide
+  stackHigh := by decide
+  addressSpace := by decide
+
+/-- The old assumption with zero-extended arguments does not hold for this
+state. -/
+example : ¬ Asm.Proof.AbiEntry entryCtx "f" (entryArgs.map Machine.sourceArgument) entryState 4096 :=
+  fun abi => by
+    have := abi.registers 0 _ (by decide) rfl
+    simp [entryState, Machine.sourceArgument] at this
 
 /-! Axiom audit. A native or unproved axiom changes the message and fails the file. -/
 

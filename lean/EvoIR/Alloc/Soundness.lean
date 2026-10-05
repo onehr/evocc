@@ -53,11 +53,34 @@ theorem simulation (checked : checkAllocation pre post hints = true)
       · simp [Machine.step, haltA] at h
       · exact .inr ⟨o, by rw [observe_same haltA haltB, h]⟩
 
-theorem initial_related (checked : checkAllocation pre post hints = true) {name : String}
-    {args : List Machine.Value} {memory : Machine.Memory} {preEntry : Machine.State}
-    (started : Machine.initial pre name args memory = .ok preEntry) :
+/-- The argument lists `preArgs` and `args` give the same entry registers to
+the entry function `name` of `pre`. The two lists have the same length. For
+each parameter of the entry block, the two arguments are equal after the
+normalization to the class of the parameter. Thus a parameter with a 32-bit
+register uses only the low 32 bits of its argument. -/
+def EntryAgrees (pre : Machine.Program) (name : String) (preArgs args : List Machine.Value) :
+    Prop :=
+  args.length = preArgs.length ∧
+  ∀ f block, pre.functions.find? (·.name == name) = some f →
+    f.blocks.find? (·.id == 0) = some block →
+    ∀ i (h : i < block.args.length) (h' : i < preArgs.length) (h'' : i < args.length),
+      Machine.normalize block.args[i].class args[i] =
+        Machine.normalize block.args[i].class preArgs[i]
+
+theorem EntryAgrees.refl (pre : Machine.Program) (name : String) (args : List Machine.Value) :
+    EntryAgrees pre name args args :=
+  ⟨rfl, fun _ _ _ _ _ _ _ _ => rfl⟩
+
+/-- The initial state before allocation with the arguments `preArgs` and the
+initial allocated state with the arguments `args` are related when the two
+lists agree at the entry. -/
+theorem initial_related_args (checked : checkAllocation pre post hints = true) {name : String}
+    {preArgs args : List Machine.Value} {memory : Machine.Memory} {preEntry : Machine.State}
+    (started : Machine.initial pre name preArgs memory = .ok preEntry)
+    (agrees : EntryAgrees pre name preArgs args) :
     ∃ postEntry, initial post name args memory = .ok postEntry ∧
       Related pre post hints preEntry preEntry postEntry := by
+  obtain ⟨length, same⟩ := agrees
   unfold Machine.initial at started
   cases foundF : pre.functions.find? (·.name == name) with
   | none => simp [foundF, MonadExcept.throw, throwThe, MonadExceptOf.throw] at started
@@ -66,7 +89,7 @@ theorem initial_related (checked : checkAllocation pre post hints = true) {name 
     | none => simp [foundF, Machine.enter, foundE, MonadExcept.throw, throwThe,
         MonadExceptOf.throw, bind, Except.bind] at started
     | some entryBlock =>
-      cases bound : Machine.bind [] entryBlock.args args with
+      cases bound : Machine.bind [] entryBlock.args preArgs with
       | error e => simp [foundF, Machine.enter, foundE, bound, bind, Except.bind] at started
       | ok regs =>
         obtain ⟨arity, unique, _⟩ := Machine.Transport.bind_success_shape [] _ _ regs bound
@@ -86,13 +109,15 @@ theorem initial_related (checked : checkAllocation pre post hints = true) {name 
           .refl _, rfl, rfl, .inl ⟨_, _, rfl,
           rfl, ⟨hintOf hints name 0, ?_, ?_⟩, ?_⟩⟩
         · simpa [name_f, id0] using cursor_entry checked (a := ⟨f.name, entryBlock.id, 0,
-            Machine.bindValues [] (entryBlock.args.zip args), 1, args⟩)
+            Machine.bindValues [] (entryBlock.args.zip preArgs), 1, preArgs⟩)
             (b := ⟨g.name, entry'.id, 0, entryStorage args, 1⟩) (by simpa [name_f] using foundF)
             (by simpa [id0] using foundE) (by simp [name_f, name_g]) (by simp [id0, id0']) rfl rfl rfl
         · apply Holds.mono (fun e member => by
             simpa [name_f] using List.all_eq_true.mp hintSub e member)
           apply entry_holds arity distinct (by simpa using general)
           intro i h h' loc fits
+          have h'' : i < args.length := by omega
+          rw [← same f entryBlock foundF foundE i h h' h'']
           have gen : entryBlock.args[i].class ≠ .flags := by
             have := List.all_eq_true.mp general _ (List.getElem_mem h); simpa using this
           have notFlags : loc ≠ .flags := fun e => gen ((Place.at_flags fits).mp e)
@@ -100,13 +125,21 @@ theorem initial_related (checked : checkAllocation pre post hints = true) {name 
             rw [Place.at_place fits]
             unfold argPlace entryStorage
             by_cases small : i < abiRegisterCount
-            · simp [small, List.getElem?_eq_getElem h']
+            · simp [small, List.getElem?_eq_getElem h'']
             · have e : abiRegisterCount + (i - abiRegisterCount) = i := by omega
-              simp [small, e, List.getElem?_eq_getElem h']
+              simp [small, e, List.getElem?_eq_getElem h'']
           have cls := Place.at_class fits
           rw [Loc.class_of_general notFlags] at cls
+          clear same
           cases loc <;> simp_all [readLoc, Loc.width]
         · exact .nil _
+
+theorem initial_related (checked : checkAllocation pre post hints = true) {name : String}
+    {args : List Machine.Value} {memory : Machine.Memory} {preEntry : Machine.State}
+    (started : Machine.initial pre name args memory = .ok preEntry) :
+    ∃ postEntry, initial post name args memory = .ok postEntry ∧
+      Related pre post hints preEntry preEntry postEntry :=
+  initial_related_args checked started (.refl pre name args)
 
 end
 
@@ -127,6 +160,21 @@ theorem checkAllocation_sound (pre : Machine.Program) (post : Program) (hints : 
     ∃ postEntry, initial post name args memory = .ok postEntry ∧
       AllocationRefines pre post type preEntry postEntry := by
   obtain ⟨postEntry, init, related⟩ := initial_related accepted started
+  exact ⟨postEntry, init, (simulation accepted progress).sound related⟩
+
+/-- `checkAllocation_sound` with two argument lists. The allocated program
+starts with `args`. The program before allocation starts with `preArgs`. The
+two lists must agree at the entry (`EntryAgrees`). The other bits of `args`
+are arbitrary. -/
+theorem checkAllocation_sound_args (pre : Machine.Program) (post : Program) (hints : Hints)
+    (accepted : checkAllocation pre post hints = true) (type : Core.Source.IntType)
+    (name : String) (preArgs args : List Machine.Value) (memory : Machine.Memory)
+    (preEntry : Machine.State) (started : Machine.initial pre name preArgs memory = .ok preEntry)
+    (agrees : EntryAgrees pre name preArgs args)
+    (progress : Machine.ObservedProgress .postSSA pre type preEntry) :
+    ∃ postEntry, initial post name args memory = .ok postEntry ∧
+      AllocationRefines pre post type preEntry postEntry := by
+  obtain ⟨postEntry, init, related⟩ := initial_related_args accepted started agrees
   exact ⟨postEntry, init, (simulation accepted progress).sound related⟩
 
 /-- Composition with `Machine.source_machine_refines`: typed Core source to

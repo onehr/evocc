@@ -20,6 +20,11 @@ The explicit hypotheses are:
   return address in `x30` is outside the program, and the stack region has
   enough bytes below the stack pointer for the deepest call chain of the
   entry function (`needOf`). The stack region ends below `2^64`.
+  `AbiEntry` takes the machine arguments with all 64 bits. The pipeline
+  theorem uses `AbiSourceEntry`, which fixes only the low `w` bits of the
+  register or stack slot of a source argument of width `w`.
+  `AbiSourceEntry.abiEntry` gives `AbiEntry` for the machine arguments of the
+  entry state (`abiArguments`).
 * `ResultView`: the result type is not wider than the view of the returned
   register of the entry function.
 * `Safe`: each reachable allocated state steps or has an observation. The
@@ -119,6 +124,78 @@ structure AbiEntry (ctx : Ctx) (entry : String) (args : List Machine.Value) (t0 
   stackLow : t0.low + needOf ctx.p ctx.hints entry ≤ E
   stackHigh : E ≤ t0.high
   addressSpace : t0.high < 2^64
+
+/-- The machine argument `n` of the entry state `t0` with the entry stack
+pointer `E`: register `n` for `n < 8`, else the 8-byte stack slot at
+`E + 8 * (n - 8)`. The value keeps all 64 bits. -/
+def abiArgument (t0 : Asm.State) (E n : Nat) : Machine.Value :=
+  if n < 8 then .int (t0.regs n) else .int (load64 t0.memory (E + 8 * (n - 8)))
+
+/-- The first `count` machine arguments of the entry state `t0`. -/
+def abiArguments (t0 : Asm.State) (E count : Nat) : List Machine.Value :=
+  (List.range count).map (abiArgument t0 E)
+
+theorem abiArguments_getElem? (t0 : Asm.State) (E count n : Nat) :
+    (abiArguments t0 E count)[n]? = if n < count then some (abiArgument t0 E n) else none := by
+  rw [abiArguments, List.getElem?_map]
+  by_cases h : n < count <;> simp [h]
+
+/-- A valid ABI entry state of the assembly program for `entry` with the
+source arguments `args`. `E` is the entry stack pointer. The fields other than
+`registers` and `stackArgs` are those of `AbiEntry`. Argument `n` is in
+register `n` for `n < 8`, else in the 8-byte stack slot at `E + 8 * (n - 8)`.
+For an argument of width `w`, only the low `w` bits of this register or slot
+are equal to the argument. The other bits are arbitrary, as in AAPCS64. -/
+structure AbiSourceEntry (ctx : Ctx) (entry : String) (args : List Core.Source.Value)
+    (t0 : Asm.State) (E : Nat) : Prop where
+  function : ∃ i f, ctx.p.functions[i]? = some f ∧ f.name = entry ∧ t0.control = .running i 0
+  sp : t0.sp = BitVec.ofNat 64 E
+  aligned : E % 16 = 0
+  registers : ∀ n v, n < 8 → args[n]? = some v → (t0.regs n).setWidth v.type.width = v.bits
+  stackArgs : ∀ k v, args[8 + k]? = some v →
+    (load64 t0.memory (E + 8 * k)).setWidth v.type.width = v.bits ∧ E + 8 * k + 8 ≤ t0.high
+  returnAddress : decodeAddress (t0.regs 30) = none
+  stackLow : t0.low + needOf ctx.p ctx.hints entry ≤ E
+  stackHigh : E ≤ t0.high
+  addressSpace : t0.high < 2^64
+
+/-- The low bits of each machine argument are the source argument. -/
+theorem AbiSourceEntry.low {ctx : Ctx} {entry : String} {args : List Core.Source.Value}
+    {t0 : Asm.State} {E : Nat} (abi : AbiSourceEntry ctx entry args t0 E) (i : Nat)
+    (h : i < args.length) :
+    ∃ raw, abiArgument t0 E i = .int raw ∧ raw.setWidth args[i].type.width = args[i].bits := by
+  unfold abiArgument
+  by_cases small : i < 8
+  · exact ⟨_, if_pos small, abi.registers i _ small (List.getElem?_eq_getElem h)⟩
+  · obtain ⟨k, rfl⟩ : ∃ k, i = 8 + k := ⟨i - 8, by omega⟩
+    refine ⟨_, if_neg small, ?_⟩
+    simpa using (abi.stackArgs k _ (List.getElem?_eq_getElem h)).1
+
+/-- An ABI entry state for the source arguments is an `AbiEntry` for the
+machine arguments of the state. -/
+theorem AbiSourceEntry.abiEntry {ctx : Ctx} {entry : String} {args : List Core.Source.Value}
+    {t0 : Asm.State} {E : Nat} (abi : AbiSourceEntry ctx entry args t0 E) :
+    AbiEntry ctx entry (abiArguments t0 E args.length) t0 E where
+  function := abi.function
+  sp := abi.sp
+  aligned := abi.aligned
+  registers n v small found := by
+    rw [abiArguments_getElem?] at found
+    split at found
+    · cases found; simp [abiArgument, small]
+    · cases found
+  stackArgs k v found := by
+    rw [abiArguments_getElem?] at found
+    split at found
+    · rename_i lt
+      cases found
+      refine ⟨by simp [abiArgument, show ¬ 8 + k < 8 by omega], ?_⟩
+      exact (abi.stackArgs k _ (List.getElem?_eq_getElem lt)).2
+    · cases found
+  returnAddress := abi.returnAddress
+  stackLow := abi.stackLow
+  stackHigh := abi.stackHigh
+  addressSpace := abi.addressSpace
 
 theorem entryStorage_shape (args : List Machine.Value)
     (ints : ∀ v ∈ args, ∃ b, v = .int b) : Shape (entryStorage args) := by

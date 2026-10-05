@@ -22,8 +22,9 @@ assembly text.
 
 The pipeline also checks that adjacent stages agree on the entry: V01 must
 give a pair for the selected source function, and V02 must use the same
-argument tokens as V01. Each of these checks is a Boolean test. No check
-trusts a producer annotation.
+argument tokens as V01. The check `entryViewsOk` refuses a post-SSA entry in
+which a 32-bit parameter has a 64-bit register. Each of these checks is a
+Boolean test. No check trusts a producer annotation.
 
 The theorem `checkPipeline_sound` in `EvoIR.Pipeline.Soundness` states what
 an accepted check gives.
@@ -71,6 +72,19 @@ def pairLinked {source : Source.Program} {ir : IR.Program} (f : Source.Function)
   pair.sourceFunction.parameters.map (·.type.type) == f.parameters.map (·.type.type) &&
   pair.sourceFunction.returnType.type == f.returnType.type
 
+/-- Each 32-bit parameter of the source entry `f` has a 32-bit register in
+block 0 of the post-SSA entry function. The write of an argument to a 32-bit
+register keeps only the low 32 bits. Thus the bits of an argument above its
+width do not change the program. -/
+def entryViewsOk (p : Machine.Program) (f : Source.Function) : Bool :=
+  match p.functions.find? (·.name == f.name) with
+  | none => false
+  | some g =>
+    match g.blocks.find? (·.id == 0) with
+    | none => false
+    | some b => (b.args.zip f.parameters).all fun (r, q) =>
+      q.type.type.width == 64 || r.class == .gpr32
+
 /-- Check each rewrite step in sequence. The result is the EvoIR after the
 last step, or the index of the first step that the checker refuses. -/
 def rewriteChain : Nat → IR.Program → List RewriteStep → Except Nat IR.Program
@@ -111,6 +125,8 @@ def refusal (input : Input) : Option (String × String) :=
   | some lowered =>
   if lowered.tokens != pair.tokens then
     some ("V02", s!"entry={f.name} the argument tokens of V02 are not the tokens of V01")
+  else if !entryViewsOk input.postSSA f then
+    some ("V02", s!"entry={f.name} a 32-bit parameter has no 32-bit register at the post-SSA entry")
   else if !Alloc.checkAllocation input.postSSA input.allocated input.allocHints then
     some ("V03", s!"entry={f.name} allocation not confirmed")
   else if !Asm.Check.checkAsm input.allocated input.asm input.frameHints then
