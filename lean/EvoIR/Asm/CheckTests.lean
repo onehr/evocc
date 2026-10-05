@@ -108,6 +108,13 @@ def run : IO Unit := do
   -- A frame hint without the save slot of a used register, with the same text.
   expect "hint with a missing save slot refused"
     (Check.checkAsm p file (editHint file hints "wide" fun h => {h with saved := h.saved.drop 1})) false
+  -- The zero extension mask: a 32-bit source view only for `and` with a mask below 2^32.
+  let hint : FrameHint := ⟨0, [], [], [], 0⟩
+  let mask (op : Machine.BinOp) (imm : Nat) : Bool :=
+    (Check.instTemplate hint (.binaryImm op (.gpr 1 .x) (.gpr 1 .w) imm .x)).isSome
+  expect "zero extension mask accepted" (mask .and 4294967295) true
+  expect "mask with a high bit and a 32-bit source refused" (mask .and 4294967296) false
+  expect "orr with a 32-bit source refused" (mask .orr 4294967295) false
   let (q, privateFile, privateHints, privateText) ← load "machine-private"
   expect "machine-private prints the actual text" (printMatches privateFile privateText) true
   -- Private frame objects are outside the proved forms: the checker refuses them.

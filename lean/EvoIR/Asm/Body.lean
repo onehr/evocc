@@ -308,6 +308,42 @@ theorem step_binaryImm {cur : Frame} {st st' : Storage} {t : Asm.State} {owner :
   rw [view_eq, alu_eq, evalBinary_normalize_left]
   rfl
 
+/-- A mask below `2^32` ignores the high half of the source. -/
+theorem and_zeroExtend (r : BitVec 64) (imm : Nat) (h : imm < 2^32) :
+    Machine.evalBinary .and .x (Machine.normalizeAt .w r) (BitVec.ofNat 64 imm) =
+      Machine.evalBinary .and .x r (BitVec.ofNat 64 imm) := by
+  have key : (r.setWidth 32).setWidth 64 &&& BitVec.ofNat 64 imm = r &&& BitVec.ofNat 64 imm := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    simp only [BitVec.getLsbD_and, BitVec.getLsbD_setWidth, BitVec.getLsbD_ofNat]
+    by_cases lt : i < 32
+    · simp [lt, hi]
+    · have : imm.testBit i = false :=
+        Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le h (Nat.pow_le_pow_right (by decide) (by omega)))
+      simp [this]
+  unfold Machine.evalBinary Machine.normalizeAt
+  simp only [Machine.Width.bits, BitVec.setWidth_eq]
+  exact key
+
+/-- The zero extension mask with a 32-bit source view. -/
+theorem step_zeroMask {cur : Frame} {st st' : Storage} {t : Asm.State} {owner : Nat}
+    {mem mem' : Machine.Memory} (hl : Local cur st t) (d n imm : Nat) (h : imm < 2^32)
+    (dw : Writable cur d)
+    (heval : Alloc.evalInstruction owner (.binaryImm .and (.gpr d .x) (.gpr n .w) imm .x) st mem =
+      .ok (st', mem')) :
+    mem' = mem ∧ OneStep cur st' t (.aluImm .and .x (.r d) (.r n) imm) := by
+  eval_prelude heval
+  obtain ⟨left, hleft, he⟩ := bind_ok he
+  rw [value_gpr hl.shape hl.regs hleft] at he
+  simp only [Machine.evalBinaryValue, bind, Except.bind, pure, Except.pure, Except.ok.injEq,
+    Prod.mk.injEq] at he
+  obtain ⟨rfl, rfl⟩ := he
+  refine ⟨rfl, _, rfl, ?_⟩
+  simp only [Machine.valueWrite, applyWrites_cons, applyWrites_nil]
+  apply local_set_gpr hl d dw .x .x
+  rw [view_eq, alu_eq, and_zeroExtend _ _ h]
+  rfl
+
 theorem step_mov {cur : Frame} {st st' : Storage} {t : Asm.State} {owner : Nat}
     {mem mem' : Machine.Memory} (hl : Local cur st t) (d s : Nat) (dv sv : Machine.Width)
     (dw : Writable cur d)

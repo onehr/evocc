@@ -13,7 +13,9 @@ AST and the untrusted frame hints.
   exactly one offset. Each callee-saved register that the function writes has
   a save slot.
 * The allocated function uses only `x0`-`x15` and `x19`-`x28`. Each
-  operand view agrees with the width of its instruction.
+  operand view agrees with the width of its instruction. The one exception
+  is the zero extension mask `and xD, xN, #imm` with `imm < 2^32`
+  (`zeroMask`).
 * The entry block is the first block. No branch goes to the entry block.
   Block identifiers are unique.
 * Private frame objects (`frameSlot`, `load`, `store`) and `stackRelease`
@@ -55,6 +57,12 @@ def immediateLines (v : Machine.Width) (d imm : Nat) : List Inst :=
 
 def lookupOffset (entries : List (Nat × Nat)) (key : Nat) : Option Nat := entries.lookup key
 
+/-- The zero extension form `and xD, xN, #imm` with a 32-bit source view and
+`imm < 2^32`. The mask clears the high half, thus the 64-bit source gives the
+same result as the 32-bit view. -/
+abbrev zeroMask (op : Machine.BinOp) (lhsView : Machine.Width) (imm : Nat) (w : Machine.Width) : Prop :=
+  op = .and ∧ lhsView = .w ∧ w = .x ∧ imm < 2^32
+
 /-- The template of one allocated instruction. `none` refuses the form.
 Private frame objects (`frameSlot`, `load`, `store`) are refused: the
 soundness proof does not cover them yet. -/
@@ -74,7 +82,8 @@ def instTemplate (hint : FrameHint) : Instruction → Option (List Inst)
   | .binaryImm op dst lhs imm w => do
     let (d, dv) ← gprOf dst
     let (n, nv) ← gprOf lhs
-    if dv = w ∧ nv = w then some [.aluImm op w (.r d) (.r n) imm] else none
+    if dv = w ∧ (nv = w ∨ zeroMask op nv imm w) then some [.aluImm op w (.r d) (.r n) imm]
+    else none
   | .flagBinary op dst flags lhs rhs w => do
     let (d, dv) ← gprOf dst
     let (n, nv) ← gprOf lhs

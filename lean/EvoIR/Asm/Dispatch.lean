@@ -57,10 +57,13 @@ theorem body_dispatch {cur : Frame} {st st' : Storage} {t : Asm.State} {owner : 
     exact ⟨rfl, oneStep_run fn pos h⟩
   | binaryImm op dst lhs imm w =>
     template_inv ht
-    obtain ⟨d, dv, hd, n, nv, hn, ⟨rfl, rfl⟩, rfl⟩ := ht
+    obtain ⟨d, dv, hd, n, nv, hn, ⟨rfl, view⟩, rfl⟩ := ht
     cases gprOf_eq hd; cases gprOf_eq hn
-    obtain ⟨rfl, h⟩ := step_binaryImm hl op d n imm _ (w1 d _ List.mem_cons_self) heval
-    exact ⟨rfl, oneStep_run fn pos h⟩
+    rcases view with rfl | ⟨rfl, rfl, rfl, small⟩
+    · obtain ⟨rfl, h⟩ := step_binaryImm hl op d n imm _ (w1 d _ List.mem_cons_self) heval
+      exact ⟨rfl, oneStep_run fn pos h⟩
+    · obtain ⟨rfl, h⟩ := step_zeroMask hl d n imm small (w1 d _ List.mem_cons_self) heval
+      exact ⟨rfl, oneStep_run fn pos h⟩
   | flagBinary op dst flags lhs rhs w =>
     template_inv ht
     obtain ⟨d, dv, hd, n, nv, hn, m, mv, hm, ⟨rfl, rfl, rfl, rfl⟩, rfl⟩ := ht
