@@ -164,8 +164,9 @@ structure CallFrontierPair (source : Source.Program) (target : IR.Program) where
       IR.initial target targetFunction.name (loopInputValues tokens args) = .ok targetEntry ∧
       LoweringRefines source target sourceFunction.returnType.type sourceEntry targetEntry
 
-def callFrontierPair (source : Source.Program) (target : IR.Program)
-    (proposals : CalleeProposals) (budget : Nat) : Option (CallFrontierPair source target) := do
+def callFrontierPairWith (source : Source.Program) (target : IR.Program)
+    (build : (fid : Nat) → (f : IR.Function) → Bool → (type : Source.IntType) →
+      ContinuationBuilder source target fid f type) : Option (CallFrontierPair source target) := do
   if !(Source.checkWellFormed source).isOk || !(IR.checkProgram target).isOk then none else
   let [entry] := source.entries | none
   let sf : {f // source.functions.find? (·.symbol == entry) = some f} ←
@@ -201,11 +202,7 @@ def callFrontierPair (source : Source.Program) (target : IR.Program)
           | some scope => some ⟨scope, bound⟩
         let cursor : SourceCursor inputWidths :=
           ⟨.statement sf.val.body, locals.val, [.function none sf.val.returnType.type]⟩
-        let sp ← sourceCallFrontier source budget cursor
-        let tp ← targetCallFrontier target tf.val budget block.val.name 0 scope.val
-        let joined ← cutMatchUnder (checkCallFrontierWith source target sf.val.symbol tf.val tokens
-          sf.val.returnType.type proposals budget (checkedSuffix source target sf.val.symbol tf.val tokens
-            sf.val.returnType.type proposals budget)) budget [] sp.val.normalizeTrace tp.val.normalizeTrace
+        let proof ← build sf.val.symbol tf.val tokens sf.val.returnType.type [] cursor block.val.name 0 scope.val
         return {
           sourceFunction := sf.val, targetFunction := tf.val, tokens := tokens
           checked := by
@@ -241,11 +238,21 @@ def callFrontierPair (source : Source.Program) (target : IR.Program)
                 SavedFrames.denote, Source.Frame.map]
             · simp [IR.initial, targetFound, entered, Bind.bind, Except.bind, pure, Except.pure,
                 cutTargetState, targetState]
-            · exact frontier_prefix_refines source target sf.val.symbol tf.val sf.val.returnType.type
-                cursor block.val.name 0 scope.val sp.val tp.val sp.property tp.property [] joined.down σ 1 2 trivial }
+            · exact proof.down σ trivial 1 2 }
       else none
     else none
   else none
+
+def callFrontierPair (source : Source.Program) (target : IR.Program)
+    (proposals : CalleeProposals) (budget : Nat) : Option (CallFrontierPair source target) :=
+  callFrontierPairWith source target fun fid f tokens type path cursor label pc scope => do
+    let sp ← sourceCallFrontier source budget cursor
+    let tp ← targetCallFrontier target f budget label pc scope
+    let joined ← cutMatchUnder (checkCallFrontierWith source target fid f tokens type proposals budget
+      (checkedSuffix source target fid f tokens type proposals budget)) budget path
+      sp.val.normalizeTrace tp.val.normalizeTrace
+    return ⟨fun σ holds owner frame => frontier_prefix_refines source target fid f type
+      cursor label pc scope sp.val tp.val sp.property tp.property path joined.down σ owner frame holds⟩
 
 theorem CallFrontierPair.refines {source : Source.Program} {target : IR.Program}
     (pair : CallFrontierPair source target) (args : List Source.Value)

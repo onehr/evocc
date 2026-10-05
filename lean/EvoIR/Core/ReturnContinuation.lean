@@ -153,6 +153,33 @@ theorem cut_results_values {Γ : Var → Nat} (σ : Subst Γ) (tokens : Bool) (w
 /-- Every possible typed callee result instantiates the checked suffix without
 changing any saved caller input. This discharges the return-site obligation;
 it makes no assumption about the callee's arithmetic or termination. -/
+theorem return_binding_related {fid : Nat}
+    {target : IR.Function} {returnType : Source.IntType}
+    {locals : LocalStore inputWidths} {frames : SavedFrames inputWidths}
+    {label : String} {pc : Nat} {scope : Scope inputWidths} {results : List IR.Binding}
+    {calleeTokens : Bool} {path : PathConditions inputWidths}
+    {boundScope : Scope inputWidths}
+    (binding : scope.forReturn.appendSlots results
+      (cutResults calleeTokens (inputWord returnType 0)) = some boundScope)
+    (σ : Subst inputWidths) (holds : path.Holds σ) (value : Source.Value) (typed : value.type = returnType)
+    (owner nextFrame : Nat) :
+    ResumedAt fid target ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc boundScope
+      ⟨.value value, locals.denote σ, frames.denote σ, fid⟩
+      (cutResume (valueIRs calleeTokens value) nextFrame
+        [⟨⟨target.name, label, pc, scope.denote σ callTokens, owner⟩, results⟩]) path.forReturn := by
+  have fresh : (inputWord returnType 0).denote (returnSubst σ value) = value := by
+    simpa only [typed] using return_subst_fresh σ value
+  have resultValues : (cutResults calleeTokens (inputWord returnType 0)).map
+      (Slot.denote (returnSubst σ value) callTokens) = valueIRs calleeTokens value := by
+    rw [cut_results_values, fresh]
+  have bound := append_slots_sound (returnSubst σ value) scope.forReturn boundScope results
+    (cutResults calleeTokens (inputWord returnType 0)) binding
+  rw [scope_for_return, resultValues] at bound
+  refine ⟨returnSubst σ value, owner, nextFrame,
+    (path.for_return_sound σ value).mpr holds, ?_, ?_⟩
+  · simp only [SourceCursor.denote, CutControl.denote, fresh, local_store_for_return, saved_frames_for_return]
+  · simp [cutResume, bound, cutTargetState, targetState]
+
 theorem CheckedReturn.related {source : Source.Program} {ir : IR.Program} {fid : Nat}
     {target : IR.Function} {callerTokens : Bool} {type returnType : Source.IntType}
     {locals : LocalStore inputWidths} {frames : SavedFrames inputWidths}
@@ -164,18 +191,7 @@ theorem CheckedReturn.related {source : Source.Program} {ir : IR.Program} {fid :
     ResumedAt fid target ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc d.boundScope
       ⟨.value value, locals.denote σ, frames.denote σ, fid⟩
       (cutResume (valueIRs calleeTokens value) nextFrame
-        [⟨⟨target.name, label, pc, scope.denote σ callTokens, owner⟩, results⟩]) path.forReturn := by
-  have fresh : (inputWord returnType 0).denote (returnSubst σ value) = value := by
-    simpa only [typed] using return_subst_fresh σ value
-  have resultValues : (cutResults calleeTokens (inputWord returnType 0)).map
-      (Slot.denote (returnSubst σ value) callTokens) = valueIRs calleeTokens value := by
-    rw [cut_results_values, fresh]
-  have bound := append_slots_sound (returnSubst σ value) scope.forReturn d.boundScope results
-    (cutResults calleeTokens (inputWord returnType 0)) d.binding
-  rw [scope_for_return, resultValues] at bound
-  refine ⟨returnSubst σ value, owner, nextFrame,
-    (path.for_return_sound σ value).mpr holds, ?_, ?_⟩
-  · simp only [SourceCursor.denote, CutControl.denote, fresh, local_store_for_return, saved_frames_for_return]
-  · simp [cutResume, bound, cutTargetState, targetState]
+        [⟨⟨target.name, label, pc, scope.denote σ callTokens, owner⟩, results⟩]) path.forReturn :=
+  return_binding_related d.binding σ holds value typed owner nextFrame
 
 end EvoIR.Core.Symbolic

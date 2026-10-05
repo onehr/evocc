@@ -1,5 +1,4 @@
-import EvoIR.Core.LoopReturn
-import EvoIR.Core.ReturnContinuation
+import EvoIR.Core.OpenCallingLoop
 
 /-! A cyclic callee is an open simulation: its return rejoins a proved caller
 continuation instead of becoming a terminal observation. Both sides execute
@@ -135,37 +134,9 @@ theorem LoopDiagram.call_refines (σ : Subst inputWidths)
           ((parameterWords source.parameters).map (CWord.denote σ)),
         caller.locals, caller.continuation, caller.functionId⟩
       ⟨.running a, stack, nextFrame⟩ := by
-  have stored := parameter_store_sound σ source.parameters (parameterWords source.parameters)
-    d.locals d.storage
-  have sourceStep : Source.Step s
-      ⟨.call source.symbol source.returnType.type
-          ((parameterWords source.parameters).map (CWord.denote σ)),
-        caller.locals, caller.continuation, caller.functionId⟩
-      ⟨.statement source.body, d.locals.denote σ,
-        .function (some (caller.functionId, caller.locals)) source.returnType.type ::
-          caller.continuation, source.symbol⟩ := by
-    simp [Source.Step, Source.step, Source.enterFunction, sourceFound, stored]
-  have binding := bind_slots_sound σ callTokens callTokenTypes (by intro id; rfl) _ _ _ d.binding
-  have types : ((loopInputSlots d.tokens (parameterWords source.parameters)).map
-      (Slot.denote σ callTokens)).map IR.Value.type = target.parameters := by
-    rw [d.signature, List.map_map]
-    apply List.map_congr_left
-    intro slot _
-    exact slot_type_sound σ callTokens callTokenTypes (by intro id; rfl) slot
-  have entered : IR.enter target (loopInputValues d.tokens
-      ((parameterWords source.parameters).map (CWord.denote σ))) nextFrame =
-      .ok ⟨target.name, d.block.name, 0, d.scope.denote σ callTokens, nextFrame⟩ := by
-    rw [← loop_input_values]
-    simp [IR.enter, types, d.head, d.parameters, binding, Bind.bind, Except.bind, pure, Except.pure]
-  have targetStep := IR.call_enters t ⟨.running a, stack, nextFrame⟩ a
-    ⟨target.name, d.block.name, 0, d.scope.denote σ callTokens, nextFrame⟩
-    f target b inst _ rfl function block atPc call targetFound arguments results entered
-  let simulation := checked_call_context_simulation (d.points.map LayoutPoint.joint) source.symbol
-    source.returnType.type observationType s t target d.tokens (fun point member => d.spans.get point member)
-    caller nextFrame (⟨{a with pc := a.pc+1}, inst.results⟩ :: stack) resumed continuation returns
-  apply simulation.prepend (Or.inl (d.initialRelated σ (some caller) nextFrame (nextFrame+1) _))
-  · exact .single sourceStep
-  · cases targetStep with | execute h => exact .single h
+  exact (d.call_open σ s t observationType caller a nextFrame stack f b inst sourceFound function
+    block atPc call targetFound arguments results resumed returns).finish
+    (fun _ _ related => continuation.sound related)
 
 /-- The caller suffix premise is discharged by the executable return checker.
 This is an actual call-site theorem, not yet a source-entry admission theorem:

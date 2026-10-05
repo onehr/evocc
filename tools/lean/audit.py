@@ -223,6 +223,9 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Symbolic.TargetExit.callState",
     "EvoIR.Core.Symbolic.cutResume",
     "EvoIR.Core.Symbolic.CallingLoopRelated",
+    "EvoIR.Core.Transition.OpenCheckpoint",
+    "EvoIR.Core.Symbolic.CallerBoundary",
+    "EvoIR.Core.Symbolic.OpenCaller",
     "EvoIR.Core.Symbolic.loopInputValues",
     "EvoIR.Core.Symbolic.CutpointRelated",
     "EvoIR.Core.Symbolic.CutExitAgreement",
@@ -296,6 +299,31 @@ RECORDED_DEFINITIONS = [
 ]
 
 CORE_PRIMITIVE_TARGETS = [
+    (
+        "EvoIR.Core.Transition.OpenCheckpoint.close",
+        "∀ {S : Type u_1} {T : Type u_2} {O : Type u_3} {sourceStep : S → Option S} "
+        "{targetStep : T → Option T} {sourceObserve : S → Option O} {targetObserve : T → Option O} "
+        "{boundary : S → T → Prop} {s : S} {t : T}, "
+        "(∀ (a : S) (b : T), boundary a b → EvoIR.Core.Transition.OpenCheckpoint "
+        "sourceStep targetStep sourceObserve targetObserve boundary a b) → boundary s t → "
+        "EvoIR.Core.Transition.Refines sourceStep targetStep sourceObserve targetObserve s t",
+    ),
+    (
+        "EvoIR.Core.Transition.OpenCheckpoint.bind",
+        "∀ {S : Type u_1} {T : Type u_2} {O : Type u_3} {sourceStep : S → Option S} "
+        "{targetStep : T → Option T} {sourceObserve : S → Option O} {targetObserve : T → Option O} "
+        "{boundary nextBoundary : S → T → Prop} {s : S} {t : T}, "
+        "EvoIR.Core.Transition.OpenCheckpoint sourceStep targetStep sourceObserve targetObserve boundary s t → "
+        "(∀ (a : S) (b : T), boundary a b → nextBoundary a b ∨ "
+        "EvoIR.Core.Transition.OpenCheckpoint sourceStep targetStep sourceObserve targetObserve nextBoundary a b) → "
+        "EvoIR.Core.Transition.OpenCheckpoint sourceStep targetStep sourceObserve targetObserve nextBoundary s t",
+    ),
+    (
+        "EvoIR.Core.Symbolic.callingLoopPair",
+        "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → "
+        "EvoIR.Core.Symbolic.CalleeProposals → Nat → "
+        "Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+    ),
     (
         "EvoIR.Core.Symbolic.cutMatchUnder",
         "{Γ : EvoIR.Var → Nat} → {α β : Type} → {related : EvoIR.Subst Γ → α → β → Prop} → "
