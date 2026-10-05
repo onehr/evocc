@@ -12,7 +12,9 @@ structure ReturnContinuation (source : Source.Program) (ir : IR.Program)
     (cursor : SourceCursor inputWidths) (label : String) (pc : Nat) (scope : Scope inputWidths) where
   sourceTree : CutTree inputWidths (SourceCursor inputWidths)
   targetTree : CutTree inputWidths (TargetExit inputWidths)
-  sourceDiagram : SourceCutRuns source true cursor sourceTree
+  -- A return-only frontier is already terminal on the source side. This
+  -- finite suffix uses terminal agreement, not a zero-step cyclic backedge.
+  sourceDiagram : SourceCutRuns source false cursor sourceTree
   targetDiagram : CallingCutRuns ir target tokens true label pc scope targetTree
   agreement : CutMatch (CutExitAgreement [] fid target tokens type)
     sourceTree.normalizeTrace targetTree.normalizeTrace
@@ -21,7 +23,7 @@ def returnContinuation (source : Source.Program) (ir : IR.Program)
     (fid : Nat) (target : IR.Function) (tokens : Bool) (type : Source.IntType)
     (cursor : SourceCursor inputWidths) (label : String) (pc : Nat) (scope : Scope inputWidths)
     (budget : Nat) : Option (ReturnContinuation source ir fid target tokens type cursor label pc scope) := do
-  let s ← sourceCutDiagram source [] budget true cursor
+  let s ← sourceCutDiagram source [] budget false cursor
   let t ← callingCutDiagram ir target tokens type [] budget true scope label pc
   let same ← cutMatch (checkExit [] fid target tokens type) s.val.normalizeTrace t.val.normalizeTrace
   return ⟨s.val, t.val, s.property, t.property, same.down⟩
@@ -59,8 +61,10 @@ theorem ReturnContinuation.simulation {source : Source.Program} {ir : IR.Program
     subst sf
     subst tf
     cases matched with
-    | returned control typed boundary =>
-      rename_i word
+    | returned control typed boundary same =>
+      rename_i word targetWord
+      have identical := TargetExit.returned_congr σ tokens target owner afterCalls [] targetWord word (same σ)
+      rw [identical] at tp
       refine .inl ⟨_, _, .returned type (word.denote σ).bits.toNat,
         sp.toReaches, tp.toReaches, ?_, rfl, ?_, ?_⟩
       · simp [Source.step, SourceCursor.denote, control, CutControl.denote]

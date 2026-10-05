@@ -47,6 +47,13 @@ def sourceFrontierSelfTest : IO UInt32 := do
     ("original caller entry", stops p entry [u 7, u 3] (.ok [u 7, u 3])),
     ("boundary caller arguments", stops p entry [u 0xffffffff, u 0] (.ok [u 0xffffffff, u 0])),
     ("assignment suspends before write", stops p assigned [u 7, u 3] (.ok [u 7, u 3])),
+    ("initializer suspends with uninitialized binding", stops p
+      ⟨.object ⟨77, "saved", ⟨.uint, false⟩, .none,
+        some (⟨.uint, false⟩, .call .uint 2 [
+          (⟨.uint, false⟩, .ident .uint 6), (⟨.uint, false⟩, .ident .uint 7)])⟩,
+       locals, [.sequence [.statement (.return ⟨.uint, false⟩ (.ident .uint 77))],
+         .scope locals.length, .function none .uint]⟩
+      [u 7, u 3] (.ok [u 7, u 3])),
     ("second argument call retains first argument", stops p
       (expression [(⟨.uint, false⟩, .ident .uint 6),
         (⟨.uint, false⟩, .call .uint 2 [(⟨.uint, false⟩, .literal .uint 0),

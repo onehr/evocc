@@ -22,6 +22,7 @@ import EvoIR.Core.SourceResumeTests
 import EvoIR.Core.SourceFrontierTests
 import EvoIR.Core.CallFrontierTests
 import EvoIR.Core.CallContextTests
+import EvoIR.Core.CallClosureTests
 
 /-!
 # The executable evaluator
@@ -318,13 +319,14 @@ def run (args : List String) : IO UInt32 := do
       let sourceFrontiers ← EvoIR.Core.Symbolic.SourceFrontierTests.sourceFrontierSelfTest
       let callFrontiers ← EvoIR.Core.Symbolic.CallFrontierTests.callFrontierSelfTest
       let callResumptions ← EvoIR.Core.Symbolic.CallContextTests.callContextSelfTest
+      let callClosures ← EvoIR.Core.Symbolic.CallClosureTests.callClosureSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
         statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 &&
         calls == 0 && callControls == 0 && callLoops == 0 && callContexts == 0 &&
         sourceResumes == 0 && sourceFrontiers == 0 && callFrontiers == 0 &&
-        callResumptions == 0 then 0 else 1
+        callResumptions == 0 && callClosures == 0 then 0 else 1
   | ["--check-core-loop-pair", sourcePath, targetPath, proposalPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2

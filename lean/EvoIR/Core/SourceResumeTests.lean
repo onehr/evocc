@@ -111,7 +111,19 @@ def sourceResumeSelfTest : IO UInt32 := do
       [(1, uint 99), (101, uint 0xffffffff)]),
     ("saved dividend retains zero diagnostic", checks p .uint
       [.binaryRight .uint .div (CWord.literal (.ofNat .uint 100))] []
-      [(0, divideZero), (4, uint 25)])]
+      [(0, divideZero), (4, uint 25)]),
+    ("post-call and skips fault", checks p .int
+      [.binaryLeft .int .and (.binary .int .div (.literal .int 1) (.literal .int 0))] []
+      [(0, int 0), (1, divideZero)]),
+    ("post-call or skips fault", checks p .int
+      [.binaryLeft .int .or (.binary .int .div (.literal .int 1) (.literal .int 0))] []
+      [(1, int 1), (0, divideZero)]),
+    ("post-call and retains conditional writes", checks p .int
+      [.binaryLeft .int .and update, .binaryLeft .uint .comma (.ident .uint 71)] locals
+      [(0, int 3), (1, int 7)]),
+    ("post-call or retains conditional writes", checks p .int
+      [.binaryLeft .int .or update, .binaryLeft .uint .comma (.ident .uint 71)] locals
+      [(0, int 7), (1, int 3)])]
   let mut failed := 0
   for (label, passed) in tests do
     if !passed then

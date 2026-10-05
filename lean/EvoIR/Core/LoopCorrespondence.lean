@@ -27,9 +27,9 @@ def CutpointRelated {Γ : Var → Nat} (entries : List (JointPoint Γ))
 inductive CutExitAgreement {Γ : Var → Nat} (entries : List (JointPoint Γ))
     (fid : Nat) (target : IR.Function) (tokens : Bool) (type : Source.IntType) :
     SourceCursor Γ → TargetExit Γ → Prop where
-  | returned {s word} (control : s.control = .returned word) (typed : word.type = type)
-      (boundary : s.continuation = []) :
-      CutExitAgreement entries fid target tokens type s (.returned word)
+  | returned {s word targetWord} (control : s.control = .returned word) (typed : word.type = type)
+      (boundary : s.continuation = []) (same : ∀ σ, targetWord.denote σ = word.denote σ) :
+      CutExitAgreement entries fid target tokens type s (.returned targetWord)
   | successor {s t} (closed : ∀ σ nextFrame context owner stack,
       CutpointRelated entries fid target (s.denote σ fid context)
         (t.callState σ tokens target owner nextFrame stack) context owner stack) :
@@ -95,8 +95,10 @@ theorem checked_cutpoint_simulation {Γ : Var → Nat} (entries : List (JointPoi
     subst sf
     subst tf
     cases matched with
-    | returned control typed boundary =>
-      rename_i word
+    | returned control typed boundary same =>
+      rename_i word targetWord
+      have identical := TargetExit.returned_congr σ tokens target 1 afterCalls [] targetWord word (same σ)
+      rw [identical] at tp
       refine .inl ⟨_, _, .returned type (word.denote σ).bits.toNat,
         sp.toReaches, tp.toReaches, ?_, rfl, ?_, ?_⟩
       · simp [Source.step, SourceCursor.denote, control, CutControl.denote]

@@ -100,6 +100,29 @@ theorem resumes_binary {p : Program} {locals : Locals} {fid : Nat}
       exact path.trans (.next (by
         simp [Step, step, resumeValue, valueResult, calculated, typed v answer result calculated]) (.refl _))
 
+theorem resumes_short {p : Program} {locals : Locals} {fid : Nat}
+    (isOr : Bool) (right : Expr) (value : Value) (outcome : StateOutcome)
+    (operand : EvaluatesContext p locals fid right outcome) :
+    ResumesContext p locals fid (.binaryLeft .int (if isOr then .or else .and) right) value
+      (if value.truth = isOr then (locals, .ok (.boolean isOr))
+       else (outcome.1, outcome.2.map (fun v => Value.boolean v.truth))) := by
+  by_cases skip : value.truth = isOr
+  · intro k
+    simp only [skip, ↓reduceIte]
+    exact .next (by cases isOr <;>
+      simp [Step, step, resumeValue, skip, valueResult, Value.boolean, Value.ofNat]) (.refl _)
+  · have truth : value.truth = !isOr := by cases isOr <;> cases h : value.truth <;> simp_all
+    have result (v : Value) : binaryValue (if isOr then .or else .and) value v =
+        .ok (.boolean v.truth) := by
+      cases isOr <;> simp [binaryValue, truth, pure, Except.pure]
+    have path := resumes_binary .int (if isOr then .or else .and) right value outcome
+      (by cases isOr <;> simp [truth]) operand
+      (by intro v answer _ h; rw [result] at h; cases Except.ok.inj h; rfl)
+    have same : (do let v ← outcome.2; binaryValue (if isOr then .or else .and) value v) =
+        outcome.2.map (fun v => Value.boolean v.truth) := by
+      cases outcome.2 <;> simp [bind, Except.bind, result, Except.map]
+    simpa only [skip, ↓reduceIte, same] using path
+
 end EvoIR.Core.Source
 
 namespace EvoIR.Core.Symbolic
@@ -110,10 +133,27 @@ structure ResumptionDiagram {Γ : Var → Nat} (p : Source.Program) (locals : Lo
     frame.map (CWord.denote σ) :: sourceContextFrames context rest
   runs : ∀ σ fid, Source.ResumesContext p (locals.denote σ) fid (frame.map (CWord.denote σ)) (word.denote σ) (tree.denote σ)
 
+def resumeShort {Γ : Var → Nat} (p : Source.Program) (budget : Nat)
+    (locals : LocalStore Γ) (isOr : Bool) (right : Source.Expr) (word : CWord Γ) :
+    Option {tree // ResumptionDiagram p locals
+      (.binaryLeft .int (if isOr then .or else .and) right) word tree} := do
+  let r ← callExpression p budget locals right
+  return ⟨shortTree isOr locals word r.val, ⟨by intro σ context rest; cases context <;> rfl, by
+    intro σ fid
+    have path := Source.resumes_short isOr right (word.denote σ) (r.val.denote σ) (r.property σ fid)
+    have constant (b : Bool) :
+        (CWord.constant (Γ := Γ) (.boolean b)).denote σ = Source.Value.boolean b := by
+      cases b <;> rfl
+    cases isOr <;> cases truth : (word.denote σ).truth <;>
+      simpa [shortTree, StateTree.denote, truth_term_sound, truth,
+        StateTree.booleanize_sound, constant, Source.Frame.map] using path⟩⟩
+
 def resumeExpression {Γ : Var → Nat} (p : Source.Program) (budget : Nat)
     (locals : LocalStore Γ) (frame : Source.Frame (CWord Γ)) (word : CWord Γ) :
     Option {tree // ResumptionDiagram p locals frame word tree} :=
   match frame with
+  | .binaryLeft .int .and right => resumeShort p budget locals false right word
+  | .binaryLeft .int .or right => resumeShort p budget locals true right word
   | .binaryRight type op left => do
     let r ← binaryResult op left word
     if typed : r.val.2.type = type then

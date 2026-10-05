@@ -115,6 +115,44 @@ theorem cursor_statement_sound {Γ : Var → Nat} (locals : LocalStore Γ)
     SymbolicFlow.denote, LocalStore.denote, sourceContextFrames, SavedFrames.denote, Source.Frame.map]
   all_goals split <;> rfl
 
+def cursorObject {Γ : Var → Nat} (locals : LocalStore Γ) (k : SavedFrames Γ)
+    (object : Source.Object) :
+    Option {tree // CursorStep ⟨.object object, locals, k⟩ tree} := do
+  let fresh : {ls // locals.declare object.symbol object.type = some ls} ←
+    match declared : locals.declare object.symbol object.type with
+    | none => none
+    | some ls => some ⟨ls, declared⟩
+  match initialized : object.initializer with
+  | none =>
+    return ⟨.leaf ⟨.flow .normal, fresh.val, k⟩, by
+      intro σ p fid context
+      have started := local_declare_sound σ locals fresh.val object initialized fresh.property
+        ((SourceCursor.mk (.object object) locals k).denote σ fid context)
+        (by cases context <;> rfl)
+      cases context <;>
+        simpa [CutTree.eval, Source.Step, Source.step, SourceCursor.denote,
+          CutControl.denote, SymbolicFlow.denote] using congrArg some started⟩
+  | some (destination, expr) =>
+    if same : destination = object.type then
+      return ⟨.leaf ⟨.expression expr, fresh.val, .initialize object.symbol destination :: k⟩, by
+        intro σ p fid context
+        have declared := fresh.property
+        unfold LocalStore.declare at declared
+        split at declared
+        · contradiction
+        · rename_i unique
+          have duplicate : (locals.denote σ).any (·.symbol == object.symbol) = false := by
+            simpa [LocalStore.denote, List.any_map, Function.comp_def, LocalSlot.denote]
+              using Bool.eq_false_iff.mpr unique
+          have shape := Option.some.inj declared
+          cases context <;>
+            simp only [CutTree.eval, Source.Step, Source.step, Source.enterObject,
+              SourceCursor.denote, CutControl.denote, duplicate, initialized, same,
+              Bool.false_eq_true, ↓reduceIte, bne_self_eq_false, ← shape] <;>
+            simp [sourceContextFrames, SavedFrames.denote, Source.Frame.map,
+              LocalStore.denote, LocalSlot.denote]⟩
+    else none
+
 def cursorFlow {Γ : Var → Nat} (locals : LocalStore Γ) (k : SavedFrames Γ)
     (flow : SymbolicFlow Γ) :
     Option {tree // CursorStep ⟨.flow flow, locals, k⟩ tree} :=

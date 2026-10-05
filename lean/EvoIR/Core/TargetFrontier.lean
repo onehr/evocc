@@ -1,8 +1,9 @@
 import EvoIR.Core.CallingCutpoint
 
-/-! Actual IR prefixes ending before a call. Ordinary instructions and CFG
+/-! Actual IR prefixes ending before a call or return. Ordinary instructions and CFG
 edges are checked against their execution semantics. A zero-length prefix is
-valid when the original entry already contains the call. -/
+valid when the original entry already contains the call. Return leaves still
+require independent result, token and actual return-step checking. -/
 namespace EvoIR.Core.Symbolic
 
 structure TargetCallSite (Γ : Var → Nat) where
@@ -148,7 +149,9 @@ def targetCallFrontier {Γ : Var → Nat} (p : IR.Program) (f : IR.Function) :
                       function block terminator lookup a b' first.property second.property⟩
               | _, _ => none
             | _ => none
-          | _ => none
+          | .return _ => return ⟨.leaf ⟨label, pc, scope⟩, by
+              intro σ owner nextFrame stack
+              exact ⟨_, .refl _, rfl⟩⟩
         else none
     else none
 

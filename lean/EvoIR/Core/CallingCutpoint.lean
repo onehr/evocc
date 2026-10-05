@@ -36,6 +36,18 @@ def TargetExit.callState {Γ : Var → Nat} (σ : Subst Γ) (tokens : Bool)
   | .returned word => cutResume ((cutResults tokens word).map (Slot.denote σ callTokens)) nextFrame stack
   | .next label scope => cutTargetState σ f label 0 owner nextFrame scope stack
 
+theorem TargetExit.returned_congr {Γ : Var → Nat} (σ : Subst Γ) (tokens : Bool)
+    (f : IR.Function) (owner nextFrame : Nat) (stack : List IR.ReturnFrame)
+    (a b : CWord Γ) (same : a.denote σ = b.denote σ) :
+    (TargetExit.returned a).callState σ tokens f owner nextFrame stack =
+      (TargetExit.returned b).callState σ tokens f owner nextFrame stack := by
+  have value : Slot.denote σ callTokens (.word a.word) =
+      Slot.denote σ callTokens (.word b.word) := by
+    simpa only [Slot.denote, Word.denote, CWord.word, sourceValueIR, CWord.denote]
+      using congrArg sourceValueIR same
+  cases tokens <;> simp only [callState, cutResults, Bool.false_eq_true, ↓reduceIte,
+    callResults, List.map_cons, List.map_nil, value]
+
 def CallingCutRuns {Γ : Var → Nat} (p : IR.Program) (f : IR.Function) (tokens : Bool)
     (advance : Bool) (label : String) (pc : Nat) (scope : Scope Γ)
     (tree : CutTree Γ (TargetExit Γ)) : Prop :=

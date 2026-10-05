@@ -1,8 +1,9 @@
 import EvoIR.Core.ArgumentFrontier
 
-/-! Construct real source prefixes ending at a suspended direct call. The
+/-! Construct real source prefixes ending at a suspended direct call or return. The
 budget limits proof search only: no successful result invokes or unrolls the
-stopped callee. Ordinary expressions and administrative steps reuse the same
+stopped callee. Return-only arms retain their own checked suffix instead of
+requiring an artificial call. Ordinary expressions and administrative steps reuse the same
 source semantics as cyclic cutpoint checking. -/
 namespace EvoIR.Core.Symbolic
 
@@ -72,12 +73,18 @@ def sourceFrontierChunk {Γ : Var → Nat} (p : Source.Program) (budget : Nat) :
     match cursorValue locals k word with
     | some step => some ⟨step.val, step.property.runs p⟩
     | none => sourceChunk p budget ⟨.value word, locals, k⟩
+  | ⟨.object object, locals, k⟩ => do
+    let step ← cursorObject locals k object
+    return ⟨step.val, step.property.runs p⟩
   | cursor => sourceChunk p budget cursor
 
 def sourceCallFrontier {Γ : Var → Nat} (p : Source.Program) : (budget : Nat) →
     (cursor : SourceCursor Γ) → Option {tree // SourceCutRuns p false cursor tree}
   | 0, _ => none
   | budget+1, cursor => match cursor with
+    | ⟨.returned word, locals, k⟩ => some ⟨.leaf ⟨.returned word, locals, k⟩, by
+        intro σ fid context
+        exact ⟨_, .refl _, by simp, rfl⟩⟩
     | ⟨.call callee type args, locals, k⟩ => some ⟨.leaf ⟨.call callee type args, locals, k⟩, by
         intro σ fid context
         exact ⟨_, .refl _, by simp, rfl⟩⟩

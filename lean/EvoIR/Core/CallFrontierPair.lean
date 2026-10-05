@@ -76,7 +76,9 @@ def checkCallFrontierWith (source : Source.Program) (target : IR.Program)
         else none
       else none
     else none
-  | _ => none
+  | _ => do
+    let proof ← continuation s t.label t.pc t.scope
+    return ⟨proof.down⟩
 
 theorem frontier_prefix_refines (source : Source.Program) (target : IR.Program)
     (fid : Nat) (f : IR.Function) (type : Source.IntType)

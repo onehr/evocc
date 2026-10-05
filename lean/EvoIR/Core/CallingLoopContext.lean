@@ -52,7 +52,9 @@ theorem checked_call_context_simulation {Γ : Var → Nat} (entries : List (Join
       subst tf
       refine .inr ⟨_, _, positiveSource rfl, positiveTarget rfl, ?_⟩
       cases matched with
-      | returned control typed boundary =>
+      | returned control typed boundary same =>
+        rename_i word targetWord
+        rw [TargetExit.returned_congr σ tokens target owner afterCalls stack targetWord word (same σ)]
         apply Or.inr
         simpa only [SourceCursor.denote, control, boundary, sourceContextFrames,
           SavedFrames.denote, List.map_nil, List.nil_append] using returns σ _ afterCalls typed
