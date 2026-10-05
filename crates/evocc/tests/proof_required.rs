@@ -129,6 +129,19 @@ fn assert_refused(output: &Output, directory: &Path, code: i32, reason: &str) {
     assert!(stderr.contains(reason), "expected `{reason}` in: {stderr}");
 }
 
+/// The text of one stage row of the record, up to the next stage row.
+fn row<'a>(record: &'a str, stage: &str) -> &'a str {
+    let at = record.find(&format!("\"id\": \"{stage}\",")).unwrap();
+    let end = record[at + 1..]
+        .find("\"id\": \"V")
+        .map_or(record.len(), |next| at + 1 + next);
+    &record[at..end]
+}
+
+fn digest(path: &Path) -> String {
+    evocc_proof::sha256_hex(&std::fs::read(path).unwrap())
+}
+
 fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
     let directory = new_directory();
     let output = run_proof(&directory, &lean_checker(), extra, source, &[]);
@@ -152,11 +165,15 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
     assert!(record.contains("\"scope\": \"checked to post-SSA EvoMIR, not to final assembly\""));
     assert!(record.contains("\"all_stages_checked\": false"));
     assert!(!record.to_lowercase().contains("verified"), "{record}");
-    for stage in ["V03", "V04", "V05"] {
-        let row = format!("\"id\": \"{stage}\",");
-        let at = record.find(&row).unwrap();
-        assert!(record[at..].contains("\"status\": \"NOT_CHECKED\""));
+    for stage in ["V03", "V04"] {
+        assert!(row(&record, stage).contains("\"reason\": \"not integrated\""));
     }
+    // Without -Oeq-scalar, the V05 row says that no rewrite ran.
+    assert!(row(&record, "V05").contains("\"status\": \"NOT_CHECKED\""));
+    assert!(row(&record, "V05").contains("no rewrite ran"));
+    assert!(
+        !record.contains("\"chain\"") && !directory.join("inputs/rewrite-000.proof.evp").exists()
+    );
     assert_eq!(record.matches("\"status\": \"CHECKED\"").count(), 2);
     for digest in [
         evocc_proof::sha256_hex(&ordinary.into_bytes()),
@@ -200,6 +217,202 @@ fn pilot_entries_are_checked_to_post_ssa_evomir() {
         &["--core-entry=pressure", "--core-entry=wide"],
     );
     assert!(record.contains("entry=pressure route=call"));
+}
+
+/// `-Oeq-scalar` with the pinned Rust certificate checker of this build.
+fn rewrite_arguments(policy: Option<&str>) -> Vec<String> {
+    let checker = env!("CARGO_BIN_EXE_evocc-checker");
+    let mut arguments = vec![
+        "-Oeq-scalar".to_owned(),
+        format!("--eq-checker={checker}"),
+        format!("--eq-checker-sha256={}", digest(Path::new(checker))),
+    ];
+    arguments.extend(policy.map(|policy| format!("--eq-policy={policy}")));
+    arguments
+}
+
+/// Accept an optimized compilation. Check the stage order, the assembly and
+/// the digest chain from V01 through each V05 step to V02.
+fn accept_rewrites(source: &Path, entries: &[&str], rewrite: &[String]) -> (Scratch, String) {
+    let directory = new_directory();
+    let mut extra = entries.to_vec();
+    extra.extend(rewrite.iter().map(String::as_str));
+    let output = run_proof(&directory, &lean_checker(), &extra, source, &[]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(stderr.contains("checked to post-SSA EvoMIR, not to final assembly"));
+
+    // The assembly is the assembly of the ordinary optimized compilation.
+    let mut ordinary = vec!["--emit=asm", "-O0", "-fno-builtin"];
+    ordinary.extend(rewrite.iter().map(String::as_str));
+    let ordinary = evocc(&ordinary, source, &[]);
+    assert!(ordinary.status.success());
+    assert_eq!(output.stdout, ordinary.stdout);
+    assert_eq!(
+        std::fs::read(directory.join("output.s")).unwrap(),
+        ordinary.stdout
+    );
+
+    let record = std::fs::read_to_string(directory.join("record.json")).unwrap();
+    assert!(record.contains("\"result\": \"CHECKED_TO_POST_SSA_EVOMIR\""));
+    assert!(record.contains("\"scope\": \"checked to post-SSA EvoMIR, not to final assembly\""));
+    assert!(record.contains("\"all_stages_checked\": false"));
+    assert!(!record.to_lowercase().contains("verified"), "{record}");
+    let order = ["V01", "V05", "V02", "V03", "V04"]
+        .map(|stage| record.find(&format!("\"id\": \"{stage}\",")).unwrap());
+    assert!(order.is_sorted(), "stage order {order:?}");
+    for stage in ["V01", "V05", "V02"] {
+        assert!(row(&record, stage).contains("\"status\": \"CHECKED\""));
+    }
+    for stage in ["V03", "V04"] {
+        assert!(row(&record, stage).contains("\"status\": \"NOT_CHECKED\""));
+    }
+    assert!(row(&record, "V01").contains("\"path\": \"inputs/evoir.evo\""));
+    assert!(row(&record, "V02").contains("\"path\": \"inputs/evoir-rewritten.evo\""));
+
+    // Adjacent stages read the same bytes, and the record names each link in
+    // stage order.
+    let inputs = directory.join("inputs");
+    let steps = (0..)
+        .take_while(|step| {
+            inputs
+                .join(format!("rewrite-{step:03}.proof.evp"))
+                .is_file()
+        })
+        .count();
+    assert!(steps >= 1);
+    let mut files = vec!["evoir.evo".to_owned()];
+    for step in 0..steps {
+        files.push(format!("rewrite-{step:03}.before.evo"));
+        files.push(format!("rewrite-{step:03}.after.evo"));
+    }
+    files.push("evoir-rewritten.evo".to_owned());
+    let chain = &row(&record, "V05")[row(&record, "V05").find("\"chain\"").unwrap()..];
+    let mut at = 0;
+    for pair in files.chunks(2) {
+        let link = digest(&inputs.join(&pair[0]));
+        assert_eq!(link, digest(&inputs.join(&pair[1])), "{pair:?}");
+        at += chain[at..]
+            .find(&link)
+            .expect("the chain names each link in order")
+            + 1;
+    }
+    for input in std::fs::read_dir(&inputs).unwrap() {
+        let digest = digest(&input.unwrap().path());
+        assert!(
+            record.contains(&digest),
+            "record must name input digest {digest}"
+        );
+    }
+    (directory, record)
+}
+
+#[test]
+fn rewrites_are_checked_between_v01_and_v02() {
+    let fixtures = fixture("rewrite");
+    let same = |directory: &Path, name: &str| {
+        for (exported, frozen) in [
+            ("rewrite-000.before.evo", "before.evo"),
+            ("rewrite-000.after.evo", "after.evo"),
+            ("rewrite-000.proof.evp", "proof.evp"),
+        ] {
+            assert_eq!(
+                std::fs::read(directory.join("inputs").join(exported)).unwrap(),
+                std::fs::read(fixtures.join(format!("{name}.{frozen}"))).unwrap(),
+                "{name}.{frozen}"
+            );
+        }
+    };
+
+    // g0: the FixedMul shift count guard fold.
+    let (directory, record) = accept_rewrites(
+        &fixture("doom-fixedmul.c"),
+        &["--core-entry=FixedMul"],
+        &rewrite_arguments(Some("guard-known-true")),
+    );
+    same(&directory, "fixedmul-g0");
+    assert!(record.contains(
+        "stage=V05 entry=FixedMul registry=g0.ub.v1 regions=FixedMul/entry/6 rules=g0_007_signed_count"
+    ));
+    let certificate = digest(&directory.join("inputs/rewrite-000.proof.evp"));
+    assert!(row(&record, "V05").contains(&certificate));
+    drop(directory);
+
+    // p0: the short_circuit comparison folds.
+    let proposal = format!(
+        "--proof-proposal=loop_join={}",
+        fixture("loop-join.cutpoints.json").display()
+    );
+    let (directory, record) = accept_rewrites(
+        &fixture("control.c"),
+        &[
+            "--core-entry=loop_join",
+            "--core-entry=short_circuit",
+            &proposal,
+        ],
+        &rewrite_arguments(None),
+    );
+    same(&directory, "control-p0");
+    assert!(record.contains(
+        "stage=V05 entry=short_circuit registry=p0.scalar.v1 regions=short_circuit/b1/2,short_circuit/b7/2 rules=p0_107_fold_icmp_ne"
+    ));
+    assert!(record.contains("entry=loop_join route=loop"));
+}
+
+#[test]
+fn rejected_rewrites_give_no_output() {
+    // The Lean checker does not support the p0 alias form. There is no
+    // fallback to the program without the rewrite.
+    let directory = new_directory();
+    let mut extra = vec!["--core-entry=pressure", "--core-entry=wide"];
+    let p0 = rewrite_arguments(None);
+    extra.extend(p0.iter().map(String::as_str));
+    let output = run_proof(
+        &directory,
+        &lean_checker(),
+        &extra,
+        &fixture("pressure.c"),
+        &[],
+    );
+    assert_refused(&output, &directory, REJECTED, "stage V05");
+    assert_refused(
+        &output,
+        &directory,
+        REJECTED,
+        "regions=pressure/entry/1 rules=p0_001_add_zero_rhs",
+    );
+    drop(directory);
+
+    // A certificate that changes after export: the premise says that the
+    // guard is false.
+    let tools = new_directory();
+    std::fs::create_dir(&*tools).unwrap();
+    let script = tools.join("changing-certificate.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nfor binding in \"$@\"; do\n  case \"$binding\" in\n    certificate=*)\n      file=${binding#certificate=}\n      sed 's/premises c6:1:1/premises c6:1:0/' \"$file\" > \"$file.changed\" && mv \"$file.changed\" \"$file\" ;;\n  esac\ndone\nexec \"$EVOCC_TEST_LEAN_CHECKER\" \"$@\"\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let directory = new_directory();
+    let mut extra = vec!["--core-entry=FixedMul"];
+    let g0 = rewrite_arguments(Some("guard-known-true"));
+    extra.extend(g0.iter().map(String::as_str));
+    let output = run_proof(
+        &directory,
+        &script,
+        &extra,
+        &fixture("doom-fixedmul.c"),
+        &[("EVOCC_TEST_LEAN_CHECKER", &lean_checker())],
+    );
+    assert_refused(&output, &directory, REJECTED, "stage V05");
+    assert_refused(&output, &directory, REJECTED, "for entry `FixedMul` step 0");
+    let changed = std::fs::read_to_string(directory.join("inputs/rewrite-000.proof.evp")).unwrap();
+    assert!(
+        changed.contains("premises c6:1:0"),
+        "the test checker must change the certificate"
+    );
 }
 
 #[test]
@@ -397,7 +610,9 @@ fn proof_options_are_admitted_only_with_the_baseline_path() {
     let checker = lean_checker();
     for extra in [
         vec!["--core-entry=abs", "-O2"],
+        // -Oeq-scalar requires the pinned Rust certificate checker.
         vec!["--core-entry=abs", "-Oeq-scalar"],
+        vec!["--core-entry=abs", "--eq-proof-dir=/tmp/x"],
         vec!["--core-entry=abs", "--ub-checks=unchecked"],
         vec!["--core-entry=abs", "--frame-opt=paired-saves"],
         vec!["--core-entry=abs", "--proof-proposal=other=/dev/null"],

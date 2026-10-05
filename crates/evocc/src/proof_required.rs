@@ -8,6 +8,13 @@
 //! missing or slow checker, or a construct outside `core-v1` gives a failure
 //! exit code and no output. There is no fallback to ordinary compilation.
 //!
+//! With `-Oeq-scalar`, the directory also holds each rewrite step of the same
+//! compilation: the EvoIR before the step, the EvoIR after the step and the
+//! certificate. V01 reads the EvoIR before the first step, V05 checks each
+//! step, and V02 reads the EvoIR after the last step. Adjacent stages must read
+//! the same bytes. A rejected step gives a failure and no output. There is no
+//! fallback to the program without the rewrite.
+//!
 //! The compiled Lean checker is the one result-checking path. This module does
 //! not check a compilation result. It collects the inputs, runs the checker and
 //! records its answers.
@@ -20,6 +27,7 @@ use std::process::{Command, ExitCode, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
 use evocc_chir::CHirUnit;
+use evocc_eqopt::ProofBundle;
 use evocc_evoir::Module;
 use evocc_mir::core_machine_export::{export_core_machine, CoreMachineMode};
 
@@ -51,6 +59,12 @@ enum Role {
     PostSsa,
     /// An untrusted loop or call proposal. This role is optional.
     Proposal,
+    /// The EvoIR before one rewrite step.
+    Before,
+    /// The EvoIR after one rewrite step.
+    After,
+    /// The `evp2` certificate of one rewrite step.
+    Certificate,
 }
 
 impl Role {
@@ -61,8 +75,22 @@ impl Role {
             Self::Ssa => "ssa",
             Self::PostSsa => "postssa",
             Self::Proposal => "proposal",
+            Self::Before => "before",
+            Self::After => "after",
+            Self::Certificate => "certificate",
         }
     }
+}
+
+/// The EvoIR program that a stage reads in the rewrite chain.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// The EvoIR before the first rewrite step.
+    First,
+    /// The stage runs once for each rewrite step.
+    EachStep,
+    /// The EvoIR after the last rewrite step.
+    Last,
 }
 
 struct Stage {
@@ -70,6 +98,7 @@ struct Stage {
     name: &'static str,
     /// The last program of the stage. The record says "checked to" it.
     reaches: &'static str,
+    place: Place,
     /// The checker input roles, or `None` if the stage is not integrated.
     roles: Option<&'static [Role]>,
     /// The Lean result that an acceptance applies.
@@ -78,19 +107,29 @@ struct Stage {
 
 /// All stages in pipeline order. The Lean table is `stages` in
 /// `lean/EvoIR/Eval.lean`. To integrate a stage, set its `roles` here, add
-/// the same row to the Lean table, and export each new role in `prove`.
+/// the same row to the Lean table, and export each new role in `export`.
 const STAGES: &[Stage] = &[
     Stage {
         id: "V01",
         name: "typed Core C-HIR to EvoIR",
         reaches: "EvoIR",
+        place: Place::First,
         roles: Some(&[Role::Source, Role::Ir, Role::Proposal]),
         theorem: "EvoIR.Core.Symbolic.check_source_target_refines",
+    },
+    Stage {
+        id: "V05",
+        name: "EvoIR rewrites",
+        reaches: "rewritten EvoIR",
+        place: Place::EachStep,
+        roles: Some(&[Role::Source, Role::Before, Role::After, Role::Certificate]),
+        theorem: "EvoIR.Rewrite.checkRewrite_refines; composition EvoIR.Rewrite.check_source_rewrite_refines",
     },
     Stage {
         id: "V02",
         name: "EvoIR to SSA EvoMIR and post-SSA EvoMIR",
         reaches: "post-SSA EvoMIR",
+        place: Place::Last,
         roles: Some(&[Role::Source, Role::Ir, Role::Ssa, Role::PostSsa]),
         theorem: "EvoIR.Machine.checkLowering; composition EvoIR.Machine.source_machine_refines",
     },
@@ -98,6 +137,7 @@ const STAGES: &[Stage] = &[
         id: "V03",
         name: "register allocation",
         reaches: "allocated EvoMIR",
+        place: Place::Last,
         roles: None,
         theorem: "",
     },
@@ -105,13 +145,7 @@ const STAGES: &[Stage] = &[
         id: "V04",
         name: "frame layout and final assembly",
         reaches: "final assembly",
-        roles: None,
-        theorem: "",
-    },
-    Stage {
-        id: "V05",
-        name: "rewrites",
-        reaches: "final assembly",
+        place: Place::Last,
         roles: None,
         theorem: "",
     },
@@ -159,8 +193,13 @@ pub(crate) struct Admission<'a> {
     pub entries: &'a [String],
     /// `-O0` and `-fno-builtin`.
     pub baseline: bool,
-    /// No EqSat, development pass or backend variant, and checked guards.
+    /// No development pass or backend variant, checked guards, and no EqSat
+    /// option without `-Oeq-scalar`.
     pub unchanged_backend: bool,
+    /// `-Oeq-scalar`: the rewrite steps go to stage V05.
+    pub rewrites: bool,
+    /// `--eq-checker-sha256` is on the command line.
+    pub rewrite_checker_pinned: bool,
 }
 
 impl ProofArguments {
@@ -210,7 +249,12 @@ impl ProofArguments {
             || !admission.baseline
             || !admission.unchanged_backend
         {
-            return Err("--proof-required requires --emit=asm, --core-entry=NAME, -O0 and -fno-builtin, and permits no EqSat, development pass, backend variant or unchecked guard".into());
+            return Err("--proof-required requires --emit=asm, --core-entry=NAME, -O0 and -fno-builtin, and permits no development pass, backend variant, unchecked guard or EqSat option without -Oeq-scalar".into());
+        }
+        if admission.rewrites && !admission.rewrite_checker_pinned {
+            return Err(
+                "-Oeq-scalar in proof-required mode requires --eq-checker-sha256=SHA256".into(),
+            );
         }
         if !admission
             .entries
@@ -245,17 +289,27 @@ struct Artifact {
     role: Role,
     /// `None` for a file of the whole module.
     entry: Option<String>,
+    /// For the EvoIR and the rewrite roles: the rewrite step. An EvoIR file at
+    /// step K comes after K rewrite steps. `None` for a file of every step.
+    step: Option<usize>,
     path: String,
     bytes: Vec<u8>,
     sha256: String,
 }
 
 impl Artifact {
-    fn new(role: Role, entry: Option<&str>, path: String, bytes: Vec<u8>) -> Self {
+    fn new(
+        role: Role,
+        entry: Option<&str>,
+        step: Option<usize>,
+        path: String,
+        bytes: Vec<u8>,
+    ) -> Self {
         let sha256 = sha256(&bytes);
         Self {
             role,
             entry: entry.map(str::to_owned),
+            step,
             path,
             bytes,
             sha256,
@@ -271,14 +325,18 @@ impl Artifact {
     }
 }
 
-/// Compile in proof-required mode. On success, the assembly goes to standard
-/// output after the record exists. On failure, nothing goes to standard output.
+/// Compile in proof-required mode. `module` is the module that the backend
+/// compiles. `rewrites` is `None` without `-Oeq-scalar`. Otherwise it is the
+/// module before the first rewrite step and the steps of the chain. On success,
+/// the assembly goes to standard output after the record exists. On failure,
+/// nothing goes to standard output.
 pub(crate) fn run(
     options: &DriverOptions,
     proof: &ProofOptions,
     source: &[u8],
     unit: &CHirUnit<'_>,
     module: &Module,
+    rewrites: Option<(&Module, &[ProofBundle])>,
     resolved: &CHirUnit<'_>,
 ) -> ExitCode {
     let refuse = |(failure, message): Refusal| {
@@ -287,7 +345,7 @@ pub(crate) fn run(
         ));
         ExitCode::from(failure as u8)
     };
-    let (artifacts, closures) = match export(options, proof, unit, module) {
+    let (artifacts, closures) = match export(options, proof, unit, module, rewrites) {
         Ok(exported) => exported,
         Err(refusal) => return refuse(refusal),
     };
@@ -317,6 +375,7 @@ fn export(
     proof: &ProofOptions,
     unit: &CHirUnit<'_>,
     module: &Module,
+    rewrites: Option<(&Module, &[ProofBundle])>,
 ) -> Result<(Vec<Artifact>, Vec<Json>), Refusal> {
     let unsupported = |message: String| (Failure::Unsupported, message);
     let target = options.target_layout();
@@ -338,7 +397,13 @@ fn export(
             ("closure", Json::List(closure.collect())),
         ]));
         let path = format!("inputs/source-{entry}.json");
-        artifacts.push(Artifact::new(Role::Source, Some(entry), path, text.into()));
+        artifacts.push(Artifact::new(
+            Role::Source,
+            Some(entry),
+            None,
+            path,
+            text.into(),
+        ));
     }
 
     // Every function and object in the output must be a checked entry.
@@ -363,10 +428,35 @@ fn export(
         )));
     }
 
+    // V01 reads the EvoIR before the first rewrite step. Each step is the
+    // triple that `--eq-proof-dir` also writes. V02 reads the EvoIR of the
+    // module that the backend compiles.
+    let (initial, steps) = rewrites.unwrap_or((module, &[]));
+    if rewrites.is_some() && steps.is_empty() {
+        return Err((Failure::Input, "-Oeq-scalar gave no rewrite step".into()));
+    }
+    let ir = evocc_evoir::render_module(initial).into_bytes();
+    let path = "inputs/evoir.evo".into();
+    artifacts.push(Artifact::new(Role::Ir, None, Some(0), path, ir));
+    for (step, bundle) in steps.iter().enumerate() {
+        for (role, text, suffix) in [
+            (Role::Before, &bundle.before, "before.evo"),
+            (Role::After, &bundle.after, "after.evo"),
+            (Role::Certificate, &bundle.proof, "proof.evp"),
+        ] {
+            let path = format!("inputs/rewrite-{step:03}.{suffix}");
+            let bytes = text.clone().into_bytes();
+            artifacts.push(Artifact::new(role, None, Some(step), path, bytes));
+        }
+    }
+    if !steps.is_empty() {
+        let ir = evocc_evoir::render_module(module).into_bytes();
+        let path = "inputs/evoir-rewritten.evo".into();
+        artifacts.push(Artifact::new(Role::Ir, None, Some(steps.len()), path, ir));
+    }
+
     // The same lowering and SSA removal as the ordinary backend, which
     // `admit` restricts to checked guards and no backend variant.
-    let ir = evocc_evoir::render_module(module).into_bytes();
-    artifacts.push(Artifact::new(Role::Ir, None, "inputs/evoir.evo".into(), ir));
     let ssa = evocc_mir::lower_module_for_profile(
         evocc_mir::Target::Linux,
         module,
@@ -397,7 +487,7 @@ fn export(
     ] {
         let text = export_core_machine(program, mode)
             .map_err(|error| unsupported(format!("machine snapshot refused: {error}")))?;
-        artifacts.push(Artifact::new(role, None, path.into(), text.into()));
+        artifacts.push(Artifact::new(role, None, None, path.into(), text.into()));
     }
     for (entry, path) in &proof.proposals {
         let bytes = fs::read(path).map_err(|error| {
@@ -408,7 +498,13 @@ fn export(
             )
         })?;
         let path = format!("inputs/proposal-{entry}.json");
-        artifacts.push(Artifact::new(Role::Proposal, Some(entry), path, bytes));
+        artifacts.push(Artifact::new(
+            Role::Proposal,
+            Some(entry),
+            None,
+            path,
+            bytes,
+        ));
     }
     Ok((artifacts, closures))
 }
@@ -424,14 +520,23 @@ fn check_and_record(
     assembly: &str,
 ) -> Result<String, Refusal> {
     let (checker, checker_sha256) = locate_checker(proof)?;
+    let steps = artifacts
+        .iter()
+        .filter(|a| a.role == Role::Certificate)
+        .count();
+    let mut chain = Some(chain(artifacts, steps)?);
     write_new(&proof.directory, artifacts)?;
     let mut stages = Vec::new();
     for stage in STAGES {
-        let Some(roles) = stage.roles else {
-            let reason = if stage.id == "V05" {
-                "not integrated; this mode runs no optional rewrite"
-            } else {
-                "not integrated"
+        let runs = match stage.place {
+            Place::First => 0..1,
+            Place::EachStep => 0..steps,
+            Place::Last => steps..steps + 1,
+        };
+        let (Some(roles), false) = (stage.roles, runs.is_empty()) else {
+            let reason = match stage.roles {
+                None => "not integrated",
+                Some(_) => "no rewrite ran; the compilation has no -Oeq-scalar",
             };
             stages.push(Json::Object(vec![
                 ("id", Json::text(stage.id)),
@@ -441,42 +546,55 @@ fn check_and_record(
             ]));
             continue;
         };
+        let each = stage.place == Place::EachStep;
         let mut results = Vec::new();
         for entry in &options.core_entries {
-            let inputs = roles
-                .iter()
-                .filter_map(|role| {
-                    artifacts.iter().find(|a| {
-                        a.role == *role && a.entry.as_ref().is_none_or(|name| name == entry)
+            for step in runs.clone() {
+                let inputs = roles
+                    .iter()
+                    .filter_map(|role| {
+                        artifacts.iter().find(|a| {
+                            a.role == *role
+                                && a.entry.as_ref().is_none_or(|name| name == entry)
+                                && a.step.is_none_or(|at| at == step)
+                        })
                     })
-                })
-                .collect::<Vec<_>>();
-            let missing = |role: &&Role| !inputs.iter().any(|a| a.role == **role);
-            if let Some(role) = roles.iter().filter(|r| **r != Role::Proposal).find(missing) {
-                let role = role.name();
-                return Err((
-                    Failure::Input,
-                    format!("stage {} has no {role} input", stage.id),
-                ));
+                    .collect::<Vec<_>>();
+                let missing = |role: &&Role| !inputs.iter().any(|a| a.role == **role);
+                if let Some(role) = roles.iter().filter(|r| **r != Role::Proposal).find(missing) {
+                    let role = role.name();
+                    return Err((
+                        Failure::Input,
+                        format!("stage {} has no {role} input", stage.id),
+                    ));
+                }
+                let report = check(&checker, proof, stage, entry, each.then_some(step), &inputs)?;
+                let mut result = vec![("entry", Json::text(entry))];
+                if each {
+                    result.push(("step", Json::Number(step as u64)));
+                }
+                result.extend([
+                    ("result", Json::text("ACCEPTED")),
+                    (
+                        "inputs",
+                        Json::List(inputs.iter().map(|a| a.json()).collect()),
+                    ),
+                    ("report", Json::text(&report)),
+                ]);
+                results.push(Json::Object(result));
             }
-            let report = check(&checker, proof, stage, entry, &inputs)?;
-            results.push(Json::Object(vec![
-                ("entry", Json::text(entry)),
-                ("result", Json::text("ACCEPTED")),
-                (
-                    "inputs",
-                    Json::List(inputs.iter().map(|a| a.json()).collect()),
-                ),
-                ("report", Json::text(&report)),
-            ]));
         }
-        stages.push(Json::Object(vec![
+        let mut row = vec![
             ("id", Json::text(stage.id)),
             ("name", Json::text(stage.name)),
             ("status", Json::text("CHECKED")),
             ("theorem", Json::text(stage.theorem)),
             ("results", Json::List(results)),
-        ]));
+        ];
+        if let Some(chain) = chain.take_if(|_| each) {
+            row.push(("chain", chain));
+        }
+        stages.push(Json::Object(row));
     }
 
     // The checker must not change an input that the record names.
@@ -560,6 +678,61 @@ fn check_and_record(
     Ok(format!("{result}: {scope}; record {}", record.display()))
 }
 
+/// The EvoIR files of the rewrite chain, in stage order. V01 reads the file
+/// before step 0. Step K of V05 reads the file before step K and the file after
+/// step K. V02 reads the file after the last step. Two adjacent stages must read
+/// the same bytes. A different digest is a gap and stops the compilation. The
+/// result is one link for each pair of adjacent stages.
+fn chain(artifacts: &[Artifact], steps: usize) -> Result<Json, Refusal> {
+    let file = |role: Role, step: usize, reader: String| match artifacts
+        .iter()
+        .find(|a| a.role == role && a.step == Some(step))
+    {
+        Some(artifact) => Ok((artifact, reader)),
+        None => {
+            let role = role.name();
+            Err((
+                Failure::Input,
+                format!("stage {reader} has no {role} input"),
+            ))
+        }
+    };
+    let mut links = Vec::new();
+    for step in 0..=steps {
+        let left = if step == 0 {
+            file(Role::Ir, 0, "V01".into())?
+        } else {
+            file(Role::After, step - 1, format!("V05 step {}", step - 1))?
+        };
+        let right = if step == steps {
+            file(Role::Ir, steps, "V02".into())?
+        } else {
+            file(Role::Before, step, format!("V05 step {step}"))?
+        };
+        if left.0.sha256 != right.0.sha256 {
+            return Err((
+                Failure::Input,
+                format!(
+                    "the EvoIR chain has a gap: stage {} reads `{}` and stage {} reads `{}`, and their digests differ",
+                    left.1, left.0.path, right.1, right.0.path
+                ),
+            ));
+        }
+        let reader = |(artifact, reader): (&Artifact, String)| {
+            Json::Object(vec![
+                ("stage", Json::text(&reader)),
+                ("role", Json::text(artifact.role.name())),
+                ("path", Json::text(&artifact.path)),
+            ])
+        };
+        links.push(Json::Object(vec![
+            ("sha256", Json::text(&left.0.sha256)),
+            ("read_by", Json::List(vec![reader(left), reader(right)])),
+        ]));
+    }
+    Ok(Json::List(links))
+}
+
 /// The checker path and its digest. A pinned digest must match.
 fn locate_checker(proof: &ProofOptions) -> Result<(PathBuf, String), Refusal> {
     let missing = |message: String| (Failure::Checker, message);
@@ -621,20 +794,22 @@ fn create_new(path: &Path, bytes: &[u8]) -> Result<(), Refusal> {
         })
 }
 
-/// Run one stage for one entry with the time limit. The result is the
-/// acceptance line of the checker.
+/// Run one stage for one entry, and for one rewrite step of V05, with the time
+/// limit. The result is the acceptance line of the checker.
 fn check(
     checker: &Path,
     proof: &ProofOptions,
     stage: &Stage,
     entry: &str,
+    step: Option<usize>,
     inputs: &[&Artifact],
 ) -> Result<String, Refusal> {
     let failed = |message: String| (Failure::Checker, message);
+    let step_name = step.map_or_else(String::new, |step| format!("-{step:03}"));
     let log = |suffix: &str| {
         proof
             .directory
-            .join(format!("checks/{}-{entry}.{suffix}", stage.id))
+            .join(format!("checks/{}-{entry}{step_name}.{suffix}", stage.id))
     };
     let open = |path: &Path| {
         fs::File::create(path).map_err(|error| {
@@ -682,7 +857,11 @@ fn check(
     let stdout = fs::read_to_string(log("out")).unwrap_or_default();
     let stderr = fs::read_to_string(log("err")).unwrap_or_default();
     let reason = stderr.lines().next().unwrap_or("no reason").to_owned();
-    let what = format!("stage {} ({}) for entry `{entry}`", stage.id, stage.name);
+    let step_text = step.map_or_else(String::new, |step| format!(" step {step}"));
+    let what = format!(
+        "stage {} ({}) for entry `{entry}`{step_text}",
+        stage.id, stage.name
+    );
     match status.code() {
         Some(0) => {
             let expected = format!("STAGE_ACCEPTED stage={} entry={entry}", stage.id);

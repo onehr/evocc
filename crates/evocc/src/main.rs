@@ -297,7 +297,7 @@ fn main() -> ExitCode {
         eprintln!("       evocc --emit=evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --emit=core-c-hir --core-entry=NAME -O0 -fno-builtin <file> (source input only, not a proof)");
         eprintln!("       evocc --emit=asm [--target={SUPPORTED_TARGET}] <file>");
-        eprintln!("       evocc --emit=asm --proof-required=NEW_DIR --core-entry=NAME -O0 -fno-builtin [--proof-checker=PATH --proof-checker-sha256=SHA256 --proof-timeout-ms=N --proof-proposal=NAME=PATH] <file>");
+        eprintln!("       evocc --emit=asm --proof-required=NEW_DIR --core-entry=NAME -O0 -fno-builtin [--proof-checker=PATH --proof-checker-sha256=SHA256 --proof-timeout-ms=N --proof-proposal=NAME=PATH] [-Oeq-scalar --eq-checker-sha256=SHA256 ...] <file>");
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --check [--error-format=text|json] <file>");
         eprintln!("       evocc --explain E3xxx");
@@ -781,11 +781,11 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         emit_asm: mode == DriverMode::EmitAsm,
         entries: &core_entries,
         baseline: optimization == 0 && !standard_builtins,
-        unchanged_backend: !optimize_scalar_evoir
-            && opt_passes.is_empty()
+        rewrites: optimize_scalar_evoir,
+        rewrite_checker_pinned: eq_checker_digest.is_some(),
+        unchanged_backend: opt_passes.is_empty()
             && pass_report.is_none()
-            && eq_proof_dir.is_none()
-            && !eq_options
+            && (optimize_scalar_evoir || (eq_proof_dir.is_none() && !eq_options))
             && !frame_variants_selected
             && !selection_variants_selected
             && !allocation_variants_selected
@@ -1459,9 +1459,13 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                             return ExitCode::from(1);
                         }
                     };
-                    let module = if options.optimize_scalar_evoir {
+                    // Proof-required mode keeps the module before the first
+                    // rewrite step for stage V01.
+                    let initial = (options.proof.is_some() && options.optimize_scalar_evoir)
+                        .then(|| module.clone());
+                    let (module, steps) = if options.optimize_scalar_evoir {
                         match optimize_scalar_evoir(module, options) {
-                            Ok(module) => module,
+                            Ok(optimized) => optimized,
                             Err(detail) => {
                                 options
                                     .error_format
@@ -1478,13 +1482,16 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                                 return ExitCode::from(1);
                             }
                         }
-                        module
+                        (module, Vec::new())
                     };
                     match action {
                         ParsedAction::EmitEvoIr => emit_evoir(&module),
                         ParsedAction::EmitAsm => match &options.proof {
                             Some(proof) => {
-                                proof_required::run(options, proof, &src, &unit, &module, resolved)
+                                let rewrites = initial.as_ref().map(|i| (i, steps.as_slice()));
+                                proof_required::run(
+                                    options, proof, &src, &unit, &module, rewrites, resolved,
+                                )
                             }
                             None => emit_asm(options, &module, resolved),
                         },
@@ -1543,10 +1550,12 @@ fn apply_development_passes(module: Module, options: &DriverOptions) -> Result<M
     Ok(output.module)
 }
 
+/// The result is the optimized module and the proof bundle of each
+/// transaction, in chain order.
 fn optimize_scalar_evoir(
     module: evocc_evoir::Module,
     options: &DriverOptions,
-) -> Result<evocc_evoir::Module, String> {
+) -> Result<(evocc_evoir::Module, Vec<evocc_eqopt::ProofBundle>), String> {
     let checker = match &options.eq_checker {
         Some(binary) => {
             evocc_proof::StandaloneProofChecker::new(binary.clone(), std::env::temp_dir())
@@ -1563,7 +1572,8 @@ fn optimize_scalar_evoir(
             if let Some(path) = &options.eq_proof_dir {
                 run.write_bundle(path)?;
             }
-            Ok(run.module)
+            let steps = run.transactions.into_iter().map(|t| t.bundle).collect();
+            Ok((run.module, steps))
         }
         Err(failure) => {
             if let Some(path) = &options.eq_proof_dir {
