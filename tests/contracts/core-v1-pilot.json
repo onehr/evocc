@@ -893,20 +893,21 @@
     "claim_ceiling": "Soundness for every accepted pair plus the frozen constructor/original-function acceptance population, not completeness of proof discovery for every well-formed program. Faithful typed-source export, decoding, the Lean compiler/runtime and host toolchain remain trusted boundaries. Generic kernel proofs are not per-invocation kernel replay. V02-V06 remain unimplemented. No source-C-to-native or verified-release theorem."
   },
   "machine_lowering_checkpoint": {
-    "status": "IN_PROGRESS_PRIVATE_CALLS_AND_FINAL_GATES_OPEN",
+    "status": "IMPLEMENTED_FINAL_GATES_PENDING",
     "checked_on": "2026-10-05",
     "interface": "EvoIR.Machine.checkLowering",
     "contract": "Accepted actual EvoIR/SSA-MIR/postSSA-MIR triples preserve all typed arguments, unbounded return bits, first admitted diagnostics, divergence and target progress. The same supplied SSA program connects selection and transport. Always-on dead-poison normalization, DCE, forwarding, full edge vectors and parallel copies have independent composed proofs.",
-    "original_replay": {"modules": 17, "accepted_entries": 68, "refused": 0, "input_or_tool_failures": 0, "log": "machine-public-cfg-original-replay.log"},
-    "private_replay": {"accepted_entries": ["private_word", "private_wide", "private_loop", "private_checked", "private_shift"], "refused_entries": ["private_caller"], "bounded_executions": 87, "bounded_failures": 0, "logs": ["machine-private-cfg-replay.log", "machine-private-guard-joined-replay.log", "machine-private-shift-joined-replay.log"], "interpretation": "Bounded execution controls are not universal proof. Listed accepted entries independently return PROVED_MACHINE_PAIR through the public checker."},
-    "focused_controls": {"private_finite_kernel_controls": 7, "private_proposal_controls": 6, "private_loop_runtime_controls": 7, "failed": 0, "selftest": "PASS", "interrupted_attempt": "Concrete loop admission by kernel decide exceeded the bounded elaboration attempt and was interrupted, not PASS. Runtime controls use the compiled proof-valued checker; its generic all-input soundness theorem is kernel checked. No native_decide or new axiom was introduced."},
-    "compiled_checker_sha256": "e19584a4b4d8c3a61293ce9ec0de7259225a98dfc5d3be69e496237a495dee9f",
-    "public_build": "PASS: proper Lake build, 568 jobs, native link",
+    "original_replay": {"modules": 17, "accepted_entries": 68, "refused": 0, "input_or_tool_failures": 0, "log": "machine-final-original-replay.log"},
+    "private_replay": {"accepted_entries": ["private_word", "private_wide", "private_caller", "private_loop", "private_checked", "private_shift", "private_keep", "private_call_loop"], "refused_entries": [], "bounded_executions": 108, "bounded_failures": 0, "logs": ["machine-final-private-replay.log", "machine-final-private-guard-replay.log", "machine-final-private-shift-replay.log", "machine-final-private-call-loop-replay.log"], "interpretation": "Bounded execution controls are not universal proof. Listed accepted entries independently return PROVED_MACHINE_PAIR through the public checker. Companion private IR is deliberate storage coverage, not claimed original C lowering."},
+    "private_call_contract": "Actual call and return instructions preserve literal saved callers, unbounded pointer identities, separate source/target memories and their independent endFrame operations. Full argument vectors remain intact; an independently checked demand proof permits only actual unused-argument substitution. Both demand progress premises follow from the preceding all-argument callee proof. The call-loop fixture combines repeated private calls, ignored-argument zero substitution and pointer-carrying backedges.",
+    "focused_controls": {"private_finite_kernel_controls": 7, "private_proposal_controls": 6, "private_loop_runtime_controls": 7, "private_guard_runtime_controls": 12, "private_call_runtime_controls": 9, "failed": 0, "selftest": "PASS", "selftest_log": "machine-complete-selftest.log", "interrupted_attempt": "Concrete loop admission by kernel decide exceeded the bounded elaboration attempt and was interrupted, not PASS. Runtime controls use the compiled proof-valued checker; its generic all-input soundness theorem is kernel checked. No native_decide or new axiom was introduced."},
+    "public_build": "PASS: proper Lake build, 586 jobs, native link",
+    "compiled_checker_sha256": "037a956652973259e46b939ac3725b12c553bfd4c0bb71dbc48758255ea2f449",
     "final_clean_lean_gate": "NOT_RUN",
     "final_full_workspace_gate": "NOT_RUN",
     "capture_directory": ".evidence/verification-core/20261004/source-execution",
     "capture_retention_bytes": 524288000,
-    "claim_ceiling": "Actual accepted IR-to-postSSA pairs only. Private call composition and final gates still prevent V02 closure. Export/decoding and compiled Lean runtime remain disclosed boundaries. No allocation, physical frame, emission, source-to-native or verified-release claim."
+    "claim_ceiling": "Actual accepted IR-to-postSSA pairs only, not a universal theorem for every lower.rs input. Final gates remain pending. Export/decoding and compiled Lean runtime remain disclosed boundaries. No allocation, physical frame, emission, source-to-native or verified-release claim."
   },
   "integration_gates": {
     "rust_implementation_commit": "6c28845a13ee6687f7e0dcce61b96606eac6152a",
@@ -947,7 +948,7 @@
     "independent_source_validation": "KERNEL_PROVED_EXECUTION_SAFETY",
     "existing_pipeline_population": "FOCUSED_AND_FULL_WORKSPACE_PASS_NOT_A_COMPILATION_PROOF",
     "V01_source_to_evoir": "PASS_FROZEN_PROFILE",
-    "V02_selection_and_copies": "IN_PROGRESS_PRIVATE_CALLS_AND_FINAL_GATES_OPEN",
+    "V02_selection_and_copies": "IMPLEMENTED_FINAL_GATES_PENDING",
     "V03_allocation": "NOT_IMPLEMENTED",
     "V04_frame_emission_and_baseline": "NOT_IMPLEMENTED",
     "V05_contextual_rewrites": "NOT_IMPLEMENTED",

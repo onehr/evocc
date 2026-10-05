@@ -3,6 +3,7 @@ import EvoIR.MachineSelectionDemandModule
 import EvoIR.MachinePrivateFinite
 import EvoIR.MachinePrivateLoop
 import EvoIR.MachinePrivateGuardedFunction
+import EvoIR.MachinePrivateModule
 import EvoIR.MachineTransportSound
 import EvoIR.MachineTransportProposal
 import EvoIR.IRPoisonProposal
@@ -76,8 +77,11 @@ private def checkSelection (source : IR.Program) (ssa target : Program)
           match privateCFGProposedFunctionPair source ssa entry parameters type with
           | some selected => return lowerTokenPair source ssa target entry parameters type selected plan accepted
           | none =>
-            let selected ← privateGuardedFunctionPair source ssa entry parameters type
-            return lowerTokenPair source ssa target entry parameters type selected plan accepted
+            match privateGuardedFunctionPair source ssa entry parameters type with
+            | some selected => return lowerTokenPair source ssa target entry parameters type selected plan accepted
+            | none =>
+              let selected ← privateModulePair source ssa entry parameters type
+              return lowerTokenPair source ssa target entry parameters type selected plan accepted
 
 /-- A proved normalization leg changes only independently checked dead poison
 definitions. The final theorem still starts from the supplied original IR. -/
