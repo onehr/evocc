@@ -15,8 +15,13 @@ whole compiler or a claim that every program is optimized through EqSat.
 The design separates **semantic equivalence in EvoIR**, **machine constraints in
 EvoMIR**, and **rule soundness in Lean 4**. [Why this split, and what is proved](#why-evoir-and-evomir).
 
+For a restricted integer profile, proved Lean checkers also check compilation
+results from typed source through virtual machine lowering. These proofs stop
+before register allocation and machine-code emission.
+See [Verification of compilation results](#verification-of-compilation-results).
+
 The authoritative language and machine profiles are
-[EvoIR 1.9.115](docs/evoir-spec.md) and [EvoMIR 0.54](docs/evomir-spec.md).
+[EvoIR 1.9.116](docs/evoir-spec.md) and [EvoMIR 0.64](docs/evomir-spec.md).
 GCC 14.2 and Clang 19.1 in the sealed AArch64 lab provide reference measurements;
 documented profile decisions resolve supported disagreements, and remaining
 unsupported forms have explicit refusal boundaries.
@@ -407,7 +412,7 @@ C source → checked C-HIR → EvoIR → EqSat search + extraction → EvoIR →
                             └─ before ─────┴─ certificate ────┘        └─ allocation verifier
                                          evo-proofcheck
 
-Lean 4 (offline): proofs about the scalar rule registry and known-bits model
+Lean 4:          rule proofs and restricted compilation-result checkers
 Native tests:     C lowering, machine code, ABI and real-program behavior
 ```
 
@@ -450,7 +455,10 @@ Performance and coverage remain measured roadmap work.
 ### What Lean 4 proves—and what it does not
 
 Lean is an **offline proof tool**, not EvoCC's code generator and not a runtime
-dependency of compiled C programs.
+dependency of compiled C programs. It has two roles: prove rewrite rules and
+prove compilation-result checkers. The table below covers the rewrite layer.
+The [compilation verification section](#verification-of-compilation-results)
+describes the separate source and machine-lowering theorems.
 
 | Layer | What it establishes |
 |---|---|
@@ -464,7 +472,9 @@ registry digest and historical proof subject; they are not a blanket theorem
 about every feature in the latest specification. The semantic definitions,
 registry decoder, checker and correspondence to Rust remain explicit trust
 boundaries. These results **do not prove the C front end, memory model, backend,
-entire compiler, or Linux kernel correct**. Reproduce the separate proof gate
+entire compiler, or Linux kernel correct as a whole**. The restricted
+compilation theorems below do not remove these wider limits.
+Reproduce the separate proof gate
 with [`tools/gate-lean.sh`](tools/gate-lean.sh).
 
 The [Q2/Q3 implementation design](docs/framing-draft.md) separates rule
@@ -530,6 +540,206 @@ the first guard slice is now accepted. The [six-TU GCC/Clang size comparison](do
 is complete and records larger EvoCC objects. G2 whole-kernel reproducibility,
 full Q2 acceptance and any Q3 self-improvement claim remain **NOT_ACCEPTED**.
 None of these test populations substitutes for the others.
+
+## Verification of compilation results
+
+As of **2026-10-05**, two verification layers pass their frozen acceptance
+profile: **source-to-EvoIR verification** and **EvoIR-to-virtual-machine
+verification**. Both check the actual compiler output. Neither proves that
+every program accepted by EvoCC is compiled correctly.
+
+The method is *translation validation*: check each supplied compilation
+result, instead of proving the compiler algorithm. The compiler and proof
+search can propose a correspondence. An independent checker must establish it.
+The checker is written in Lean, and its soundness theorem is checked by the
+Lean kernel.
+
+```text
+Typed Core C-HIR                complete selected functions and callees
+        |
+        | source-to-EvoIR checker
+        v
+Actual EvoIR
+        |
+        | instruction-selection checker
+        v
+SSA EvoMIR                      virtual registers and block arguments
+        |
+        | edge and copy checker
+        v
+Post-SSA EvoMIR                 virtual registers and explicit copies
+        ---------------------  current formal boundary
+        |
+        | allocation, physical frames, emission, assembly and linking
+        v
+Native program                  tested; not covered by these theorems
+```
+
+Here, *SSA* means static single assignment. Each SSA value has one definition.
+Removing SSA replaces block-argument transfers with explicit copies. It does
+not assign physical registers.
+
+### The checked source profile
+
+The proof input is typed Core C-HIR, not raw C text. It retains complete
+function bodies, types, evaluation order and local bindings. The frozen
+profile uses checked integer operations on AArch64 Linux LP64. Its acceptance
+inputs use `-O0 -fno-builtin`, with optional optimizations off.
+
+| Area | Included in this proof profile |
+|---|---|
+| Integer types | `int`, `unsigned int`, `long`, `unsigned long`, `long long` and `unsigned long long`. Type rank and signedness remain distinct. |
+| Expressions | Integer arithmetic, bitwise operations, comparisons, conversions, conditional expressions and short-circuit evaluation. Unsigned left shift and signed or unsigned right shift are included. Signed left shift is excluded. |
+| Control flow | Branches, joins, `while`, `do-while`, `for`, `break`, `continue` and value returns. Loops do not need a fixed iteration bound. |
+| Calls | Direct calls to defined, prototyped, nonvariadic functions. The selected call graph has no recursion. |
+| Local storage | Private scalar automatic objects, initialization, assignment and lifetime. Their addresses cannot escape. The IR proof tracks private bytes and object identities. |
+| Observable results | Return type and bits, or the first admitted arithmetic diagnostic: `E3002`, `E3003`, `E3004` or `E3005`. Infinite execution is also covered. |
+
+Floating point, general pointer access, heap objects, shared or global memory,
+external calls, volatile or atomic access, inline assembly and other GNU C
+features are outside this proof profile. Some of these features work in the
+ordinary compiler. That does not make them formally verified.
+
+Uninitialized reads and unsupported memory faults must be excluded by source
+validation and the proved invariants. They are not extra successful outcomes.
+This is not a claim that all C undefined behavior becomes a checked native
+diagnostic.
+
+### Source-to-EvoIR verification
+
+This layer proves two different properties.
+
+First, the independent source validator checks types, bindings, definite
+initialization, sequencing, scopes and the direct-call graph.
+The [`checked_source_safety` theorem](lean/EvoIR/Core/ValidatorSafety.lean)
+states that an accepted source program can start with any correctly typed
+arguments. Each reachable state then has a typed result, an admitted
+diagnostic, or a next step. It cannot stop in a malformed state. This theorem
+does not assume that a compilation result has already passed another checker.
+
+Second, the [source-to-EvoIR checker](lean/EvoIR/Core/SourceTargetCheck.lean)
+compares that source tree with the supplied EvoIR program. Its
+`check_source_target_refines` theorem covers every accepted pair and all typed
+arguments. It preserves return bits and the first admitted diagnostic. For
+example, the checked `abs(INT_MIN)` case must report `E3004`; it cannot become
+a successful return of `INT_MIN`.
+
+The checker covers expression order, integer conversions, branch arguments,
+loop backedges, calls and returns. Private-storage proofs cover allocation,
+byte contents, initialization, lifetime end and preservation of the caller's
+objects. A callee result alone is not enough to establish correct call behavior.
+
+Loop checks establish relations at control-flow checkpoints and check their
+successor paths. They do not unroll the program to a test limit. Proof search
+has a finite resource budget, but the accepted theorem has no execution bound.
+A failed proposal is a refusal, not evidence that the two programs agree.
+
+### EvoIR-to-virtual-machine verification
+
+The [`checkLowering` checker](lean/EvoIR/MachineLowering.lean) takes three actual
+programs: EvoIR, SSA EvoMIR and post-SSA EvoMIR. It checks two connected steps.
+
+1. **Instruction selection.** The selected virtual instructions must implement
+   the supplied EvoIR operations. Checks include integer widths, conditions,
+   arithmetic guards, calls, return values and private storage.
+2. **SSA removal.** Edge transfers and explicit copy sequences must preserve
+   the same values. The proof covers complete edge argument lists, forwarding,
+   split edges and copy cycles. A sequence that destroys a value before its
+   last required copy must be refused.
+
+Both checks refer to the **same SSA program and entry state**. A proof about
+one compilation cannot justify a different machine snapshot.
+
+Always-on transformations also need justification. The current checker covers
+dead-code elimination and independently checked normalization of dead poison
+definitions. Poison marks an undefined value; it is not an ordinary zero.
+The final theorem still starts from the original supplied EvoIR.
+It also checks the compiler's substitution of zero for unused private-call
+arguments. That substitution requires an independent proof that the callee
+does not need those values.
+
+Private-call checks preserve saved caller state and private memory across
+return. They keep full argument lists and distinct object identities. The
+combined acceptance cases include a loop with repeated private calls and a
+pointer carried through a backedge.
+
+The [composition theorem](lean/EvoIR/MachineCorrespondence.lean) connects this
+result to an accepted source-to-EvoIR result. The intermediate EvoIR program,
+entry states and result type must match. Under those premises, the complete
+typed-source-to-post-SSA result preserves the defined observations for all
+typed arguments. It also preserves divergence and excludes a stuck target
+state. Administrative copies cannot introduce an infinite silent loop.
+
+### Recorded acceptance evidence
+
+The [acceptance receipt](tests/contracts/core-v1-pilot.json) separates original
+inputs, added controls and historical failures. Read `source_to_ir_completion`
+for the source result and `machine_lowering_checkpoint` for the later machine
+result. Earlier partial records remain in the file; they are not the current
+completion status.
+
+| Check | Recorded result | Limit of this evidence |
+|---|---|---|
+| Source-to-EvoIR replay | 32 positive pairs and 36 integer-conversion pairs accepted. One retained negative pair refused. | Acceptance of these inputs, not every C function. The general theorem applies to every pair the checker accepts. |
+| Original machine-lowering replay | 68 entries from 17 modules accepted; no refusal or input/tool failure. | Actual EvoIR-to-post-SSA results. Not allocated or emitted code. |
+| Private-storage machine controls | Eight entries accepted by the public checker. Separately, 108 bounded executions passed. | The added IR fixtures exercise storage. They are not presented as original C lowering. The bounded runs are tests, not universal proofs. |
+| Clean Lean gate | 118 audited Core declarations, all `kernel-only`, with no native axioms in their recorded dependencies. | The modeled semantics and checker theorems. Not a kernel replay of each CLI invocation. |
+| Full Rust workspace gate | 402 suites; 3,085 passed, zero failed, five pre-existing ignored campaigns. Clippy and formatting passed. | Implementation regression evidence, not a semantic theorem. Ignored campaigns are not passes. |
+
+The final combined gates bind implementation commit `56af3157`. The
+[Lean audit](tests/contracts/lean-p0-receipt.json) records the clean source
+identity, Lean 4.32.2 and theorem dependencies. The source fixtures include
+unchanged `FixedMul` from doomgeneric and `abs` from musl, plus synthetic
+control-flow and call cases. This does not prove either complete application.
+
+Negative controls include wrong conversions, changed diagnostics, incorrect
+edge arguments, broken copy sequences, missing effects and corrupt caller
+storage. A successful sample run cannot override a refused proof check.
+
+To rebuild the Lean checker, run its tests and regenerate its audit receipt,
+run this command from the repository root with the pinned Lean toolchain
+installed:
+
+```sh
+tools/gate-lean.sh
+```
+
+The public checker also accepts exported files directly:
+
+```sh
+lean/.lake/build/bin/evoir-sem --check-core-leaf-pair source.json target.evo
+lean/.lake/build/bin/evoir-sem --check-core-loop-pair source.json target.evo proposal.json
+lean/.lake/build/bin/evoir-sem --check-core-machine-pair source.json target.evo ssa.json postssa.json
+```
+
+These file names are placeholders for the actual exports and, for loops, the
+proposed checkpoints. The machine command uses `source.json` to select an entry
+and its signature. It does **not** replace the source-to-EvoIR check. Normal
+compilation does not automatically obtain this complete proof chain.
+
+### Trust boundaries and work not yet proved
+
+The generic soundness theorems are checked by the Lean kernel. The public
+checker is a compiled Lean executable. Running it also trusts Lean's compiler
+and runtime, the host toolchain, and file decoding. A successful invocation
+does not submit a new per-program proof term to the kernel.
+
+The formal model starts after preprocessing, parsing and type elaboration.
+Faithful export of the typed source and machine snapshots remains a boundary.
+The selected semantic definitions must also match the intended compiler
+contract. Tests help check these connections; they do not prove them.
+
+The present result does **not** prove register allocation, physical stack-frame
+layout, prologue or epilogue code, assembly emission, linking, runtime libraries
+or processor execution. The existing allocation verifier and native tests do
+not close those proof obligations. There is no end-to-end source-to-native or
+verified-release claim yet.
+
+The P0 and guard rewrite proofs above are a separate result. Their composition
+with this whole-function compilation chain remains open. Neither layer proves
+that an optimization improves code size or speed. A valid program can also be
+refused when proof search lacks a suitable correspondence or exhausts its
+budget. Refusal is not permission to label an unchecked result as verified.
 
 ## Layout and development
 
