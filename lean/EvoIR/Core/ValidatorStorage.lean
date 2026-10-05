@@ -69,6 +69,37 @@ theorem caller_restore_safe (static : LocalState) (locals : Locals)
     static.Realizes (resumeFlow state (.function (some (callerId, locals)) type) (.returned value)).locals := by
   simp [resumeFlow, typed, realized]
 
+/-- The scope-frame invariant separates newly declared objects from the
+retained outer bindings. It cannot be inferred merely from the captured depth:
+an incorrectly ordered or shadowing prefix would violate these premises. -/
+structure ScopeShape (incoming : LocalState) (introduced retained : Locals) : Prop where
+  types : ∀ id, (retained.find? (·.symbol == id)).map Slot.type =
+    (incoming.bindings.find? (fun pair => pair.1 == id)).map Prod.snd
+  separate : ∀ id,
+    ((incoming.bindings.find? (fun pair => pair.1 == id)).map Prod.snd).isSome = true →
+      introduced.find? (·.symbol == id) = none
+
+/-- Pop precisely the captured prefix and retain newly established facts only
+for live outer objects. The store may have changed inside the scope; it is not
+replaced by the old incoming values. -/
+theorem scope_exit_safe (incoming current : LocalState) (introduced retained : Locals)
+    (shape : ScopeShape incoming introduced retained)
+    (realized : current.Realizes (introduced ++ retained)) (state : State) (flow : Flow)
+    (locals : state.locals = introduced ++ retained) :
+    resumeFlow state (.scope retained.length) flow = {state with control := .flow flow, locals := retained} ∧
+    (LocalState.mk incoming.bindings (scopeInitialized incoming current)).Realizes retained := by
+  constructor
+  · have depth : ¬introduced.length + retained.length < retained.length := by omega
+    simp [resumeFlow, locals, depth]
+  · refine ⟨shape.types, ?_, ?_⟩
+    · intro slot member value stored
+      exact realized.values slot (List.mem_append_right _ member) value stored
+    · intro id member
+      obtain ⟨initialized, present⟩ := List.mem_filter.mp member
+      obtain ⟨slot, value, found, stored⟩ := realized.initialized id initialized
+      have noInner := shape.separate id present
+      exact ⟨slot, value, by simpa [List.find?_append, noInner] using found, stored⟩
+
 /-- Initialization facts can grow only by the object actually written.
 Other first bindings retain their old values, including hidden/uninitialized
 objects; a same-width but different source rank is not a type equality. -/

@@ -39,6 +39,18 @@ example : writeSlot [⟨1, ⟨.int, true⟩, none⟩]
     1 ⟨.int, true⟩ (.ofInt .int 2) false =
       .error (.malformed "const assignment") := by rfl
 
+-- Depth alone is not the scope invariant: a prefix cannot shadow a retained
+-- object, and the retained objects must preserve their exact source ranks.
+example : ¬ScopeShape ⟨[(1, q)], [1]⟩ [⟨1, q, none⟩] [⟨1, q, some (.ofInt .int 2)⟩] := by
+  intro shape
+  have hidden := shape.separate 1 (by rfl)
+  cases hidden
+example : ¬ScopeShape ⟨[(1, ⟨.long, false⟩)], [1]⟩ []
+    [⟨1, ⟨.longLong, false⟩, some (.ofInt .longLong 2)⟩] := by
+  intro shape
+  have types := shape.types 1
+  simp [List.find?] at types
+
 -- The actual exported pair from initializer-self-assignment.c, without source
 -- rewriting or input restriction. The target retains the inner write's unused
 -- constant but returns the final initializer's value.
@@ -84,7 +96,7 @@ def storageSelfTest : IO UInt32 := do
       IO.eprintln s!"storage proof regression: {name}"
       failures := failures + 1
   if failures != 0 then return 1
-  IO.println "2 initializer closure pairs, 3 refusals and 9 kernel storage controls pass"
+  IO.println "2 initializer closure pairs, 3 refusals and 11 kernel storage controls pass"
   return 0
 
 end EvoIR.Core.Source.StorageTests

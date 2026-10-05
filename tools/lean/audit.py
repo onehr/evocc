@@ -301,6 +301,17 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Source.scope_exit_safe",
+        "∀ (incoming current : EvoIR.Core.Source.LocalState) (introduced retained : EvoIR.Core.Source.Locals), "
+        "EvoIR.Core.Source.ScopeShape incoming introduced retained → current.Realizes (introduced ++ retained) → "
+        "∀ (state : EvoIR.Core.Source.State) (flow : EvoIR.Core.Source.Flow), state.locals = introduced ++ retained → "
+        "EvoIR.Core.Source.resumeFlow state "
+        "(EvoIR.Core.Source.Frame.scope EvoIR.Core.Source.Value (List.length retained)) flow = "
+        "{ control := EvoIR.Core.Source.Control.flow flow, locals := retained, continuation := state.continuation, "
+        "functionId := state.functionId } ∧ { bindings := incoming.bindings, "
+        "initialized := EvoIR.Core.Source.scopeInitialized incoming current }.Realizes retained",
+    ),
+    (
         "EvoIR.Core.Source.LocalState.Realizes.after_write",
         "∀ (state : EvoIR.Core.Source.LocalState) (locals updated : EvoIR.Core.Source.Locals), "
         "state.Realizes locals → ∀ (id : Nat) (destination : EvoIR.Core.Source.QualifiedType) "

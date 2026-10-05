@@ -277,8 +277,12 @@ structure FlowFacts where
   fallsThrough : Bool := true
   deriving Repr
 
+def scopeInitialized (incoming current : LocalState) : List Nat :=
+  current.initialized.filter (fun id =>
+    ((incoming.bindings.find? (fun pair => pair.1 == id)).map Prod.snd).isSome)
+
 private def restoreScope (incoming out : LocalState) : LocalState :=
-  ⟨incoming.bindings, out.initialized.filter (fun id => (lookup incoming id).isSome)⟩
+  ⟨incoming.bindings, scopeInitialized incoming out⟩
 
 def checkStmt (callees : List Function) (returnType : QualifiedType) :
     Nat → Nat → LocalState → Stmt → Except String FlowFacts
