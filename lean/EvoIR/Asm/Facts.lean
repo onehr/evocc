@@ -43,7 +43,7 @@ theorem funOk_of_check (ctx : Ctx) (checked : checkAsm ctx.p ctx.asm ctx.hints =
   · rename_i f' h g hf' hh hg
     cases hf'
     simp only [checkFunction, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at this
-    obtain ⟨⟨⟨⟨⟨⟨⟨⟨name, body⟩, frame⟩, regs⟩, _⟩, entry⟩, stack⟩, need⟩, span⟩ := this
+    obtain ⟨⟨⟨⟨⟨⟨⟨name, body⟩, frame⟩, regs⟩, entry⟩, stack⟩, need⟩, span⟩ := this
     exact ⟨h, g, ⟨⟨hf, hh, hg⟩, name, by simpa using body, frame, layoutOk_of_frameOk f h frame,
       regs, entry, stack, need, span, by omega, count⟩⟩
   · cases this

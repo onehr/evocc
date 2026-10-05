@@ -14,11 +14,10 @@ AST and the untrusted frame hints.
   a save slot.
 * The allocated function uses only `x0`-`x15` and `x19`-`x28`. Each
   operand view agrees with the width of its instruction.
-* The pointer places of the function are moved only through 64-bit views and
-  are used only as load and store bases. No pointer is an argument, a stack
-  argument or a result.
-* Frame objects are created only in the entry block. No branch goes to the
-  entry block. Block identifiers are unique.
+* The entry block is the first block. No branch goes to the entry block.
+  Block identifiers are unique.
+* Private frame objects (`frameSlot`, `load`, `store`) and `stackRelease`
+  are refused: the soundness proof does not cover them.
 * The local stack bound of the function covers its frame and each callee.
 * The assembly body is equal to the fixed templates: the prologue, each block
   label, each instruction template, each terminator template with the
@@ -245,69 +244,6 @@ def instructionsOf (f : Alloc.Function) : List Instruction := f.blocks.flatMap (
 def locsOf (f : Alloc.Function) : List Loc :=
   (instructionsOf f).flatMap instLocs ++ f.blocks.flatMap (fun b => termLocs b.term)
 
-/-! Pointer places. A pointer comes only from `frameSlot` and moves only
-through `mov`, spill stores and spill reloads. The set is closed under these
-moves; it is computed by iteration and then checked to be closed. -/
-
-/-- The moves of an instruction: (destination, source). -/
-def instMove : Instruction → Option (Loc × Loc)
-  | .mov dst src => some (dst, src)
-  | .spillStore slot src => some (.spill slot src.width, src)
-  | .spillReload dst slot => some (dst, .spill slot dst.width)
-  | .incomingArg dst slot => some (dst, .incoming slot dst.width)
-  | .outgoingArg slot src => some (.outgoing slot src.width, src)
-  | _ => none
-
-def pointerSeeds (f : Alloc.Function) : List Place :=
-  (instructionsOf f).filterMap fun
-    | .frameSlot dst _ _ _ => some dst.place
-    | _ => none
-
-def closeOnce (f : Alloc.Function) (places : List Place) : List Place :=
-  places ++ (instructionsOf f).filterMap fun inst =>
-    match instMove inst with
-    | some (dst, src) => if src.place ∈ places ∧ dst.place ∉ places then some dst.place else none
-    | none => none
-
-def pointerPlaces (f : Alloc.Function) : List Place :=
-  (List.range ((instructionsOf f).length + 1)).foldl (fun places _ => closeOnce f places) (pointerSeeds f)
-
-/-- The checked closure property: the seeds are in the set, and each move
-from a place in the set goes to a place in the set. -/
-def pointerClosed (f : Alloc.Function) (places : List Place) : Bool :=
-  (pointerSeeds f).all (· ∈ places) &&
-    (instructionsOf f).all fun inst =>
-      match instMove inst with
-      | some (dst, src) => !(src.place ∈ places) || dst.place ∈ places
-      | none => true
-
-/-- The uses of the pointer places that the checker admits. Instructions
-that read their operands as integer bits are not restricted: a pointer
-operand makes the allocated step malformed. -/
-def pointerUses (places : List Place) (inst : Instruction) : Bool :=
-  let ptr (loc : Loc) : Bool := loc.place ∈ places
-  match inst with
-  | .mov dst src => !(ptr src) || (src.width == .x && dst.width == .x)
-  | .spillStore _ src => !(ptr src) || src.width == .x
-  | .spillReload dst slot => !((Place.spill slot) ∈ places) || dst.width == .x
-  | .incomingArg _ slot => !((Place.incoming slot) ∈ places)
-  | .outgoingArg _ src => !(ptr src)
-  | .frameSlot dst _ _ _ => dst.width == .x
-  | .bl _ args _ => args.all (fun a => !(ptr a))
-  | .binary _ _ lhs rhs _ => !(ptr lhs) && !(ptr rhs)
-  | .binaryImm _ _ lhs _ _ => !(ptr lhs)
-  | .cmp _ lhs rhs _ => !(ptr lhs) && !(ptr rhs)
-  | .cmpImm _ lhs _ _ => !(ptr lhs)
-  | .csel _ _ lhs rhs _ _ => !(ptr lhs) && !(ptr rhs)
-  | _ => true
-
-def pointerSafe (f : Alloc.Function) : Bool :=
-  let places := pointerPlaces f
-  pointerClosed f places && (instructionsOf f).all (pointerUses places) &&
-    f.blocks.all fun b => match b.term with
-      | .ret values => values.all (fun v => !(v.place ∈ places))
-      | _ => true
-
 /-! Frame layout. -/
 
 def regionsDisjoint : List (Nat × Nat) → Bool
@@ -422,7 +358,7 @@ def checkFunction (p : Program) (hints : List FrameHint) (i : Nat) (f : Alloc.Fu
     (hint : FrameHint) (g : Asm.Function) : Bool :=
   g.name == f.name &&
   expectedBody hint f == some g.body &&
-  frameOk f hint && registersOk f && pointerSafe f && entryOk f &&
+  frameOk f hint && registersOk f && entryOk f &&
   stackOk p hints i f hint &&
   frameBytes hint ≤ needOf p hints f.name
 

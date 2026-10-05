@@ -55,7 +55,6 @@ def refusal (p : EvoIR.Alloc.Program) (asm : File) (hints : List FrameHint) : St
           else if Check.expectedBody hint f != some g.body then some "template"
           else if !Check.frameOk f hint then some "frame"
           else if !Check.registersOk f then some "registers"
-          else if !Check.pointerSafe f then some "pointers"
           else if !Check.entryOk f then some "entry"
           else if !Check.stackOk p hints i f hint then some "stack"
           else if !(Check.frameBytes hint ≤ Check.needOf p hints f.name) then some "stack"

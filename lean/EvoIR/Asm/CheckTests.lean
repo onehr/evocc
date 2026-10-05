@@ -50,6 +50,11 @@ def str (w : Machine.Width) (r : Nat) (base : Base) (off : Int) : Line := .inst 
 def ldr (w : Machine.Width) (r : Nat) (base : Base) (off : Int) : Line := .inst (.ldr w (.r r) base off)
 
 def run : IO Unit := do
+  -- Every frozen pilot module prints its actual text and is accepted.
+  for name in ["doom-fixedmul", "musl-abs", "control", "pressure"] do
+    let (p, file, hints, text) ← load name
+    expect s!"{name} prints the actual text" (printMatches file text) true
+    expect s!"{name} accepted" (Check.checkAsm p file hints) true
   let (p, file, hints, text) ← load "pressure"
   expect "pressure prints the actual text" (printMatches file text) true
   expect "pressure accepted" (Check.checkAsm p file hints) true
