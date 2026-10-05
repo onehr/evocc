@@ -148,6 +148,20 @@ def sourceResumeSelfTest : IO UInt32 := do
       IO.eprintln s!"wrong return instruction position admitted: {pc}"
       failed := failed+1
   let types : List Source.IntType := [.int, .uint, .long, .ulong, .longLong, .ulongLong]
+  let mut rightLogical := 0
+  for type in types do
+    for isOr in [false, true] do
+      for left in [0, 7] do
+        let frame : Source.Frame (CWord inputWidths) :=
+          .binaryRight .int (if isOr then .or else .and)
+            (CWord.literal (.ofNat type left))
+        let samples := [0, 1, 2^type.width-1] |>.map fun n =>
+          let truth := if isOr then left != 0 || n != 0 else left != 0 && n != 0
+          (n, (.ok (.ofNat type (if truth then 1 else 0)) : Source.Result))
+        if !checks p type [frame] [] samples then
+          IO.eprintln s!"right-logical continuation mismatch: {repr type} {isOr} {left}"
+          failed := failed+1
+        rightLogical := rightLogical+1
   let mut captures := 0
   for type in types do
     for number in [0, 2^(type.width-1), 2^type.width-1] do
@@ -169,7 +183,7 @@ def sourceResumeSelfTest : IO UInt32 := do
         IO.eprintln s!"return value captured caller input: {repr type} {number}"
         failed := failed+1
       captures := captures+1
-  if failed == 0 then IO.println s!"{tests.length} symbolic continuations, original call_loop suffix, {mutations.length+3} suffix mutations and {captures} fresh-return controls pass"
+  if failed == 0 then IO.println s!"{tests.length} symbolic continuations, {rightLogical} right-logical diagrams, original call_loop suffix, {mutations.length+3} suffix mutations and {captures} fresh-return controls pass"
   return if failed == 0 then 0 else 1
 
 end EvoIR.Core.Symbolic.SourceResumeTests

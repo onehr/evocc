@@ -185,8 +185,10 @@ theorem LoopDiagram.call_checked_return (argumentsσ callerσ : Subst inputWidth
     (arguments : inst.operands.mapM (IR.lookup (scope.denote callerσ callTokens)) =
       .ok (loopInputValues d.tokens ((parameterWords source.parameters).map (CWord.denote argumentsσ))))
     (results : inst.results.map IR.Binding.type = target.returns)
+    (path : PathConditions inputWidths)
     (resumption : CheckedReturn s t fid f callerTokens observationType source.returnType.type
-      locals frames b.name (pc+1) scope inst.results d.tokens) :
+      locals frames b.name (pc+1) scope inst.results d.tokens path)
+    (holds : path.Holds callerσ) :
     LoweringRefines s t observationType
       ⟨.call source.symbol source.returnType.type
           ((parameterWords source.parameters).map (CWord.denote argumentsσ)),
@@ -199,9 +201,9 @@ theorem LoopDiagram.call_checked_return (argumentsσ callerσ : Subst inputWidth
     _ (Transition.refinement_simulation (Source.step s) (IR.step t)
       observeSource (observeTarget observationType))
   intro τ word afterCalls typed
-  obtain ⟨σ, savedOwner, savedFrame, sourceSame, targetSame⟩ :=
-    resumption.related callerσ (word.denote τ) typed owner afterCalls
-  have resumed := resumption.refinement σ savedOwner savedFrame
+  obtain ⟨σ, savedOwner, savedFrame, savedHolds, sourceSame, targetSame⟩ :=
+    resumption.related callerσ holds (word.denote τ) typed owner afterCalls
+  have resumed := resumption.refinement σ savedHolds savedOwner savedFrame
   rw [← sourceSame, ← targetSame] at resumed
   simpa only [TargetExit.callState, cut_results_values, LoweringRefines] using resumed
 

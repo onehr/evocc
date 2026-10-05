@@ -148,12 +148,38 @@ def resumeShort {Γ : Var → Nat} (p : Source.Program) (budget : Nat)
       simpa [shortTree, StateTree.denote, truth_term_sound, truth,
         StateTree.booleanize_sound, constant, Source.Frame.map] using path⟩⟩
 
+def resumeRightShort {Γ : Var → Nat} (p : Source.Program) (locals : LocalStore Γ)
+    (isOr : Bool) (left word : CWord Γ) :
+    Option {tree // ResumptionDiagram p locals
+      (.binaryRight .int (if isOr then .or else .and) left) word tree} :=
+  let skip := StateTree.value locals (CWord.constant (.boolean isOr))
+  let right := StateTree.value locals word.booleanize
+  let tree := if isOr then StateTree.branch left.truthTerm skip right
+    else StateTree.branch left.truthTerm right skip
+  some ⟨tree, ⟨by intro σ context rest; cases context <;> rfl, by
+    intro σ fid
+    have constant (b : Bool) :
+        (CWord.constant (Γ := Γ) (.boolean b)).denote σ = Source.Value.boolean b := by
+      cases b <;> rfl
+    have result : tree.denote σ = (locals.denote σ,
+        Source.binaryValue (if isOr then .or else .and) (left.denote σ) (word.denote σ)) := by
+      cases isOr <;> cases truth : (left.denote σ).truth <;>
+        simp [tree, skip, right, StateTree.denote, truth_term_sound, truth,
+          booleanize_sound, constant, Source.binaryValue, pure, Except.pure]
+    rw [result]
+    apply Source.resumes_binary_right
+    intro answer result
+    cases isOr <;> simp only [↓reduceIte, Source.binaryValue, pure, Except.pure, Except.ok.injEq] at result <;>
+      cases result <;> rfl⟩⟩
+
 def resumeExpression {Γ : Var → Nat} (p : Source.Program) (budget : Nat)
     (locals : LocalStore Γ) (frame : Source.Frame (CWord Γ)) (word : CWord Γ) :
     Option {tree // ResumptionDiagram p locals frame word tree} :=
   match frame with
   | .binaryLeft .int .and right => resumeShort p budget locals false right word
   | .binaryLeft .int .or right => resumeShort p budget locals true right word
+  | .binaryRight .int .and left => resumeRightShort p locals false left word
+  | .binaryRight .int .or left => resumeRightShort p locals true left word
   | .binaryRight type op left => do
     let r ← binaryResult op left word
     if typed : r.val.2.type = type then

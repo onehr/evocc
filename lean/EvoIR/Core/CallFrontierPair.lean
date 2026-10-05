@@ -11,15 +11,17 @@ abbrev CalleeProposals := Nat → Option (Nat × List CutpointLayout)
 
 def CallFrontierAgreement (source : Source.Program) (target : IR.Program)
     (fid : Nat) (f : IR.Function) (type : Source.IntType)
-    (s : SourceCursor inputWidths) (t : TargetCallSite inputWidths) : Prop :=
-  ∀ σ owner nextFrame, LoweringRefines source target type (s.denote σ fid)
+    (s : SourceCursor inputWidths) (t : TargetCallSite inputWidths)
+    (path : PathConditions inputWidths := []) : Prop :=
+  ∀ σ, path.Holds σ → ∀ owner nextFrame, LoweringRefines source target type (s.denote σ fid)
     (t.denote σ f owner nextFrame [])
 
 def checkCallFrontierWith (source : Source.Program) (target : IR.Program)
     (fid : Nat) (f : IR.Function) (tokens : Bool) (type : Source.IntType)
     (proposals : CalleeProposals) (continuation : ContinuationBuilder source target fid f type)
+    (path : PathConditions inputWidths)
     (s : SourceCursor inputWidths) (t : TargetCallSite inputWidths) :
-    Option (PLift (CallFrontierAgreement source target fid f type s t)) := do
+    Option (PLift (CallFrontierAgreement source target fid f type s t path)) := do
   match sourceCursor : s with
   | ⟨.call id returnType args, locals, frames⟩ =>
     let sf : {g // source.functions.find? (·.symbol == id) = some g} ←
@@ -51,10 +53,10 @@ def checkCallFrontierWith (source : Source.Program) (target : IR.Program)
                 some (loopInputSlots diagram.tokens args) then
               if results : inst.val.results.map IR.Binding.type = tf.val.returns then
                 let resumed ← checkedReturnWith source target fid f tokens type sf.val.returnType.type
-                  locals frames b.val.name (t.pc+1) t.scope inst.val.results diagram.tokens continuation
+                  locals frames b.val.name (t.pc+1) t.scope inst.val.results diagram.tokens continuation path
                 return ⟨by
                   rw [sourceCursor]
-                  intro σ owner nextFrame
+                  intro σ holds owner nextFrame
                   have typed : (args.map (CWord.denote σ)).map Source.Value.type =
                       sf.val.parameters.map (fun p => p.type.type) := by
                     simpa only [List.map_map, Function.comp_def, CWord.denote] using argsTyped
@@ -67,7 +69,7 @@ def checkCallFrontierWith (source : Source.Program) (target : IR.Program)
                     (by simpa only [sourceId] using sf.property) function
                     (by simpa only [blockName] using b.property) inst.property call
                     (by simpa only [targetName] using tf.property)
-                    (by simpa only [coverage] using actualArgs) results resumed
+                    (by simpa only [coverage] using actualArgs) results path resumed holds
                   simpa only [CallFrontierAgreement, SourceCursor.denote, CutControl.denote,
                     TargetCallSite.denote, coverage, returnTyped, sourceId, blockName] using proof⟩
               else none
@@ -77,7 +79,7 @@ def checkCallFrontierWith (source : Source.Program) (target : IR.Program)
       else none
     else none
   | _ => do
-    let proof ← continuation s t.label t.pc t.scope
+    let proof ← continuation path s t.label t.pc t.scope
     return ⟨proof.down⟩
 
 theorem frontier_prefix_refines (source : Source.Program) (target : IR.Program)
@@ -87,14 +89,17 @@ theorem frontier_prefix_refines (source : Source.Program) (target : IR.Program)
     (targetTree : CutTree inputWidths (TargetCallSite inputWidths))
     (sourcePrefix : SourceCutRuns source false cursor sourceTree)
     (targetPrefix : TargetFrontierRuns target f label pc scope targetTree)
-    (matched : CutMatch (CallFrontierAgreement source target fid f type)
+    (path : PathConditions inputWidths)
+    (matched : CutMatchUnder (fun σ s t => ∀ owner nextFrame,
+      LoweringRefines source target type (s.denote σ fid)
+        (t.denote σ f owner nextFrame [])) path
       sourceTree.normalizeTrace targetTree.normalizeTrace)
-    (σ : Subst inputWidths) (owner nextFrame : Nat) :
+    (σ : Subst inputWidths) (owner nextFrame : Nat) (holds : path.Holds σ) :
     LoweringRefines source target type (cursor.denote σ fid)
       (cutTargetState σ f label pc owner nextFrame scope []) := by
   obtain ⟨sf, sp, _, sourceOutcome⟩ := sourcePrefix σ fid none
   obtain ⟨tf, tp, targetOutcome⟩ := targetPrefix σ owner nextFrame []
-  have agreement := matched.sound σ
+  have agreement := matched σ holds
   rw [CutTree.normalize_trace_sound, CutTree.normalize_trace_sound] at agreement
   rcases agreement with ⟨fault, sourceFailed, targetFailed⟩ |
     ⟨se, te, sourceSuccess, targetSuccess, continued⟩
@@ -109,23 +114,25 @@ theorem frontier_prefix_refines (source : Source.Program) (target : IR.Program)
     have th : tf = te.denote σ f owner nextFrame [] := by simpa [targetSuccess] using targetOutcome
     subst sf
     subst tf
-    exact (continued σ owner nextFrame).prepend sp.toReaches tp.toReaches
+    exact (continued owner nextFrame).prepend sp.toReaches tp.toReaches
 
 /-- Build a caller suffix, including further cyclic calls. The decreasing
 budget bounds construction, not callee iterations or the values returned. -/
 def checkedSuffix (source : Source.Program) (target : IR.Program) (fid : Nat)
     (f : IR.Function) (tokens : Bool) (type : Source.IntType) (proposals : CalleeProposals) :
     Nat → ContinuationBuilder source target fid f type
-  | 0, _, _, _, _ => none
-  | budget+1, cursor, label, pc, scope => do
-    if let some finite := returnContinuation source target fid f tokens type cursor label pc scope (budget+1) then
+  | 0, _, _, _, _, _ => none
+  | budget+1, path, cursor, label, pc, scope => do
+    if let some finite := returnContinuation source target fid f tokens type cursor label pc scope (budget+1) path then
       return ⟨finite.refines⟩
     let sp ← sourceCallFrontier source (budget+1) cursor
     let tp ← targetCallFrontier target f (budget+1) label pc scope
-    let joined ← cutMatch (checkCallFrontierWith source target fid f tokens type proposals
-      (checkedSuffix source target fid f tokens type proposals budget)) sp.val.normalizeTrace tp.val.normalizeTrace
-    return ⟨frontier_prefix_refines source target fid f type cursor label pc scope
-      sp.val tp.val sp.property tp.property joined.down⟩
+    let joined ← cutMatchUnder (checkCallFrontierWith source target fid f tokens type proposals
+      (checkedSuffix source target fid f tokens type proposals budget)) (budget+1) path
+      sp.val.normalizeTrace tp.val.normalizeTrace
+    return ⟨fun σ holds owner nextFrame =>
+      frontier_prefix_refines source target fid f type cursor label pc scope
+        sp.val tp.val sp.property tp.property path joined.down σ owner nextFrame holds⟩
 
 structure CallFrontierPair (source : Source.Program) (target : IR.Program) where
   sourceFunction : Source.Function
@@ -177,9 +184,9 @@ def callFrontierPair (source : Source.Program) (target : IR.Program)
           ⟨.statement sf.val.body, locals.val, [.function none sf.val.returnType.type]⟩
         let sp ← sourceCallFrontier source budget cursor
         let tp ← targetCallFrontier target tf.val budget block.val.name 0 scope.val
-        let joined ← cutMatch (checkCallFrontierWith source target sf.val.symbol tf.val tokens
+        let joined ← cutMatchUnder (checkCallFrontierWith source target sf.val.symbol tf.val tokens
           sf.val.returnType.type proposals (checkedSuffix source target sf.val.symbol tf.val tokens
-            sf.val.returnType.type proposals budget)) sp.val.normalizeTrace tp.val.normalizeTrace
+            sf.val.returnType.type proposals budget)) budget [] sp.val.normalizeTrace tp.val.normalizeTrace
         return {
           sourceFunction := sf.val, targetFunction := tf.val, tokens := tokens
           checked := by
@@ -216,7 +223,7 @@ def callFrontierPair (source : Source.Program) (target : IR.Program)
             · simp [IR.initial, targetFound, entered, Bind.bind, Except.bind, pure, Except.pure,
                 cutTargetState, targetState]
             · exact frontier_prefix_refines source target sf.val.symbol tf.val sf.val.returnType.type
-                cursor block.val.name 0 scope.val sp.val tp.val sp.property tp.property joined.down σ 1 2 }
+                cursor block.val.name 0 scope.val sp.val tp.val sp.property tp.property [] joined.down σ 1 2 trivial }
       else none
     else none
   else none

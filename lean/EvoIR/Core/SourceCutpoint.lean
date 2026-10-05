@@ -213,10 +213,27 @@ def cursorArguments {Γ : Var → Nat} (locals : LocalStore Γ) (type : Source.I
   | (destination, expr) :: rest =>
     ⟨.expression expr, locals, .callArgument type callee destination rest reverseWords :: k⟩
 
+def cursorLogical {Γ : Var → Nat} (locals : LocalStore Γ) (k : SavedFrames Γ)
+    (isOr : Bool) (right : Source.Expr) (word : CWord Γ) :
+    Option {tree // CursorStep
+      ⟨.value word, locals, .binaryLeft .int (if isOr then .or else .and) right :: k⟩ tree} :=
+  let skip := CutTree.leaf (SourceCursor.mk (.value (CWord.constant (.boolean isOr))) locals k)
+  let next := CutTree.leaf (SourceCursor.mk (.expression right) locals
+    (.binaryRight .int (if isOr then .or else .and) word :: k))
+  some ⟨if isOr then .branch word.truthTerm skip next else .branch word.truthTerm next skip, by
+    intro σ p fid context
+    cases isOr <;> cases context <;> cases truth : (word.denote σ).truth <;>
+      simp [CutTree.eval, truth_term_sound, truth, skip, next, Source.Step, Source.step,
+        Source.resumeValue, Source.valueResult, SourceCursor.denote, CutControl.denote,
+        sourceContextFrames, SavedFrames.denote, Source.Frame.map,
+        Source.Value.boolean, Source.Value.ofNat] <;> rfl⟩
+
 def cursorValue {Γ : Var → Nat} (locals : LocalStore Γ) (k : SavedFrames Γ)
     (word : CWord Γ) :
     Option {tree // CursorStep ⟨.value word, locals, k⟩ tree} :=
   match k with
+  | .binaryLeft .int .and right :: rest => cursorLogical locals rest false right word
+  | .binaryLeft .int .or right :: rest => cursorLogical locals rest true right word
   | .callArgument type callee destination remaining reverseWords :: rest =>
     some ⟨.leaf (cursorArguments locals type callee remaining
       (word.cast destination.type :: reverseWords) rest), by

@@ -297,6 +297,21 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.cutMatchUnder",
+        "{Γ : EvoIR.Var → Nat} → {α β : Type} → {related : EvoIR.Subst Γ → α → β → Prop} → "
+        "((path : EvoIR.Core.Symbolic.PathConditions Γ) → (a : α) → (b : β) → "
+        "Option (PLift (∀ (σ : EvoIR.Subst Γ), EvoIR.Core.Symbolic.PathConditions.Holds σ path → related σ a b))) → "
+        "Nat → (path : EvoIR.Core.Symbolic.PathConditions Γ) → (a : EvoIR.Core.Symbolic.CutTree Γ α) → "
+        "(b : EvoIR.Core.Symbolic.CutTree Γ β) → Option (PLift (EvoIR.Core.Symbolic.CutMatchUnder related path a b))",
+    ),
+    (
+        "EvoIR.Core.Symbolic.PathConditions.for_return_sound",
+        "∀ (σ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) (value : EvoIR.Core.Source.Value) "
+        "(path : EvoIR.Core.Symbolic.PathConditions EvoIR.Core.Symbolic.inputWidths), "
+        "EvoIR.Core.Symbolic.PathConditions.Holds (EvoIR.Core.Symbolic.returnSubst σ value) path.forReturn ↔ "
+        "EvoIR.Core.Symbolic.PathConditions.Holds σ path",
+    ),
+    (
         "EvoIR.Core.Transition.refinement_simulation",
         "∀ {S : Type u_1} {T : Type u_2} {O : Type u_3} (sourceStep : S → Option S) "
         "(targetStep : T → Option T) (sourceObserve : S → Option O) (targetObserve : T → Option O), "
@@ -608,8 +623,11 @@ CORE_PRIMITIVE_TARGETS = [
         "∀ {source : EvoIR.Core.Source.Program} {ir : EvoIR.Core.IR.Program} {fid : Nat} {target : "
         "EvoIR.Core.IR.Function} {tokens : Bool} {type : EvoIR.Core.Source.IntType} {cursor : "
         "EvoIR.Core.Symbolic.SourceCursor EvoIR.Core.Symbolic.inputWidths} {label : String} {pc : Nat} {scope : "
-        "EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths} (d : EvoIR.Core.Symbolic.ReturnContinuation source ir "
-        "fid target tokens type cursor label pc scope) (σ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths) (owner nextFrame "
+        "EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths} "
+        "{path : EvoIR.Core.Symbolic.PathConditions EvoIR.Core.Symbolic.inputWidths} "
+        "(d : EvoIR.Core.Symbolic.ReturnContinuation source ir "
+        "fid target tokens type cursor label pc scope path) (σ : EvoIR.Subst EvoIR.Core.Symbolic.inputWidths), "
+        "EvoIR.Core.Symbolic.PathConditions.Holds σ path → ∀ (owner nextFrame "
         ": Nat), EvoIR.Core.LoweringRefines source ir type (EvoIR.Core.Symbolic.SourceCursor.denote σ fid cursor) "
         "(EvoIR.Core.Symbolic.cutTargetState σ target label pc owner nextFrame scope [])",
     ),
@@ -628,9 +646,11 @@ CORE_PRIMITIVE_TARGETS = [
         "t.functions = some target → List.mapM (EvoIR.Core.IR.lookup (EvoIR.Core.Symbolic.Scope.denote callerσ "
         "EvoIR.Core.Symbolic.callTokens scope)) inst.operands = Except.ok (EvoIR.Core.Symbolic.loopInputValues d.tokens "
         "(List.map (EvoIR.Core.Symbolic.CWord.denote argumentsσ) (EvoIR.Core.Symbolic.parameterWords source.parameters))) "
-        "→ List.map EvoIR.Core.IR.Binding.type inst.results = target.returns → ∀ (resumption : "
+        "→ List.map EvoIR.Core.IR.Binding.type inst.results = target.returns → "
+        "∀ (path : EvoIR.Core.Symbolic.PathConditions EvoIR.Core.Symbolic.inputWidths) (resumption : "
         "EvoIR.Core.Symbolic.CheckedReturn s t fid f callerTokens observationType source.returnType.type locals frames "
-        "b.name (pc + 1) scope inst.results d.tokens), EvoIR.Core.LoweringRefines s t observationType { control := "
+        "b.name (pc + 1) scope inst.results d.tokens path), "
+        "EvoIR.Core.Symbolic.PathConditions.Holds callerσ path → EvoIR.Core.LoweringRefines s t observationType { control := "
         "EvoIR.Core.Source.Control.call source.symbol source.returnType.type (List.map (EvoIR.Core.Symbolic.CWord.denote "
         "argumentsσ) (EvoIR.Core.Symbolic.parameterWords source.parameters)), locals := "
         "EvoIR.Core.Symbolic.LocalStore.denote callerσ locals, "

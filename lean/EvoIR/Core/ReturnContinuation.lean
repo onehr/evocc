@@ -1,50 +1,58 @@
 import EvoIR.Core.CutpointInvariant
 import EvoIR.Core.FreshReturn
+import EvoIR.Core.PathCondition
 
 /-! Construct a checked caller suffix from the actual source continuation and
 the actual post-call instruction position. The result covers every symbolic
-valuation and frame counter; it is not obtained by running a callee on sample
-arguments or replacing its result by a chosen constant. -/
+valuation satisfying the enclosing path premises and every frame counter;
+root admission has no premises. It is not obtained by running a callee on
+sample arguments or replacing its result by a chosen constant. -/
 namespace EvoIR.Core.Symbolic
 
 structure ReturnContinuation (source : Source.Program) (ir : IR.Program)
     (fid : Nat) (target : IR.Function) (tokens : Bool) (type : Source.IntType)
-    (cursor : SourceCursor inputWidths) (label : String) (pc : Nat) (scope : Scope inputWidths) where
+    (cursor : SourceCursor inputWidths) (label : String) (pc : Nat) (scope : Scope inputWidths)
+    (path : PathConditions inputWidths := []) where
   sourceTree : CutTree inputWidths (SourceCursor inputWidths)
   targetTree : CutTree inputWidths (TargetExit inputWidths)
   -- A return-only frontier is already terminal on the source side. This
   -- finite suffix uses terminal agreement, not a zero-step cyclic backedge.
   sourceDiagram : SourceCutRuns source false cursor sourceTree
   targetDiagram : CallingCutRuns ir target tokens true label pc scope targetTree
-  agreement : CutMatch (CutExitAgreement [] fid target tokens type)
+  agreement : CutMatchUnder (fun _ => CutExitAgreement [] fid target tokens type) path
     sourceTree.normalizeTrace targetTree.normalizeTrace
 
 def returnContinuation (source : Source.Program) (ir : IR.Program)
     (fid : Nat) (target : IR.Function) (tokens : Bool) (type : Source.IntType)
     (cursor : SourceCursor inputWidths) (label : String) (pc : Nat) (scope : Scope inputWidths)
-    (budget : Nat) : Option (ReturnContinuation source ir fid target tokens type cursor label pc scope) := do
+    (budget : Nat) (path : PathConditions inputWidths := []) :
+    Option (ReturnContinuation source ir fid target tokens type cursor label pc scope path) := do
   let s ← sourceCutDiagram source [] budget false cursor
   let t ← callingCutDiagram ir target tokens type [] budget true scope label pc
-  let same ← cutMatch (checkExit [] fid target tokens type) s.val.normalizeTrace t.val.normalizeTrace
+  let same ← cutMatchUnder (fun _ a b => do
+    let proof ← checkExit [] fid target tokens type a b
+    return ⟨fun _ _ => proof.down⟩) budget path s.val.normalizeTrace t.val.normalizeTrace
   return ⟨s.val, t.val, s.property, t.property, same.down⟩
 
 def ResumedAt (fid : Nat) (target : IR.Function) (cursor : SourceCursor inputWidths)
-    (label : String) (pc : Nat) (scope : Scope inputWidths) (s : Source.State) (t : IR.State) : Prop :=
-  ∃ σ owner nextFrame, s = cursor.denote σ fid ∧
+    (label : String) (pc : Nat) (scope : Scope inputWidths) (s : Source.State) (t : IR.State)
+    (path : PathConditions inputWidths := []) : Prop :=
+  ∃ σ owner nextFrame, path.Holds σ ∧ s = cursor.denote σ fid ∧
     t = cutTargetState σ target label pc owner nextFrame scope []
 
 theorem ReturnContinuation.simulation {source : Source.Program} {ir : IR.Program}
     {fid : Nat} {target : IR.Function} {tokens : Bool} {type : Source.IntType}
     {cursor : SourceCursor inputWidths} {label : String} {pc : Nat} {scope : Scope inputWidths}
-    (d : ReturnContinuation source ir fid target tokens type cursor label pc scope) :
+    {path : PathConditions inputWidths}
+    (d : ReturnContinuation source ir fid target tokens type cursor label pc scope path) :
     Transition.CheckpointSimulation (Source.step source) (IR.step ir)
-      observeSource (observeTarget type) (ResumedAt fid target cursor label pc scope) := by
+      observeSource (observeTarget type) (fun s t => ResumedAt fid target cursor label pc scope s t path) := by
   constructor
   intro s t related
-  obtain ⟨σ, owner, nextFrame, rfl, rfl⟩ := related
+  obtain ⟨σ, owner, nextFrame, holds, rfl, rfl⟩ := related
   obtain ⟨sf, sp, positiveSource, sourceOutcome⟩ := d.sourceDiagram σ fid none
   obtain ⟨tf, tp, positiveTarget, targetOutcome⟩ := d.targetDiagram σ owner nextFrame []
-  have agreement := d.agreement.sound σ
+  have agreement := d.agreement σ holds
   rw [CutTree.normalize_trace_sound, CutTree.normalize_trace_sound] at agreement
   rcases agreement with ⟨fault, sourceFailed, targetFailed⟩ |
     ⟨se, te, sourceSuccess, targetSuccess, matched⟩
@@ -79,45 +87,49 @@ theorem ReturnContinuation.simulation {source : Source.Program} {ir : IR.Program
 theorem ReturnContinuation.refines {source : Source.Program} {ir : IR.Program}
     {fid : Nat} {target : IR.Function} {tokens : Bool} {type : Source.IntType}
     {cursor : SourceCursor inputWidths} {label : String} {pc : Nat} {scope : Scope inputWidths}
-    (d : ReturnContinuation source ir fid target tokens type cursor label pc scope)
-    (σ : Subst inputWidths) (owner nextFrame : Nat) :
+    {path : PathConditions inputWidths}
+    (d : ReturnContinuation source ir fid target tokens type cursor label pc scope path)
+    (σ : Subst inputWidths) (holds : path.Holds σ) (owner nextFrame : Nat) :
     LoweringRefines source ir type (cursor.denote σ fid)
       (cutTargetState σ target label pc owner nextFrame scope []) :=
-  d.simulation.sound ⟨σ, owner, nextFrame, rfl, rfl⟩
+  d.simulation.sound ⟨σ, owner, nextFrame, holds, rfl, rfl⟩
 
 def ContinuationRefines (source : Source.Program) (ir : IR.Program) (fid : Nat)
     (target : IR.Function) (type : Source.IntType) (cursor : SourceCursor inputWidths)
-    (label : String) (pc : Nat) (scope : Scope inputWidths) : Prop :=
-  ∀ σ owner nextFrame, LoweringRefines source ir type (cursor.denote σ fid)
+    (label : String) (pc : Nat) (scope : Scope inputWidths)
+    (path : PathConditions inputWidths := []) : Prop :=
+  ∀ σ, path.Holds σ → ∀ owner nextFrame, LoweringRefines source ir type (cursor.denote σ fid)
     (cutTargetState σ target label pc owner nextFrame scope [])
 
 abbrev ContinuationBuilder (source : Source.Program) (ir : IR.Program) (fid : Nat)
     (target : IR.Function) (type : Source.IntType) :=
-  (cursor : SourceCursor inputWidths) → (label : String) → (pc : Nat) → (scope : Scope inputWidths) →
-    Option (PLift (ContinuationRefines source ir fid target type cursor label pc scope))
+  (path : PathConditions inputWidths) → (cursor : SourceCursor inputWidths) →
+    (label : String) → (pc : Nat) → (scope : Scope inputWidths) →
+    Option (PLift (ContinuationRefines source ir fid target type cursor label pc scope path))
 
 structure CheckedReturn (source : Source.Program) (ir : IR.Program) (fid : Nat)
     (target : IR.Function) (callerTokens : Bool) (type returnType : Source.IntType)
     (locals : LocalStore inputWidths) (frames : SavedFrames inputWidths)
     (label : String) (pc : Nat) (scope : Scope inputWidths) (results : List IR.Binding)
-    (calleeTokens : Bool) where
+    (calleeTokens : Bool) (path : PathConditions inputWidths := []) where
   boundScope : Scope inputWidths
   binding : scope.forReturn.appendSlots results (cutResults calleeTokens (inputWord returnType 0)) = some boundScope
   refinement : ContinuationRefines source ir fid target type
-    ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc boundScope
+    ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc boundScope path.forReturn
 
 def checkedReturnWith (source : Source.Program) (ir : IR.Program) (fid : Nat)
     (target : IR.Function) (callerTokens : Bool) (type returnType : Source.IntType)
     (locals : LocalStore inputWidths) (frames : SavedFrames inputWidths)
     (label : String) (pc : Nat) (scope : Scope inputWidths) (results : List IR.Binding)
-    (calleeTokens : Bool) (build : ContinuationBuilder source ir fid target type) :
-    Option (CheckedReturn source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens) := do
+    (calleeTokens : Bool) (build : ContinuationBuilder source ir fid target type)
+    (path : PathConditions inputWidths := []) :
+    Option (CheckedReturn source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens path) := do
   let bound : {out // scope.forReturn.appendSlots results
       (cutResults calleeTokens (inputWord returnType 0)) = some out} ←
     match binding : scope.forReturn.appendSlots results (cutResults calleeTokens (inputWord returnType 0)) with
     | none => none
     | some out => some ⟨out, binding⟩
-  let proof ← build ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc bound.val
+  let proof ← build path.forReturn ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc bound.val
   return ⟨bound.val, bound.property, proof.down⟩
 
 def checkedReturn (source : Source.Program) (ir : IR.Program) (fid : Nat)
@@ -127,8 +139,8 @@ def checkedReturn (source : Source.Program) (ir : IR.Program) (fid : Nat)
     (calleeTokens : Bool) (budget : Nat) :
     Option (CheckedReturn source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens) :=
   checkedReturnWith source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens
-    (fun cursor label pc scope => do
-      let diagram ← returnContinuation source ir fid target callerTokens type cursor label pc scope budget
+    (fun path cursor label pc scope => do
+      let diagram ← returnContinuation source ir fid target callerTokens type cursor label pc scope budget path
       return ⟨diagram.refines⟩)
 
 def valueIRs (tokens : Bool) (value : Source.Value) : List IR.Value :=
@@ -145,14 +157,14 @@ theorem CheckedReturn.related {source : Source.Program} {ir : IR.Program} {fid :
     {target : IR.Function} {callerTokens : Bool} {type returnType : Source.IntType}
     {locals : LocalStore inputWidths} {frames : SavedFrames inputWidths}
     {label : String} {pc : Nat} {scope : Scope inputWidths} {results : List IR.Binding}
-    {calleeTokens : Bool}
-    (d : CheckedReturn source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens)
-    (σ : Subst inputWidths) (value : Source.Value) (typed : value.type = returnType)
+    {calleeTokens : Bool} {path : PathConditions inputWidths}
+    (d : CheckedReturn source ir fid target callerTokens type returnType locals frames label pc scope results calleeTokens path)
+    (σ : Subst inputWidths) (holds : path.Holds σ) (value : Source.Value) (typed : value.type = returnType)
     (owner nextFrame : Nat) :
     ResumedAt fid target ⟨.value (inputWord returnType 0), locals.forReturn, frames.forReturn⟩ label pc d.boundScope
       ⟨.value value, locals.denote σ, frames.denote σ, fid⟩
       (cutResume (valueIRs calleeTokens value) nextFrame
-        [⟨⟨target.name, label, pc, scope.denote σ callTokens, owner⟩, results⟩]) := by
+        [⟨⟨target.name, label, pc, scope.denote σ callTokens, owner⟩, results⟩]) path.forReturn := by
   have fresh : (inputWord returnType 0).denote (returnSubst σ value) = value := by
     simpa only [typed] using return_subst_fresh σ value
   have resultValues : (cutResults calleeTokens (inputWord returnType 0)).map
@@ -161,7 +173,8 @@ theorem CheckedReturn.related {source : Source.Program} {ir : IR.Program} {fid :
   have bound := append_slots_sound (returnSubst σ value) scope.forReturn d.boundScope results
     (cutResults calleeTokens (inputWord returnType 0)) d.binding
   rw [scope_for_return, resultValues] at bound
-  refine ⟨returnSubst σ value, owner, nextFrame, ?_, ?_⟩
+  refine ⟨returnSubst σ value, owner, nextFrame,
+    (path.for_return_sound σ value).mpr holds, ?_, ?_⟩
   · simp only [SourceCursor.denote, CutControl.denote, fresh, local_store_for_return, saved_frames_for_return]
   · simp [cutResume, bound, cutTargetState, targetState]
 
