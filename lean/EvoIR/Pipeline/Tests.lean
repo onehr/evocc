@@ -123,4 +123,8 @@ def run : IO Unit := do
 #guard_msgs in
 #print axioms EvoIR.Pipeline.checkPipelineTexts_accepted
 
+/-- info: 'EvoIR.Pipeline.checkPipelineTexts_sound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms EvoIR.Pipeline.checkPipelineTexts_sound
+
 end EvoIR.Pipeline.Tests

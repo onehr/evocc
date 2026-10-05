@@ -1,4 +1,5 @@
 import EvoIR.Pipeline.Check
+import EvoIR.Pipeline.Text
 import EvoIR.Rewrite.Soundness
 import EvoIR.Asm.Baseline
 
@@ -150,5 +151,21 @@ theorem checkPipeline_sound {input : Input} (accepted : checkPipeline input = tr
     allocStarted asmEntry E abi (resultView_of_ok view) allocation.progress
   refine ⟨sourceEntry, by rw [← symbol]; exact started, ?_⟩
   exact Refines.trans (Refines.trans (Refines.trans front lowering) allocation) toAsm
+
+/-- The pipeline check on the texts: an accepted verdict gives the conclusion
+of `checkPipeline_sound` for the input that the readers give. -/
+theorem checkPipelineTexts_sound {texts : Texts} {report : String}
+    (accepted : checkPipelineTexts texts = .accepted report) :
+    ∃ input, readInput texts = .ok input ∧ input.asm.print = input.text ∧
+    ∃ f, selectEntry input.source = some f ∧
+      ∀ args : List Source.Value, args.map Source.Value.type = f.parameters.map (·.type.type) →
+      ∀ (asmEntry : Asm.State) (E : Nat),
+        Asm.Proof.AbiEntry ⟨input.allocated, input.asm, input.frameHints⟩ f.name
+          (args.map Machine.sourceArgument) asmEntry E →
+        ∃ sourceEntry, Source.initial input.source f.symbol args = .ok sourceEntry ∧
+          Asm.Proof.SourceToAsmRefines input.source input.asm f.returnType.type sourceEntry
+            asmEntry := by
+  obtain ⟨input, read, checked⟩ := checkPipelineTexts_accepted accepted
+  exact ⟨input, read, checkPipeline_sound checked⟩
 
 end EvoIR.Pipeline
