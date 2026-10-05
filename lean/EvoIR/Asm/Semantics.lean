@@ -193,9 +193,11 @@ def bitfield (signed : Bool) (width : Machine.Width) (value : BitVec 64) (lsb bi
   let field := (view width value >>> lsb).setWidth bits
   if signed then field.signExtend 64 else field.setWidth 64
 
-/-- MOVK: replace sixteen bits at `shift` and keep the other bits. -/
+/-- MOVK: `result<shift+15:shift> = imm16`; the other bits keep their value.
+The bits above, the new sixteen bits and the bits below are added. -/
 def insertHalf (old : BitVec 64) (imm shift : Nat) : BitVec 64 :=
-  (old &&& ~~~(BitVec.ofNat 64 (0xffff * 2^shift))) ||| BitVec.ofNat 64 (imm * 2^shift)
+  BitVec.ofNat 64 (old.toNat / 2^(shift+16) * 2^(shift+16) + imm % 2^16 * 2^shift +
+    old.toNat % 2^shift)
 
 /-! Control. -/
 
