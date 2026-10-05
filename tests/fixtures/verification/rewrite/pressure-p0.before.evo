@@ -1,0 +1,109 @@
+func @wide(%arg0: bits<64>, %arg1: bits<64>, %arg2: bits<64>, %arg3: bits<64>, %arg4: bits<64>, %arg5: bits<64>, %arg6: bits<64>, %arg7: bits<64>, %arg8: bits<64>, %arg9: bits<64>, %arg10: bits<64>, %arg11: bits<64>, %arg12: bits<64>, %arg13: bits<64>, %arg14: bits<64>, %arg15: bits<64>, %arg16: bits<64>, %arg17: bits<64>, %arg18: bits<64>, %arg19: bits<64>, %arg20: bits<64>, %arg21: bits<64>, %arg22: bits<64>, %arg23: bits<64>, %arg24: bits<64>, %arg25: bits<64>, %arg26: bits<64>, %arg27: bits<64>, %arg28: bits<64>, %arg29: bits<64>, %arg30: bits<64>, %arg31: bits<64>, %arg32: mem<all>, %arg33: world) -> (bits<64>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<64>, %v1: bits<64>, %v2: bits<64>, %v3: bits<64>, %v4: bits<64>, %v5: bits<64>, %v6: bits<64>, %v7: bits<64>, %v8: bits<64>, %v9: bits<64>, %v10: bits<64>, %v11: bits<64>, %v12: bits<64>, %v13: bits<64>, %v14: bits<64>, %v15: bits<64>, %v16: bits<64>, %v17: bits<64>, %v18: bits<64>, %v19: bits<64>, %v20: bits<64>, %v21: bits<64>, %v22: bits<64>, %v23: bits<64>, %v24: bits<64>, %v25: bits<64>, %v26: bits<64>, %v27: bits<64>, %v28: bits<64>, %v29: bits<64>, %v30: bits<64>, %v31: bits<64>, %v32: mem<all>, %v33: world):
+    %v34 = add.bits<64> %v0, %v1
+    %v35 = add.bits<64> %v34, %v2
+    %v36 = add.bits<64> %v35, %v3
+    %v37 = add.bits<64> %v36, %v4
+    %v38 = add.bits<64> %v37, %v5
+    %v39 = add.bits<64> %v38, %v6
+    %v40 = add.bits<64> %v39, %v7
+    %v41 = add.bits<64> %v40, %v8
+    %v42 = add.bits<64> %v41, %v9
+    %v43 = add.bits<64> %v42, %v10
+    %v44 = add.bits<64> %v43, %v11
+    %v45 = add.bits<64> %v44, %v12
+    %v46 = add.bits<64> %v45, %v13
+    %v47 = add.bits<64> %v46, %v14
+    %v48 = add.bits<64> %v47, %v15
+    %v49 = add.bits<64> %v48, %v16
+    %v50 = add.bits<64> %v49, %v17
+    %v51 = add.bits<64> %v50, %v18
+    %v52 = add.bits<64> %v51, %v19
+    %v53 = add.bits<64> %v52, %v20
+    %v54 = add.bits<64> %v53, %v21
+    %v55 = add.bits<64> %v54, %v22
+    %v56 = add.bits<64> %v55, %v23
+    %v57 = add.bits<64> %v56, %v24
+    %v58 = add.bits<64> %v57, %v25
+    %v59 = add.bits<64> %v58, %v26
+    %v60 = add.bits<64> %v59, %v27
+    %v61 = add.bits<64> %v60, %v28
+    %v62 = add.bits<64> %v61, %v29
+    %v63 = add.bits<64> %v62, %v30
+    %v64 = add.bits<64> %v63, %v31
+    ret %v64, %v32, %v33
+}
+
+func @pressure(%arg0: bits<64>, %arg1: mem<all>, %arg2: world) -> (bits<64>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<64>, %v1: mem<all>, %v2: world):
+    %v3 = const.bits<64> 0
+    %v4 = add.bits<64> %v0, %v3
+    %v5 = const.bits<64> 1
+    %v6 = add.bits<64> %v0, %v5
+    %v7 = const.bits<64> 2
+    %v8 = add.bits<64> %v0, %v7
+    %v9 = const.bits<64> 3
+    %v10 = add.bits<64> %v0, %v9
+    %v11 = const.bits<64> 4
+    %v12 = add.bits<64> %v0, %v11
+    %v13 = const.bits<64> 5
+    %v14 = add.bits<64> %v0, %v13
+    %v15 = const.bits<64> 6
+    %v16 = add.bits<64> %v0, %v15
+    %v17 = const.bits<64> 7
+    %v18 = add.bits<64> %v0, %v17
+    %v19 = const.bits<64> 8
+    %v20 = add.bits<64> %v0, %v19
+    %v21 = const.bits<64> 9
+    %v22 = add.bits<64> %v0, %v21
+    %v23 = const.bits<64> 10
+    %v24 = add.bits<64> %v0, %v23
+    %v25 = const.bits<64> 11
+    %v26 = add.bits<64> %v0, %v25
+    %v27 = const.bits<64> 12
+    %v28 = add.bits<64> %v0, %v27
+    %v29 = const.bits<64> 13
+    %v30 = add.bits<64> %v0, %v29
+    %v31 = const.bits<64> 14
+    %v32 = add.bits<64> %v0, %v31
+    %v33 = const.bits<64> 15
+    %v34 = add.bits<64> %v0, %v33
+    %v35 = const.bits<64> 16
+    %v36 = add.bits<64> %v0, %v35
+    %v37 = const.bits<64> 17
+    %v38 = add.bits<64> %v0, %v37
+    %v39 = const.bits<64> 18
+    %v40 = add.bits<64> %v0, %v39
+    %v41 = const.bits<64> 19
+    %v42 = add.bits<64> %v0, %v41
+    %v43 = const.bits<64> 20
+    %v44 = add.bits<64> %v0, %v43
+    %v45 = const.bits<64> 21
+    %v46 = add.bits<64> %v0, %v45
+    %v47 = const.bits<64> 22
+    %v48 = add.bits<64> %v0, %v47
+    %v49 = const.bits<64> 23
+    %v50 = add.bits<64> %v0, %v49
+    %v51 = const.bits<64> 24
+    %v52 = add.bits<64> %v0, %v51
+    %v53 = const.bits<64> 25
+    %v54 = add.bits<64> %v0, %v53
+    %v55 = const.bits<64> 26
+    %v56 = add.bits<64> %v0, %v55
+    %v57 = const.bits<64> 27
+    %v58 = add.bits<64> %v0, %v57
+    %v59 = const.bits<64> 28
+    %v60 = add.bits<64> %v0, %v59
+    %v61 = const.bits<64> 29
+    %v62 = add.bits<64> %v0, %v61
+    %v63 = const.bits<64> 30
+    %v64 = add.bits<64> %v0, %v63
+    %v65 = const.bits<64> 31
+    %v66 = add.bits<64> %v0, %v65
+    (%v67, %v68, %v69) = call @wide(%v4, %v6, %v8, %v10, %v12, %v14, %v16, %v18, %v20, %v22, %v24, %v26, %v28, %v30, %v32, %v34, %v36, %v38, %v40, %v42, %v44, %v46, %v48, %v50, %v52, %v54, %v56, %v58, %v60, %v62, %v64, %v66, %v1, %v2)
+    ret %v67, %v68, %v69
+}

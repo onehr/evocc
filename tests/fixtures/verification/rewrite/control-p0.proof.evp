@@ -1,0 +1,31 @@
+evp2
+registry p0.scalar.v1 ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9
+input e3c16c486e4bbd083c0c4411adc933cbb231ec85352ea1d67f1c9adccbe4e5fb
+budget nodes=8/100000 epochs=1/1024 fuel=1/256 n=3 stop=saturated
+region short_circuit/b1/2 root %v8 witnesses 3 seeds 0
+witness 0 short_circuit/b1/0
+witness 1 short_circuit/b1/1
+witness 2 short_circuit/b1/2
+node 0 n0 c0 source=before op=const sort=bits<32> effect=pure attrs=value=3 children=-
+node 1 n1 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 2 n2 c2 source=before op=icmp.ne sort=bits<1> effect=pure attrs=- children=c0,c1
+node 3 n3 c3 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+epoch 1
+rewrite 4 p0_107_fold_icmp_ne c2 c3 c2 node:n2 node:n3 bind ?a:c0,?b:c1
+extract 0 c2 node:n3
+root c2
+endregion
+region short_circuit/b7/2 root %v30 witnesses 3 seeds 0
+witness 0 short_circuit/b7/0
+witness 1 short_circuit/b7/1
+witness 2 short_circuit/b7/2
+node 0 n0 c0 source=before op=const sort=bits<32> effect=pure attrs=value=9 children=-
+node 1 n1 c1 source=before op=const sort=bits<32> effect=pure attrs=value=0 children=-
+node 2 n2 c2 source=before op=icmp.ne sort=bits<1> effect=pure attrs=- children=c0,c1
+node 3 n3 c3 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+epoch 1
+rewrite 4 p0_107_fold_icmp_ne c2 c3 c2 node:n2 node:n3 bind ?a:c0,?b:c1
+extract 0 c2 node:n3
+root c2
+endregion
+output 9a22fcc147eb7cf320752753ed57880bdec643fb8009ac3a63ec160c5ec05870

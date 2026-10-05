@@ -1,0 +1,24 @@
+evp2
+registry g0.ub.v1 c49a0caac284fe276cf1605b312f45a8ddb5378b61dc0aaf352e03a41d21cc84
+input 29764f97f2e8761a7c508455b9fdcda4719d7ebf95517ebccb8d27cea65b8dde
+budget nodes=6/100000 epochs=1/1024 fuel=1/256 n=5 stop=saturated
+region FixedMul/entry/6 root %v7 witnesses 5 seeds 2
+witness 0 FixedMul/entry/0
+witness 1 FixedMul/entry/1
+witness 2 FixedMul/entry/4
+witness 3 FixedMul/entry/5
+witness 4 FixedMul/entry/6
+seed 0 %v0 bits<32> input c0
+seed 1 %v1 bits<32> input c1
+node 0 n0 c2 source=before op=sext sort=bits<64> effect=pure attrs=- children=c0
+node 1 n1 c3 source=before op=sext sort=bits<64> effect=pure attrs=- children=c1
+node 2 n2 c4 source=before op=mul sort=bits<64> effect=pure attrs=- children=c2,c3
+node 3 n3 c5 source=before op=const sort=bits<32> effect=pure attrs=value=16 children=-
+node 4 n4 c6 source=before op=shift_count_defined.signed sort=bits<1> effect=pure attrs=- children=c4,c5
+epoch 1
+node 5 n5 c7 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+rewrite 6 g0_007_signed_count c6 c7 c6 node:n4 node:n5 bind ?a:c4,?k:c5 premises c6:1:1
+extract 0 c6 node:n5
+root c6
+endregion
+output e36cdb25e1d484331f8c90c1e6eee7a1cde492db7266774c03b307913e6e6263

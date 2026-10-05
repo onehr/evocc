@@ -1,0 +1,152 @@
+func @loop_join(%arg0: bits<32>, %arg1: bits<32>) -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: bits<32>):
+    %v2 = const.bits<32> 0
+    %v3 = const.bits<32> 0
+    br ^b1(%v3, %v0, %v1, %v2)
+
+^b1(%v4: bits<32>, %v5: bits<32>, %v6: bits<32>, %v7: bits<32>):
+    %v8 = icmp.ult %v4, %v6
+    cond_br %v8, ^b2(%v4, %v5, %v6, %v7), ^b9(%v6, %v7)
+
+^b2(%v9: bits<32>, %v10: bits<32>, %v11: bits<32>, %v12: bits<32>):
+    %v13 = const.bits<32> 3
+    %v14 = and.bits<32> %v9, %v13
+    %v15 = const.bits<32> 0
+    %v16 = icmp.eq %v14, %v15
+    cond_br %v16, ^b7(%v9, %v10, %v11, %v12), ^b3(%v9, %v10, %v11, %v12)
+
+^b3(%v17: bits<32>, %v18: bits<32>, %v19: bits<32>, %v20: bits<32>):
+    %v21 = const.bits<32> 17
+    %v22 = icmp.eq %v17, %v21
+    cond_br %v22, ^b9(%v19, %v20), ^b4(%v17, %v18, %v19, %v20)
+
+^b4(%v23: bits<32>, %v24: bits<32>, %v25: bits<32>, %v26: bits<32>):
+    %v27 = const.bits<32> 1
+    %v28 = and.bits<32> %v24, %v27
+    %v29 = const.bits<32> 0
+    %v30 = icmp.ne %v28, %v29
+    cond_br %v30, ^b5(%v23, %v24, %v25, %v26), ^b6(%v23, %v24, %v25, %v26)
+
+^b5(%v31: bits<32>, %v32: bits<32>, %v33: bits<32>, %v34: bits<32>):
+    br ^b8(%v31, %v32, %v33, %v34, %v31)
+
+^b6(%v35: bits<32>, %v36: bits<32>, %v37: bits<32>, %v38: bits<32>):
+    %v39 = xor.bits<32> %v35, %v36
+    br ^b8(%v35, %v36, %v37, %v38, %v39)
+
+^b7(%v40: bits<32>, %v41: bits<32>, %v42: bits<32>, %v43: bits<32>):
+    %v44 = const.bits<32> 1
+    %v45 = add.bits<32> %v40, %v44
+    br ^b1(%v45, %v41, %v42, %v43)
+
+^b8(%v46: bits<32>, %v47: bits<32>, %v48: bits<32>, %v49: bits<32>, %v50: bits<32>):
+    %v51 = add.bits<32> %v49, %v50
+    %v52 = const.bits<32> 1
+    %v53 = shift_count_defined.signed %v47, %v52
+    ub.assume.invalid_shift_count %v53
+    %v54 = lshr.bits<32> %v47, %v52
+    %v55 = const.bits<32> 31
+    %v56 = shift_count_defined.signed %v47, %v55
+    ub.assume.invalid_shift_count %v56
+    %v57 = shl.bits<32> %v47, %v55
+    %v58 = or.bits<32> %v54, %v57
+    br ^b7(%v46, %v58, %v48, %v51)
+
+^b9(%v59: bits<32>, %v60: bits<32>):
+    br ^b10(%v59, %v60)
+
+^b10(%v61: bits<32>, %v62: bits<32>):
+    %v63 = const.bits<32> 20
+    %v64 = icmp.ult %v63, %v61
+    cond_br %v64, ^b11(%v61, %v62), ^b12(%v61, %v62)
+
+^b11(%v65: bits<32>, %v66: bits<32>):
+    %v67 = const.bits<32> 7
+    %v68 = sub.bits<32> %v65, %v67
+    br ^b10(%v68, %v66)
+
+^b12(%v69: bits<32>, %v70: bits<32>):
+    br ^b13(%v69, %v70)
+
+^b13(%v71: bits<32>, %v72: bits<32>):
+    %v73 = add.bits<32> %v72, %v71
+    %v74 = const.bits<32> 1
+    %v75 = shift_count_defined.signed %v71, %v74
+    ub.assume.invalid_shift_count %v75
+    %v76 = lshr.bits<32> %v71, %v74
+    br ^b14(%v76, %v73)
+
+^b14(%v77: bits<32>, %v78: bits<32>):
+    %v79 = const.bits<32> 0
+    %v80 = icmp.ne %v77, %v79
+    cond_br %v80, ^b13(%v77, %v78), ^b15(%v78)
+
+^b15(%v81: bits<32>):
+    ret %v81
+}
+
+func @short_circuit(%arg0: bits<32>) -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>):
+    %v1 = const.bits<32> 0
+    %v2 = const.bits<32> 0
+    %v3 = icmp.ne %v0, %v2
+    cond_br %v3, ^b1(%v0, %v1), ^b2(%v0, %v1)
+
+^b1(%v4: bits<32>, %v5: bits<32>):
+    %v6 = const.bits<32> 3
+    %v7 = const.bits<32> 0
+    %v8 = const.bits<1> 1
+    br ^b3(%v4, %v6, %v8)
+
+^b2(%v9: bits<32>, %v10: bits<32>):
+    %v11 = const.bits<1> 0
+    br ^b3(%v9, %v10, %v11)
+
+^b3(%v12: bits<32>, %v13: bits<32>, %v14: bits<1>):
+    cond_br %v14, ^b4(%v12, %v13), ^b5(%v12, %v13)
+
+^b4(%v15: bits<32>, %v16: bits<32>):
+    %v17 = const.bits<32> 1
+    %v18 = signed_add_defined %v16, %v17
+    ub.assume.signed_overflow %v18
+    %v19 = add.bits<32> %v16, %v17
+    br ^b6(%v15, %v19)
+
+^b5(%v20: bits<32>, %v21: bits<32>):
+    br ^b6(%v20, %v21)
+
+^b6(%v22: bits<32>, %v23: bits<32>):
+    %v24 = const.bits<32> 0
+    %v25 = icmp.eq %v22, %v24
+    cond_br %v25, ^b8(%v22, %v23), ^b7(%v22, %v23)
+
+^b7(%v26: bits<32>, %v27: bits<32>):
+    %v28 = const.bits<32> 9
+    %v29 = const.bits<32> 0
+    %v30 = const.bits<1> 1
+    br ^b9(%v26, %v28, %v30)
+
+^b8(%v31: bits<32>, %v32: bits<32>):
+    %v33 = const.bits<1> 1
+    br ^b9(%v31, %v32, %v33)
+
+^b9(%v34: bits<32>, %v35: bits<32>, %v36: bits<1>):
+    cond_br %v36, ^b10(%v35), ^b11(%v35)
+
+^b10(%v37: bits<32>):
+    %v38 = const.bits<32> 2
+    %v39 = signed_add_defined %v37, %v38
+    ub.assume.signed_overflow %v39
+    %v40 = add.bits<32> %v37, %v38
+    br ^b12(%v40)
+
+^b11(%v41: bits<32>):
+    br ^b12(%v41)
+
+^b12(%v42: bits<32>):
+    ret %v42
+}

@@ -1,0 +1,53 @@
+evp2
+registry g0.ub.v1 c49a0caac284fe276cf1605b312f45a8ddb5378b61dc0aaf352e03a41d21cc84
+input e3c16c486e4bbd083c0c4411adc933cbb231ec85352ea1d67f1c9adccbe4e5fb
+budget nodes=12/100000 epochs=1/1024 fuel=1/256 n=2 stop=saturated
+region loop_join/b8/2 root %v53 witnesses 2 seeds 1
+witness 0 loop_join/b8/1
+witness 1 loop_join/b8/2
+seed 0 %v47 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=1 children=-
+node 1 n1 c2 source=before op=shift_count_defined.signed sort=bits<1> effect=pure attrs=- children=c0,c1
+epoch 1
+node 2 n2 c3 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+rewrite 3 g0_007_signed_count c2 c3 c2 node:n1 node:n2 bind ?a:c0,?k:c1 premises c2:1:1
+extract 0 c2 node:n2
+root c2
+endregion
+region loop_join/b8/6 root %v56 witnesses 2 seeds 1
+witness 0 loop_join/b8/5
+witness 1 loop_join/b8/6
+seed 0 %v47 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=31 children=-
+node 1 n1 c2 source=before op=shift_count_defined.signed sort=bits<1> effect=pure attrs=- children=c0,c1
+epoch 1
+node 2 n2 c3 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+rewrite 3 g0_007_signed_count c2 c3 c2 node:n1 node:n2 bind ?a:c0,?k:c1 premises c2:1:1
+extract 0 c2 node:n2
+root c2
+endregion
+region loop_join/b13/2 root %v75 witnesses 2 seeds 1
+witness 0 loop_join/b13/1
+witness 1 loop_join/b13/2
+seed 0 %v71 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=1 children=-
+node 1 n1 c2 source=before op=shift_count_defined.signed sort=bits<1> effect=pure attrs=- children=c0,c1
+epoch 1
+node 2 n2 c3 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+rewrite 3 g0_007_signed_count c2 c3 c2 node:n1 node:n2 bind ?a:c0,?k:c1 premises c2:1:1
+extract 0 c2 node:n2
+root c2
+endregion
+region short_circuit/b4/1 root %v18 witnesses 2 seeds 1
+witness 0 short_circuit/b4/0
+witness 1 short_circuit/b4/1
+seed 0 %v16 bits<32> input c0
+node 0 n0 c1 source=before op=const sort=bits<32> effect=pure attrs=value=1 children=-
+node 1 n1 c2 source=before op=signed_add_defined sort=bits<1> effect=pure attrs=- children=c0,c1
+epoch 1
+node 2 n2 c3 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+rewrite 3 g0_003_add c2 c3 c2 node:n1 node:n2 bind ?a:c0,?b:c1 premises c2:1:1
+extract 0 c2 node:n2
+root c2
+endregion
+output b5c9bb96230909420a5f13e51316f0c3a27498d8676680598ca2b3c7d0f904a6
