@@ -124,7 +124,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | V04, V05, T03 | V00-V03 are complete in the frozen scope. V04 and V05 are proved and integrated in proof-required mode; close them after the full gates and the one composed pipeline theorem. The bucket includes proof implementation, not new audit tooling. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. |
+| AUDIT | V04, V05, T03 | V00-V03 are complete in the frozen scope. V04 and V05 are proved and integrated in proof-required mode, and the pipeline check is the final decision; close them after the full gates. The bucket includes proof implementation, not new audit tooling. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. |
 | ACCEPTANCE | V06, T04, T02, K13, K14, B10, T05 | V06 blocks public release until V00-V05 compose and the frozen proof/native gates pass. Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -2729,9 +2729,9 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   fold and a g0 guard fold from actual `-Oeq-scalar` output and rejects forged
   premises, deleted obligations and changes outside the roots. Proof-required
   mode runs V05 on each rewrite step (commits `f4f71dc5`, `46be6d80`), and V02
-  to V04 check the rewritten program to the final assembly text. One composed
-  theorem for the whole optimized chain is in work. V05 stays OPEN until the
-  lead runs the full gates.
+  to V04 check the rewritten program to the final assembly text. The pipeline
+  check (`checkPipelineTexts_sound`) gives one theorem for the whole optimized
+  chain. V05 stays OPEN until the lead runs the full gates.
 
 - [ ] **V06 — Enforce proof-required compilation and final release acceptance** — `OPEN`, P1.
   After V00–V05, integrate the compiled proved Lean checker at the driver output
@@ -2746,7 +2746,10 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   assembly AST and the assembly text that it will publish. With `-Oeq-scalar`
   and a pinned `--eq-checker-sha256`, it also exports each rewrite step. The
   compiled Lean checker (`evoir-sem --check-stage`) runs V01, V05 for each
-  rewrite step, V02, V03 and V04 for each `--core-entry`. The record has a
+  rewrite step, V02, V03 and V04 for each `--core-entry`. Then
+  `evoir-sem --check-pipeline` runs `EvoIR.Pipeline.checkPipelineTexts` on all
+  files as the final decision (record row `PIPELINE`, theorem
+  `checkPipelineTexts_sound`). The record has a
   digest chain: adjacent stages read the same files, and `output.s` is the text
   that V04 checked. Output and record appear only if every stage accepts. Exit
   3 is a rejection, 4 a missing or changed input, 5 a missing, failed or
@@ -2759,8 +2762,11 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   and the compiled checker, the file readers, the printer of the assembly AST,
   the Lean semantics of typed Core C and of the AArch64 subset, `AbiEntry`
   (the caller obeys the ABI and gives sufficient stack), and the assembler,
-  the linker and the hardware. Release acceptance is not run. The 14 tests in
-  `crates/evocc/tests/proof_required.rs` pass.
+  the linker and the hardware. Open limit: `AbiEntry` uses zero-extended
+  argument values; the theorem covers only entry states in which the upper 32
+  bits of each 32-bit argument register and stack slot are zero, and AAPCS64
+  does not require this of a caller. Release acceptance is not run. The 15
+  tests in `crates/evocc/tests/proof_required.rs` pass.
 
 ## Codegen quality track — next quarter
 

@@ -742,8 +742,13 @@ then runs each stage for each `--core-entry`
 | V04 | frame layout and the final assembly text | the same allocation export as V03, the assembly AST and the text to publish |
 
 V04 prints the AST and compares it with the text byte for byte, then checks the
-frame and the instructions against the allocated program. The driver publishes
-`output.s` only with the bytes that V04 checked.
+frame and the instructions against the allocated program. After the stage rows
+accept, the driver runs one more command for each entry as the final decision:
+`evoir-sem --check-pipeline ROLE=PATH ...` checks all stages on the same files
+in one function, `EvoIR.Pipeline.checkPipelineTexts`, with one theorem,
+`checkPipelineTexts_sound`. The record names this row `PIPELINE`; the stage rows
+stay for diagnosis. The driver publishes `output.s` only if the pipeline check
+accepts, and only with the bytes that it checked.
 
 **What the mode checks.** For the `core-v1` subset, an accepted result is
 checked from the typed Core source to the final assembly text. The record
@@ -787,7 +792,10 @@ trusts:
 - the Lean semantics of typed Core C and of the AArch64 subset, which must
   match the intended compiler contract;
 - the ABI entry assumption `AbiEntry`: the caller obeys the AArch64 procedure
-  call standard and gives sufficient stack;
+  call standard and gives sufficient stack. Open limit: `AbiEntry` uses
+  zero-extended argument values. The theorem covers only entry states in which
+  the upper 32 bits of each 32-bit argument register and stack slot are zero.
+  AAPCS64 does not require this of a caller;
 - the assembler, the linker, the runtime libraries and the hardware.
 
 The exported snapshots (EvoIR, EvoMIR, allocation, assembly AST) are not
@@ -795,8 +803,9 @@ trusted: a stage checks each one, and the digest chain binds them to the
 published text. Tests help check the trusted connections; they do not prove
 them. There is no verified-release claim. As of 2026-10-05, V03 is complete in
 the frozen scope. V04 and V05 are proved and integrated in proof-required
-mode; they stay open until the full release gates run. One composed theorem
-for the whole chain and proof-required release acceptance (V06) are in work.
+mode; they stay open until the full release gates run. The pipeline check
+gives one theorem for the whole chain. Proof-required release acceptance (V06)
+is in work.
 See the [verification plan](docs/lean-plan.md#first-public-release-verification).
 
 The P0 and guard rewrite proofs above are a separate result. The V05 checker
