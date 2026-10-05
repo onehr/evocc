@@ -29,6 +29,10 @@ import EvoIR.Core.CallingLoopPairTests
 import EvoIR.Core.FunctionClosureTests
 import EvoIR.Core.ConstantClosureTests
 import EvoIR.Core.ValidatorStorageTests
+import EvoIR.Core.SourceTargetCheckTests
+import EvoIR.Core.PrivateStorageTests
+import EvoIR.Core.PrivateLoopTests
+import EvoIR.Core.PrivateCallTests
 
 /-!
 # The executable evaluator
@@ -332,13 +336,17 @@ def run (args : List String) : IO UInt32 := do
       let deepCalls ← EvoIR.Core.Symbolic.FunctionClosureTests.functionClosureSelfTest
       let constantCalls ← EvoIR.Core.Symbolic.ConstantClosureTests.constantClosureSelfTest
       let validatorStorage ← EvoIR.Core.Source.StorageTests.storageSelfTest
+      let sourceTargetCheck ← EvoIR.Core.Symbolic.SourceTargetCheckTests.sourceTargetCheckSelfTest
+      let privateStorage ← EvoIR.Core.Symbolic.PrivateStorageTests.privateStorageSelfTest
+      let privateLoops ← EvoIR.Core.Symbolic.PrivateLoopTests.privateLoopSelfTest
+      let privateCalls ← EvoIR.Core.Symbolic.PrivateCallTests.privateCallSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
         statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 &&
         calls == 0 && callControls == 0 && callLoops == 0 && callContexts == 0 &&
         sourceResumes == 0 && sourceFrontiers == 0 && callFrontiers == 0 &&
-        callResumptions == 0 && callClosures == 0 && shortRight == 0 && mixedCalls == 0 && nestedCalls == 0 && deepCalls == 0 && constantCalls == 0 && validatorStorage == 0 then 0 else 1
+        callResumptions == 0 && callClosures == 0 && shortRight == 0 && mixedCalls == 0 && nestedCalls == 0 && deepCalls == 0 && constantCalls == 0 && validatorStorage == 0 && sourceTargetCheck == 0 && privateStorage == 0 && privateLoops == 0 && privateCalls == 0 then 0 else 1
   | ["--check-core-loop-pair", sourcePath, targetPath, proposalPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
@@ -350,26 +358,25 @@ def run (args : List String) : IO UInt32 := do
         | IO.eprintln "CORE_PAIR_REFUSED: missing selected source function"; return 1
       let proposal ← IO.FS.readFile proposalPath
       if let some (budget, layouts) := EvoIR.Core.Symbolic.readCutpoints sf proposal then
-        let some accepted := EvoIR.Core.Symbolic.loopPair source target layouts budget
+        let some (_, accepted) := EvoIR.Core.Symbolic.checkSourceTargetPair source target (.cutpoints layouts budget)
           | IO.eprintln "CORE_PAIR_REFUSED: entry, span or successor closure"; return 1
-        IO.println s!"PROVED_LOOP_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits execution=unbounded scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+        IO.println s!"PROVED_LOOP_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits execution=unbounded scope=source-to-evoir backend=UNPROVED release=UNVERIFIED"
         return 0
       let some (budget, rows) := EvoIR.Core.Symbolic.readCallCutpoints source proposal
         | IO.eprintln "CORE_PAIR_MALFORMED: cutpoint proposal"; return 2
-      let some accepted := EvoIR.Core.Symbolic.callingLoopPair source target (fun id => rows.lookup id) budget
+      let some (_, accepted) := EvoIR.Core.Symbolic.checkSourceTargetPair source target
+          (.closure (fun id => rows.lookup id) budget)
         | IO.eprintln "CORE_PAIR_REFUSED: caller prefixes, callee invariant or return continuation"; return 1
-      IO.println s!"PROVED_LOOP_CALL_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits execution=unbounded scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+      IO.println s!"PROVED_LOOP_CALL_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits execution=unbounded scope=source-to-evoir backend=UNPROVED release=UNVERIFIED"
       return 0
   | ["--check-core-leaf-pair", sourcePath, targetPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2
       let .ok target := EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile targetPath)
         | IO.eprintln "CORE_PAIR_MALFORMED: target input"; return 2
-      if let some accepted := EvoIR.Core.Symbolic.returnPair source target then
-        IO.println s!"PROVED_LEAF_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
-        return 0
-      if let some accepted := EvoIR.Core.Symbolic.callPair source target then
-        IO.println s!"PROVED_CALL_PAIR entry={accepted.sourceFunction.name} arguments=all-signature-bits scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+      if let some (route, accepted) := EvoIR.Core.Symbolic.checkSourceTargetPair source target .finite then
+        let status := if route == .leaf then "PROVED_LEAF_PAIR" else "PROVED_CALL_PAIR"
+        IO.println s!"{status} entry={accepted.sourceFunction.name} arguments=all-signature-bits scope=source-to-evoir backend=UNPROVED release=UNVERIFIED"
         return 0
       IO.eprintln "CORE_PAIR_REFUSED: no checked whole-function diagram for this complete pair"
       return 1
@@ -381,7 +388,9 @@ def run (args : List String) : IO UInt32 := do
       if !EvoIR.Core.AbsCorrespondence.checkPilotPair source target then
         IO.eprintln "CORE_PAIR_REFUSED: no proved correspondence for this complete pair"
         return 1
-      IO.println "PROVED_PILOT_PAIR entry=abs arguments=all-bits32 scope=source-to-evoir backend=UNPROVED core-v1=INCOMPLETE"
+      let some (_, _) := EvoIR.Core.Symbolic.checkSourceTargetPair source target .finite
+        | IO.eprintln "CORE_PAIR_REFUSED: no proved correspondence for this complete pair"; return 1
+      IO.println "PROVED_PILOT_PAIR entry=abs arguments=all-bits32 scope=source-to-evoir backend=UNPROVED release=UNVERIFIED"
       return 0
   | ["--read-core-ir", input] => do
       match EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile input) with
