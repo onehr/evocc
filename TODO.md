@@ -2613,6 +2613,21 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   Private storage, complete closure/constructor coverage and validator safety
   remain OPEN. Receipt: `mixed_call_contexts` in the existing pilot manifest.
 
+  **October 5 cyclic caller continuation:** `d14f4d95` closes
+  `call-loop-nested.c`: productive open fragments compose callee returns with
+  the caller's independently checked backedges. Twenty-five original pairs and
+  the retained negative replay; 2 original/renamed pairs, 24 mutations,
+  27 execution/frame controls and 2 nonterminating variants pass. Clean Lean:
+  all steps PASS, 82 kernel-only core targets, zero native axioms in those
+  targets. Rust baseline remains `014bfa62`. Next RED: `call-loop-deep.c`
+  invokes this nested-loop function from another function; source validation
+  and three execution controls pass, but the whole-pair checker refuses.
+  Reuse open caller tables for callees under a suspended outer return context;
+  do not finitely unfold or assume a summary. Private storage, complete closure
+  and constructor coverage, and validator safety remain OPEN. Receipt:
+  `cyclic_caller_contexts`. Artifact delta +3,268 KiB; 52 GiB free; no temporary
+  source remains, protected evidence retained.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

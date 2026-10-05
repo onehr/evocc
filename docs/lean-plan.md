@@ -832,6 +832,27 @@ V01 and V02–V06 remain open. Artifact delta +1,216 KiB (.lake +1,124;
 capture +92); target/frontend unchanged, capture 17,240 KiB of 500 MiB,
 53 GiB free. Temporary inspection source removed; all final evidence retained.
 
+**Cyclic caller/callee composition (October 5 continuation).** `d14f4d95`
+closes the original `call-loop-nested.c` pair. `OpenCheckpoint.bind` links
+callee returns to checked caller fragments; `OpenCheckpoint.close` closes all
+caller cutpoints with positive actual source/target paths. No assumed caller
+refinement, iteration bound or termination premise is used. The old whole-call
+entry theorem now reuses this open call proof. Twenty-five original pairs and
+the historical refusal replay. Two original/renamed pairs, 24 mutations,
+27 execution/frame controls and two matched nonterminating variants pass.
+Clean Lean at this commit: all steps PASS, 82 kernel-only core targets, no native
+axioms in those targets, 1,246,159 vector answers. Rust evidence remains the
+unchanged `014bfa62` full-workspace baseline, not a new run.
+The saved next RED, `call-loop-deep.c`, adds a finite caller around the now
+accepted nested loop. Its four-function source closure validates and three
+execution controls agree, but pair admission still refuses: the callee builder
+must itself reuse open cyclic caller tables under an outer return context.
+Private storage, full constructor/closure coverage and validator safety still
+keep V01 OPEN; V02–V06 are unimplemented. Receipt: `cyclic_caller_contexts` in
+the existing pilot manifest. Artifact delta +3,268 KiB (.lake +3,220; capture
++48), target/frontend unchanged, capture 17,288 KiB of 500 MiB, 52 GiB free.
+No temporary source remains; protected evidence is retained.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted
