@@ -59,6 +59,7 @@ import EvoIR.Alloc.Soundness
 import EvoIR.Asm.Reader
 import EvoIR.Asm.Print
 import EvoIR.Asm.Baseline
+import EvoIR.Pipeline.Text
 
 /-!
 # The executable evaluator
@@ -458,31 +459,12 @@ def checkPostSSAToAllocated (inputs : StageInputs) : StageVerdict := Id.run do
   let refused := (pre.functions.find? (!EvoIR.Alloc.checkFunction pre post hints ·)).map (·.name)
   .rejected s!"entry={function.name} allocation not confirmed in function {refused.getD "?"}"
 
-/-- The Boolean form of `EvoIR.Asm.Proof.ResultView`: each returned location of
-the entry function has a view that is at least as wide as the result type. -/
-def resultViewOk (p : EvoIR.Alloc.Program) (entry : String)
-    (type : EvoIR.Core.Source.IntType) : Bool :=
-  p.functions.all fun f => f.name != entry || f.blocks.all fun b =>
-    match b.term with
-    | .ret locs => locs.all fun l => type.width ≤ l.width.bits
-    | _ => true
-
-theorem resultViewOk_sound {p : EvoIR.Alloc.Program} {entry : String}
-    {type : EvoIR.Core.Source.IntType} (h : resultViewOk p entry type = true) :
-    EvoIR.Asm.Proof.ResultView p entry type := by
-  intro f hf hname b hb locs hret l hl
-  have hf' := List.all_eq_true.mp h f hf
-  simp only [hname, bne_self_eq_false, Bool.false_or] at hf'
-  have hb' := List.all_eq_true.mp hf' b hb
-  rw [hret] at hb'
-  simpa using List.all_eq_true.mp hb' l hl
-
 /-- V04: frame layout and emission, `EvoIR.Asm.Check.checkAsm`, with the theorem
 `checkAsm_sound`. The allocated program comes from the allocation export that V03
 also reads. The `asm` file gives the assembly AST and the frame hints. The `text`
 file is the assembly text that the driver publishes. The printed AST must be equal
 to that text, byte for byte. The result view of the entry is a premise of
-`source_asm_refines`; `resultViewOk_sound` discharges it. -/
+`source_asm_refines`; `EvoIR.Pipeline.resultView_of_ok` discharges it. -/
 def checkAllocatedToAsm (inputs : StageInputs) : StageVerdict := Id.run do
   let .ok (_, function) := stageEntry inputs | return .unsupported "source input"
   let some allocText := inputs.lookup "allocation" | return .unsupported "missing allocation input"
@@ -498,7 +480,7 @@ def checkAllocatedToAsm (inputs : StageInputs) : StageVerdict := Id.run do
     return .rejected s!"{entry} the printed AST is not the assembly text at line {line}"
   if !EvoIR.Asm.Check.checkAsm allocated file hints then
     return .rejected s!"{entry} frame layout or emission not confirmed"
-  if !resultViewOk allocated function.name function.returnType.type then
+  if !EvoIR.Pipeline.resultViewOk allocated function.name function.returnType.type then
     return .rejected s!"{entry} a returned view is narrower than the result type"
   .accepted s!"{entry} functions={file.functions.length} bytes={text.utf8ByteSize} scope=allocated-mir-to-assembly-text"
 
@@ -546,10 +528,43 @@ def runStage (id : String) (args : List String) : IO UInt32 := do
   | .rejected reason => IO.eprintln s!"STAGE_REJECTED stage={id} {reason}"; return 1
   | .unsupported reason => IO.eprintln s!"STAGE_INPUT_UNSUPPORTED stage={id} {reason}"; return 2
 
+/-- `--check-pipeline ROLE=PATH ...`: `EvoIR.Pipeline.checkPipelineTexts` on all
+files of one compilation, with the theorem `checkPipelineTexts_sound`. The roles
+are those of the stage commands. `source`, `ir`, `ssa`, `postssa`,
+`allocation`, `asm` and `text` occur once, `proposal` at most once. Each rewrite
+step gives one `after` and one `certificate`, in step order. The exit codes are
+those of `--check-stage`. -/
+def runPipeline (args : List String) : IO UInt32 := do
+  let invalid := "PIPELINE_COMMAND_INVALID: use source, ir, ssa, postssa, allocation, asm and text once, proposal at most once, and one after and one certificate for each rewrite step"
+  let some pairs := args.mapM fun arg => match arg.splitOn "=" with
+      | role :: path@(_ :: _) => some (role, "=".intercalate path)
+      | _ => none
+    | IO.eprintln invalid; return 64
+  let mut files : List (String × String) := []
+  for (role, path) in pairs do
+    match ← (IO.FS.readFile path).toBaseIO with
+    | .ok text => files := files ++ [(role, text)]
+    | .error error => IO.eprintln s!"PIPELINE_INPUT_UNSUPPORTED role={role}: not readable: {error}"; return 2
+  let all (role : String) := (files.filter (·.1 == role)).map (·.2)
+  let one (role : String) := match all role with | [text] => some text | _ => none
+  let known := ["source", "proposal", "ir", "after", "certificate", "ssa", "postssa", "allocation", "asm", "text"]
+  let texts : Option EvoIR.Pipeline.Texts := do
+    if files.any (!known.contains ·.1) || (all "proposal").length > 1 ||
+        (all "after").length != (all "certificate").length then none
+    return { source := ← one "source", proposal := (all "proposal").head?, ir := ← one "ir",
+             rewrites := (all "after").zip (all "certificate"), ssa := ← one "ssa",
+             postSSA := ← one "postssa", allocation := ← one "allocation", ast := ← one "asm",
+             asm := ← one "text" }
+  let some texts := texts | IO.eprintln invalid; return 64
+  match EvoIR.Pipeline.checkPipelineTexts texts with
+  | .accepted report => IO.println s!"PIPELINE_ACCEPTED {report}"; return 0
+  | .rejected stage reason => IO.eprintln s!"PIPELINE_REJECTED stage={stage} {reason}"; return 1
+  | .unsupported reason => IO.eprintln s!"PIPELINE_INPUT_UNSUPPORTED {reason}"; return 2
+
 /-! ## Entry point -/
 
 def usage : String :=
-  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-mir <machine.json> | evoir-sem --run-core-mir <machine.json> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo> | evoir-sem --check-core-leaf-pair <source.json> <target.evo> | evoir-sem --check-core-machine-pair <source.json> <actual.evo> <ssa.json> <postssa.json> | evoir-sem --list-stages | evoir-sem --check-stage <stage> <role>=<path> ..."
+  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-mir <machine.json> | evoir-sem --run-core-mir <machine.json> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo> | evoir-sem --check-core-leaf-pair <source.json> <target.evo> | evoir-sem --check-core-machine-pair <source.json> <actual.evo> <ssa.json> <postssa.json> | evoir-sem --list-stages | evoir-sem --check-stage <stage> <role>=<path> ... | evoir-sem --check-pipeline <role>=<path> ..."
 
 def run (args : List String) : IO UInt32 := do
   match args with
@@ -558,6 +573,7 @@ def run (args : List String) : IO UInt32 := do
         IO.println s!"{stage.id} {stage.name} required={",".intercalate stage.required} optional={",".intercalate stage.optional}"
       return 0
   | "--check-stage" :: id :: bindings => runStage id bindings
+  | "--check-pipeline" :: bindings => runPipeline bindings
   | ["--selftest"] => do
       EvoIR.Machine.Reader.selfTest
       let tokenFunctions ← EvoIR.Core.Symbolic.MachineSelection.TokenFunctionTests.tokenFunctionSelfTest

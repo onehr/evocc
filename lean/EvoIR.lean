@@ -42,4 +42,6 @@ import EvoIR.Alloc.AcceptanceTests
 import EvoIR.Asm.Baseline
 import EvoIR.Asm.CheckTests
 import EvoIR.Asm.PrintTests
+import EvoIR.Pipeline.Soundness
+import EvoIR.Pipeline.Tests
 import EvoIR.Eval
