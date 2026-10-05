@@ -797,6 +797,22 @@ remain unimplemented. Receipts: `saved_call_contexts` and
 delta +6,396 KiB; target/frontend unchanged, capture 16,284 KiB of 500 MiB,
 53 GiB free. Temporary probe source removed; protected evidence retained.
 
+**Logical RHS call closure (October 5 continuation).** `9ab35d27` closes both
+`call-loop-short-right.c` REDs without changing either execution semantics.
+`cutMatchUnder` establishes premises only at matched branches; root admission
+starts with none. `PathConditions.for_return_sound` transports those premises
+with saved caller values, so a fresh return cannot capture an old condition.
+This is scoped source/target correspondence, not an EqSat fact-domain extension.
+Twenty-one original pairs and the retained caller-only refusal replay. The
+new tests cover four original/renamed pairs, 18 mutations, 14 execution controls,
+15 premise-isolation controls and 24 six-type logical-resumption diagrams.
+Clean Lean at this commit passes all steps with 79 kernel-only core audit
+targets and 1,246,159 vector answers. The Rust baseline remains `014bfa62`, not
+a newly run workspace gate. Private storage, complete call/constructor closure
+and validator execution safety still keep V01 OPEN; V02–V06 are unimplemented.
+Artifact delta +3,660 KiB (.lake +2,796; capture +864); target/frontend unchanged,
+capture 17,148 KiB of 500 MiB, 53 GiB free. No temporary source remains.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted

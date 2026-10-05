@@ -2591,6 +2591,16 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   `call_statement_contexts`. Combined artifact delta +6,396 KiB, 53 GiB free;
   temporary probe removed, protected evidence retained.
 
+  **October 5 logical RHS continuation:** `9ab35d27` closes those two REDs.
+  Branch premises are established by matched paths and renamed across returns;
+  they are not unconditional facts or new EqSat rules. Twenty-one original
+  source/IR pairs replay, the caller-only negative still refuses; four new
+  original/renamed pairs, 18 mutations, 14 executions, 15 premise controls and
+  24 six-type resumption diagrams pass. Clean Lean: 79 kernel-only core targets,
+  1,246,159 vector answers. Retained Rust gate is still `014bfa62`, not a new
+  run. Full call/constructor closure, private storage and validator safety remain
+  OPEN. Receipt: `logical_right_call_contexts` in the existing pilot manifest.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong
