@@ -548,6 +548,7 @@ fn walk(pre: &[MInst], post: &[MInst], locs: &Locations<'_>, state: &mut Equatio
                 if let Some(MInst::Mov { dst: d, src: s }) = pre.get(i) {
                     let (ld, ls) = (locs.of(*ld)?, locs.of(*ls)?);
                     if d.class != s.class
+                        && d.class != RegClass::Flags
                         && state.contains(&(ls.place, *s))
                         && ls.fits(s.class)
                         && ld.fits(d.class)

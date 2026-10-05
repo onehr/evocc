@@ -140,7 +140,8 @@ def defClassesOK : Machine.Instruction → Bool
   | .flagBinary _ dst flags _ _ _ => dst.class != .flags && flags.class == .flags
   | inst => inst.defs.all (·.class != .flags)
 
-def distinctIds (regs : List VReg) : Bool := decide ((regs.map (·.id)).Nodup)
+/-- The identities are distinct, in the form of the check of `Machine.bind`. -/
+def distinctIds (regs : List VReg) : Bool := (regs.map VReg.id).eraseDups.length == regs.length
 
 /-- Apply the definitions in their order. -/
 def defineAll (E : Equations) : List (VReg × Loc) → Equations
@@ -150,12 +151,11 @@ def defineAll (E : Equations) : List (VReg × Loc) → Equations
 /-- An original instruction that is not a call, together with its allocated
 form. The result is the state after the instruction. -/
 def matchOriginal (E : Equations) (o : Machine.Instruction) (a : Instruction) : Option Equations :=
-  if o.uses.length == a.useLocs.length && o.defs.length == a.defLocs.length &&
-      a == ofMachine (assign o.uses a.useLocs) (assign o.defs a.defLocs) o &&
-      (o.uses.zip a.useLocs).all (fun e => holds E e.2 e.1) &&
-      (o.defs.zip a.defLocs).all (fun e => e.2.fits e.1.class) &&
-      defClassesOK o && distinctIds o.defs then
-    some (defineAll E (o.defs.zip a.defLocs))
+  let U := assign o.uses a.useLocs
+  let D := assign o.defs a.defLocs
+  if a == ofMachine U D o && o.uses.all (fun r => holds E (U r) r) &&
+      o.defs.all (fun r => (D r).fits r.class) && defClassesOK o then
+    some (defineAll E (o.defs.map (fun r => (r, D r))))
   else none
 
 /-- The ABI location of argument `index` at a call, and of parameter `index`
@@ -216,38 +216,75 @@ def matchCall (pre : Machine.Program) (post : Program) (E : Equations)
     some (callExit E results aresults)
   else none
 
-/-- The lockstep walk of one block body. `fuel` bounds the recursion; the
-initial fuel is the sum of the two lengths. -/
-def walk (pre : Machine.Program) (post : Program) :
-    Nat → List Machine.Instruction → List Instruction → Equations → Option Equations
-  | _, [], [], E => some E
-  | 0, _, _, _ => none
-  | fuel+1, os, a :: as, E =>
+/-- A move before allocation that only renames: both classes are equal. -/
+def renameOf : Machine.Instruction → Option (VReg × VReg)
+  | .mov d s => if d.class == s.class then some (d, s) else none
+  | _ => none
+
+/-- An allocated move that implements a class-changing move before allocation. -/
+def classChange (E : Equations) (a : Instruction) :
+    List Machine.Instruction → Option (List Machine.Instruction × Equations)
+  | .mov d s :: os =>
+    match a with
+    | .mov ld ls =>
+      if d.class != s.class && d.class != .flags && holds E ls s && ld.fits d.class then
+        some (os, define E ld d)
+      else none
+    | _ => none
+  | _ => none
+
+/-- An original instruction and its allocated form. -/
+def matchStep (pre : Machine.Program) (post : Program) (E : Equations) :
+    Machine.Instruction → Instruction → Option Equations
+  | .bl symbol args results, .bl symbol' aargs aresults =>
+    matchCall pre post E symbol args results symbol' aargs aresults
+  | .bl _ _ _, _ => none
+  | o, a => matchOriginal E o a
+
+/-- One action of the walk. -/
+inductive Next where
+  | done (E : Equations)
+  | step (os : List Machine.Instruction) (as : List Instruction) (E : Equations)
+  | fail
+
+/-- The next action of the walk. Inserted copies come first. A rename of the
+program before allocation comes before a matched instruction. -/
+def next (pre : Machine.Program) (post : Program) (os : List Machine.Instruction) :
+    List Instruction → Equations → Next
+  | a :: as, E =>
     match a.copyOf with
     | some (dst, src) =>
-      match a, os with
-      | .mov ld ls, .mov d s :: os' =>
-        if d.class != s.class && holds E ls s && ld.fits d.class then
-          walk pre post fuel os' as (define E ld d)
-        else if sourceDefined E src then walk pre post fuel os as (copy E dst src) else none
-      | _, _ => if sourceDefined E src then walk pre post fuel os as (copy E dst src) else none
+      match classChange E a os with
+      | some (os', E') => .step os' as E'
+      | none => if sourceDefined E src then .step os as (copy E dst src) else .fail
     | none =>
       match os with
-      | .mov d s :: os' =>
-        if d.class == s.class then walk pre post fuel os' (a :: as) (rename E d s) else none
-      | .bl symbol args results :: os' =>
-        match a with
-        | .bl symbol' aargs aresults => do
-          let E ← matchCall pre post E symbol args results symbol' aargs aresults
-          walk pre post fuel os' as E
-        | _ => none
-      | o :: os' => do
-        let E ← matchOriginal E o a
-        walk pre post fuel os' as E
-      | [] => none
-  | fuel+1, .mov d s :: os', [], E =>
-    if d.class == s.class then walk pre post fuel os' [] (rename E d s) else none
-  | _+1, _ :: _, [], _ => none
+      | o :: os' =>
+        match renameOf o with
+        | some (d, s) => .step os' (a :: as) (rename E d s)
+        | none =>
+          match matchStep pre post E o a with
+          | some E' => .step os' as E'
+          | none => .fail
+      | [] => .fail
+  | [], E =>
+    match os with
+    | [] => .done E
+    | o :: os' =>
+      match renameOf o with
+      | some (d, s) => .step os' [] (rename E d s)
+      | none => .fail
+
+/-- The lockstep walk of one block body. `fuel` bounds the number of actions;
+the initial fuel is the sum of the two lengths plus one. -/
+def walk (pre : Machine.Program) (post : Program) :
+    Nat → List Machine.Instruction → List Instruction → Equations → Option Equations
+  | 0, _, _, _ => none
+  | fuel+1, os, as, E =>
+    match next pre post os as E with
+    | .done E => some E
+    | .step os as E => walk pre post fuel os as E
+    | .fail => none
 
 def hasBlock (blocks : List Machine.Block) (blocks' : List Block) (id : Nat) : Bool :=
   (blocks.find? (·.id == id)).isSome && (blocks'.find? (·.id == id)).isSome
@@ -281,7 +318,7 @@ def checkBlock (pre : Machine.Program) (post : Program) (hint : Nat → Equation
   match g.blocks.find? (·.id == block.id) with
   | none => false
   | some block' =>
-    match walk pre post (block.insts.length + block'.insts.length) block.insts block'.insts
+    match walk pre post (block.insts.length + block'.insts.length + 1) block.insts block'.insts
         (hint block.id) with
     | some X => termOK hint f.blocks g.blocks X block.term block'.term
     | none => false
