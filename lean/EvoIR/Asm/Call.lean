@@ -197,7 +197,7 @@ theorem outermost_push (a a' : Activation) (rf : ReturnFrame) (stack : List Retu
   | nil => simp [outermost, h]
   | cons x rest =>
     simp only [outermost, List.getLast?_cons_cons]
-    rw [List.getLast?_eq_getLast (l := x :: rest) (by simp)]
+    rw [List.getLast?_eq_some_getLast (l := x :: rest) (by simp)]
     rfl
 
 /-- The chunk of a call. -/

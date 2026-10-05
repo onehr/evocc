@@ -97,3 +97,161 @@ theorem advance {ctx : Ctx} {entry : String} (checked : checkAsm ctx.p ctx.asm c
     | brk imm => exact advance_brk checked safe reach c hpc imm hterm
 
 end EvoIR.Asm.Proof
+
+namespace EvoIR.Asm.Proof
+
+open EvoIR.Alloc
+open EvoIR.Asm.Check
+open Core.Transition (Reaches Predecessor Path Refines CheckpointSimulation)
+
+/-- A valid ABI entry state of the assembly program for `entry` with the
+arguments `args`, and sufficient stack memory. `E` is the entry stack
+pointer. -/
+structure AbiEntry (ctx : Ctx) (entry : String) (args : List Machine.Value) (t0 : Asm.State)
+    (E : Nat) : Prop where
+  function : ∃ i f, ctx.p.functions[i]? = some f ∧ f.name = entry ∧ t0.control = .running i 0
+  sp : t0.sp = BitVec.ofNat 64 E
+  aligned : E % 16 = 0
+  registers : ∀ n v, n < 8 → args[n]? = some v → v = .int (t0.regs n)
+  stackArgs : ∀ k v, args[8 + k]? = some v →
+    v = .int (load64 t0.memory (E + 8 * k)) ∧ E + 8 * k + 8 ≤ t0.high
+  returnAddress : decodeAddress (t0.regs 30) = none
+  stackLow : t0.low + needOf ctx.p ctx.hints entry ≤ E
+  stackHigh : E ≤ t0.high
+  addressSpace : t0.high < 2^64
+
+theorem entryStorage_shape (args : List Machine.Value)
+    (ints : ∀ v ∈ args, ∃ b, v = .int b) : Shape (entryStorage args) := by
+  refine ⟨fun place v d h => ?_, fun n hn => ?_⟩
+  · cases place with
+    | gpr n =>
+      simp only [entryStorage] at h
+      split at h
+      · cases hv : args[n]? with
+        | none => rw [hv] at h; cases h
+        | some w =>
+          rw [hv] at h; simp at h; obtain ⟨rfl, _⟩ := h
+          exact ints _ (List.mem_of_getElem? hv)
+      · cases h
+    | incoming k =>
+      simp only [entryStorage] at h
+      cases hv : args[abiRegisterCount + k]? with
+      | none => rw [hv] at h; cases h
+      | some w =>
+        rw [hv] at h; simp at h; obtain ⟨rfl, _⟩ := h
+        exact ints _ (List.mem_of_getElem? hv)
+    | _ => cases h
+  · simp only [entryStorage, abiRegisterCount]
+    have : ¬ n < 8 := by intro lt; simp [allocatable, isCalleeSaved] at hn; omega
+    simp [this]
+
+/-- The entry: the prologue of the entry function and the label of its entry
+block relate the initial allocated state to the assembly state at block 0. -/
+theorem entry_running (ctx : Ctx) (checked : checkAsm ctx.p ctx.asm ctx.hints = true)
+    (entry : String) (args : List Machine.Value) (s0 : Alloc.State)
+    (hs0 : Alloc.initial ctx.p entry args = .ok s0) (t0 : Asm.State) (E : Nat)
+    (abi : AbiEntry ctx entry args t0 E) :
+    ∃ n t1, Path (Asm.step ctx.asm) n t0 t1 ∧ Running ctx entry s0 t1 := by
+  obtain ⟨i, f, hf, fname, hc⟩ := abi.function
+  obtain ⟨h, g, ok⟩ := funOk_of_check ctx checked i f hf
+  have hfind : ctx.p.functions.find? (·.name == entry) = some f := by
+    rw [← fname]; exact names_find ctx checked i f hf
+  obtain ⟨b0, rest0, hblocks0, id0, hfind0, hd0, hlabel0, at0⟩ := entry_block ok
+  have henter := enter_ok f b0 hfind0 id0 (entryStorage args) 1
+  have hs0' : s0 = ⟨.running ⟨f.name, 0, 0, entryStorage args, 1⟩, [], 2, ⟨1, []⟩⟩ := by
+    simp [Alloc.initial, hfind, henter] at hs0
+    have : (Except.ok s0 : Except Core.Source.Fault Alloc.State) =
+        .ok ⟨.running ⟨f.name, 0, 0, entryStorage args, 1⟩, [], 2, ⟨1, []⟩⟩ := hs0.symm
+    exact Except.ok.inj this
+  subst hs0'
+  have frameNeed := ok.need
+  rw [fname] at frameNeed
+  unfold frameBytes at frameNeed
+  have low := abi.stackLow
+  have top := abi.stackHigh
+  have high := abi.addressSpace
+  obtain ⟨t1, hrun, hsp1, hfl1, hlow1, hhigh1, hregs1, hrec29, hrec30, hsaves, hkeep⟩ :=
+    prologue_run i h ok.layout t0 E abi.sp abi.aligned (by omega) top high
+  obtain ⟨path1, ctrl1⟩ := run_path ctx.asm i g ok.at_.2.2 (prologue h) 0 _ t0 t1 hc hd0
+    (prologue_straight h) hrun
+  have path2 := label_path ctx.asm t1 i (prologue h).length g ok.at_.2.2 (by rw [ctrl1]; simp) 0
+    hlabel0
+  let t2 : Asm.State := {t1 with control := .running i ((prologue h).length + 1)}
+  refine ⟨(prologue h).length + 1, t2, pathAppend path1 path2, ?_⟩
+  let cur : Frame := ⟨i, E - 16 - h.size, h⟩
+  have fp' : cur.fp = E - 16 := by simp only [Frame.fp, cur]; omega
+  have entry' : cur.entry = E := by simp only [Frame.entry, cur]; omega
+  have ints : ∀ v ∈ args, ∃ b, v = .int b := by
+    intro v m
+    obtain ⟨n, hn⟩ := List.getElem?_of_mem m
+    by_cases small : n < 8
+    · exact ⟨_, abi.registers n v small hn⟩
+    · obtain ⟨k, rfl⟩ : ∃ k, n = 8 + k := ⟨n - 8, by omega⟩
+      exact ⟨_, (abi.stackArgs k v hn).1⟩
+  have hl : Local cur (entryStorage args) t2 := by
+    refine ⟨hsp1, ?_, ?_, ?_, ?_, ?_, entryStorage_shape args ints, ?_, ?_, ?_, ?_⟩
+    · simp only [cur]; have := ok.layout.size16; have := abi.aligned; omega
+    · simp only [t2]; rw [hregs1, update_same, fp']
+    · simp only [t2]; rw [hhigh1]; exact high
+    · rw [entry']; simp only [t2]; rw [hhigh1]; exact top
+    · simp only [t2, cur]; rw [hlow1]; omega
+    · intro n b d hcell
+      simp only [entryStorage, abiRegisterCount] at hcell
+      split at hcell
+      · rename_i lt
+        cases hv : args[n]? with
+        | none => rw [hv] at hcell; cases hcell
+        | some v =>
+          rw [hv] at hcell
+          simp only [Option.map_some, Option.some.injEq, Cell.mk.injEq] at hcell
+          obtain ⟨hcell, _⟩ := hcell
+          have := abi.registers n v lt hv
+          rw [Machine.Slot.value.injEq] at hcell
+          subst hcell
+          cases this
+          simp only [t2]
+          rw [hregs1, update_other _ _ _ _ (by omega)]
+      · cases hcell
+    · intro fl d c b hcell; simp [entryStorage] at hcell
+    · intro k cell hcell; simp [entryStorage] at hcell
+    · refine ⟨fun k cell hcell => by simp [entryStorage] at hcell, fun k cell hcell => ?_⟩
+      simp only [entryStorage, abiRegisterCount] at hcell
+      cases hv : args[8 + k]? with
+      | none => rw [hv] at hcell; cases hcell
+      | some v =>
+        rw [hv] at hcell
+        simp only [Option.map_some, Option.some.injEq] at hcell
+        subst hcell
+        obtain ⟨rfl, bound⟩ := abi.stackArgs k v hv
+        rw [entry']
+        refine ⟨by simp only [t2]; rw [hhigh1]; exact bound, ?_⟩
+        simp only [SlotRel]
+        exact load64_congr _ _ _ (fun j _ => by simp only [t2]; exact hkeep _ (by omega))
+  have chain : Chain ctx t2.low t2.high t2.memory cur t2.regs [] [] := by
+    refine ⟨by rw [entry']; simp only [t2]; rw [hhigh1]; exact top, ?_⟩
+    rw [fp', show E - 16 + 8 = E - 8 by omega]
+    simp only [t2]
+    rw [hrec30]
+    exact abi.returnAddress
+  exact running_intro ⟨f.name, 0, 0, entryStorage args, 1⟩ cur [] ((prologue h).length + 1) f g b0
+    rfl rfl (by simp [outermost, fname]) ok.at_ rfl hfind0 (Nat.zero_le _) at0 hl
+    (by rw [entry', fname]; simp only [t2]; rw [hlow1]; exact low) chain
+
+/-- Soundness of `checkAsm`: the assembly refines the allocated program from
+related entry states. -/
+theorem checkAsm_sound (p : Alloc.Program) (asm : File) (hints : List FrameHint)
+    (checked : checkAsm p asm hints = true) (type : Core.Source.IntType) (entry : String)
+    (args : List Machine.Value) (s0 : Alloc.State) (hs0 : Alloc.initial p entry args = .ok s0)
+    (t0 : Asm.State) (E : Nat) (abi : AbiEntry ⟨p, asm, hints⟩ entry args t0 E)
+    (rv : ResultView p entry type) (safe : Safe p type s0) :
+    Refines (Alloc.step p) (Asm.step asm) (Alloc.observe type) (Asm.observe type) s0 t0 := by
+  let ctx : Ctx := ⟨p, asm, hints⟩
+  obtain ⟨n, t1, path, rel⟩ := entry_running ctx checked entry args s0 hs0 t0 E abi
+  have sim : CheckpointSimulation (Alloc.step p) (Asm.step asm) (Alloc.observe type)
+      (Asm.observe type) (fun s t => Reaches (Alloc.step p) s0 s ∧ Running ctx entry s t) := by
+    constructor
+    intro s t ⟨reach, rel⟩
+    exact advance (ctx := ctx) checked safe rv reach rel
+  exact Refines.prepend (sim.sound ⟨.refl _, rel⟩) (.refl _) path.reaches
+
+end EvoIR.Asm.Proof

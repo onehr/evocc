@@ -290,7 +290,7 @@ theorem outermost_pop (a a' : Activation) (frame : ReturnFrame) (rest : List Ret
   | nil => simp [outermost, h]
   | cons x more =>
     simp only [outermost, List.getLast?_cons_cons]
-    rw [List.getLast?_eq_getLast (l := x :: more) (by simp)]
+    rw [List.getLast?_eq_some_getLast (l := x :: more) (by simp)]
     rfl
 
 /-- The chunk of a return. -/
