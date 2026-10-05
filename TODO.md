@@ -2601,6 +2601,18 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   run. Full call/constructor closure, private storage and validator safety remain
   OPEN. Receipt: `logical_right_call_contexts` in the existing pilot manifest.
 
+  **October 5 mixed-call continuation:** `59e0f8cc` closes three more original
+  call contexts without assuming a finite callee summary: proposed entry-only
+  spans still pass the independent checker. Twenty-four original pairs replay;
+  six new original/renamed pairs, 23 refusals, 27 execution/frame controls and
+  the clean Lean gate pass (79 kernel-only targets). Next RED:
+  `call-loop-nested.c` plus `call-loop-nested.cutpoints.json`, where the caller
+  itself loops and calls a cyclic callee. Source/IR execution agrees on three
+  controls, but the whole-pair checker still refuses. Close the caller backedge
+  and suspended callee jointly; no loop unrolling/fuel-bound acceptance.
+  Private storage, complete closure/constructor coverage and validator safety
+  remain OPEN. Receipt: `mixed_call_contexts` in the existing pilot manifest.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

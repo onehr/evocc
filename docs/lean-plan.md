@@ -813,6 +813,25 @@ and validator execution safety still keep V01 OPEN; V02–V06 are unimplemented.
 Artifact delta +3,660 KiB (.lake +2,796; capture +864); target/frontend unchanged,
 capture 17,148 KiB of 500 MiB, 53 GiB free. No temporary source remains.
 
+**Mixed finite/cyclic calls (October 5 continuation).** `59e0f8cc` closes
+`call-loop-mixed.c`'s three REDs: a finite call before a cyclic call, inside its
+argument, and after its return. Source frontiers now stop at the first actual
+call, rather than eagerly executing finite argument calls. An unannotated
+finite callee receives an entry-only suggestion; `loopDiagram` still checks
+its body, bindings and successors. An explicit bad plan is never replaced.
+Twenty-four original pairs and the historical refusal replay; six new
+original/renamed pairs, 23 rejection controls and 27 execution/frame controls
+pass. Clean Lean at this commit passes all steps: 79 kernel-only core targets,
+1,246,159 vector answers. Rust-baseline scope remains `014bfa62`.
+`call-loop-nested.c` is the next RED: an unbounded caller loop invokes the
+cyclic callee. Both source and target execute the three recorded controls
+identically, but whole-pair admission refuses even with both functions' proposed
+cutpoints. Cyclic caller spans currently only compose finite callees; their
+call/return and backedge relation must be closed together. This is not PASS.
+V01 and V02–V06 remain open. Artifact delta +1,216 KiB (.lake +1,124;
+capture +92); target/frontend unchanged, capture 17,240 KiB of 500 MiB,
+53 GiB free. Temporary inspection source removed; all final evidence retained.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted

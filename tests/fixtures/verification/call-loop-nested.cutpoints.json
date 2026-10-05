@@ -1,0 +1,10 @@
+["core-call-cutpoints-v1",256,[
+  [2,["core-cutpoints-v2",256,[
+    [0,"entry",[[3,"uint",false,true],[4,"uint",false,true]],[[1,4,"uint"],[0,3,"uint"]],[[3,"world"],[2,"mem"]]],
+    [2,"b1",[[3,"uint",false,true],[4,"uint",false,true]],[[5,4,"uint"],[4,3,"uint"]],[[7,"world"],[6,"mem"]]]
+  ]]],
+  [8,["core-cutpoints-v2",256,[
+    [0,"entry",[[9,"uint",false,true],[10,"uint",false,true],[11,"uint",false,true]],[[2,11,"uint"],[1,10,"uint"],[0,9,"uint"]],[[4,"world"],[3,"mem"]]],
+    [2,"b1",[[9,"uint",false,true],[10,"uint",false,true],[11,"uint",false,true]],[[7,11,"uint"],[6,10,"uint"],[5,9,"uint"]],[[9,"world"],[8,"mem"]]]
+  ]]]
+]]
