@@ -853,6 +853,28 @@ the existing pilot manifest. Artifact delta +3,268 KiB (.lake +3,220; capture
 +48), target/frontend unchanged, capture 17,288 KiB of 500 MiB, 52 GiB free.
 No temporary source remains; protected evidence is retained.
 
+**General call closure and execution safety (October 5 continuation).**
+`8b7d16d0` replaces the two-level construction with one nonrecursive call-graph
+builder over arbitrary suspended caller contexts. `8afff094` adds proved
+transport of unused poison placeholders and closed-term diagram normalization;
+false/unknown guards and the first diagnostic remain intact. The unchanged
+`source-execution.c` / `main` closure now passes with all signature bits and
+unbounded execution. Thirty-one positive original pairs and one retained
+negative replay; no source/IR input, EqSat registry or runtime bound was changed.
+`05fb62d4` connects actual identifier admission to a realized local store and
+proves typed scalar continuation safety. `4a8ac98e` derives
+`LoweringRefines.source_no_malformed`: an accepted whole-pair proof excludes
+malformed source terminals, including when target divergence is considered.
+This conditional result does **not** prove standalone input-validator safety.
+Clean Lean at `4a8ac98e`: PASS, 90 kernel-only core targets, no native axioms in
+those targets. Full workspace at `8afff094`: 401 suites, 3,080 PASS, 0 FAIL,
+5 ignored; Clippy/format PASS. Private lowered-storage composition, complete
+constructor coverage, and preservation of validator facts through full
+expressions/statements/loops/calls remain OPEN; V02–V06 remain unimplemented.
+Details and exact subjects are in the existing pilot receipt. Artifact delta
++6,412 KiB; target/frontend unchanged; capture 17,832 KiB of 500 MiB; 52 GiB
+free. Two temporary inspection inputs removed, protected evidence retained.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted

@@ -2628,6 +2628,23 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   `cyclic_caller_contexts`. Artifact delta +3,268 KiB; 52 GiB free; no temporary
   source remains, protected evidence retained.
 
+  **October 5 general closure and safety:** `8b7d16d0` generalizes suspended
+  callers through the nonrecursive closure; `8afff094` proves unused-poison
+  transport and closed-term diagram normalization. The unchanged combined
+  `source-execution.c` / `main` closure now passes, without input restriction or
+  an execution bound. Thirty-one positive original pairs and one retained
+  negative replay. `05fb62d4` proves scalar/read safety under explicit runtime
+  store/operand invariants; `4a8ac98e` proves accepted whole-pair refinement
+  excludes malformed source terminals. Standalone validator safety is still
+  OPEN: establish and preserve those invariants through the complete machine.
+  Private lowered-storage composition and complete constructor coverage also
+  remain OPEN; no V02–V06 or release completion is claimed. Clean Lean PASS:
+  90 kernel-only core targets, no native axioms in those targets. Full workspace
+  at `8afff094`: 401 suites, 3,080 PASS / 0 FAIL / 5 ignored, Clippy/format PASS.
+  Receipt: `general_call_closure` and `validator_safety_foundation` in the existing
+  pilot manifest. Artifact delta +6,412 KiB; 52 GiB free; target/frontend
+  unchanged, capture 17,832 KiB; temporary diagnostic inputs removed.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong
