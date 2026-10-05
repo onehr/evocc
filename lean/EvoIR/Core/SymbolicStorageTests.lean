@@ -19,7 +19,9 @@ example : (uninitialized.read 1 .int).isNone := by decide
 example : ((uninitialized ++ initialized).bindings.lookup 1).isNone := by decide
 example : ((uninitialized ++ initialized).read 1 .int).isNone := by decide
 example : (initialized.write 1 mutableInt x false).isSome := by decide
-example : (initialized.write 1 mutableInt x true).isNone := by decide
+-- A sequenced initializer may have already assigned the mutable object.
+example : (initialized.write 1 mutableInt x true).isSome := by decide
+example : (LocalStore.write ([⟨1, constInt, some x.term⟩] : LocalStore widths) 1 constInt x true).isNone := by decide
 example : (uninitialized.write 1 mutableInt x true).isSome := by decide
 example : (constant.write 1 constInt x true).isSome := by decide
 example : (constant.write 1 constInt x false).isNone := by decide

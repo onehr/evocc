@@ -52,6 +52,9 @@ private def cases : List (String × Program × Int × Option Result) := [
   ("post increment", program (ret (inc 1)), 4, some (.ok (.ofInt .int 4))),
   ("sequenced post increment", program (ret (.comma .int (inc 1) x)),
     4, some (.ok (.ofInt .int 5))),
+  ("initializer follows its sequenced self-assignment", program (.compound [
+    decl 2 (.comma .int (set 2 (lit 1)) (lit 2)),
+    .statement (ret (.ident .int 2))]), 0, some (.ok (.ofInt .int 2))),
   ("nested scope keeps outer writes", program (.compound [
     .statement (.compound [decl 2 (lit 8), stmt (set 1 (.ident .int 2))]),
     .statement (ret x)]), 1, some (.ok (.ofInt .int 8))),

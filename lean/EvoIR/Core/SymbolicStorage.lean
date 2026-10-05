@@ -60,7 +60,7 @@ def LocalStore.write {Γ : Var → Nat} : LocalStore Γ → Nat → Source.Quali
   | slot :: rest, symbol, destination, value, initialization =>
     if slot.symbol == symbol then
       if slot.type = destination ∧ value.type = destination.type then
-        if initialization && slot.value.isSome || !initialization && slot.type.isConst then none
+        if initialization && slot.type.isConst && slot.value.isSome || !initialization && slot.type.isConst then none
         else some ({slot with value := some (value.cast slot.type.type).term} :: rest)
       else none
     else return slot :: (← LocalStore.write rest symbol destination value initialization)
@@ -82,13 +82,15 @@ theorem local_write_sound {Γ : Var → Nat} (σ : Subst Γ)
         split at accepted
         · contradiction
         · rename_i allowed
+          have constSame := congrArg Source.QualifiedType.isConst same.1
+          rw [constSame] at allowed
           cases Option.some.inj accepted
           have castSelf : (value.cast slot.type.type).denote σ = value.denote σ := by
             rw [cast_sound, same.1, ← same.2]
             exact Source.value_cast_self (value.denote σ)
           have represented : Source.Value.mk slot.type.type
               (denoteTerm σ (value.cast slot.type.type).term) = value.denote σ := castSelf
-          cases initialization <;>
+          cases constPermission : destination.isConst <;> cases initialization <;>
             simp_all [LocalStore.denote, LocalSlot.denote, Source.writeSlot,
               CWord.denote, pure, Except.pure]
           all_goals exact HEq.symm represented

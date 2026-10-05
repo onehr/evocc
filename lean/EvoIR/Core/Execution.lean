@@ -28,7 +28,8 @@ def readSlot (locals : Locals) (symbol : Nat) (t : IntType) : Result := do
   return value
 
 /-- Initialization may write a const object exactly once; assignment may not.
-Lookup and update concern the same first active binding. -/
+An initializer may already have assigned its mutable object through a sequenced
+subexpression. Lookup and update concern the same first active binding. -/
 def writeSlot : Locals → Nat → QualifiedType → Value → Bool → Except Fault Locals
   | [], _, _, _, _ => .error (.malformed "unbound local write")
   | slot :: rest, symbol, destination, value, initialization => do
@@ -36,7 +37,7 @@ def writeSlot : Locals → Nat → QualifiedType → Value → Bool → Except F
       if slot.type != destination || value.type != destination.type then
         throw (.malformed "local write type mismatch")
       if initialization then
-        if slot.value.isSome then throw (.malformed "duplicate initialization")
+        if slot.type.isConst && slot.value.isSome then throw (.malformed "duplicate initialization")
       else if slot.type.isConst then throw (.malformed "const assignment")
       return {slot with value := some value} :: rest
     else return slot :: (← writeSlot rest symbol destination value initialization)

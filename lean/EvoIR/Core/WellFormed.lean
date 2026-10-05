@@ -185,6 +185,76 @@ theorem checked_binary_signature (callees : List Function) (fuel : Nat) (s : Loc
         simp [checkExpr, require, typed, denied.1, denied.2, bind, Except.bind] at accepted
     · simp [checkExpr, require, typed, bind, Except.bind] at accepted
 
+private theorem checked_place (s : LocalState) (id : Nat) (destination : QualifiedType)
+    (target : Expr) (read : Bool) (accepted : checkPlace s id destination target read = .ok ()) :
+    target = .ident destination.type id ∧ lookup s id = some destination ∧
+      destination.isConst = false ∧ (read = true → id ∈ s.initialized) := by
+  cases found : lookup s id with
+  | none => simp [checkPlace, found, throw, throwThe, MonadExceptOf.throw] at accepted
+  | some binding =>
+    by_cases valid : binding = destination ∧ binding.isConst = false
+    · obtain ⟨rfl, writable⟩ := valid
+      cases target <;> try simp [checkPlace, found, require, writable,
+        throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at accepted
+      rename_i type symbol
+      by_cases same : id = symbol ∧ type = binding.type
+      · obtain ⟨rfl, rfl⟩ := same
+        refine ⟨rfl, rfl, writable, ?_⟩
+        intro reads
+        subst read
+        by_cases initialized : id ∈ s.initialized
+        · exact initialized
+        · simp [readLocal, found, require, initialized, bind, Except.bind] at accepted
+      · simp [same] at accepted
+    · simp [checkPlace, found, require, valid, bind, Except.bind] at accepted
+
+/-- Assignment permissions and initialization premises come from the real
+independent input check, including the exact target tree and source type. -/
+theorem checked_assignment_signature (callees : List Function) (fuel : Nat) (s : LocalState)
+    (type : IntType) (op : Assignment) (id : Nat) (destination : QualifiedType)
+    (target rhs : Expr) (facts : ExpressionFacts)
+    (accepted : checkExpr callees fuel s (.assign type op id destination target rhs) = .ok facts) :
+    type = destination.type ∧ !(op == .shl && type.signed) = true ∧
+      target = .ident destination.type id ∧
+      (s.bindings.find? (fun pair => pair.1 == id)).map Prod.snd = some destination ∧
+      destination.isConst = false ∧ (op ≠ .set → id ∈ s.initialized) := by
+  cases fuel with
+  | zero => simp [checkExpr] at accepted
+  | succ fuel =>
+    by_cases typed : type = destination.type
+    · by_cases admitted : !(op == .shl && type.signed) = true
+      · have placeOk : checkPlace s id destination target (op != .set) = .ok () := by
+          have allow : op ≠ .shl ∨ destination.type.signed = false := by simpa [typed] using admitted
+          cases checked : checkPlace s id destination target (op != .set) with
+          | ok result => cases result; rfl
+          | error message =>
+            simp [checkExpr, require, typed, allow, checked, bind, Except.bind] at accepted
+        obtain ⟨place, binding, writable, initialized⟩ := checked_place s id destination target _ placeOk
+        exact ⟨typed, admitted, place, binding, writable, fun notSet => initialized (by simpa using notSet)⟩
+      · have denied : op = .shl ∧ type.signed = true := by simpa using admitted
+        have signed : destination.type.signed = true := typed ▸ denied.2
+        simp [checkExpr, require, typed, denied.1, signed, bind, Except.bind] at accepted
+    · simp [checkExpr, require, typed, bind, Except.bind] at accepted
+
+theorem checked_update_signature (callees : List Function) (fuel : Nat) (s : LocalState)
+    (type : IntType) (op : Update) (id : Nat) (destination : QualifiedType)
+    (target : Expr) (facts : ExpressionFacts)
+    (accepted : checkExpr callees fuel s (.update type op id destination target) = .ok facts) :
+    type = destination.type ∧ target = .ident destination.type id ∧
+      (s.bindings.find? (fun pair => pair.1 == id)).map Prod.snd = some destination ∧
+      destination.isConst = false ∧ id ∈ s.initialized := by
+  cases fuel with
+  | zero => simp [checkExpr] at accepted
+  | succ fuel =>
+    by_cases typed : type = destination.type
+    · have placeOk : checkPlace s id destination target true = .ok () := by
+        cases checked : checkPlace s id destination target true with
+        | ok result => cases result; rfl
+        | error message => simp [checkExpr, require, typed, checked, bind, Except.bind] at accepted
+      obtain ⟨place, binding, writable, initialized⟩ := checked_place s id destination target true placeOk
+      exact ⟨typed, place, binding, writable, initialized rfl⟩
+    · simp [checkExpr, require, typed, bind, Except.bind] at accepted
+
 private def expressionState (callees : List Function) (fuel : Nat)
     (s : LocalState) (e : Expr) : Except String LocalState := do
   let facts ← checkExpr callees fuel s e

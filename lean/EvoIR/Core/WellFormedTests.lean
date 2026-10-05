@@ -85,6 +85,9 @@ private def wellFormedCases : List (String × Program × Bool) := [
     .statement (ret (.ident .int 2))]), false),
   ("duplicate active local", programOf (.compound [localObject 1 (some one),
     .statement (ret one)]), false),
+  ("initializer sequenced self-assignment", programOf (.compound [
+    localObject 2 (some (.comma .int (.assign .int .set 2 (q) (.ident .int 2) one) one)),
+    .statement (ret (.ident .int 2))]), true),
   ("wrong initializer conversion", programOf (.compound [
     .declaration ⟨2, "v", q, .none, some (q .uint, one)⟩,
     .statement (ret one)]), false),

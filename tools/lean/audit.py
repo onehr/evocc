@@ -301,6 +301,82 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Source.LocalState.Realizes.after_write",
+        "∀ (state : EvoIR.Core.Source.LocalState) (locals updated : EvoIR.Core.Source.Locals), "
+        "state.Realizes locals → ∀ (id : Nat) (destination : EvoIR.Core.Source.QualifiedType) "
+        "(value : EvoIR.Core.Source.Value) (initialization : Bool), "
+        "EvoIR.Core.Source.writeSlot locals id destination value initialization = Except.ok updated → "
+        "∀ (initialized : List Nat), (∀ (other : Nat), other ∈ initialized → other = id ∨ other ∈ state.initialized) → "
+        "{ bindings := state.bindings, initialized := initialized }.Realizes updated",
+    ),
+    (
+        "EvoIR.Core.Source.LocalState.Realizes.declare",
+        "∀ (state : EvoIR.Core.Source.LocalState) (locals : EvoIR.Core.Source.Locals), state.Realizes locals → "
+        "∀ (id : Nat) (destination : EvoIR.Core.Source.QualifiedType), "
+        "Option.map Prod.snd (List.find? (fun pair => pair.fst == id) state.bindings) = none → "
+        "{ bindings := (id, destination) :: state.bindings, initialized := state.initialized }.Realizes "
+        "({ symbol := id, type := destination, value := none } :: locals)",
+    ),
+    (
+        "EvoIR.Core.Source.checked_assignment_enter",
+        "∀ (callees : List EvoIR.Core.Source.Function) (fuel : Nat) (static : EvoIR.Core.Source.LocalState) "
+        "(state : EvoIR.Core.Source.State) (type : EvoIR.Core.Source.IntType) (op : EvoIR.Core.Source.Assignment) "
+        "(id : Nat) (destination : EvoIR.Core.Source.QualifiedType) (target rhs : EvoIR.Core.Source.Expr) "
+        "(facts : EvoIR.Core.Source.ExpressionFacts), "
+        "EvoIR.Core.Source.checkExpr callees fuel static (EvoIR.Core.Source.Expr.assign type op id destination target rhs) = "
+        "Except.ok facts → static.Realizes state.locals → "
+        "EvoIR.Core.Source.enterExpression state (EvoIR.Core.Source.Expr.assign type op id destination target rhs) = "
+        "{ control := EvoIR.Core.Source.Control.expression rhs, locals := state.locals, "
+        "continuation := EvoIR.Core.Source.Frame.assign EvoIR.Core.Source.Value type op id destination :: state.continuation, "
+        "functionId := state.functionId }",
+    ),
+    (
+        "EvoIR.Core.Source.checked_assignment_continuation_safe",
+        "∀ (callees : List EvoIR.Core.Source.Function) (fuel : Nat) (static : EvoIR.Core.Source.LocalState) "
+        "(state : EvoIR.Core.Source.State) (type : EvoIR.Core.Source.IntType) (op : EvoIR.Core.Source.Assignment) "
+        "(id : Nat) (destination : EvoIR.Core.Source.QualifiedType) (target rhs : EvoIR.Core.Source.Expr) "
+        "(facts : EvoIR.Core.Source.ExpressionFacts) (value : EvoIR.Core.Source.Value), "
+        "EvoIR.Core.Source.checkExpr callees fuel static (EvoIR.Core.Source.Expr.assign type op id destination target rhs) = "
+        "Except.ok facts → static.Realizes state.locals → "
+        "EvoIR.Core.Source.WriteOutcome state { bindings := static.bindings, initialized := id :: static.initialized } type "
+        "(EvoIR.Core.Source.resumeValue state "
+        "(EvoIR.Core.Source.Frame.assign EvoIR.Core.Source.Value type op id destination) value)",
+    ),
+    (
+        "EvoIR.Core.Source.checked_update_safe",
+        "∀ (callees : List EvoIR.Core.Source.Function) (fuel : Nat) (static : EvoIR.Core.Source.LocalState) "
+        "(state : EvoIR.Core.Source.State) (type : EvoIR.Core.Source.IntType) (op : EvoIR.Core.Source.Update) (id : Nat) "
+        "(destination : EvoIR.Core.Source.QualifiedType) (target : EvoIR.Core.Source.Expr) "
+        "(facts : EvoIR.Core.Source.ExpressionFacts), "
+        "EvoIR.Core.Source.checkExpr callees fuel static (EvoIR.Core.Source.Expr.update type op id destination target) = "
+        "Except.ok facts → static.Realizes state.locals → EvoIR.Core.Source.WriteOutcome state static type "
+        "(EvoIR.Core.Source.enterExpression state (EvoIR.Core.Source.Expr.update type op id destination target))",
+    ),
+    (
+        "EvoIR.Core.Source.initialization_continuation_safe",
+        "∀ (static : EvoIR.Core.Source.LocalState) (state : EvoIR.Core.Source.State), static.Realizes state.locals → "
+        "∀ (id : Nat) (destination : EvoIR.Core.Source.QualifiedType) (slot : EvoIR.Core.Source.Slot), "
+        "List.find? (fun x => x.symbol == id) state.locals = some slot → slot.type = destination → "
+        "(destination.isConst = true → slot.value = none) → ∀ (value : EvoIR.Core.Source.Value), "
+        "∃ locals, { bindings := static.bindings, initialized := id :: static.initialized }.Realizes locals ∧ "
+        "EvoIR.Core.Source.resumeValue state "
+        "(EvoIR.Core.Source.Frame.initialize EvoIR.Core.Source.Value id destination) value = "
+        "{ control := EvoIR.Core.Source.Control.flow EvoIR.Core.Source.Flow.normal, locals := locals, "
+        "continuation := state.continuation, functionId := state.functionId }",
+    ),
+    (
+        "EvoIR.Core.Source.caller_restore_safe",
+        "∀ (static : EvoIR.Core.Source.LocalState) (locals : EvoIR.Core.Source.Locals), static.Realizes locals → "
+        "∀ (state : EvoIR.Core.Source.State) (callerId : Nat) (type : EvoIR.Core.Source.IntType) (value : EvoIR.Core.Source.Value), "
+        "value.type = type → EvoIR.Core.Source.resumeFlow state "
+        "(EvoIR.Core.Source.Frame.function EvoIR.Core.Source.Value (some (callerId, locals)) type) "
+        "(EvoIR.Core.Source.Flow.returned value) = "
+        "{ control := EvoIR.Core.Source.Control.value value, locals := locals, continuation := state.continuation, "
+        "functionId := callerId } ∧ static.Realizes (EvoIR.Core.Source.resumeFlow state "
+        "(EvoIR.Core.Source.Frame.function EvoIR.Core.Source.Value (some (callerId, locals)) type) "
+        "(EvoIR.Core.Source.Flow.returned value)).locals",
+    ),
+    (
         "EvoIR.Core.LoweringRefines.source_no_malformed",
         "∀ {s : EvoIR.Core.Source.Program} {t : EvoIR.Core.IR.Program} {resultType : EvoIR.Core.Source.IntType} "
         "{s₀ : EvoIR.Core.Source.State} {t₀ : EvoIR.Core.IR.State}, "

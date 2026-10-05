@@ -170,3 +170,15 @@ fn complete_source_execution_fixture_agrees_in_existing_interpreters() {
     assert_eq!(tree.matches("[\"function\"").count(), 10);
     assert!(!tree.contains("VERIFIED"));
 }
+
+#[test]
+fn sequenced_initializer_write_is_not_duplicate_initialization() {
+    let source = include_str!("../../../tests/fixtures/verification/initializer-self-assignment.c");
+    let tree = exported(source, "main");
+    assert!(tree.contains("[\"comma\",\"int\",[\"assign\",\"int\",\"set\""));
+    for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+        let output = invoke(source, &[mode, "-O0", "-fno-builtin"]);
+        assert!(output.status.success(), "{mode}: {:?}", output.stderr);
+        assert_eq!(output.stdout, b"0\n", "{mode}");
+    }
+}
