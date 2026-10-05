@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "b691b5899269ddf9e908c721bb57ad54ea230247",
+    "lean_commit": "56af315722f2e5585403b95f04f3e728d0d12a2a",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -193,6 +193,159 @@
       "lean/EvoIR/Eval.lean",
       "lean/EvoIR/Fact.lean",
       "lean/EvoIR/GuardRegistry.lean",
+      "lean/EvoIR/IRPoisonBindings.lean",
+      "lean/EvoIR/IRPoisonCheck.lean",
+      "lean/EvoIR/IRPoisonDispatch.lean",
+      "lean/EvoIR/IRPoisonEdges.lean",
+      "lean/EvoIR/IRPoisonExecution.lean",
+      "lean/EvoIR/IRPoisonInstructions.lean",
+      "lean/EvoIR/IRPoisonProposal.lean",
+      "lean/EvoIR/IRPoisonProposalTests.lean",
+      "lean/EvoIR/IRPoisonSound.lean",
+      "lean/EvoIR/IRPoisonSoundTests.lean",
+      "lean/EvoIR/IRPoisonState.lean",
+      "lean/EvoIR/Machine.lean",
+      "lean/EvoIR/MachineCopies.lean",
+      "lean/EvoIR/MachineCopiesTests.lean",
+      "lean/EvoIR/MachineCorrespondence.lean",
+      "lean/EvoIR/MachineDemand.lean",
+      "lean/EvoIR/MachineDemandCalls.lean",
+      "lean/EvoIR/MachineDemandContext.lean",
+      "lean/EvoIR/MachineDemandContextPrefixes.lean",
+      "lean/EvoIR/MachineDemandContextStep.lean",
+      "lean/EvoIR/MachineDemandCorrespondence.lean",
+      "lean/EvoIR/MachineDemandExecution.lean",
+      "lean/EvoIR/MachineDemandLockstep.lean",
+      "lean/EvoIR/MachineDemandPrefixes.lean",
+      "lean/EvoIR/MachineDemandTerm.lean",
+      "lean/EvoIR/MachineEntry.lean",
+      "lean/EvoIR/MachineExecution.lean",
+      "lean/EvoIR/MachineExecutionTests.lean",
+      "lean/EvoIR/MachineLowering.lean",
+      "lean/EvoIR/MachineLoweringTests.lean",
+      "lean/EvoIR/MachineMultiply.lean",
+      "lean/EvoIR/MachinePrivateBank.lean",
+      "lean/EvoIR/MachinePrivateBinding.lean",
+      "lean/EvoIR/MachinePrivateBody.lean",
+      "lean/EvoIR/MachinePrivateBodyCut.lean",
+      "lean/EvoIR/MachinePrivateBodyRows.lean",
+      "lean/EvoIR/MachinePrivateBodySpan.lean",
+      "lean/EvoIR/MachinePrivateBranch.lean",
+      "lean/EvoIR/MachinePrivateBytes.lean",
+      "lean/EvoIR/MachinePrivateCFG.lean",
+      "lean/EvoIR/MachinePrivateCall.lean",
+      "lean/EvoIR/MachinePrivateCallResume.lean",
+      "lean/EvoIR/MachinePrivateCallTests.lean",
+      "lean/EvoIR/MachinePrivateCaller.lean",
+      "lean/EvoIR/MachinePrivateControl.lean",
+      "lean/EvoIR/MachinePrivateCutpoint.lean",
+      "lean/EvoIR/MachinePrivateDemandCallEntry.lean",
+      "lean/EvoIR/MachinePrivateDemandCallee.lean",
+      "lean/EvoIR/MachinePrivateEdges.lean",
+      "lean/EvoIR/MachinePrivateEffects.lean",
+      "lean/EvoIR/MachinePrivateFinite.lean",
+      "lean/EvoIR/MachinePrivateFiniteTests.lean",
+      "lean/EvoIR/MachinePrivateFunction.lean",
+      "lean/EvoIR/MachinePrivateGuardChain.lean",
+      "lean/EvoIR/MachinePrivateGuardEdges.lean",
+      "lean/EvoIR/MachinePrivateGuardPrefix.lean",
+      "lean/EvoIR/MachinePrivateGuardStep.lean",
+      "lean/EvoIR/MachinePrivateGuardTests.lean",
+      "lean/EvoIR/MachinePrivateGuarded.lean",
+      "lean/EvoIR/MachinePrivateGuardedFunction.lean",
+      "lean/EvoIR/MachinePrivateLive.lean",
+      "lean/EvoIR/MachinePrivateLoop.lean",
+      "lean/EvoIR/MachinePrivateLoopTests.lean",
+      "lean/EvoIR/MachinePrivateMemory.lean",
+      "lean/EvoIR/MachinePrivateModule.lean",
+      "lean/EvoIR/MachinePrivateProgress.lean",
+      "lean/EvoIR/MachinePrivateProposal.lean",
+      "lean/EvoIR/MachinePrivateProposalTests.lean",
+      "lean/EvoIR/MachinePrivateReturn.lean",
+      "lean/EvoIR/MachinePrivateSourceStep.lean",
+      "lean/EvoIR/MachinePrivateSuffix.lean",
+      "lean/EvoIR/MachinePrivateUninitialized.lean",
+      "lean/EvoIR/MachineProgress.lean",
+      "lean/EvoIR/MachineReader.lean",
+      "lean/EvoIR/MachineReaderTests.lean",
+      "lean/EvoIR/MachineSelectionArithmetic.lean",
+      "lean/EvoIR/MachineSelectionBank.lean",
+      "lean/EvoIR/MachineSelectionBranch.lean",
+      "lean/EvoIR/MachineSelectionCFG.lean",
+      "lean/EvoIR/MachineSelectionCFGTests.lean",
+      "lean/EvoIR/MachineSelectionCallEntry.lean",
+      "lean/EvoIR/MachineSelectionCallResume.lean",
+      "lean/EvoIR/MachineSelectionCallee.lean",
+      "lean/EvoIR/MachineSelectionCaller.lean",
+      "lean/EvoIR/MachineSelectionCallerCall.lean",
+      "lean/EvoIR/MachineSelectionCallerDemand.lean",
+      "lean/EvoIR/MachineSelectionCallerSpan.lean",
+      "lean/EvoIR/MachineSelectionCallerTests.lean",
+      "lean/EvoIR/MachineSelectionConditional.lean",
+      "lean/EvoIR/MachineSelectionConditionalTests.lean",
+      "lean/EvoIR/MachineSelectionControl.lean",
+      "lean/EvoIR/MachineSelectionConvert.lean",
+      "lean/EvoIR/MachineSelectionCutpoint.lean",
+      "lean/EvoIR/MachineSelectionDemandArguments.lean",
+      "lean/EvoIR/MachineSelectionDemandCallEntry.lean",
+      "lean/EvoIR/MachineSelectionDemandCallee.lean",
+      "lean/EvoIR/MachineSelectionDemandCaller.lean",
+      "lean/EvoIR/MachineSelectionDemandCallerTests.lean",
+      "lean/EvoIR/MachineSelectionDemandModule.lean",
+      "lean/EvoIR/MachineSelectionEdges.lean",
+      "lean/EvoIR/MachineSelectionEntry.lean",
+      "lean/EvoIR/MachineSelectionFunction.lean",
+      "lean/EvoIR/MachineSelectionGuard.lean",
+      "lean/EvoIR/MachineSelectionModule.lean",
+      "lean/EvoIR/MachineSelectionMultiply.lean",
+      "lean/EvoIR/MachineSelectionNormal.lean",
+      "lean/EvoIR/MachineSelectionNormalTests.lean",
+      "lean/EvoIR/MachineSelectionPair.lean",
+      "lean/EvoIR/MachineSelectionPairTests.lean",
+      "lean/EvoIR/MachineSelectionResume.lean",
+      "lean/EvoIR/MachineSelectionReturn.lean",
+      "lean/EvoIR/MachineSelectionSourceSpan.lean",
+      "lean/EvoIR/MachineSelectionSpan.lean",
+      "lean/EvoIR/MachineSelectionTermStep.lean",
+      "lean/EvoIR/MachineSelectionTerms.lean",
+      "lean/EvoIR/MachineSelectionTest.lean",
+      "lean/EvoIR/MachineSelectionTokenCFG.lean",
+      "lean/EvoIR/MachineSelectionTokenControl.lean",
+      "lean/EvoIR/MachineSelectionTokenCutpoint.lean",
+      "lean/EvoIR/MachineSelectionTokenFunction.lean",
+      "lean/EvoIR/MachineSelectionTokenFunctionTests.lean",
+      "lean/EvoIR/MachineSelectionTokenReturnOpen.lean",
+      "lean/EvoIR/MachineSelectionTokens.lean",
+      "lean/EvoIR/MachineStep.lean",
+      "lean/EvoIR/MachineTransport.lean",
+      "lean/EvoIR/MachineTransportActive.lean",
+      "lean/EvoIR/MachineTransportBindings.lean",
+      "lean/EvoIR/MachineTransportCalls.lean",
+      "lean/EvoIR/MachineTransportCopies.lean",
+      "lean/EvoIR/MachineTransportDCE.lean",
+      "lean/EvoIR/MachineTransportEdges.lean",
+      "lean/EvoIR/MachineTransportEntry.lean",
+      "lean/EvoIR/MachineTransportInstruction.lean",
+      "lean/EvoIR/MachineTransportJump.lean",
+      "lean/EvoIR/MachineTransportNoncall.lean",
+      "lean/EvoIR/MachineTransportPreparation.lean",
+      "lean/EvoIR/MachineTransportPrepareState.lean",
+      "lean/EvoIR/MachineTransportProposal.lean",
+      "lean/EvoIR/MachineTransportProposalTests.lean",
+      "lean/EvoIR/MachineTransportReads.lean",
+      "lean/EvoIR/MachineTransportRelation.lean",
+      "lean/EvoIR/MachineTransportResults.lean",
+      "lean/EvoIR/MachineTransportReturn.lean",
+      "lean/EvoIR/MachineTransportRoutes.lean",
+      "lean/EvoIR/MachineTransportSimulation.lean",
+      "lean/EvoIR/MachineTransportSound.lean",
+      "lean/EvoIR/MachineTransportSoundTests.lean",
+      "lean/EvoIR/MachineTransportSteps.lean",
+      "lean/EvoIR/MachineTransportTable.lean",
+      "lean/EvoIR/MachineTransportTerms.lean",
+      "lean/EvoIR/MachineTransportTests.lean",
+      "lean/EvoIR/MachineTransportWrites.lean",
+      "lean/EvoIR/MachineWrites.lean",
       "lean/EvoIR/Proofs/Bits.lean",
       "lean/EvoIR/Proofs/GuardBounds.lean",
       "lean/EvoIR/Proofs/GuardRules.lean",
@@ -885,13 +1038,618 @@
         "EvoIR.Core.SourceTargetCheckTests",
         "EvoIR.Core.PrivateStorageTests",
         "EvoIR.Core.PrivateLoopTests",
-        "EvoIR.Core.PrivateCallTests"
+        "EvoIR.Core.PrivateCallTests",
+        "EvoIR.MachineReader",
+        "EvoIR.MachineExecution",
+        "EvoIR.MachineReaderTests",
+        "EvoIR.MachineExecutionTests",
+        "EvoIR.MachineLowering",
+        "EvoIR.MachineLoweringTests",
+        "EvoIR.MachineTransportSoundTests",
+        "EvoIR.MachineTransportTests",
+        "EvoIR.MachineTransportProposalTests",
+        "EvoIR.MachineCopiesTests",
+        "EvoIR.MachineSelectionCallerTests",
+        "EvoIR.MachineSelectionDemandCallerTests",
+        "EvoIR.MachineSelectionTokenFunctionTests",
+        "EvoIR.IRPoisonProposalTests",
+        "EvoIR.IRPoisonSoundTests",
+        "EvoIR.MachinePrivateProposalTests",
+        "EvoIR.MachinePrivateFiniteTests",
+        "EvoIR.MachinePrivateLoopTests",
+        "EvoIR.MachinePrivateGuardTests",
+        "EvoIR.MachinePrivateCallTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
       ],
       "lean/EvoIR/GuardRegistry.lean": [
         "EvoIR.Rule"
+      ],
+      "lean/EvoIR/IRPoisonBindings.lean": [
+        "EvoIR.Core.IRExecution"
+      ],
+      "lean/EvoIR/IRPoisonCheck.lean": [
+        "EvoIR.IRPoisonBindings"
+      ],
+      "lean/EvoIR/IRPoisonDispatch.lean": [
+        "EvoIR.IRPoisonState"
+      ],
+      "lean/EvoIR/IRPoisonEdges.lean": [
+        "EvoIR.IRPoisonCheck"
+      ],
+      "lean/EvoIR/IRPoisonExecution.lean": [
+        "EvoIR.IRPoisonDispatch"
+      ],
+      "lean/EvoIR/IRPoisonInstructions.lean": [
+        "EvoIR.IRPoisonEdges"
+      ],
+      "lean/EvoIR/IRPoisonProposal.lean": [
+        "EvoIR.IRPoisonCheck"
+      ],
+      "lean/EvoIR/IRPoisonProposalTests.lean": [
+        "EvoIR.IRPoisonProposal"
+      ],
+      "lean/EvoIR/IRPoisonSound.lean": [
+        "EvoIR.IRPoisonExecution",
+        "EvoIR.Core.Correspondence"
+      ],
+      "lean/EvoIR/IRPoisonSoundTests.lean": [
+        "EvoIR.IRPoisonSound",
+        "EvoIR.MachineSelectionFunction"
+      ],
+      "lean/EvoIR/IRPoisonState.lean": [
+        "EvoIR.IRPoisonInstructions"
+      ],
+      "lean/EvoIR/Machine.lean": [
+        "EvoIR.Core.IRExecution"
+      ],
+      "lean/EvoIR/MachineCopies.lean": [
+        "EvoIR.Core.CheckpointSimulation"
+      ],
+      "lean/EvoIR/MachineCopiesTests.lean": [
+        "EvoIR.MachineCopies"
+      ],
+      "lean/EvoIR/MachineCorrespondence.lean": [
+        "EvoIR.MachineExecution",
+        "EvoIR.Core.Simulation"
+      ],
+      "lean/EvoIR/MachineDemand.lean": [
+        "EvoIR.MachineStep",
+        "EvoIR.MachineEntry"
+      ],
+      "lean/EvoIR/MachineDemandCalls.lean": [
+        "EvoIR.MachineDemandExecution"
+      ],
+      "lean/EvoIR/MachineDemandContext.lean": [
+        "EvoIR.MachineDemandContextStep"
+      ],
+      "lean/EvoIR/MachineDemandContextPrefixes.lean": [
+        "EvoIR.MachineDemandContext",
+        "EvoIR.MachineDemandPrefixes"
+      ],
+      "lean/EvoIR/MachineDemandContextStep.lean": [
+        "EvoIR.MachineDemandCorrespondence",
+        "EvoIR.Core.OpenCheckpoint"
+      ],
+      "lean/EvoIR/MachineDemandCorrespondence.lean": [
+        "EvoIR.MachineDemandLockstep"
+      ],
+      "lean/EvoIR/MachineDemandExecution.lean": [
+        "EvoIR.MachineDemand",
+        "EvoIR.MachineProgress"
+      ],
+      "lean/EvoIR/MachineDemandLockstep.lean": [
+        "EvoIR.MachineDemandTerm"
+      ],
+      "lean/EvoIR/MachineDemandPrefixes.lean": [
+        "EvoIR.MachineDemandCorrespondence",
+        "EvoIR.Core.OpenCheckpoint"
+      ],
+      "lean/EvoIR/MachineDemandTerm.lean": [
+        "EvoIR.MachineDemandCalls"
+      ],
+      "lean/EvoIR/MachineEntry.lean": [
+        "EvoIR.MachineExecution"
+      ],
+      "lean/EvoIR/MachineExecution.lean": [
+        "EvoIR.Machine",
+        "EvoIR.Core.Correspondence"
+      ],
+      "lean/EvoIR/MachineExecutionTests.lean": [
+        "EvoIR.MachineExecution"
+      ],
+      "lean/EvoIR/MachineLowering.lean": [
+        "EvoIR.MachineSelectionModule",
+        "EvoIR.MachineSelectionDemandModule",
+        "EvoIR.MachinePrivateFinite",
+        "EvoIR.MachinePrivateLoop",
+        "EvoIR.MachinePrivateGuardedFunction",
+        "EvoIR.MachinePrivateModule",
+        "EvoIR.MachineTransportSound",
+        "EvoIR.MachineTransportProposal",
+        "EvoIR.IRPoisonProposal",
+        "EvoIR.IRPoisonSound"
+      ],
+      "lean/EvoIR/MachineLoweringTests.lean": [
+        "EvoIR.MachineLowering"
+      ],
+      "lean/EvoIR/MachineMultiply.lean": [
+        "EvoIR.MachineExecution"
+      ],
+      "lean/EvoIR/MachinePrivateBank.lean": [
+        "EvoIR.MachineSelectionBank"
+      ],
+      "lean/EvoIR/MachinePrivateBinding.lean": [
+        "EvoIR.MachinePrivateBody",
+        "EvoIR.MachineEntry"
+      ],
+      "lean/EvoIR/MachinePrivateBody.lean": [
+        "EvoIR.MachinePrivateEffects",
+        "EvoIR.MachinePrivateBank",
+        "EvoIR.MachineSelectionConditional",
+        "EvoIR.Core.PrivateChecker",
+        "EvoIR.Core.PrivateBoundary"
+      ],
+      "lean/EvoIR/MachinePrivateBodyCut.lean": [
+        "EvoIR.MachinePrivateBodySpan"
+      ],
+      "lean/EvoIR/MachinePrivateBodyRows.lean": [
+        "EvoIR.MachinePrivateBody"
+      ],
+      "lean/EvoIR/MachinePrivateBodySpan.lean": [
+        "EvoIR.MachinePrivateBodyRows",
+        "EvoIR.MachinePrivateSourceStep",
+        "EvoIR.MachineStep",
+        "EvoIR.Core.CheckpointSimulation"
+      ],
+      "lean/EvoIR/MachinePrivateBranch.lean": [
+        "EvoIR.MachinePrivateBody",
+        "EvoIR.MachineSelectionTest",
+        "EvoIR.MachineSelectionConditional",
+        "EvoIR.MachineSelectionTermStep"
+      ],
+      "lean/EvoIR/MachinePrivateBytes.lean": [
+        "EvoIR.MachinePrivateLive"
+      ],
+      "lean/EvoIR/MachinePrivateCFG.lean": [
+        "EvoIR.MachinePrivateControl",
+        "EvoIR.MachinePrivateFinite"
+      ],
+      "lean/EvoIR/MachinePrivateCall.lean": [
+        "EvoIR.MachinePrivateCallResume",
+        "EvoIR.MachinePrivateDemandCallee"
+      ],
+      "lean/EvoIR/MachinePrivateCallResume.lean": [
+        "EvoIR.MachinePrivateSuffix",
+        "EvoIR.MachineSelectionCallResume",
+        "EvoIR.Core.PrivateCallBindings"
+      ],
+      "lean/EvoIR/MachinePrivateCallTests.lean": [
+        "EvoIR.MachinePrivateModule"
+      ],
+      "lean/EvoIR/MachinePrivateCaller.lean": [
+        "EvoIR.MachinePrivateGuarded",
+        "EvoIR.MachinePrivateCall",
+        "EvoIR.MachinePrivateProposal"
+      ],
+      "lean/EvoIR/MachinePrivateControl.lean": [
+        "EvoIR.MachinePrivateEdges",
+        "EvoIR.MachinePrivateBranch"
+      ],
+      "lean/EvoIR/MachinePrivateCutpoint.lean": [
+        "EvoIR.MachinePrivateBinding",
+        "EvoIR.MachinePrivateReturn",
+        "EvoIR.MachineTransportBindings",
+        "EvoIR.Core.PrivateCheckpointBank",
+        "EvoIR.Core.PrivateProject"
+      ],
+      "lean/EvoIR/MachinePrivateDemandCallEntry.lean": [
+        "EvoIR.MachinePrivateBody",
+        "EvoIR.MachineSelectionDemandCallEntry"
+      ],
+      "lean/EvoIR/MachinePrivateDemandCallee.lean": [
+        "EvoIR.MachinePrivateDemandCallEntry",
+        "EvoIR.MachinePrivateProgress",
+        "EvoIR.MachineSelectionDemandCallee"
+      ],
+      "lean/EvoIR/MachinePrivateEdges.lean": [
+        "EvoIR.MachinePrivateCutpoint",
+        "EvoIR.Core.PrivateCutpoint"
+      ],
+      "lean/EvoIR/MachinePrivateEffects.lean": [
+        "EvoIR.MachinePrivateBytes",
+        "EvoIR.Core.PrivateBytes"
+      ],
+      "lean/EvoIR/MachinePrivateFinite.lean": [
+        "EvoIR.MachinePrivateBodySpan",
+        "EvoIR.MachinePrivateFunction"
+      ],
+      "lean/EvoIR/MachinePrivateFiniteTests.lean": [
+        "EvoIR.MachinePrivateFinite",
+        "EvoIR.MachinePrivateUninitialized"
+      ],
+      "lean/EvoIR/MachinePrivateFunction.lean": [
+        "EvoIR.MachinePrivateReturn",
+        "EvoIR.MachineSelectionTokenFunction"
+      ],
+      "lean/EvoIR/MachinePrivateGuardChain.lean": [
+        "EvoIR.MachinePrivateGuardEdges",
+        "EvoIR.MachinePrivateGuardPrefix",
+        "EvoIR.MachinePrivateBranch"
+      ],
+      "lean/EvoIR/MachinePrivateGuardEdges.lean": [
+        "EvoIR.MachinePrivateBinding",
+        "EvoIR.MachineSelectionConvert",
+        "EvoIR.MachineTransportBindings"
+      ],
+      "lean/EvoIR/MachinePrivateGuardPrefix.lean": [
+        "EvoIR.MachinePrivateBodySpan",
+        "EvoIR.MachineSelectionGuard"
+      ],
+      "lean/EvoIR/MachinePrivateGuardStep.lean": [
+        "EvoIR.MachinePrivateBodyCut",
+        "EvoIR.MachinePrivateGuardChain"
+      ],
+      "lean/EvoIR/MachinePrivateGuardTests.lean": [
+        "EvoIR.MachinePrivateGuardedFunction"
+      ],
+      "lean/EvoIR/MachinePrivateGuarded.lean": [
+        "EvoIR.MachinePrivateSuffix",
+        "EvoIR.MachinePrivateGuardStep"
+      ],
+      "lean/EvoIR/MachinePrivateGuardedFunction.lean": [
+        "EvoIR.MachinePrivateGuarded",
+        "EvoIR.MachinePrivateProposal"
+      ],
+      "lean/EvoIR/MachinePrivateLive.lean": [
+        "EvoIR.MachinePrivateMemory",
+        "EvoIR.Core.PrivateStorage"
+      ],
+      "lean/EvoIR/MachinePrivateLoop.lean": [
+        "EvoIR.MachinePrivateCFG",
+        "EvoIR.MachinePrivateProposal"
+      ],
+      "lean/EvoIR/MachinePrivateLoopTests.lean": [
+        "EvoIR.MachinePrivateLoop"
+      ],
+      "lean/EvoIR/MachinePrivateMemory.lean": [
+        "EvoIR.MachineExecution"
+      ],
+      "lean/EvoIR/MachinePrivateModule.lean": [
+        "EvoIR.MachinePrivateCaller",
+        "EvoIR.MachineSelectionDemandModule"
+      ],
+      "lean/EvoIR/MachinePrivateProgress.lean": [
+        "EvoIR.MachinePrivateFunction",
+        "EvoIR.MachineProgress"
+      ],
+      "lean/EvoIR/MachinePrivateProposal.lean": [
+        "EvoIR.MachinePrivateCutpoint"
+      ],
+      "lean/EvoIR/MachinePrivateProposalTests.lean": [
+        "EvoIR.MachinePrivateProposal"
+      ],
+      "lean/EvoIR/MachinePrivateReturn.lean": [
+        "EvoIR.MachinePrivateBody",
+        "EvoIR.MachineSelectionTokenReturnOpen"
+      ],
+      "lean/EvoIR/MachinePrivateSourceStep.lean": [
+        "EvoIR.Core.PrivateTarget"
+      ],
+      "lean/EvoIR/MachinePrivateSuffix.lean": [
+        "EvoIR.MachinePrivateCFG",
+        "EvoIR.MachinePrivateBodyCut"
+      ],
+      "lean/EvoIR/MachinePrivateUninitialized.lean": [
+        "EvoIR.MachinePrivateEffects"
+      ],
+      "lean/EvoIR/MachineProgress.lean": [
+        "EvoIR.MachineStep",
+        "EvoIR.MachineCorrespondence"
+      ],
+      "lean/EvoIR/MachineReader.lean": [
+        "EvoIR.Machine",
+        "Lean.Data.Json"
+      ],
+      "lean/EvoIR/MachineReaderTests.lean": [
+        "EvoIR.MachineReader"
+      ],
+      "lean/EvoIR/MachineSelectionArithmetic.lean": [
+        "EvoIR.MachineExecution",
+        "EvoIR.MachineSelectionTerms"
+      ],
+      "lean/EvoIR/MachineSelectionBank.lean": [
+        "EvoIR.MachineSelectionArithmetic"
+      ],
+      "lean/EvoIR/MachineSelectionBranch.lean": [
+        "EvoIR.MachineSelectionTest",
+        "EvoIR.MachineSelectionTermStep",
+        "EvoIR.MachineSelectionConditional"
+      ],
+      "lean/EvoIR/MachineSelectionCFG.lean": [
+        "EvoIR.MachineSelectionControl",
+        "EvoIR.MachineSelectionGuard",
+        "EvoIR.Core.LeafCorrespondence"
+      ],
+      "lean/EvoIR/MachineSelectionCFGTests.lean": [
+        "EvoIR.MachineSelectionFunction"
+      ],
+      "lean/EvoIR/MachineSelectionCallEntry.lean": [
+        "EvoIR.MachineSelectionTokens",
+        "EvoIR.MachineSelectionEdges",
+        "EvoIR.Core.TargetCall"
+      ],
+      "lean/EvoIR/MachineSelectionCallResume.lean": [
+        "EvoIR.MachineSelectionResume",
+        "EvoIR.MachineSelectionTokenReturnOpen"
+      ],
+      "lean/EvoIR/MachineSelectionCallee.lean": [
+        "EvoIR.MachineSelectionTokenFunction",
+        "EvoIR.MachineSelectionCallEntry",
+        "EvoIR.MachineProgress"
+      ],
+      "lean/EvoIR/MachineSelectionCaller.lean": [
+        "EvoIR.MachineSelectionCallerCall"
+      ],
+      "lean/EvoIR/MachineSelectionCallerCall.lean": [
+        "EvoIR.MachineSelectionCallerSpan"
+      ],
+      "lean/EvoIR/MachineSelectionCallerDemand.lean": [
+        "EvoIR.MachineSelectionCallerCall",
+        "EvoIR.MachineSelectionDemandCallee"
+      ],
+      "lean/EvoIR/MachineSelectionCallerSpan.lean": [
+        "EvoIR.MachineSelectionCallee",
+        "EvoIR.MachineSelectionCallResume"
+      ],
+      "lean/EvoIR/MachineSelectionCallerTests.lean": [
+        "EvoIR.MachineSelectionCaller"
+      ],
+      "lean/EvoIR/MachineSelectionConditional.lean": [
+        "EvoIR.MachineSelectionNormal",
+        "EvoIR.MachineSelectionSourceSpan"
+      ],
+      "lean/EvoIR/MachineSelectionConditionalTests.lean": [
+        "EvoIR.MachineSelectionConditional"
+      ],
+      "lean/EvoIR/MachineSelectionControl.lean": [
+        "EvoIR.MachineSelectionCutpoint",
+        "EvoIR.MachineSelectionBranch"
+      ],
+      "lean/EvoIR/MachineSelectionConvert.lean": [
+        "EvoIR.MachineSelectionBank",
+        "EvoIR.MachineMultiply"
+      ],
+      "lean/EvoIR/MachineSelectionCutpoint.lean": [
+        "EvoIR.MachineSelectionEdges",
+        "EvoIR.MachineSelectionPair",
+        "EvoIR.Core.SymbolicEdge"
+      ],
+      "lean/EvoIR/MachineSelectionDemandArguments.lean": [
+        "EvoIR.MachineSelectionCallEntry",
+        "EvoIR.MachineDemandCalls"
+      ],
+      "lean/EvoIR/MachineSelectionDemandCallEntry.lean": [
+        "EvoIR.MachineSelectionDemandArguments"
+      ],
+      "lean/EvoIR/MachineSelectionDemandCallee.lean": [
+        "EvoIR.MachineSelectionCallee",
+        "EvoIR.MachineSelectionDemandCallEntry",
+        "EvoIR.MachineSelectionCallResume",
+        "EvoIR.MachineDemandContextPrefixes"
+      ],
+      "lean/EvoIR/MachineSelectionDemandCaller.lean": [
+        "EvoIR.MachineSelectionCallerDemand",
+        "EvoIR.MachineSelectionCaller"
+      ],
+      "lean/EvoIR/MachineSelectionDemandCallerTests.lean": [
+        "EvoIR.MachineSelectionDemandCaller"
+      ],
+      "lean/EvoIR/MachineSelectionDemandModule.lean": [
+        "EvoIR.MachineSelectionModule",
+        "EvoIR.MachineSelectionDemandCaller",
+        "EvoIR.MachineTransportProposal"
+      ],
+      "lean/EvoIR/MachineSelectionEdges.lean": [
+        "EvoIR.MachineSelectionSourceSpan",
+        "EvoIR.MachineEntry"
+      ],
+      "lean/EvoIR/MachineSelectionEntry.lean": [
+        "EvoIR.MachineSelectionReturn",
+        "EvoIR.MachineEntry",
+        "EvoIR.Core.SymbolicEntry"
+      ],
+      "lean/EvoIR/MachineSelectionFunction.lean": [
+        "EvoIR.MachineSelectionCFG"
+      ],
+      "lean/EvoIR/MachineSelectionGuard.lean": [
+        "EvoIR.MachineSelectionBranch"
+      ],
+      "lean/EvoIR/MachineSelectionModule.lean": [
+        "EvoIR.MachineSelectionCaller"
+      ],
+      "lean/EvoIR/MachineSelectionMultiply.lean": [
+        "EvoIR.MachineSelectionNormal"
+      ],
+      "lean/EvoIR/MachineSelectionNormal.lean": [
+        "EvoIR.MachineSelectionConvert",
+        "EvoIR.Core.PathCondition"
+      ],
+      "lean/EvoIR/MachineSelectionNormalTests.lean": [
+        "EvoIR.MachineSelectionNormal"
+      ],
+      "lean/EvoIR/MachineSelectionPair.lean": [
+        "EvoIR.MachineSelectionEntry"
+      ],
+      "lean/EvoIR/MachineSelectionPairTests.lean": [
+        "EvoIR.MachineSelectionPair"
+      ],
+      "lean/EvoIR/MachineSelectionResume.lean": [
+        "EvoIR.MachineSelectionTokens",
+        "EvoIR.MachineSelectionEdges",
+        "EvoIR.Core.FreshReturn"
+      ],
+      "lean/EvoIR/MachineSelectionReturn.lean": [
+        "EvoIR.MachineSelectionSourceSpan",
+        "EvoIR.MachineSelectionNormal",
+        "EvoIR.MachineSelectionConditional",
+        "EvoIR.MachineCorrespondence",
+        "EvoIR.Core.OpenCheckpoint"
+      ],
+      "lean/EvoIR/MachineSelectionSourceSpan.lean": [
+        "EvoIR.MachineSelectionSpan"
+      ],
+      "lean/EvoIR/MachineSelectionSpan.lean": [
+        "EvoIR.MachineSelectionConvert",
+        "EvoIR.MachineStep",
+        "EvoIR.Core.CheckpointSimulation"
+      ],
+      "lean/EvoIR/MachineSelectionTermStep.lean": [
+        "EvoIR.MachineStep"
+      ],
+      "lean/EvoIR/MachineSelectionTerms.lean": [
+        "EvoIR.Core.SymbolicInstruction"
+      ],
+      "lean/EvoIR/MachineSelectionTest.lean": [
+        "EvoIR.MachineSelectionEdges",
+        "EvoIR.MachineSelectionMultiply",
+        "EvoIR.MachineSelectionTermStep",
+        "EvoIR.Core.ConstantBranch"
+      ],
+      "lean/EvoIR/MachineSelectionTokenCFG.lean": [
+        "EvoIR.MachineSelectionTokenControl",
+        "EvoIR.MachineSelectionGuard",
+        "EvoIR.Core.LeafCorrespondence"
+      ],
+      "lean/EvoIR/MachineSelectionTokenControl.lean": [
+        "EvoIR.MachineSelectionTokenCutpoint",
+        "EvoIR.MachineSelectionBranch",
+        "EvoIR.MachineSelectionTokenReturnOpen"
+      ],
+      "lean/EvoIR/MachineSelectionTokenCutpoint.lean": [
+        "EvoIR.MachineSelectionCutpoint",
+        "EvoIR.MachineSelectionTokens",
+        "EvoIR.MachineSelectionConditional",
+        "EvoIR.MachineSelectionCallEntry"
+      ],
+      "lean/EvoIR/MachineSelectionTokenFunction.lean": [
+        "EvoIR.MachineSelectionTokenCFG",
+        "EvoIR.MachineSelectionFunction"
+      ],
+      "lean/EvoIR/MachineSelectionTokenFunctionTests.lean": [
+        "EvoIR.MachineSelectionTokenFunction"
+      ],
+      "lean/EvoIR/MachineSelectionTokenReturnOpen.lean": [
+        "EvoIR.MachineSelectionTokens",
+        "EvoIR.Core.CallingCutpoint"
+      ],
+      "lean/EvoIR/MachineSelectionTokens.lean": [
+        "EvoIR.MachineSelectionEntry",
+        "EvoIR.MachineSelectionConditional",
+        "EvoIR.Core.PrivateBindings"
+      ],
+      "lean/EvoIR/MachineStep.lean": [
+        "EvoIR.MachineExecution"
+      ],
+      "lean/EvoIR/MachineTransport.lean": [
+        "EvoIR.MachineCopies",
+        "EvoIR.MachineTransportInstruction"
+      ],
+      "lean/EvoIR/MachineTransportActive.lean": [
+        "EvoIR.MachineTransportRelation"
+      ],
+      "lean/EvoIR/MachineTransportBindings.lean": [
+        "EvoIR.MachineTransportWrites",
+        "EvoIR.MachineEntry"
+      ],
+      "lean/EvoIR/MachineTransportCalls.lean": [
+        "EvoIR.MachineTransportNoncall"
+      ],
+      "lean/EvoIR/MachineTransportCopies.lean": [
+        "EvoIR.MachineTransport"
+      ],
+      "lean/EvoIR/MachineTransportDCE.lean": [
+        "EvoIR.MachineTransportSteps",
+        "EvoIR.MachineTransportWrites",
+        "EvoIR.MachineDemandExecution"
+      ],
+      "lean/EvoIR/MachineTransportEdges.lean": [
+        "EvoIR.MachineTransportRoutes",
+        "EvoIR.MachineTransportEntry"
+      ],
+      "lean/EvoIR/MachineTransportEntry.lean": [
+        "EvoIR.MachineTransportBindings",
+        "EvoIR.MachineTransportReads"
+      ],
+      "lean/EvoIR/MachineTransportInstruction.lean": [
+        "EvoIR.MachineExecution"
+      ],
+      "lean/EvoIR/MachineTransportJump.lean": [
+        "EvoIR.MachineTransportCalls"
+      ],
+      "lean/EvoIR/MachineTransportNoncall.lean": [
+        "EvoIR.MachineTransportPrepareState"
+      ],
+      "lean/EvoIR/MachineTransportPreparation.lean": [
+        "EvoIR.MachineTransportDCE",
+        "EvoIR.MachineTransportReads"
+      ],
+      "lean/EvoIR/MachineTransportPrepareState.lean": [
+        "EvoIR.MachineTransportActive"
+      ],
+      "lean/EvoIR/MachineTransportProposal.lean": [
+        "EvoIR.MachineTransportTable"
+      ],
+      "lean/EvoIR/MachineTransportProposalTests.lean": [
+        "EvoIR.MachineTransportProposal"
+      ],
+      "lean/EvoIR/MachineTransportReads.lean": [
+        "EvoIR.MachineTransportResults"
+      ],
+      "lean/EvoIR/MachineTransportRelation.lean": [
+        "EvoIR.MachineTransportTable",
+        "EvoIR.MachineCorrespondence"
+      ],
+      "lean/EvoIR/MachineTransportResults.lean": [
+        "EvoIR.MachineTransportCopies"
+      ],
+      "lean/EvoIR/MachineTransportReturn.lean": [
+        "EvoIR.MachineTransportJump"
+      ],
+      "lean/EvoIR/MachineTransportRoutes.lean": [
+        "EvoIR.MachineTransportTerms"
+      ],
+      "lean/EvoIR/MachineTransportSimulation.lean": [
+        "EvoIR.MachineTransportReturn"
+      ],
+      "lean/EvoIR/MachineTransportSound.lean": [
+        "EvoIR.MachineTransportSimulation"
+      ],
+      "lean/EvoIR/MachineTransportSoundTests.lean": [
+        "EvoIR.MachineTransportSound",
+        "EvoIR.MachineSelectionCFGTests"
+      ],
+      "lean/EvoIR/MachineTransportSteps.lean": [
+        "EvoIR.MachineTransportCopies",
+        "EvoIR.MachineStep"
+      ],
+      "lean/EvoIR/MachineTransportTable.lean": [
+        "EvoIR.MachineTransportEdges"
+      ],
+      "lean/EvoIR/MachineTransportTerms.lean": [
+        "EvoIR.MachineTransportPreparation",
+        "EvoIR.MachineDemandTerm"
+      ],
+      "lean/EvoIR/MachineTransportTests.lean": [
+        "EvoIR.MachineTransportCopies"
+      ],
+      "lean/EvoIR/MachineTransportWrites.lean": [
+        "EvoIR.MachineTransportResults",
+        "EvoIR.MachineWrites"
+      ],
+      "lean/EvoIR/MachineWrites.lean": [
+        "EvoIR.MachineExecution"
       ],
       "lean/EvoIR/Proofs/Bits.lean": [
         "EvoIR.Fact"
@@ -7207,6 +7965,41 @@
       "sha256": "167bd4d958db1dbca30aede6f41027d7761fc3003d83ab89d473e5489955f251"
     },
     {
+      "name": "EvoIR.Core.IR.Poison.BanksRelated",
+      "type": "List Nat → EvoIR.Core.IR.Bindings → EvoIR.Core.IR.Bindings → Prop",
+      "sha256": "2cd81d5a7a83f3b659f73387b77fda41d5b5e6e0df90cd7c3e1c8fce462ce824"
+    },
+    {
+      "name": "EvoIR.Core.IR.Poison.StatesRelated",
+      "type": "EvoIR.Core.IR.Poison.DemandPlan → EvoIR.Core.IR.State → EvoIR.Core.IR.State → Prop",
+      "sha256": "d54078b1084b9e3466ae6eccb2cac1bede8678f5438d454333e6380276cd48f9"
+    },
+    {
+      "name": "EvoIR.Core.IR.Poison.programValid",
+      "type": "EvoIR.Core.IR.Poison.DemandPlan → EvoIR.Core.IR.Program → Bool",
+      "sha256": "30e91eb91fe1a6974718be22b15b63b2c559f5f3e74017ea39570495fd88b995"
+    },
+    {
+      "name": "EvoIR.Core.IR.Poison.rewriteInstruction",
+      "type": "List Nat → EvoIR.Core.IR.Instruction → EvoIR.Core.IR.Instruction",
+      "sha256": "999db7a8007e448a0df6b56542d53c59846296614dff4d8036674eff14eb35a0"
+    },
+    {
+      "name": "EvoIR.Core.IR.Poison.rewriteProgram",
+      "type": "EvoIR.Core.IR.Poison.DemandPlan → EvoIR.Core.IR.Program → EvoIR.Core.IR.Program",
+      "sha256": "fefec571e88db9f1017ff9b2883c6212ec6d88cf8f0624571de94e450ab16141"
+    },
+    {
+      "name": "EvoIR.Core.IR.Poison.checkPair",
+      "type": "EvoIR.Core.IR.Program → EvoIR.Core.IR.Program → EvoIR.Core.IR.Poison.DemandPlan → Bool",
+      "sha256": "1ab4a3ec0e21e04e0cb8ace3151e670184aee37a06c9571b766d65f171bc7939"
+    },
+    {
+      "name": "EvoIR.Core.IR.Poison.propose",
+      "type": "(source : EvoIR.Core.IR.Program) → Option (EvoIR.Core.IR.Poison.CheckedProposal source)",
+      "sha256": "098eb52fc47fcb243a00ad242b35e9cd4f42f73618f73b82377decea0e06355f"
+    },
+    {
       "name": "EvoIR.Core.Source.exprDecEq",
       "type": "(a b : EvoIR.Core.Source.Expr) → Decidable (a = b)",
       "sha256": "2da112d72ef287624518492643d75f28eae3eb212536b3edd18d37dcf5206820"
@@ -7325,6 +8118,236 @@
       "name": "EvoIR.Core.Symbolic.checkArithmetic",
       "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Core.SignedArithmetic → EvoIR.Core.Symbolic.CWord Γ → EvoIR.Core.Symbolic.CWord Γ → EvoIR.Core.Symbolic.Scope Γ → List EvoIR.Core.IR.Instruction → Nat → Bool",
       "sha256": "eb34f98c6d36d1cf14e56799493996ffe407dac8b6aeadd0fbc53ab98e7e08c2"
+    },
+    {
+      "name": "EvoIR.Machine.Reader.readProgram",
+      "type": "String → Except String (EvoIR.Machine.Mode × EvoIR.Machine.Program)",
+      "sha256": "1d0b5b38e3049c64f62852edba449021a4fdde8e81b3098bf9c6a0f2f09b7c85"
+    },
+    {
+      "name": "EvoIR.Machine.evalBinary",
+      "type": "EvoIR.Machine.BinOp → EvoIR.Machine.Width → BitVec 64 → BitVec 64 → BitVec 64",
+      "sha256": "8418567c053d36dd8a69df8fa130de65661f97158f462bb4d25aebee4ef35ace"
+    },
+    {
+      "name": "EvoIR.Machine.arithmeticFlags",
+      "type": "EvoIR.Machine.FlagOp → EvoIR.Machine.Width → BitVec 64 → BitVec 64 → BitVec 64 × EvoIR.Machine.Flags",
+      "sha256": "7690d578ea90b6558831b8f328373dbc767536db8e5fe5585ce8ea0833e1d1e7"
+    },
+    {
+      "name": "EvoIR.Machine.condition",
+      "type": "EvoIR.Machine.Flags → EvoIR.Machine.Cond → Except EvoIR.Core.Source.Fault Bool",
+      "sha256": "71c5228e5a97935a6172a3e1da59876c04f5ca1f548b29c1f21499f3b4f6ffc4"
+    },
+    {
+      "name": "EvoIR.Machine.evalWideMultiply",
+      "type": "EvoIR.Machine.WideMul → BitVec 64 → BitVec 64 → BitVec 64",
+      "sha256": "d72110770521a8275d29ba303214b3ea227b2691366593629aea089f8c01ee27"
+    },
+    {
+      "name": "EvoIR.Machine.evalExtend",
+      "type": "EvoIR.Machine.ExtOp → BitVec 64 → BitVec 64",
+      "sha256": "50bfbb51bbba82e4fcbc7e821d8140ce735df71f22d2a6aa191f2287e2ea0ad8"
+    },
+    {
+      "name": "EvoIR.Machine.evalInstructionOperands",
+      "type": "Nat → EvoIR.Machine.Instruction → EvoIR.Machine.OperandReader → EvoIR.Machine.Memory → Except EvoIR.Core.Source.Fault (EvoIR.Machine.Writes × EvoIR.Machine.Memory)",
+      "sha256": "ad0ba501269f41054c123252d3b8eef2202f77fdd467d4d33830f8d45a48c17b"
+    },
+    {
+      "name": "EvoIR.Machine.evalInstruction",
+      "type": "Nat → EvoIR.Machine.Instruction → EvoIR.Machine.RegisterFile → EvoIR.Machine.Memory → Except EvoIR.Core.Source.Fault (EvoIR.Machine.RegisterFile × EvoIR.Machine.Memory)",
+      "sha256": "06415e375e2fcee74624a4ea3a8ace29427d07e3012e82dfc92844de52919273"
+    },
+    {
+      "name": "EvoIR.Machine.bind",
+      "type": "EvoIR.Machine.RegisterFile → List EvoIR.Machine.VReg → List EvoIR.Machine.Value → Except EvoIR.Core.Source.Fault EvoIR.Machine.RegisterFile",
+      "sha256": "359bba83b2e57d40e56365d77109d5e1fb16c32eeab9e0800e3be3d4c13d23fc"
+    },
+    {
+      "name": "EvoIR.Machine.jump",
+      "type": "EvoIR.Machine.Mode → EvoIR.Machine.Function → EvoIR.Machine.Activation → Nat → List EvoIR.Machine.VReg → Except EvoIR.Core.Source.Fault EvoIR.Machine.Activation",
+      "sha256": "f6710e544b7fa94e30906270c5393f47b7f563140790f2d40f4574c2bfcf2cf6"
+    },
+    {
+      "name": "EvoIR.Machine.enter",
+      "type": "EvoIR.Machine.Function → List EvoIR.Machine.Value → Nat → Except EvoIR.Core.Source.Fault EvoIR.Machine.Activation",
+      "sha256": "53c42f38df94d9ab0f0e42bbe2a270ab9b6fd7eed46d3a9787f7b4da4ecdb52a"
+    },
+    {
+      "name": "EvoIR.Machine.execute",
+      "type": "EvoIR.Machine.Mode → EvoIR.Machine.Program → EvoIR.Machine.State → EvoIR.Machine.Activation → Except EvoIR.Core.Source.Fault EvoIR.Machine.State",
+      "sha256": "6af16fd939faba9749a476de048261efee0afe67312268864f437febdbefbc72"
+    },
+    {
+      "name": "EvoIR.Machine.step",
+      "type": "EvoIR.Machine.Mode → EvoIR.Machine.Program → EvoIR.Machine.State → Option EvoIR.Machine.State",
+      "sha256": "687160aa83d6a4ea11e9b271a685f6f1e6146d62f415237e68f103a57f4d9517"
+    },
+    {
+      "name": "EvoIR.Machine.observe",
+      "type": "EvoIR.Core.Source.IntType → EvoIR.Machine.State → Option EvoIR.Core.Observation",
+      "sha256": "94cc0181575a448c169a2fa837b1d91c3c5348afe9f87ac0824574034f7139f0"
+    },
+    {
+      "name": "EvoIR.Machine.initial",
+      "type": "EvoIR.Machine.Program → String → List EvoIR.Machine.Value → optParam EvoIR.Machine.Memory { nextId := 1, objects := [] } → Except EvoIR.Core.Source.Fault EvoIR.Machine.State",
+      "sha256": "028371a01df639bfec148c26a9467a44977123f0ed424c44ca646e84a183ed96"
+    },
+    {
+      "name": "EvoIR.Machine.SelectionRefines",
+      "type": "EvoIR.Core.IR.Program → EvoIR.Machine.Program → EvoIR.Core.Source.IntType → EvoIR.Core.IR.State → EvoIR.Machine.State → Prop",
+      "sha256": "31bc8966ef8df09d030446107ab1755fc36756e83cdd8f86fa0e749dfb22a449"
+    },
+    {
+      "name": "EvoIR.Machine.TransportRefines",
+      "type": "EvoIR.Machine.Program → EvoIR.Machine.Program → EvoIR.Core.Source.IntType → EvoIR.Machine.State → EvoIR.Machine.State → Prop",
+      "sha256": "240c9bafd7b88df34624621213ab523b503b6dcd8bccf29c54bcfeedfc3004ca"
+    },
+    {
+      "name": "EvoIR.Machine.IRToMachineRefines",
+      "type": "EvoIR.Core.IR.Program → EvoIR.Machine.Program → EvoIR.Core.Source.IntType → EvoIR.Core.IR.State → EvoIR.Machine.State → Prop",
+      "sha256": "e5decac20f4fe24f34c886b801e668933d0d41beabd1283a7e82e09687128339"
+    },
+    {
+      "name": "EvoIR.Machine.SourceToMachineRefines",
+      "type": "EvoIR.Core.Source.Program → EvoIR.Machine.Program → EvoIR.Core.Source.IntType → EvoIR.Core.Source.State → EvoIR.Machine.State → Prop",
+      "sha256": "67221d636c6a36cc703f7ec4f442e0ca6d3e4ae715f2728822e63f27a44af054"
+    },
+    {
+      "name": "EvoIR.Machine.ObservedProgress",
+      "type": "EvoIR.Machine.Mode → EvoIR.Machine.Program → EvoIR.Core.Source.IntType → EvoIR.Machine.State → Prop",
+      "sha256": "501f16d8d0cfa647f591ea9fde3c57a4f99fb97331ef9c622847ff5c85b8e3ed"
+    },
+    {
+      "name": "EvoIR.Machine.loweringArguments",
+      "type": "Bool → List EvoIR.Core.Source.Value → List EvoIR.Core.IR.Value",
+      "sha256": "630c79e577ab5e70dbf29f5db205b4cf0d9d0cdb553fea291d3caab2eefe612a"
+    },
+    {
+      "name": "EvoIR.Machine.CheckedLowering",
+      "type": "EvoIR.Core.IR.Program → EvoIR.Machine.Program → EvoIR.Machine.Program → String → List EvoIR.Core.Source.Parameter → EvoIR.Core.Source.IntType → Type",
+      "sha256": "3d4201a19d1c2e14b63e8cd875cc9ff52a9c7e2b15737ee46a82c4154c9a1d6b"
+    },
+    {
+      "name": "EvoIR.Machine.checkLoweringWithPlan",
+      "type": "(source : EvoIR.Core.IR.Program) → (ssa target : EvoIR.Machine.Program) → (entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → (type : EvoIR.Core.Source.IntType) → EvoIR.Machine.Transport.ProgramPlan → Option (EvoIR.Machine.CheckedLowering source ssa target entry parameters type)",
+      "sha256": "5f4ecd7c5b27a84d78f5f5c4de7e1fde62bd0f8a5e6c62b35e85e53c6d810fda"
+    },
+    {
+      "name": "EvoIR.Machine.checkLowering",
+      "type": "(source : EvoIR.Core.IR.Program) → (ssa target : EvoIR.Machine.Program) → (entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → (type : EvoIR.Core.Source.IntType) → Option (EvoIR.Machine.CheckedLowering source ssa target entry parameters type)",
+      "sha256": "540d893235b4ea0e83ac5051aff8ca0bd52e4f409ffd2feb74250b662b4c4cfd"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.ScalarSelectionPair",
+      "type": "EvoIR.Core.IR.Program → EvoIR.Machine.Program → String → List EvoIR.Core.Source.Parameter → EvoIR.Core.Source.IntType → Type",
+      "sha256": "1b3d219ef3f0134beaa8e0223239987ac98cbe116e99a9ce29eb8492641b631f"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair",
+      "type": "EvoIR.Core.IR.Program → EvoIR.Machine.Program → String → List EvoIR.Core.Source.Parameter → EvoIR.Core.Source.IntType → Type",
+      "sha256": "1b3d219ef3f0134beaa8e0223239987ac98cbe116e99a9ce29eb8492641b631f"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.sourceSpan",
+      "type": "{Γ : EvoIR.Var → Nat} → (p : EvoIR.Core.IR.Program) → (f : EvoIR.Core.IR.Function) → (b : EvoIR.Core.IR.Block) → (count pc : Nat) → (scope : EvoIR.Core.Symbolic.Scope Γ) → Option { result // EvoIR.Core.Symbolic.MachineSelection.SourceSpanDiagram p f b pc count scope result }",
+      "sha256": "f55d38af6d76b0a577e4e38f346f634e2e5d5c3ebc10026278287ad09f6ad36a"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.guardChainUnder",
+      "type": "{Γ : EvoIR.Var → Nat} → (p : EvoIR.Machine.Program) → (f : EvoIR.Machine.Function) → (b : EvoIR.Machine.Block) → (pc : Nat) → (bank : EvoIR.Core.Symbolic.MachineSelection.Bank Γ) → (prior checks : List (EvoIR.Core.Symbolic.Guard Γ)) → Option { result // EvoIR.Core.Symbolic.MachineSelection.GuardChainUnderDiagram p f b pc bank prior checks result }",
+      "sha256": "2d8f62fa71604b8a2d09fbd7f0d5a01e80bc4c237b76d8b0daeb9dbb20377926"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.checkWordUnder",
+      "type": "{Γ : EvoIR.Var → Nat} → (checks : List (EvoIR.Core.Symbolic.Guard Γ)) → (source : EvoIR.Core.Symbolic.Word Γ) → (target : EvoIR.Core.Symbolic.MachineSelection.WordExpr Γ) → Option (PLift (∀ (σ : EvoIR.Subst Γ), EvoIR.Core.Symbolic.guards σ checks = Except.ok () → EvoIR.Core.Symbolic.MachineSelection.WordExpr.denote σ target = BitVec.setWidth 64 (EvoIR.Core.Symbolic.denoteTerm σ source.snd)))",
+      "sha256": "145cb545f95c53005e0d6089157348b699d119f980c54f5bf65f2f659ad13c04"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.tokenControl",
+      "type": "(source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → (sf : EvoIR.Core.IR.Function) → (tf : EvoIR.Machine.Function) → (type : EvoIR.Core.Source.IntType) → (table : List (EvoIR.Core.Symbolic.MachineSelection.TokenCutpoint sf tf)) → (sb : EvoIR.Core.IR.Block) → (scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths) → (tb : EvoIR.Machine.Block) → (bank : EvoIR.Core.Symbolic.MachineSelection.Bank EvoIR.Core.Symbolic.inputWidths) → (checks : optParam (List (EvoIR.Core.Symbolic.Guard EvoIR.Core.Symbolic.inputWidths)) []) → (memoryKey : optParam Nat 0) → (worldKey : optParam Nat 1) → Option (PLift (EvoIR.Core.Symbolic.MachineSelection.TokenControlDiagram source target sf tf type table sb scope tb bank checks memoryKey worldKey))",
+      "sha256": "ac10a09e75ed4deb7baf09f224ee7c8e1ab41d6d5e0ac8b168bc07616b046563"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.tokenCallerSuffix",
+      "type": "(source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → (sf : EvoIR.Core.IR.Function) → (tf : EvoIR.Machine.Function) → (type : EvoIR.Core.Source.IntType) → (table : List (EvoIR.Core.Symbolic.MachineSelection.TokenCutpoint sf tf)) → List (EvoIR.Core.Symbolic.MachineSelection.TokenCallee source target) → Nat → (checks : List (EvoIR.Core.Symbolic.Guard EvoIR.Core.Symbolic.inputWidths)) → (types : List EvoIR.Core.IR.Ty) → (memoryKey worldKey : Nat) → (sb : EvoIR.Core.IR.Block) → (spc : Nat) → (scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths) → (tb : EvoIR.Machine.Block) → (tpc : Nat) → (bank : EvoIR.Core.Symbolic.MachineSelection.Bank EvoIR.Core.Symbolic.inputWidths) → Option (PLift (EvoIR.Core.Symbolic.MachineSelection.TokenSuffixDiagram source target sf tf type table sb spc scope tb tpc bank types memoryKey worldKey checks))",
+      "sha256": "bebd550b31413c216ddf4f50fdb2e1fd1c6e748e7cacabc94ecba0462cef75ed"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.tokenDemandCallerSuffix",
+      "type": "(source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → (sf : EvoIR.Core.IR.Function) → (tf : EvoIR.Machine.Function) → (type : EvoIR.Core.Source.IntType) → (table : List (EvoIR.Core.Symbolic.MachineSelection.TokenCutpoint sf tf)) → List (EvoIR.Core.Symbolic.MachineSelection.TokenCallee source target) → (plan : EvoIR.Machine.Demand.Plan) → EvoIR.Machine.Demand.Checked target plan → Nat → (checks : List (EvoIR.Core.Symbolic.Guard EvoIR.Core.Symbolic.inputWidths)) → (types : List EvoIR.Core.IR.Ty) → (memoryKey worldKey : Nat) → (sb : EvoIR.Core.IR.Block) → (spc : Nat) → (scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths) → (tb : EvoIR.Machine.Block) → (tpc : Nat) → (bank : EvoIR.Core.Symbolic.MachineSelection.Bank EvoIR.Core.Symbolic.inputWidths) → Option (PLift (EvoIR.Core.Symbolic.MachineSelection.TokenSuffixDiagram source target sf tf type table sb spc scope tb tpc bank types memoryKey worldKey checks))",
+      "sha256": "35fdfc1de116ef6b76317426d1e69db9054f71e78e60170e49e5d55305e2fcb9"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.tokenDemandCallEntry",
+      "type": "{Γ : EvoIR.Var → Nat} → (source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → (sf : EvoIR.Core.IR.Function) → (sb : EvoIR.Core.IR.Block) → (spc : Nat) → (scope : EvoIR.Core.Symbolic.Scope Γ) → (tf : EvoIR.Machine.Function) → (tb : EvoIR.Machine.Block) → (tpc : Nat) → (bank : EvoIR.Core.Symbolic.MachineSelection.Bank Γ) → (sc : EvoIR.Core.IR.Function) → (tc : EvoIR.Machine.Function) → (plan : EvoIR.Machine.Demand.Plan) → (checks : List (EvoIR.Core.Symbolic.Guard Γ)) → (memoryKey worldKey : Nat) → Option { pair // EvoIR.Core.Symbolic.MachineSelection.TokenDemandCallEntryDiagram source target sf sb spc scope pair.fst tf tb tpc bank pair.snd.fst sc tc plan pair.snd.snd checks memoryKey worldKey }",
+      "sha256": "769a7b42ac980b18582ef52ea5192630d57b57425f04bb177bfa2a041e1da16a"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.tokenModulePair",
+      "type": "(source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → (entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → (type : EvoIR.Core.Source.IntType) → Option (EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair source target entry parameters type)",
+      "sha256": "e9680d815a2bbfe2bff8dee0df04648d3f018c0846fab38b4ad677d1ac51c6f2"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.MachineSelection.tokenDemandModulePair",
+      "type": "(source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → (entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → (type : EvoIR.Core.Source.IntType) → Option (EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair source target entry parameters type)",
+      "sha256": "0e388f9c7062cb0838bae94896fbbb6b00e548d15237e2ffdbf2b1b79896e1db"
+    },
+    {
+      "name": "EvoIR.Machine.Demand.checkStructure",
+      "type": "EvoIR.Machine.Program → EvoIR.Machine.Demand.Plan → Bool",
+      "sha256": "a9828afb55734b0c08eb3db91936e28fa6287fad60546379babdf79786ebb102"
+    },
+    {
+      "name": "EvoIR.Machine.Demand.checkDemand",
+      "type": "(program : EvoIR.Machine.Program) → (plan : EvoIR.Machine.Demand.Plan) → Option (EvoIR.Machine.Demand.Checked program plan)",
+      "sha256": "7861f2fa76ff0105f540a87163e5f53817386508ad1804869f5076f3682dfedb"
+    },
+    {
+      "name": "EvoIR.Machine.Demand.StateRelated",
+      "type": "EvoIR.Machine.Demand.Plan → EvoIR.Machine.State → EvoIR.Machine.State → Prop",
+      "sha256": "b0c6aba50cbd3dda6dab7f7688e2390be8c507c9a04bfadde1402746942f82a3"
+    },
+    {
+      "name": "EvoIR.Machine.Demand.StateRelated.control",
+      "type": "∀ {plan : EvoIR.Machine.Demand.Plan} {source target : EvoIR.Machine.State}, EvoIR.Machine.Demand.StateRelated plan source target → EvoIR.Machine.Demand.ControlRelated plan source.control target.control",
+      "sha256": "16e33f82e0017e7ae012d8724d48c192f29d88923e6ee782911c9a8e0a0044ad"
+    },
+    {
+      "name": "EvoIR.Machine.Demand.StateRelated.stack",
+      "type": "∀ {plan : EvoIR.Machine.Demand.Plan} {source target : EvoIR.Machine.State}, EvoIR.Machine.Demand.StateRelated plan source target → EvoIR.Machine.Demand.Aligned (EvoIR.Machine.Demand.FrameRelated plan) source.stack target.stack",
+      "sha256": "212edbeb818e8b47469fb1c2d4fe9721112d715db4fabf889343ec1eeee37c05"
+    },
+    {
+      "name": "EvoIR.Machine.Demand.StateRelated.nextFrame",
+      "type": "∀ {plan : EvoIR.Machine.Demand.Plan} {source target : EvoIR.Machine.State}, EvoIR.Machine.Demand.StateRelated plan source target → source.nextFrame = target.nextFrame",
+      "sha256": "dde09cd3fe28bf94eb79996a3146eefacb1233017889930b31fbad89a13a02fc"
+    },
+    {
+      "name": "EvoIR.Machine.Demand.StateRelated.memory",
+      "type": "∀ {plan : EvoIR.Machine.Demand.Plan} {source target : EvoIR.Machine.State}, EvoIR.Machine.Demand.StateRelated plan source target → source.memory = target.memory",
+      "sha256": "e6fc267133e3bac0d77d42053c15771c8776b9dcbb98ec62424eec8f11651e2c"
+    },
+    {
+      "name": "EvoIR.Machine.Demand.ActivationRelated.regs",
+      "type": "∀ {plan : EvoIR.Machine.Demand.Plan} {source target : EvoIR.Machine.Activation}, EvoIR.Machine.Demand.ActivationRelated plan source target → EvoIR.Machine.RegistersAgree (EvoIR.Machine.Demand.needed plan source.function) source.regs target.regs",
+      "sha256": "2d23868a1674ac81f9c4add9b7dfa2b1ab098f971f4ec36b80aae24cee5840b0"
+    },
+    {
+      "name": "EvoIR.Machine.Demand.ContextCoupled",
+      "type": "EvoIR.Machine.Program → EvoIR.Machine.Demand.Plan → EvoIR.Machine.State → EvoIR.Machine.State → List EvoIR.Machine.ReturnFrame → EvoIR.Machine.State → EvoIR.Machine.State → Prop",
+      "sha256": "e3fea46b83e24dcca476d9180056c05267ba1ad4f9ca693915441db448a87e0b"
+    },
+    {
+      "name": "EvoIR.Machine.Transport.checkProgram",
+      "type": "EvoIR.Machine.Program → EvoIR.Machine.Program → EvoIR.Machine.Transport.ProgramPlan → Bool",
+      "sha256": "01b05e237fb3f4a742b9ce35ed6eada4fd0e65551c96de55bae0498905aa2537"
+    },
+    {
+      "name": "EvoIR.Machine.Transport.StateRelated",
+      "type": "EvoIR.Machine.Program → EvoIR.Machine.Program → EvoIR.Core.Source.IntType → EvoIR.Machine.State → EvoIR.Machine.State → EvoIR.Machine.State → Prop",
+      "sha256": "ae551febc4efb00b29ae8744b4588a4f4e0bc00724ceac53b8992407ba40a4a1"
     },
     {
       "name": "EvoIR.denoteOp",
@@ -16407,6 +17430,145 @@
     "claim": "Independent typed-source validator safety for every actual reachable source state; accepted source/IR pairs refine all typed arguments under the unbounded small-step semantics, preserving return bits, first admitted diagnostics and target progress. The shared pair checker composes finite statements, conditional CFGs, cyclic diagrams, nonrecursive calls and private byte storage with actual frame cleanup and caller-memory preservation. Proof discovery is incomplete: a refused pair has no refinement claim. Source export, input decoding and compiled-checker execution remain trusted boundaries; backend compilation and verified-release acceptance are not proved here",
     "targets": [
       {
+        "theorem": "EvoIR.Machine.checkLowering",
+        "proposition": "(source : EvoIR.Core.IR.Program) → (ssa target : EvoIR.Machine.Program) → (entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → (type : EvoIR.Core.Source.IntType) → Option (EvoIR.Machine.CheckedLowering source ssa target entry parameters type)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Machine.checkLoweringWithPlan",
+        "proposition": "(source : EvoIR.Core.IR.Program) → (ssa target : EvoIR.Machine.Program) → (entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → (type : EvoIR.Core.Source.IntType) → EvoIR.Machine.Transport.ProgramPlan → Option (EvoIR.Machine.CheckedLowering source ssa target entry parameters type)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Machine.CheckedLowering.checked",
+        "proposition": "∀ {source : EvoIR.Core.IR.Program} {ssa target : EvoIR.Machine.Program} {entry : String} {parameters : List EvoIR.Core.Source.Parameter} {type : EvoIR.Core.Source.IntType} (self : EvoIR.Machine.CheckedLowering source ssa target entry parameters type) (values : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type values = List.map (fun p => p.type.type) parameters → ∃ sourceEntry targetEntry, EvoIR.Core.IR.initial source entry (EvoIR.Machine.loweringArguments self.tokens values) = Except.ok sourceEntry ∧ EvoIR.Machine.initial target entry (List.map EvoIR.Machine.sourceArgument values) = Except.ok targetEntry ∧ EvoIR.Machine.IRToMachineRefines source target type sourceEntry targetEntry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Machine.selection_transport_refines",
+        "proposition": "∀ {ir : EvoIR.Core.IR.Program} {ssa lowered : EvoIR.Machine.Program} {resultType : EvoIR.Core.Source.IntType} {irEntry : EvoIR.Core.IR.State} {ssaEntry loweredEntry : EvoIR.Machine.State}, EvoIR.Machine.SelectionRefines ir ssa resultType irEntry ssaEntry → EvoIR.Machine.TransportRefines ssa lowered resultType ssaEntry loweredEntry → EvoIR.Machine.IRToMachineRefines ir lowered resultType irEntry loweredEntry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Machine.source_machine_refines",
+        "proposition": "∀ {source : EvoIR.Core.Source.Program} {ir : EvoIR.Core.IR.Program} {ssa lowered : EvoIR.Machine.Program} {resultType : EvoIR.Core.Source.IntType} {sourceEntry : EvoIR.Core.Source.State} {irEntry : EvoIR.Core.IR.State} {ssaEntry loweredEntry : EvoIR.Machine.State}, EvoIR.Core.LoweringRefines source ir resultType sourceEntry irEntry → EvoIR.Machine.SelectionRefines ir ssa resultType irEntry ssaEntry → EvoIR.Machine.TransportRefines ssa lowered resultType ssaEntry loweredEntry → EvoIR.Machine.SourceToMachineRefines source lowered resultType sourceEntry loweredEntry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair.checked",
+        "proposition": "∀ {source : EvoIR.Core.IR.Program} {target : EvoIR.Machine.Program} {entry : String} {parameters : List EvoIR.Core.Source.Parameter} {type : EvoIR.Core.Source.IntType} (self : EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair source target entry parameters type) (values : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type values = List.map (fun p => p.type.type) parameters → ∃ sourceEntry targetEntry, EvoIR.Core.IR.initial source entry (List.map EvoIR.Core.Symbolic.sourceValueIR values ++ [EvoIR.Core.IR.Value.memory { nextId := 1, objects := [] }, EvoIR.Core.IR.Value.world]) = Except.ok sourceEntry ∧ EvoIR.Machine.initial target entry (List.map EvoIR.Machine.sourceArgument values) = Except.ok targetEntry ∧ EvoIR.Machine.SelectionRefines source target type sourceEntry targetEntry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.MachineSelection.tokenModulePair",
+        "proposition": "(source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → (entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → (type : EvoIR.Core.Source.IntType) → Option (EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair source target entry parameters type)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.MachineSelection.tokenDemandModulePair",
+        "proposition": "(source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → (entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → (type : EvoIR.Core.Source.IntType) → Option (EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair source target entry parameters type)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.MachineSelection.token_callee_arguments",
+        "proposition": "∀ {source : EvoIR.Core.IR.Program} {target : EvoIR.Machine.Program} {name : String} {type : EvoIR.Core.Source.IntType} (function : EvoIR.Core.Symbolic.MachineSelection.CheckedTokenFunction source target name type) (args : List (EvoIR.Core.Symbolic.Word EvoIR.Core.Symbolic.inputWidths)), function.first.widths = List.map Sigma.fst args → EvoIR.Core.Symbolic.MachineSelection.TokenCalleeArgumentsDiagram function args",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.MachineSelection.token_demand_callee",
+        "proposition": "∀ {source : EvoIR.Core.IR.Program} {target : EvoIR.Machine.Program} (callee : EvoIR.Core.Symbolic.MachineSelection.TokenCallee source target) (plan : EvoIR.Machine.Demand.Plan) (demand : EvoIR.Machine.Demand.Checked target plan) (entry : EvoIR.Core.Symbolic.MachineSelection.TokenDemandCallEntryResult EvoIR.Core.Symbolic.inputWidths callee.checked.sourceFunction callee.checked.targetFunction plan) (inst : EvoIR.Core.IR.Instruction) (results : List EvoIR.Machine.VReg) (types : List EvoIR.Core.IR.Ty) (sf : EvoIR.Core.IR.Function) (sb : EvoIR.Core.IR.Block) (spc : Nat) (scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths) (tf : EvoIR.Machine.Function) (tb : EvoIR.Machine.Block) (tpc : Nat) (bank : EvoIR.Core.Symbolic.MachineSelection.Bank EvoIR.Core.Symbolic.inputWidths) (binding : EvoIR.Core.Symbolic.MachineSelection.ResumeBindings types scope bank inst.results results callee.type), EvoIR.Core.Symbolic.MachineSelection.TokenCalleeArgumentsDiagram callee.checked entry.original.arguments → EvoIR.Core.Symbolic.MachineSelection.TokenCalleeArgumentsDiagram callee.checked entry.substituted.arguments → EvoIR.Core.Symbolic.MachineSelection.TokenDemandCalleeDiagram callee plan entry inst results types sf sb spc scope tf tb tpc bank",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Machine.Demand.Checked.refines",
+        "proposition": "∀ (program : EvoIR.Machine.Program) (plan : EvoIR.Machine.Demand.Plan) (checked : EvoIR.Machine.Demand.Checked program plan) (type : EvoIR.Core.Source.IntType) (sourceEntry targetEntry : EvoIR.Machine.State), EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa program type sourceEntry → EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa program type targetEntry → EvoIR.Machine.Demand.StateRelated plan sourceEntry targetEntry → EvoIR.Core.Transition.Refines (EvoIR.Machine.step EvoIR.Machine.Mode.ssa program) (EvoIR.Machine.step EvoIR.Machine.Mode.ssa program) (EvoIR.Machine.observe type) (EvoIR.Machine.observe type) sourceEntry targetEntry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Machine.Demand.replace_context_target",
+        "proposition": "∀ {S : Type} (sourceStep : S → Option S) (sourceObserve : S → Option EvoIR.Core.Observation) (observationType : EvoIR.Core.Source.IntType) (program : EvoIR.Machine.Program) (plan : EvoIR.Machine.Demand.Plan), EvoIR.Machine.Demand.checkStructure program plan = true → ∀ (type : EvoIR.Core.Source.IntType) (sourceEntry targetEntry : EvoIR.Machine.State), EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa program type sourceEntry → EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa program type targetEntry → EvoIR.Machine.Demand.StateRelated plan sourceEntry targetEntry → ∀ (stack : List EvoIR.Machine.ReturnFrame), EvoIR.Machine.Demand.SingleCaller stack → ∀ (boundary : S → EvoIR.Machine.State → Prop) (entry : S), EvoIR.Core.Transition.OpenCheckpoint sourceStep (EvoIR.Machine.step EvoIR.Machine.Mode.ssa program) sourceObserve (EvoIR.Machine.observe observationType) boundary entry (EvoIR.Machine.Demand.context sourceEntry stack) → (∀ (source : S) (target : EvoIR.Machine.State), boundary source target → target.stack.length < stack.length) → EvoIR.Core.Transition.OpenCheckpoint sourceStep (EvoIR.Machine.step EvoIR.Machine.Mode.ssa program) sourceObserve (EvoIR.Machine.observe observationType) boundary entry (EvoIR.Machine.Demand.context targetEntry stack)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Machine.Transport.sound",
+        "proposition": "∀ (source target : EvoIR.Machine.Program) (annotations : EvoIR.Machine.Transport.ProgramPlan), EvoIR.Machine.Transport.checkProgram source target annotations = true → ∀ (type : EvoIR.Core.Source.IntType) (name : String) (values : List EvoIR.Machine.Value) (memory : EvoIR.Machine.Memory) (entry : EvoIR.Machine.State), EvoIR.Machine.initial source name values memory = Except.ok entry → EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa source type entry → EvoIR.Machine.initial target name values memory = Except.ok entry ∧ EvoIR.Machine.TransportRefines source target type entry entry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
         "theorem": "EvoIR.Core.Source.scope_exit_safe",
         "proposition": "∀ (incoming current : EvoIR.Core.Source.LocalState) (introduced retained : EvoIR.Core.Source.Locals), EvoIR.Core.Source.ScopeShape incoming introduced retained → current.Realizes (introduced ++ retained) → ∀ (state : EvoIR.Core.Source.State) (flow : EvoIR.Core.Source.Flow), state.locals = introduced ++ retained → EvoIR.Core.Source.resumeFlow state (EvoIR.Core.Source.Frame.scope EvoIR.Core.Source.Value (List.length retained)) flow = { control := EvoIR.Core.Source.Control.flow flow, locals := retained, continuation := state.continuation, functionId := state.functionId } ∧ { bindings := incoming.bindings, initialized := EvoIR.Core.Source.scopeInitialized incoming current }.Realizes retained",
         "proof_kind": "kernel-only",
@@ -17524,8 +18686,8 @@
     "The registry decoder of tools/lean/registry_to_lean.py and the Lean semantic definitions themselves; the round trip and Rule.render check that the two conversions agree, not that either is faithful.",
     "Sections 8.5 eligibility, the seed-fact fixed point, the checker's replay and the Section 9 parser, none of which this layer touches.",
     "The correspondence between the Rust implementation and these Lean definitions, for which only differential evidence exists.",
-    "Executing the compiled source-to-IR checker trusts the Lean compiler, runtime and host toolchain. The general soundness theorem is kernel-checked; an executable acceptance is not a separately kernel-replayed proof term.",
-    "Faithful typed-source export and source/IR decoding remain input boundaries. Source-to-IR checking does not prove machine lowering, allocation or emission."
+    "Executing the compiled source/IR and IR/MIR pair checkers trusts the Lean compiler, runtime and host toolchain. The general soundness theorem is kernel-checked; an executable acceptance is not a separately kernel-replayed proof term.",
+    "Faithful typed-source and actual MIR snapshot exports and source/IR/MIR decoding remain input boundaries. The accepted actual EvoIR/SSA/postSSA pair theorem does not prove allocation, physical framing, assembly emission or hardware execution."
   ],
   "status": "pass"
 }
