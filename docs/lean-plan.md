@@ -7,12 +7,19 @@ The owner requires a practical compiler-correctness path before the first public
 version, followed by verified rewrites on that path. This section is the current
 implementation plan; the scalar-proof plan below remains historical evidence.
 **Current state (2026-10-05): V00, V01, V02 and V03 are complete in the frozen
-`core-v1` scope. V05 is proved and integrated; its composition with V04 is
-open. V04 and V06 are in work. The composed theorem reaches allocated EvoMIR.
-No source-to-assembly theorem or release acceptance is claimed.** The driver
-mode `--proof-required` (V06, in work) runs the V01, V05 (with `-Oeq-scalar`),
-V02 and V03 checkers. Its record says "checked to allocated EvoMIR, not to
-final assembly".
+`core-v1` scope. V04 and V05 are proved and integrated in proof-required mode;
+they stay open until the full release gates run. One composed theorem for the
+whole chain and V06 release acceptance are in work. No release acceptance is
+claimed.** The driver mode `--proof-required` runs the V01, V05 (with
+`-Oeq-scalar`), V02, V03 and V04 checkers. For the `core-v1` subset its record
+says "checked from typed Core source to final assembly text". Limits: Linux
+AArch64 with default code generation options only; no private frame objects;
+allocations with edge bridge blocks and rewrite certificate forms that V05
+does not support are refused; a loop entry needs a proposal file. The trusted
+base is the source export, the Lean kernel and the compiled checker, the file
+readers, the printer of the assembly AST, the Lean semantics of typed Core C
+and of the AArch64 subset, the `AbiEntry` assumption, and the assembler, the
+linker and the hardware.
 Execution is tracked only in [TODO.md](../TODO.md#first-public-release-verification).
 
 ### Release outcome and boundary

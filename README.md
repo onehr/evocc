@@ -727,10 +727,11 @@ evocc --emit=asm --proof-required=NEW_DIR --proof-checker=lean/.lake/build/bin/e
       --core-entry=abs -O0 -fno-builtin tests/fixtures/verification/musl-abs.c
 ```
 
-The driver exports the typed source, EvoIR, SSA EvoMIR, post-SSA EvoMIR and the
-register allocation of the same compilation into `NEW_DIR/inputs/`. The
-compiled Lean checker then runs each integrated stage for each `--core-entry`
-(`evoir-sem --check-stage V01|V05|V02|V03 ROLE=PATH ...`), in this order:
+The driver exports the typed source, EvoIR, SSA EvoMIR, post-SSA EvoMIR, the
+register allocation, the assembly AST with its frame hints, and the assembly
+text of the same compilation into `NEW_DIR/inputs/`. The compiled Lean checker
+then runs each stage for each `--core-entry`
+(`evoir-sem --check-stage V01|V05|V02|V03|V04 ROLE=PATH ...`), in this order:
 
 | Stage | Checks | Reads |
 | --- | --- | --- |
@@ -738,50 +739,69 @@ compiled Lean checker then runs each integrated stage for each `--core-entry`
 | V05 | each rewrite step (only with `-Oeq-scalar`) | the EvoIR before and after the step and its certificate |
 | V02 | EvoIR to SSA and post-SSA EvoMIR | the EvoIR after the last rewrite and both EvoMIR files |
 | V03 | register allocation | the same post-SSA file as V02 and the allocation export |
+| V04 | frame layout and the final assembly text | the same allocation export as V03, the assembly AST and the text to publish |
 
-Every function in the output must be a selected entry. A loop entry needs its
-untrusted checkpoint proposal, `--proof-proposal=NAME=PATH`. `-Oeq-scalar` needs
-`--eq-checker-sha256`; the Rust certificate checker still runs on each step. The
-driver writes `NEW_DIR/output.s`, `NEW_DIR/record.json` and the assembly on
-standard output only if every integrated stage accepts. Otherwise it writes no
-output and exits with 3 (a stage rejected, or a rewrite certificate form that
-the Lean checker does not support), 4 (a proof input is missing, changed or not
+V04 prints the AST and compares it with the text byte for byte, then checks the
+frame and the instructions against the allocated program. The driver publishes
+`output.s` only with the bytes that V04 checked.
+
+**What the mode checks.** For the `core-v1` subset, an accepted result is
+checked from the typed Core source to the final assembly text. The record
+says **"checked from typed Core source to final assembly text"**
+(`CHECKED_TO_FINAL_ASSEMBLY`). Its digest chain shows that each pair of
+adjacent stages reads the same bytes, and that the published `output.s` is the
+text that V04 checked. The record also names the digests of all input files,
+the Lean checker digest and, with `-Oeq-scalar`, the Rust certificate checker
+digest.
+
+**Limits.** Every function in the output must be a selected entry. A loop
+entry needs its untrusted checkpoint proposal, `--proof-proposal=NAME=PATH`.
+Only Linux AArch64 with the default code generation options is supported; an
+option that changes the text fails the V04 print check. A source that keeps a
+private frame object is outside `core-v1`, and V04 does not accept private
+frame objects. An allocation with edge bridge blocks is refused at V03, by its
+export or by its checker. A
+rewrite certificate form that V05 does not support (for example the P0 alias
+form of `p0_001_add_zero_rhs`) is refused; there is no fallback to the program
+without the rewrite. `-Oeq-scalar` needs `--eq-checker-sha256`; the Rust
+certificate checker still runs on each step.
+
+If a stage does not accept, the driver writes no output and no record and exits
+with 3 (a stage rejected), 4 (a proof input is missing, changed or not
 readable), 5 (the checker is missing, failed or timed out) or 6 (a construct is
-outside `core-v1`). There is no fallback to the program without the rewrite.
-
-The record names each stage, its result, the digests of its input files, the
-Lean checker digest and, with `-Oeq-scalar`, the Rust certificate checker
-digest. Its digest chain shows that each pair of adjacent stages reads the same
-bytes. At present it says **"checked to allocated EvoMIR, not to final
-assembly"**. Frame layout and assembly emission (V04) are not checked yet, so
-this output is not a verified binary. Ordinary compilation without the flag is
-unchanged and gets no proof label.
+outside `core-v1`). Ordinary compilation without the flag is unchanged and gets
+no proof label.
 
 ### Trust boundaries and work not yet proved
 
 The generic soundness theorems are checked by the Lean kernel. The public
-checker is a compiled Lean executable. Running it also trusts Lean's compiler
-and runtime, the host toolchain, and file decoding. A successful invocation
-does not submit a new per-program proof term to the kernel.
+checker is a compiled Lean executable. A successful invocation does not submit
+a new per-program proof term to the kernel. A result of proof-required mode
+trusts:
 
-The formal model starts after preprocessing, parsing and type elaboration.
-Faithful export of the typed source and machine snapshots remains a boundary.
-The selected semantic definitions must also match the intended compiler
-contract. Tests help check these connections; they do not prove them.
+- preprocessing, parsing, elaboration and the typed source export;
+- the Lean kernel, and the compiled Lean checker with the Lean compiler, its
+  runtime and the host toolchain;
+- the readers of the input files;
+- the printer of the assembly AST (`EvoIR.Asm.File.print`);
+- the Lean semantics of typed Core C and of the AArch64 subset, which must
+  match the intended compiler contract;
+- the ABI entry assumption `AbiEntry`: the caller obeys the AArch64 procedure
+  call standard and gives sufficient stack;
+- the assembler, the linker, the runtime libraries and the hardware.
 
-The present result does **not** prove physical stack-frame layout, prologue or
-epilogue code, assembly emission, linking, runtime libraries or processor
-execution. Native tests do not close those proof obligations. There is no
-end-to-end source-to-native or verified-release claim yet. As of 2026-10-05,
-register allocation (V03) is proved, and V03 and the rewrite checker (V05) are
-integrated in proof-required mode. Frame layout and assembly (V04) and
-proof-required release acceptance (V06) are in work. The composition of V05
-with V04 is open. See the
-[verification plan](docs/lean-plan.md#first-public-release-verification).
+The exported snapshots (EvoIR, EvoMIR, allocation, assembly AST) are not
+trusted: a stage checks each one, and the digest chain binds them to the
+published text. Tests help check the trusted connections; they do not prove
+them. There is no verified-release claim. As of 2026-10-05, V03 is complete in
+the frozen scope. V04 and V05 are proved and integrated in proof-required
+mode; they stay open until the full release gates run. One composed theorem
+for the whole chain and proof-required release acceptance (V06) are in work.
+See the [verification plan](docs/lean-plan.md#first-public-release-verification).
 
 The P0 and guard rewrite proofs above are a separate result. The V05 checker
-composes an accepted rewrite step with the source-to-EvoIR theorem. Its
-composition to final assembly waits for V04. Neither layer proves
+composes an accepted rewrite step with the source-to-EvoIR theorem, and the
+later stages check the rewritten program. Neither layer proves
 that an optimization improves code size or speed. A valid program can also be
 refused when proof search lacks a suitable correspondence or exhausts its
 budget. Refusal is not permission to label an unchecked result as verified.
