@@ -142,6 +142,36 @@ theorem normalize_low_bits (regClass : Machine.RegClass) (value : Source.Value)
        · simp [Machine.sourceArgument, Machine.normalize, Source.IntType.width])
     | simp [Machine.sourceArgument, Machine.normalize, Source.IntType.width]
 
+/-- The low bits of a zero-extended source value are the value. -/
+theorem sourceArgument_low (value : Source.Value) :
+    (value.bits.setWidth 64).setWidth value.type.width = value.bits := by
+  rcases value with ⟨type, bits⟩
+  cases type <;> simp [Source.IntType.width]
+
+/-- The entry assumption of the pipeline theorem is weaker than `AbiEntry`
+with the zero-extended source arguments. -/
+theorem abiSourceEntry_of_abiEntry {ctx : Asm.Proof.Ctx} {entry : String}
+    {args : List Source.Value} {t0 : Asm.State} {E : Nat}
+    (abi : Asm.Proof.AbiEntry ctx entry (args.map Machine.sourceArgument) t0 E) :
+    Asm.Proof.AbiSourceEntry ctx entry args t0 E where
+  function := abi.function
+  sp := abi.sp
+  aligned := abi.aligned
+  registers n v small found := by
+    have same := abi.registers n (Machine.sourceArgument v) small (by simp [found])
+    simp only [Machine.sourceArgument, Machine.Value.int.injEq] at same
+    rw [← same]
+    exact sourceArgument_low v
+  stackArgs k v found := by
+    obtain ⟨same, bound⟩ := abi.stackArgs k (Machine.sourceArgument v) (by simp [found])
+    simp only [Machine.sourceArgument, Machine.Value.int.injEq] at same
+    rw [← same]
+    exact ⟨sourceArgument_low v, bound⟩
+  returnAddress := abi.returnAddress
+  stackLow := abi.stackLow
+  stackHigh := abi.stackHigh
+  addressSpace := abi.addressSpace
+
 /-- `entryViewsOk` makes the zero-extended source arguments and the machine
 arguments of an ABI entry state agree at the post-SSA entry. -/
 theorem entryAgrees_of_ok {p : Machine.Program} {f : Source.Function}
