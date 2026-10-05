@@ -35,4 +35,8 @@ import EvoIR.Proofs.Rules
 import EvoIR.Rewrite.Check
 import EvoIR.Rewrite.Soundness
 import EvoIR.Rewrite.Tests
+import EvoIR.Alloc.Check
+import EvoIR.Alloc.Reader
+import EvoIR.Alloc.Soundness
+import EvoIR.Alloc.AcceptanceTests
 import EvoIR.Eval

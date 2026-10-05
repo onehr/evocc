@@ -54,6 +54,8 @@ import EvoIR.MachinePrivateLoopTests
 import EvoIR.MachinePrivateGuardTests
 import EvoIR.MachinePrivateCallTests
 import EvoIR.Rewrite.Soundness
+import EvoIR.Alloc.Reader
+import EvoIR.Alloc.Soundness
 
 /-!
 # The executable evaluator
@@ -433,15 +435,37 @@ def checkRewriteStep (inputs : StageInputs) : StageVerdict := Id.run do
     else
       .rejected s!"entry={function.name} rewrite not confirmed or form not supported: {rewriteSummary cert}"
 
-/-- The table of integrated stages, in pipeline order. To integrate V03 or V04,
-add one row here. The compiler driver has a matching table. -/
+/-- V03: register allocation, `EvoIR.Alloc.checkAllocation`, with the theorem
+`checkAllocation_sound`. The program before allocation is the post-SSA file
+that V02 also reads. The allocation export gives the allocated program and the
+hints. The export also holds a copy of the program before allocation. If that
+copy is not equal to the post-SSA file, the stage rejects the export. -/
+def checkPostSSAToAllocated (inputs : StageInputs) : StageVerdict := Id.run do
+  let .ok (_, function) := stageEntry inputs | return .unsupported "source input"
+  let some postText := inputs.lookup "postssa" | return .unsupported "missing post-SSA EvoMIR input"
+  let .ok (.postSSA, pre) := EvoIR.Machine.Reader.readProgram postText
+    | return .unsupported "post-SSA EvoMIR input"
+  let some text := inputs.lookup "allocation" | return .unsupported "missing allocation input"
+  let .ok (copy, post, hints) := EvoIR.Alloc.Reader.readPair text
+    | return .unsupported "allocation input"
+  if copy != pre then
+    return .rejected s!"entry={function.name} the program before allocation in the export is not the post-SSA input"
+  if EvoIR.Alloc.checkAllocation pre post hints then
+    return .accepted s!"entry={function.name} functions={pre.functions.length} scope=post-ssa-mir-to-allocated-mir"
+  let refused := (pre.functions.find? (!EvoIR.Alloc.checkFunction pre post hints ·)).map (·.name)
+  .rejected s!"entry={function.name} allocation not confirmed in function {refused.getD "?"}"
+
+/-- The table of integrated stages, in pipeline order. To integrate V04, add one
+row here. The compiler driver has a matching table. -/
 def stages : List Stage :=
   [ { id := "V01", name := "source-to-evoir", required := ["source", "ir"],
       optional := ["proposal"], check := checkSourceToIR }
   , { id := "V05", name := "evoir-rewrite",
       required := ["source", "before", "after", "certificate"], check := checkRewriteStep }
   , { id := "V02", name := "evoir-to-post-ssa-mir", required := ["source", "ir", "ssa", "postssa"],
-      check := checkIRToPostSSA } ]
+      check := checkIRToPostSSA }
+  , { id := "V03", name := "post-ssa-mir-to-allocated-mir",
+      required := ["source", "postssa", "allocation"], check := checkPostSSAToAllocated } ]
 
 /-- Read each `ROLE=PATH` argument. A role outside the stage row, a duplicate
 role or a missing required role is a command error. -/
