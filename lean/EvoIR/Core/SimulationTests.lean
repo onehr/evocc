@@ -84,4 +84,13 @@ theorem cannot_change_terminal_observation :
 admission. The soundness theorem requires membership of the actual entry. -/
 example : ¬ (fun (_ : Unit) (_ : Unit) => False) () () := by simp
 
+/-- A malformed/unobserved source terminal cannot be hidden behind any target,
+including a target that spins forever instead of producing an observation. -/
+theorem cannot_hide_unobserved_source (targetStep : T → Option T)
+    (targetObserve : T → Option Nat) (entry : T) :
+    ¬Refines stopped targetStep (fun _ => (none : Option Nat)) targetObserve () entry := by
+  intro proof
+  obtain ⟨observation, observed⟩ := proof.source_terminal () (.refl _) rfl
+  cases observed
+
 end EvoIR.Core.Transition.SimulationTests

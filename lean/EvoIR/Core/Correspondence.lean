@@ -50,6 +50,18 @@ def LoweringRefines (s : Source.Program) (t : IR.Program)
   Transition.Refines (Source.step s) (IR.step t) observeSource
     (observeTarget resultType) s₀ t₀
 
+/-- Every accepted whole-pair proof rules out malformed source execution at
+any reachable terminal, not only on tested inputs. This is conditional on the
+compilation proof; it is not standalone soundness of the input validator. -/
+theorem LoweringRefines.source_no_malformed {s : Source.Program} {t : IR.Program}
+    {resultType : Source.IntType} {s₀ : Source.State} {t₀ : IR.State}
+    (proof : LoweringRefines s t resultType s₀ t₀)
+    (message : String) (locals : Source.Locals) (continuation : List Source.Frame) (functionId : Nat) :
+    ¬Source.Steps s s₀ ⟨.halted (.error (.malformed message)), locals, continuation, functionId⟩ := by
+  intro reached
+  obtain ⟨observation, observed⟩ := proof.source_terminal _ reached.toReaches rfl
+  cases observed
+
 /-- The local invariant obligations for the actual source/IR machines. A
 relation/rank proposal alone conveys no authority: transfer, terminal and
 progress obligations must all be established independently for both inputs. -/

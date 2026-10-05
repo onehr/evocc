@@ -181,17 +181,6 @@ theorem prepend {s t s' t'} (entry : related s' t')
 
 end CheckpointSimulation
 
-theorem terminal_of_accessible {step : α → Option α} {s : α}
-    (accessible : Acc (Predecessor step) s) :
-    ∃ final, Reaches step s final ∧ step final = none := by
-  induction accessible with
-  | intro current _ ih =>
-    cases edge : step current with
-    | none => exact ⟨current, .refl _, edge⟩
-    | some next =>
-      obtain ⟨final, tail, stop⟩ := ih next edge
-      exact ⟨final, .next edge tail, stop⟩
-
 /-- Already proved continuations can be composed through the same cyclic
 simulation interface. The relation is refinement itself; no search result or
 finite execution sample is used to manufacture a continuation proof. -/

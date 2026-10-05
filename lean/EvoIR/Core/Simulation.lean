@@ -132,6 +132,40 @@ theorem infinite_of_not_accessible {step : α → Option α} {s : α}
   obtain ⟨b, edge, _⟩ := next _ (all n)
   simp [trajectory, edge]
 
+theorem terminal_of_accessible {step : α → Option α} {s : α}
+    (accessible : Acc (Predecessor step) s) :
+    ∃ final, Reaches step s final ∧ step final = none := by
+  induction accessible with
+  | intro current _ ih =>
+    cases edge : step current with
+    | none => exact ⟨current, .refl _, edge⟩
+    | some next =>
+      obtain ⟨final, tail, stop⟩ := ih next edge
+      exact ⟨final, .next edge tail, stop⟩
+
+/-- Deterministic execution either reaches a terminal or is infinite. This
+classical dichotomy does not choose an execution bound or execute the program. -/
+theorem terminal_or_infinite (step : α → Option α) (entry : α) :
+    (∃ final, Reaches step entry final ∧ step final = none) ∨ Infinite step entry := by
+  classical
+  by_cases accessible : Acc (Predecessor step) entry
+  · exact .inl (terminal_of_accessible accessible)
+  · exact .inr (infinite_of_not_accessible accessible)
+
+/-- The backward theorem also rules out an unobserved source terminal. A
+terminating source cannot be matched by a divergent target, and determinism
+identifies it with the source terminal promised for a terminating target. -/
+theorem Refines.source_terminal {sourceStep : S → Option S} {targetStep : T → Option T}
+    {sourceObserve : S → Option O} {targetObserve : T → Option O} {s : S} {t : T}
+    (proof : Refines sourceStep targetStep sourceObserve targetObserve s t)
+    (final : S) (path : Reaches sourceStep s final) (stopped : sourceStep final = none) :
+    ∃ observation, sourceObserve final = some observation := by
+  rcases terminal_or_infinite targetStep t with ⟨tf, tp, terminal⟩ | infinite
+  · obtain ⟨sf, observation, sp, stop, observed, _⟩ := proof.terminal tf tp terminal
+    have same := path.terminal_unique sp stopped stop
+    exact ⟨observation, same ▸ observed⟩
+  · exact False.elim (path.not_infinite stopped (proof.divergence infinite))
+
 /-- Pass-local proof obligations. Unknown effects, malformed states and wrong
 diagnostics cannot be hidden by choosing an empty relation: entry membership,
 successor closure, terminal observations and progress all remain obligations. -/

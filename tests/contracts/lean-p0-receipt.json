@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "8afff09451aa5d274df0ea1c82b45aaf69a3d1f9",
+    "lean_commit": "05fb62d4c91d0114329eddb91d2c946816481822",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -138,6 +138,7 @@
       "lean/EvoIR/Core/TargetCutpoint.lean",
       "lean/EvoIR/Core/TargetFrontier.lean",
       "lean/EvoIR/Core/Transition.lean",
+      "lean/EvoIR/Core/ValidatorState.lean",
       "lean/EvoIR/Core/WellFormed.lean",
       "lean/EvoIR/Core/WellFormedTests.lean",
       "lean/EvoIR/Eval.lean",
@@ -608,6 +609,10 @@
         "EvoIR.Core.CallingCutpoint"
       ],
       "lean/EvoIR/Core/Transition.lean": [],
+      "lean/EvoIR/Core/ValidatorState.lean": [
+        "EvoIR.Core.LocalStorage",
+        "EvoIR.Core.ScalarCorrectness"
+      ],
       "lean/EvoIR/Core/WellFormed.lean": [
         "EvoIR.Core.Source"
       ],
@@ -644,7 +649,8 @@
         "EvoIR.Core.CallMixedTests",
         "EvoIR.Core.CallingLoopPairTests",
         "EvoIR.Core.FunctionClosureTests",
-        "EvoIR.Core.ConstantClosureTests"
+        "EvoIR.Core.ConstantClosureTests",
+        "EvoIR.Core.ValidatorState"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -16075,6 +16081,37 @@
   "compilation_core_primitives": {
     "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions, conditional CFGs, checked cyclic diagrams, div/rem, finite calls and private-leaf substitution. Full core-v1 constructor/call/loop composition remains incomplete. No proof of source export, input-validation execution safety, backend compilation or verified-release acceptance",
     "targets": [
+      {
+        "theorem": "EvoIR.Core.Source.checked_identifier_step",
+        "proposition": "∀ (program : EvoIR.Core.Source.Program) (callees : List EvoIR.Core.Source.Function) (fuel : Nat) (state : EvoIR.Core.Source.LocalState) (locals : EvoIR.Core.Source.Locals) (type : EvoIR.Core.Source.IntType) (id : Nat) (facts : EvoIR.Core.Source.ExpressionFacts) (continuation : List EvoIR.Core.Source.Frame) (functionId : Nat), EvoIR.Core.Source.checkExpr callees fuel state (EvoIR.Core.Source.Expr.ident type id) = Except.ok facts → state.Realizes locals → ∃ value, value.type = type ∧ EvoIR.Core.Source.Step program { control := EvoIR.Core.Source.Control.expression (EvoIR.Core.Source.Expr.ident type id), locals := locals, continuation := continuation, functionId := functionId } { control := EvoIR.Core.Source.Control.value value, locals := locals, continuation := continuation, functionId := functionId }",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.checked_binary_continuation_safe",
+        "proposition": "∀ (callees : List EvoIR.Core.Source.Function) (fuel : Nat) (static : EvoIR.Core.Source.LocalState) (state : EvoIR.Core.Source.State) (type : EvoIR.Core.Source.IntType) (op : EvoIR.Core.Source.Binary) (left right : EvoIR.Core.Source.Expr) (facts : EvoIR.Core.Source.ExpressionFacts) (a b : EvoIR.Core.Source.Value), EvoIR.Core.Source.checkExpr callees fuel static (EvoIR.Core.Source.Expr.binary type op left right) = Except.ok facts → a.type = left.type → b.type = right.type → EvoIR.Core.Source.SafeValueControl type (EvoIR.Core.Source.resumeValue state (EvoIR.Core.Source.Frame.binaryRight EvoIR.Core.Source.Value type op a) b).control",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.unary_continuation_safe",
+        "proposition": "∀ (state : EvoIR.Core.Source.State) (op : EvoIR.Core.Source.Unary) (value : EvoIR.Core.Source.Value), EvoIR.Core.Source.SafeValueControl (if (op == EvoIR.Core.Source.Unary.not) = true then EvoIR.Core.Source.IntType.int else value.type) (EvoIR.Core.Source.resumeValue state (EvoIR.Core.Source.Frame.unary EvoIR.Core.Source.Value (if (op == EvoIR.Core.Source.Unary.not) = true then EvoIR.Core.Source.IntType.int else value.type) op) value).control",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
       {
         "theorem": "EvoIR.Core.Symbolic.Term.constant_value_sound",
         "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} (term : EvoIR.Core.Symbolic.Term Γ n) (value : BitVec n), term.constantValue = some value → EvoIR.Core.Symbolic.denoteTerm σ term = value",

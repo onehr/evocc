@@ -301,6 +301,16 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.LoweringRefines.source_no_malformed",
+        "∀ {s : EvoIR.Core.Source.Program} {t : EvoIR.Core.IR.Program} {resultType : EvoIR.Core.Source.IntType} "
+        "{s₀ : EvoIR.Core.Source.State} {t₀ : EvoIR.Core.IR.State}, "
+        "EvoIR.Core.LoweringRefines s t resultType s₀ t₀ → "
+        "∀ (message : String) (locals : EvoIR.Core.Source.Locals) (continuation : List EvoIR.Core.Source.Frame) "
+        "(functionId : Nat), ¬EvoIR.Core.Source.Steps s s₀ "
+        "{ control := EvoIR.Core.Source.Control.halted (Except.error (EvoIR.Core.Source.Fault.malformed message)), "
+        "locals := locals, continuation := continuation, functionId := functionId }",
+    ),
+    (
         "EvoIR.Core.Source.checked_identifier_step",
         "∀ (program : EvoIR.Core.Source.Program) (callees : List EvoIR.Core.Source.Function) (fuel : Nat) "
         "(state : EvoIR.Core.Source.LocalState) (locals : EvoIR.Core.Source.Locals) (type : EvoIR.Core.Source.IntType) "
