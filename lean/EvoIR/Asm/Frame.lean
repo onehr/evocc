@@ -99,11 +99,13 @@ structure LayoutOk (h : FrameHint) : Prop where
   spillSpill : ∀ k a k' b, (k, a) ∈ h.spills → (k', b) ∈ h.spills → k ≠ k' → Disjoint (a, 8) (b, 8)
   saveSave : ∀ r a r' b, (r, a) ∈ h.saved → (r', b) ∈ h.saved → r ≠ r' → Disjoint (a, 8) (b, 8)
   spillSave : ∀ k a r b, (k, a) ∈ h.spills → (r, b) ∈ h.saved → Disjoint (a, 8) (b, 8)
+  savedPw : h.saved.Pairwise (fun x y => Disjoint (x.2, 8) (y.2, 8))
+  savedKeys : keysUnique (h.saved.map Prod.fst) = true
 
 theorem layoutOk_of_frameOk (f : Alloc.Function) (h : FrameHint) (ok : frameOk f h = true) :
     LayoutOk h := by
   simp only [frameOk, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at ok
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨size16, _⟩, inside⟩, disjoint⟩, _⟩, _⟩, _⟩, _⟩, savedCallee⟩, _⟩, _⟩, _⟩, _⟩ := ok
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨size16, _⟩, inside⟩, disjoint⟩, _⟩, savedKeys⟩, _⟩, _⟩, savedCallee⟩, _⟩, _⟩, _⟩, _⟩ := ok
   have pw := regionsDisjoint_pairwise _ disjoint
   have inside' : ∀ x ∈ frameRegions f h, x.1 + x.2 ≤ h.size := by
     intro x m
@@ -134,7 +136,7 @@ theorem layoutOk_of_frameOk (f : Alloc.Function) (h : FrameHint) (ok : frameOk f
     intro k a m; exact List.mem_map.mpr ⟨(k, a), m, rfl⟩
   have savePair : ∀ r a, (r, a) ∈ h.saved → ((a, 8) : Nat × Nat) ∈ V := by
     intro r a m; exact List.mem_map.mpr ⟨(r, a), m, rfl⟩
-  refine ⟨size16, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨size16, ?_, ?_, ?_, ?_, ?_, ?_, List.pairwise_map.mp savedPw, savedKeys⟩
   · by_cases zero : h.outgoing = 0
     · omega
     · have := inside' (0, h.outgoing) (List.mem_append_left _ (List.mem_append_left _
