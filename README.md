@@ -15,9 +15,10 @@ whole compiler or a claim that every program is optimized through EqSat.
 The design separates **semantic equivalence in EvoIR**, **machine constraints in
 EvoMIR**, and **rule soundness in Lean 4**. [Why this split, and what is proved](#why-evoir-and-evomir).
 
-For a restricted integer profile, proved Lean checkers also check compilation
-results from typed source through virtual machine lowering. These proofs stop
-before register allocation and machine-code emission.
+For a restricted integer profile on Linux AArch64, a proof-required driver mode
+checks the compilation result with proved Lean checkers, from typed Core source
+to the final assembly text. If a check fails, the mode publishes no output. The
+assembler, the linker and the hardware stay outside the proofs.
 See [Verification of compilation results](#verification-of-compilation-results).
 
 The authoritative language and machine profiles are
@@ -458,7 +459,8 @@ Lean is an **offline proof tool**, not EvoCC's code generator and not a runtime
 dependency of compiled C programs. It has two roles: prove rewrite rules and
 prove compilation-result checkers. The table below covers the rewrite layer.
 The [compilation verification section](#verification-of-compilation-results)
-describes the separate source and machine-lowering theorems.
+describes the separate compilation theorems, from typed source to final
+assembly text.
 
 | Layer | What it establishes |
 |---|---|
@@ -543,10 +545,15 @@ None of these test populations substitutes for the others.
 
 ## Verification of compilation results
 
-As of **2026-10-05**, two verification layers pass their frozen acceptance
-profile: **source-to-EvoIR verification** and **EvoIR-to-virtual-machine
-verification**. Both check the actual compiler output. Neither proves that
-every program accepted by EvoCC is compiled correctly.
+As of **2026-10-06**, every checked stage passes its frozen acceptance profile:
+typed source to EvoIR, EvoIR rewrites, EvoIR to post-SSA EvoMIR, register
+allocation, and frame layout and emission to the final assembly text.
+[Proof-required compilation](#proof-required-compilation) composes these
+stages. The result is a proved, fail-closed compilation path for the listed
+Core C-HIR subset and target, with an explicit trusted boundary. Existing
+scalar rewrites compose with that path. Each stage checks the actual compiler
+output. No stage proves that every program accepted by EvoCC is compiled
+correctly.
 
 The method is *translation validation*: check each supplied compilation
 result, instead of proving the compiler algorithm. The compiler and proof
@@ -557,20 +564,32 @@ Lean kernel.
 ```text
 Typed Core C-HIR                complete selected functions and callees
         |
-        | source-to-EvoIR checker
+        | source-to-EvoIR checker                       V01
         v
 Actual EvoIR
         |
-        | instruction-selection checker
+        | rewrite-step checker, only with -Oeq-scalar   V05
+        v
+Rewritten EvoIR                 the same program if no rewrite ran
+        |
+        | instruction-selection checker                 V02
         v
 SSA EvoMIR                      virtual registers and block arguments
         |
-        | edge and copy checker
+        | edge and copy checker                         V02
         v
 Post-SSA EvoMIR                 virtual registers and explicit copies
+        |
+        | allocation checker                            V03
+        v
+Allocated EvoMIR                physical registers and spill slots
+        |
+        | frame, emission and print checker             V04
+        v
+Final assembly text             the published output.s
         ---------------------  current formal boundary
         |
-        | allocation, physical frames, emission, assembly and linking
+        | assembler, linker and runtime libraries
         v
 Native program                  tested; not covered by these theorems
 ```
@@ -717,10 +736,10 @@ proposed checkpoints. The machine command uses `source.json` to select an entry
 and its signature. It does **not** replace the source-to-EvoIR check. Normal
 compilation does not automatically obtain this complete proof chain.
 
-### Proof-required compilation (in work)
+### Proof-required compilation
 
-A separate driver mode connects the compiler to these checkers. It is part of
-the V06 work package and is not release acceptance:
+A separate driver mode connects the compiler to these checkers. It is the
+result of work package V06:
 
 ```sh
 evocc --emit=asm --proof-required=NEW_DIR --proof-checker=lean/.lake/build/bin/evoir-sem \
@@ -746,7 +765,8 @@ frame and the instructions against the allocated program. After the stage rows
 accept, the driver runs one more command for each entry as the final decision:
 `evoir-sem --check-pipeline ROLE=PATH ...` checks all stages on the same files
 in one function, `EvoIR.Pipeline.checkPipelineTexts`, with one theorem,
-`checkPipelineTexts_sound`. The record names this row `PIPELINE`; the stage rows
+`checkPipelineTexts_sound`. Its companion `checkPipeline_sound` covers zero or
+more rewrite steps. The record names this row `PIPELINE`; the stage rows
 stay for diagnosis. The driver publishes `output.s` only if the pipeline check
 accepts, and only with the bytes that it checked.
 
@@ -759,17 +779,35 @@ text that V04 checked. The record also names the digests of all input files,
 the Lean checker digest and, with `-Oeq-scalar`, the Rust certificate checker
 digest.
 
-**Limits.** Every function in the output must be a selected entry. A loop
-entry needs its untrusted checkpoint proposal, `--proof-proposal=NAME=PATH`.
-Only Linux AArch64 with the default code generation options is supported; an
-option that changes the text fails the V04 print check. A source that keeps a
-private frame object is outside `core-v1`, and V04 does not accept private
-frame objects. An allocation with edge bridge blocks is refused at V03, by its
-export or by its checker. A
-rewrite certificate form that V05 does not support (for example the P0 alias
-form of `p0_001_add_zero_rhs`) is refused; there is no fallback to the program
-without the rewrite. `-Oeq-scalar` needs `--eq-checker-sha256`; the Rust
-certificate checker still runs on each step.
+**Acceptance sweep (2026-10-06).** The sweep ran proof-required mode on each of
+the 17 pilot modules in the
+[acceptance receipt](tests/contracts/core-v1-pilot.json)
+(`machine_lowering_checkpoint`). Every function of each output was an entry.
+Each loop entry had its proposal file.
+
+| Run | Result |
+| --- | --- |
+| 17 pilot modules, `-O0 -fno-builtin` | 17 of 17 modules accepted (exit 0). 107 of 107 entries checked from typed Core source to final assembly text (`CHECKED_TO_FINAL_ASSEMBLY`): the 68 pilot entries and 39 other functions of the same modules. No entry refused at any stage. |
+| `doom-fixedmul.c` (`FixedMul`), `-Oeq-scalar --eq-policy=guard-known-true` | Accepted. One g0 guard fold (`g0_007_signed_count`) through the complete pipeline. |
+| `control.c` (`loop_join`, `short_circuit`), `-Oeq-scalar` | Accepted. One P0 replacement (`p0_107_fold_icmp_ne`) through the complete pipeline. |
+
+In `source-execution.c`, the functions `loop_join` and `control` are also
+entries. Their proposals are the elements for symbols 7 and 56 of
+`tests/fixtures/verification/source-execution.cutpoints.json`. Without these
+proposals, V01 refuses the module with exit 3: this is a missing input, not a
+defect of the mode. The acceptance run binds implementation commit `8770b186`.
+At that commit, the full workspace gate passes (407 suites, 3,102 passed,
+0 failed, 5 ignored; Clippy and formatting pass), and the Lean gate passes
+(receipt Lean commit `5d917f39`). The
+[TODO entry for V06](TODO.md#first-public-release-verification) records the
+binary digests.
+
+The mode also refuses a source that keeps a private frame object; this source
+is outside `core-v1`. An option that changes the text fails the V04 print
+check. A refused rewrite step stops the compilation: there is no fallback to
+the program without the rewrite. The Rust certificate checker still runs on
+each rewrite step. The [next section](#trust-boundaries-and-work-not-yet-proved)
+lists the limits of an accepted result.
 
 If a stage does not accept, the driver writes no output and no record and exits
 with 3 (a stage rejected), 4 (a proof input is missing, changed or not
@@ -781,31 +819,45 @@ no proof label.
 
 The generic soundness theorems are checked by the Lean kernel. The public
 checker is a compiled Lean executable. A successful invocation does not submit
-a new per-program proof term to the kernel. A result of proof-required mode
-trusts:
+a new per-program proof term to the kernel. A result of proof-required mode has
+these limits:
 
-- preprocessing, parsing, elaboration and the typed source export;
-- the Lean kernel, and the compiled Lean checker with the Lean compiler, its
-  runtime and the host toolchain;
-- the readers of the input files;
-- the printer of the assembly AST (`EvoIR.Asm.File.print`);
-- the Lean semantics of typed Core C and of the AArch64 subset, which must
-  match the intended compiler contract;
-- the ABI entry assumption `AbiEntry`: the caller obeys the AArch64 procedure
-  call standard and gives sufficient stack. Open limit: `AbiEntry` uses
-  zero-extended argument values. The theorem covers only entry states in which
-  the upper 32 bits of each 32-bit argument register and stack slot are zero.
-  AAPCS64 does not require this of a caller;
-- the assembler, the linker, the runtime libraries and the hardware.
+1. **ABI entry values.** `AbiEntry` uses zero-extended argument values. The
+   theorem covers only entry states in which the upper 32 bits of each 32-bit
+   argument register and stack slot are zero. AAPCS64 does not require this of
+   a caller. The open task V07 is to remove this limit. It is the first
+   follow-up task.
+2. **Allocation.** V03 refuses an allocation with edge bridge blocks. No pilot
+   entry has one.
+3. **Rewrites.** V05 refuses the root-deletion (alias) certificate form, for
+   example the P0 alias form of `p0_001_add_zero_rhs`. V05 refuses an
+   extraction with more than one instruction. V05 does not use facts through
+   add, sub, mul and comparison: the result for these facts is "unknown",
+   because their existing proofs use SAT reflection.
+4. **Inputs.** The mode supports only Linux AArch64 with the default code
+   generation options, and only `-O0 -fno-builtin`. The one optional rewrite
+   option is `-Oeq-scalar` with `--eq-checker-sha256`. Every function in the
+   output must be a selected entry. A loop entry needs an untrusted proposal
+   file, `--proof-proposal=NAME=PATH`. Each pipeline check has one selected
+   entry.
+5. **Trusted base.** These parts are trusted, not proved:
+   - preprocessing, parsing, elaboration and the typed source export;
+   - the Lean kernel, and the compiled Lean checker with the Lean compiler,
+     its runtime and the host toolchain;
+   - the readers of the input files;
+   - the printer of the assembly AST (`EvoIR.Asm.File.print`);
+   - the Lean semantics of typed Core C and of the AArch64 subset, which must
+     match the intended compiler contract;
+   - the ABI entry assumption `AbiEntry`: the caller obeys the AArch64
+     procedure call standard and gives sufficient stack (see item 1);
+   - the assembler, the linker, the runtime libraries and the hardware.
 
 The exported snapshots (EvoIR, EvoMIR, allocation, assembly AST) are not
 trusted: a stage checks each one, and the digest chain binds them to the
 published text. Tests help check the trusted connections; they do not prove
-them. There is no verified-release claim. As of 2026-10-05, V03 is complete in
-the frozen scope. V04 and V05 are proved and integrated in proof-required
-mode; they stay open until the full release gates run. The pipeline check
-gives one theorem for the whole chain. Proof-required release acceptance (V06)
-is in work.
+them. As of 2026-10-06, V00 to V06 are complete in the frozen `core-v1` scope.
+The pipeline check gives one theorem for the whole chain. The proofs do not
+cover the whole compiler, the GNU C language or Linux.
 See the [verification plan](docs/lean-plan.md#first-public-release-verification).
 
 The P0 and guard rewrite proofs above are a separate result. The V05 checker

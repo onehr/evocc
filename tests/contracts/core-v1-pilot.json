@@ -951,9 +951,9 @@
     "existing_pipeline_population": "FOCUSED_AND_FULL_WORKSPACE_PASS_NOT_A_COMPILATION_PROOF",
     "V01_source_to_evoir": "PASS_FROZEN_PROFILE",
     "V02_selection_and_copies": "PASS_FROZEN_PROFILE",
-    "V03_allocation": "NOT_IMPLEMENTED",
-    "V04_frame_emission_and_baseline": "NOT_IMPLEMENTED",
-    "V05_contextual_rewrites": "NOT_IMPLEMENTED",
-    "V06_proof_required_release": "NOT_IMPLEMENTED"
+    "V03_allocation": "PASS_FROZEN_PROFILE",
+    "V04_frame_emission_and_baseline": "PASS_FROZEN_PROFILE",
+    "V05_contextual_rewrites": "PASS_FROZEN_PROFILE",
+    "V06_proof_required_release": "PASS_FROZEN_PROFILE"
   }
 }

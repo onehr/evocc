@@ -6,24 +6,35 @@ Plan revision 1, **2026-10-04**; inspected implementation `19bb5f7d`.
 The owner requires a practical compiler-correctness path before the first public
 version, followed by verified rewrites on that path. This section is the current
 implementation plan; the scalar-proof plan below remains historical evidence.
-**Current state (2026-10-05): V00, V01, V02 and V03 are complete in the frozen
-`core-v1` scope. V04 and V05 are proved and integrated in proof-required mode;
-they stay open until the full release gates run. V06 release acceptance is in
-work. No release acceptance is claimed.** The driver mode `--proof-required`
-runs the V01, V05 (with `-Oeq-scalar`), V02, V03 and V04 checkers, then the
-pipeline check (`EvoIR.Pipeline.checkPipelineTexts`, one theorem
-`checkPipelineTexts_sound`) as the final decision. For the `core-v1` subset its
-record says "checked from typed Core source to final assembly text". Limits: Linux
-AArch64 with default code generation options only; no private frame objects;
-allocations with edge bridge blocks and rewrite certificate forms that V05
-does not support are refused; a loop entry needs a proposal file. The trusted
-base is the source export, the Lean kernel and the compiled checker, the file
-readers, the printer of the assembly AST, the Lean semantics of typed Core C
-and of the AArch64 subset, the `AbiEntry` assumption, and the assembler, the
-linker and the hardware. Open limit: `AbiEntry` uses zero-extended argument
-values, so the theorem covers only entry states in which the upper 32 bits of
-each 32-bit argument register and stack slot are zero. AAPCS64 does not
-require this of a caller.
+**Current state (2026-10-06): V00 to V06 are complete in the frozen `core-v1`
+scope. V07, the first follow-up task, is open.** The result is a proved,
+fail-closed compilation path for the listed Core C-HIR subset and target, with
+an explicit trusted boundary. Existing scalar rewrites compose with that path.
+The driver mode `--proof-required` runs the V01, V05 (with `-Oeq-scalar`), V02,
+V03 and V04 checkers. Then the pipeline check
+(`EvoIR.Pipeline.checkPipelineTexts`) gives the final decision. Its theorems are
+`checkPipeline_sound` and `checkPipelineTexts_sound`; they cover zero or more
+rewrite steps. An accepted record says "checked from typed Core source to final
+assembly text" (`CHECKED_TO_FINAL_ASSEMBLY`). Acceptance run: implementation
+commit `8770b186`. The full workspace gate passes (407 suites, 3,102 passed,
+0 failed, 5 ignored; Clippy and formatting pass). The Lean gate passes (receipt
+Lean commit `5d917f39`). The sweep accepts 17 of 17 pilot modules and 107 of
+107 entries (the 68 pilot entries and 39 other functions of these modules). It
+also accepts one g0 guard fold (`FixedMul`) and one P0 replacement
+(`short_circuit`) through the complete pipeline. Limits: Linux AArch64 with the
+default code generation options and `-O0 -fno-builtin` only; every function in
+the output must be a selected entry; a loop entry needs an untrusted proposal
+file; one selected entry for each pipeline check. V03 refuses allocations with
+edge bridge blocks. V05 refuses the root-deletion (alias) certificate form and
+an extraction with more than one instruction, and does not use facts through
+add, sub, mul and comparison. The trusted base is preprocessing, parsing,
+elaboration and the typed source export; the Lean kernel, the compiled checker
+and its toolchain; the file readers; the printer of the assembly AST; the Lean
+semantics of typed Core C and of the AArch64 subset; the `AbiEntry` assumption;
+and the assembler, the linker, the runtime and the hardware. Open limit (V07):
+`AbiEntry` uses zero-extended argument values, so the theorem covers only entry
+states in which the upper 32 bits of each 32-bit argument register and stack
+slot are zero. AAPCS64 does not require this of a caller.
 Execution is tracked only in [TODO.md](../TODO.md#first-public-release-verification).
 
 ### Release outcome and boundary

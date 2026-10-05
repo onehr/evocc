@@ -124,8 +124,8 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | V04, V05, T03 | V00-V03 are complete in the frozen scope. V04 and V05 are proved and integrated in proof-required mode, and the pipeline check is the final decision; close them after the full gates. The bucket includes proof implementation, not new audit tooling. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. |
-| ACCEPTANCE | V06, T04, T02, K13, K14, B10, T05 | V06 blocks public release until V00-V05 compose and the frozen proof/native gates pass. Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| AUDIT | V07, T03 | V00-V06 are complete in the frozen scope. V07 removes the zero-extension premise from `AbiEntry`; it is the first follow-up task. The bucket includes proof implementation, not new audit tooling. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. |
+| ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -2303,15 +2303,43 @@ Reopening any of them needs a new owner decision after the N03 slices land.
 ## First public release verification
 
 Authority and exact envelope: [V1 verification plan](docs/lean-plan.md#first-public-release-verification).
-All seven tasks are release-blocking. Current state (2026-10-05): V00, V01, V02
-and V03 are complete in the frozen `core-v1` scope. V04 and V05 are proved and
-integrated in proof-required mode. They stay OPEN until the full release gates
-run. V06 is in work and stays OPEN. For the `core-v1` subset, proof-required
-mode checks from typed Core source to the final assembly text. The first result must
+V00 to V06 are the seven release-blocking tasks. The first result must
 be a proved baseline path for a declared subset, then a proved optimized path;
 neither an allocation-only theorem nor existing rule proofs close the parent
 release requirement. Keep unsupported programs available in the ordinary
 compiler without implying a proof. No new registry, fact domain or AI campaign.
+
+**Current state (2026-10-06).** V00 to V06 are complete in the frozen `core-v1`
+scope. V07 is the first follow-up task. It is OPEN. The result is a proved,
+fail-closed compilation path for the listed Core C-HIR subset and target, with
+an explicit trusted boundary. Existing scalar rewrites compose with that path.
+Proof-required mode publishes an output only if the output is checked from
+typed Core source to final assembly text. The acceptance sweep accepts all 17
+pilot modules and all 107 entries of these modules, and both optimized cases.
+The V06 entry below gives the acceptance run. The proofs do not cover the
+whole compiler, the GNU C language or Linux.
+
+Limits of the accepted result:
+
+1. `AbiEntry` uses zero-extended argument values. The theorem covers only entry
+   states in which the upper 32 bits of each 32-bit argument register and
+   stack slot are zero. AAPCS64 does not require this of a caller. The open
+   task V07 is to remove this limit. It is the first follow-up task.
+2. V03 refuses an allocation with edge bridge blocks. No pilot entry has one.
+3. V05 refuses the root-deletion (alias) certificate form. V05 refuses an
+   extraction with more than one instruction. V05 does not use facts through
+   add, sub, mul and comparison: the result for these facts is "unknown",
+   because their existing proofs use SAT reflection.
+4. The mode supports only Linux AArch64 with the default code generation
+   options, and only `-O0 -fno-builtin`. The one optional rewrite option is
+   `-Oeq-scalar` with a pinned `--eq-checker-sha256`. Every function in the
+   output must be a selected entry. A loop entry needs an untrusted proposal
+   file. Each pipeline check has one selected entry.
+5. Trusted: preprocessing, parsing, elaboration and the typed source export;
+   the Lean kernel, the compiled checker and its toolchain; the readers of the
+   input files; the printer of the assembly AST; the Lean semantics of typed
+   Core C and of the AArch64 subset; the ABI entry assumption (`AbiEntry`);
+   the assembler, the linker, the runtime and the hardware.
 
 - [x] **V00 — Freeze the core compilation theorem and real pilot**, complete in the frozen scope; P1.
   Name the source/target states, observation/refinement relation, exact supported
@@ -2702,8 +2730,10 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   `crates/evocc-mir/src/verify_alloc.rs` makes the export. Proof-required mode
   runs V03 (commits `d3a9c4d8`, `17873336`). Frames and emission are not
   covered.
+  October 6: the acceptance sweep of proof-required mode accepts V03 for all
+  107 entries of the 17 pilot modules. No pilot entry has an edge bridge block.
 
-- [ ] **V04 — Close frame/emission verification and compose the baseline** — `OPEN`, P1.
+- [x] **V04 — Close frame/emission verification and compose the baseline**, 2026-10-06; complete in the frozen scope; P1.
   After V01–V03, prove frame separation, save/restore, stack arguments and the
   correspondence to the AST decoded from the actual final emitted assembly.
   Compose a Core C-HIR-to-assembly
@@ -2716,8 +2746,14 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   Proof-required mode runs V04 on the text that it publishes (commits
   `2bbee1ed`, `c4bed6a1`, `642234db`). Private frame objects are refused. V04
   stays OPEN until the lead runs the full gates.
+  **October 6 completion (current state):** V04 is complete in the frozen
+  scope. `checkAsm_sound` and `source_asm_refines` are kernel-checked, and the
+  full gates pass (see V06). Proof-required mode accepts all 68 pilot entries
+  of the 17 pilot modules to `CHECKED_TO_FINAL_ASSEMBLY`. Every function in
+  the output must be an entry, so the mode also checks the 39 other functions
+  of these modules. It accepts all 107 entries. The paragraph above is history.
 
-- [ ] **V05 — Compose existing verified rewrites with the proved pipeline** — `OPEN`, P1.
+- [x] **V05 — Compose existing verified rewrites with the proved pipeline**, 2026-10-06; complete in the frozen scope; P1.
   After V04, reuse frozen P0/g0 rules; close admitted seed/poison/fact premises,
   certificate replay, extraction and replacement in context. Show both a P0
   rewrite and g0 guard fold on the frozen path. Reject forged premises and
@@ -2732,8 +2768,25 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   to V04 check the rewritten program to the final assembly text. The pipeline
   check (`checkPipelineTexts_sound`) gives one theorem for the whole optimized
   chain. V05 stays OPEN until the lead runs the full gates.
+  **October 6 completion (current state):** V05 is complete in the frozen
+  scope. `checkPipeline_sound` covers zero or more rewrite steps between V01
+  and V02. Proof-required mode accepts two optimized compilations to
+  `CHECKED_TO_FINAL_ASSEMBLY`:
+  - `doom-fixedmul.c` (`FixedMul`) with `-Oeq-scalar
+    --eq-policy=guard-known-true`: one g0 guard fold,
+    `regions=FixedMul/entry/6 rules=g0_007_signed_count`.
+  - `control.c` (`loop_join`, `short_circuit`) with `-Oeq-scalar`: one P0
+    replacement, `regions=short_circuit/b1/2,short_circuit/b7/2
+    rules=p0_107_fold_icmp_ne`.
 
-- [ ] **V06 — Enforce proof-required compilation and final release acceptance** — `OPEN`, P1.
+  Each record has two rewrite steps. Step 0 has the rule. Step 1 names no
+  region and no rule. Limits: V05 refuses the root-deletion (alias)
+  certificate form and an extraction with more than one instruction. V05 does
+  not use facts through add, sub, mul and comparison. The result for these
+  facts is "unknown", because their existing proofs use SAT reflection. The
+  paragraph above is history.
+
+- [x] **V06 — Enforce proof-required compilation and final release acceptance**, 2026-10-06; complete in the frozen scope; P1.
   After V00–V05, integrate the compiled proved Lean checker at the driver output
   boundary with no silent fallback or unproved callee. Unsupported/rejected/
   timed-out proofs cannot publish verified output. Run full workspace, Lean and
@@ -2767,6 +2820,58 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   bits of each 32-bit argument register and stack slot are zero, and AAPCS64
   does not require this of a caller. Release acceptance is not run. The 15
   tests in `crates/evocc/tests/proof_required.rs` pass.
+  **October 6 completion (current state):** V06 is complete in the frozen
+  scope. No refusal in the acceptance sweep is a defect of the mode. The
+  acceptance run:
+  - Subject: implementation commit `8770b186`. The sweep ran at `4c4cc849`,
+    which adds only the Lean gate receipt. Binary SHA-256 digests: `evocc`
+    `aedc2cd02dda98ab65a18f3e25831eb3344d78d6c7ba371e5bff67bfed89dbb2`,
+    `evoir-sem`
+    `f2940a8e4fb852fd6f8bf7315f3c1e72578aa47570b9277a1f3b0e5a6def70c6`,
+    `evocc-checker`
+    `723354bf72ce5cbbc9cd3e7d3d35339c46159bbb87678590fc8eeda3be9f078f`.
+  - Full workspace gate (`tools/gate-changed.sh --full-workspace --offline`)
+    at `8770b186`, clean tree: 407 suites, 3,102 passed, 0 failed, 5 ignored.
+    Clippy and formatting pass.
+  - Lean gate (`tools/gate-lean.sh`) at `8770b186`, clean tree: all steps
+    pass. The receipt `tests/contracts/lean-p0-receipt.json` names Lean
+    commit `5d917f39`.
+  - Sweep: proof-required mode ran on each of the 17 pilot modules of
+    `machine_lowering_checkpoint`, with all functions of the output as
+    entries and the proposal files below. 17 of 17 modules are accepted
+    (exit 0). 107 of 107 entries are accepted to `CHECKED_TO_FINAL_ASSEMBLY`:
+    the 68 pilot entries and 39 other functions of the same modules. No
+    entry is refused at V01, V02, V03, V04 or the pipeline check. Both
+    optimized cases of V05 are accepted.
+  - Proposal files: the frozen `*.cutpoints.json` files give each loop
+    entry its proposal. In `source-execution.c`, `loop_join` and `control`
+    are also entries. Their proposals are the elements for symbols 7 and 56
+    of `tests/fixtures/verification/source-execution.cutpoints.json`; the
+    fixtures do not hold them as separate files.
+  - Refused run: the first run of `source-execution.c` gave
+    `loop-join.cutpoints.json` (symbol IDs of `control.c`) to `loop_join`
+    and no proposal to `control`. The mode refused the module at V01 with
+    exit 3. The reason line was `STAGE_REJECTED stage=V01 entry=control no
+    checked source-to-EvoIR correspondence`. A direct check of the exported
+    inputs refused `loop_join` at V01 with the same reason. All other entries
+    of that module, `caller` and `main` included, passed every stage in the
+    direct check. This refusal is a missing input, not a defect of the mode.
+
+  The proof covers the listed subset only. The assembler, the linker, the
+  runtime and the hardware stay trusted. Native tests do not remove them from
+  the trusted base. The paragraph that starts "In work (October 5)" is
+  history.
+
+- [ ] **V07 — Remove the zero-extension premise from the ABI entry assumption** — `OPEN`, P1.
+  First follow-up after V06. `EvoIR.Asm.Proof.AbiEntry` binds each argument
+  register and stack slot to the zero-extended argument value. So the theorem
+  covers only entry states in which the upper 32 bits of each 32-bit argument
+  register and stack slot are zero. AAPCS64 does not require this of a
+  caller. Next action: state `AbiEntry` with arbitrary upper 32 bits for each
+  32-bit argument. Then prove that the checked code does not use these bits,
+  or make the checker refuse code that uses them. Exit: `checkPipeline_sound`
+  holds without the zero-extension premise, and the acceptance sweep of the
+  17 pilot modules and the two optimized cases passes again.
 
 ## Codegen quality track — next quarter
 
