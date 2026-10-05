@@ -1,0 +1,15 @@
+evp2
+registry p0.scalar.v1 ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9
+input 0000000000000000000000000000000000000000000000000000000000000000
+budget nodes=2/100000 epochs=1/1024 fuel=1/256 n=1 stop=saturated
+region poison_join/b1/0 root %v5 witnesses 1 seeds 1
+witness 0 poison_join/b1/0
+seed 0 %v4 bits<32> input c0
+node 0 n0 c1 source=before op=icmp.eq sort=bits<1> effect=pure attrs=- children=c0,c0
+node 1 n1 c2 source=derived op=const sort=bits<1> effect=pure attrs=value=1 children=-
+epoch 1
+rewrite 2 p0_010_icmp_eq_self c1 c2 c1 node:n0 node:n1 bind ?x:c0
+extract 0 c1 node:n1
+root c1
+endregion
+output 0000000000000000000000000000000000000000000000000000000000000000

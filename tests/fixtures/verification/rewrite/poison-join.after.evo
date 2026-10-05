@@ -1,0 +1,13 @@
+func @poison_join(%arg0: bits<32>) -> (bits<1>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>):
+    %v1 = const.bits<32> 0
+    %v2 = icmp.eq %v0, %v1
+    %v3 = uninitialized.bits<32>
+    cond_br %v2, ^b1(%v3), ^b1(%v0)
+
+^b1(%v4: bits<32>):
+    %v5 = const.bits<1> 1
+    ret %v5
+}
