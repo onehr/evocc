@@ -26,6 +26,7 @@ import EvoIR.Core.CallClosureTests
 import EvoIR.Core.CallShortRightTests
 import EvoIR.Core.CallMixedTests
 import EvoIR.Core.CallingLoopPairTests
+import EvoIR.Core.FunctionClosureTests
 
 /-!
 # The executable evaluator
@@ -326,13 +327,14 @@ def run (args : List String) : IO UInt32 := do
       let shortRight ← EvoIR.Core.Symbolic.CallShortRightTests.callShortRightSelfTest
       let mixedCalls ← EvoIR.Core.Symbolic.CallMixedTests.callMixedSelfTest
       let nestedCalls ← EvoIR.Core.Symbolic.CallingLoopPairTests.callingLoopPairSelfTest
+      let deepCalls ← EvoIR.Core.Symbolic.FunctionClosureTests.functionClosureSelfTest
       return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
         statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 &&
         calls == 0 && callControls == 0 && callLoops == 0 && callContexts == 0 &&
         sourceResumes == 0 && sourceFrontiers == 0 && callFrontiers == 0 &&
-        callResumptions == 0 && callClosures == 0 && shortRight == 0 && mixedCalls == 0 && nestedCalls == 0 then 0 else 1
+        callResumptions == 0 && callClosures == 0 && shortRight == 0 && mixedCalls == 0 && nestedCalls == 0 && deepCalls == 0 then 0 else 1
   | ["--check-core-loop-pair", sourcePath, targetPath, proposalPath] => do
       let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
         | IO.eprintln "CORE_PAIR_MALFORMED: source input"; return 2

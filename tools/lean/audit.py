@@ -224,8 +224,9 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Symbolic.cutResume",
     "EvoIR.Core.Symbolic.CallingLoopRelated",
     "EvoIR.Core.Transition.OpenCheckpoint",
-    "EvoIR.Core.Symbolic.CallerBoundary",
-    "EvoIR.Core.Symbolic.OpenCaller",
+    "EvoIR.Core.Symbolic.FunctionReturn",
+    "EvoIR.Core.Symbolic.FunctionBoundary",
+    "EvoIR.Core.Symbolic.ContextOpen",
     "EvoIR.Core.Symbolic.loopInputValues",
     "EvoIR.Core.Symbolic.CutpointRelated",
     "EvoIR.Core.Symbolic.CutExitAgreement",
@@ -299,6 +300,22 @@ RECORDED_DEFINITIONS = [
 ]
 
 CORE_PRIMITIVE_TARGETS = [
+    (
+        "EvoIR.Core.Transition.OpenCheckpoint.closeWithin",
+        "∀ {S : Type u_1} {T : Type u_2} {O : Type u_3} {sourceStep : S → Option S} "
+        "{targetStep : T → Option T} {sourceObserve : S → Option O} {targetObserve : T → Option O} "
+        "{boundary nextBoundary : S → T → Prop} {s : S} {t : T}, "
+        "(∀ (a : S) (b : T), boundary a b → EvoIR.Core.Transition.OpenCheckpoint "
+        "sourceStep targetStep sourceObserve targetObserve (fun x y => boundary x y ∨ nextBoundary x y) a b) → "
+        "boundary s t → EvoIR.Core.Transition.OpenCheckpoint "
+        "sourceStep targetStep sourceObserve targetObserve nextBoundary s t",
+    ),
+    (
+        "EvoIR.Core.Symbolic.openCallPair",
+        "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → "
+        "EvoIR.Core.Symbolic.CalleeProposals → Nat → "
+        "Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+    ),
     (
         "EvoIR.Core.Transition.OpenCheckpoint.close",
         "∀ {S : Type u_1} {T : Type u_2} {O : Type u_3} {sourceStep : S → Option S} "

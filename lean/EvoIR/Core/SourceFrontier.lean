@@ -96,4 +96,24 @@ def sourceCallFrontier {Γ : Var → Nat} (p : Source.Program) : (budget : Nat) 
         (fun next => sourceCallFrontier p budget next)
       return ⟨tail.val, source_cut_compose (chunk.property.relax false) tail.property⟩
 
+/-- Stop immediately before the final source return step. Open callee
+composition needs that real step, paired with the target return instruction;
+stopping after it would lose productivity on a return-only branch. -/
+def sourceOpenFrontier {Γ : Var → Nat} (p : Source.Program) : (budget : Nat) →
+    (cursor : SourceCursor Γ) → Option {tree // SourceCutRuns p false cursor tree}
+  | 0, _ => none
+  | budget+1, cursor => match cursor with
+    | ⟨.flow (.returned word), locals, .function none type :: rest⟩ =>
+      some ⟨.leaf ⟨.flow (.returned word), locals, .function none type :: rest⟩, by
+        intro σ fid context
+        exact ⟨_, .refl _, by simp, rfl⟩⟩
+    | ⟨.call callee type args, locals, k⟩ => some ⟨.leaf ⟨.call callee type args, locals, k⟩, by
+        intro σ fid context
+        exact ⟨_, .refl _, by simp, rfl⟩⟩
+    | cursor => do
+      let chunk ← sourceFrontierChunk p (budget+1) cursor
+      let tail ← chunk.val.bindChecked (next := SourceCutRuns p false)
+        (fun next => sourceOpenFrontier p budget next)
+      return ⟨tail.val, source_cut_compose (chunk.property.relax false) tail.property⟩
+
 end EvoIR.Core.Symbolic

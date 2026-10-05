@@ -117,6 +117,35 @@ theorem close (table : ∀ a b, boundary a b →
         next.elim (fun h => ⟨r, step, h⟩) (includeBoundary a' b')⟩
   exact simulation.sound (includeBoundary s t entry)
 
+/-- Close a function's own backedges while leaving its return boundary open
+for the suspended caller. Every internal cutpoint remains productive. -/
+theorem closeWithin (table : ∀ a b, boundary a b →
+      OpenCheckpoint sourceStep targetStep sourceObserve targetObserve
+        (fun x y => boundary x y ∨ nextBoundary x y) a b)
+    (entry : boundary s t) :
+    OpenCheckpoint sourceStep targetStep sourceObserve targetObserve nextBoundary s t := by
+  let joined := fun a b => ∃ r : S → T → Prop,
+    (∀ x y, r x y →
+      (∃ sf tf o, Reaches sourceStep x sf ∧ Reaches targetStep y tf ∧
+        sourceStep sf = none ∧ targetStep tf = none ∧
+        sourceObserve sf = some o ∧ targetObserve tf = some o) ∨
+      (∃ x' y', Relation.TransGen (Predecessor sourceStep) x' x ∧
+        Relation.TransGen (Predecessor targetStep) y' y ∧
+        (r x' y' ∨ boundary x' y' ∨ nextBoundary x' y'))) ∧ r a b
+  have included : ∀ a b, boundary a b → joined a b := by
+    intro a b h
+    obtain ⟨r, start, step⟩ := table a b h
+    exact ⟨r, step, start⟩
+  refine ⟨joined, included s t entry, ?_⟩
+  rintro a b ⟨r, step, h⟩
+  rcases step a b h with terminal | ⟨a', b', sp, tp, next⟩
+  · exact .inl terminal
+  · refine .inr ⟨a', b', sp, tp, ?_⟩
+    rcases next with inside | backedge | returned
+    · exact .inl ⟨r, step, inside⟩
+    · exact .inl (included a' b' backedge)
+    · exact .inr returned
+
 /-- The historical whole-suffix interface is a special case of open
 composition, so it need not maintain a second call-entry proof. -/
 theorem finish (fragment : OpenCheckpoint sourceStep targetStep sourceObserve targetObserve boundary s t)
