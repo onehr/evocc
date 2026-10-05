@@ -56,13 +56,9 @@ def immediateLines (v : Machine.Width) (d imm : Nat) : List Inst :=
 
 def lookupOffset (entries : List (Nat × Nat)) (key : Nat) : Option Nat := entries.lookup key
 
-def loadWidth : Machine.LoadKind → Machine.Width
-  | .w => .w | .x => .x
-
-def storeWidth : Machine.StoreKind → Machine.Width
-  | .w => .w | .x => .x
-
-/-- The template of one allocated instruction. `none` refuses the form. -/
+/-- The template of one allocated instruction. `none` refuses the form.
+Private frame objects (`frameSlot`, `load`, `store`) are refused: the
+soundness proof does not cover them yet. -/
 def instTemplate (hint : FrameHint) : Instruction → Option (List Inst)
   | .mov dst src => do
     let (d, dv) ← gprOf dst
@@ -131,18 +127,6 @@ def instTemplate (hint : FrameHint) : Instruction → Option (List Inst)
     let (m, mv) ← gprOf rhs
     if flags = .flags ∧ dv = w ∧ nv = w ∧ mv = w then some [.csel w (.r d) (.r n) (.r m) cond]
     else none
-  | .load _ dst base offset kind false => do
-    let (d, dv) ← gprOf dst
-    let (b, bv) ← gprOf base
-    if dv = loadWidth kind ∧ bv = .x then some [.ldr dv (.r d) (.r b) offset] else none
-  | .store _ src base offset kind false => do
-    let (s, sv) ← gprOf src
-    let (b, bv) ← gprOf base
-    if sv = storeWidth kind ∧ bv = .x then some [.str sv (.r s) (.r b) offset] else none
-  | .frameSlot dst origin _ _ => do
-    let (d, dv) ← gprOf dst
-    let offset ← lookupOffset hint.slots origin
-    if dv = .x then some [.addFromSp (.r d) offset] else none
   | .bl symbol _ _ => some [.bl symbol]
   | .spillStore slot src => do
     let (s, sv) ← gprOf src
