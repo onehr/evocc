@@ -32,4 +32,7 @@ import EvoIR.Proofs.Transfer
 import EvoIR.Proofs.GuardTransfer
 import EvoIR.Proofs.GuardRules
 import EvoIR.Proofs.Rules
+import EvoIR.Rewrite.Check
+import EvoIR.Rewrite.Soundness
+import EvoIR.Rewrite.Tests
 import EvoIR.Eval

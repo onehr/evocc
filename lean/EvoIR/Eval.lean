@@ -53,6 +53,7 @@ import EvoIR.MachinePrivateFiniteTests
 import EvoIR.MachinePrivateLoopTests
 import EvoIR.MachinePrivateGuardTests
 import EvoIR.MachinePrivateCallTests
+import EvoIR.Rewrite.Soundness
 
 /-!
 # The executable evaluator
@@ -401,11 +402,44 @@ def checkIRToPostSSA (inputs : StageInputs) : StageVerdict := Id.run do
   | none => .rejected s!"entry={function.name} no checked selection or SSA transport"
   | some _ => .accepted s!"entry={function.name} scope=evoir-to-post-ssa-mir"
 
-/-- The table of integrated stages, in pipeline order. To integrate V03, V04 or
-V05, add one row here. The compiler driver has a matching table. -/
+/-- The registry, the regions as `function/block/index` and the rule names of a
+certificate. An empty list is `-`. -/
+def rewriteSummary (cert : EvoIR.Rewrite.Certificate) : String :=
+  let names (items : List String) := if items.isEmpty then "-" else ",".intercalate items.eraseDups
+  let regions := cert.regions.map fun r => s!"{r.function}/{r.block}/{r.index}"
+  let rules := cert.regions.flatMap fun r => r.events.filterMap fun
+    | .rewrite e => some e.rule
+    | _ => none
+  s!"registry={cert.registry} regions={names regions} rules={names rules}"
+
+/-- V05: one rewrite step, `EvoIR.Rewrite.checkRewrite`, with the theorem
+`checkRewrite_refines`. The inputs are the EvoIR before the step, the EvoIR
+after the step and the `evp2` certificate. The source export gives only the
+entry name. A certificate that the reader does not decode is a rejection. The
+stage never falls back to the program before the step. -/
+def checkRewriteStep (inputs : StageInputs) : StageVerdict := Id.run do
+  let .ok (_, function) := stageEntry inputs | return .unsupported "source input"
+  let program (role : String) : Except String EvoIR.Core.IR.Program := do
+    let some text := inputs.lookup role | throw s!"missing {role} input"
+    EvoIR.Core.IR.Reader.readProgram text
+  let .ok before := program "before" | return .unsupported "EvoIR input before the rewrite"
+  let .ok after := program "after" | return .unsupported "EvoIR input after the rewrite"
+  let some text := inputs.lookup "certificate" | return .unsupported "missing certificate input"
+  match EvoIR.Rewrite.Reader.certificate text with
+  | .error message => .rejected s!"entry={function.name} certificate form not supported: {message}"
+  | .ok cert =>
+    if EvoIR.Rewrite.checkRewrite before after cert then
+      .accepted s!"entry={function.name} {rewriteSummary cert} scope=evoir-rewrite"
+    else
+      .rejected s!"entry={function.name} rewrite not confirmed or form not supported: {rewriteSummary cert}"
+
+/-- The table of integrated stages, in pipeline order. To integrate V03 or V04,
+add one row here. The compiler driver has a matching table. -/
 def stages : List Stage :=
   [ { id := "V01", name := "source-to-evoir", required := ["source", "ir"],
       optional := ["proposal"], check := checkSourceToIR }
+  , { id := "V05", name := "evoir-rewrite",
+      required := ["source", "before", "after", "certificate"], check := checkRewriteStep }
   , { id := "V02", name := "evoir-to-post-ssa-mir", required := ["source", "ir", "ssa", "postssa"],
       check := checkIRToPostSSA } ]
 
