@@ -332,7 +332,7 @@ def witnessOk (ctx : Ctx) (st : St) : Bool :=
       inst.op == nd.op && inst.results.map (·.id) == nd.result.toList &&
       inst.operands.length == nd.children.length &&
       (inst.operands.zip nd.children).all fun (v, c) => match operandClass ctx st k v with
-        | some oc => st.find oc == st.find c
+        | some oc => st.find oc == st.find c && st.sort oc == st.sort c
         | none => false
     | _, _ => false
 
@@ -343,7 +343,7 @@ def existing (ctx : Ctx) (st : St) (rootNode c : Nat) : Option Nat := do
   match ch with
   | .seed i =>
     let s ← ctx.region.seeds[i]?
-    guard (st.find i == c)
+    guard (st.find i == c && ctx.region.seeds.findIdx? (·.value == s.value) == some i)
     some s.value
   | .node k =>
     let nd ← st.nodes[k]?
