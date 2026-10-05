@@ -2,6 +2,78 @@
 use std::{fs, process::Command};
 
 #[test]
+fn machine_snapshots_use_actual_lowering_and_reject_backend_variants() {
+    let directory = std::env::temp_dir().join(format!(
+        "evocc-machine-snapshot-test-{}",
+        std::process::id()
+    ));
+    fs::create_dir(&directory).unwrap();
+    let path = directory.join("input.evo");
+    let input = "func @choose(%arg0: bits<32>) -> (bits<32>) cc = target_default\n    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }\n{\n^entry(%v0: bits<32>):\n    %v1 = const.bits<32> 19\n    br ^b1(%v0)\n\n^b1(%v2: bits<32>):\n    ret %v2\n}\n";
+    let parsed = evocc_evoir::parse_section9_module(input.as_bytes()).unwrap();
+    let input = evocc_evoir::render_module(&parsed);
+    fs::write(&path, &input).unwrap();
+    let digest = evocc_proof::sha256_hex(input.as_bytes());
+    let run = |target, hash: &str, flags: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_evo-ir-asm"))
+            .args([target, hash])
+            .arg(&path)
+            .args(flags)
+            .output()
+            .unwrap()
+    };
+    use evocc_mir::core_machine_export::{export_core_machine, CoreMachineMode};
+    let mut expected = evocc_mir::lower_module_for_profile(
+        evocc_mir::Target::Linux,
+        &parsed,
+        &|_| false,
+        evocc_mir::UbCheckProfile::Checked,
+    )
+    .unwrap();
+    let ssa = run("linux-aarch64", &digest, &["--emit=mir-ssa-json"]);
+    assert!(ssa.status.success(), "{ssa:?}");
+    assert_eq!(
+        ssa.stdout,
+        export_core_machine(&expected, CoreMachineMode::Ssa)
+            .unwrap()
+            .as_bytes()
+    );
+    for function in &mut expected.functions {
+        *function = evocc_mir::regalloc::out_of_ssa(function);
+    }
+    let lowered = run("linux-aarch64", &digest, &["--emit=mir-post-ssa-json"]);
+    assert!(lowered.status.success(), "{lowered:?}");
+    assert_eq!(
+        lowered.stdout,
+        export_core_machine(&expected, CoreMachineMode::PostSsa)
+            .unwrap()
+            .as_bytes()
+    );
+    assert_ne!(ssa.stdout, lowered.stdout);
+    for flags in [
+        vec!["--emit=mir-ssa-json", "--ub-checks=unchecked"],
+        vec!["--emit=mir-ssa-json", "--isel-opt=constants"],
+        vec!["--emit=mir-post-ssa-json", "--retain-dead-computations"],
+        vec!["--emit=mir-post-ssa-json", "--dce-report"],
+        vec!["--emit=mir-ssa-json", "--emit=mir-post-ssa-json"],
+    ] {
+        let result = run("linux-aarch64", &digest, &flags);
+        assert_eq!(result.status.code(), Some(2), "{result:?}");
+        assert!(result.stdout.is_empty());
+    }
+    for (target, hash) in [
+        ("darwin-arm64", digest.as_str()),
+        ("linux-aarch64", "incorrect"),
+    ] {
+        let result = run(target, hash, &["--emit=mir-ssa-json"]);
+        assert_eq!(result.status.code(), Some(2));
+        assert!(result.stdout.is_empty());
+    }
+    assert_eq!(fs::read_to_string(path).unwrap(), input);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn control_selection_recovers_late_branch_and_same_input_interval() {
     let directory =
         std::env::temp_dir().join(format!("evocc-ir-control-test-{}", std::process::id()));

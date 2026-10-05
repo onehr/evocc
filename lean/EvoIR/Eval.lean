@@ -33,6 +33,10 @@ import EvoIR.Core.SourceTargetCheckTests
 import EvoIR.Core.PrivateStorageTests
 import EvoIR.Core.PrivateLoopTests
 import EvoIR.Core.PrivateCallTests
+import EvoIR.MachineReader
+import EvoIR.MachineExecution
+import EvoIR.MachineReaderTests
+import EvoIR.MachineExecutionTests
 
 /-!
 # The executable evaluator
@@ -299,11 +303,12 @@ def selfTest : IO UInt32 := do
 /-! ## Entry point -/
 
 def usage : String :=
-  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo> | evoir-sem --check-core-leaf-pair <source.json> <target.evo>"
+  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-mir <machine.json> | evoir-sem --run-core-mir <machine.json> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo> | evoir-sem --check-core-leaf-pair <source.json> <target.evo>"
 
 def run (args : List String) : IO UInt32 := do
   match args with
   | ["--selftest"] => do
+      EvoIR.Machine.Reader.selfTest
       let arithmetic ← selfTest
       let source ← EvoIR.Core.Source.readerSelfTest
       let wellFormed ← EvoIR.Core.Source.wellFormedSelfTest
@@ -392,6 +397,41 @@ def run (args : List String) : IO UInt32 := do
         | IO.eprintln "CORE_PAIR_REFUSED: no proved correspondence for this complete pair"; return 1
       IO.println "PROVED_PILOT_PAIR entry=abs arguments=all-bits32 scope=source-to-evoir backend=UNPROVED release=UNVERIFIED"
       return 0
+  | ["--read-core-mir", input] => do
+      match EvoIR.Machine.Reader.readProgram (← IO.FS.readFile input) with
+      | .error message => IO.eprintln s!"CORE_MIR_REFUSED: {message}"; return 2
+      | .ok (mode, p) =>
+        IO.println s!"DECODED_NOT_VERIFIED mode={reprStr mode} functions={p.functions.length}"
+        return 0
+  | "--run-core-mir" :: input :: entry :: limit :: args => do
+      let some fuel := limit.toNat? | IO.eprintln "invalid step limit"; return 2
+      let .ok (mode, p) := EvoIR.Machine.Reader.readProgram (← IO.FS.readFile input)
+        | IO.eprintln "malformed core machine input"; return 2
+      let some f := p.functions.find? (·.name == entry)
+        | IO.eprintln "missing machine entry"; return 2
+      let some b := f.blocks.find? (·.id == 0)
+        | IO.eprintln "missing machine entry block"; return 2
+      if args.length != b.args.length then IO.eprintln "argument count mismatch"; return 2
+      let values := (args.zip b.args).mapM fun (arg, param) => do
+        let w ← param.class.width
+        let n ← ofHex arg
+        if n < 2^w.bits then some (EvoIR.Machine.Value.int (BitVec.ofNat 64 n)) else none
+      let some values := values | IO.eprintln "invalid or out-of-width argument bits"; return 2
+      let .ok start := EvoIR.Machine.initial p entry values
+        | IO.eprintln "machine entry refused"; return 2
+      match (EvoIR.Machine.runSteps mode p fuel start).control with
+      | .halted (.ok results) =>
+        let some bits := results.mapM (fun v => match v with
+          | .int b => some (toHex b.toNat) | _ => none)
+          | IO.eprintln "pointer result outside Core entry"; return 2
+        IO.println s!"EXECUTED_NOT_VERIFIED returns={bits}"
+        return 0
+      | .halted (.error (.diagnostic code)) =>
+        IO.println s!"EXECUTED_NOT_VERIFIED diagnostic=E{code}"
+        return 1
+      | .halted (.error (.malformed message)) =>
+        IO.eprintln s!"CORE_MIR_MACHINE_MALFORMED: {message}"; return 2
+      | _ => IO.println "STEP_LIMIT_NOT_VERIFICATION"; return 3
   | ["--read-core-ir", input] => do
       match EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile input) with
       | .error message => IO.eprintln s!"CORE_IR_REFUSED: {message}"; return 2

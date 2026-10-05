@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 fn emit(args: &[String]) -> Result<String, String> {
     if args.len() < 3 {
-        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo [--ub-checks=checked|unchecked] [--frame-opt=LIST] [--isel-opt=constants,local,extensions,controls] [--regalloc-opt=copy-hints,reload-reuse] [--retain-dead-computations] [--dce-report]".into());
+        return Err("usage: evo-ir-asm (darwin-arm64|linux-aarch64) SHA256 INPUT.evo [--emit=asm|mir-ssa-json|mir-post-ssa-json] [--ub-checks=checked|unchecked] [--frame-opt=LIST] [--isel-opt=constants,local,extensions,controls] [--regalloc-opt=copy-hints,reload-reuse] [--retain-dead-computations] [--dce-report]".into());
     }
     let mut profile = evocc_mir::UbCheckProfile::Checked;
     let mut frame = evocc_mir::emit::FrameVariants::OFF;
@@ -13,13 +13,22 @@ fn emit(args: &[String]) -> Result<String, String> {
     let mut allocation = evocc_mir::generic::allocation::AllocationOptions::default();
     let mut retain_dead = false;
     let mut report = false;
+    let mut machine_mode = None;
     let mut seen = std::collections::BTreeSet::new();
     for flag in &args[3..] {
         let key = flag.split('=').next().unwrap_or(flag);
         if !seen.insert(key) {
             return Err("duplicate backend option".into());
         }
-        if let Some(value) = flag.strip_prefix("--ub-checks=") {
+        if let Some(value) = flag.strip_prefix("--emit=") {
+            use evocc_mir::core_machine_export::CoreMachineMode;
+            machine_mode = match value {
+                "asm" => None,
+                "mir-ssa-json" => Some(CoreMachineMode::Ssa),
+                "mir-post-ssa-json" => Some(CoreMachineMode::PostSsa),
+                _ => return Err("unsupported output kind".into()),
+            };
+        } else if let Some(value) = flag.strip_prefix("--ub-checks=") {
             profile = evocc_mir::UbCheckProfile::parse(value)?;
         } else if let Some(value) = flag.strip_prefix("--frame-opt=") {
             frame = evocc_mir::emit::FrameVariants::parse(value)?;
@@ -48,6 +57,34 @@ fn emit(args: &[String]) -> Result<String, String> {
     evocc_evoir::validate_module(&module).map_err(|e| e.to_string())?;
     if evocc_evoir::render_module(&module).as_bytes() != bytes {
         return Err("codegen input is not canonical EvoIR".into());
+    }
+    if let Some(mode) = machine_mode {
+        // This export exposes the existing, always-on native transformations.
+        // It must not silently choose a diagnostic or optional optimizer path.
+        if target != evocc_mir::Target::Linux
+            || profile != evocc_mir::UbCheckProfile::Checked
+            || seen
+                .iter()
+                .any(|key| !matches!(*key, "--emit" | "--ub-checks"))
+        {
+            return Err(
+                "Core machine export requires checked Linux and no backend variants".into(),
+            );
+        }
+        let keep = evocc_mir::emitted_functions(&module);
+        let mut lowered = evocc_mir::lower_module_for_profile(
+            target,
+            &module,
+            &|name| !keep.contains(name),
+            profile,
+        )
+        .map_err(|e| format!("{e:?}"))?;
+        if mode == evocc_mir::core_machine_export::CoreMachineMode::PostSsa {
+            for function in &mut lowered.functions {
+                *function = evocc_mir::regalloc::out_of_ssa(function);
+            }
+        }
+        return evocc_mir::core_machine_export::export_core_machine(&lowered, mode);
     }
     if report {
         let keep = evocc_mir::emitted_functions(&module);

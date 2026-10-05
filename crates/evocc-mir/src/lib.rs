@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 pub mod allocverify;
+pub mod core_machine_export;
 pub mod emit;
 mod floating;
 pub mod generic;
