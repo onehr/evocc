@@ -727,20 +727,33 @@ evocc --emit=asm --proof-required=NEW_DIR --proof-checker=lean/.lake/build/bin/e
       --core-entry=abs -O0 -fno-builtin tests/fixtures/verification/musl-abs.c
 ```
 
-The driver exports the typed source, EvoIR, SSA EvoMIR and post-SSA EvoMIR of
-the same compilation into `NEW_DIR/inputs/`. The compiled Lean checker then
-runs each integrated stage for each `--core-entry`
-(`evoir-sem --check-stage V01|V02 ROLE=PATH ...`). Every function in the output
-must be a selected entry. A loop entry needs its untrusted checkpoint proposal,
-`--proof-proposal=NAME=PATH`. The driver writes `NEW_DIR/output.s`,
-`NEW_DIR/record.json` and the assembly on standard output only if every
-integrated stage accepts. Otherwise it writes no output and exits with 3 (a stage
-rejected), 4 (a proof input is missing, changed or not readable), 5 (the checker
-is missing, failed or timed out) or 6 (a construct is outside `core-v1`).
+The driver exports the typed source, EvoIR, SSA EvoMIR, post-SSA EvoMIR and the
+register allocation of the same compilation into `NEW_DIR/inputs/`. The
+compiled Lean checker then runs each integrated stage for each `--core-entry`
+(`evoir-sem --check-stage V01|V05|V02|V03 ROLE=PATH ...`), in this order:
 
-The record names each stage, its result, the digests of its input files and the
-checker digest. At present it says **"checked to post-SSA EvoMIR, not to final
-assembly"**. Register allocation and assembly emission are not checked yet, so
+| Stage | Checks | Reads |
+| --- | --- | --- |
+| V01 | typed source to EvoIR | the source and the EvoIR before any rewrite |
+| V05 | each rewrite step (only with `-Oeq-scalar`) | the EvoIR before and after the step and its certificate |
+| V02 | EvoIR to SSA and post-SSA EvoMIR | the EvoIR after the last rewrite and both EvoMIR files |
+| V03 | register allocation | the same post-SSA file as V02 and the allocation export |
+
+Every function in the output must be a selected entry. A loop entry needs its
+untrusted checkpoint proposal, `--proof-proposal=NAME=PATH`. `-Oeq-scalar` needs
+`--eq-checker-sha256`; the Rust certificate checker still runs on each step. The
+driver writes `NEW_DIR/output.s`, `NEW_DIR/record.json` and the assembly on
+standard output only if every integrated stage accepts. Otherwise it writes no
+output and exits with 3 (a stage rejected, or a rewrite certificate form that
+the Lean checker does not support), 4 (a proof input is missing, changed or not
+readable), 5 (the checker is missing, failed or timed out) or 6 (a construct is
+outside `core-v1`). There is no fallback to the program without the rewrite.
+
+The record names each stage, its result, the digests of its input files, the
+Lean checker digest and, with `-Oeq-scalar`, the Rust certificate checker
+digest. Its digest chain shows that each pair of adjacent stages reads the same
+bytes. At present it says **"checked to allocated EvoMIR, not to final
+assembly"**. Frame layout and assembly emission (V04) are not checked yet, so
 this output is not a verified binary. Ordinary compilation without the flag is
 unchanged and gets no proof label.
 
@@ -756,17 +769,19 @@ Faithful export of the typed source and machine snapshots remains a boundary.
 The selected semantic definitions must also match the intended compiler
 contract. Tests help check these connections; they do not prove them.
 
-The present result does **not** prove register allocation, physical stack-frame
-layout, prologue or epilogue code, assembly emission, linking, runtime libraries
-or processor execution. The existing allocation verifier and native tests do
-not close those proof obligations. There is no end-to-end source-to-native or
-verified-release claim yet. As of 2026-10-05, register allocation (V03), frame
-layout and assembly (V04), rewrite composition (V05) and proof-required release
-acceptance (V06) are in work. None of them is complete. See the
+The present result does **not** prove physical stack-frame layout, prologue or
+epilogue code, assembly emission, linking, runtime libraries or processor
+execution. Native tests do not close those proof obligations. There is no
+end-to-end source-to-native or verified-release claim yet. As of 2026-10-05,
+register allocation (V03) is proved, and V03 and the rewrite checker (V05) are
+integrated in proof-required mode. Frame layout and assembly (V04) and
+proof-required release acceptance (V06) are in work. The composition of V05
+with V04 is open. See the
 [verification plan](docs/lean-plan.md#first-public-release-verification).
 
-The P0 and guard rewrite proofs above are a separate result. Their composition
-with this whole-function compilation chain remains open. Neither layer proves
+The P0 and guard rewrite proofs above are a separate result. The V05 checker
+composes an accepted rewrite step with the source-to-EvoIR theorem. Its
+composition to final assembly waits for V04. Neither layer proves
 that an optimization improves code size or speed. A valid program can also be
 refused when proof search lacks a suitable correspondence or exhausts its
 budget. Refusal is not permission to label an unchecked result as verified.

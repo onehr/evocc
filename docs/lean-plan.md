@@ -6,12 +6,13 @@ Plan revision 1, **2026-10-04**; inspected implementation `19bb5f7d`.
 The owner requires a practical compiler-correctness path before the first public
 version, followed by verified rewrites on that path. This section is the current
 implementation plan; the scalar-proof plan below remains historical evidence.
-**Current state (2026-10-05): V00, V01 and V02 are complete in the frozen
-`core-v1` scope. V03, V04, V05 and V06 are in work. The composed theorem
-reaches post-SSA EvoMIR. No source-to-assembly theorem or release acceptance
-is claimed.** The driver mode `--proof-required` (V06, in work) runs the V01
-and V02 checkers. Its record says "checked to post-SSA EvoMIR, not to final
-assembly".
+**Current state (2026-10-05): V00, V01, V02 and V03 are complete in the frozen
+`core-v1` scope. V05 is proved and integrated; its composition with V04 is
+open. V04 and V06 are in work. The composed theorem reaches allocated EvoMIR.
+No source-to-assembly theorem or release acceptance is claimed.** The driver
+mode `--proof-required` (V06, in work) runs the V01, V05 (with `-Oeq-scalar`),
+V02 and V03 checkers. Its record says "checked to allocated EvoMIR, not to
+final assembly".
 Execution is tracked only in [TODO.md](../TODO.md#first-public-release-verification).
 
 ### Release outcome and boundary
