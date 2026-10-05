@@ -270,3 +270,90 @@ theorem prologue_run (fn : Nat) (h : FrameHint) (layout : LayoutOk h) (t : Asm.S
     exact hkeep2 a ha
 
 end EvoIR.Asm.Proof
+
+namespace EvoIR.Asm.Proof
+
+open EvoIR.Alloc
+open EvoIR.Asm.Check
+open Core.Source (Fault)
+
+/-- The registers after the restores of the epilogue. -/
+def restored (h : FrameHint) (S : Nat) (mem : Nat → BitVec 8) (regs : Nat → BitVec 64) :
+    Nat → BitVec 64 := fun r =>
+  match lookupOffset h.saved r with
+  | some off => load64 mem (S + off)
+  | none => regs r
+
+/-- The epilogue run from the body stack pointer `S`. -/
+theorem epilogue_run (fn pos : Nat) (h : FrameHint) (layout : LayoutOk h) (t : Asm.State) (S : Nat)
+    (hc : t.control = .running fn pos) (hsp : t.sp = BitVec.ofNat 64 S) (h16 : S % 16 = 0)
+    (low : t.low ≤ S) (top : S + h.size + 16 ≤ t.high) (high : t.high < 2^64) :
+    ∃ t', runFrom fn pos (epilogue h) t = .ok t' ∧
+      t'.sp = BitVec.ofNat 64 (S + h.size + 16) ∧ t'.flags = t.flags ∧ t'.low = t.low ∧
+      t'.high = t.high ∧ t'.memory = t.memory ∧
+      t'.regs = update (update (restored h S t.memory t.regs) 29 (load64 t.memory (S + h.size))) 30
+        (load64 t.memory (S + h.size + 8)) := by
+  obtain ⟨t1, hrun1, hmem1, hsp1, hfl1, hlow1, hhigh1, hregs1⟩ :=
+    restores_run fn S h.saved pos t hsp h16 high
+      (fun x m => by have := layout.save x.1 x.2 m; omega) layout.savedKeys
+  let F := S + h.size
+  have hF : F % 16 = 0 := by have := layout.size16; omega
+  let sizeCode : List Inst := if h.size = 0 then [] else [.addSp h.size]
+  let t2 : Asm.State := { t1 with
+    sp := BitVec.ofNat 64 F
+    control := Control.running fn (pos + h.saved.length + sizeCode.length) }
+  have hsize : runFrom fn (pos + h.saved.length) sizeCode t1 = .ok t2 := by
+    have c1 := runFrom_control fn _ pos t t1 hc hrun1
+    by_cases z : h.size = 0
+    · simp only [sizeCode, z, if_true, runFrom, Except.ok.injEq]
+      simp only [t2, sizeCode, z, if_true, List.length_nil, Nat.add_zero, F]
+      simp only [List.length_map] at c1
+      rw [← c1, ← hsp, ← hsp1]
+    · have hadd : BitVec.ofNat 64 S + BitVec.ofNat 64 h.size = BitVec.ofNat 64 F :=
+        add_nat _ _ (by omega)
+      simp only [sizeCode, z, if_false, runFrom, effect, bind, Except.bind, pure, Except.pure]
+      simp only [t2, sizeCode, z, if_false, List.length_cons, List.length_nil, hsp1, hsp, hadd]
+  have hbase : t2.baseValue .sp = .ok t2.sp := by
+    have : t2.sp.toNat % 16 = 0 := by
+      simp only [t2, BitVec.toNat_ofNat]
+      rw [Nat.mod_eq_of_lt (a := F) (b := 2^64) (by omega)]; exact hF
+    simp [State.baseValue, this]
+  have eight : (t2.sp + 8).toNat = F + 8 := by
+    simp only [t2, BitVec.toNat_add, BitVec.toNat_ofNat]
+    have : (8 : BitVec 64).toNat = 8 := rfl
+    omega
+  have spnat : t2.sp.toNat = F := by simp only [t2, BitVec.toNat_ofNat]; omega
+  have hmem2 : t2.memory = t.memory := hmem1
+  let t3 : Asm.State := {((t2.set .x (.r 29) (load64 t.memory F)).set .x (.r 30)
+      (load64 t.memory (F + 8))) with sp := (BitVec.ofNat 64 (F + 16))}
+  have hldp : effect t2 (.ldpPost 29 30 16) = .ok t3 := by
+    simp only [effect, hbase, bind, Except.bind]
+    rw [load_in t2 _ _ (by rw [spnat]; simp [t2]; omega) (by rw [spnat]; simp [t2]; omega), spnat,
+      load_in t2 _ _ (by rw [eight]; simp [t2]; omega) (by rw [eight]; simp [t2]; omega), eight,
+      hmem2]
+    simp only [pure, Except.pure, t3]
+    congr 2
+    simp only [t2]
+    have : BitVec.ofInt 64 (16 : Int) = BitVec.ofNat 64 16 := rfl
+    rw [this, add_nat _ _ (by omega)]
+  refine ⟨{t3 with control := (Control.running fn (pos + h.saved.length + sizeCode.length + 1))}, ?_, ?_,
+    ?_, ?_, ?_, ?_, ?_⟩
+  · have : epilogue h = (h.saved.map (fun x => Inst.ldr .x (.r x.1) .sp (x.2 : Int)) ++ sizeCode) ++
+        [.ldpPost 29 30 16] := by
+      simp only [epilogue, sizeCode, List.append_assoc]
+    rw [this, runFrom_append, runFrom_append, hrun1]
+    simp only [bind, Except.bind, List.length_map]
+    rw [hsize]
+    simp only [runFrom, hldp, bind, Except.bind, List.length_append, List.length_map, Nat.add_assoc]
+  · rfl
+  · simp only [t3, t2, State.set]; exact hfl1
+  · simp only [t3, t2, State.set]; exact hlow1
+  · simp only [t3, t2, State.set]; exact hhigh1
+  · simp only [t3, t2, State.set]; exact hmem1
+  · simp only [t3, t2, State.set, view]
+    congr 2
+    funext r
+    rw [hregs1 r]
+    rfl
+
+end EvoIR.Asm.Proof
