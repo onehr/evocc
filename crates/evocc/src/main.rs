@@ -33,6 +33,7 @@ use evocc_types::{EvoIRType, Region, TargetDataLayout};
 mod core_export;
 mod diagnostics;
 mod dwarf;
+mod proof_required;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DriverMode {
@@ -124,6 +125,8 @@ struct DriverOptions {
     macro_actions: Vec<MacroAction>,
     standard_includes: bool,
     core_entries: Vec<String>,
+    /// `--proof-required=NEW_DIR`: no output unless every integrated stage accepts.
+    proof: Option<proof_required::ProofOptions>,
     optimize_scalar_evoir: bool,
     opt_passes: Vec<String>,
     pass_report: Option<std::path::PathBuf>,
@@ -294,6 +297,7 @@ fn main() -> ExitCode {
         eprintln!("       evocc --emit=evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --emit=core-c-hir --core-entry=NAME -O0 -fno-builtin <file> (source input only, not a proof)");
         eprintln!("       evocc --emit=asm [--target={SUPPORTED_TARGET}] <file>");
+        eprintln!("       evocc --emit=asm --proof-required=NEW_DIR --core-entry=NAME -O0 -fno-builtin [--proof-checker=PATH --proof-checker-sha256=SHA256 --proof-timeout-ms=N --proof-proposal=NAME=PATH] <file>");
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --check [--error-format=text|json] <file>");
         eprintln!("       evocc --explain E3xxx");
@@ -367,6 +371,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut macro_actions = Vec::new();
     let mut standard_includes = true;
     let mut core_entries = Vec::new();
+    let mut proof_arguments = proof_required::ProofArguments::default();
     let mut optimize_scalar_evoir = false;
     let mut opt_passes = Vec::new();
     let mut pass_report = None;
@@ -422,6 +427,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 }
                 core_entries.push(name.to_owned());
             }
+            _ if arg.starts_with("--proof-") => proof_arguments.parse(arg)?,
             "--emit=evoir" => set_mode(&mut mode, DriverMode::EmitEvoIr)?,
             "--emit=asm" => set_mode(&mut mode, DriverMode::EmitAsm)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
@@ -771,11 +777,25 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, --emit=asm, or --interpret-evoir is required"
                 .to_string()
         })?;
+    let proof = proof_arguments.admit(proof_required::Admission {
+        emit_asm: mode == DriverMode::EmitAsm,
+        entries: &core_entries,
+        baseline: optimization == 0 && !standard_builtins,
+        unchanged_backend: !optimize_scalar_evoir
+            && opt_passes.is_empty()
+            && pass_report.is_none()
+            && eq_proof_dir.is_none()
+            && !eq_options
+            && !frame_variants_selected
+            && !selection_variants_selected
+            && !allocation_variants_selected
+            && codegen.ub_checks == evocc_mir::UbCheckProfile::Checked,
+    })?;
     if mode == DriverMode::EmitCoreCHir {
         if core_entries.is_empty() || optimization != 0 || standard_builtins {
             return Err("Core C-HIR export requires --core-entry=NAME, -O0 and -fno-builtin; it is not a compilation proof".into());
         }
-    } else if !core_entries.is_empty() {
+    } else if !core_entries.is_empty() && proof.is_none() {
         return Err("--core-entry requires --emit=core-c-hir".into());
     }
     if optimize_scalar_evoir
@@ -855,6 +875,7 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         macro_actions,
         standard_includes,
         core_entries,
+        proof,
         optimize_scalar_evoir,
         opt_passes,
         pass_report,
@@ -1461,7 +1482,12 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                     };
                     match action {
                         ParsedAction::EmitEvoIr => emit_evoir(&module),
-                        ParsedAction::EmitAsm => emit_asm(options, &module, resolved),
+                        ParsedAction::EmitAsm => match &options.proof {
+                            Some(proof) => {
+                                proof_required::run(options, proof, &src, &unit, &module, resolved)
+                            }
+                            None => emit_asm(options, &module, resolved),
+                        },
                         ParsedAction::InterpretEvoIr => interpret_evoir(options, &module),
                         _ => unreachable!("matched EvoIR action"),
                     }
@@ -1646,6 +1672,23 @@ fn emit_evoir(module: &Module) -> ExitCode {
 /// Lowering refusals carry their own EvoMIR codes; the remaining stops are
 /// driver-level reports of an internal stage that declined.
 fn emit_asm(options: &DriverOptions, module: &Module, unit: &evocc_chir::CHirUnit<'_>) -> ExitCode {
+    let text = match assemble(options, module, unit) {
+        Ok(text) => text,
+        Err(code) => return code,
+    };
+    let mut stdout = std::io::stdout().lock();
+    if write!(stdout, "{text}").is_err() {
+        return ExitCode::from(1);
+    }
+    ExitCode::SUCCESS
+}
+
+/// The assembly text of `--emit=asm`. An error is already reported.
+fn assemble(
+    options: &DriverOptions,
+    module: &Module,
+    unit: &evocc_chir::CHirUnit<'_>,
+) -> Result<String, ExitCode> {
     let target = match options.target {
         DriverTarget::Aarch64UnknownLinuxGnu => MirTarget::Linux,
     };
@@ -1676,7 +1719,7 @@ fn emit_asm(options: &DriverOptions, module: &Module, unit: &evocc_chir::CHirUni
                     ),
                 ),
             }
-            return ExitCode::from(1);
+            return Err(ExitCode::from(1));
         }
     };
     if options.debug_types {
@@ -1690,15 +1733,11 @@ fn emit_asm(options: &DriverOptions, module: &Module, unit: &evocc_chir::CHirUni
                     "E0004",
                     &format!("debug-type-emission: {error}"),
                 );
-                return ExitCode::from(1);
+                return Err(ExitCode::from(1));
             }
         }
     }
-    let mut stdout = std::io::stdout().lock();
-    if write!(stdout, "{text}").is_err() {
-        return ExitCode::from(1);
-    }
-    ExitCode::SUCCESS
+    Ok(text)
 }
 
 fn interpret_evoir(options: &DriverOptions, module: &Module) -> ExitCode {
