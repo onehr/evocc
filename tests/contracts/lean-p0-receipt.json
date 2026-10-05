@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "8b7d16d0b793a0b760c624217e050db894a7d7a6",
+    "lean_commit": "8afff09451aa5d274df0ea1c82b45aaf69a3d1f9",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -57,6 +57,7 @@
       "lean/EvoIR/Core/CheckpointSimulation.lean",
       "lean/EvoIR/Core/CheckpointTests.lean",
       "lean/EvoIR/Core/ConstantBranch.lean",
+      "lean/EvoIR/Core/ConstantClosureTests.lean",
       "lean/EvoIR/Core/ContextCallSpan.lean",
       "lean/EvoIR/Core/Correspondence.lean",
       "lean/EvoIR/Core/CorrespondenceTests.lean",
@@ -299,6 +300,10 @@
       "lean/EvoIR/Core/ConstantBranch.lean": [
         "EvoIR.Core.BranchExpression"
       ],
+      "lean/EvoIR/Core/ConstantClosureTests.lean": [
+        "EvoIR.Core.FunctionClosure",
+        "EvoIR.Core.CutpointInput"
+      ],
       "lean/EvoIR/Core/ContextCallSpan.lean": [
         "EvoIR.Core.FunctionContext",
         "EvoIR.Core.CallFrontierPair"
@@ -465,7 +470,8 @@
         "EvoIR.Core.ReturnCorrespondence"
       ],
       "lean/EvoIR/Core/SourceCallTests.lean": [
-        "EvoIR.Core.CallCorrespondence"
+        "EvoIR.Core.CallCorrespondence",
+        "EvoIR.Core.FunctionClosure"
       ],
       "lean/EvoIR/Core/SourceCutpoint.lean": [
         "EvoIR.Core.StatementDiagram",
@@ -637,7 +643,8 @@
         "EvoIR.Core.CallShortRightTests",
         "EvoIR.Core.CallMixedTests",
         "EvoIR.Core.CallingLoopPairTests",
-        "EvoIR.Core.FunctionClosureTests"
+        "EvoIR.Core.FunctionClosureTests",
+        "EvoIR.Core.ConstantClosureTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -16068,6 +16075,26 @@
   "compilation_core_primitives": {
     "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions, conditional CFGs, checked cyclic diagrams, div/rem, finite calls and private-leaf substitution. Full core-v1 constructor/call/loop composition remains incomplete. No proof of source export, input-validation execution safety, backend compilation or verified-release acceptance",
     "targets": [
+      {
+        "theorem": "EvoIR.Core.Symbolic.Term.constant_value_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} (term : EvoIR.Core.Symbolic.Term Γ n) (value : BitVec n), term.constantValue = some value → EvoIR.Core.Symbolic.denoteTerm σ term = value",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.Term.normalize_value_sound",
+        "proposition": "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} (term : EvoIR.Core.Symbolic.Term Γ n), EvoIR.Core.Symbolic.denoteTerm σ term.normalizeValue = EvoIR.Core.Symbolic.denoteTerm σ term",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
       {
         "theorem": "EvoIR.Core.Transition.OpenCheckpoint.closeWithin",
         "proposition": "∀ {S : Type u_1} {T : Type u_2} {O : Type u_3} {sourceStep : S → Option S} {targetStep : T → Option T} {sourceObserve : S → Option O} {targetObserve : T → Option O} {boundary nextBoundary : S → T → Prop} {s : S} {t : T}, (∀ (a : S) (b : T), boundary a b → EvoIR.Core.Transition.OpenCheckpoint sourceStep targetStep sourceObserve targetObserve (fun x y => boundary x y ∨ nextBoundary x y) a b) → boundary s t → EvoIR.Core.Transition.OpenCheckpoint sourceStep targetStep sourceObserve targetObserve nextBoundary s t",

@@ -301,6 +301,37 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Source.checked_identifier_step",
+        "∀ (program : EvoIR.Core.Source.Program) (callees : List EvoIR.Core.Source.Function) (fuel : Nat) "
+        "(state : EvoIR.Core.Source.LocalState) (locals : EvoIR.Core.Source.Locals) (type : EvoIR.Core.Source.IntType) "
+        "(id : Nat) (facts : EvoIR.Core.Source.ExpressionFacts) (continuation : List EvoIR.Core.Source.Frame) "
+        "(functionId : Nat), "
+        "EvoIR.Core.Source.checkExpr callees fuel state (EvoIR.Core.Source.Expr.ident type id) = Except.ok facts → "
+        "state.Realizes locals → ∃ value, value.type = type ∧ EvoIR.Core.Source.Step program "
+        "{ control := EvoIR.Core.Source.Control.expression (EvoIR.Core.Source.Expr.ident type id), locals := locals, "
+        "continuation := continuation, functionId := functionId } "
+        "{ control := EvoIR.Core.Source.Control.value value, locals := locals, continuation := continuation, "
+        "functionId := functionId }",
+    ),
+    (
+        "EvoIR.Core.Source.checked_binary_continuation_safe",
+        "∀ (callees : List EvoIR.Core.Source.Function) (fuel : Nat) (static : EvoIR.Core.Source.LocalState) "
+        "(state : EvoIR.Core.Source.State) (type : EvoIR.Core.Source.IntType) (op : EvoIR.Core.Source.Binary) "
+        "(left right : EvoIR.Core.Source.Expr) (facts : EvoIR.Core.Source.ExpressionFacts) (a b : EvoIR.Core.Source.Value), "
+        "EvoIR.Core.Source.checkExpr callees fuel static (EvoIR.Core.Source.Expr.binary type op left right) = Except.ok facts → "
+        "a.type = left.type → b.type = right.type → EvoIR.Core.Source.SafeValueControl type "
+        "(EvoIR.Core.Source.resumeValue state (EvoIR.Core.Source.Frame.binaryRight EvoIR.Core.Source.Value type op a) b).control",
+    ),
+    (
+        "EvoIR.Core.Source.unary_continuation_safe",
+        "∀ (state : EvoIR.Core.Source.State) (op : EvoIR.Core.Source.Unary) (value : EvoIR.Core.Source.Value), "
+        "EvoIR.Core.Source.SafeValueControl "
+        "(if (op == EvoIR.Core.Source.Unary.not) = true then EvoIR.Core.Source.IntType.int else value.type) "
+        "(EvoIR.Core.Source.resumeValue state "
+        "(EvoIR.Core.Source.Frame.unary EvoIR.Core.Source.Value "
+        "(if (op == EvoIR.Core.Source.Unary.not) = true then EvoIR.Core.Source.IntType.int else value.type) op) value).control",
+    ),
+    (
         "EvoIR.Core.Symbolic.Term.constant_value_sound",
         "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} "
         "(term : EvoIR.Core.Symbolic.Term Γ n) (value : BitVec n), "

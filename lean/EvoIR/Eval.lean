@@ -28,6 +28,7 @@ import EvoIR.Core.CallMixedTests
 import EvoIR.Core.CallingLoopPairTests
 import EvoIR.Core.FunctionClosureTests
 import EvoIR.Core.ConstantClosureTests
+import EvoIR.Core.ValidatorState
 
 /-!
 # The executable evaluator

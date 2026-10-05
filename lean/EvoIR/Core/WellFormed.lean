@@ -149,6 +149,42 @@ def checkExpr (callees : List Function) : Nat → LocalState → Expr → Except
         return accessUnion accumulated current (union accumulated.initialized current.initialized))
         ⟨s.initialized, [], []⟩
 
+/-- Extract the actual independent validator's identifier premises. This is
+not yet an execution theorem: a runtime store must realize these facts. -/
+theorem checked_identifier (callees : List Function) (fuel : Nat) (s : LocalState)
+    (type : IntType) (id : Nat) (facts : ExpressionFacts)
+    (accepted : checkExpr callees fuel s (.ident type id) = .ok facts) :
+    ∃ binding, (s.bindings.find? (fun pair => pair.1 == id)).map Prod.snd = some binding ∧
+      binding.type = type ∧ id ∈ s.initialized := by
+  cases fuel with
+  | zero => simp [checkExpr] at accepted
+  | succ fuel =>
+    cases found : lookup s id with
+    | none => simp [checkExpr, readLocal, found, Functor.map, Except.map,
+        throw, throwThe, MonadExceptOf.throw] at accepted
+    | some binding =>
+      by_cases typed : binding.type = type
+      · by_cases initialized : id ∈ s.initialized
+        · exact ⟨binding, found, typed, initialized⟩
+        · simp [checkExpr, readLocal, found, require, typed, initialized,
+            bind, Except.bind] at accepted
+      · simp [checkExpr, readLocal, found, require, typed,
+          bind, Except.bind] at accepted
+
+theorem checked_binary_signature (callees : List Function) (fuel : Nat) (s : LocalState)
+    (type : IntType) (op : Binary) (left right : Expr) (facts : ExpressionFacts)
+    (accepted : checkExpr callees fuel s (.binary type op left right) = .ok facts) :
+    type = binaryType op left.type right.type ∧ !(op == .shl && left.type.signed) = true := by
+  cases fuel with
+  | zero => simp [checkExpr] at accepted
+  | succ fuel =>
+    by_cases typed : type = binaryType op left.type right.type
+    · by_cases admitted : !(op == .shl && left.type.signed) = true
+      · exact ⟨typed, admitted⟩
+      · have denied : op = .shl ∧ left.type.signed = true := by simpa using admitted
+        simp [checkExpr, require, typed, denied.1, denied.2, bind, Except.bind] at accepted
+    · simp [checkExpr, require, typed, bind, Except.bind] at accepted
+
 private def expressionState (callees : List Function) (fuel : Nat)
     (s : LocalState) (e : Expr) : Except String LocalState := do
   let facts ← checkExpr callees fuel s e
