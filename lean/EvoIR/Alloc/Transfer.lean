@@ -727,6 +727,106 @@ theorem terminator_case (checked : checkAllocation pre post hints = true)
             rw [Place.at_place fits]; exact returnStorage_kept _ _ (by omega) notClob)]
           exact read
 
+
+/-- Each allocated step matches a positive number of steps before allocation,
+or it is an inserted copy that decreases the rank. -/
+theorem transfer (checked : checkAllocation pre post hints = true)
+    (progress : Machine.ObservedProgress .postSSA pre type entry)
+    {s : Machine.State} {t t' : State} (rel : Related pre post hints entry s t)
+    (stepped : step post t = some t') :
+    (∃ s', Relation.TransGen (Predecessor (PreStep pre)) s' s ∧ Related pre post hints entry s' t') ∨
+      (Related pre post hints entry s t' ∧ rank post s t' < rank post s t) := by
+  obtain ⟨reach, mem, nf, ctrl⟩ := rel
+  rcases ctrl with ⟨a, b, runA, runB, ⟨E, ⟨fn, bl, ow, f, g, block, block', fuel, X, foundF,
+    foundG, foundB, foundB', le, le', walked, term⟩, state⟩, stack⟩ | ⟨r, _, haltB⟩
+  case inr => simp [step, haltB] at stepped
+  -- After the renamed moves before allocation.
+  have settled := fun (as : List Instruction) (h : block'.insts.drop b.pc = as) (nc : NoCopyNext as) =>
+    settle progress b.storage fuel s a E X f block as reach runA foundF foundB le (h ▸ walked) nc state
+  have moved := fun (a₁ : Machine.Activation) (fn₁ : a₁.function = a.function) (bl₁ : a₁.block = a.block)
+      (ow₁ : a₁.owner = a.owner) =>
+    And.intro (show ({s with control := .running a₁} : Machine.State).control = .running a₁ from rfl)
+      (And.intro (fn₁.trans fn) (And.intro (bl₁.trans bl) (And.intro (ow₁.trans ow)
+        (And.intro (fn₁ ▸ foundF) (And.intro (fn₁ ▸ foundG) (And.intro (bl₁ ▸ foundB)
+          (And.intro (bl₁ ▸ foundB')
+            (show StackRel pre post hints a₁.function s.stack t.stack by rw [fn₁]; exact stack))))))))
+  cases allocRest : block'.insts.drop b.pc with
+  | cons inst rest =>
+    cases isCopy : inst.copyOf with
+    | some pair =>
+      obtain ⟨dst, src⟩ := pair
+      obtain ⟨fuel', rfl, done | ⟨os', as', E', found, walked'⟩⟩ := walk_inv walked
+      · rw [allocRest] at done
+        simp only [next, isCopy] at done
+        split at done <;> (try split at done) <;> cases done
+      · rw [allocRest] at found
+        simp only [next, isCopy] at found
+        split at found
+        · rename_i os'' E'' changed
+          cases found
+          obtain ⟨d, src', ld, ls, osEq, instEq, _, general, held, fits, result⟩ := classChange_some changed
+          subst instEq
+          exact .inl (instruction_case reach (.refl _) runA runB mem nf stack fn bl ow foundF foundG
+            foundB foundB' osEq allocRest walked' term (by intro _ _ _ h; cases h) (fun _ => ls)
+            (fun _ => ld) rfl (by simp [Machine.Instruction.uses, held])
+            (by simpa [Machine.Instruction.defs, Loc.fits_iff] using fits) general
+            (by simp [Machine.Instruction.defs, defineAll, result]) state stepped)
+        · split at found
+          · rename_i defined
+            cases found
+            exact .inr (copy_case reach runA runB mem nf stack fn bl ow foundF foundG foundB foundB'
+              le allocRest walked' term isCopy defined state stepped)
+          · cases found
+    | none =>
+      obtain ⟨a₁, E₁, fuel₁, path, fn₁, bl₁, ow₁, _, walked₁, state₁, settledHead⟩ :=
+        settled (inst :: rest) allocRest (by simp [NoCopyNext, isCopy])
+      obtain ⟨run₁, fnA, blA, owA, foundF₁, foundG₁, foundB₁, foundB₁', stack₁⟩ := moved a₁ fn₁ bl₁ ow₁
+      obtain ⟨fuel₂, rfl, done | ⟨os', as', E', found, walked'⟩⟩ := walk_inv walked₁
+      · cases hd : block.insts.drop a₁.pc with
+        | nil => rw [hd] at done; simp [next, isCopy] at done
+        | cons o os =>
+          rw [hd] at done
+          simp only [next, isCopy] at done
+          split at done <;> (try split at done) <;> cases done
+      · cases preRest : block.insts.drop a₁.pc with
+        | nil => rw [preRest] at found; simp [next, isCopy] at found
+        | cons o os =>
+          rw [preRest] at found settledHead
+          have noRename : renameOf o = none := settledHead o (by simp)
+          simp only [next, isCopy, noRename] at found
+          split at found
+          · rename_i E'' matched
+            cases found
+            rcases matchStep_some matched with
+              ⟨symbol, args, results, symbol', aargs, aresults, rfl, rfl, called⟩ | ⟨notCall, orig⟩
+            · exact .inl (call_case checked reach path run₁ runB mem nf stack₁ fnA blA owA foundF₁
+                foundG₁ foundB₁ foundB₁' preRest allocRest walked' (fn₁ ▸ term) called state₁ stepped)
+            · obtain ⟨shape, uses, defs, outputs, result⟩ := matchOriginal_some orig
+              exact .inl (instruction_case reach path run₁ runB mem nf stack₁ fnA blA owA foundF₁
+                foundG₁ foundB₁ foundB₁' preRest allocRest walked' (fn₁ ▸ term) notCall _ _ shape uses defs
+                outputs result state₁ stepped)
+          · cases found
+  | nil =>
+    obtain ⟨a₁, E₁, fuel₁, path, fn₁, bl₁, ow₁, le₁, walked₁, state₁, settledHead⟩ :=
+      settled [] allocRest (by simp [NoCopyNext])
+    obtain ⟨run₁, fnA, blA, owA, foundF₁, foundG₁, foundB₁, foundB₁', stack₁⟩ := moved a₁ fn₁ bl₁ ow₁
+    obtain ⟨fuel₂, rfl, done | ⟨os', as', E', found, _⟩⟩ := walk_inv walked₁
+    · cases preRest : block.insts.drop a₁.pc with
+      | nil =>
+        rw [preRest] at done
+        simp only [next, Next.done.injEq] at done
+        subst done
+        exact .inl (terminator_case checked progress reach path run₁ runB mem nf stack₁ fnA blA owA
+          foundF₁ foundG₁ foundB₁ foundB₁' preRest le₁ allocRest le' (fn₁ ▸ term) state₁ stepped)
+      | cons o os =>
+        rw [preRest] at done settledHead
+        simp [next, settledHead o (by simp)] at done
+    · cases preRest : block.insts.drop a₁.pc with
+      | nil => rw [preRest] at found; simp [next] at found
+      | cons o os =>
+        rw [preRest] at found settledHead
+        simp [next, settledHead o (by simp)] at found
+
 end term
 
 end transfer
