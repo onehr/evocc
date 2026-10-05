@@ -56,6 +56,9 @@ import EvoIR.MachinePrivateCallTests
 import EvoIR.Rewrite.Soundness
 import EvoIR.Alloc.Reader
 import EvoIR.Alloc.Soundness
+import EvoIR.Asm.Reader
+import EvoIR.Asm.Print
+import EvoIR.Asm.Baseline
 
 /-!
 # The executable evaluator
@@ -455,8 +458,52 @@ def checkPostSSAToAllocated (inputs : StageInputs) : StageVerdict := Id.run do
   let refused := (pre.functions.find? (!EvoIR.Alloc.checkFunction pre post hints ·)).map (·.name)
   .rejected s!"entry={function.name} allocation not confirmed in function {refused.getD "?"}"
 
-/-- The table of integrated stages, in pipeline order. To integrate V04, add one
-row here. The compiler driver has a matching table. -/
+/-- The Boolean form of `EvoIR.Asm.Proof.ResultView`: each returned location of
+the entry function has a view that is at least as wide as the result type. -/
+def resultViewOk (p : EvoIR.Alloc.Program) (entry : String)
+    (type : EvoIR.Core.Source.IntType) : Bool :=
+  p.functions.all fun f => f.name != entry || f.blocks.all fun b =>
+    match b.term with
+    | .ret locs => locs.all fun l => type.width ≤ l.width.bits
+    | _ => true
+
+theorem resultViewOk_sound {p : EvoIR.Alloc.Program} {entry : String}
+    {type : EvoIR.Core.Source.IntType} (h : resultViewOk p entry type = true) :
+    EvoIR.Asm.Proof.ResultView p entry type := by
+  intro f hf hname b hb locs hret l hl
+  have hf' := List.all_eq_true.mp h f hf
+  simp only [hname, bne_self_eq_false, Bool.false_or] at hf'
+  have hb' := List.all_eq_true.mp hf' b hb
+  rw [hret] at hb'
+  simpa using List.all_eq_true.mp hb' l hl
+
+/-- V04: frame layout and emission, `EvoIR.Asm.Check.checkAsm`, with the theorem
+`checkAsm_sound`. The allocated program comes from the allocation export that V03
+also reads. The `asm` file gives the assembly AST and the frame hints. The `text`
+file is the assembly text that the driver publishes. The printed AST must be equal
+to that text, byte for byte. The result view of the entry is a premise of
+`source_asm_refines`; `resultViewOk_sound` discharges it. -/
+def checkAllocatedToAsm (inputs : StageInputs) : StageVerdict := Id.run do
+  let .ok (_, function) := stageEntry inputs | return .unsupported "source input"
+  let some allocText := inputs.lookup "allocation" | return .unsupported "missing allocation input"
+  let .ok (_, allocated, _) := EvoIR.Alloc.Reader.readPair allocText
+    | return .unsupported "allocation input"
+  let some astText := inputs.lookup "asm" | return .unsupported "missing assembly AST input"
+  let .ok (file, hints) := EvoIR.Asm.Reader.readFile astText
+    | return .unsupported "assembly AST input"
+  let some text := inputs.lookup "text" | return .unsupported "missing assembly text input"
+  let entry := s!"entry={function.name}"
+  if !EvoIR.Asm.printMatches file text then
+    let line := (EvoIR.Asm.firstDifference file text).getD 0
+    return .rejected s!"{entry} the printed AST is not the assembly text at line {line}"
+  if !EvoIR.Asm.Check.checkAsm allocated file hints then
+    return .rejected s!"{entry} frame layout or emission not confirmed"
+  if !resultViewOk allocated function.name function.returnType.type then
+    return .rejected s!"{entry} a returned view is narrower than the result type"
+  .accepted s!"{entry} functions={file.functions.length} bytes={text.utf8ByteSize} scope=allocated-mir-to-assembly-text"
+
+/-- The table of integrated stages, in pipeline order. The compiler driver has a
+matching table. -/
 def stages : List Stage :=
   [ { id := "V01", name := "source-to-evoir", required := ["source", "ir"],
       optional := ["proposal"], check := checkSourceToIR }
@@ -465,7 +512,9 @@ def stages : List Stage :=
   , { id := "V02", name := "evoir-to-post-ssa-mir", required := ["source", "ir", "ssa", "postssa"],
       check := checkIRToPostSSA }
   , { id := "V03", name := "post-ssa-mir-to-allocated-mir",
-      required := ["source", "postssa", "allocation"], check := checkPostSSAToAllocated } ]
+      required := ["source", "postssa", "allocation"], check := checkPostSSAToAllocated }
+  , { id := "V04", name := "allocated-mir-to-assembly-text",
+      required := ["source", "allocation", "asm", "text"], check := checkAllocatedToAsm } ]
 
 /-- Read each `ROLE=PATH` argument. A role outside the stage row, a duplicate
 role or a missing required role is a command error. -/
