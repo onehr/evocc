@@ -212,8 +212,7 @@ const TRUSTED: &[&str] = &[
     "the readers of the input files",
     "the printer of the assembly AST (EvoIR.Asm.File.print)",
     "the Lean semantics of typed Core C and of the AArch64 subset",
-    "the ABI entry assumption (EvoIR.Asm.Proof.AbiEntry): the caller obeys the AArch64 procedure call standard and gives sufficient stack",
-    "open limit: AbiEntry uses zero-extended argument values; the theorem covers only entry states in which the upper 32 bits of each 32-bit argument register and stack slot are zero, and AAPCS64 does not require this of a caller",
+    "the ABI entry assumption (EvoIR.Asm.Proof.AbiSourceEntry): the caller obeys the AArch64 procedure call standard and gives sufficient stack; for an argument of width w, only the low w bits of its register or 8-byte stack slot are equal to the argument, and the other bits are arbitrary",
     "the assembler, the linker, the runtime libraries and the hardware",
 ];
 

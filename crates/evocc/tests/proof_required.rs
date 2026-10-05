@@ -157,15 +157,19 @@ fn assert_record(record: &str, checked: &[&str]) {
         "the readers of the input files",
         "the printer of the assembly AST",
         "the AArch64 subset",
-        "AbiEntry",
+        "AbiSourceEntry",
+        "only the low w bits of its register or 8-byte stack slot",
         "the assembler, the linker",
-        "zero-extended argument values",
     ] {
         assert!(
             record.contains(trusted),
             "the trusted list must name {trusted}"
         );
     }
+    assert!(
+        !record.contains("zero-extended argument values"),
+        "the trusted list must not name the removed argument limit"
+    );
     let order = ["V01", "V05", "V02", "V03", "V04", "PIPELINE"]
         .map(|stage| record.find(&format!("\"id\": \"{stage}\",")).unwrap());
     assert!(order.is_sorted(), "stage order {order:?}");
