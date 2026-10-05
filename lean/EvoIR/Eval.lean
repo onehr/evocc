@@ -47,6 +47,9 @@ import EvoIR.MachineSelectionCallerTests
 import EvoIR.MachineSelectionDemandCallerTests
 import EvoIR.MachineSelectionTokenFunctionTests
 import EvoIR.IRPoisonProposalTests
+import EvoIR.IRPoisonSoundTests
+import EvoIR.MachinePrivateProposalTests
+import EvoIR.MachinePrivateFiniteTests
 
 /-!
 # The executable evaluator

@@ -1,0 +1,20 @@
+func @private_checked(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    (%v3, %v4, %v5) = alloca %v1, %v2 [origin=0, size=4, align=4]
+    %v6 = access_in_bounds %v4, %v3 [size=4, align=4]
+    (%v7, %v8) = store %v6, %v5, %v3, %v0
+    %v9 = access_in_bounds %v7, %v3 [size=4, align=4]
+    (%v10, %v11, %v12) = load %v9, %v8, %v3 : bits<32>
+    %v13 = const.bits<32> 1
+    %v14 = signed_add_defined %v10, %v13
+    ub.assume.signed_overflow %v14
+    %v15 = add.bits<32> %v10, %v13
+    %v16 = access_in_bounds %v11, %v3 [size=4, align=4]
+    (%v17, %v18) = store %v16, %v12, %v3, %v15
+    %v19 = access_in_bounds %v17, %v3 [size=4, align=4]
+    (%v20, %v21, %v22) = load %v19, %v18, %v3 : bits<32>
+    (%v23, %v24) = lifetime.end %v21, %v22, %v3
+    ret %v20, %v23, %v24
+}

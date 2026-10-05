@@ -33,6 +33,28 @@ private theorem byteSum_eq (value count : Nat) :
     simpa only [Nat.mul_comm] using
       (Nat.mod_mul (x := value) (a := 2^(8*count)) (b := 256)).symm
 
+/-- The same private bytes can be read into a wider machine word without
+changing the stored representation. This is a byte-decoding theorem; it does
+not assert that an address is live, aligned, or in bounds. -/
+theorem scalar_bytes_read_word (width : Nat) (value : BitVec width)
+    (admitted : width = 32 ∨ width = 64) :
+    (do
+      let mut bits := 0
+      for i in List.range (width/8) do
+        let some (some byte) := (scalarBytes width value)[i]? | throw (.diagnostic 3001)
+        bits := bits + byte.toNat * 2^(8*i)
+      return BitVec.ofNat 64 bits : Except Source.Fault (BitVec 64)) =
+      .ok (value.setWidth 64) := by
+  rcases admitted with rfl | rfl
+  · change Except.ok (BitVec.ofNat 64 (byteSum value.toNat 4)) = .ok (value.setWidth 64)
+    rw [byteSum_eq, Nat.mod_eq_of_lt value.isLt]
+    congr 1
+    apply BitVec.eq_of_toNat_eq
+    simp [BitVec.toNat_setWidth]
+  · change Except.ok (BitVec.ofNat 64 (byteSum value.toNat 8)) = .ok (value.setWidth 64)
+    rw [byteSum_eq, Nat.mod_eq_of_lt value.isLt]
+    simp
+
 theorem store_scalar_bytes (owner : Nat) (m : Memory) (o : Object)
     (width : Nat) (value : BitVec width)
     (admitted : width = 32 ∨ width = 64)
