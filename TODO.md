@@ -2645,6 +2645,22 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   pilot manifest. Artifact delta +6,412 KiB; 52 GiB free; target/frontend
   unchanged, capture 17,832 KiB; temporary diagnostic inputs removed.
 
+  **October 5 source writes:** `6c28845a` proves actual-validator-backed safety
+  for assignment entry/continuation and updates, plus store preservation,
+  declaration, initialization and caller restoration. This exposed and fixed
+  the accepted-but-malformed `int x = (x = 1, 2);` model case; its original
+  source/IR pair now passes, with const and uninitialized-read negatives retained.
+  `4db6012e` adds scope-exit preservation under explicit binding-separation and
+  retained-type premises; establishing that frame invariant globally is still
+  required. Clean Lean: 98 kernel-only core targets, zero native axioms in those targets;
+  33 replays have their expected results (32 positive, one retained negative).
+  Full workspace: 401 suites, 3,081 PASS / 0 FAIL / 5 ignored; Clippy/format
+  PASS. Scoped artifact delta +19,260 KiB; 52 GiB free, capture under 19 MiB.
+  Whole-expression/continuation invariant preservation, private lowered storage
+  and complete constructor coverage still block V01. V02–V06 remain OPEN.
+  Gate results and disk accounting: `validator_storage_preservation` in the
+  existing pilot receipt, not a new acceptance layer.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

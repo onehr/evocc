@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "4a8ac98ec74e3432baa62dd77abbfb6a06a44ed5",
+    "lean_commit": "4db6012eaca35a2cab60afe85acf60672aeeaca0",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -139,6 +139,8 @@
       "lean/EvoIR/Core/TargetFrontier.lean",
       "lean/EvoIR/Core/Transition.lean",
       "lean/EvoIR/Core/ValidatorState.lean",
+      "lean/EvoIR/Core/ValidatorStorage.lean",
+      "lean/EvoIR/Core/ValidatorStorageTests.lean",
       "lean/EvoIR/Core/WellFormed.lean",
       "lean/EvoIR/Core/WellFormedTests.lean",
       "lean/EvoIR/Eval.lean",
@@ -613,6 +615,14 @@
         "EvoIR.Core.LocalStorage",
         "EvoIR.Core.ScalarCorrectness"
       ],
+      "lean/EvoIR/Core/ValidatorStorage.lean": [
+        "EvoIR.Core.ValidatorState"
+      ],
+      "lean/EvoIR/Core/ValidatorStorageTests.lean": [
+        "EvoIR.Core.ValidatorStorage",
+        "EvoIR.Core.CallCorrespondence",
+        "EvoIR.Core.IRReader"
+      ],
       "lean/EvoIR/Core/WellFormed.lean": [
         "EvoIR.Core.Source"
       ],
@@ -650,7 +660,7 @@
         "EvoIR.Core.CallingLoopPairTests",
         "EvoIR.Core.FunctionClosureTests",
         "EvoIR.Core.ConstantClosureTests",
-        "EvoIR.Core.ValidatorState"
+        "EvoIR.Core.ValidatorStorageTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -16081,6 +16091,91 @@
   "compilation_core_primitives": {
     "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions, conditional CFGs, checked cyclic diagrams, div/rem, finite calls and private-leaf substitution. Full core-v1 constructor/call/loop composition remains incomplete. No proof of source export, input-validation execution safety, backend compilation or verified-release acceptance",
     "targets": [
+      {
+        "theorem": "EvoIR.Core.Source.scope_exit_safe",
+        "proposition": "∀ (incoming current : EvoIR.Core.Source.LocalState) (introduced retained : EvoIR.Core.Source.Locals), EvoIR.Core.Source.ScopeShape incoming introduced retained → current.Realizes (introduced ++ retained) → ∀ (state : EvoIR.Core.Source.State) (flow : EvoIR.Core.Source.Flow), state.locals = introduced ++ retained → EvoIR.Core.Source.resumeFlow state (EvoIR.Core.Source.Frame.scope EvoIR.Core.Source.Value (List.length retained)) flow = { control := EvoIR.Core.Source.Control.flow flow, locals := retained, continuation := state.continuation, functionId := state.functionId } ∧ { bindings := incoming.bindings, initialized := EvoIR.Core.Source.scopeInitialized incoming current }.Realizes retained",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.LocalState.Realizes.after_write",
+        "proposition": "∀ (state : EvoIR.Core.Source.LocalState) (locals updated : EvoIR.Core.Source.Locals), state.Realizes locals → ∀ (id : Nat) (destination : EvoIR.Core.Source.QualifiedType) (value : EvoIR.Core.Source.Value) (initialization : Bool), EvoIR.Core.Source.writeSlot locals id destination value initialization = Except.ok updated → ∀ (initialized : List Nat), (∀ (other : Nat), other ∈ initialized → other = id ∨ other ∈ state.initialized) → { bindings := state.bindings, initialized := initialized }.Realizes updated",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.LocalState.Realizes.declare",
+        "proposition": "∀ (state : EvoIR.Core.Source.LocalState) (locals : EvoIR.Core.Source.Locals), state.Realizes locals → ∀ (id : Nat) (destination : EvoIR.Core.Source.QualifiedType), Option.map Prod.snd (List.find? (fun pair => pair.fst == id) state.bindings) = none → { bindings := (id, destination) :: state.bindings, initialized := state.initialized }.Realizes ({ symbol := id, type := destination, value := none } :: locals)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.checked_assignment_enter",
+        "proposition": "∀ (callees : List EvoIR.Core.Source.Function) (fuel : Nat) (static : EvoIR.Core.Source.LocalState) (state : EvoIR.Core.Source.State) (type : EvoIR.Core.Source.IntType) (op : EvoIR.Core.Source.Assignment) (id : Nat) (destination : EvoIR.Core.Source.QualifiedType) (target rhs : EvoIR.Core.Source.Expr) (facts : EvoIR.Core.Source.ExpressionFacts), EvoIR.Core.Source.checkExpr callees fuel static (EvoIR.Core.Source.Expr.assign type op id destination target rhs) = Except.ok facts → static.Realizes state.locals → EvoIR.Core.Source.enterExpression state (EvoIR.Core.Source.Expr.assign type op id destination target rhs) = { control := EvoIR.Core.Source.Control.expression rhs, locals := state.locals, continuation := EvoIR.Core.Source.Frame.assign EvoIR.Core.Source.Value type op id destination :: state.continuation, functionId := state.functionId }",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.checked_assignment_continuation_safe",
+        "proposition": "∀ (callees : List EvoIR.Core.Source.Function) (fuel : Nat) (static : EvoIR.Core.Source.LocalState) (state : EvoIR.Core.Source.State) (type : EvoIR.Core.Source.IntType) (op : EvoIR.Core.Source.Assignment) (id : Nat) (destination : EvoIR.Core.Source.QualifiedType) (target rhs : EvoIR.Core.Source.Expr) (facts : EvoIR.Core.Source.ExpressionFacts) (value : EvoIR.Core.Source.Value), EvoIR.Core.Source.checkExpr callees fuel static (EvoIR.Core.Source.Expr.assign type op id destination target rhs) = Except.ok facts → static.Realizes state.locals → EvoIR.Core.Source.WriteOutcome state { bindings := static.bindings, initialized := id :: static.initialized } type (EvoIR.Core.Source.resumeValue state (EvoIR.Core.Source.Frame.assign EvoIR.Core.Source.Value type op id destination) value)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.checked_update_safe",
+        "proposition": "∀ (callees : List EvoIR.Core.Source.Function) (fuel : Nat) (static : EvoIR.Core.Source.LocalState) (state : EvoIR.Core.Source.State) (type : EvoIR.Core.Source.IntType) (op : EvoIR.Core.Source.Update) (id : Nat) (destination : EvoIR.Core.Source.QualifiedType) (target : EvoIR.Core.Source.Expr) (facts : EvoIR.Core.Source.ExpressionFacts), EvoIR.Core.Source.checkExpr callees fuel static (EvoIR.Core.Source.Expr.update type op id destination target) = Except.ok facts → static.Realizes state.locals → EvoIR.Core.Source.WriteOutcome state static type (EvoIR.Core.Source.enterExpression state (EvoIR.Core.Source.Expr.update type op id destination target))",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.initialization_continuation_safe",
+        "proposition": "∀ (static : EvoIR.Core.Source.LocalState) (state : EvoIR.Core.Source.State), static.Realizes state.locals → ∀ (id : Nat) (destination : EvoIR.Core.Source.QualifiedType) (slot : EvoIR.Core.Source.Slot), List.find? (fun x => x.symbol == id) state.locals = some slot → slot.type = destination → (destination.isConst = true → slot.value = none) → ∀ (value : EvoIR.Core.Source.Value), ∃ locals, { bindings := static.bindings, initialized := id :: static.initialized }.Realizes locals ∧ EvoIR.Core.Source.resumeValue state (EvoIR.Core.Source.Frame.initialize EvoIR.Core.Source.Value id destination) value = { control := EvoIR.Core.Source.Control.flow EvoIR.Core.Source.Flow.normal, locals := locals, continuation := state.continuation, functionId := state.functionId }",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.caller_restore_safe",
+        "proposition": "∀ (static : EvoIR.Core.Source.LocalState) (locals : EvoIR.Core.Source.Locals), static.Realizes locals → ∀ (state : EvoIR.Core.Source.State) (callerId : Nat) (type : EvoIR.Core.Source.IntType) (value : EvoIR.Core.Source.Value), value.type = type → EvoIR.Core.Source.resumeFlow state (EvoIR.Core.Source.Frame.function EvoIR.Core.Source.Value (some (callerId, locals)) type) (EvoIR.Core.Source.Flow.returned value) = { control := EvoIR.Core.Source.Control.value value, locals := locals, continuation := state.continuation, functionId := callerId } ∧ static.Realizes (EvoIR.Core.Source.resumeFlow state (EvoIR.Core.Source.Frame.function EvoIR.Core.Source.Value (some (callerId, locals)) type) (EvoIR.Core.Source.Flow.returned value)).locals",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "propext"
+        ],
+        "native_axioms": []
+      },
       {
         "theorem": "EvoIR.Core.LoweringRefines.source_no_malformed",
         "proposition": "∀ {s : EvoIR.Core.Source.Program} {t : EvoIR.Core.IR.Program} {resultType : EvoIR.Core.Source.IntType} {s₀ : EvoIR.Core.Source.State} {t₀ : EvoIR.Core.IR.State}, EvoIR.Core.LoweringRefines s t resultType s₀ t₀ → ∀ (message : String) (locals : EvoIR.Core.Source.Locals) (continuation : List EvoIR.Core.Source.Frame) (functionId : Nat), ¬EvoIR.Core.Source.Steps s s₀ { control := EvoIR.Core.Source.Control.halted (Except.error (EvoIR.Core.Source.Fault.malformed message)), locals := locals, continuation := continuation, functionId := functionId }",

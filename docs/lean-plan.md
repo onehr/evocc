@@ -875,6 +875,37 @@ Details and exact subjects are in the existing pilot receipt. Artifact delta
 +6,412 KiB; target/frontend unchanged; capture 17,832 KiB of 500 MiB; 52 GiB
 free. Two temporary inspection inputs removed, protected evidence retained.
 
+**Source write preservation (October 5 continuation).** `6c28845a` connects the
+actual assignment/update admission checks to runtime binding permissions and
+proves preservation of the local-store invariant for all eleven assignment
+forms, all four updates, declarations, initialization and caller restoration.
+`4db6012e` adds scope-exit preservation under an explicit frame-shape invariant:
+the dropped prefix cannot shadow retained bindings, retained types remain exact,
+and the post-scope facts use the actual validator's initialization filter.
+Failures retain the old store and the first checked diagnostic; successful
+writes retain source ranks, qualifiers and other first bindings. Whole-expression
+and continuation preservation are still required; these component results do
+not establish standalone `checkWellFormed` safety.
+The proof exposed a model defect: `int x = (x = 1, 2);` passed validation but
+execution reported duplicate initialization. The retained RED demonstrates that
+failure. Mutable initialization now follows its sequenced subexpression;
+const assignment and duplicate const initialization still refuse. This follows
+[C11 draft N1570](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf)
+6.5.17 and 6.7.9, rather than restricting the source profile to hide the failure.
+The original C pair is accepted by the source/IR checker, both existing Rust
+interpreters return zero, and two original/renamed pairs, three mutations and
+eleven kernel storage controls pass. Clean Lean at `4db6012e`: 98 kernel-only
+core targets, no native axioms in those targets. The 31 previous positive pairs,
+one previous refusal and the new original pair replay as expected. Exact gate
+subjects, logs and disk accounting are in `validator_storage_preservation` in
+the existing pilot receipt. Full workspace on the unchanged Rust tree of
+`6c28845a`: 401 suites, 3,081 PASS / 0 FAIL / 5 ignored, Clippy/format PASS.
+The sandbox-denied attempt is retained as FAIL, separate from the authorized
+complete rerun. Scoped artifact delta +19,260 KiB; 52 GiB free, no new target
+tree or temporary inspection inputs retained. Private lowered-storage composition, full constructor
+coverage and global validator invariants still keep V01 OPEN; V02–V06 remain
+unimplemented. No backend or release theorem is claimed.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted
