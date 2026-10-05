@@ -105,16 +105,9 @@ def run : IO Unit := do
     (Check.checkAsm p file (editHint file hints "wide" fun h => {h with saved := h.saved.drop 1})) false
   let (q, privateFile, privateHints, privateText) ← load "machine-private"
   expect "machine-private prints the actual text" (printMatches privateFile privateText) true
-  expect "machine-private accepted" (Check.checkAsm q privateFile privateHints) true
-  -- A frame object outside the frame.
-  expect "frame object outside the frame refused"
-    (Check.checkAsm q privateFile (editHint privateFile privateHints "private_word" fun h =>
-      {h with size := 0})) false
-  -- A store of a 32-bit value through a 64-bit store.
-  let narrow : Line := .inst (.str .w (.r 0) (.r 1) 0)
-  let wide : Line := .inst (.str .x (.r 0) (.r 1) 0)
-  expect "store width change refused"
-    (Check.checkAsm q (editLines privateFile "private_word" narrow [wide]) privateHints) false
+  -- Private frame objects are outside the proved forms: the checker refuses them.
+  expect "machine-private refused (private frame objects)"
+    (Check.checkAsm q privateFile privateHints) false
 
 #eval run
 
