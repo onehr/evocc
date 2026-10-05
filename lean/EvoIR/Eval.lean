@@ -37,6 +37,16 @@ import EvoIR.MachineReader
 import EvoIR.MachineExecution
 import EvoIR.MachineReaderTests
 import EvoIR.MachineExecutionTests
+import EvoIR.MachineLowering
+import EvoIR.MachineLoweringTests
+import EvoIR.MachineTransportSoundTests
+import EvoIR.MachineTransportTests
+import EvoIR.MachineTransportProposalTests
+import EvoIR.MachineCopiesTests
+import EvoIR.MachineSelectionCallerTests
+import EvoIR.MachineSelectionDemandCallerTests
+import EvoIR.MachineSelectionTokenFunctionTests
+import EvoIR.IRPoisonProposalTests
 
 /-!
 # The executable evaluator
@@ -303,12 +313,13 @@ def selfTest : IO UInt32 := do
 /-! ## Entry point -/
 
 def usage : String :=
-  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-mir <machine.json> | evoir-sem --run-core-mir <machine.json> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo> | evoir-sem --check-core-leaf-pair <source.json> <target.evo>"
+  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-mir <machine.json> | evoir-sem --run-core-mir <machine.json> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo> | evoir-sem --check-core-leaf-pair <source.json> <target.evo> | evoir-sem --check-core-machine-pair <source.json> <actual.evo> <ssa.json> <postssa.json>"
 
 def run (args : List String) : IO UInt32 := do
   match args with
   | ["--selftest"] => do
       EvoIR.Machine.Reader.selfTest
+      let tokenFunctions ← EvoIR.Core.Symbolic.MachineSelection.TokenFunctionTests.tokenFunctionSelfTest
       let arithmetic ← selfTest
       let source ← EvoIR.Core.Source.readerSelfTest
       let wellFormed ← EvoIR.Core.Source.wellFormedSelfTest
@@ -345,7 +356,7 @@ def run (args : List String) : IO UInt32 := do
       let privateStorage ← EvoIR.Core.Symbolic.PrivateStorageTests.privateStorageSelfTest
       let privateLoops ← EvoIR.Core.Symbolic.PrivateLoopTests.privateLoopSelfTest
       let privateCalls ← EvoIR.Core.Symbolic.PrivateCallTests.privateCallSelfTest
-      return if arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
+      return if tokenFunctions == 0 && arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
         statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 &&
@@ -397,6 +408,24 @@ def run (args : List String) : IO UInt32 := do
         | IO.eprintln "CORE_PAIR_REFUSED: no proved correspondence for this complete pair"; return 1
       IO.println "PROVED_PILOT_PAIR entry=abs arguments=all-bits32 scope=source-to-evoir backend=UNPROVED release=UNVERIFIED"
       return 0
+  | ["--check-core-machine-pair", sourcePath, irPath, ssaPath, targetPath] => do
+      let .ok source := EvoIR.Core.Source.readProgram (← IO.FS.readFile sourcePath)
+        | IO.eprintln "CORE_MACHINE_PAIR_MALFORMED: source signature input"; return 2
+      let .ok ir := EvoIR.Core.IR.Reader.readProgram (← IO.FS.readFile irPath)
+        | IO.eprintln "CORE_MACHINE_PAIR_MALFORMED: actual EvoIR input"; return 2
+      let .ok (.ssa, ssa) := EvoIR.Machine.Reader.readProgram (← IO.FS.readFile ssaPath)
+        | IO.eprintln "CORE_MACHINE_PAIR_MALFORMED: actual SSA MIR input"; return 2
+      let .ok (.postSSA, target) := EvoIR.Machine.Reader.readProgram (← IO.FS.readFile targetPath)
+        | IO.eprintln "CORE_MACHINE_PAIR_MALFORMED: actual postSSA MIR input"; return 2
+      let [entry] := source.entries
+        | IO.eprintln "CORE_MACHINE_PAIR_REFUSED: expected one selected entry"; return 1
+      let some function := source.functions.find? (·.symbol == entry)
+        | IO.eprintln "CORE_MACHINE_PAIR_REFUSED: missing selected source signature"; return 1
+      let some _ := EvoIR.Machine.checkLowering ir ssa target function.name
+          function.parameters function.returnType.type
+        | IO.eprintln "CORE_MACHINE_PAIR_REFUSED: actual selection or SSA transport"; return 1
+      IO.println s!"PROVED_MACHINE_PAIR entry={function.name} arguments=all-signature-bits execution=unbounded scope=evoir-to-postssa-mir allocation=UNPROVED emission=UNPROVED release=UNVERIFIED"
+      return 0
   | ["--read-core-mir", input] => do
       match EvoIR.Machine.Reader.readProgram (← IO.FS.readFile input) with
       | .error message => IO.eprintln s!"CORE_MIR_REFUSED: {message}"; return 2
@@ -413,9 +442,9 @@ def run (args : List String) : IO UInt32 := do
         | IO.eprintln "missing machine entry block"; return 2
       if args.length != b.args.length then IO.eprintln "argument count mismatch"; return 2
       let values := (args.zip b.args).mapM fun (arg, param) => do
-        let w ← param.class.width
+        let width ← param.class.width
         let n ← ofHex arg
-        if n < 2^w.bits then some (EvoIR.Machine.Value.int (BitVec.ofNat 64 n)) else none
+        if n < 2^width.bits then some (EvoIR.Machine.Value.int (BitVec.ofNat 64 n)) else none
       let some values := values | IO.eprintln "invalid or out-of-width argument bits"; return 2
       let .ok start := EvoIR.Machine.initial p entry values
         | IO.eprintln "machine entry refused"; return 2

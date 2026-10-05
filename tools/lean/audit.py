@@ -272,6 +272,13 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.IR.runSteps",
     "EvoIR.Core.IR.Reader.readProgram",
     "EvoIR.Core.IR.checkProgram",
+    "EvoIR.Core.IR.Poison.BanksRelated",
+    "EvoIR.Core.IR.Poison.StatesRelated",
+    "EvoIR.Core.IR.Poison.programValid",
+    "EvoIR.Core.IR.Poison.rewriteInstruction",
+    "EvoIR.Core.IR.Poison.rewriteProgram",
+    "EvoIR.Core.IR.Poison.checkPair",
+    "EvoIR.Core.IR.Poison.propose",
     "EvoIR.Core.Source.exprDecEq",
     "EvoIR.Core.Source.stmtDecEq",
     "EvoIR.Core.Transition.Reaches",
@@ -296,6 +303,52 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Symbolic.CWord.cast",
     "EvoIR.Core.Symbolic.arithmetic",
     "EvoIR.Core.Symbolic.checkArithmetic",
+    "EvoIR.Machine.Reader.readProgram",
+    "EvoIR.Machine.evalBinary",
+    "EvoIR.Machine.arithmeticFlags",
+    "EvoIR.Machine.condition",
+    "EvoIR.Machine.evalWideMultiply",
+    "EvoIR.Machine.evalExtend",
+    "EvoIR.Machine.evalInstructionOperands",
+    "EvoIR.Machine.evalInstruction",
+    "EvoIR.Machine.bind",
+    "EvoIR.Machine.jump",
+    "EvoIR.Machine.enter",
+    "EvoIR.Machine.execute",
+    "EvoIR.Machine.step",
+    "EvoIR.Machine.observe",
+    "EvoIR.Machine.initial",
+    "EvoIR.Machine.SelectionRefines",
+    "EvoIR.Machine.TransportRefines",
+    "EvoIR.Machine.IRToMachineRefines",
+    "EvoIR.Machine.SourceToMachineRefines",
+    "EvoIR.Machine.ObservedProgress",
+    "EvoIR.Machine.loweringArguments",
+    "EvoIR.Machine.CheckedLowering",
+    "EvoIR.Machine.checkLoweringWithPlan",
+    "EvoIR.Machine.checkLowering",
+    "EvoIR.Core.Symbolic.MachineSelection.ScalarSelectionPair",
+    "EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair",
+    "EvoIR.Core.Symbolic.MachineSelection.sourceSpan",
+    "EvoIR.Core.Symbolic.MachineSelection.guardChainUnder",
+    "EvoIR.Core.Symbolic.MachineSelection.checkWordUnder",
+    "EvoIR.Core.Symbolic.MachineSelection.tokenControl",
+    "EvoIR.Core.Symbolic.MachineSelection.tokenCallerSuffix",
+    "EvoIR.Core.Symbolic.MachineSelection.tokenDemandCallerSuffix",
+    "EvoIR.Core.Symbolic.MachineSelection.tokenDemandCallEntry",
+    "EvoIR.Core.Symbolic.MachineSelection.tokenModulePair",
+    "EvoIR.Core.Symbolic.MachineSelection.tokenDemandModulePair",
+    "EvoIR.Machine.Demand.checkStructure",
+    "EvoIR.Machine.Demand.checkDemand",
+    "EvoIR.Machine.Demand.StateRelated",
+    "EvoIR.Machine.Demand.StateRelated.control",
+    "EvoIR.Machine.Demand.StateRelated.stack",
+    "EvoIR.Machine.Demand.StateRelated.nextFrame",
+    "EvoIR.Machine.Demand.StateRelated.memory",
+    "EvoIR.Machine.Demand.ActivationRelated.regs",
+    "EvoIR.Machine.Demand.ContextCoupled",
+    "EvoIR.Machine.Transport.checkProgram",
+    "EvoIR.Machine.Transport.StateRelated",
     "EvoIR.denoteOp",
     "EvoIR.denoteTerm",
     "EvoIR.Core.Symbolic.denoteTerm",
@@ -318,6 +371,149 @@ RECORDED_DEFINITIONS = [
 ]
 
 CORE_PRIMITIVE_TARGETS = [
+    (
+        "EvoIR.Machine.checkLowering",
+        "(source : EvoIR.Core.IR.Program) → (ssa target : EvoIR.Machine.Program) → "
+        "(entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → "
+        "(type : EvoIR.Core.Source.IntType) → "
+        "Option (EvoIR.Machine.CheckedLowering source ssa target entry parameters type)",
+    ),
+    (
+        "EvoIR.Machine.checkLoweringWithPlan",
+        "(source : EvoIR.Core.IR.Program) → (ssa target : EvoIR.Machine.Program) → "
+        "(entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → "
+        "(type : EvoIR.Core.Source.IntType) → EvoIR.Machine.Transport.ProgramPlan → "
+        "Option (EvoIR.Machine.CheckedLowering source ssa target entry parameters type)",
+    ),
+    (
+        "EvoIR.Machine.CheckedLowering.checked",
+        "∀ {source : EvoIR.Core.IR.Program} {ssa target : EvoIR.Machine.Program} {entry : String} "
+        "{parameters : List EvoIR.Core.Source.Parameter} {type : EvoIR.Core.Source.IntType} "
+        "(self : EvoIR.Machine.CheckedLowering source ssa target entry parameters type) "
+        "(values : List EvoIR.Core.Source.Value), "
+        "List.map EvoIR.Core.Source.Value.type values = List.map (fun p => p.type.type) parameters → "
+        "∃ sourceEntry targetEntry, EvoIR.Core.IR.initial source entry "
+        "(EvoIR.Machine.loweringArguments self.tokens values) = Except.ok sourceEntry ∧ "
+        "EvoIR.Machine.initial target entry (List.map EvoIR.Machine.sourceArgument values) = Except.ok targetEntry ∧ "
+        "EvoIR.Machine.IRToMachineRefines source target type sourceEntry targetEntry",
+    ),
+    (
+        "EvoIR.Machine.selection_transport_refines",
+        "∀ {ir : EvoIR.Core.IR.Program} {ssa lowered : EvoIR.Machine.Program} "
+        "{resultType : EvoIR.Core.Source.IntType} {irEntry : EvoIR.Core.IR.State} "
+        "{ssaEntry loweredEntry : EvoIR.Machine.State}, "
+        "EvoIR.Machine.SelectionRefines ir ssa resultType irEntry ssaEntry → "
+        "EvoIR.Machine.TransportRefines ssa lowered resultType ssaEntry loweredEntry → "
+        "EvoIR.Machine.IRToMachineRefines ir lowered resultType irEntry loweredEntry",
+    ),
+    (
+        "EvoIR.Machine.source_machine_refines",
+        "∀ {source : EvoIR.Core.Source.Program} {ir : EvoIR.Core.IR.Program} {ssa lowered : EvoIR.Machine.Program} "
+        "{resultType : EvoIR.Core.Source.IntType} {sourceEntry : EvoIR.Core.Source.State} {irEntry : EvoIR.Core.IR.State} "
+        "{ssaEntry loweredEntry : EvoIR.Machine.State}, "
+        "EvoIR.Core.LoweringRefines source ir resultType sourceEntry irEntry → "
+        "EvoIR.Machine.SelectionRefines ir ssa resultType irEntry ssaEntry → "
+        "EvoIR.Machine.TransportRefines ssa lowered resultType ssaEntry loweredEntry → "
+        "EvoIR.Machine.SourceToMachineRefines source lowered resultType sourceEntry loweredEntry",
+    ),
+    (
+        "EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair.checked",
+        "∀ {source : EvoIR.Core.IR.Program} {target : EvoIR.Machine.Program} {entry : String} "
+        "{parameters : List EvoIR.Core.Source.Parameter} {type : EvoIR.Core.Source.IntType} "
+        "(self : EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair source target entry parameters type) "
+        "(values : List EvoIR.Core.Source.Value), "
+        "List.map EvoIR.Core.Source.Value.type values = List.map (fun p => p.type.type) parameters → "
+        "∃ sourceEntry targetEntry, EvoIR.Core.IR.initial source entry "
+        "(List.map EvoIR.Core.Symbolic.sourceValueIR values ++ "
+        "[EvoIR.Core.IR.Value.memory { nextId := 1, objects := [] }, EvoIR.Core.IR.Value.world]) = Except.ok sourceEntry ∧ "
+        "EvoIR.Machine.initial target entry (List.map EvoIR.Machine.sourceArgument values) = Except.ok targetEntry ∧ "
+        "EvoIR.Machine.SelectionRefines source target type sourceEntry targetEntry",
+    ),
+    (
+        "EvoIR.Core.Symbolic.MachineSelection.tokenModulePair",
+        "(source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → "
+        "(entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → "
+        "(type : EvoIR.Core.Source.IntType) → "
+        "Option (EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair source target entry parameters type)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.MachineSelection.tokenDemandModulePair",
+        "(source : EvoIR.Core.IR.Program) → (target : EvoIR.Machine.Program) → "
+        "(entry : String) → (parameters : List EvoIR.Core.Source.Parameter) → "
+        "(type : EvoIR.Core.Source.IntType) → "
+        "Option (EvoIR.Core.Symbolic.MachineSelection.TokenSelectionPair source target entry parameters type)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.MachineSelection.token_callee_arguments",
+        "∀ {source : EvoIR.Core.IR.Program} {target : EvoIR.Machine.Program} {name : String} "
+        "{type : EvoIR.Core.Source.IntType} "
+        "(function : EvoIR.Core.Symbolic.MachineSelection.CheckedTokenFunction source target name type) "
+        "(args : List (EvoIR.Core.Symbolic.Word EvoIR.Core.Symbolic.inputWidths)), "
+        "function.first.widths = List.map Sigma.fst args → "
+        "EvoIR.Core.Symbolic.MachineSelection.TokenCalleeArgumentsDiagram function args",
+    ),
+    (
+        "EvoIR.Core.Symbolic.MachineSelection.token_demand_callee",
+        "∀ {source : EvoIR.Core.IR.Program} {target : EvoIR.Machine.Program} "
+        "(callee : EvoIR.Core.Symbolic.MachineSelection.TokenCallee source target) "
+        "(plan : EvoIR.Machine.Demand.Plan) (demand : EvoIR.Machine.Demand.Checked target plan) "
+        "(entry : EvoIR.Core.Symbolic.MachineSelection.TokenDemandCallEntryResult "
+        "EvoIR.Core.Symbolic.inputWidths callee.checked.sourceFunction callee.checked.targetFunction plan) "
+        "(inst : EvoIR.Core.IR.Instruction) (results : List EvoIR.Machine.VReg) (types : List EvoIR.Core.IR.Ty) "
+        "(sf : EvoIR.Core.IR.Function) (sb : EvoIR.Core.IR.Block) (spc : Nat) "
+        "(scope : EvoIR.Core.Symbolic.Scope EvoIR.Core.Symbolic.inputWidths) (tf : EvoIR.Machine.Function) "
+        "(tb : EvoIR.Machine.Block) (tpc : Nat) "
+        "(bank : EvoIR.Core.Symbolic.MachineSelection.Bank EvoIR.Core.Symbolic.inputWidths) "
+        "(binding : EvoIR.Core.Symbolic.MachineSelection.ResumeBindings "
+        "types scope bank inst.results results callee.type), "
+        "EvoIR.Core.Symbolic.MachineSelection.TokenCalleeArgumentsDiagram callee.checked entry.original.arguments → "
+        "EvoIR.Core.Symbolic.MachineSelection.TokenCalleeArgumentsDiagram callee.checked entry.substituted.arguments → "
+        "EvoIR.Core.Symbolic.MachineSelection.TokenDemandCalleeDiagram callee plan entry inst results types "
+        "sf sb spc scope tf tb tpc bank",
+    ),
+    (
+        "EvoIR.Machine.Demand.Checked.refines",
+        "∀ (program : EvoIR.Machine.Program) (plan : EvoIR.Machine.Demand.Plan) "
+        "(checked : EvoIR.Machine.Demand.Checked program plan) (type : EvoIR.Core.Source.IntType) "
+        "(sourceEntry targetEntry : EvoIR.Machine.State), "
+        "EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa program type sourceEntry → "
+        "EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa program type targetEntry → "
+        "EvoIR.Machine.Demand.StateRelated plan sourceEntry targetEntry → "
+        "EvoIR.Core.Transition.Refines (EvoIR.Machine.step EvoIR.Machine.Mode.ssa program) "
+        "(EvoIR.Machine.step EvoIR.Machine.Mode.ssa program) "
+        "(EvoIR.Machine.observe type) (EvoIR.Machine.observe type) sourceEntry targetEntry",
+    ),
+    (
+        "EvoIR.Machine.Demand.replace_context_target",
+        "∀ {S : Type} (sourceStep : S → Option S) (sourceObserve : S → Option EvoIR.Core.Observation) "
+        "(observationType : EvoIR.Core.Source.IntType) (program : EvoIR.Machine.Program) "
+        "(plan : EvoIR.Machine.Demand.Plan), EvoIR.Machine.Demand.checkStructure program plan = true → "
+        "∀ (type : EvoIR.Core.Source.IntType) (sourceEntry targetEntry : EvoIR.Machine.State), "
+        "EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa program type sourceEntry → "
+        "EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa program type targetEntry → "
+        "EvoIR.Machine.Demand.StateRelated plan sourceEntry targetEntry → "
+        "∀ (stack : List EvoIR.Machine.ReturnFrame), EvoIR.Machine.Demand.SingleCaller stack → "
+        "∀ (boundary : S → EvoIR.Machine.State → Prop) (entry : S), "
+        "EvoIR.Core.Transition.OpenCheckpoint sourceStep (EvoIR.Machine.step EvoIR.Machine.Mode.ssa program) "
+        "sourceObserve (EvoIR.Machine.observe observationType) boundary entry "
+        "(EvoIR.Machine.Demand.context sourceEntry stack) → "
+        "(∀ (source : S) (target : EvoIR.Machine.State), "
+        "boundary source target → target.stack.length < stack.length) → "
+        "EvoIR.Core.Transition.OpenCheckpoint sourceStep (EvoIR.Machine.step EvoIR.Machine.Mode.ssa program) "
+        "sourceObserve (EvoIR.Machine.observe observationType) boundary entry "
+        "(EvoIR.Machine.Demand.context targetEntry stack)",
+    ),
+    (
+        "EvoIR.Machine.Transport.sound",
+        "∀ (source target : EvoIR.Machine.Program) (annotations : EvoIR.Machine.Transport.ProgramPlan), "
+        "EvoIR.Machine.Transport.checkProgram source target annotations = true → "
+        "∀ (type : EvoIR.Core.Source.IntType) (name : String) (values : List EvoIR.Machine.Value) "
+        "(memory : EvoIR.Machine.Memory) (entry : EvoIR.Machine.State), "
+        "EvoIR.Machine.initial source name values memory = Except.ok entry → "
+        "EvoIR.Machine.ObservedProgress EvoIR.Machine.Mode.ssa source type entry → "
+        "EvoIR.Machine.initial target name values memory = Except.ok entry ∧ "
+        "EvoIR.Machine.TransportRefines source target type entry entry",
+    ),
     (
         "EvoIR.Core.Source.scope_exit_safe",
         "∀ (incoming current : EvoIR.Core.Source.LocalState) (introduced retained : EvoIR.Core.Source.Locals), "
@@ -1406,11 +1602,12 @@ TRUST = [
     "and the Section 9 parser, none of which this layer touches.",
     "The correspondence between the Rust implementation and these Lean "
     "definitions, for which only differential evidence exists.",
-    "Executing the compiled source-to-IR checker trusts the Lean compiler, "
+    "Executing the compiled source/IR and IR/MIR pair checkers trusts the Lean compiler, "
     "runtime and host toolchain. The general soundness theorem is kernel-checked; "
     "an executable acceptance is not a separately kernel-replayed proof term.",
-    "Faithful typed-source export and source/IR decoding remain input boundaries. "
-    "Source-to-IR checking does not prove machine lowering, allocation or emission.",
+    "Faithful typed-source and actual MIR snapshot exports and source/IR/MIR decoding "
+    "remain input boundaries. The accepted actual EvoIR/SSA/postSSA pair theorem "
+    "does not prove allocation, physical framing, assembly emission or hardware execution.",
 ]
 
 DUMP_TEMPLATE = """\

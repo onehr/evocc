@@ -21,6 +21,8 @@ def stripTokenSlots {Γ : Var → Nat} (memoryKey worldKey : Nat) : (slots : Lis
       exact congrArg (Slot.word first :: ·) tail.property⟩
   | _ => none
 
+/-- Read the complete logical call vector, including the current memory/world
+tail. Physical argument-register limits never truncate this vector. -/
 def readTokenArguments {Γ : Var → Nat} (scope : Scope Γ) (ids : List Nat) (memoryKey worldKey : Nat) :
     Option {words : List (Word Γ) // ∀ σ (ρ : Nat → IR.Value) memory,
       ρ memoryKey = .memory memory → ρ worldKey = .world →
