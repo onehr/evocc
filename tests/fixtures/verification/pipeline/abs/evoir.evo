@@ -1,0 +1,21 @@
+func @abs(%arg0: bits<32>) -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>):
+    %v1 = const.bits<32> 0
+    %v2 = icmp.slt %v1, %v0
+    cond_br %v2, ^b1(%v0), ^b2(%v0)
+
+^b1(%v3: bits<32>):
+    br ^b3(%v3, %v3)
+
+^b2(%v4: bits<32>):
+    %v5 = const.bits<32> 0
+    %v6 = signed_sub_defined %v5, %v4
+    ub.assume.signed_overflow %v6
+    %v7 = sub.bits<32> %v5, %v4
+    br ^b3(%v4, %v7)
+
+^b3(%v8: bits<32>, %v9: bits<32>):
+    ret %v9
+}

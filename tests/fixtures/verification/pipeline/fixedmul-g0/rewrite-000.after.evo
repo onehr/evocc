@@ -1,0 +1,16 @@
+func @FixedMul(%arg0: bits<32>, %arg1: bits<32>) -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: bits<32>):
+    %v2 = sext.bits<64> %v0
+    %v3 = sext.bits<64> %v1
+    %v4 = signed_mul_defined %v2, %v3
+    ub.assume.signed_overflow %v4
+    %v5 = mul.bits<64> %v2, %v3
+    %v6 = const.bits<32> 16
+    %v7 = const.bits<1> 1
+    ub.assume.invalid_shift_count %v7
+    %v8 = ashr.bits<64> %v5, %v6
+    %v9 = trunc.bits<32> %v8
+    ret %v9
+}
