@@ -43,7 +43,7 @@ theorem runFrom_control (fn : Nat) :
 /-- The save stores of the prologue. -/
 theorem saves_run (fn S : Nat) :
     ∀ (L : List (Nat × Nat)) (pos : Nat) (t : Asm.State),
-      t.sp = BitVec.ofNat 64 S → S % 16 = 0 → t.high ≤ 2^64 →
+      t.sp = BitVec.ofNat 64 S → S % 16 = 0 → t.high < 2^64 →
       (∀ x ∈ L, t.low ≤ S + x.2 ∧ S + x.2 + 8 ≤ t.high) →
       L.Pairwise (fun x y => Disjoint (x.2, 8) (y.2, 8)) →
       ∃ t', runFrom fn pos (L.map (fun x => Inst.str .x (.r x.1) .sp (x.2 : Int))) t = .ok t' ∧
@@ -106,7 +106,7 @@ theorem lookup_none (L : List (Nat × Nat)) (k : Nat) (h : k ∉ L.map Prod.fst)
 /-- The restore loads of the epilogue. -/
 theorem restores_run (fn S : Nat) :
     ∀ (L : List (Nat × Nat)) (pos : Nat) (t : Asm.State),
-      t.sp = BitVec.ofNat 64 S → S % 16 = 0 → t.high ≤ 2^64 →
+      t.sp = BitVec.ofNat 64 S → S % 16 = 0 → t.high < 2^64 →
       (∀ x ∈ L, t.low ≤ S + x.2 ∧ S + x.2 + 8 ≤ t.high) →
       keysUnique (L.map Prod.fst) = true →
       ∃ t', runFrom fn pos (L.map (fun x => Inst.ldr .x (.r x.1) .sp (x.2 : Int))) t = .ok t' ∧
@@ -146,5 +146,127 @@ theorem restores_run (fn S : Nat) :
         cases lookupOffset L r with
         | some o => rfl
         | none => simp [t1, update_other _ _ _ _ e]
+
+end EvoIR.Asm.Proof
+
+namespace EvoIR.Asm.Proof
+
+open EvoIR.Alloc
+open EvoIR.Asm.Check
+open Core.Source (Fault)
+
+theorem address_sub (E k : Nat) (hk : k ≤ E) (hE : E < 2^64) :
+    (BitVec.ofNat 64 E + BitVec.ofInt 64 (-(k : Int))).toNat = E - k := by
+  have : BitVec.ofInt 64 (-(k : Int)) = BitVec.ofNat 64 (2^64 - k) := by
+    apply BitVec.eq_of_toNat_eq
+    simp only [BitVec.toNat_ofInt, BitVec.toNat_ofNat]
+    omega
+  rw [this, BitVec.toNat_add, BitVec.toNat_ofNat, BitVec.toNat_ofNat]
+  omega
+
+theorem sub_nat (E k : Nat) (hk : k ≤ E) (hE : E < 2^64) :
+    BitVec.ofNat 64 E - BitVec.ofNat 64 k = BitVec.ofNat 64 (E - k) := by
+  apply BitVec.eq_of_toNat_eq
+  simp only [BitVec.toNat_sub, BitVec.toNat_ofNat]
+  omega
+
+theorem add_nat (E k : Nat) (hE : E + k < 2^64) :
+    BitVec.ofNat 64 E + BitVec.ofNat 64 k = BitVec.ofNat 64 (E + k) := by
+  apply BitVec.eq_of_toNat_eq
+  simp only [BitVec.toNat_add, BitVec.toNat_ofNat]
+  omega
+
+theorem ofInt_neg16 : BitVec.ofInt 64 (-16 : Int) = BitVec.ofInt 64 (-((16 : Nat) : Int)) := rfl
+
+theorem stp_effect (t : Asm.State) (E : Nat) (hsp : t.sp = BitVec.ofNat 64 E) (h16 : E % 16 = 0)
+    (low : t.low + 16 ≤ E) (top : E ≤ t.high) (high : t.high < 2^64) :
+    effect t (.stpPre 29 30 (-16)) = .ok {t with
+      memory := storeBytes (storeBytes t.memory (E - 16) 8 (t.regs 29).toNat) (E - 8) 8
+        (t.regs 30).toNat,
+      sp := BitVec.ofNat 64 (E - 16)} := by
+  have hE : E < 2^64 := by omega
+  have hbase : t.baseValue .sp = .ok t.sp := by
+    have : t.sp.toNat % 16 = 0 := by rw [hsp, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hE]; exact h16
+    simp [State.baseValue, this]
+  have a16 : (t.sp + BitVec.ofInt 64 (-16 : Int)).toNat = E - 16 := by
+    rw [hsp, ofInt_neg16]; exact address_sub E 16 (by omega) hE
+  have eight : (8 : BitVec 64).toNat = 8 := rfl
+  have a8 : (t.sp + BitVec.ofInt 64 (-16 : Int) + 8).toNat = E - 8 := by
+    rw [BitVec.toNat_add, a16, eight]; omega
+  have aeq : t.sp + BitVec.ofInt 64 (-16 : Int) = BitVec.ofNat 64 (E - 16) := by
+    apply BitVec.eq_of_toNat_eq; rw [a16, BitVec.toNat_ofNat]; omega
+  simp only [effect, hbase, bind, Except.bind]
+  rw [store_in t _ _ _ (by rw [a16]; omega) (by rw [a16]; omega), a16]
+  simp only
+  rw [store_in _ _ _ _ (by simp only; rw [a8]; omega) (by simp only; rw [a8]; omega), a8]
+  simp only [pure, Except.pure, aeq]
+
+/-- The prologue run from the entry stack pointer `E`. -/
+theorem prologue_run (fn : Nat) (h : FrameHint) (layout : LayoutOk h) (t : Asm.State) (E : Nat)
+    (hsp : t.sp = BitVec.ofNat 64 E) (h16 : E % 16 = 0)
+    (low : t.low + h.size + 16 ≤ E) (top : E ≤ t.high) (high : t.high < 2^64) :
+    ∃ t', runFrom fn 0 (prologue h) t = .ok t' ∧
+      t'.sp = BitVec.ofNat 64 (E - 16 - h.size) ∧ t'.flags = t.flags ∧ t'.low = t.low ∧
+      t'.high = t.high ∧ t'.regs = update t.regs 29 (BitVec.ofNat 64 (E - 16)) ∧
+      load64 t'.memory (E - 16) = t.regs 29 ∧ load64 t'.memory (E - 8) = t.regs 30 ∧
+      (∀ x ∈ h.saved, load64 t'.memory (E - 16 - h.size + x.2) = t.regs x.1) ∧
+      (∀ a, E ≤ a → t'.memory a = t.memory a) := by
+  have hE : E < 2^64 := by omega
+  let m2 := storeBytes (storeBytes t.memory (E - 16) 8 (t.regs 29).toNat) (E - 8) 8 (t.regs 30).toNat
+  have hrec29 : load64 m2 (E - 16) = t.regs 29 := by
+    rw [load64_congr (storeBytes t.memory (E - 16) 8 (t.regs 29).toNat) m2 _
+      (fun j _ => storeBytes_outside _ _ _ _ _ (by omega))]
+    unfold load64; exact load64_store64 _ _ _
+  have hrec30 : load64 m2 (E - 8) = t.regs 30 := by
+    unfold load64; exact load64_store64 _ _ _
+  have hkeep2 : ∀ a, E ≤ a → m2 a = t.memory a := by
+    intro a ha
+    simp only [m2]
+    rw [storeBytes_outside _ _ _ _ _ (by omega), storeBytes_outside _ _ _ _ _ (by omega)]
+  -- The state after the record, the frame pointer and the frame size.
+  let sizeCode : List Inst := if h.size = 0 then [] else [.subSp h.size]
+  let t4 : Asm.State := {t with
+    memory := m2, sp := BitVec.ofNat 64 (E - 16 - h.size),
+    regs := update t.regs 29 (BitVec.ofNat 64 (E - 16)),
+    control := .running fn (2 + sizeCode.length)}
+  have head : runFrom fn 0 ([.stpPre 29 30 (-16), .movFromSp 29] ++ sizeCode) t = .ok t4 := by
+    rw [runFrom_append]
+    simp only [runFrom, stp_effect t E hsp h16 (by omega) top high, bind, Except.bind]
+    by_cases z : h.size = 0
+    · simp only [sizeCode, z, if_true, runFrom, List.length_nil]
+      simp only [t4, sizeCode, z, if_true, List.length_nil, Nat.sub_zero]
+      rfl
+    · have hsub : BitVec.ofNat 64 (E - 16) - BitVec.ofNat 64 h.size =
+          BitVec.ofNat 64 (E - 16 - h.size) := sub_nat _ _ (by omega) (by omega)
+      simp only [sizeCode, z, if_false, runFrom, effect, bind, Except.bind, pure, Except.pure]
+      simp only [t4, sizeCode, z, if_false, List.length_singleton, List.length_cons, List.length_nil]
+      simp only [State.set, view, hsub]
+      rfl
+  obtain ⟨t', hrun, hregs, hsp', hfl, hlow, hhigh, hload, hkeep⟩ :=
+    saves_run fn (E - 16 - h.size) h.saved (2 + sizeCode.length) t4 rfl
+      (by have := layout.size16; omega) high
+      (fun x m => by have := layout.save x.1 x.2 m; simp only [t4]; omega) layout.savedPw
+  refine ⟨t', ?_, hsp', hfl, hlow, hhigh, hregs, ?_, ?_, ?_, ?_⟩
+  · have : prologue h = ([.stpPre 29 30 (-16), .movFromSp 29] ++ sizeCode) ++
+        h.saved.map (fun x => Inst.str .x (.r x.1) .sp (x.2 : Int)) := by
+      simp only [prologue, sizeCode, List.append_assoc]
+    rw [this, runFrom_append, head]
+    simp only [bind, Except.bind, List.length_append, List.length_cons, List.length_nil]
+    rw [show 0 + (0 + 1 + 1 + sizeCode.length) = 2 + sizeCode.length by omega]
+    exact hrun
+  · rw [load64_congr _ _ _ (fun j _ => hkeep _ (fun x m => by
+      have := (layout.save x.1 x.2 m).1; omega))]
+    exact hrec29
+  · rw [load64_congr _ _ _ (fun j _ => hkeep _ (fun x m => by
+      have := (layout.save x.1 x.2 m).1; omega))]
+    exact hrec30
+  · intro x m
+    rw [hload x m]
+    have := (layout.save x.1 x.2 m).2.2
+    have ne : x.1 ≠ 29 := by intro e; rw [e] at this; simp [isCalleeSaved] at this
+    simp only [t4, update_other _ _ _ _ ne]
+  · intro a ha
+    rw [hkeep a (fun x m => by have := (layout.save x.1 x.2 m).1; omega)]
+    exact hkeep2 a ha
 
 end EvoIR.Asm.Proof

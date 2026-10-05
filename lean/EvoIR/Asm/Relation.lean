@@ -153,7 +153,7 @@ def Running (ctx : Ctx) (entry : String) (s : Alloc.State) (t : Asm.State) : Pro
     Placed ctx a cur pos ∧
     t.sp = BitVec.ofNat 64 cur.sp ∧ cur.sp % 16 = 0 ∧
     t.regs 29 = BitVec.ofNat 64 cur.fp ∧
-    t.low + needOf ctx.p ctx.hints a.function ≤ cur.entry ∧ t.high ≤ 2^64 ∧
+    t.low + needOf ctx.p ctx.hints a.function ≤ cur.entry ∧ t.high < 2^64 ∧
     Shape a.storage ∧ RegsRel t.regs a.storage ∧ FlagsRel t.flags a.storage ∧
     OutgoingRel t.memory cur a.storage ∧ OwnSlots t.high t.memory cur a.storage ∧
     Chain ctx t.low t.high t.memory cur t.regs s.stack frs

@@ -20,7 +20,7 @@ theorem address_nat (a off : Nat) (h : a + off < 2^64) :
   omega
 
 theorem Local.sp_lt {cur : Frame} {st : Storage} {t : Asm.State} (hl : Local cur st t) :
-    cur.entry ≤ 2^64 := Nat.le_trans hl.top hl.high
+    cur.entry < 2^64 := Nat.lt_of_le_of_lt hl.top hl.high
 
 theorem Local.baseValue_sp {cur : Frame} {st : Storage} {t : Asm.State} (hl : Local cur st t) :
     t.baseValue .sp = .ok t.sp := by

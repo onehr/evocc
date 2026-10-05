@@ -19,7 +19,7 @@ structure Local (cur : Frame) (st : Storage) (t : Asm.State) : Prop where
   sp : t.sp = BitVec.ofNat 64 cur.sp
   sp16 : cur.sp % 16 = 0
   fp : t.regs 29 = BitVec.ofNat 64 cur.fp
-  high : t.high ≤ 2^64
+  high : t.high < 2^64
   top : cur.entry ≤ t.high
   bottom : t.low ≤ cur.sp
   shape : Shape st
