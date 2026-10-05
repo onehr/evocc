@@ -30,19 +30,19 @@ def appendResults (values : Bindings) (results : List Binding) (args : List Valu
     throw (.malformed "IR result already bound")
   return fresh ++ values
 
-private def pointer : Value → Except Fault (Nat × Int)
+def pointer : Value → Except Fault (Nat × Int)
   | .pointer id offset => .ok (id, offset)
   | .poison _ => .error (.diagnostic 3013)
   | _ => .error (.malformed "IR expected pointer")
 
-private def memory : Value → Except Fault Memory
+def memory : Value → Except Fault Memory
   | .memory m => .ok m
   | _ => .error (.malformed "IR expected memory")
 
-private def world (v : Value) : Except Fault Unit :=
+def world (v : Value) : Except Fault Unit :=
   if v == .world then .ok () else .error (.malformed "IR expected world")
 
-private def liveObject (m : Memory) (id : Nat) : Except Fault Object := do
+def liveObject (m : Memory) (id : Nat) : Except Fault Object := do
   if id == 0 then throw (.diagnostic 3009)
   let some o := m.objects.find? (·.id == id) | throw (.diagnostic 3013)
   if !o.live then throw (.diagnostic 3010)
