@@ -800,7 +800,11 @@ At that commit, the full workspace gate passes (407 suites, 3,102 passed,
 0 failed, 5 ignored; Clippy and formatting pass), and the Lean gate passes
 (receipt Lean commit `5d917f39`). The
 [TODO entry for V06](TODO.md#first-public-release-verification) records the
-binary digests.
+binary digests. After V07, the sweep passes again at `e657709b`: 17 of 17
+modules, 107 of 107 entries and both optimized cases. The 19 `output.s` files
+are byte-identical to the earlier output. The
+[native-run receipt](tests/contracts/core-v1-native-run.json) records this
+repeat.
 
 The mode also refuses a source that keeps a private frame object; this source
 is outside `core-v1`. An option that changes the text fails the V04 print
@@ -822,11 +826,12 @@ checker is a compiled Lean executable. A successful invocation does not submit
 a new per-program proof term to the kernel. A result of proof-required mode has
 these limits:
 
-1. **ABI entry values.** `AbiEntry` uses zero-extended argument values. The
-   theorem covers only entry states in which the upper 32 bits of each 32-bit
-   argument register and stack slot are zero. AAPCS64 does not require this of
-   a caller. The open task V07 is to remove this limit. It is the first
-   follow-up task.
+1. **ABI entry assumption.** The theorem uses `AbiSourceEntry`. The caller
+   obeys AAPCS64 for the low `w` bits of each argument of width `w`, in its
+   argument register or 8-byte stack slot, and gives sufficient stack. The
+   upper bits are free: the theorem holds for any value of them. The pipeline
+   check refuses at stage `V02` a post-SSA entry that does not read each
+   32-bit parameter through a 32-bit register (`entryViewsOk`).
 2. **Allocation.** V03 refuses an allocation with edge bridge blocks. No pilot
    entry has one.
 3. **Rewrites.** V05 refuses the root-deletion (alias) certificate form, for
@@ -848,17 +853,32 @@ these limits:
    - the printer of the assembly AST (`EvoIR.Asm.File.print`);
    - the Lean semantics of typed Core C and of the AArch64 subset, which must
      match the intended compiler contract;
-   - the ABI entry assumption `AbiEntry`: the caller obeys the AArch64
-     procedure call standard and gives sufficient stack (see item 1);
+   - the ABI entry assumption `AbiSourceEntry`: the caller obeys the AArch64
+     procedure call standard for the low bits of each argument and gives
+     sufficient stack (see item 1);
    - the assembler, the linker, the runtime libraries and the hardware.
-6. **Native execution.** The acceptance run did not assemble or execute the
-   output of proof-required mode. The open task V08 is to run the selected
-   native gates on this output.
+6. **Native execution.** The output of the 17 pilot modules was executed on
+   Linux AArch64 with no difference from the source interpreter in 14,194
+   comparisons (V08, subject `e657709b`). The run uses the existing sealed
+   image `evo-flight-lab:sealed`, GNU as and GNU ld 2.44, and a second build
+   with clang-19 and ld.lld 19. The two optimized cases give no difference in
+   328 comparisons. The upper-bits probe calls each entry with nonzero upper
+   32 bits in each 32-bit argument register: 45,232 calls on 83 pilot entries
+   give no difference. The run does not compare 178 vectors with undefined
+   behavior (each traps natively with the same diagnostic code) and 66
+   vectors that reach the step limit of the source interpreter. Not covered:
+   no pilot entry has a 32-bit parameter on the stack; the vectors at the step
+   limit have no source result; a test is not a proof. The assembler, the
+   linker, the runtime and the hardware stay trusted: the native run tests
+   them but does not prove them. Receipt:
+   [`tests/contracts/core-v1-native-run.json`](tests/contracts/core-v1-native-run.json).
+   Repeat with `python3 tools/proof-native/proof_native.py all WORK_DIR`
+   (`WORK_DIR` outside the repository).
 
 The exported snapshots (EvoIR, EvoMIR, allocation, assembly AST) are not
 trusted: a stage checks each one, and the digest chain binds them to the
 published text. Tests help check the trusted connections; they do not prove
-them. As of 2026-10-06, V00 to V06 are complete in the frozen `core-v1` scope.
+them. As of 2026-10-06, V00 to V08 are complete in the frozen `core-v1` scope.
 The pipeline check gives one theorem for the whole chain. The proofs do not
 cover the whole compiler, the GNU C language or Linux.
 See the [verification plan](docs/lean-plan.md#first-public-release-verification).

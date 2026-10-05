@@ -6,10 +6,8 @@ Plan revision 1, **2026-10-04**; inspected implementation `19bb5f7d`.
 The owner requires a practical compiler-correctness path before the first public
 version, followed by verified rewrites on that path. This section is the current
 implementation plan; the scalar-proof plan below remains historical evidence.
-**Current state (2026-10-06): V00 to V06 are complete in the frozen `core-v1`
-scope. V07, the first follow-up task, is open. V08 is open: the acceptance run
-did not assemble or execute the output, and the selected native gates were not
-run.** The result is a proved,
+**Current state (2026-10-06): V00 to V08 are complete in the frozen `core-v1`
+scope.** The result is a proved,
 fail-closed compilation path for the listed Core C-HIR subset and target, with
 an explicit trusted boundary. Existing scalar rewrites compose with that path.
 The driver mode `--proof-required` runs the V01, V05 (with `-Oeq-scalar`), V02,
@@ -32,11 +30,26 @@ an extraction with more than one instruction, and does not use facts through
 add, sub, mul and comparison. The trusted base is preprocessing, parsing,
 elaboration and the typed source export; the Lean kernel, the compiled checker
 and its toolchain; the file readers; the printer of the assembly AST; the Lean
-semantics of typed Core C and of the AArch64 subset; the `AbiEntry` assumption;
-and the assembler, the linker, the runtime and the hardware. Open limit (V07):
-`AbiEntry` uses zero-extended argument values, so the theorem covers only entry
-states in which the upper 32 bits of each 32-bit argument register and stack
-slot are zero. AAPCS64 does not require this of a caller.
+semantics of typed Core C and of the AArch64 subset; the `AbiSourceEntry`
+assumption; and the assembler, the linker, the runtime and the hardware.
+V07 removes the zero-extension premise. The pipeline theorems now use
+`EvoIR.Asm.Proof.AbiSourceEntry`: for a source argument of width `w`, only the
+low `w` bits of its argument register or 8-byte stack slot are equal to the
+argument, and the upper bits are arbitrary. The caller obeys AAPCS64 for these
+low bits and gives sufficient stack. `abiSourceEntry_of_abiEntry` shows that
+the old `AbiEntry` implies the new assumption. The new Boolean check
+`entryViewsOk` refuses at stage `V02` a post-SSA entry that does not read each
+32-bit parameter through a 32-bit register. After V07, the sweep passes again
+at `e657709b`. V08: the output of the 17 pilot modules was executed on Linux
+AArch64 with no difference from the source interpreter in 14,194 comparisons,
+in the existing sealed image `evo-flight-lab:sealed` with GNU as and GNU ld
+2.44 and a second build with clang-19 and ld.lld 19. The upper-bits probe
+gives no difference in 45,232 calls. Not covered: no pilot entry has a 32-bit
+parameter on the stack; vectors at the step limit have no source result; a
+test is not a proof. The assembler, the linker, the runtime and the hardware
+stay trusted: the native run tests them but does not prove them. Receipt:
+[core-v1-native-run.json](../tests/contracts/core-v1-native-run.json); repeat
+with `python3 tools/proof-native/proof_native.py all WORK_DIR`.
 Execution is tracked only in [TODO.md](../TODO.md#first-public-release-verification).
 
 ### Release outcome and boundary

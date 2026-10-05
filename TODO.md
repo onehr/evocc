@@ -124,8 +124,8 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | V07, T03 | V00-V06 are complete in the frozen scope. V07 removes the zero-extension premise from `AbiEntry`; it is the first follow-up task. The bucket includes proof implementation, not new audit tooling. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. |
-| ACCEPTANCE | V08, T04, T02, K13, K14, B10, T05 | V08 runs the selected native gates on proof-required output; the V06 acceptance run did not run them. Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| AUDIT | T03 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. |
+| ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -2309,24 +2309,27 @@ neither an allocation-only theorem nor existing rule proofs close the parent
 release requirement. Keep unsupported programs available in the ordinary
 compiler without implying a proof. No new registry, fact domain or AI campaign.
 
-**Current state (2026-10-06).** V00 to V06 are complete in the frozen `core-v1`
-scope. V07 is the first follow-up task. It is OPEN. The result is a proved,
+**Current state (2026-10-06).** V00 to V08 are complete in the frozen `core-v1`
+scope. The result is a proved,
 fail-closed compilation path for the listed Core C-HIR subset and target, with
 an explicit trusted boundary. Existing scalar rewrites compose with that path.
 Proof-required mode publishes an output only if the output is checked from
 typed Core source to final assembly text. The acceptance sweep accepts all 17
 pilot modules and all 107 entries of these modules, and both optimized cases.
-The V06 entry below gives the acceptance run. The acceptance run did not
-assemble or execute the output: the selected native gates were not run. Task
-V08 is to run them. The proofs do not cover the whole compiler, the GNU C
-language or Linux.
+The V06 entry below gives the first acceptance run. V07 removes the
+zero-extension premise from the entry assumption. The V08 entry gives the
+repeat of the sweep at `e657709b` and the native run: the output of the 17
+pilot modules was executed on Linux AArch64 with no difference from the
+source interpreter in 14,194 comparisons. The proofs do not cover the whole
+compiler, the GNU C language or Linux.
 
 Limits of the accepted result:
 
-1. `AbiEntry` uses zero-extended argument values. The theorem covers only entry
-   states in which the upper 32 bits of each 32-bit argument register and
-   stack slot are zero. AAPCS64 does not require this of a caller. The open
-   task V07 is to remove this limit. It is the first follow-up task.
+1. The entry assumption is `AbiSourceEntry`. The caller obeys AAPCS64 for the
+   low `w` bits of each argument of width `w` (its register or 8-byte stack
+   slot) and gives sufficient stack. The upper bits are free. The pipeline
+   check refuses at stage `V02` a post-SSA entry that does not read each
+   32-bit parameter through a 32-bit register (`entryViewsOk`).
 2. V03 refuses an allocation with edge bridge blocks. No pilot entry has one.
 3. V05 refuses the root-deletion (alias) certificate form. V05 refuses an
    extraction with more than one instruction. V05 does not use facts through
@@ -2340,8 +2343,12 @@ Limits of the accepted result:
 5. Trusted: preprocessing, parsing, elaboration and the typed source export;
    the Lean kernel, the compiled checker and its toolchain; the readers of the
    input files; the printer of the assembly AST; the Lean semantics of typed
-   Core C and of the AArch64 subset; the ABI entry assumption (`AbiEntry`);
-   the assembler, the linker, the runtime and the hardware.
+   Core C and of the AArch64 subset; the ABI entry assumption
+   (`AbiSourceEntry`); the assembler, the linker, the runtime and the hardware.
+6. The native run of V08 tests the assembler, the linker, the runtime and the
+   hardware on the pilot output. It does not prove them. Not covered: no pilot
+   entry has a 32-bit parameter on the stack; the vectors at the step limit
+   have no source result; a test is not a proof.
 
 - [x] **V00 — Freeze the core compilation theorem and real pilot**, complete in the frozen scope; P1.
   Name the source/target states, observation/refinement relation, exact supported
@@ -2817,10 +2824,11 @@ Limits of the accepted result:
   and the compiled checker, the file readers, the printer of the assembly AST,
   the Lean semantics of typed Core C and of the AArch64 subset, `AbiEntry`
   (the caller obeys the ABI and gives sufficient stack), and the assembler,
-  the linker and the hardware. Open limit: `AbiEntry` uses zero-extended
-  argument values; the theorem covers only entry states in which the upper 32
-  bits of each 32-bit argument register and stack slot are zero, and AAPCS64
-  does not require this of a caller. Release acceptance is not run. The 15
+  the linker and the hardware. Limit at that time (V07 removed it): `AbiEntry`
+  uses zero-extended argument values; the theorem covers only entry states in
+  which the upper 32 bits of each 32-bit argument register and stack slot are
+  zero, and AAPCS64 does not require this of a caller. Release acceptance is
+  not run. The 15
   tests in `crates/evocc/tests/proof_required.rs` pass.
   **October 6 completion (current state):** V06 is complete in the frozen
   scope. No refusal in the acceptance sweep is a defect of the mode. The
@@ -2859,16 +2867,17 @@ Limits of the accepted result:
     of that module, `caller` and `main` included, passed every stage in the
     direct check. This refusal is a missing input, not a defect of the mode.
 
-  - Not run: the selected native gates that the task text names. The
-    acceptance run did not assemble or execute the output. Free disk space
-    was below the stop line for heavy runs. Task V08 is to run these gates.
+  - Not run in this acceptance run: the selected native gates that the task
+    text names. Free disk space was below the stop line for heavy runs. V08
+    ran them later on the output of the same 17 modules and the two optimized
+    cases (see V08).
 
   The proof covers the listed subset only. The assembler, the linker, the
   runtime and the hardware stay trusted. Native tests do not remove them from
   the trusted base. The paragraph that starts "In work (October 5)" is
   history.
 
-- [ ] **V07 — Remove the zero-extension premise from the ABI entry assumption** — `OPEN`, P1.
+- [x] **V07 — Remove the zero-extension premise from the ABI entry assumption**, 2026-10-06; complete in the frozen scope; P1.
   First follow-up after V06. `EvoIR.Asm.Proof.AbiEntry` binds each argument
   register and stack slot to the zero-extended argument value. So the theorem
   covers only entry states in which the upper 32 bits of each 32-bit argument
@@ -2878,8 +2887,34 @@ Limits of the accepted result:
   or make the checker refuse code that uses them. Exit: `checkPipeline_sound`
   holds without the zero-extension premise, and the acceptance sweep of the
   17 pilot modules and the two optimized cases passes again.
+  **October 6 completion (current state):** V07 is complete in the frozen
+  scope (commits `3db5b76a`, `c00ae749`, `61868fdf`).
+  - The pipeline theorems `EvoIR.Pipeline.checkPipeline_sound` and
+    `checkPipelineTexts_sound` use the entry assumption
+    `EvoIR.Asm.Proof.AbiSourceEntry` (`lean/EvoIR/Asm/Soundness.lean`). For a
+    source argument of width `w`, only the low `w` bits of its argument
+    register or 8-byte stack slot are equal to the argument. The upper bits
+    are arbitrary. The zero-extension premise is removed.
+    `abiSourceEntry_of_abiEntry` shows that the old assumption implies the
+    new one.
+  - The pipeline check has one new Boolean check, `entryViewsOk`
+    (`lean/EvoIR/Pipeline/Check.lean`). Each 32-bit parameter must have a
+    32-bit register class at the post-SSA entry. A refusal has stage `V02`.
+  - `lean/EvoIR/Pipeline/Tests.lean` has a kernel-checked example with
+    `x0 = 0xFFFFFFFF00000005` and source argument 5.
+  - The change has 322 inserted Lean lines. The axioms are `propext`,
+    `Classical.choice` and `Quot.sound`.
+  - Gates at `61868fdf`, clean tree: the full workspace gate passes (407
+    suites, 3,102 passed, 0 failed, 5 ignored; Clippy and formatting pass).
+    The Lean gate passes (receipt Lean commit `61868fdf`, committed in
+    `e657709b`).
+  - The acceptance sweep passes again at `e657709b`: 17 of 17 modules, 107 of
+    107 entries and both optimized cases are checked from typed Core source
+    to final assembly text (see V08).
 
-- [ ] **V08 — Run the selected native gates on proof-required output** — `RETEST`, P1.
+  The first paragraph is history.
+
+- [x] **V08 — Run the selected native gates on proof-required output**, 2026-10-06; complete in the frozen scope; P1.
   The V06 acceptance run did not assemble or execute the output, because free
   disk space was below the stop line for heavy runs. Next action: when free
   disk space is above 25 GiB, assemble and run the proof-required output of
@@ -2889,6 +2924,50 @@ Limits of the accepted result:
   difference is recorded with its cause. A difference is a defect in a
   trusted part (the AArch64 subset semantics, the printer, the assembler or
   the linker), not a gap in a proved stage.
+  **October 6 completion (current state):** V08 is complete in the frozen
+  scope. The output of the 17 pilot modules was executed on Linux AArch64
+  with no difference from the source interpreter in 14,194 comparisons.
+  Receipt: [`tests/contracts/core-v1-native-run.json`](tests/contracts/core-v1-native-run.json).
+  Command to repeat: `python3 tools/proof-native/proof_native.py all WORK_DIR`
+  (`WORK_DIR` must be outside the repository). The scripts are in
+  `tools/proof-native/` (commit `94a13c24`); the receipt gives their digests.
+  - Subject: `e657709b`, with the binaries built at that state. The receipt
+    gives their SHA-256 digests. Proof-required mode accepts all 19 cases
+    with `CHECKED_TO_FINAL_ASSEMBLY`: the 17 pilot modules (107 of 107
+    entries) and both optimized cases. This is also the repeat of the
+    acceptance sweep that the exit of V07 requires. All 19 `output.s` files
+    are byte-identical to the output of the first native run (subject
+    `8dd00f59`, with the V06 binaries). The two runs give the same numbers.
+  - Environment: the existing sealed image `evo-flight-lab:sealed` (digest
+    `2c23684c9cc5`) on the Apple Container runtime 1.2.2. Guest kernel:
+    Linux 6.18.15 aarch64. Assembler and linker: GNU as 2.44 and GNU ld 2.44,
+    through gcc-14 14.2.0. Second build: the clang-19.1.7 integrated
+    assembler and ld.lld 19.1.7. The two assemblers give identical `.text`
+    bytes for all 19 outputs. No new image, VM disk or kernel tree.
+  - Oracle: the source interpreter (`evoir-sem --run-core`, step limit
+    10,000,000) for each module. Cross-check: the same C file compiled by
+    gcc-14 -O0. It agrees with the source interpreter in each comparison.
+  - Totals for the 17 modules (107 entries): 14,438 vectors; 14,194
+    compared; 0 differences. The clang-19 build gives the same 14,194
+    results. 178 vectors with undefined behavior are not compared; each of
+    them traps natively with the same diagnostic code (`brk #3004`). 66
+    vectors reach the step limit and have no source result: 10 return the
+    gcc -O0 result, 55 time out in both builds, and `loop_checked(5,
+    0xffffffff)` traps with `brk #3004` (signed overflow of `x`). The two
+    optimized cases: 332 vectors, 328 compared, 0 differences.
+  - Upper-bits probe: each entry with a 32-bit parameter is also called
+    with nonzero upper 32 bits in each 32-bit argument register (four
+    patterns). 45,232 calls on 83 pilot entries and 1,312 calls on the
+    3 optimized entries give 0 differences. `loop_forever` has no result, so
+    the probe does not call it. A static scan of the control flow from each
+    entry finds no read of the upper bits of a 32-bit argument register. The
+    8 reads that it finds are explicit zero extensions.
+  - Not covered: no pilot entry has a 32-bit parameter on the stack; the
+    vectors at the step limit have no source result; a test is not a proof.
+    The assembler, the linker, the runtime and the hardware stay trusted.
+    The native run tests them but does not prove them.
+
+  The first paragraph is history.
 
 ## Codegen quality track — next quarter
 

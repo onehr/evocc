@@ -1,0 +1,844 @@
+{
+ "format": "core-v1-native-run-v1",
+ "task": "V08",
+ "date": "2026-10-06",
+ "subject_commit": "e657709bc7d2463a57d30c0617a3a8d1ea02f2af",
+ "claim": "The proof-required output of the 17 core-v1 pilot modules is checked from typed Core source to final assembly text, and it was executed on Linux AArch64 with no difference from the source interpreter in 14,194 comparisons. The assembler, the linker, the runtime and the hardware stay trusted: the native run tests them but does not prove them.",
+ "command": "python3 tools/proof-native/proof_native.py all WORK_DIR",
+ "command_note": "WORK_DIR must be outside the repository. The script copies the three binaries into WORK_DIR/bin and uses only these copies. Defaults: target/frontend/debug/evocc, target/frontend/debug/evocc-checker, lean/.lake/build/bin/evoir-sem; override with --evocc, --evocc-checker, --evoir-sem or EVOCC, EVOCC_CHECKER, EVOIR_SEM.",
+ "harness": {
+  "commit": "94a13c240602c317525e65db0d39d1a98e431175",
+  "files": {
+   "tools/proof-native/proof_native.py": "8848e635c71cb2c9b8f934c39eb3e194e01cb58acd7e0b62b35f82dbac51c6ca",
+   "tools/proof-native/run-module.sh": "eaf0bfe7a0a00ed8c2a3f6e91dc09cda95eb796d4786236c71c44ae5c8a4e5e6"
+  },
+  "note": "The run used these files before their commit; the commit does not change them."
+ },
+ "binaries": {
+  "evocc": {
+   "path": "target/frontend/debug/evocc",
+   "sha256": "8c162ec92d58ced2f3be2fe3b43cf2aa322945cff9b71a3314377f4c5af2dfe5"
+  },
+  "evocc-checker": {
+   "path": "target/frontend/debug/evocc-checker",
+   "sha256": "6c8fe8b9f9c30e32093b2b3991748e17b96c4f3a83e270718951fe0e9e3fba2f"
+  },
+  "evoir-sem": {
+   "path": "lean/.lake/build/bin/evoir-sem",
+   "sha256": "c3e53dca6fc69bb94085d3715be8ef6a67b7e281588c9a3e9c94d2bc6de3913f"
+  }
+ },
+ "environment": {
+  "host": "macOS on Apple silicon",
+  "runner": "Apple Container CLI 1.2.2 (/usr/local/bin/container)",
+  "runner_command": "container run --rm --platform linux/arm64 --network none --cpus 4 --memory 2G --volume DIR:/work evo-flight-lab:sealed",
+  "image": "evo-flight-lab:sealed",
+  "image_digest": "2c23684c9cc5",
+  "guest_kernel": "Linux 6.18.15 aarch64",
+  "c_compiler": "gcc-14 (Debian 14.2.0-19) 14.2.0",
+  "assembler": "GNU assembler (GNU Binutils for Debian) 2.44",
+  "linker": "GNU ld (GNU Binutils for Debian) 2.44",
+  "objcopy": "GNU objcopy (GNU Binutils for Debian) 2.44",
+  "second_assembler": "Debian clang version 19.1.7 (3+b1) (integrated assembler)",
+  "second_linker": "Debian LLD 19.1.7 (compatible with GNU linkers)"
+ },
+ "method": {
+  "oracle": "evoir-sem --run-core inputs/source-ENTRY.json ENTRY 10000000 ARGS (the source interpreter) for every module",
+  "cross_check": "the same C file compiled by gcc-14 -O0 -fno-builtin in the same image; compared with the oracle, and the only comparison for vectors at the step limit",
+  "builds": "output.s assembled by GNU as (through gcc-14) and linked by GNU ld; and assembled by clang-19 and linked by ld.lld-19. The instructions are not changed; objcopy changes only the symbol table (static entries made global, main renamed).",
+  "vectors": "cross product of core values (0, 1, -1, minimum, maximum and others) for up to 4 parameters, a sweep of each parameter over its full value set, and 32 seeded random vectors (64 for wide); loop counts 0 to 8, 16 to 32, 64, 100, 1000 and the maximum",
+  "execution": "each call in a forked child with a time limit (20 s; 5 s for a vector without a source result); a brk trap is reported with its immediate",
+  "skipped": "a vector for which the source interpreter reports a diagnostic (undefined behavior) or reaches the step limit is not compared with the oracle",
+  "upper_bits_probe": "each entry with a 32-bit parameter is also called through a prototype that declares each parameter as a 64-bit integer; the upper 32 bits of each 32-bit argument are DEADBEEF, FFFFFFFF, 00000001 and 80000000 in four calls; each result must be equal to the oracle",
+  "static_scan": "control-flow scan of output.s from each entry with a 32-bit parameter: a read of the X form of an argument register before a write to it"
+ },
+ "proof_required_sweep": {
+  "cases": 19,
+  "accepted": 19,
+  "result": "CHECKED_TO_FINAL_ASSEMBLY",
+  "scope": "checked from typed Core source to final assembly text",
+  "pilot_modules": 17,
+  "pilot_entries": 107,
+  "output_identical_to_first_run": true,
+  "note": "This is also the repeat of the acceptance sweep that the exit of V07 requires."
+ },
+ "cases": {
+  "doom-fixedmul": {
+   "fixture": "tests/fixtures/verification/doom-fixedmul.c",
+   "options": [],
+   "entries": [
+    "FixedMul"
+   ],
+   "proposals": {},
+   "pipeline_accepted": 1
+  },
+  "musl-abs": {
+   "fixture": "tests/fixtures/verification/musl-abs.c",
+   "options": [],
+   "entries": [
+    "abs"
+   ],
+   "proposals": {},
+   "pipeline_accepted": 1
+  },
+  "control": {
+   "fixture": "tests/fixtures/verification/control.c",
+   "options": [],
+   "entries": [
+    "loop_join",
+    "short_circuit"
+   ],
+   "proposals": {
+    "loop_join": "tests/fixtures/verification/loop-join.cutpoints.json"
+   },
+   "pipeline_accepted": 2
+  },
+  "pressure": {
+   "fixture": "tests/fixtures/verification/pressure.c",
+   "options": [],
+   "entries": [
+    "wide",
+    "pressure"
+   ],
+   "proposals": {},
+   "pipeline_accepted": 2
+  },
+  "source-execution": {
+   "fixture": "tests/fixtures/verification/source-execution.c",
+   "options": [],
+   "entries": [
+    "FixedMul",
+    "abs",
+    "loop_join",
+    "short_circuit",
+    "wide",
+    "pressure",
+    "caller",
+    "control",
+    "main"
+   ],
+   "proposals": {
+    "loop_join": "element for symbol 7 of tests/fixtures/verification/source-execution.cutpoints.json (extracted at run time)",
+    "control": "element for symbol 56 of tests/fixtures/verification/source-execution.cutpoints.json (extracted at run time)",
+    "main": "tests/fixtures/verification/source-execution.cutpoints.json"
+   },
+   "pipeline_accepted": 9
+  },
+  "call-loop": {
+   "fixture": "tests/fixtures/verification/call-loop.c",
+   "options": [],
+   "entries": [
+    "call_tick",
+    "loop_call",
+    "call_loop"
+   ],
+   "proposals": {
+    "loop_call": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "call_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json"
+   },
+   "pipeline_accepted": 3
+  },
+  "call-loop-control": {
+   "fixture": "tests/fixtures/verification/call-loop-control.c",
+   "options": [],
+   "entries": [
+    "loop_branch_tick",
+    "loop_branch",
+    "loop_checked_tick",
+    "loop_checked",
+    "loop_forever"
+   ],
+   "proposals": {
+    "loop_branch": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "loop_checked": "tests/fixtures/verification/loop-checked.cutpoints.json",
+    "loop_forever": "tests/fixtures/verification/loop-forever.cutpoints.json"
+   },
+   "pipeline_accepted": 5
+  },
+  "call-loop-context": {
+   "fixture": "tests/fixtures/verification/call-loop-context.c",
+   "options": [],
+   "entries": [
+    "call_tick",
+    "loop_call",
+    "call_loop",
+    "right_call",
+    "conditional_call",
+    "assigned_call",
+    "nested_call"
+   ],
+   "proposals": {
+    "loop_call": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "call_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "right_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "conditional_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "assigned_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "nested_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json"
+   },
+   "pipeline_accepted": 7
+  },
+  "call-loop-closure-context": {
+   "fixture": "tests/fixtures/verification/call-loop-closure-context.c",
+   "options": [],
+   "entries": [
+    "call_tick",
+    "loop_call",
+    "call_loop",
+    "initialized_loop_call",
+    "and_loop_call",
+    "or_loop_call",
+    "branch_loop_call"
+   ],
+   "proposals": {
+    "loop_call": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "call_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "initialized_loop_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "and_loop_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "or_loop_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "branch_loop_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json"
+   },
+   "pipeline_accepted": 7
+  },
+  "call-loop-short-right": {
+   "fixture": "tests/fixtures/verification/call-loop-short-right.c",
+   "options": [],
+   "entries": [
+    "call_tick",
+    "loop_call",
+    "call_loop",
+    "and_right_loop_call",
+    "or_right_loop_call"
+   ],
+   "proposals": {
+    "loop_call": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "call_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "and_right_loop_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "or_right_loop_call": "tests/fixtures/verification/call-loop-closure.cutpoints.json"
+   },
+   "pipeline_accepted": 5
+  },
+  "call-loop-mixed": {
+   "fixture": "tests/fixtures/verification/call-loop-mixed.c",
+   "options": [],
+   "entries": [
+    "call_tick",
+    "loop_call",
+    "call_loop",
+    "finite_before_loop",
+    "finite_loop_argument",
+    "loop_then_finite"
+   ],
+   "proposals": {
+    "loop_call": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "call_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "finite_before_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "finite_loop_argument": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "loop_then_finite": "tests/fixtures/verification/call-loop-closure.cutpoints.json"
+   },
+   "pipeline_accepted": 6
+  },
+  "call-loop-nested": {
+   "fixture": "tests/fixtures/verification/call-loop-nested.c",
+   "options": [],
+   "entries": [
+    "call_tick",
+    "loop_call",
+    "call_loop",
+    "loop_calls_loop"
+   ],
+   "proposals": {
+    "loop_call": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "call_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "loop_calls_loop": "tests/fixtures/verification/call-loop-nested.cutpoints.json"
+   },
+   "pipeline_accepted": 4
+  },
+  "call-loop-deep": {
+   "fixture": "tests/fixtures/verification/call-loop-deep.c",
+   "options": [],
+   "entries": [
+    "call_tick",
+    "loop_call",
+    "call_loop",
+    "loop_calls_loop",
+    "call_nested_loop"
+   ],
+   "proposals": {
+    "loop_call": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "call_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "loop_calls_loop": "tests/fixtures/verification/call-loop-nested.cutpoints.json",
+    "call_nested_loop": "tests/fixtures/verification/call-loop-nested.cutpoints.json"
+   },
+   "pipeline_accepted": 5
+  },
+  "call-loop-deep-context": {
+   "fixture": "tests/fixtures/verification/call-loop-deep-context.c",
+   "options": [],
+   "entries": [
+    "call_tick",
+    "loop_call",
+    "call_loop",
+    "loop_calls_loop",
+    "call_nested_loop",
+    "deep_saved",
+    "deep_short",
+    "deep_outer_loop"
+   ],
+   "proposals": {
+    "loop_call": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "call_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "loop_calls_loop": "tests/fixtures/verification/call-loop-nested.cutpoints.json",
+    "call_nested_loop": "tests/fixtures/verification/call-loop-nested.cutpoints.json",
+    "deep_saved": "tests/fixtures/verification/call-loop-nested.cutpoints.json",
+    "deep_short": "tests/fixtures/verification/call-loop-nested.cutpoints.json",
+    "deep_outer_loop": "tests/fixtures/verification/call-loop-deep-context.cutpoints.json"
+   },
+   "pipeline_accepted": 8
+  },
+  "call-constant-tail": {
+   "fixture": "tests/fixtures/verification/call-constant-tail.c",
+   "options": [],
+   "entries": [
+    "call_tick",
+    "loop_call",
+    "call_loop",
+    "call_constant_tail"
+   ],
+   "proposals": {
+    "loop_call": "tests/fixtures/verification/loop-call.cutpoints.json",
+    "call_loop": "tests/fixtures/verification/call-loop-closure.cutpoints.json",
+    "call_constant_tail": "tests/fixtures/verification/call-loop-closure.cutpoints.json"
+   },
+   "pipeline_accepted": 4
+  },
+  "initializer-self-assignment": {
+   "fixture": "tests/fixtures/verification/initializer-self-assignment.c",
+   "options": [],
+   "entries": [
+    "initializer_self_assignment",
+    "main"
+   ],
+   "proposals": {},
+   "pipeline_accepted": 2
+  },
+  "source-conversions": {
+   "fixture": "tests/fixtures/verification/source-conversions.c",
+   "options": [],
+   "entries": [
+    "ii",
+    "iu",
+    "il",
+    "iz",
+    "iq",
+    "iw",
+    "ui",
+    "uu",
+    "ul",
+    "uz",
+    "uq",
+    "uw",
+    "li",
+    "lu",
+    "ll",
+    "lz",
+    "lq",
+    "lw",
+    "zi",
+    "zu",
+    "zl",
+    "zz",
+    "zq",
+    "zw",
+    "qi",
+    "qu",
+    "ql",
+    "qz",
+    "qq",
+    "qw",
+    "wi",
+    "wu",
+    "wl",
+    "wz",
+    "wq",
+    "ww"
+   ],
+   "proposals": {},
+   "pipeline_accepted": 36
+  },
+  "opt-fixedmul-g0": {
+   "fixture": "tests/fixtures/verification/doom-fixedmul.c",
+   "options": [
+    "-Oeq-scalar",
+    "--eq-policy=guard-known-true",
+    "--eq-checker=EVOCC_CHECKER",
+    "--eq-checker-sha256=SHA256(EVOCC_CHECKER)"
+   ],
+   "entries": [
+    "FixedMul"
+   ],
+   "proposals": {},
+   "pipeline_accepted": 1
+  },
+  "opt-control-p0": {
+   "fixture": "tests/fixtures/verification/control.c",
+   "options": [
+    "-Oeq-scalar",
+    "--eq-checker=EVOCC_CHECKER",
+    "--eq-checker-sha256=SHA256(EVOCC_CHECKER)"
+   ],
+   "entries": [
+    "loop_join",
+    "short_circuit"
+   ],
+   "proposals": {
+    "loop_join": "tests/fixtures/verification/loop-join.cutpoints.json"
+   },
+   "pipeline_accepted": 2
+  }
+ },
+ "modules": {
+  "doom-fixedmul": {
+   "entries": 1,
+   "vectors": 143,
+   "compared": 143,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 0,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 572,
+   "probe_differences": 0,
+   "gcc_O0_compared": 143,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 143,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=76 gnu_vs_llvm=SAME relocations_gnu=0 relocations_llvm=0"
+  },
+  "musl-abs": {
+   "entries": 1,
+   "vectors": 52,
+   "compared": 51,
+   "skipped_undefined_behavior": 1,
+   "skipped_step_limit": 0,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 204,
+   "probe_differences": 0,
+   "gcc_O0_compared": 51,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 51,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 1,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=56 gnu_vs_llvm=SAME relocations_gnu=0 relocations_llvm=0"
+  },
+  "control": {
+   "entries": 2,
+   "vectors": 191,
+   "compared": 187,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 4,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 748,
+   "probe_differences": 0,
+   "gcc_O0_compared": 187,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 187,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 4,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=428 gnu_vs_llvm=SAME relocations_gnu=0 relocations_llvm=0"
+  },
+  "pressure": {
+   "entries": 2,
+   "vectors": 627,
+   "compared": 627,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 0,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 0,
+   "probe_differences": 0,
+   "gcc_O0_compared": 627,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 627,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=808 gnu_vs_llvm=SAME relocations_gnu=1 relocations_llvm=1"
+  },
+  "source-execution": {
+   "entries": 9,
+   "vectors": 1113,
+   "compared": 1090,
+   "skipped_undefined_behavior": 17,
+   "skipped_step_limit": 6,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 1848,
+   "probe_differences": 0,
+   "gcc_O0_compared": 1090,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 1090,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 17,
+   "step_limit_gcc_compared": 6,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=2336 gnu_vs_llvm=SAME relocations_gnu=11 relocations_llvm=11"
+  },
+  "call-loop": {
+   "entries": 3,
+   "vectors": 279,
+   "compared": 277,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 2,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 1108,
+   "probe_differences": 0,
+   "gcc_O0_compared": 277,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 277,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=136 gnu_vs_llvm=SAME relocations_gnu=2 relocations_llvm=2"
+  },
+  "call-loop-control": {
+   "entries": 5,
+   "vectors": 342,
+   "compared": 326,
+   "skipped_undefined_behavior": 8,
+   "skipped_step_limit": 8,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 1304,
+   "probe_differences": 0,
+   "gcc_O0_compared": 326,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 326,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 8,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=280 gnu_vs_llvm=SAME relocations_gnu=3 relocations_llvm=3"
+  },
+  "call-loop-context": {
+   "entries": 7,
+   "vectors": 739,
+   "compared": 733,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 6,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 2932,
+   "probe_differences": 0,
+   "gcc_O0_compared": 733,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 733,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=312 gnu_vs_llvm=SAME relocations_gnu=7 relocations_llvm=7"
+  },
+  "call-loop-closure-context": {
+   "entries": 7,
+   "vectors": 738,
+   "compared": 732,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 6,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 2928,
+   "probe_differences": 0,
+   "gcc_O0_compared": 732,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 732,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=380 gnu_vs_llvm=SAME relocations_gnu=6 relocations_llvm=6"
+  },
+  "call-loop-short-right": {
+   "entries": 5,
+   "vectors": 512,
+   "compared": 509,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 3,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 2036,
+   "probe_differences": 0,
+   "gcc_O0_compared": 509,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 509,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=240 gnu_vs_llvm=SAME relocations_gnu=4 relocations_llvm=4"
+  },
+  "call-loop-mixed": {
+   "entries": 6,
+   "vectors": 630,
+   "compared": 625,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 5,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 2500,
+   "probe_differences": 0,
+   "gcc_O0_compared": 625,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 625,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=292 gnu_vs_llvm=SAME relocations_gnu=8 relocations_llvm=8"
+  },
+  "call-loop-nested": {
+   "entries": 4,
+   "vectors": 601,
+   "compared": 597,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 4,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 2388,
+   "probe_differences": 0,
+   "gcc_O0_compared": 597,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 597,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=236 gnu_vs_llvm=SAME relocations_gnu=3 relocations_llvm=3"
+  },
+  "call-loop-deep": {
+   "entries": 5,
+   "vectors": 915,
+   "compared": 909,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 6,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 3636,
+   "probe_differences": 0,
+   "gcc_O0_compared": 909,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 909,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=260 gnu_vs_llvm=SAME relocations_gnu=4 relocations_llvm=4"
+  },
+  "call-loop-deep-context": {
+   "entries": 8,
+   "vectors": 2982,
+   "compared": 2969,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 13,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 11876,
+   "probe_differences": 0,
+   "gcc_O0_compared": 2969,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 2969,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=480 gnu_vs_llvm=SAME relocations_gnu=7 relocations_llvm=7"
+  },
+  "call-constant-tail": {
+   "entries": 4,
+   "vectors": 392,
+   "compared": 389,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 3,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 1556,
+   "probe_differences": 0,
+   "gcc_O0_compared": 389,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 389,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=572 gnu_vs_llvm=SAME relocations_gnu=3 relocations_llvm=3"
+  },
+  "initializer-self-assignment": {
+   "entries": 2,
+   "vectors": 2,
+   "compared": 2,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 0,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 0,
+   "probe_differences": 0,
+   "gcc_O0_compared": 2,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 2,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=52 gnu_vs_llvm=SAME relocations_gnu=1 relocations_llvm=1"
+  },
+  "source-conversions": {
+   "entries": 36,
+   "vectors": 4180,
+   "compared": 4028,
+   "skipped_undefined_behavior": 152,
+   "skipped_step_limit": 0,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 9596,
+   "probe_differences": 0,
+   "gcc_O0_compared": 4028,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 4028,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 152,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=904 gnu_vs_llvm=SAME relocations_gnu=0 relocations_llvm=0"
+  },
+  "opt-fixedmul-g0": {
+   "entries": 1,
+   "vectors": 143,
+   "compared": 143,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 0,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 572,
+   "probe_differences": 0,
+   "gcc_O0_compared": 143,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 143,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 0,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=60 gnu_vs_llvm=SAME relocations_gnu=0 relocations_llvm=0"
+  },
+  "opt-control-p0": {
+   "entries": 2,
+   "vectors": 189,
+   "compared": 185,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 4,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 740,
+   "probe_differences": 0,
+   "gcc_O0_compared": 185,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 185,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 4,
+   "step_limit_gcc_differences": 0,
+   "text": "text_bytes=420 gnu_vs_llvm=SAME relocations_gnu=0 relocations_llvm=0"
+  }
+ },
+ "totals": {
+  "pilot_17_modules": {
+   "entries": 107,
+   "vectors": 14438,
+   "compared": 14194,
+   "skipped_undefined_behavior": 178,
+   "skipped_step_limit": 66,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 45232,
+   "probe_differences": 0,
+   "gcc_O0_compared": 14194,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 14194,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 178,
+   "step_limit_gcc_compared": 10,
+   "step_limit_gcc_differences": 0
+  },
+  "optimized_2_cases": {
+   "entries": 3,
+   "vectors": 332,
+   "compared": 328,
+   "skipped_undefined_behavior": 0,
+   "skipped_step_limit": 4,
+   "oracle_errors": 0,
+   "differences": 0,
+   "probe_calls": 1312,
+   "probe_differences": 0,
+   "gcc_O0_compared": 328,
+   "gcc_O0_differences": 0,
+   "llvm_build_compared": 328,
+   "llvm_build_differences": 0,
+   "undefined_behavior_with_same_trap": 0,
+   "step_limit_gcc_compared": 4,
+   "step_limit_gcc_differences": 0
+  }
+ },
+ "step_limit_native_outcomes_pilot": {
+  "RET": 10,
+  "TIMEOUT": 55,
+  "TRAP": 1
+ },
+ "step_limit_note": "loop_join and control return the gcc-14 -O0 result; loop_checked(5, 0xffffffff) traps with brk #3004, which agrees with the signed overflow of x at INT_MAX; the other vectors (a loop count of 0xffffffff with a call in each iteration, and loop_forever) time out in both builds",
+ "probe": {
+  "pilot_entries_with_32_bit_parameter": 84,
+  "pilot_entries_probed": 83,
+  "pilot_entries_not_probed": [
+   "call-loop-control:loop_forever"
+  ],
+  "not_probed_reason": "loop_forever has no result",
+  "pilot_calls": 45232,
+  "pilot_differences": 0,
+  "optimized_calls": 1312,
+  "optimized_differences": 0,
+  "static_scan": {
+   "entries_scanned": 87,
+   "findings": {
+    "passed to callee": 66,
+    "masked": 8
+   }
+  },
+  "static_scan_note": "masked: and xN, xN, #4294967295 in source-conversions, an explicit zero extension; passed to callee: each callee parameter is 32-bit, and the scan checks each callee as an entry"
+ },
+ "first_run": {
+  "date": "2026-10-06",
+  "subject_commit": "8dd00f59",
+  "binaries": {
+   "evocc": "aedc2cd02dda98ab65a18f3e25831eb3344d78d6c7ba371e5bff67bfed89dbb2",
+   "evocc-checker": "723354bf72ce5cbbc9cd3e7d3d35339c46159bbb87678590fc8eeda3be9f078f",
+   "evoir-sem": "f2940a8e4fb852fd6f8bf7315f3c1e72578aa47570b9277a1f3b0e5a6def70c6"
+  },
+  "result": "the same tables and totals with the scratch scripts that became tools/proof-native",
+  "output_s_byte_identical_cases": 19,
+  "number_differences": []
+ },
+ "not_covered": [
+  "No pilot entry has a 32-bit parameter on the stack, so the stack-slot part of AbiSourceEntry has no native test (wide has 24 stack arguments, all 64-bit).",
+  "The vectors at the step limit have no source result; they are not compared with the source interpreter.",
+  "A test is not a proof. The assembler, the linker, the runtime and the hardware stay trusted.",
+  "The run covers only the 17 pilot modules and the two optimized cases, with the listed vectors."
+ ]
+}
