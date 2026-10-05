@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 1.9.116** | **Authoritative reference** | **2026-10-01**",
     "spec_sha256": "00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802",
-    "lean_commit": "4db6012eaca35a2cab60afe85acf60672aeeaca0",
+    "lean_commit": "b691b5899269ddf9e908c721bb57ad54ea230247",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -89,6 +89,29 @@
       "lean/EvoIR/Core/OpenCallingLoop.lean",
       "lean/EvoIR/Core/OpenCheckpoint.lean",
       "lean/EvoIR/Core/PathCondition.lean",
+      "lean/EvoIR/Core/PrivateBindings.lean",
+      "lean/EvoIR/Core/PrivateBoundary.lean",
+      "lean/EvoIR/Core/PrivateBytes.lean",
+      "lean/EvoIR/Core/PrivateCallBindings.lean",
+      "lean/EvoIR/Core/PrivateCallTests.lean",
+      "lean/EvoIR/Core/PrivateCallingClosure.lean",
+      "lean/EvoIR/Core/PrivateChecker.lean",
+      "lean/EvoIR/Core/PrivateCheckpointBank.lean",
+      "lean/EvoIR/Core/PrivateContextCall.lean",
+      "lean/EvoIR/Core/PrivateCutpoint.lean",
+      "lean/EvoIR/Core/PrivateCyclic.lean",
+      "lean/EvoIR/Core/PrivateDiagram.lean",
+      "lean/EvoIR/Core/PrivateFunctionClosure.lean",
+      "lean/EvoIR/Core/PrivateFunctionContext.lean",
+      "lean/EvoIR/Core/PrivateLoopTests.lean",
+      "lean/EvoIR/Core/PrivateOperations.lean",
+      "lean/EvoIR/Core/PrivateProject.lean",
+      "lean/EvoIR/Core/PrivateRead.lean",
+      "lean/EvoIR/Core/PrivateRebind.lean",
+      "lean/EvoIR/Core/PrivateStorage.lean",
+      "lean/EvoIR/Core/PrivateStorageTests.lean",
+      "lean/EvoIR/Core/PrivateTarget.lean",
+      "lean/EvoIR/Core/PrivateTargetTypes.lean",
       "lean/EvoIR/Core/RepeatedGuard.lean",
       "lean/EvoIR/Core/ReturnContinuation.lean",
       "lean/EvoIR/Core/ReturnCorrespondence.lean",
@@ -113,6 +136,8 @@
       "lean/EvoIR/Core/SourceResumeTests.lean",
       "lean/EvoIR/Core/SourceResumption.lean",
       "lean/EvoIR/Core/SourceSpan.lean",
+      "lean/EvoIR/Core/SourceTargetCheck.lean",
+      "lean/EvoIR/Core/SourceTargetCheckTests.lean",
       "lean/EvoIR/Core/StateEntry.lean",
       "lean/EvoIR/Core/StateExpression.lean",
       "lean/EvoIR/Core/StateExpressionTests.lean",
@@ -138,9 +163,31 @@
       "lean/EvoIR/Core/TargetCutpoint.lean",
       "lean/EvoIR/Core/TargetFrontier.lean",
       "lean/EvoIR/Core/Transition.lean",
+      "lean/EvoIR/Core/ValidatorAdmission.lean",
+      "lean/EvoIR/Core/ValidatorArguments.lean",
+      "lean/EvoIR/Core/ValidatorBranchTransfer.lean",
+      "lean/EvoIR/Core/ValidatorCallTransfer.lean",
+      "lean/EvoIR/Core/ValidatorConstantTransfer.lean",
+      "lean/EvoIR/Core/ValidatorExpressionTransfer.lean",
+      "lean/EvoIR/Core/ValidatorFacts.lean",
+      "lean/EvoIR/Core/ValidatorForFacts.lean",
+      "lean/EvoIR/Core/ValidatorForTransfer.lean",
+      "lean/EvoIR/Core/ValidatorInitial.lean",
+      "lean/EvoIR/Core/ValidatorInvariant.lean",
+      "lean/EvoIR/Core/ValidatorLoopTransfer.lean",
+      "lean/EvoIR/Core/ValidatorObjectFacts.lean",
+      "lean/EvoIR/Core/ValidatorObjectTransfer.lean",
+      "lean/EvoIR/Core/ValidatorPrimitiveTransfer.lean",
+      "lean/EvoIR/Core/ValidatorSafety.lean",
+      "lean/EvoIR/Core/ValidatorScopeFacts.lean",
+      "lean/EvoIR/Core/ValidatorScopeTransfer.lean",
+      "lean/EvoIR/Core/ValidatorSequenceTransfer.lean",
       "lean/EvoIR/Core/ValidatorState.lean",
+      "lean/EvoIR/Core/ValidatorStatementFacts.lean",
+      "lean/EvoIR/Core/ValidatorStatementTransfer.lean",
       "lean/EvoIR/Core/ValidatorStorage.lean",
       "lean/EvoIR/Core/ValidatorStorageTests.lean",
+      "lean/EvoIR/Core/ValidatorStoreTransfer.lean",
       "lean/EvoIR/Core/WellFormed.lean",
       "lean/EvoIR/Core/WellFormedTests.lean",
       "lean/EvoIR/Eval.lean",
@@ -168,6 +215,7 @@
         "EvoIR.Core.Divergence",
         "EvoIR.Core.SimulationTests",
         "EvoIR.Core.LocalStorage",
+        "EvoIR.Core.ValidatorSafety",
         "EvoIR.Core.SymbolicScalarTests",
         "EvoIR.Core.SymbolicInstructionTests",
         "EvoIR.Core.SymbolicSourceTests",
@@ -426,6 +474,91 @@
         "EvoIR.Core.CutTree",
         "EvoIR.Core.FreshReturn"
       ],
+      "lean/EvoIR/Core/PrivateBindings.lean": [
+        "EvoIR.Core.PrivateStorage",
+        "EvoIR.Core.SymbolicEdge",
+        "EvoIR.Core.SymbolicStorage"
+      ],
+      "lean/EvoIR/Core/PrivateBoundary.lean": [
+        "EvoIR.Core.PrivateTargetTypes"
+      ],
+      "lean/EvoIR/Core/PrivateBytes.lean": [
+        "EvoIR.Core.IRExecution"
+      ],
+      "lean/EvoIR/Core/PrivateCallBindings.lean": [
+        "EvoIR.Core.PrivateFunctionClosure",
+        "EvoIR.Core.FreshReturn"
+      ],
+      "lean/EvoIR/Core/PrivateCallTests.lean": [
+        "EvoIR.Core.PrivateCallingClosure",
+        "EvoIR.Core.SourceTargetCheck"
+      ],
+      "lean/EvoIR/Core/PrivateCallingClosure.lean": [
+        "EvoIR.Core.PrivateContextCall"
+      ],
+      "lean/EvoIR/Core/PrivateChecker.lean": [
+        "EvoIR.Core.PrivateRead"
+      ],
+      "lean/EvoIR/Core/PrivateCheckpointBank.lean": [
+        "EvoIR.Core.PrivateRebind"
+      ],
+      "lean/EvoIR/Core/PrivateContextCall.lean": [
+        "EvoIR.Core.PrivateCyclic",
+        "EvoIR.Core.PrivateCallBindings",
+        "EvoIR.Core.SourceFrontier"
+      ],
+      "lean/EvoIR/Core/PrivateCutpoint.lean": [
+        "EvoIR.Core.PrivateFunctionContext",
+        "EvoIR.Core.PrivateCheckpointBank",
+        "EvoIR.Core.PrivateProject"
+      ],
+      "lean/EvoIR/Core/PrivateCyclic.lean": [
+        "EvoIR.Core.PrivateFunctionClosure",
+        "EvoIR.Core.PrivateCutpoint"
+      ],
+      "lean/EvoIR/Core/PrivateDiagram.lean": [
+        "EvoIR.Core.PrivateTarget",
+        "EvoIR.Core.PrivateBoundary"
+      ],
+      "lean/EvoIR/Core/PrivateFunctionClosure.lean": [
+        "EvoIR.Core.PrivateFunctionContext",
+        "EvoIR.Core.FunctionClosure"
+      ],
+      "lean/EvoIR/Core/PrivateFunctionContext.lean": [
+        "EvoIR.Core.PrivateDiagram",
+        "EvoIR.Core.FunctionContext",
+        "EvoIR.Core.PathCondition"
+      ],
+      "lean/EvoIR/Core/PrivateLoopTests.lean": [
+        "EvoIR.Core.PrivateCyclic"
+      ],
+      "lean/EvoIR/Core/PrivateOperations.lean": [
+        "EvoIR.Core.PrivateBindings",
+        "EvoIR.Core.SymbolicInstruction"
+      ],
+      "lean/EvoIR/Core/PrivateProject.lean": [
+        "EvoIR.Core.PrivateRebind",
+        "EvoIR.Core.CutpointInvariant"
+      ],
+      "lean/EvoIR/Core/PrivateRead.lean": [
+        "EvoIR.Core.PrivateOperations"
+      ],
+      "lean/EvoIR/Core/PrivateRebind.lean": [
+        "EvoIR.Core.PrivateTargetTypes"
+      ],
+      "lean/EvoIR/Core/PrivateStorage.lean": [
+        "EvoIR.Core.PrivateBytes"
+      ],
+      "lean/EvoIR/Core/PrivateStorageTests.lean": [
+        "EvoIR.Core.PrivateChecker"
+      ],
+      "lean/EvoIR/Core/PrivateTarget.lean": [
+        "EvoIR.Core.PrivateTargetTypes"
+      ],
+      "lean/EvoIR/Core/PrivateTargetTypes.lean": [
+        "EvoIR.Core.PrivateChecker",
+        "EvoIR.Core.CallingCutpoint"
+      ],
       "lean/EvoIR/Core/RepeatedGuard.lean": [
         "EvoIR.Core.ConstantBranch"
       ],
@@ -522,6 +655,18 @@
         "EvoIR.Core.CallSourceDiagram",
         "EvoIR.Core.SourceResumption"
       ],
+      "lean/EvoIR/Core/SourceTargetCheck.lean": [
+        "EvoIR.Core.ReturnCorrespondence",
+        "EvoIR.Core.CallingLoopPair",
+        "EvoIR.Core.PrivateFunctionClosure",
+        "EvoIR.Core.PrivateCyclic",
+        "EvoIR.Core.PrivateCallingClosure"
+      ],
+      "lean/EvoIR/Core/SourceTargetCheckTests.lean": [
+        "EvoIR.Core.SourceTargetCheck",
+        "EvoIR.Core.AbsCorrespondence",
+        "EvoIR.Core.CallLoopFixtures"
+      ],
       "lean/EvoIR/Core/StateEntry.lean": [
         "EvoIR.Core.StateExpression",
         "EvoIR.Core.SymbolicEntry"
@@ -611,9 +756,82 @@
         "EvoIR.Core.CallingCutpoint"
       ],
       "lean/EvoIR/Core/Transition.lean": [],
+      "lean/EvoIR/Core/ValidatorAdmission.lean": [
+        "EvoIR.Core.ValidatorInvariant"
+      ],
+      "lean/EvoIR/Core/ValidatorArguments.lean": [
+        "EvoIR.Core.ValidatorCallTransfer",
+        "EvoIR.Core.ValidatorFacts"
+      ],
+      "lean/EvoIR/Core/ValidatorBranchTransfer.lean": [
+        "EvoIR.Core.ValidatorStatementTransfer"
+      ],
+      "lean/EvoIR/Core/ValidatorCallTransfer.lean": [
+        "EvoIR.Core.ValidatorAdmission"
+      ],
+      "lean/EvoIR/Core/ValidatorConstantTransfer.lean": [
+        "EvoIR.Core.ValidatorFacts"
+      ],
+      "lean/EvoIR/Core/ValidatorExpressionTransfer.lean": [
+        "EvoIR.Core.ValidatorPrimitiveTransfer",
+        "EvoIR.Core.ValidatorArguments",
+        "EvoIR.Core.ValidatorConstantTransfer"
+      ],
+      "lean/EvoIR/Core/ValidatorFacts.lean": [
+        "EvoIR.Core.ValidatorInvariant"
+      ],
+      "lean/EvoIR/Core/ValidatorForFacts.lean": [
+        "EvoIR.Core.ValidatorStatementFacts"
+      ],
+      "lean/EvoIR/Core/ValidatorForTransfer.lean": [
+        "EvoIR.Core.ValidatorForFacts",
+        "EvoIR.Core.ValidatorScopeFacts",
+        "EvoIR.Core.ValidatorBranchTransfer"
+      ],
+      "lean/EvoIR/Core/ValidatorInitial.lean": [
+        "EvoIR.Core.ValidatorAdmission"
+      ],
+      "lean/EvoIR/Core/ValidatorInvariant.lean": [
+        "EvoIR.Core.ValidatorStorage"
+      ],
+      "lean/EvoIR/Core/ValidatorLoopTransfer.lean": [
+        "EvoIR.Core.ValidatorPrimitiveTransfer"
+      ],
+      "lean/EvoIR/Core/ValidatorObjectFacts.lean": [
+        "EvoIR.Core.ValidatorScopeFacts"
+      ],
+      "lean/EvoIR/Core/ValidatorObjectTransfer.lean": [
+        "EvoIR.Core.ValidatorObjectFacts"
+      ],
+      "lean/EvoIR/Core/ValidatorPrimitiveTransfer.lean": [
+        "EvoIR.Core.ValidatorStoreTransfer"
+      ],
+      "lean/EvoIR/Core/ValidatorSafety.lean": [
+        "EvoIR.Core.ValidatorInitial",
+        "EvoIR.Core.ValidatorForTransfer",
+        "EvoIR.Core.ValidatorObjectTransfer",
+        "EvoIR.Core.ValidatorSequenceTransfer"
+      ],
+      "lean/EvoIR/Core/ValidatorScopeFacts.lean": [
+        "EvoIR.Core.ValidatorFacts"
+      ],
+      "lean/EvoIR/Core/ValidatorScopeTransfer.lean": [
+        "EvoIR.Core.ValidatorScopeFacts"
+      ],
+      "lean/EvoIR/Core/ValidatorSequenceTransfer.lean": [
+        "EvoIR.Core.ValidatorScopeTransfer"
+      ],
       "lean/EvoIR/Core/ValidatorState.lean": [
         "EvoIR.Core.LocalStorage",
         "EvoIR.Core.ScalarCorrectness"
+      ],
+      "lean/EvoIR/Core/ValidatorStatementFacts.lean": [
+        "EvoIR.Core.ValidatorFacts"
+      ],
+      "lean/EvoIR/Core/ValidatorStatementTransfer.lean": [
+        "EvoIR.Core.ValidatorStatementFacts",
+        "EvoIR.Core.ValidatorExpressionTransfer",
+        "EvoIR.Core.ValidatorLoopTransfer"
       ],
       "lean/EvoIR/Core/ValidatorStorage.lean": [
         "EvoIR.Core.ValidatorState"
@@ -622,6 +840,9 @@
         "EvoIR.Core.ValidatorStorage",
         "EvoIR.Core.CallCorrespondence",
         "EvoIR.Core.IRReader"
+      ],
+      "lean/EvoIR/Core/ValidatorStoreTransfer.lean": [
+        "EvoIR.Core.ValidatorFacts"
       ],
       "lean/EvoIR/Core/WellFormed.lean": [
         "EvoIR.Core.Source"
@@ -660,7 +881,11 @@
         "EvoIR.Core.CallingLoopPairTests",
         "EvoIR.Core.FunctionClosureTests",
         "EvoIR.Core.ConstantClosureTests",
-        "EvoIR.Core.ValidatorStorageTests"
+        "EvoIR.Core.ValidatorStorageTests",
+        "EvoIR.Core.SourceTargetCheckTests",
+        "EvoIR.Core.PrivateStorageTests",
+        "EvoIR.Core.PrivateLoopTests",
+        "EvoIR.Core.PrivateCallTests"
       ],
       "lean/EvoIR/Fact.lean": [
         "EvoIR.Sem"
@@ -6682,6 +6907,96 @@
       "sha256": "21c6927461ca6321891f3ab4f5377a182063ceac9a17a95c04b5bf4552600beb"
     },
     {
+      "name": "EvoIR.Core.Source.checkWellFormed",
+      "type": "EvoIR.Core.Source.Program → Except String Unit",
+      "sha256": "652ea8e0ed56742b7128e4e30b785019737680560a8602d28661293f469aad16"
+    },
+    {
+      "name": "EvoIR.Core.Source.ValidatorMachineInvariant",
+      "type": "EvoIR.Core.Source.Program → EvoIR.Core.Source.IntType → EvoIR.Core.Source.State → Prop",
+      "sha256": "5f53642b75657409b9354e5e0a303a2b1f3ba9e4becebbd8318138d1bc7095e5"
+    },
+    {
+      "name": "EvoIR.Core.Source.ValidatorEnvironment.Models",
+      "type": "EvoIR.Core.Source.ValidatorEnvironment → EvoIR.Core.Source.Locals → Prop",
+      "sha256": "f59ca6aadb6c98208d437199f12ccc84153d3ef3daddd54db7a37f80a614e881"
+    },
+    {
+      "name": "EvoIR.Core.Source.ResultSafe",
+      "type": "EvoIR.Core.Source.IntType → EvoIR.Core.Source.Result → Prop",
+      "sha256": "a86851cfef006f57069e69e2affec79d1d688627e3bf3aff73e945c6caffdaca"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.checkSourceTargetPair",
+      "type": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → EvoIR.Core.Symbolic.SourceTargetRequest → Option (EvoIR.Core.Symbolic.SourceTargetRoute × EvoIR.Core.Symbolic.CallFrontierPair source target)",
+      "sha256": "d7d6c668bae900348224deba2e4d0a58c5aaf1b51f073e5b28db302248c60fd5"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.PrivateConfig.Realizes",
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Subst Γ → List EvoIR.Core.IR.Value → EvoIR.Core.IR.Memory → Nat → Nat → EvoIR.Core.Symbolic.PrivateConfig Γ → Prop",
+      "sha256": "1d6e463d1add834ad7d51a481044d771da0c68a0befaf7cf2a379c4504e015f7"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.PrivateCell.Realizes",
+      "type": "{Γ : EvoIR.Var → Nat} → EvoIR.Subst Γ → List EvoIR.Core.IR.Value → EvoIR.Core.IR.Memory → Nat → EvoIR.Core.IR.Memory → EvoIR.Core.Symbolic.PrivateCell Γ → Prop",
+      "sha256": "93d4429edc4b403284352de91924deabcb9d40f40860e6d3f7c4ba2502604385"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.privateInstruction",
+      "type": "{Γ : EvoIR.Var → Nat} → (before : EvoIR.Core.Symbolic.PrivateConfig Γ) → (inst : EvoIR.Core.IR.Instruction) → Option (EvoIR.Core.Symbolic.CheckedPrivateInstruction before inst)",
+      "sha256": "4713afd4cb8025da8eb62f7bfac10833b027af7cc0a70d7353c4d8f90e62e420"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.privateCutDiagram",
+      "type": "{Γ : EvoIR.Var → Nat} → (p : EvoIR.Core.IR.Program) → (f : EvoIR.Core.IR.Function) → (tokens : Bool) → EvoIR.Core.Source.IntType → List String → Bool → Nat → (advance : Bool) → (config : EvoIR.Core.Symbolic.PrivateConfig Γ) → (label : String) → (pc : optParam Nat 0) → Option { tree // EvoIR.Core.Symbolic.PrivateCutRuns p f tokens advance label pc config tree }",
+      "sha256": "aa0596720d27ee3a1e54d7eb6e26aec99b36b55ac928328cc877fccdfed6be76"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.PrivateFunctionReturn",
+      "type": "EvoIR.Core.IR.Memory → Nat → Nat → EvoIR.Core.Source.IntType → Bool → Option EvoIR.Core.Symbolic.SourceReturnContext → List EvoIR.Core.IR.ReturnFrame → EvoIR.Core.Source.State → EvoIR.Core.IR.State → Prop",
+      "sha256": "a160d384a1476d7de148323db0fcbaae01bf45568caf66076342cadbc82f562a"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.privateFinitePair",
+      "type": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → Nat → Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+      "sha256": "1378b7db53bed106956d7f71dce889d04899cf79a76023e9253d4d2a4b2b025e"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.privateLoopPair",
+      "type": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → List EvoIR.Core.Symbolic.CutpointLayout → Nat → Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+      "sha256": "9907de4ea7c05261b16cd56423837683869aed02442d88359957e2767dffb7b7"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.privateOpenCallPair",
+      "type": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → EvoIR.Core.Symbolic.CalleeProposals → Nat → Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+      "sha256": "72d569a83dad75b209b551458822ff2a9ec679a40cbee49a2d7fe99e29724da9"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.privateCallingFunctionClosure",
+      "type": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → EvoIR.Core.Symbolic.CalleeProposals → Nat → Nat → EvoIR.Core.Symbolic.PrivateFunctionBuilder source target",
+      "sha256": "2ca598444d70f2a2fc9de33d39ac9dd32bcb86a66f3cca076525924882ef7e6c"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.privateProject",
+      "type": "{Γ : EvoIR.Var → Nat} → List EvoIR.Core.IR.Binding → EvoIR.Core.Symbolic.CutpointLayout → EvoIR.Core.Symbolic.LocalStore Γ → Option (EvoIR.Core.Symbolic.PrivateConfig Γ)",
+      "sha256": "881fd426284ac190beba2ee9b6377981ae652e077c1275822b2028397fca9aac"
+    },
+    {
+      "name": "EvoIR.Core.Symbolic.privateRebindingCheck",
+      "type": "{Γ : EvoIR.Var → Nat} → (before after : EvoIR.Core.Symbolic.PrivateConfig Γ) → (bank : List (EvoIR.Core.Symbolic.Slot Γ)) → Option (PLift (∀ (σ : EvoIR.Subst Γ) (values : List EvoIR.Core.IR.Value), List.map EvoIR.Core.IR.Value.type values = before.tokens → EvoIR.Core.Symbolic.privateToken values before.world = EvoIR.Core.IR.Value.world → Nonempty (EvoIR.Core.Symbolic.PrivateRebinding σ σ values (List.map (EvoIR.Core.Symbolic.Slot.denote σ (EvoIR.Core.Symbolic.privateToken values)) bank) before after)))",
+      "sha256": "f56fedf096b2e70b85ff44660c852fda54d5c3250c05939f74659dd242f86712"
+    },
+    {
+      "name": "EvoIR.Core.IR.Memory.PrivateFrame",
+      "type": "EvoIR.Core.IR.Memory → Nat → EvoIR.Core.IR.Memory → Prop",
+      "sha256": "bc50341b46fbce24051ce08c11d713c5ab198dd5aa817a9243b08b077eacacc7"
+    },
+    {
+      "name": "EvoIR.Core.IR.Memory.ClosedExtension",
+      "type": "EvoIR.Core.IR.Memory → EvoIR.Core.IR.Memory → Prop",
+      "sha256": "902e50f3157d6ba62ed576355a84b962ede46ec48809067113a3e13040bc93af"
+    },
+    {
       "name": "EvoIR.Core.Transition.CheckpointSimulation",
       "type": "{S : Type u_1} → {T : Type u_2} → {O : Type u_3} → (S → Option S) → (T → Option T) → (S → Option O) → (T → Option O) → (S → T → Prop) → Prop",
       "sha256": "0b934c57c62529605ae4834084fc7ec6c63f512da757ceeee94168acb31d203b"
@@ -6844,7 +7159,7 @@
     {
       "name": "EvoIR.Core.IR.evalOperation",
       "type": "Nat → EvoIR.Core.IR.Operation → List EvoIR.Core.IR.Value → Except EvoIR.Core.Source.Fault (List EvoIR.Core.IR.Value)",
-      "sha256": "204b003422a52914cca7c30c51399e01d3eeaba02d46ae2cfd4862da743888d4"
+      "sha256": "a68a1b5308c33ed69216f4da72fd415ea7fe59574e20200d23c361f8e7e3b0d8"
     },
     {
       "name": "EvoIR.Core.IR.bind",
@@ -16089,7 +16404,7 @@
     }
   ],
   "compilation_core_primitives": {
-    "claim": "Checked arithmetic primitive correspondence and source/IR-machine determinism, finite-prefix and terminal-diagnostic properties; structural finite-statement source/IR checker soundness, including local declarations, scope, stateful expressions, conditional CFGs, checked cyclic diagrams, div/rem, finite calls and private-leaf substitution. Full core-v1 constructor/call/loop composition remains incomplete. No proof of source export, input-validation execution safety, backend compilation or verified-release acceptance",
+    "claim": "Independent typed-source validator safety for every actual reachable source state; accepted source/IR pairs refine all typed arguments under the unbounded small-step semantics, preserving return bits, first admitted diagnostics and target progress. The shared pair checker composes finite statements, conditional CFGs, cyclic diagrams, nonrecursive calls and private byte storage with actual frame cleanup and caller-memory preservation. Proof discovery is incomplete: a refused pair has no refinement claim. Source export, input decoding and compiled-checker execution remain trusted boundaries; backend compilation and verified-release acceptance are not proved here",
     "targets": [
       {
         "theorem": "EvoIR.Core.Source.scope_exit_safe",
@@ -16248,6 +16563,83 @@
       {
         "theorem": "EvoIR.Core.Symbolic.openCallPair",
         "proposition": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → EvoIR.Core.Symbolic.CalleeProposals → Nat → Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.privateFinitePair",
+        "proposition": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → Nat → Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.privateLoopPair",
+        "proposition": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → List EvoIR.Core.Symbolic.CutpointLayout → Nat → Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.privateOpenCallPair",
+        "proposition": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → EvoIR.Core.Symbolic.CalleeProposals → Nat → Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.checkSourceTargetPair",
+        "proposition": "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → EvoIR.Core.Symbolic.SourceTargetRequest → Option (EvoIR.Core.Symbolic.SourceTargetRoute × EvoIR.Core.Symbolic.CallFrontierPair source target)",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Symbolic.check_source_target_refines",
+        "proposition": "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} (request : EvoIR.Core.Symbolic.SourceTargetRequest) (route : EvoIR.Core.Symbolic.SourceTargetRoute) (pair : EvoIR.Core.Symbolic.CallFrontierPair source target), EvoIR.Core.Symbolic.checkSourceTargetPair source target request = some (route, pair) → ∀ (args : List EvoIR.Core.Source.Value), List.map EvoIR.Core.Source.Value.type args = List.map (fun p => p.type.type) pair.sourceFunction.parameters → ∃ sourceEntry targetEntry, EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ EvoIR.Core.IR.initial target pair.targetFunction.name (EvoIR.Core.Symbolic.loopInputValues pair.tokens args) = Except.ok targetEntry ∧ EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.validator_step_preserves",
+        "proposition": "∀ (program : EvoIR.Core.Source.Program) (entryType : EvoIR.Core.Source.IntType) (state next : EvoIR.Core.Source.State), EvoIR.Core.Source.ValidatorMachineInvariant program entryType state → EvoIR.Core.Source.Step program state next → EvoIR.Core.Source.ValidatorMachineInvariant program entryType next",
+        "proof_kind": "kernel-only",
+        "core_axioms": [
+          "Classical.choice",
+          "Quot.sound",
+          "propext"
+        ],
+        "native_axioms": []
+      },
+      {
+        "theorem": "EvoIR.Core.Source.checked_source_safety",
+        "proposition": "∀ (program : EvoIR.Core.Source.Program) (entry : Nat) (function : EvoIR.Core.Source.Function) (arguments : List EvoIR.Core.Source.Value), EvoIR.Core.Source.checkWellFormed program = Except.ok () → entry ∈ program.entries → List.find? (fun x => x.symbol == entry) program.functions = some function → List.map EvoIR.Core.Source.Value.type arguments = List.map (fun parameter => parameter.type.type) function.parameters → ∃ state, EvoIR.Core.Source.initial program entry arguments = Except.ok state ∧ ∀ (next : EvoIR.Core.Source.State), EvoIR.Core.Source.Steps program state next → EvoIR.Core.Source.ValidatorMachineInvariant program function.returnType.type next ∧ (∀ (message : String), next.control ≠ EvoIR.Core.Source.Control.halted (Except.error (EvoIR.Core.Source.Fault.malformed message))) ∧ ((∃ result, next.control = EvoIR.Core.Source.Control.halted result ∧ EvoIR.Core.Source.ResultSafe function.returnType.type result) ∨ ∃ following, EvoIR.Core.Source.Step program next following)",
         "proof_kind": "kernel-only",
         "core_axioms": [
           "Classical.choice",
@@ -17131,7 +17523,9 @@
     "The Lean compiler and the SAT/LRAT path, for every theorem this receipt classifies native-backed.",
     "The registry decoder of tools/lean/registry_to_lean.py and the Lean semantic definitions themselves; the round trip and Rule.render check that the two conversions agree, not that either is faithful.",
     "Sections 8.5 eligibility, the seed-fact fixed point, the checker's replay and the Section 9 parser, none of which this layer touches.",
-    "The correspondence between the Rust implementation and these Lean definitions, for which only differential evidence exists."
+    "The correspondence between the Rust implementation and these Lean definitions, for which only differential evidence exists.",
+    "Executing the compiled source-to-IR checker trusts the Lean compiler, runtime and host toolchain. The general soundness theorem is kernel-checked; an executable acceptance is not a separately kernel-replayed proof term.",
+    "Faithful typed-source export and source/IR decoding remain input boundaries. Source-to-IR checking does not prove machine lowering, allocation or emission."
   ],
   "status": "pass"
 }
