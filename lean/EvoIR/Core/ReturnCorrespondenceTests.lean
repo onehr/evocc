@@ -112,7 +112,7 @@ def returnSelfTest : IO UInt32 := do
       IO.eprintln "generic return checker refused a consistent changed pair"
       failures := failures+1
   if failures == 0 then
-    IO.println s!"{2+mutations.length+sourceMutations.length+acceptedPairs.length} branching whole-return cases pass (two originals; loops/state/calls remain open)"
+    IO.println s!"{2+mutations.length+sourceMutations.length+acceptedPairs.length} branching whole-return cases pass (two originals; this suite is not full-profile coverage)"
     return 0
   return 1
 

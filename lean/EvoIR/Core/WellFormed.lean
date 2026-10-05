@@ -34,21 +34,21 @@ def binaryType (op : Binary) (a b : IntType) : IntType :=
   | .comma => b
   | _ => usualType a b
 
-private def require (condition : Bool) (message : String) : Except String Unit :=
+def require (condition : Bool) (message : String) : Except String Unit :=
   if condition then .ok () else .error message
 
-private def union (a b : List Nat) : List Nat :=
+def union (a b : List Nat) : List Nat :=
   a ++ b.filter (fun n => !a.contains n)
 
-private def intersection (a b : List Nat) : List Nat := a.filter b.contains
-private def disjoint (a b : List Nat) : Bool := a.all (fun n => !b.contains n)
+def intersection (a b : List Nat) : List Nat := a.filter b.contains
+def disjoint (a b : List Nat) : Bool := a.all (fun n => !b.contains n)
 
 structure LocalState where
   bindings : List (Nat × QualifiedType)
   initialized : List Nat
   deriving Repr
 
-private def lookup (s : LocalState) (id : Nat) : Option QualifiedType :=
+def lookup (s : LocalState) (id : Nat) : Option QualifiedType :=
   (s.bindings.find? (fun p => p.1 == id)).map Prod.snd
 
 structure ExpressionFacts where
@@ -57,19 +57,19 @@ structure ExpressionFacts where
   writes : List Nat := []
   deriving Repr
 
-private def accessUnion (a b : ExpressionFacts) (initialized : List Nat) : ExpressionFacts :=
+def accessUnion (a b : ExpressionFacts) (initialized : List Nat) : ExpressionFacts :=
   ⟨initialized, union a.reads b.reads, union a.writes b.writes⟩
 
 /-- Non-sequenced operands may not modify an object accessed by the other. -/
-private def nonconflicting (a b : ExpressionFacts) : Bool :=
+def nonconflicting (a b : ExpressionFacts) : Bool :=
   disjoint a.writes (union b.reads b.writes) && disjoint b.writes a.reads
 
-private def readLocal (s : LocalState) (id : Nat) (t : IntType) : Except String Unit := do
+def readLocal (s : LocalState) (id : Nat) (t : IntType) : Except String Unit := do
   let some binding := lookup s id | throw "unbound local identifier"
   require (binding.type == t) "identifier type differs from its binding"
   require (s.initialized.contains id) "read of a possibly uninitialized local"
 
-private def checkPlace (s : LocalState) (id : Nat) (dest : QualifiedType)
+def checkPlace (s : LocalState) (id : Nat) (dest : QualifiedType)
     (target : Expr) (read : Bool) : Except String Unit := do
   let some binding := lookup s id | throw "unbound assignment target"
   require (binding == dest && !binding.isConst) "assignment changes its binding or writes const"
@@ -255,12 +255,12 @@ theorem checked_update_signature (callees : List Function) (fuel : Nat) (s : Loc
       exact ⟨typed, place, binding, writable, initialized rfl⟩
     · simp [checkExpr, require, typed, bind, Except.bind] at accepted
 
-private def expressionState (callees : List Function) (fuel : Nat)
+def expressionState (callees : List Function) (fuel : Nat)
     (s : LocalState) (e : Expr) : Except String LocalState := do
   let facts ← checkExpr callees fuel s e
   return {s with initialized := facts.initialized}
 
-private def declare (callees : List Function) (fuel : Nat)
+def declare (callees : List Function) (fuel : Nat)
     (s : LocalState) (o : Object) : Except String LocalState := do
   require ((lookup s o.symbol).isNone) "duplicate active object symbol"
   require (!(callees.any (fun f => f.symbol == o.symbol))) "object reuses a function symbol"
@@ -281,7 +281,7 @@ def scopeInitialized (incoming current : LocalState) : List Nat :=
   current.initialized.filter (fun id =>
     ((incoming.bindings.find? (fun pair => pair.1 == id)).map Prod.snd).isSome)
 
-private def restoreScope (incoming out : LocalState) : LocalState :=
+def restoreScope (incoming out : LocalState) : LocalState :=
   ⟨incoming.bindings, scopeInitialized incoming out⟩
 
 def checkStmt (callees : List Function) (returnType : QualifiedType) :
@@ -339,7 +339,7 @@ def checkStmt (callees : List Function) (returnType : QualifiedType) :
         let _ ← expressionState callees fuel incoming e
       return ⟨restoreScope s incoming, true⟩
 
-private def checkFunction (callees : List Function) (f : Function) : Except String Unit := do
+def checkFunction (callees : List Function) (f : Function) : Except String Unit := do
   let initial ← f.parameters.foldlM (fun (s : LocalState) p => do
     require (p.storage != .auto) "auto storage is invalid for a parameter"
     require ((lookup s p.symbol).isNone && p.symbol != f.symbol &&

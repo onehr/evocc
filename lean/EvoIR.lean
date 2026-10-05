@@ -5,6 +5,7 @@ import EvoIR.Core.Execution
 import EvoIR.Core.Divergence
 import EvoIR.Core.SimulationTests
 import EvoIR.Core.LocalStorage
+import EvoIR.Core.ValidatorSafety
 import EvoIR.Core.SymbolicScalarTests
 import EvoIR.Core.SymbolicInstructionTests
 import EvoIR.Core.SymbolicSourceTests

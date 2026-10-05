@@ -150,7 +150,7 @@ def sourceExpressionSelfTest : IO UInt32 := do
     IO.eprintln "general expression checker refused a consistent changed pair"
     failures := failures+1
   if failures == 0 then
-    IO.println s!"{mutations.length+sourceMutations.length+2} original-expression cases pass (component only; whole-function admission incomplete)"
+    IO.println s!"{mutations.length+sourceMutations.length+2} original-expression cases pass (component tests, not standalone compilation evidence)"
     return 0
   return 1
 

@@ -271,7 +271,7 @@ def leafSelfTest : IO UInt32 := do
         IO.eprintln s!"whole-leaf return conversion refused: {repr src} -> {repr dst}"
         failures := failures+1
   if failures == 0 then
-    IO.println s!"{targetMutations.length+sourceMutations.length+changedPairs.length+3+types.length*types.length} whole-leaf cases pass (source-to-EvoIR only; core-v1 incomplete)"
+    IO.println s!"{targetMutations.length+sourceMutations.length+changedPairs.length+3+types.length*types.length} whole-leaf cases pass (source-to-EvoIR only; backend unproved)"
     return 0
   return 1
 

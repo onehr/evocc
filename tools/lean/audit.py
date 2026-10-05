@@ -212,6 +212,24 @@ RECORDED_DEFINITIONS = [
     "EvoIR.Core.Source.enterFunction",
     "EvoIR.Core.Source.initial",
     "EvoIR.Core.Source.step",
+    "EvoIR.Core.Source.checkWellFormed",
+    "EvoIR.Core.Source.ValidatorMachineInvariant",
+    "EvoIR.Core.Source.ValidatorEnvironment.Models",
+    "EvoIR.Core.Source.ResultSafe",
+    "EvoIR.Core.Symbolic.checkSourceTargetPair",
+    "EvoIR.Core.Symbolic.PrivateConfig.Realizes",
+    "EvoIR.Core.Symbolic.PrivateCell.Realizes",
+    "EvoIR.Core.Symbolic.privateInstruction",
+    "EvoIR.Core.Symbolic.privateCutDiagram",
+    "EvoIR.Core.Symbolic.PrivateFunctionReturn",
+    "EvoIR.Core.Symbolic.privateFinitePair",
+    "EvoIR.Core.Symbolic.privateLoopPair",
+    "EvoIR.Core.Symbolic.privateOpenCallPair",
+    "EvoIR.Core.Symbolic.privateCallingFunctionClosure",
+    "EvoIR.Core.Symbolic.privateProject",
+    "EvoIR.Core.Symbolic.privateRebindingCheck",
+    "EvoIR.Core.IR.Memory.PrivateFrame",
+    "EvoIR.Core.IR.Memory.ClosedExtension",
     "EvoIR.Core.Transition.CheckpointSimulation",
     "EvoIR.Core.Symbolic.SourceCutRuns",
     "EvoIR.Core.Symbolic.sourceContextFrames",
@@ -455,6 +473,70 @@ CORE_PRIMITIVE_TARGETS = [
         "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → "
         "EvoIR.Core.Symbolic.CalleeProposals → Nat → "
         "Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.privateFinitePair",
+        "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → Nat → "
+        "Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.privateLoopPair",
+        "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → "
+        "List EvoIR.Core.Symbolic.CutpointLayout → Nat → "
+        "Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.privateOpenCallPair",
+        "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → "
+        "EvoIR.Core.Symbolic.CalleeProposals → Nat → "
+        "Option (EvoIR.Core.Symbolic.CallFrontierPair source target)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.checkSourceTargetPair",
+        "(source : EvoIR.Core.Source.Program) → (target : EvoIR.Core.IR.Program) → "
+        "EvoIR.Core.Symbolic.SourceTargetRequest → Option "
+        "(EvoIR.Core.Symbolic.SourceTargetRoute × EvoIR.Core.Symbolic.CallFrontierPair source target)",
+    ),
+    (
+        "EvoIR.Core.Symbolic.check_source_target_refines",
+        "∀ {source : EvoIR.Core.Source.Program} {target : EvoIR.Core.IR.Program} "
+        "(request : EvoIR.Core.Symbolic.SourceTargetRequest) "
+        "(route : EvoIR.Core.Symbolic.SourceTargetRoute) "
+        "(pair : EvoIR.Core.Symbolic.CallFrontierPair source target), "
+        "EvoIR.Core.Symbolic.checkSourceTargetPair source target request = some (route, pair) → "
+        "∀ (args : List EvoIR.Core.Source.Value), "
+        "List.map EvoIR.Core.Source.Value.type args = "
+        "List.map (fun p => p.type.type) pair.sourceFunction.parameters → "
+        "∃ sourceEntry targetEntry, "
+        "EvoIR.Core.Source.initial source pair.sourceFunction.symbol args = Except.ok sourceEntry ∧ "
+        "EvoIR.Core.IR.initial target pair.targetFunction.name "
+        "(EvoIR.Core.Symbolic.loopInputValues pair.tokens args) = Except.ok targetEntry ∧ "
+        "EvoIR.Core.LoweringRefines source target pair.sourceFunction.returnType.type sourceEntry targetEntry",
+    ),
+    (
+        "EvoIR.Core.Source.validator_step_preserves",
+        "∀ (program : EvoIR.Core.Source.Program) (entryType : EvoIR.Core.Source.IntType) "
+        "(state next : EvoIR.Core.Source.State), "
+        "EvoIR.Core.Source.ValidatorMachineInvariant program entryType state → "
+        "EvoIR.Core.Source.Step program state next → "
+        "EvoIR.Core.Source.ValidatorMachineInvariant program entryType next",
+    ),
+    (
+        "EvoIR.Core.Source.checked_source_safety",
+        "∀ (program : EvoIR.Core.Source.Program) (entry : Nat) "
+        "(function : EvoIR.Core.Source.Function) (arguments : List EvoIR.Core.Source.Value), "
+        "EvoIR.Core.Source.checkWellFormed program = Except.ok () → entry ∈ program.entries → "
+        "List.find? (fun x => x.symbol == entry) program.functions = some function → "
+        "List.map EvoIR.Core.Source.Value.type arguments = "
+        "List.map (fun parameter => parameter.type.type) function.parameters → "
+        "∃ state, EvoIR.Core.Source.initial program entry arguments = Except.ok state ∧ "
+        "∀ (next : EvoIR.Core.Source.State), EvoIR.Core.Source.Steps program state next → "
+        "EvoIR.Core.Source.ValidatorMachineInvariant program function.returnType.type next ∧ "
+        "(∀ (message : String), next.control ≠ EvoIR.Core.Source.Control.halted "
+        "(Except.error (EvoIR.Core.Source.Fault.malformed message))) ∧ "
+        "((∃ result, next.control = EvoIR.Core.Source.Control.halted result ∧ "
+        "EvoIR.Core.Source.ResultSafe function.returnType.type result) ∨ "
+        "∃ following, EvoIR.Core.Source.Step program next following)",
     ),
     (
         "EvoIR.Core.Transition.OpenCheckpoint.close",
@@ -1324,6 +1406,11 @@ TRUST = [
     "and the Section 9 parser, none of which this layer touches.",
     "The correspondence between the Rust implementation and these Lean "
     "definitions, for which only differential evidence exists.",
+    "Executing the compiled source-to-IR checker trusts the Lean compiler, "
+    "runtime and host toolchain. The general soundness theorem is kernel-checked; "
+    "an executable acceptance is not a separately kernel-replayed proof term.",
+    "Faithful typed-source export and source/IR decoding remain input boundaries. "
+    "Source-to-IR checking does not prove machine lowering, allocation or emission.",
 ]
 
 DUMP_TEMPLATE = """\
@@ -1842,14 +1929,16 @@ def main(argv: list[str]) -> int:
         },
         "evaluator": evaluator,
         "compilation_core_primitives": {
-            "claim": "Checked arithmetic primitive correspondence and source/IR-machine "
-                     "determinism, finite-prefix and terminal-diagnostic properties; "
-                     "structural finite-statement source/IR checker soundness, including local "
-                     "declarations, scope, stateful expressions, conditional CFGs, checked "
-                     "cyclic diagrams, div/rem, finite calls and private-leaf substitution. "
-                     "Full core-v1 constructor/call/loop composition remains incomplete. "
-                     "No proof of source export, input-validation execution safety, backend "
-                     "compilation or verified-release acceptance",
+            "claim": "Independent typed-source validator safety for every actual reachable "
+                     "source state; accepted source/IR pairs refine all typed arguments under "
+                     "the unbounded small-step semantics, preserving return bits, first "
+                     "admitted diagnostics and target progress. The shared pair checker "
+                     "composes finite statements, conditional CFGs, cyclic diagrams, "
+                     "nonrecursive calls and private byte storage with actual frame cleanup "
+                     "and caller-memory preservation. Proof discovery is incomplete: a "
+                     "refused pair has no refinement claim. Source export, input decoding and "
+                     "compiled-checker execution remain trusted boundaries; backend "
+                     "compilation and verified-release acceptance are not proved here",
             "targets": core_primitives,
         },
         "trust": TRUST,
