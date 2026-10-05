@@ -316,13 +316,141 @@ def selfTest : IO UInt32 := do
   else
     pure 1
 
+/-! ## Stage checks for proof-required compilation
+
+`evoir-sem --check-stage STAGE ROLE=PATH ...` runs one proved stage checker on
+files that the compiler exported. Each stage reads only the roles that its row
+names. The command gives one of three results:
+
+* exit 0 and `STAGE_ACCEPTED stage=ID entry=NAME ...` on standard output;
+* exit 1 and `STAGE_REJECTED` on standard error: the checker refused the pair;
+* exit 2 and `STAGE_INPUT_UNSUPPORTED` on standard error: an input is missing,
+  not readable, or outside the reader's profile.
+
+An incorrect command line gives exit 64. A stage never falls back to a different
+request, and an acceptance line names only the stage that ran. -/
+
+inductive StageVerdict where
+  | accepted (report : String)
+  | rejected (reason : String)
+  | unsupported (reason : String)
+
+/-- File text by role name, for example `("ir", text)`. -/
+abbrev StageInputs := List (String × String)
+
+structure Stage where
+  id : String
+  name : String
+  required : List String
+  optional : List String := []
+  check : StageInputs → StageVerdict
+
+/-- The selected source entry. Every stage checks exactly one entry. -/
+def stageEntry (inputs : StageInputs) :
+    Except String (EvoIR.Core.Source.Program × EvoIR.Core.Source.Function) := do
+  let some text := inputs.lookup "source" | throw "missing source input"
+  let .ok source := EvoIR.Core.Source.readProgram text | throw "source input"
+  let [entry] := source.entries | throw "expected one selected entry"
+  let some function := source.functions.find? (·.symbol == entry)
+    | throw "missing selected source function"
+  return (source, function)
+
+def stageIR (inputs : StageInputs) : Except String EvoIR.Core.IR.Program := do
+  let some text := inputs.lookup "ir" | throw "missing EvoIR input"
+  let .ok ir := EvoIR.Core.IR.Reader.readProgram text | throw "EvoIR input"
+  return ir
+
+/-- V01: the independent source validator, then the source-to-EvoIR checker
+of `check_source_target_refines`. A proposal selects the cyclic or call-closure
+request. A proposal that does not decode is unsupported; it never falls back to
+the finite request. -/
+def checkSourceToIR (inputs : StageInputs) : StageVerdict := Id.run do
+  let .ok (source, function) := stageEntry inputs | return .unsupported "source input"
+  let .ok ir := stageIR inputs | return .unsupported "EvoIR input"
+  if let .error message := EvoIR.Core.Source.checkWellFormed source then
+    return .rejected s!"entry={function.name} source validator: {message}"
+  let request : Option EvoIR.Core.Symbolic.SourceTargetRequest :=
+    match inputs.lookup "proposal" with
+    | none => some .finite
+    | some text =>
+      match EvoIR.Core.Symbolic.readCutpoints function text with
+      | some (budget, layouts) => some (.cutpoints layouts budget)
+      | none => (EvoIR.Core.Symbolic.readCallCutpoints source text).map fun (budget, rows) =>
+          .closure (fun id => rows.lookup id) budget
+  let some request := request | return .unsupported "proposal input"
+  match EvoIR.Core.Symbolic.checkSourceTargetPair source ir request with
+  | none => .rejected s!"entry={function.name} no checked source-to-EvoIR correspondence"
+  | some (route, accepted) =>
+    let route := match route with
+      | .leaf => "leaf" | .call => "call" | .loop => "loop" | .loopCall => "loop-call"
+    .accepted s!"entry={accepted.sourceFunction.name} route={route} scope=source-to-evoir"
+
+/-- V02: instruction selection and SSA removal, `EvoIR.Machine.checkLowering`.
+The source export gives only the entry name and signature. -/
+def checkIRToPostSSA (inputs : StageInputs) : StageVerdict := Id.run do
+  let .ok (_, function) := stageEntry inputs | return .unsupported "source input"
+  let .ok ir := stageIR inputs | return .unsupported "EvoIR input"
+  let some ssaText := inputs.lookup "ssa" | return .unsupported "missing SSA EvoMIR input"
+  let .ok (.ssa, ssa) := EvoIR.Machine.Reader.readProgram ssaText
+    | return .unsupported "SSA EvoMIR input"
+  let some postText := inputs.lookup "postssa" | return .unsupported "missing post-SSA EvoMIR input"
+  let .ok (.postSSA, post) := EvoIR.Machine.Reader.readProgram postText
+    | return .unsupported "post-SSA EvoMIR input"
+  match EvoIR.Machine.checkLowering ir ssa post function.name function.parameters
+      function.returnType.type with
+  | none => .rejected s!"entry={function.name} no checked selection or SSA transport"
+  | some _ => .accepted s!"entry={function.name} scope=evoir-to-post-ssa-mir"
+
+/-- The table of integrated stages, in pipeline order. To integrate V03, V04 or
+V05, add one row here. The compiler driver has a matching table. -/
+def stages : List Stage :=
+  [ { id := "V01", name := "source-to-evoir", required := ["source", "ir"],
+      optional := ["proposal"], check := checkSourceToIR }
+  , { id := "V02", name := "evoir-to-post-ssa-mir", required := ["source", "ir", "ssa", "postssa"],
+      check := checkIRToPostSSA } ]
+
+/-- Read each `ROLE=PATH` argument. A role outside the stage row, a duplicate
+role or a missing required role is a command error. -/
+def stageBindings (stage : Stage) (args : List String) : Option (List (String × String)) := do
+  let pairs ← args.mapM fun arg => match arg.splitOn "=" with
+    | role :: path@(_ :: _) => some (role, "=".intercalate path)
+    | _ => none
+  let roles := pairs.map Prod.fst
+  if roles.eraseDups.length != roles.length then none
+  if roles.any (fun role => !(stage.required ++ stage.optional).contains role) then none
+  if stage.required.any (fun role => !roles.contains role) then none
+  return pairs
+
+def runStage (id : String) (args : List String) : IO UInt32 := do
+  let some stage := stages.find? (·.id == id)
+    | IO.eprintln s!"STAGE_COMMAND_INVALID: unknown stage {id}"; return 64
+  let some bindings := stageBindings stage args
+    | IO.eprintln s!"STAGE_COMMAND_INVALID: stage {id} requires {stage.required} and permits {stage.optional}"
+      return 64
+  let mut inputs : StageInputs := []
+  for (role, path) in bindings do
+    match ← (IO.FS.readFile path).toBaseIO with
+    | .ok text => inputs := inputs ++ [(role, text)]
+    | .error error =>
+      IO.eprintln s!"STAGE_INPUT_UNSUPPORTED stage={id} role={role}: not readable: {error}"
+      return 2
+  match stage.check inputs with
+  | .accepted report => IO.println s!"STAGE_ACCEPTED stage={id} {report}"; return 0
+  | .rejected reason => IO.eprintln s!"STAGE_REJECTED stage={id} {reason}"; return 1
+  | .unsupported reason => IO.eprintln s!"STAGE_INPUT_UNSUPPORTED stage={id} {reason}"; return 2
+
 /-! ## Entry point -/
 
 def usage : String :=
-  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-mir <machine.json> | evoir-sem --run-core-mir <machine.json> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo> | evoir-sem --check-core-leaf-pair <source.json> <target.evo> | evoir-sem --check-core-machine-pair <source.json> <actual.evo> <ssa.json> <postssa.json>"
+  "usage: evoir-sem <in.jsonl> <out.jsonl> | evoir-sem --selftest | evoir-sem --registry | evoir-sem --read-core <source.json> | evoir-sem --check-core-source <source.json> | evoir-sem --run-core <source.json> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-ir <target.evo> | evoir-sem --run-core-ir <target.evo> <entry> <step-limit> [0xARG ...] | evoir-sem --read-core-mir <machine.json> | evoir-sem --run-core-mir <machine.json> <entry> <step-limit> [0xARG ...] | evoir-sem --check-core-pilot-pair <source.json> <target.evo> | evoir-sem --check-core-leaf-pair <source.json> <target.evo> | evoir-sem --check-core-machine-pair <source.json> <actual.evo> <ssa.json> <postssa.json> | evoir-sem --list-stages | evoir-sem --check-stage <stage> <role>=<path> ..."
 
 def run (args : List String) : IO UInt32 := do
   match args with
+  | ["--list-stages"] => do
+      for stage in stages do
+        IO.println s!"{stage.id} {stage.name} required={",".intercalate stage.required} optional={",".intercalate stage.optional}"
+      return 0
+  | "--check-stage" :: id :: bindings => runStage id bindings
   | ["--selftest"] => do
       EvoIR.Machine.Reader.selfTest
       let tokenFunctions ← EvoIR.Core.Symbolic.MachineSelection.TokenFunctionTests.tokenFunctionSelfTest
