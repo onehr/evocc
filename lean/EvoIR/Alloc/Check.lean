@@ -158,31 +158,26 @@ def matchOriginal (E : Equations) (o : Machine.Instruction) (a : Instruction) : 
     some (defineAll E (o.defs.map (fun r => (r, D r))))
   else none
 
-/-- The ABI location of argument `index` at a call, and of parameter `index`
-at function entry. -/
-def argumentLoc (outgoing : Bool) (index : Nat) (reg : VReg) : Option Loc :=
-  if index < abiRegisterCount then (Place.gpr index).at reg.class
-  else (if outgoing then Place.outgoing (index - abiRegisterCount)
-    else Place.incoming (index - abiRegisterCount)).at reg.class
+/-- The ABI place of argument `index`: a general register, then the outgoing
+(at a call) or incoming (at entry) stack argument slots. -/
+def argPlace (outgoing : Bool) (index : Nat) : Place :=
+  if index < abiRegisterCount then .gpr index
+  else if outgoing then .outgoing (index - abiRegisterCount)
+  else .incoming (index - abiRegisterCount)
 
-def argumentLocs (outgoing : Bool) : Nat → List VReg → Option (List Loc)
-  | _, [] => some []
-  | index, reg :: rest => do
-    let loc ← argumentLoc outgoing index reg
-    return loc :: (← argumentLocs outgoing (index+1) rest)
+/-- General register `index` through the view of the class of `reg`. -/
+def regLoc (index : Nat) (reg : VReg) : Loc := ((Place.gpr index).at reg.class).getD .flags
 
-def resultLocs : Nat → List VReg → Option (List Loc)
-  | _, [] => some []
-  | index, reg :: rest => do
-    if abiRegisterCount ≤ index then none
-    let loc ← (Place.gpr index).at reg.class
-    return loc :: (← resultLocs (index+1) rest)
+/-- `place` holds `reg` and has a view for its class. -/
+def heldAt (E : Equations) (place : Place) (reg : VReg) : Bool :=
+  E.contains (place, reg) && (place.at reg.class).isSome
 
 /-- The ABI entry state for the parameters of a function. -/
 def entryState (params : List VReg) : Equations :=
-  match argumentLocs false 0 params with
-  | some locs => (locs.zip params).map (fun e => (e.1.place, e.2))
-  | none => []
+  params.zipIdx.map (fun e => (argPlace false e.2, e.1))
+
+/-- The ABI result registers of a call or a return. -/
+def resultRegs (results : List VReg) : List Loc := results.zipIdx.map (fun e => regLoc e.2 e.1)
 
 def preParams (p : Machine.Program) (name : String) : Option (List VReg) := do
   let f ← p.functions.find? (·.name == name)
@@ -204,17 +199,19 @@ def callExit (E : Equations) (results : List VReg) (locs : List Loc) : Equations
 
 def matchCall (pre : Machine.Program) (post : Program) (E : Equations)
     (symbol : String) (args results : List VReg)
-    (symbol' : String) (aargs aresults : List Loc) : Option Equations := do
-  let params ← preParams pre symbol
-  let locs ← argumentLocs true 0 args
-  let resultAt ← resultLocs 0 results
-  if symbol == symbol' && params.length == args.length &&
-      (args.zip params).all (fun e => e.1.class == e.2.class) &&
-      (args.zip locs).all (fun e => holds E e.2 e.1) &&
-      aargs == locs.take abiRegisterCount && aresults == resultAt &&
-      distinctIds results && returnViews post symbol (aresults.map Loc.width) then
-    some (callExit E results aresults)
-  else none
+    (symbol' : String) (aargs aresults : List Loc) : Option Equations :=
+  match preParams pre symbol with
+  | none => none
+  | some params =>
+    if symbol == symbol' && params.length == args.length &&
+        (args.zip params).all (fun e => e.1.class == e.2.class) &&
+        args.zipIdx.all (fun e => heldAt E (argPlace true e.2) e.1) &&
+        aargs == resultRegs (args.take abiRegisterCount) &&
+        decide (results.length ≤ abiRegisterCount) && results.all (·.class != .flags) &&
+        aresults == resultRegs results && distinctIds results &&
+        returnViews post symbol (aresults.map Loc.width) then
+      some (callExit E results aresults)
+    else none
 
 /-- A move before allocation that only renames: both classes are equal. -/
 def renameOf : Machine.Instruction → Option (VReg × VReg)
@@ -328,7 +325,7 @@ def checkFunction (pre : Machine.Program) (post : Program) (hints : Hints)
   match post.functions.find? (·.name == f.name), f.blocks.find? (·.id == 0) with
   | some g, some entry =>
     let hint := hintOf hints f.name
-    distinctIds entry.args && (argumentLocs false 0 entry.args).isSome &&
+    distinctIds entry.args && entry.args.all (·.class != .flags) &&
       (hint 0).all (entryState entry.args).contains &&
       f.blocks.all (checkBlock pre post hint f g)
   | _, _ => false

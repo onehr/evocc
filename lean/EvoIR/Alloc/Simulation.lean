@@ -44,7 +44,8 @@ def Matched (a : Machine.Activation) (b : Activation) : Prop :=
 /-- A return frame after a call to `callee`. `K` are the equations that the
 call keeps. After the return, the result registers hold the results. -/
 def FrameRel (callee : String) (fr : Machine.ReturnFrame) (fr' : ReturnFrame) : Prop :=
-  resultLocs 0 fr.results = some fr'.results ∧ distinctIds fr.results = true ∧
+  fr'.results = resultRegs fr.results ∧ fr.results.length ≤ abiRegisterCount ∧
+  (∀ r ∈ fr.results, r.class ≠ .flags) ∧ distinctIds fr.results = true ∧
   returnViews post callee (fr'.results.map Loc.width) = true ∧
   ∃ K, (∀ e ∈ K, e.1.callClobbered = false ∧ (fr.results.map (·.id)).contains e.2.id = false) ∧
     Holds K fr.caller.regs fr'.caller.storage ∧
@@ -131,7 +132,7 @@ theorem entry_facts (checked : checkAllocation pre post hints = true)
     {name : String} {f : Machine.Function} {entry : Machine.Block}
     (foundF : pre.functions.find? (·.name == name) = some f)
     (foundE : f.blocks.find? (·.id == 0) = some entry) :
-    distinctIds entry.args = true ∧ (argumentLocs false 0 entry.args).isSome = true ∧
+    distinctIds entry.args = true ∧ entry.args.all (·.class != .flags) = true ∧
       (hintOf hints name 0).all (entryState entry.args).contains = true := by
   have fn := checked_function checked foundF
   have name_eq := find_name foundF
@@ -415,5 +416,164 @@ theorem settle (progress : Machine.ObservedProgress .postSSA pre type entry) (st
             settled⟩
 
 end settle
+
+
+/-! ## Positions -/
+
+theorem regLoc_at {i : Nat} {r : VReg} (general : r.class ≠ .flags) :
+    (Place.gpr i).at r.class = some (regLoc i r) := by
+  cases h : r.class <;> simp_all [regLoc, Place.at, Machine.RegClass.width]
+
+theorem regLoc_place {i : Nat} {r : VReg} (general : r.class ≠ .flags) : (regLoc i r).place = .gpr i :=
+  Place.at_place (regLoc_at general)
+
+theorem length_resultRegs (l : List VReg) : (resultRegs l).length = l.length := by
+  simp [resultRegs]
+
+theorem getElem_resultRegs (l : List VReg) (i : Nat) (h : i < (resultRegs l).length) :
+    (resultRegs l)[i] = regLoc i (l[i]'(by simpa [length_resultRegs] using h)) := by
+  simp [resultRegs]
+
+theorem abiRegistersFrom_resultRegs : ∀ (l : List VReg) (n : Nat), (∀ r ∈ l, r.class ≠ .flags) →
+    abiRegistersFrom n ((l.zipIdx n).map (fun e => regLoc e.2 e.1)) = true
+  | [], _, _ => rfl
+  | r :: rest, n, general => by
+    simp only [List.zipIdx_cons, List.map_cons, abiRegistersFrom, Bool.and_eq_true, beq_iff_eq]
+    exact ⟨regLoc_place (general r (by simp)),
+      abiRegistersFrom_resultRegs rest (n+1) (fun r' m => general r' (by simp [m]))⟩
+
+theorem abiRegisters_resultRegs (l : List VReg) (short : l.length ≤ abiRegisterCount)
+    (general : ∀ r ∈ l, r.class ≠ .flags) : abiRegisters (resultRegs l) = true := by
+  simp only [abiRegisters, Bool.and_eq_true, decide_eq_true_eq, length_resultRegs]
+  exact ⟨short, abiRegistersFrom_resultRegs l 0 general⟩
+
+theorem abiRegistersFrom_getElem : ∀ (l : List Loc) (n : Nat), abiRegistersFrom n l = true →
+    ∀ i (h : i < l.length), l[i].place = .gpr (n+i)
+  | [], _, _, _, h => by simp at h
+  | loc :: rest, n, ok, i, h => by
+    simp only [abiRegistersFrom, Bool.and_eq_true, beq_iff_eq] at ok
+    cases i with
+    | zero => simpa using ok.1
+    | succ i =>
+      have := abiRegistersFrom_getElem rest (n+1) ok.2 i (by simpa using h)
+      simpa [Nat.add_assoc, Nat.add_comm 1 i] using this
+
+theorem mapM_getElem {f : α → Except ε β} : ∀ {l : List α} {vs : List β}, l.mapM f = .ok vs →
+    vs.length = l.length ∧ ∀ i (h : i < l.length) (h' : i < vs.length), f l[i] = .ok vs[i]
+  | [], vs, ok => by
+    simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at ok
+    subst ok; simp
+  | x :: rest, vs, ok => by
+    simp only [List.mapM_cons, bind, Except.bind] at ok
+    cases hx : f x with
+    | error e => simp [hx] at ok
+    | ok v =>
+      cases hr : rest.mapM f with
+      | error e => simp [hx, hr] at ok
+      | ok vs' =>
+        simp only [hx, hr, pure, Except.pure, Except.ok.injEq] at ok
+        subst ok
+        obtain ⟨len, each⟩ := mapM_getElem hr
+        refine ⟨by simp [len], ?_⟩
+        intro i h h'
+        cases i with
+        | zero => simpa using hx
+        | succ i => simpa using each i (by simpa using h) (by simpa using h')
+
+theorem zip_all_getElem {p : α × β → Bool} {l : List α} {l' : List β}
+    (ok : (l.zip l').all p = true) (i : Nat) (h : i < l.length) (h' : i < l'.length) :
+    p (l[i], l'[i]) = true := by
+  have member : (l[i], l'[i]) ∈ l.zip l' := by
+    have hz : i < (l.zip l').length := by simp; omega
+    have := List.getElem_mem hz
+    simpa [List.getElem_zip] using this
+  exact List.all_eq_true.mp ok _ member
+
+/-! ## Inserted copies -/
+
+theorem copyOf_toMachine {inst : Instruction} {dst src : Loc} (isCopy : inst.copyOf = some (dst, src)) :
+    inst.toMachine Loc.reg = .mov dst.reg src.reg := by
+  cases inst <;> simp [Instruction.copyOf] at isCopy <;> obtain ⟨rfl, rfl⟩ := isCopy <;> rfl
+
+theorem copyOf_notCall {inst : Instruction} {pair : Loc × Loc} (isCopy : inst.copyOf = some pair) :
+    ∀ symbol args results, inst ≠ .bl symbol args results := by
+  intro symbol args results same
+  subst same
+  simp [Instruction.copyOf] at isCopy
+
+theorem copy_eval (owner : Nat) {E : Equations} {regs : RegisterFile} {st : Storage}
+    (memory : Machine.Memory) {inst : Instruction} {dst src : Loc}
+    (isCopy : inst.copyOf = some (dst, src)) (defined : sourceDefined E src = true)
+    (state : Holds E regs st) :
+    ∃ v, evalInstruction owner inst st memory =
+        .ok (writeLoc st dst (.value (normalize dst.class v)), memory) ∧
+      Holds (copy E dst src) regs (writeLoc st dst (.value (normalize dst.class v))) := by
+  obtain ⟨e, member, chosen⟩ := List.any_eq_true.mp defined
+  simp only [Bool.and_eq_true, beq_iff_eq, bne_iff_ne, ne_eq, Loc.fits_iff] at chosen
+  obtain ⟨⟨samePlace, fits⟩, general⟩ := chosen
+  obtain ⟨loc, slot, fits', _, written, read⟩ := state e member
+  rw [samePlace] at fits'
+  have same : loc = src := Option.some.inj (fits'.symm.trans fits)
+  subst same
+  cases slot with
+  | flags => exact False.elim (general written)
+  | value v =>
+    refine ⟨v, ?_, Holds.copy state read⟩
+    unfold evalInstruction
+    rw [copyOf_toMachine isCopy]
+    simp [Machine.evalInstructionOperands, Machine.operandValue, operandReader_reg, read,
+      Machine.valueWrite, applyWrites_cons, Loc.reg_class]
+    rfl
+
+/-! ## Original instructions -/
+
+theorem matched_eval (owner : Nat) {E E' : Equations} {regs : RegisterFile} {st : Storage}
+    (memory : Machine.Memory) {o : Machine.Instruction} {a : Instruction} (U D : VReg → Loc)
+    (shape : a.toMachine Loc.reg = mapDefs (fun r => (D r).reg) (o.mapUses (fun r => (U r).reg)))
+    (uses : ∀ r ∈ o.uses, holds E (U r) r = true)
+    (defs : ∀ r ∈ o.defs, (D r).place.at r.class = some (D r))
+    (outputs : Machine.OutputClassesValid o)
+    (result : E' = defineAll E (o.defs.map (fun r => (r, D r))))
+    (state : Holds E regs st) :
+    (∃ e, Machine.evalInstruction owner o regs memory = .error e ∧
+        evalInstruction owner a st memory = .error e) ∨
+      (∃ regs' st' m', Machine.evalInstruction owner o regs memory = .ok (regs', m') ∧
+        evalInstruction owner a st memory = .ok (st', m') ∧ Holds E' regs' st') := by
+  rw [original_eval owner memory o a U D shape uses defs state]
+  unfold Machine.evalInstruction
+  cases h : Machine.evalInstructionOperands owner o (Machine.readOperand regs) memory with
+  | error e => exact .inl ⟨e, rfl, rfl⟩
+  | ok pair =>
+    obtain ⟨ws, m'⟩ := pair
+    have foot := Machine.evalInstructionOperands_resultRegs owner o _ memory ws m' h
+    have norm := Machine.evalInstructionOperands_writes_normalized owner o _ memory ws m' outputs h
+    refine .inr ⟨Machine.applyWrites regs ws, applyWrites st (renameWrites (fun x => (D x).reg) ws),
+      m', rfl, rfl, ?_⟩
+    have pairs : o.defs.map (fun r => (r, D r)) = ws.map (fun e => (e.1, D e.1)) := by
+      rw [← foot, List.map_map]; rfl
+    rw [result, pairs]
+    exact Holds.writes D ws E regs st state fun e member =>
+      ⟨norm e member, defs e.1 (by rw [← foot]; exact List.mem_map_of_mem member)⟩
+
+theorem matchOriginal_some {E E' : Equations} {o : Machine.Instruction} {a : Instruction}
+    (found : matchOriginal E o a = some E') :
+    let U := assign o.uses a.useLocs
+    let D := assign o.defs a.defLocs
+    a.toMachine Loc.reg = mapDefs (fun r => (D r).reg) (o.mapUses (fun r => (U r).reg)) ∧
+      (∀ r ∈ o.uses, holds E (U r) r = true) ∧
+      (∀ r ∈ o.defs, (D r).place.at r.class = some (D r)) ∧
+      Machine.OutputClassesValid o ∧ E' = defineAll E (o.defs.map (fun r => (r, D r))) := by
+  unfold matchOriginal at found
+  dsimp only at found ⊢
+  split at found
+  · rename_i cond
+    simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true, Loc.fits_iff] at cond
+    obtain ⟨⟨⟨shape, uses⟩, defs⟩, classes⟩ := cond
+    cases found
+    have h := toMachine_ofMachine (assign o.uses a.useLocs) (assign o.defs a.defLocs) o
+    rw [← shape] at h
+    exact ⟨h, uses, defs,
+      defClassesOK_output o classes, rfl⟩
+  · simp at found
 
 end EvoIR.Alloc
