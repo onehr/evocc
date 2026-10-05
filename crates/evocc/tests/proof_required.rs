@@ -40,8 +40,24 @@ fn lean_checker() -> PathBuf {
     checker
 }
 
-/// A new path for a proof directory. The driver creates the directory.
-fn new_directory() -> PathBuf {
+/// A new path for a proof directory. The driver creates the directory. The
+/// test removes it at the end.
+struct Scratch(PathBuf);
+
+impl std::ops::Deref for Scratch {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn new_directory() -> Scratch {
     static SERIAL: AtomicU64 = AtomicU64::new(0);
     let path = std::env::temp_dir().join(format!(
         "evocc-proof-required-{}-{}",
@@ -49,7 +65,7 @@ fn new_directory() -> PathBuf {
         SERIAL.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = std::fs::remove_dir_all(&path);
-    path
+    Scratch(path)
 }
 
 fn source_file(text: &str) -> PathBuf {
@@ -113,7 +129,7 @@ fn assert_refused(output: &Output, directory: &Path, code: i32, reason: &str) {
     assert!(stderr.contains(reason), "expected `{reason}` in: {stderr}");
 }
 
-fn accept(source: &Path, extra: &[&str]) -> (PathBuf, String) {
+fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
     let directory = new_directory();
     let output = run_proof(&directory, &lean_checker(), extra, source, &[]);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -408,8 +424,7 @@ fn proof_options_are_admitted_only_with_the_baseline_path() {
     }
 
     // The proof directory must be new.
-    std::fs::create_dir(&directory).unwrap();
+    std::fs::create_dir(&*directory).unwrap();
     let output = run_proof(&directory, &checker, &["--core-entry=abs"], &source, &[]);
     assert_refused(&output, &directory, INPUT, "cannot create");
-    std::fs::remove_dir(&directory).unwrap();
 }
