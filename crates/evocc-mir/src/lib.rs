@@ -32,6 +32,7 @@ pub mod regalloc;
 pub mod text;
 pub mod text_parse;
 pub mod validate;
+pub mod verify_alloc;
 
 use std::fmt;
 
