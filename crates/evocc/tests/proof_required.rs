@@ -159,13 +159,14 @@ fn assert_record(record: &str, checked: &[&str]) {
         "the AArch64 subset",
         "AbiEntry",
         "the assembler, the linker",
+        "zero-extended argument values",
     ] {
         assert!(
             record.contains(trusted),
             "the trusted list must name {trusted}"
         );
     }
-    let order = ["V01", "V05", "V02", "V03", "V04"]
+    let order = ["V01", "V05", "V02", "V03", "V04", "PIPELINE"]
         .map(|stage| record.find(&format!("\"id\": \"{stage}\",")).unwrap());
     assert!(order.is_sorted(), "stage order {order:?}");
     for stage in ["V01", "V05", "V02", "V03", "V04"] {
@@ -188,6 +189,13 @@ fn assert_record(record: &str, checked: &[&str]) {
         assert!(row(record, "V04").contains(&format!("\"path\": \"{path}\"")));
     }
     assert!(row(record, "V04").contains("scope=allocated-mir-to-assembly-text"));
+    // The final decision: one pipeline check for each entry, after the stage
+    // rows.
+    let pipeline = &record[record.find("\"id\": \"PIPELINE\",").unwrap()..];
+    assert!(pipeline.contains("\"status\": \"CHECKED\""));
+    assert!(pipeline.contains("EvoIR.Pipeline.checkPipelineTexts_sound"));
+    assert!(pipeline.contains("PIPELINE_ACCEPTED entry="));
+    assert!(pipeline.contains("scope=source-to-assembly-text"));
 }
 
 /// The digest chain of the record: each pair of files names one link, in
@@ -264,7 +272,7 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
 #[test]
 fn pilot_entries_are_checked_to_final_assembly_text() {
     let (directory, record) = accept(&fixture("musl-abs.c"), &["--core-entry=abs"]);
-    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 4);
+    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 5);
     // The allocation export, the AST and the text are the frozen V03 and V04
     // fixtures of this module.
     for (exported, frozen) in [
@@ -297,7 +305,7 @@ fn pilot_entries_are_checked_to_final_assembly_text() {
     );
     assert!(directory.join("inputs/proposal-loop_join.json").is_file());
     assert!(record.contains("entry=loop_join route=loop"));
-    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 8);
+    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 10);
     drop(directory);
     let (_, record) = accept(
         &fixture("pressure.c"),
@@ -442,6 +450,9 @@ fn rewrites_are_checked_between_v01_and_v02() {
 /// `EVOCC_TEST_ROLE`, it applies the sed program `EVOCC_TEST_SED` to the proof
 /// input. Then it runs the real Lean checker.
 const CHANGING_ROLE_CHECKER: &str = r#"#!/bin/sh
+if [ -n "$EVOCC_TEST_COMMAND" ] && [ "$1" != "$EVOCC_TEST_COMMAND" ]; then
+    exec "$EVOCC_TEST_LEAN_CHECKER" "$@"
+fi
 for binding in "$@"; do
     role=${binding%%=*}
     case " $EVOCC_TEST_ROLE " in
@@ -457,6 +468,19 @@ exec "$EVOCC_TEST_LEAN_CHECKER" "$@"
 /// Run proof-required mode with `CHANGING_ROLE_CHECKER`: the proof input of
 /// `role` changes after export and before the Lean checker reads it.
 fn run_changed(directory: &Path, extra: &[&str], source: &Path, role: &str, sed: &str) -> Output {
+    run_changed_in("", directory, extra, source, role, sed)
+}
+
+/// As `run_changed`, but if `command` is not empty, the change occurs only in
+/// the checker runs with that first argument.
+fn run_changed_in(
+    command: &str,
+    directory: &Path,
+    extra: &[&str],
+    source: &Path,
+    role: &str,
+    sed: &str,
+) -> Output {
     use std::os::unix::fs::PermissionsExt;
     let tools = new_directory();
     std::fs::create_dir(&*tools).unwrap();
@@ -472,8 +496,29 @@ fn run_changed(directory: &Path, extra: &[&str], source: &Path, role: &str, sed:
             ("EVOCC_TEST_LEAN_CHECKER", &lean_checker()),
             ("EVOCC_TEST_ROLE", Path::new(role)),
             ("EVOCC_TEST_SED", Path::new(sed)),
+            ("EVOCC_TEST_COMMAND", Path::new(command)),
         ],
     )
+}
+
+#[test]
+fn the_pipeline_check_is_the_final_decision() {
+    // Every stage row accepts the original files. Then the text changes, and
+    // only the pipeline check reads the changed text. It refuses, and the
+    // driver publishes nothing.
+    let directory = new_directory();
+    let output = run_changed_in(
+        "--check-pipeline",
+        &directory,
+        &["--core-entry=abs"],
+        &fixture("musl-abs.c"),
+        "text",
+        "s/cmp w0, #0/cmp w0, #1/",
+    );
+    assert_refused(&output, &directory, REJECTED, "stage PIPELINE");
+    assert_refused(&output, &directory, REJECTED, "PIPELINE_REJECTED stage=V04");
+    let accepted = std::fs::read_to_string(directory.join("checks/V04-abs.out")).unwrap();
+    assert!(accepted.starts_with("STAGE_ACCEPTED stage=V04 entry=abs"));
 }
 
 #[test]

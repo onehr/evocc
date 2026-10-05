@@ -109,6 +109,9 @@ enum Place {
     EachStep,
     /// The EvoIR after the last rewrite step.
     Last,
+    /// All files of the compilation: the EvoIR before the first rewrite step
+    /// and every rewrite step, in step order.
+    Whole,
 }
 
 struct Stage {
@@ -167,7 +170,31 @@ const STAGES: &[Stage] = &[
         roles: Some(&[Role::Source, Role::Allocation, Role::Asm, Role::Text]),
         theorem: "EvoIR.Asm.Proof.checkAsm_sound; composition EvoIR.Asm.Proof.source_asm_refines",
     },
+    // The final decision: one check of all stages on the same files, with one
+    // theorem. The stage rows above are for diagnosis.
+    Stage {
+        id: PIPELINE,
+        name: "typed Core source to final assembly text in one check",
+        reaches: "final assembly",
+        place: Place::Whole,
+        roles: Some(&[
+            Role::Source,
+            Role::Proposal,
+            Role::Ir,
+            Role::After,
+            Role::Certificate,
+            Role::Ssa,
+            Role::PostSsa,
+            Role::Allocation,
+            Role::Asm,
+            Role::Text,
+        ]),
+        theorem: "EvoIR.Pipeline.checkPipelineTexts_sound; EvoIR.Pipeline.checkPipeline_sound",
+    },
 ];
+
+/// The ID of the stage row that runs `evoir-sem --check-pipeline`.
+const PIPELINE: &str = "PIPELINE";
 
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 
@@ -186,6 +213,7 @@ const TRUSTED: &[&str] = &[
     "the printer of the assembly AST (EvoIR.Asm.File.print)",
     "the Lean semantics of typed Core C and of the AArch64 subset",
     "the ABI entry assumption (EvoIR.Asm.Proof.AbiEntry): the caller obeys the AArch64 procedure call standard and gives sufficient stack",
+    "open limit: AbiEntry uses zero-extended argument values; the theorem covers only entry states in which the upper 32 bits of each 32-bit argument register and stack slot are zero, and AAPCS64 does not require this of a caller",
     "the assembler, the linker, the runtime libraries and the hardware",
 ];
 
@@ -597,6 +625,7 @@ fn check_and_record(
             Place::First => 0..1,
             Place::EachStep => 0..steps,
             Place::Last => steps..steps + 1,
+            Place::Whole => 0..1,
         };
         let (Some(roles), false) = (stage.roles, runs.is_empty()) else {
             let reason = match stage.roles {
@@ -617,16 +646,25 @@ fn check_and_record(
             for step in runs.clone() {
                 let inputs = roles
                     .iter()
-                    .filter_map(|role| {
-                        artifacts.iter().find(|a| {
+                    .flat_map(|role| {
+                        artifacts.iter().filter(move |a| {
                             a.role == *role
                                 && a.entry.as_ref().is_none_or(|name| name == entry)
-                                && a.step.is_none_or(|at| at == step)
+                                && match stage.place {
+                                    Place::Whole => a.role != Role::Ir || a.step == Some(0),
+                                    _ => a.step.is_none_or(|at| at == step),
+                                }
                         })
                     })
                     .collect::<Vec<_>>();
+                // A compilation without -Oeq-scalar has no rewrite step.
+                let optional = |role: &&Role| {
+                    **role == Role::Proposal
+                        || (stage.place == Place::Whole
+                            && matches!(role, Role::After | Role::Certificate))
+                };
                 let missing = |role: &&Role| !inputs.iter().any(|a| a.role == **role);
-                if let Some(role) = roles.iter().filter(|r| **r != Role::Proposal).find(missing) {
+                if let Some(role) = roles.iter().filter(|r| !optional(r)).find(missing) {
                     let role = role.name();
                     return Err((
                         Failure::Input,
@@ -897,7 +935,11 @@ fn check(
         })
     };
     let mut command = Command::new(checker);
-    command.arg("--check-stage").arg(stage.id);
+    if stage.id == PIPELINE {
+        command.arg("--check-pipeline");
+    } else {
+        command.arg("--check-stage").arg(stage.id);
+    }
     for artifact in inputs {
         let mut binding = OsString::from(format!("{}=", artifact.role.name()));
         binding.push(proof.directory.join(&artifact.path));
@@ -941,7 +983,11 @@ fn check(
     );
     match status.code() {
         Some(0) => {
-            let expected = format!("STAGE_ACCEPTED stage={} entry={entry}", stage.id);
+            let expected = if stage.id == PIPELINE {
+                format!("PIPELINE_ACCEPTED entry={entry}")
+            } else {
+                format!("STAGE_ACCEPTED stage={} entry={entry}", stage.id)
+            };
             match stdout.lines().collect::<Vec<_>>()[..] {
                 [line] if line == expected || line.starts_with(&format!("{expected} ")) => {
                     Ok(line.to_owned())
