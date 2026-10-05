@@ -2578,6 +2578,19 @@ compiler without implying a proof. No new registry, fact domain or AI campaign.
   Receipt: `whole_cyclic_caller`. Build/capture delta +4,292 KiB, target/frontend
   unchanged, 51 GiB free; intermediate scratch retired, final evidence retained.
 
+  **October 5 call-context closure:** `a1338248` / `014bfa62` close the four
+  preceding REDs; `e5db8d5e` closes initializer calls, post-call short circuit
+  and a branch with a return-only arm. Nineteen original pairs replay.
+  New context tests: 8 original/renamed pairs, 17 mutations, 20 executions.
+  Clean Lean: 77 kernel-only core targets; full Rust baseline at `014bfa62`:
+  3,080 / 0 / 5 ignored, Clippy/format pass (Rust and gate unchanged).
+  Two valid-source REDs remain in `call-loop-short-right.c`: preserve the
+  selected path premise when a logical right operand calls a cyclic callee.
+  Private-storage composition, complete frozen closure coverage and validator
+  safety still block V01. Receipts: `saved_call_contexts`,
+  `call_statement_contexts`. Combined artifact delta +6,396 KiB, 53 GiB free;
+  temporary probe removed, protected evidence retained.
+
 - [ ] **V02 — Prove selection and out-of-SSA result checking** — `OPEN`, P1.
   After V01's semantic interfaces, cover EvoIR-to-EvoMIR, always-on baseline
   lowering/DCE and simultaneous edge copies. Prove simulation; reject wrong

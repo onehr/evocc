@@ -770,6 +770,33 @@ Measured build/capture delta +4,292 KiB; target/frontend unchanged, 51 GiB free.
 Two intermediate logs and the temporary phase probe were retired; final
 evidence and protected artifacts remain. No backend/release label is granted.
 
+**Saved calls and statement contexts (October 5 continuation).** `a1338248`
+and `014bfa62` close the four preceding context REDs, including nested cyclic
+calls and fresh renaming of saved operands. `e5db8d5e` additionally closes
+initializer calls, post-call `&&`/`||`, and branches with a return-only arm.
+The same proof constructor checks both frontier arms; a terminal source suffix
+may take zero steps, but cyclic spans still require positive progress. Return
+matching reuses the proved constant-cast normalization, not numeric samples.
+Source/IR execution semantics, P0/g0 and the frozen profile are unchanged.
+
+Nineteen original pairs replay, including all eight newly closed contexts.
+The new statement-context tests cover eight original/renamed pairs, 17
+mutations and 20 execution controls; 19 source-resumption and nine frontier
+controls pass. Clean Lean at `e5db8d5e`: 77 kernel-only audited core targets,
+no native axioms, 1,246,159 vector answers. The completed full Rust workspace
+gate at `014bfa62` is 401 suites / 3,080 passed / zero failed / five ignored,
+Clippy/format pass. Rust sources and that gate are unchanged; this is retained
+Rust-baseline evidence, not a new full-workspace run at the later Lean commit.
+
+`call-loop-short-right.c` retains two valid-source REDs: a cyclic call as the
+right operand of `&&` or `||`. Its source frontier still needs the selected
+path premise preserved through the suspended logical frame. These, private
+storage, full closure coverage and validator safety keep V01 OPEN; V02–V06
+remain unimplemented. Receipts: `saved_call_contexts` and
+`call_statement_contexts` in the existing pilot manifest. Combined artifact
+delta +6,396 KiB; target/frontend unchanged, capture 16,284 KiB of 500 MiB,
+53 GiB free. Temporary probe source removed; protected evidence retained.
+
 **Stage inputs.** Use existing canonical EvoIR text and lossless MIR/allocated
 representations; certificates propose node/block/value correspondences and
 invariants between *two supplied programs*. Assembly input is final emitted
