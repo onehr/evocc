@@ -717,6 +717,33 @@ proposed checkpoints. The machine command uses `source.json` to select an entry
 and its signature. It does **not** replace the source-to-EvoIR check. Normal
 compilation does not automatically obtain this complete proof chain.
 
+### Proof-required compilation (in work)
+
+A separate driver mode connects the compiler to these checkers. It is part of
+the V06 work package and is not release acceptance:
+
+```sh
+evocc --emit=asm --proof-required=NEW_DIR --proof-checker=lean/.lake/build/bin/evoir-sem \
+      --core-entry=abs -O0 -fno-builtin tests/fixtures/verification/musl-abs.c
+```
+
+The driver exports the typed source, EvoIR, SSA EvoMIR and post-SSA EvoMIR of
+the same compilation into `NEW_DIR/inputs/`. The compiled Lean checker then
+runs each integrated stage for each `--core-entry`
+(`evoir-sem --check-stage V01|V02 ROLE=PATH ...`). Every function in the output
+must be a selected entry. A loop entry needs its untrusted checkpoint proposal,
+`--proof-proposal=NAME=PATH`. The driver writes `NEW_DIR/output.s`,
+`NEW_DIR/record.json` and the assembly on standard output only if every
+integrated stage accepts. Otherwise it writes no output and exits with 3 (a stage
+rejected), 4 (a proof input is missing, changed or not readable), 5 (the checker
+is missing, failed or timed out) or 6 (a construct is outside `core-v1`).
+
+The record names each stage, its result, the digests of its input files and the
+checker digest. At present it says **"checked to post-SSA EvoMIR, not to final
+assembly"**. Register allocation and assembly emission are not checked yet, so
+this output is not a verified binary. Ordinary compilation without the flag is
+unchanged and gets no proof label.
+
 ### Trust boundaries and work not yet proved
 
 The generic soundness theorems are checked by the Lean kernel. The public
@@ -733,7 +760,10 @@ The present result does **not** prove register allocation, physical stack-frame
 layout, prologue or epilogue code, assembly emission, linking, runtime libraries
 or processor execution. The existing allocation verifier and native tests do
 not close those proof obligations. There is no end-to-end source-to-native or
-verified-release claim yet.
+verified-release claim yet. As of 2026-10-05, register allocation (V03), frame
+layout and assembly (V04), rewrite composition (V05) and proof-required release
+acceptance (V06) are in work. None of them is complete. See the
+[verification plan](docs/lean-plan.md#first-public-release-verification).
 
 The P0 and guard rewrite proofs above are a separate result. Their composition
 with this whole-function compilation chain remains open. Neither layer proves
