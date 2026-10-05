@@ -7,7 +7,9 @@ The owner requires a practical compiler-correctness path before the first public
 version, followed by verified rewrites on that path. This section is the current
 implementation plan; the scalar-proof plan below remains historical evidence.
 **Current state (2026-10-06): V00 to V06 are complete in the frozen `core-v1`
-scope. V07, the first follow-up task, is open.** The result is a proved,
+scope. V07, the first follow-up task, is open. V08 is open: the acceptance run
+did not assemble or execute the output, and the selected native gates were not
+run.** The result is a proved,
 fail-closed compilation path for the listed Core C-HIR subset and target, with
 an explicit trusted boundary. Existing scalar rewrites compose with that path.
 The driver mode `--proof-required` runs the V01, V05 (with `-Oeq-scalar`), V02,

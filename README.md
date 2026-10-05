@@ -851,6 +851,9 @@ these limits:
    - the ABI entry assumption `AbiEntry`: the caller obeys the AArch64
      procedure call standard and gives sufficient stack (see item 1);
    - the assembler, the linker, the runtime libraries and the hardware.
+6. **Native execution.** The acceptance run did not assemble or execute the
+   output of proof-required mode. The open task V08 is to run the selected
+   native gates on this output.
 
 The exported snapshots (EvoIR, EvoMIR, allocation, assembly AST) are not
 trusted: a stage checks each one, and the digest chain binds them to the

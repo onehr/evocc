@@ -125,7 +125,7 @@ was found in the read-only process check at this planning checkpoint.
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | V07, T03 | V00-V06 are complete in the frozen scope. V07 removes the zero-extension premise from `AbiEntry`; it is the first follow-up task. The bucket includes proof implementation, not new audit tooling. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. |
-| ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| ACCEPTANCE | V08, T04, T02, K13, K14, B10, T05 | V08 runs the selected native gates on proof-required output; the V06 acceptance run did not run them. Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -2316,8 +2316,10 @@ an explicit trusted boundary. Existing scalar rewrites compose with that path.
 Proof-required mode publishes an output only if the output is checked from
 typed Core source to final assembly text. The acceptance sweep accepts all 17
 pilot modules and all 107 entries of these modules, and both optimized cases.
-The V06 entry below gives the acceptance run. The proofs do not cover the
-whole compiler, the GNU C language or Linux.
+The V06 entry below gives the acceptance run. The acceptance run did not
+assemble or execute the output: the selected native gates were not run. Task
+V08 is to run them. The proofs do not cover the whole compiler, the GNU C
+language or Linux.
 
 Limits of the accepted result:
 
@@ -2857,6 +2859,10 @@ Limits of the accepted result:
     of that module, `caller` and `main` included, passed every stage in the
     direct check. This refusal is a missing input, not a defect of the mode.
 
+  - Not run: the selected native gates that the task text names. The
+    acceptance run did not assemble or execute the output. Free disk space
+    was below the stop line for heavy runs. Task V08 is to run these gates.
+
   The proof covers the listed subset only. The assembler, the linker, the
   runtime and the hardware stay trusted. Native tests do not remove them from
   the trusted base. The paragraph that starts "In work (October 5)" is
@@ -2872,6 +2878,17 @@ Limits of the accepted result:
   or make the checker refuse code that uses them. Exit: `checkPipeline_sound`
   holds without the zero-extension premise, and the acceptance sweep of the
   17 pilot modules and the two optimized cases passes again.
+
+- [ ] **V08 — Run the selected native gates on proof-required output** — `RETEST`, P1.
+  The V06 acceptance run did not assemble or execute the output, because free
+  disk space was below the stop line for heavy runs. Next action: when free
+  disk space is above 25 GiB, assemble and run the proof-required output of
+  the 17 pilot modules with the existing Linux AArch64 native harness. Compare
+  each result with the result of the source interpreter. Do not add a new
+  harness. Exit: each pilot entry gives the expected result, or each
+  difference is recorded with its cause. A difference is a defect in a
+  trusted part (the AArch64 subset semantics, the printer, the assembler or
+  the linker), not a gap in a proved stage.
 
 ## Codegen quality track — next quarter
 
