@@ -263,6 +263,7 @@ private def privatePrependRow {Γ : Var → Nat} (source : IR.Program)
 private def privateBodySpanFuel {Γ : Var → Nat} (source : IR.Program)
     (target : EvoIR.Machine.Program) (sf : IR.Function) (sb : IR.Block)
     (tf : EvoIR.Machine.Function) (tb : EvoIR.Machine.Block)
+    (stopBeforeChecks : Bool)
     (sourceFunction : source.functions.find? (·.name == sf.name) = some sf)
     (sourceBlock : sf.blocks.find? (·.name == sb.name) = some sb)
     (targetFunction : target.functions.find? (·.name == tf.name) = some tf)
@@ -274,12 +275,16 @@ private def privateBodySpanFuel {Γ : Var → Nat} (source : IR.Program)
     match privateNextRow sb tb spc tpc before with
     | none => privateEmptySpan source target sf sb spc tf tb tpc before
     | some fetched =>
-      let rest := privateBodySpanFuel source target sf sb tf tb sourceFunction sourceBlock targetFunction targetBlock
-        fuel (spc+privateRowCount fetched.source) (tpc+privateRowCount fetched.target) fetched.row.next
-      privatePrependRow source target sf sb spc tf tb tpc before fetched
-        (fetched.sound source target sf sb spc tf tb tpc before sourceFunction sourceBlock targetFunction targetBlock) rest
+      if stopBeforeChecks && !fetched.row.checks.isEmpty then
+        privateEmptySpan source target sf sb spc tf tb tpc before
+      else
+        let rest := privateBodySpanFuel source target sf sb tf tb stopBeforeChecks
+          sourceFunction sourceBlock targetFunction targetBlock
+          fuel (spc+privateRowCount fetched.source) (tpc+privateRowCount fetched.target) fetched.row.next
+        privatePrependRow source target sf sb spc tf tb tpc before fetched
+          (fetched.sound source target sf sb spc tf tb tpc before sourceFunction sourceBlock targetFunction targetBlock) rest
 
-def privateBodySpan {Γ : Var → Nat} (source : IR.Program)
+def privateBodySpanStopping {Γ : Var → Nat} (stopBeforeChecks : Bool) (source : IR.Program)
     (target : EvoIR.Machine.Program) (sf : IR.Function) (sb : IR.Block) (spc : Nat)
     (tf : EvoIR.Machine.Function) (tb : EvoIR.Machine.Block) (tpc : Nat)
     (before : PrivateBank Γ) :
@@ -289,12 +294,23 @@ def privateBodySpan {Γ : Var → Nat} (source : IR.Program)
       if targetFunction : target.functions.find? (·.name == tf.name) = some tf then
         if targetBlock : tf.blocks.find? (·.id == tb.id) = some tb then
           if within : spc ≤ sb.instructions.length ∧ tpc ≤ tb.insts.length then
-            return privateBodySpanFuel source target sf sb tf tb sourceFunction sourceBlock targetFunction targetBlock
+            return privateBodySpanFuel source target sf sb tf tb stopBeforeChecks
+              sourceFunction sourceBlock targetFunction targetBlock
               (sb.instructions.length+tb.insts.length+1) spc tpc before
           else none
         else none
       else none
     else none
   else none
+
+/-- The unrestricted component retains its original success-under-checks
+contract. Whole admission must discharge those checks, or use the stopping
+entry to handle the first guarded row and its actual failure separately. -/
+def privateBodySpan {Γ : Var → Nat} (source : IR.Program)
+    (target : EvoIR.Machine.Program) (sf : IR.Function) (sb : IR.Block) (spc : Nat)
+    (tf : EvoIR.Machine.Function) (tb : EvoIR.Machine.Block) (tpc : Nat)
+    (before : PrivateBank Γ) :
+    Option {result : PrivateBodySpanResult Γ // PrivateBodySpanDiagram source target sf sb spc tf tb tpc before result} :=
+  privateBodySpanStopping false source target sf sb spc tf tb tpc before
 
 end EvoIR.Core.Symbolic.MachineSelection

@@ -1,0 +1,19 @@
+func @private_shift(%arg0: bits<32>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: bits<32>, %v2: mem<all>, %v3: world):
+    (%v4, %v5, %v6) = alloca %v2, %v3 [origin=0, size=4, align=4]
+    %v7 = access_in_bounds %v5, %v4 [size=4, align=4]
+    (%v8, %v9) = store %v7, %v6, %v4, %v0
+    %v10 = access_in_bounds %v8, %v4 [size=4, align=4]
+    (%v11, %v12, %v13) = load %v10, %v9, %v4 : bits<32>
+    %v14 = shift_count_defined.unsigned %v11, %v1
+    ub.assume.invalid_shift_count %v14
+    %v15 = shl.bits<32> %v11, %v1
+    %v16 = access_in_bounds %v12, %v4 [size=4, align=4]
+    (%v17, %v18) = store %v16, %v13, %v4, %v15
+    %v19 = access_in_bounds %v17, %v4 [size=4, align=4]
+    (%v20, %v21, %v22) = load %v19, %v18, %v4 : bits<32>
+    (%v23, %v24) = lifetime.end %v21, %v22, %v4
+    ret %v20, %v23, %v24
+}

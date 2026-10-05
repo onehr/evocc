@@ -50,6 +50,7 @@ import EvoIR.IRPoisonProposalTests
 import EvoIR.IRPoisonSoundTests
 import EvoIR.MachinePrivateProposalTests
 import EvoIR.MachinePrivateFiniteTests
+import EvoIR.MachinePrivateLoopTests
 
 /-!
 # The executable evaluator
@@ -323,6 +324,7 @@ def run (args : List String) : IO UInt32 := do
   | ["--selftest"] => do
       EvoIR.Machine.Reader.selfTest
       let tokenFunctions ← EvoIR.Core.Symbolic.MachineSelection.TokenFunctionTests.tokenFunctionSelfTest
+      let machinePrivateLoops ← EvoIR.Core.Symbolic.MachineSelection.PrivateLoopTests.privateLoopSelfTest
       let arithmetic ← selfTest
       let source ← EvoIR.Core.Source.readerSelfTest
       let wellFormed ← EvoIR.Core.Source.wellFormedSelfTest
@@ -359,7 +361,7 @@ def run (args : List String) : IO UInt32 := do
       let privateStorage ← EvoIR.Core.Symbolic.PrivateStorageTests.privateStorageSelfTest
       let privateLoops ← EvoIR.Core.Symbolic.PrivateLoopTests.privateLoopSelfTest
       let privateCalls ← EvoIR.Core.Symbolic.PrivateCallTests.privateCallSelfTest
-      return if tokenFunctions == 0 && arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
+      return if tokenFunctions == 0 && machinePrivateLoops == 0 && arithmetic == 0 && source == 0 && wellFormed == 0 && execution == 0 &&
         ir == 0 && correspondence == 0 && sourceExpression == 0 && leaf == 0 && bitwise == 0 &&
         operators == 0 && branches == 0 && stateExpressions == 0 && stateReturns == 0 &&
         statements == 0 && statementReturns == 0 && cutpoints == 0 && divisions == 0 &&
