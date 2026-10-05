@@ -301,6 +301,18 @@ RECORDED_DEFINITIONS = [
 
 CORE_PRIMITIVE_TARGETS = [
     (
+        "EvoIR.Core.Symbolic.Term.constant_value_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} "
+        "(term : EvoIR.Core.Symbolic.Term Γ n) (value : BitVec n), "
+        "term.constantValue = some value → EvoIR.Core.Symbolic.denoteTerm σ term = value",
+    ),
+    (
+        "EvoIR.Core.Symbolic.Term.normalize_value_sound",
+        "∀ {Γ : EvoIR.Var → Nat} (σ : EvoIR.Subst Γ) {n : Nat} "
+        "(term : EvoIR.Core.Symbolic.Term Γ n), "
+        "EvoIR.Core.Symbolic.denoteTerm σ term.normalizeValue = EvoIR.Core.Symbolic.denoteTerm σ term",
+    ),
+    (
         "EvoIR.Core.Transition.OpenCheckpoint.closeWithin",
         "∀ {S : Type u_1} {T : Type u_2} {O : Type u_3} {sourceStep : S → Option S} "
         "{targetStep : T → Option T} {sourceObserve : S → Option O} {targetObserve : T → Option O} "

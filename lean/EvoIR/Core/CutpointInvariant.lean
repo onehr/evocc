@@ -114,13 +114,13 @@ def checkExit (points : List LayoutPoint) (fid : Nat) (target : IR.Function)
     Option (PLift (CutExitAgreement (points.map LayoutPoint.joint) fid target tokens type s t)) :=
   match control : s.control, t with
   | .returned a, .returned b =>
-    if same : (CWord.mk a.type a.term.normalizeCasts) = (CWord.mk b.type b.term.normalizeCasts) then
+    if same : (CWord.mk a.type a.term.normalizeValue) = (CWord.mk b.type b.term.normalizeValue) then
       if typed : a.type = type then
         if boundary : s.continuation = [] then
           some ⟨.returned control typed boundary (by
             intro σ
             have equal := congrArg (CWord.denote σ) same.symm
-            simpa only [CWord.denote, Term.normalize_casts_sound] using equal)⟩
+            simpa only [CWord.denote, Term.normalize_value_sound] using equal)⟩
         else none
       else none
     else none

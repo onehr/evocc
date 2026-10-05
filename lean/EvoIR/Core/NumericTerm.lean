@@ -74,6 +74,45 @@ theorem Term.normalize_casts_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat}
     (term : Term Γ n) : denoteTerm σ term.normalizeCasts = denoteTerm σ term := by
   induction term <;> simp_all only [normalizeCasts, constant_cast_sound, denoteTerm]
 
+/-- Evaluate only closed diagram terms. No valuation, path fact, or runtime
+sample is used; a variable makes the result unknown. This is proof-diagram
+normalization, not a change to the source/IR or to the EqSat registry. -/
+def Term.constantValue {Γ : Var → Nat} : {n : Nat} → Term Γ n → Option (BitVec n)
+  | _, .var .. => none
+  | _, .const _ c => some c
+  | n, .bin op a b => do return denoteOp (.bin op n) (← a.constantValue, ← b.constantValue)
+  | _, .cmp (n := n) op a b => do return denoteOp (.cmp op n) (← a.constantValue, ← b.constantValue)
+  | n, .shift (m := m) op a b => do return denoteOp (.shift op n m) (← a.constantValue, ← b.constantValue)
+  | n, .cast (w := w) op _ a => do return denoteOp (.cast op w n) (← a.constantValue)
+  | _, .guard (n := n) op a b => do return denoteOp (.guard op n) (← a.constantValue, ← b.constantValue)
+  | _, .nonzero (n := n) a => do return denoteOp (.nonzero n) (← a.constantValue)
+  | _, .count (n := n) (m := m) signed a b => do return denoteOp (.count signed n m) (← a.constantValue, ← b.constantValue)
+  | _, .division signed remainder a b => do return divisionBits signed remainder (← a.constantValue) (← b.constantValue)
+
+theorem Term.constant_value_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat}
+    (term : Term Γ n) (value : BitVec n) (accepted : term.constantValue = some value) :
+    denoteTerm σ term = value := by
+  induction term with
+  | var => simp [constantValue] at accepted
+  | const => exact Option.some.inj accepted
+  | bin op a b first second | cmp op a b first second | shift op a b first second
+  | guard op a b first second | count signed a b first second | division signed remainder a b first second =>
+    cases ha : a.constantValue <;> cases hb : b.constantValue <;>
+      simp_all [constantValue, denoteTerm] <;> exact Option.some.inj accepted
+  | cast op width a ih | nonzero a ih =>
+    cases ha : a.constantValue <;> simp_all [constantValue, denoteTerm] <;> exact Option.some.inj accepted
+
+def Term.normalizeValue {Γ : Var → Nat} {n : Nat} (term : Term Γ n) : Term Γ n :=
+  match term.constantValue with
+  | some value => .const n value
+  | none => term.normalizeCasts
+
+theorem Term.normalize_value_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat} (term : Term Γ n) :
+    denoteTerm σ term.normalizeValue = denoteTerm σ term := by
+  cases known : term.constantValue with
+  | none => simp [normalizeValue, known, normalize_casts_sound]
+  | some value => simpa [normalizeValue, known, denoteTerm] using (term.constant_value_sound σ value known).symm
+
 theorem Term.of_p0_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat} (term : EvoIR.Term Γ n) :
     denoteTerm σ (ofP0 term) = EvoIR.denoteTerm σ term := by
   induction term <;> simp_all [ofP0, denoteTerm, EvoIR.denoteTerm]

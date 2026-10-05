@@ -266,6 +266,24 @@ def functionClosureSelfTest : IO UInt32 := do
     negatives := negatives+1
   if failed == 0 then
     IO.println s!"8 original/renamed deep closures, {negatives} refusals, {executions} execution/frame controls and {divergent} matched divergent variants pass"
+  for width in [32,64] do
+    let instruction := s!"    %v1000 = uninitialized.bits<{width}>\n"
+    for location in ["    (%v5, %v6, %v7) = call @call_nested_loop", "    %v8 = add.bits<32> %v0, %v5"] do
+      let carried := mutateFunction target "deep_saved" location (instruction ++ location)
+      if carried == target || !accepts saved carried plan then
+        IO.eprintln s!"unused poison transport refused: {width}, {location}"
+        failed := failed+1
+      for (before, after) in [
+          ("add.bits<32> %v0, %v5", "add.bits<32> %v1000, %v5"),
+          ("ret %v8, %v6, %v7", "ret %v1000, %v6, %v7"),
+          ("call @call_nested_loop(%v0,", "call @call_nested_loop(%v1000,"),
+          (s!"uninitialized.bits<{width}>", s!"uninitialized.bits<{width}> %v0")] do
+        let changed := mutateFunction carried "deep_saved" before after
+        if changed == carried || accepts saved changed plan then
+          IO.eprintln s!"used/malformed poison admitted: {width}, {before}"
+          failed := failed+1
+  if failed == 0 then
+    IO.println "4 unused-poison call-boundary transports and 16 used/malformed refusals pass"
   return if failed == 0 then 0 else 1
 
 end EvoIR.Core.Symbolic.FunctionClosureTests

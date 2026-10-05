@@ -58,7 +58,8 @@ def CutTree.normalizeChecks {Γ : Var → Nat} {α : Type} (seen : List (Guard �
     CutTree Γ α → CutTree Γ α
   | .leaf value => .leaf value
   | .checked guard next =>
-    if guard ∈ seen then next.normalizeChecks seen
+    if constantBranch guard.condition = some true then next.normalizeChecks seen
+    else if guard ∈ seen then next.normalizeChecks seen
     else .checked guard (next.normalizeChecks (guard :: seen))
   | .branch condition yes no =>
     .branch condition (yes.normalizeChecks seen) (no.normalizeChecks seen)
@@ -72,18 +73,24 @@ theorem CutTree.normalize_checks_sound {Γ : Var → Nat} {α : Type} (σ : Subs
   | checked guard next ih =>
     simp only [normalizeChecks]
     split
-    · rename_i member
+    · rename_i known
+      have truth := constant_branch_sound σ guard.condition true known
+      have nonzero : (denoteTerm σ guard.condition).toNat ≠ 0 := by simpa using truth
       rw [ih seen passed]
-      simp [eval, guards, passed guard member, bind, Except.bind]
-    · simp only [eval, guards]
-      by_cases zero : (denoteTerm σ guard.condition).toNat = 0
-      · simp [zero, bind, Except.bind]
-      · simp only [beq_iff_eq, zero, ↓reduceIte, bind, Except.bind]
-        exact ih (guard :: seen) (by
-          intro g member
-          rcases List.mem_cons.mp member with same | old
-          · subst g; exact zero
-          · exact passed g old)
+      simp [eval, guards, nonzero, bind, Except.bind]
+    · split
+      · rename_i member
+        rw [ih seen passed]
+        simp [eval, guards, passed guard member, bind, Except.bind]
+      · simp only [eval, guards]
+        by_cases zero : (denoteTerm σ guard.condition).toNat = 0
+        · simp [zero, bind, Except.bind]
+        · simp only [beq_iff_eq, zero, ↓reduceIte, bind, Except.bind]
+          exact ih (guard :: seen) (by
+            intro g member
+            rcases List.mem_cons.mp member with same | old
+            · subst g; exact zero
+            · exact passed g old)
   | branch condition yes no first second =>
     simp only [normalizeChecks, eval]
     split

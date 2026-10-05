@@ -186,4 +186,3 @@ def contextCallerSuffix (source : Source.Program) (target : IR.Program) (points 
         sp.val tp.val sp.property tp.property path joined.down σ holds context owner nextFrame stack observationType⟩
 
 end EvoIR.Core.Symbolic
-

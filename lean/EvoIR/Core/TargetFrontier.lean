@@ -111,10 +111,25 @@ def targetCallFrontier {Γ : Var → Nat} (p : IR.Program) (f : IR.Function) :
       have block : f.blocks.find? (·.name == b.val.name) = some b.val := by
         simpa only [name] using b.property
       match atPc : b.val.instructions[pc]? with
-      | some inst => match inst.op with
+      | some inst => match op : inst.op with
         | .call _ => return ⟨.leaf ⟨label, pc, scope⟩, by
             intro σ owner nextFrame stack
             exact ⟨_, .refl _, rfl⟩⟩
+        | .uninitialized (.bits width) => do
+          if args : inst.operands = [] then
+            let next : {next // scope.appendSlots inst.results [.opaque (width+2)] = some next} ←
+              match bound : scope.appendSlots inst.results [.opaque (width+2)] with
+              | none => none
+              | some next => some ⟨next, bound⟩
+            let tail ← targetCallFrontier p f budget label (pc+1) next.val
+            return ⟨tail.val, by
+              intro σ owner nextFrame stack
+              obtain ⟨last, steps, outcome⟩ := tail.property σ owner nextFrame stack
+              refine ⟨last, .next ?_ steps, outcome⟩
+              simpa only [callState, cutTargetState, targetState, name] using
+                call_uninitialized_step p f b.val pc width scope next.val inst
+                  function block atPc op args next.property σ owner nextFrame stack⟩
+          else none
         | _ => do
           let code : {pair // instruction scope inst = some pair} ←
             match accepted : instruction scope inst with

@@ -117,6 +117,29 @@ theorem call_target_instruction {Γ : Var → Nat} (p : IR.Program) (f : IR.Func
 /-- Uninitialized data is transported as poison, never made into a symbolic
 integer or admitted as a numeric operand. Unused lowered placeholders may cross
 edges, but a read, arithmetic use, guard or return still refuses the diagram. -/
+theorem call_uninitialized_step {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
+    (b : IR.Block) (pc width : Nat) (scope next : Scope Γ) (inst : IR.Instruction)
+    (function : p.functions.find? (·.name == f.name) = some f)
+    (block : f.blocks.find? (·.name == b.name) = some b)
+    (atPc : b.instructions[pc]? = some inst)
+    (op : inst.op = .uninitialized (.bits width)) (args : inst.operands = [])
+    (binding : scope.appendSlots inst.results [.opaque (width+2)] = some next)
+    (σ : Subst Γ) (owner nextFrame : Nat) (stack : List IR.ReturnFrame) :
+    IR.Step p (callState σ f b pc owner nextFrame scope stack)
+      (callState σ f b (pc+1) owner nextFrame next stack) := by
+  have bindings := append_slots_sound σ scope next inst.results [.opaque (width+2)] binding
+  simp only [List.map_cons, List.map_nil, Slot.denote, call_poison] at bindings
+  have execute := execute_instruction (p := p)
+    (s := callState σ f b pc owner nextFrame scope stack)
+    (a := ⟨f.name, b.name, pc, scope.denote σ callTokens, owner⟩)
+    function block atPc (by intro name; simp [op])
+  dsimp only [callState] at execute
+  apply IR.Step.execute
+  simp only [IR.step, callState]
+  rw [execute]
+  simp [concreteInstruction, args, op, IR.evalOperation, bindings,
+    Bind.bind, Except.bind, pure, Except.pure]
+
 theorem call_target_uninitialized {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     (b : IR.Block) (pc width : Nat) (scope next : Scope Γ) (inst : IR.Instruction)
     (result : ValueTree Γ)
@@ -128,19 +151,9 @@ theorem call_target_uninitialized {Γ : Var → Nat} (p : IR.Program) (f : IR.Fu
     (tail : CallTargetDiagram p f b (pc+1) next result) :
     CallTargetDiagram p f b pc scope result := by
   intro σ owner nextFrame stack
-  have bindings := append_slots_sound σ scope next inst.results [.opaque (width+2)] binding
-  simp only [List.map_cons, List.map_nil, Slot.denote, call_poison] at bindings
-  have execute := execute_instruction (p := p)
-    (s := callState σ f b pc owner nextFrame scope stack)
-    (a := ⟨f.name, b.name, pc, scope.denote σ callTokens, owner⟩)
-    function block atPc (by intro name; simp [op])
-  dsimp only [callState] at execute
   obtain ⟨last, steps, outcome⟩ := tail σ owner nextFrame stack
-  refine ⟨last, .next (.execute ?_) steps, outcome⟩
-  simp only [IR.step, callState]
-  rw [execute]
-  simp [concreteInstruction, args, op, IR.evalOperation, bindings,
-    Bind.bind, Except.bind, pure, Except.pure]
+  exact ⟨last, .next (call_uninitialized_step p f b pc width scope next inst
+    function block atPc op args binding σ owner nextFrame stack) steps, outcome⟩
 
 theorem call_target_branch {Γ : Var → Nat} (p : IR.Program) (f : IR.Function)
     (b nextBlock : IR.Block) (scope next : Scope Γ) (successor : IR.Edge)

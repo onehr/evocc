@@ -1,0 +1,13 @@
+["core-call-cutpoints-v1",256,[
+  [7,["core-cutpoints-v2",256,[
+    [0,"entry",[[8,"uint",false,true],[9,"uint",false,true]],[[1,9,"uint"],[0,8,"uint"]],[[3,"world"],[2,"mem"]]],
+    [2,"b1",[[11,"uint",false,true],[10,"uint",false,true],[8,"uint",false,true],[9,"uint",false,true]],[[9,10,"uint"],[8,9,"uint"],[7,8,"uint"],[6,11,"uint"]],[[11,"world"],[10,"mem"]]],
+    [11,"b10",[[10,"uint",false,true],[8,"uint",false,true],[9,"uint",false,true]],[[82,10,"uint"],[81,9,"uint"]],[[84,"world"],[83,"mem"]]],
+    [14,"b13",[[10,"uint",false,true],[8,"uint",false,true],[9,"uint",false,true]],[[98,10,"uint"],[97,9,"uint"]],[[100,"world"],[99,"mem"]]]
+  ]]],
+  [56,["core-cutpoints-v2",256,[
+    [0,"entry",[[57,"int",false,true]],[[0,57,"int"]],[[2,"world"],[1,"mem"]]],
+    [2,"b1",[[59,"int",false,true],[58,"int",false,true],[57,"int",false,true]],[[7,58,"int"],[6,57,"int"],[5,59,"int"]],[[9,"world"],[8,"mem"]]],
+    [10,"b7",[[58,"int",false,true],[57,"int",false,true]],[[46,58,"int"],[45,57,"int"]],[[48,"world"],[47,"mem"]]]
+  ]]]
+]]

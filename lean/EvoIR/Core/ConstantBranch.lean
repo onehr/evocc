@@ -33,20 +33,14 @@ theorem branch_condition_sound {Γ : Var → Nat} (σ : Subst Γ) (term : Term �
     · rfl
   · rfl
 
-def constantBranch {Γ : Var → Nat} : Term Γ 1 → Option Bool
-  | .const _ value => some (value.toNat != 0)
-  | .cmp (n := n) op (.const _ a) (.const _ b) =>
-      some ((denoteOp (.cmp op n) (a, b)).toNat != 0)
-  | _ => none
+def constantBranch {Γ : Var → Nat} (term : Term Γ 1) : Option Bool :=
+  term.constantValue.map (fun value => value.toNat != 0)
 
 theorem constant_branch_sound {Γ : Var → Nat} (σ : Subst Γ) (condition : Term Γ 1)
     (value : Bool) (accepted : constantBranch condition = some value) :
     ((denoteTerm σ condition).toNat != 0) = value := by
-  unfold constantBranch at accepted
-  split at accepted
-  · exact Option.some.inj accepted
-  · exact Option.some.inj accepted
-  · contradiction
+  obtain ⟨bits, known, rfl⟩ := Option.map_eq_some_iff.mp accepted
+  rw [condition.constant_value_sound σ bits known]
 
 def ValueTree.normalizeBranches {Γ : Var → Nat} : ValueTree Γ → ValueTree Γ
   | .value word => .value word

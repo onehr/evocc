@@ -139,6 +139,19 @@ def targetInstructionSpan {Γ : Var → Nat} (p : IR.Program) (f : IR.Function) 
               checks tail.val function block atPc code tail.property⟩
           | none =>
             match call : inst.op with
+            | .uninitialized (.bits width) => do
+              if args : inst.operands = [] then
+                let next : {next // scope.appendSlots inst.results [.opaque (width+2)] = some next} ←
+                  match bound : scope.appendSlots inst.results [.opaque (width+2)] with
+                  | none => none
+                  | some next => some ⟨next, bound⟩
+                let tail ← targetInstructionSpan p f b fuel (pc+1) next.val
+                return ⟨tail.val, by
+                  intro σ owner nextFrame stack
+                  obtain ⟨last, steps, outcome⟩ := tail.property σ owner nextFrame stack
+                  exact ⟨last, .next (call_uninitialized_step p f b pc width scope next.val inst
+                    function block atPc call args next.property σ owner nextFrame stack) steps, outcome⟩⟩
+              else none
             | .call name => do
               let callee : {callee // p.functions.find? (·.name == name) = some callee} ←
                 match found : p.functions.find? (·.name == name) with

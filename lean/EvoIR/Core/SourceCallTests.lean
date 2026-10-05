@@ -1,4 +1,5 @@
 import EvoIR.Core.CallCorrespondence
+import EvoIR.Core.FunctionClosure
 
 /-! Operational regressions for the original direct-calls.c exports. These
 tests do not claim that the whole source/IR call checker is implemented. -/
@@ -251,6 +252,11 @@ private def pairAccepted (source target : String) : Bool :=
   | .ok s, .ok t => (Symbolic.callPair s t).isSome
   | _, _ => false
 
+private def contextPairAccepted (source target : String) : Bool :=
+  match readProgram source, IR.Reader.readProgram target with
+  | .ok s, .ok t => (Symbolic.openCallPair s t (fun _ => none) 256).isSome
+  | _, _ => false
+
 def callSelfTest : IO UInt32 := do
   let cases : List (String × String × List Nat × Result × Nat) := [
     (converted_caller, "converted_caller", [0x1ffffffff, 0x100000005], .ok (.ofNat .int 4), 3),
@@ -330,9 +336,13 @@ def callSelfTest : IO UInt32 := do
     ("may_trap=true", "may_trap=false")]
   for (before, after) in inlineMutations do
     let changed := privateCallerTarget.replace before after
-    if changed == privateCallerTarget || pairAccepted privateCaller changed then
+    if changed == privateCallerTarget || pairAccepted privateCaller changed ||
+        contextPairAccepted privateCaller changed then
       IO.eprintln s!"private-leaf mutation failed to refuse: {before}"
       failures := failures+1
+  if !contextPairAccepted privateCaller privateCallerTarget then
+    IO.eprintln "context-parametric private-leaf pair refused"
+    failures := failures+1
   -- A failed scope/parameter restoration must not be mistaken for the old source.
   let sourceMutations := [
     ("[\"ident\",\"int\",53],[\"ident\",\"int\",54]", "[\"ident\",\"int\",51],[\"ident\",\"int\",54]"),
@@ -340,10 +350,12 @@ def callSelfTest : IO UInt32 := do
     ("[\"lit\",\"int\",\"00000002\"]", "[\"lit\",\"int\",\"00000003\"]")]
   for (before, after) in sourceMutations do
     let changed := privateCaller.replace before after
-    if changed == privateCaller || pairAccepted changed privateCallerTarget then
+    if changed == privateCaller || pairAccepted changed privateCallerTarget ||
+        contextPairAccepted changed privateCallerTarget then
       IO.eprintln s!"private-leaf source mutation failed to refuse: {before}"
       failures := failures+1
   if failures == 0 then
+    IO.println "Context-parametric private-leaf pair and 18 source/target refusals pass"
     IO.println s!"{cases.length} original call execution/diagram cases, {pairs.length} whole-call pairs, 6 call-boundary refusals, {sourceMutations.length} source mutations and {mutations.length + inlineMutations.length} target mutations pass"
   return if failures == 0 then 0 else 1
 
