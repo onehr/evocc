@@ -183,14 +183,22 @@ fn day_1_to_3_controls_remain_green() {
 }
 
 #[test]
-fn day_4_statement_matrix_is_accepted_silently() {
+fn statement_matrix_retains_acceptance_and_reports_missing_return() {
     assert_eq!(STATEMENT_CASES.len(), 20, "statement denominator changed");
     assert_unique(DAY_1_TO_3_CONTROLS.iter().chain(STATEMENT_CASES), 23);
 
     let mut mismatches = Vec::new();
     for case in STATEMENT_CASES {
         let actual = observed(run_parse_only(case.source));
-        if actual != (Some(0), String::new(), String::new()) {
+        let expected_diagnostic = if case.id == "function.compound.empty" {
+            // An empty non-void definition parses, but its fallthrough now warns.
+            actual.2.starts_with("warning[W0005]:")
+                && actual.2.matches("warning[").count() == 1
+                && !actual.2.contains("error[")
+        } else {
+            actual.2.is_empty()
+        };
+        if actual.0 != Some(0) || !actual.1.is_empty() || !expected_diagnostic {
             mismatches.push(format!("{}: {actual:?}", case.id));
         }
     }

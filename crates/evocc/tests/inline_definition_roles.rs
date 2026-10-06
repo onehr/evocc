@@ -246,7 +246,7 @@ fn explicit_gnu99_keeps_its_version_and_iso_inline_semantics() {
         &["-std=gnu99"],
     );
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("E2001"));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("error[W0003]"));
     for flags in [
         &["-std=gnu11", "-std=gnu99"][..],
         &["-std=gnu89", "-fno-gnu89-inline", "-std=gnu99"][..],
