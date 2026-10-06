@@ -17,9 +17,10 @@ fixtures, probes and measurements, are informative: they identify evidence
 and add no requirement.
 
 **Formal semantics of the checked subset.** The Lean checkers of Section 9.3
-accept a subset of EvoMIR: general-register scalar code under the Linux ABI
-profile, the checked UB-check profile and all optional variants OFF. For
-that subset, these Lean definitions are the formal semantics:
+accept the checked subset `core-v1` (`spec/verification.md`, Section 2):
+general-register scalar code under the Linux ABI profile, the checked
+UB-check profile and all optional variants OFF. For that subset, these Lean
+definitions are the formal semantics:
 
 | Stage | Lean definitions |
 |---|---|
@@ -271,9 +272,6 @@ conversions are ordinary ABI calls of `__addtf3`, `__subtf3`, `__multf3`,
 Comparisons use the equality/unordered and ordered helper families and test
 signs; quiet ordered predicates first test unordered status, replace
 unordered inputs with zero, and mask the result to false.
-
-*Informative.* Linux helper qualification:
-`docs/notebook/strict-floating-implementation-20260927.md`.
 
 ### 2.7 Integer vectors and AES
 
@@ -1349,9 +1347,8 @@ liveness or spill decisions of the allocator. It refuses (`E4020`) when:
 
 ### 9.3 The Lean checkers
 
-For the checked subset (Status and scope), the Lean checkers validate each
-compilation. Each reads untrusted proposals or hints and decides without
-trusting them:
+For `core-v1`, the Lean checkers validate each compilation. Each reads
+untrusted proposals or hints and decides without trusting them:
 
 | Checker | Definition | What it relates |
 |---|---|---|
@@ -1579,8 +1576,9 @@ The complete history is in git: `git log -- docs/evomir-spec.md spec/evomir.md`.
 2. Bump the revision in the header: patch for a correction, minor for a
    compatible addition, major for an incompatible change. Replace the
    paragraph above. A new rule about observable behavior names its evidence.
-3. Update the digest of this file in `spec/pins.json`.
-4. Run the gate. Every command must pass:
+3. Update the digest of this file in `spec/pins.json` with
+   `python3 tools/check-spec-pins.py --update`, and commit both files together.
+4. Run the gate. Every command must pass: `python3 tools/check-spec-pins.py`;
    `CARGO_TARGET_DIR=target/frontend cargo test --offline -p evocc-mir --test section5_lowering`;
    `python3 tools/generate-target.py --check`;
    `python3 -m unittest tools.tests.test_generate_target`.
