@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.0.0** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
+**Revision 1.0.1** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
 
 ## Status and scope
 
@@ -126,8 +126,10 @@ Section 6.1 lists their differences.
 | Linux | `aarch64-unknown-linux-gnu` | ELF | `targets/aarch64/abi-linux` |
 | Darwin | arm64 macOS | Mach-O | `targets/aarch64/abi-darwin` |
 
-The C driver emits the Linux ABI profile only: `--target` accepts only
-`aarch64-unknown-linux-gnu` (`parse_target` in `crates/evocc/src/main.rs`).
+The C driver emits both ABI profiles: `--target` accepts
+`aarch64-unknown-linux-gnu` and `aarch64-apple-darwin` (`parse_target` in
+`crates/evocc/src/main.rs`). For `aarch64-apple-darwin`, the driver also
+selects the Apple variadic convention of Section 6.12.
 The backend library and its tests cover both ABI profiles, and the
 exact-input adapter `evo-ir-asm` accepts `linux-aarch64` and `darwin-arm64`.
 The library entry points that take no target (`lower_module`,
@@ -715,8 +717,7 @@ arguments and `generic/frame.rs` lays out the frame from them.
 
 ### 6.1 ABI profiles
 
-The C driver emits the Linux ABI profile; the Darwin ABI profile serves the
-backend library and its tests (Section 1.3).
+The C driver emits both ABI profiles (Section 1.3).
 
 | Fact | Linux | Darwin |
 |---|---|---|
@@ -741,10 +742,10 @@ The ABI profiles also differ in these places:
   kernel profile also sets the stack-protector slot to 16 bytes.
 - **Binary128** and strict 128-bit conversions: Linux only (Section 2.6).
 - **Variadic functions.** The Darwin platform passes every anonymous argument
-  on the stack. EvoMIR applies the rules of Section 6.12 under both ABI
-  profiles, so a Darwin build is correct only between EvoCC-compiled
-  functions; a call to a Darwin-compiled variadic function such as `printf`
-  passes wrong values.
+  on the stack, and its `va_list` is one pointer. By default, EvoMIR applies
+  the AAPCS64 rules of Section 6.12 under both ABI profiles. The backend
+  option `anonymous_on_stack` selects the Apple convention of Section 6.12.
+  The C driver enables it for `aarch64-apple-darwin` only.
 - **128-bit argument pairs**: see the conformance note of Section 6.5.
 
 ### 6.2 Arguments and results
@@ -968,6 +969,28 @@ same procedure on `vr_offs`, `vr_top` and 16-byte slots; HVA register slots
 are gathered into their contiguous object layout, and a stack-resident HFA or
 HVA uses its packed layout. `va_end` emits nothing. Only the promoted scalar
 types of EvoIR Section 3.10 and marked HFA and HVA types reach `va_arg`.
+
+**The Apple convention.** The backend option `anonymous_on_stack`
+(`CodegenOptions` in `crates/evocc-mir/src/emit.rs`) replaces the rules above
+for calls, the list object and `va_arg` with the Apple arm64 convention. It is
+off by default. The C driver enables it for `aarch64-apple-darwin` only. Under
+it, these rules apply:
+
+- A call passes the named arguments as above. It passes every anonymous
+  argument on the stack, in order, in slots of `S8` bytes. A 16-byte-aligned
+  anonymous argument starts at a 16-byte-aligned slot. A record above 16 bytes
+  that is not a vector group travels as a pointer to the caller's copy.
+- Zero fillers take the free argument registers of each bank that an
+  anonymous argument uses, so no anonymous argument goes to a register.
+- The list object is one pointer (the `va_list` of the Darwin data layout).
+  `va_start` stores `x29 + 16 + named_stack_bytes` to it and nothing else.
+- `va_arg` loads the pointer, rounds it up to 16 when `A` is 16, reads `T`
+  there, and stores the pointer plus `S8` back.
+- The prologue still fills the save areas. Nothing reads them.
+
+*Informative.* The test `darwin_variadic_calls_agree_with_the_c_library` in
+`crates/evocc/tests/driver_cc.rs` runs variadic calls in both directions across
+the macOS C library.
 
 *Informative.* Probes: `p34-varargs.c` (fourteen items, GCC-14 and Clang-19),
 `.evidence/builtin-probes/20260907-variadic-stack/results.txt` and
@@ -1561,6 +1584,11 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.0.1, 2026-10-07.** The C driver emits both ABI profiles. Section
+6.12 specifies the Apple variadic convention: the opt-in backend option
+`anonymous_on_stack`, which the driver enables for `aarch64-apple-darwin`
+(Sections 1.3, 6.1 and 6.12).
 
 **Revision 1.0.0, 2026-10-06.** This revision is the pinned ground truth of
 EvoMIR. It specifies the same machine IR and backend as revision 0.64 of

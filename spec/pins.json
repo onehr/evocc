@@ -6,8 +6,8 @@
       "sha256": "6ceb63ab84d6b5c5ccf9c48ce93b03b49215a9363298eed461d62a044ee55c32"
     },
     "spec/evomir.md": {
-      "revision": "1.0.0",
-      "sha256": "3aa700cff6f90256b92f54d296be229da8ee0f316f7e45c045fcd056256adb49"
+      "revision": "1.0.1",
+      "sha256": "e87d23a14f55fcf587c45a5a80faf8752971aac86872a36fa94b71fba6026cb8"
     },
     "spec/target.md": {
       "revision": "1.0.0",
