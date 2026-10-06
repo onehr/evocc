@@ -177,7 +177,7 @@ outside the repository; the run uses the Apple Container runtime.
 | `--proof-proposal=NAME=PATH` | Give untrusted loop checkpoints for entry `NAME`; the Lean checker checks them. |
 | `--survey` | Report every diagnostic in the file, not only the first. |
 
-### Evaluate the roadmap
+### Run the evaluation ladder
 
 `tools/bench.py` runs the ladder: conformance (`ctest`, `torture`, `csmith`, `llvm-test-suite`),
 programs (`zlib`, `zstd`, `cjson`, `mbedtls`, `tinycc`, `toybox`, `musl`, `polybench`, `jq`, `lua`,
@@ -360,7 +360,7 @@ and the [verification contract](spec/verification.md).
 - **Differential tests** in `tests/acceptance/` compare the front end and both interpreters with sealed GCC 14 and Clang 19.
 - **The randomized semantic gate** `evo-randgate` optimizes seeded EvoIR, runs both versions and shrinks a failing module.
 - **Rust–Lean correspondence** (`tools/lean/correspondence.py`) runs one set of vectors through Rust and the Lean model.
-- **Real programs** run their own tests in the [evaluation ladder](#evaluate-the-roadmap).
+- **Real programs** run their own tests in the [evaluation ladder](#run-the-evaluation-ladder).
 
 ## Project layout
 

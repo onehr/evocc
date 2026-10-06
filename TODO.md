@@ -95,11 +95,11 @@ build, runtime retirement or large disk is authorized by this exception.
 
 ## Execution order
 
-**October 4 priority:** the first public version now requires the
-[V00–V06 compilation verification path](docs/archive/lean-plan.md#first-public-release-verification).
-Start with V00; close baseline semantic preservation before integrating proved
-rewrites. These are OPEN implementation/proof tasks, not additional audit layers.
-They use the existing AUDIT/ACCEPTANCE scheduling buckets, without a new tracker.
+**Release verification path:** V00 to V08 are complete in the frozen `core-v1`
+scope (see "First public release verification" below and
+[`spec/verification.md`](spec/verification.md)). The October 4 requirement that
+the first public version includes this path is met. The defects D01 to D05 from
+the specification review are the open follow-up items.
 The bounded codegen batch remains closed with misses; no new optimization slice
 or default flip is scheduled. The older kernel/application queues below retain
 their independent acceptance obligations; none is marked complete by this plan.
@@ -1605,7 +1605,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   `arch/arm64/crypto/sha3-ce.ko`, rather than booting mismatched artifacts.
   **Real K14 execution after T04 remains required** to close T02.
   [Adapter record](tests/fixtures/kernel-kunit-adapter.out),
-  [current usage](README.md#evaluate-the-roadmap).
+  [current usage](README.md#run-the-evaluation-ladder).
 
 - [ ] **T03 — Spec/implementation/acceptance consistency audit** — `OPEN`, P1.
   Map current clauses to positive/negative tests and original evidence. Start with
