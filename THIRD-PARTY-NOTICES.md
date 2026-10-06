@@ -1,7 +1,7 @@
 # Third-party notices
 
-EvoCC is licensed under the MIT license or the Apache License 2.0, at your option. See
-[LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
+EvoCC is licensed under the Apache License 2.0. Copyright 2026 Haoran Wang, NexRidge. See
+[LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 Some files in this repository, and some code in the release binaries, come from other projects.
 This file lists them. For each, it gives the path, the origin and the license. The license of the

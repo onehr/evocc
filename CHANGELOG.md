@@ -30,11 +30,12 @@ The first public version.
 - The evaluation ladder, `tools/bench.py`: conformance suites, fifteen application lanes and Linux
   build, boot, kselftest and KUnit lanes. Each lane writes a receipt.
 - The EvoCC Book in `book/`.
-- Dual licensing under MIT OR Apache-2.0, and third-party notices.
+- The Apache License 2.0 (copyright 2026 Haoran Wang, NexRidge), a `NOTICE` file and third-party
+  notices.
 
 ### Changed
 
-- The project license changed from the placeholder GPL-2.0-only to MIT OR Apache-2.0.
+- The project license changed from the placeholder GPL-2.0-only to Apache-2.0.
 - The book replaces the implementation notebook in `docs/notebook/` and its web site in `web/`.
   The dated lab notes stay in `docs/archive/notebook/`.
 

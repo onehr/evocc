@@ -36,7 +36,7 @@ members = [
 
 [workspace.package]
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 
 [profile.release]
 # Reproducible and auditable beats clever for a flight lab: keep debug info
