@@ -26,6 +26,11 @@ class ChangedGateTest(unittest.TestCase):
                 "print('generated-target-checked')\n"
                 f"sys.exit({generator_exit})\n"
             )
+            (root / "tools/check-spec-pins.py").write_text(
+                "import sys\n"
+                "assert sys.argv[1:] == []\n"
+                "print('spec-pins-checked')\n"
+            )
             for name in ("leaf", "consumer", "unrelated"):
                 (root / "crates" / name).mkdir(parents=True)
             for path, source in (sources or {}).items():
