@@ -9,7 +9,6 @@ explains how to use the compiler.
 - To ask a question or to propose an idea, open an
   [issue](https://github.com/onehr/evocc/issues).
 - To report a bug, a wrong-code result or a refused proof, use the matching issue template.
-- To report a security problem, do not open an issue. Follow [SECURITY.md](SECURITY.md).
 
 ## Build
 

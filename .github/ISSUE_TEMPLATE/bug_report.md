@@ -5,7 +5,7 @@ title: ""
 labels: bug
 ---
 
-<!-- For wrong code, use the "Wrong code" template. For a security problem, read SECURITY.md first. -->
+<!-- For wrong code, use the "Wrong code" template. -->
 
 ### Version
 

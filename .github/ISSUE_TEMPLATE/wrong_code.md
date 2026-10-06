@@ -5,7 +5,7 @@ title: ""
 labels: wrong-code
 ---
 
-<!-- If you think that the wrong code is a security problem, read SECURITY.md first. -->
+
 
 ### Version
 

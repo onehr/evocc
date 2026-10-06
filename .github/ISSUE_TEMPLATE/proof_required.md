@@ -5,7 +5,7 @@ title: ""
 labels: proof
 ---
 
-<!-- If a checker accepted a wrong result, that is a security problem. Read SECURITY.md first. -->
+<!-- If a checker accepted a wrong result, say so in the title. -->
 
 ### Versions
 
