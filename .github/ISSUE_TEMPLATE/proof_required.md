@@ -5,7 +5,7 @@ title: ""
 labels: proof
 ---
 
-<!-- If a checker accepted a wrong result, say so in the title. -->
+<!-- If a checker accepted a wrong result, mark the title with [security] and read SECURITY.md. -->
 
 ### Versions
 

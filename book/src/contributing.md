@@ -9,6 +9,8 @@ defect in the compiler.
   stable name, a status and the evidence that closes it.
 - The [issue templates](https://github.com/onehr/evocc/issues/new/choose) ask for what we need to
   reproduce a bug, a wrong-code result or a refused proof.
+- [SECURITY.md](https://github.com/onehr/evocc/blob/main/SECURITY.md) explains how to report wrong
+  code or a checker defect: a pull request with a failing test first.
 
 ## Work on this book
 
