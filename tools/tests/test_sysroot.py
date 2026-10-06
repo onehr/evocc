@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tarfile
 import tempfile
 import unittest
 
@@ -66,6 +67,30 @@ class HeaderExportTests(unittest.TestCase):
         self.assertIn("14.2.0", contract["gcc_version"])
         self.assertIn("usr/include/stdio.h", contract["files"])
         check_files(root, contract)
+
+    def test_release_archive_carries_complete_headers_beside_bin(self):
+        archive = os.environ.get("EVOCC_RELEASE_ARCHIVE")
+        if not archive:
+            self.skipTest("no release archive was supplied")
+        contract = json.loads(CONTRACT.read_text())
+        with tarfile.open(archive) as package:
+            files = {member.name: member for member in package.getmembers() if member.isfile()}
+            sums = [name for name in files if name.endswith("/SHA256SUMS")]
+            self.assertEqual(len(sums), 1)
+            prefix = sums[0].removesuffix("SHA256SUMS")
+            for binary in ("evo", "evocc", "evocc-checker", "evoir-sem"):
+                self.assertIn(prefix + "bin/" + binary, files)
+            listed = {}
+            for line in package.extractfile(files[sums[0]]).read().decode().splitlines():
+                digest, name = line.split("  ", 1)
+                data = package.extractfile(files[prefix + name]).read()
+                self.assertEqual(hashlib.sha256(data).hexdigest(), digest, name)
+                listed[name] = digest
+            self.assertEqual(set(files), {prefix + name for name in listed} | {sums[0]})
+            header_prefix = "sysroot/aarch64-unknown-linux-gnu/"
+            headers = {name.removeprefix(header_prefix): digest for name, digest in listed.items()
+                       if name.startswith(header_prefix)}
+            self.assertEqual(headers, contract["files"])
 
 
 if __name__ == "__main__":
