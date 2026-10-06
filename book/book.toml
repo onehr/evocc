@@ -1,0 +1,10 @@
+[book]
+title = "The EvoCC Book"
+authors = ["The EvoCC contributors"]
+description = "How to install, use and check EvoCC, a C compiler that checks its own work."
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/onehr/evocc"
+edit-url-template = "https://github.com/onehr/evocc/edit/main/book/{path}"

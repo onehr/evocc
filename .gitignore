@@ -53,3 +53,6 @@ lean/vectors/
 __pycache__/
 *.pyc
 output/
+
+# mdBook writes the rendered book here; the source is book/src/.
+book/book/

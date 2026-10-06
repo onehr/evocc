@@ -1,0 +1,265 @@
+# Hello, World!
+
+Now that you have installed EvoCC, it is time to write your first program. It is a tradition to
+start with a program that prints `Hello, world!`, so we do the same here.
+
+Make a directory for the programs in this book, and go into it:
+
+```console
+$ mkdir hello
+$ cd hello
+```
+
+## Write and run the program
+
+Make a file `hello.c` with this content:
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello, world!\n");
+    return 0;
+}
+```
+
+Compile it and run it:
+
+<!-- verify after the driver change -->
+```console
+$ evocc hello.c -o hello
+$ ./hello
+```
+
+The program prints `Hello, world!`. If you have used `gcc` or `clang`, this looks the same, and
+that is the intent: `evocc` takes the options of a usual C compiler.
+
+## One step at a time
+
+When you give `evocc` a C file, it does four things:
+
+1. It *preprocesses* the file: it reads `#include` and `#define` lines and expands macros.
+2. It *compiles* the result to AArch64 assembly. This is the part that EvoCC does itself.
+3. It *assembles* the assembly into an object file, with the assembler of your system.
+4. It *links* the object files into a program, with the linker of your system.
+
+You can stop after each step:
+
+<!-- verify after the driver change -->
+```console
+$ evocc -E hello.c -o hello.i
+$ evocc -S hello.c -o hello.s
+$ evocc -c hello.c -o hello.o
+$ evocc hello.o -o hello
+```
+
+`-E` stops after the preprocessor, `-S` after the compiler and `-c` after the assembler. The last
+command only links.
+
+EvoCC makes code for the host by default: `aarch64-apple-darwin` on macOS and
+`aarch64-unknown-linux-gnu` on Linux. `--target` selects the other one.
+
+## More than one file
+
+Real programs have more than one file. Make a header `greet.h`:
+
+```c
+void greet(const char *name);
+```
+
+a file `greet.c`:
+
+```c
+#include <stdio.h>
+#include "greet.h"
+
+void greet(const char *name) {
+    printf("Hello, %s!\n", name);
+}
+```
+
+and a file `main.c`:
+
+```c
+#include "greet.h"
+
+int main(void) {
+    greet("EvoCC");
+    return 0;
+}
+```
+
+You can give both C files to `evocc` at once:
+
+<!-- verify after the driver change -->
+```console
+$ evocc main.c greet.c -o greet
+$ ./greet
+```
+
+Or you can compile each file on its own, the way `make` does, and link at the end. `-MMD -MF`
+writes a dependency file for `make`. It lists the headers that each file includes:
+
+<!-- verify after the driver change -->
+```console
+$ evocc -c main.c -o main.o -MMD -MF main.d
+$ evocc -c greet.c -o greet.o -MMD -MF greet.d
+$ evocc main.o greet.o -o greet
+$ ./greet
+```
+
+Both ways make the same program. It prints `Hello, EvoCC!`.
+
+## Run a program without compiling it
+
+EvoCC has two interpreters. They run `main` directly from the compiler's own representations of
+your program, without assembly and without a linker. The interpreter prints the value that `main`
+returns. Make a file `sum.c`:
+
+```c
+static int sum_to(int n) {
+    int total = 0;
+    for (int i = 1; i <= n; i++)
+        total += i;
+    return total;
+}
+
+int main(void) {
+    return sum_to(10);
+}
+```
+
+Run it in each interpreter:
+
+```console
+$ evocc --interpret-c-hir sum.c
+55
+$ evocc --interpret-evoir sum.c
+55
+```
+
+The first interpreter runs C-HIR, the form of your program right after the parser. The second runs
+EvoIR, the form that the optimizer uses. They are separate programs, and they agree. [Chapter
+7](how-it-works.md) tells you more about the two forms.
+
+The interpreters run only the code in your file. They do not call into the C library. To see
+this, make a file `shout.c` that calls `puts`. It declares `puts` by hand, so it needs no header:
+
+```c
+int puts(const char *s);
+
+int main(void) {
+    puts("Hello, world!");
+    return 0;
+}
+```
+
+The interpreter stops at the call, because it cannot run `puts`:
+
+```console
+$ evocc --interpret-c-hir shout.c
+shout.c:4:5: error[E3039]: external-call-not-executable
+```
+
+This is why the interpreters are tools for checking code, not a way to run whole programs.
+
+## Look at the assembly
+
+`--emit=asm` prints the assembly that EvoCC writes. The first lines for `sum.c` are:
+
+```console
+$ evocc --target=aarch64-unknown-linux-gnu --emit=asm sum.c | head -n 24
+// evocc-native-ub-checks=checked
+.text
+
+.p2align 2
+.type sum_to, %function
+sum_to:
+    stp x29, x30, [sp, #-16]!
+    mov x29, sp
+.Lsum_to_block0:
+    movz w0, #0
+    movz w1, #1
+.Lsum_to_block1:
+    cmp w1, #10
+    b.le .Lsum_to_block3
+    b .Lsum_to_block4
+.Lsum_to_block2:
+    movz w3, #1
+    adds w3, w1, w3
+    b.vs .Lsum_to_block8
+.Lsum_to_block6:
+    mov w1, w3
+    mov w0, w2
+    b .Lsum_to_block1
+.Lsum_to_block3:
+```
+
+Look at `adds` and `b.vs`. The addition `i++` sets the overflow flag, and `b.vs` jumps away if the
+addition overflowed. Signed overflow is undefined behavior in C, so EvoCC keeps a check for it.
+[Chapter 4](undefined-behavior.md) explains these checks.
+
+On Linux, the system compiler can assemble and link this file. We ran these commands on Linux on
+AArch64 with GCC 14:
+
+```console
+$ evocc --target=aarch64-unknown-linux-gnu --emit=asm sum.c > sum.s
+$ gcc sum.s -o sum
+$ ./sum; echo $?
+55
+```
+
+The native program returns 55, like the two interpreters.
+
+## Build a real project
+
+Most build systems take the C compiler from the variable `CC`. So you can build many projects with
+EvoCC without changing them. Here is zlib, the compression library:
+
+<!-- verify after the driver change -->
+```console
+$ curl -LO https://zlib.net/zlib-1.3.2.tar.gz
+$ tar xzf zlib-1.3.2.tar.gz
+$ cd zlib-1.3.2
+$ CC=evocc ./configure
+$ make
+$ make test
+```
+
+When all tests pass, `make test` prints lines that end in `test OK`. Some Makefiles set `CC`
+themselves. For those, give the variable on the command line: `make CC=evocc`.
+
+## Driver options
+
+`evocc` accepts the options of a usual C compiler:
+
+<!-- verify after the driver change -->
+
+| Option | What it does |
+|---|---|
+| `-E` | Preprocess only, and write the result. |
+| `-S` | Compile to assembly. |
+| `-c` | Compile and assemble to an object file. Do not link. |
+| `-o FILE` | Write the output to `FILE`. |
+| Several input files | Compile each C file, then link all the files together. |
+| `-M`, `-MMD`, `-MF FILE` | Write the dependencies for `make`: `-M` in place of the output, `-MMD` beside it, into `FILE`. |
+| `-shared` | Link a shared library. |
+| `-l NAME`, `-L DIR` | Link the library `NAME`; search for libraries in `DIR`. |
+| `--target=TARGET` | Make code for `aarch64-apple-darwin` or `aarch64-unknown-linux-gnu`. |
+| `-I DIR`, `-D NAME[=VALUE]`, `-U NAME`, `-include FILE` | Control the preprocessor, as in GCC. |
+| `-std=gnu11` and other `-std=` values | Select the language standard. |
+| `-O0` to `-O3` | Select the optimization level. `-O0` keeps the control flow of the source. |
+| `-g` | Accepted for compatibility with build systems. |
+| An unknown `-f` option | EvoCC prints a warning and continues. |
+
+EvoCC also has its own options. You meet them in the next chapters:
+
+| Option | What it does | Chapter |
+|---|---|---|
+| `--interpret-c-hir`, `--interpret-evoir` | Run `main` in an interpreter. | 3 |
+| `--check` | Report undefined behavior on the path that runs. | 4 |
+| `--explain CODE` | Explain a diagnostic code. | 4 |
+| `--error-format=json` | Write diagnostics as JSON, one record per line. | 4 |
+| `--emit=c-hir`, `--emit=evoir`, `--emit=asm` | Print a representation of the program. | 4, 7 |
+| `--proof-required=DIR` | Compile with proof. | 5 |
+| `-Oeq-scalar` | Run the checked optimizer. | 6 |
