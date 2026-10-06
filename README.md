@@ -713,8 +713,8 @@ prove it equal to those models. Lean 4 [14] is the proof assistant and the langu
 - **The compiler was built by agents.** A reviewer may ask whether anyone understands the code. We
   do not claim that a human read each line. The claims rest on artifacts that do not need that
   reading: pinned specifications, sealed oracles, proved checkers and receipts that a stranger can
-  run again. But agents also wrote the trusted parts, and the lessons log records defects that the
-  process found only later, such as a certificate that authorized its own rules. Others can remain.
+  run again. But agents also wrote the trusted parts, and the process found some defects only
+  later, such as a certificate that authorized its own rules. Others can remain.
 
 ### 10 Conclusion
 
