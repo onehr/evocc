@@ -1,0 +1,99 @@
+# Release: on a v* tag, build one archive per host, smoke test it, and
+# publish the archives and SHA256SUMS as release assets.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TARGET_DIR: target/frontend
+  CARGO_BUILD_JOBS: "2"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v5
+      # On Linux, tools/release.sh links evocc statically against musl.
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install || rustup show
+          if [ "$TARGET" = aarch64-unknown-linux-gnu ]; then
+            rustup target add aarch64-unknown-linux-musl
+          fi
+      - name: Install elan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.1.2/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      # A clean build without caches: Cargo builds evocc, Lake builds evoir-sem.
+      - name: Build and package
+        run: tools/release.sh --target "$TARGET" --out dist --with-lean
+      - name: The tag names the packaged version
+        run: |
+          want="dist/evocc-${GITHUB_REF_NAME#v}-$TARGET.tar.gz"
+          test -f "$want" || { echo "::error::no $want; evocc --version disagrees with the tag"; ls dist; exit 1; }
+      - name: Smoke test the archive
+        run: |
+          mkdir smoke
+          tar -xzf "dist/evocc-${GITHUB_REF_NAME#v}-$TARGET.tar.gz" -C smoke
+          cd "smoke/evocc-${GITHUB_REF_NAME#v}-$TARGET"
+          if command -v sha256sum >/dev/null; then sha256sum -c SHA256SUMS; else shasum -a 256 -c SHA256SUMS; fi
+          ./evocc --version
+          cat > hello.c <<'C'
+          static const char greeting[] = "hello, world";
+          int main(void) { int n = 0; while (greeting[n] != '\0') n++; return n; }
+          C
+          out="$(./evocc --interpret-c-hir hello.c)"
+          echo "interpret-c-hir: $out"
+          test "$out" = 12
+          ./evoir-sem --selftest > /dev/null
+          file evocc evocc-checker evoir-sem
+          if [ "$TARGET" = aarch64-unknown-linux-gnu ]; then
+            file evocc evocc-checker | grep -Eq 'static(-pie)? linked|statically linked'
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evocc-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: evocc-*
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        working-directory: dist
+        run: sha256sum evocc-*.tar.gz | tee SHA256SUMS
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+            --title "EvoCC $GITHUB_REF_NAME"
