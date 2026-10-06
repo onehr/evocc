@@ -381,6 +381,11 @@ impl Toolchain {
     /// Use an explicit working directory, for byte-identical object captures
     /// whose assembler input paths must be stable across compiler revisions.
     pub fn locate_in(workdir: &Path) -> Result<Self, String> {
+        // The text is Darwin assembly. A clang on another host makes ELF
+        // objects and cannot link it, even when it names aarch64.
+        if !cfg!(target_os = "macos") {
+            return Err("the host is not macOS".to_owned());
+        }
         let output = Command::new("clang")
             .arg("--version")
             .output()

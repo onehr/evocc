@@ -18,6 +18,10 @@ use evocc_mir::{allocate, emit_module, lower_module, out_of_ssa, verify_allocati
 use evocc_types::EvoIRType;
 
 fn toolchain() -> Result<String, String> {
+    // Linux clang also names aarch64, but it cannot link Darwin text.
+    if !cfg!(target_os = "macos") {
+        return Err("the host is not macOS".to_owned());
+    }
     let output = Command::new("clang")
         .arg("--version")
         .output()
@@ -45,6 +49,16 @@ fn build(source: &str) -> (Vec<Allocated>, evocc_evoir::Module) {
         })
         .collect();
     (functions, module)
+}
+
+/// Whether the host can link Darwin text. Elsewhere the native step is
+/// skipped and the reason is printed.
+fn darwin_host() -> bool {
+    let darwin = cfg!(target_os = "macos");
+    if !darwin {
+        println!("skipped=the host is not macOS");
+    }
+    darwin
 }
 
 /// Assemble, link and run one emitted text, returning the process exit status.
@@ -153,10 +167,12 @@ fn private_stack_reuse_preserves_loaded_values_and_overlapping_objects() {
         } else {
             "sequential-objects"
         };
-        assert_eq!(
-            run_native(name, &emit_module(&allocated, &module.globals)).unwrap(),
-            16
-        );
+        if darwin_host() {
+            assert_eq!(
+                run_native(name, &emit_module(&allocated, &module.globals)).unwrap(),
+                16
+            );
+        }
     }
 }
 
@@ -268,11 +284,13 @@ fn computed_edges_keep_label_identity_and_simultaneous_parameter_locations() {
             vec![evocc_mir::MirValue::Int(expected)]
         );
         let asm = emit_module(&allocated, &module.globals);
-        assert_eq!(
-            run_native(name, &asm).unwrap(),
-            (expected & 255) as i32,
-            "{name}\n{asm}"
-        );
+        if darwin_host() {
+            assert_eq!(
+                run_native(name, &asm).unwrap(),
+                (expected & 255) as i32,
+                "{name}\n{asm}"
+            );
+        }
     }
 }
 
@@ -288,7 +306,9 @@ fn assembly_and_computed_edges_share_the_same_parameter_entry() {
             .replace("    br ^b1(%v2, %v7, %v8)", &format!("    (%v36, %v37) = asm.goto \"{template}\" %v7, %v8 outputs [] inputs [] clobbers [] labels [(\"again\", ^b1(%v2, %v36, %v37))] fallthrough ^b1(%v2, %v36, %v37)"));
         let (allocated, module) = build(&source);
         let asm = emit_module(&allocated, &module.globals);
-        assert_eq!(run_native(name, &asm).unwrap(), 3, "{name}\n{asm}");
+        if darwin_host() {
+            assert_eq!(run_native(name, &asm).unwrap(), 3, "{name}\n{asm}");
+        }
     }
 }
 
@@ -353,14 +373,16 @@ fn dynamic_stack_storage_preserves_fixed_objects_and_spills() {
             evocc_mir::interpret_module(&mir, "main", &[], evocc_mir::MirLimits::new(1000))
                 .unwrap();
         assert_eq!(result.results, vec![evocc_mir::MirValue::Int(0)]);
-        assert_eq!(
-            run_native(
-                &format!("dynamic-{size}-{align}"),
-                &emit_module(&allocated, &[])
-            )
-            .unwrap(),
-            0
-        );
+        if darwin_host() {
+            assert_eq!(
+                run_native(
+                    &format!("dynamic-{size}-{align}"),
+                    &emit_module(&allocated, &[])
+                )
+                .unwrap(),
+                0
+            );
+        }
     }
 }
 

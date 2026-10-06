@@ -212,10 +212,12 @@ fn simd_assembly_goto_outputs_spill_all_lanes_after_the_selected_edge() {
             "{}\n.text\n.p2align 2\n_touch_simd:\n{clobber}\nret\n",
             emit_module(&[allocated], &[])
         );
-        assert_eq!(
-            run_native(&format!("simd-goto-spills-{taken}"), &text).unwrap(),
-            0
-        );
+        if darwin_host() {
+            assert_eq!(
+                run_native(&format!("simd-goto-spills-{taken}"), &text).unwrap(),
+                0
+            );
+        }
     }
 }
 
@@ -307,10 +309,12 @@ fn assembly_goto_outputs_survive_spilling_on_both_edges() {
             "{}\n.text\n.p2align 2\n_touch:\nret\n",
             emit_module(&[allocated], &[])
         );
-        assert_eq!(
-            run_native(&format!("goto-output-spills-{taken}-{fixed}"), &text).unwrap(),
-            78
-        );
+        if darwin_host() {
+            assert_eq!(
+                run_native(&format!("goto-output-spills-{taken}-{fixed}"), &text).unwrap(),
+                78
+            );
+        }
     }
 }
 
@@ -346,6 +350,10 @@ fn register_binding_is_checked_independently_of_the_allocator() {
 
 /// The host toolchain, or the reason there is none.
 fn toolchain() -> Result<String, String> {
+    // Linux clang also names aarch64, but it cannot link Darwin text.
+    if !cfg!(target_os = "macos") {
+        return Err("the host is not macOS".to_owned());
+    }
     let output = Command::new("clang")
         .arg("--version")
         .output()
@@ -358,6 +366,16 @@ fn toolchain() -> Result<String, String> {
         return Err("the host toolchain does not target arm64".to_owned());
     }
     Ok(text.lines().next().unwrap_or_default().to_owned())
+}
+
+/// Whether the host can link Darwin text. Elsewhere the native step is
+/// skipped and the reason is printed.
+fn darwin_host() -> bool {
+    let darwin = cfg!(target_os = "macos");
+    if !darwin {
+        println!("skipped=the host is not macOS");
+    }
+    darwin
 }
 
 /// Assemble, link and run one emitted text, returning its exit status.

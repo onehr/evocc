@@ -159,6 +159,11 @@ fn assemble_on_linux(name: &str, text: &str) -> Result<(), String> {
 #[test]
 fn a_branch_past_the_short_range_still_assembles_on_darwin() {
     let text = emitted(&far_branch(FILLER), Target::Darwin);
+    // A clang on another host cannot assemble Darwin text.
+    if !cfg!(target_os = "macos") {
+        eprintln!("the Darwin lane is skipped: the host is not macOS");
+        return;
+    }
     if let Err(message) = assemble_on_darwin("far_darwin", &text) {
         panic!("the host assembler refused the emitted text:\n{message}");
     }

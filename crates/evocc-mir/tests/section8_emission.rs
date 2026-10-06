@@ -19,6 +19,10 @@ use evocc_mir::{
 
 /// The host assembler, and its version, or the reason there is none.
 fn assembler() -> Result<String, String> {
+    // Linux clang also names aarch64, but it cannot link Darwin text.
+    if !cfg!(target_os = "macos") {
+        return Err("the host is not macOS".to_owned());
+    }
     let output = Command::new("clang")
         .arg("--version")
         .output()
@@ -366,7 +370,8 @@ fn distant_block_addresses_use_page_relocations_in_both_directions() {
             );
         }
         assert!(!text.contains("    adr x0,"));
-        if target == evocc_mir::Target::Darwin {
+        // Only a macOS host assembles Darwin text.
+        if target == evocc_mir::Target::Darwin && cfg!(target_os = "macos") {
             assemble(&text).expect("the actual assembler must accept the long address");
         }
     }

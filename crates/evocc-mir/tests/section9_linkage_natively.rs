@@ -183,6 +183,10 @@ fn on_darwin(directory: &Path, script: &str) -> Result<String, String> {
 }
 
 fn clang() -> Result<(), String> {
+    // Linux clang also names aarch64, but it cannot link Darwin text.
+    if !cfg!(target_os = "macos") {
+        return Err("the host is not macOS".to_owned());
+    }
     let output = Command::new("clang")
         .arg("--version")
         .output()

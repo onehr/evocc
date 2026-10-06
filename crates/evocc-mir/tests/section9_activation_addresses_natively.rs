@@ -179,6 +179,10 @@ fn scratch(name: &str) -> PathBuf {
 
 /// Build one program from the given sources with `clang` and run it.
 fn build_and_run_on_darwin(directory: &Path, name: &str, sources: &[&Path]) -> Result<i32, String> {
+    // A clang on another host cannot link Darwin text.
+    if !cfg!(target_os = "macos") {
+        return Err("the host is not macOS".to_owned());
+    }
     let program = directory.join(name);
     let mut command = Command::new("clang");
     command.args(["-O0", "-o"]).arg(&program);

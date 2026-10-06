@@ -226,6 +226,10 @@ fn build_and_run_on_darwin(name: &str, text: &str) -> Result<i32, String> {
 
 /// The host compiler's own build of the C program, for the same two facts.
 fn reference_on_darwin() -> Result<i32, String> {
+    // A clang on another host cannot link Darwin text.
+    if !cfg!(target_os = "macos") {
+        return Err("the host is not macOS".to_owned());
+    }
     let directory = std::env::temp_dir().join(format!("evocc-blockaddr-c-{}", std::process::id()));
     std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     let source = directory.join("here.c");
