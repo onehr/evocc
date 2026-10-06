@@ -23,6 +23,10 @@ archive for each host. The name of the archive is `evocc-<version>-<target>.tar.
 
 These commands download version 0.1.0 for macOS, check the archive and unpack it:
 
+If the archive includes Linux headers, unpack it on a case-sensitive volume.
+Some header names differ only in letter case. A case-insensitive volume cannot
+keep both files. Header-free archives do not have this restriction.
+
 ```console
 $ curl -LO https://github.com/onehr/evocc/releases/download/v0.1.0/evocc-0.1.0-aarch64-apple-darwin.tar.gz
 $ curl -LO https://github.com/onehr/evocc/releases/download/v0.1.0/SHA256SUMS
@@ -33,21 +37,22 @@ $ tar xzf evocc-0.1.0-aarch64-apple-darwin.tar.gz
 On Linux, use the name with `aarch64-unknown-linux-gnu`, and use `sha256sum -c -` in place of
 `shasum -a 256 -c -`.
 
-The archive holds one directory. That directory holds the three programs of EvoCC, the README, the
+The archive holds one directory. Its `bin/` directory holds the four programs of EvoCC. The root holds the README, the
 files `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES.md`, and its own `SHA256SUMS`:
 
 | Program | What it does |
 |---|---|
+| `evo` | The commands to run, check, explain, prove and build. |
 | `evocc` | The compiler. You use it like `cc`. |
 | `evocc-checker` | The certificate checker. It replays each change of the optimizer ([chapter 6](optimization.md)). |
 | `evoir-sem` | The Lean checker. It checks a compilation with proof ([chapter 5](proof.md)). |
 
-Add the directory to your `PATH`, and check that the shell finds `evocc`:
+Add its `bin/` directory to your `PATH`, and check that the shell finds `evocc`:
 
 ```console
 $ cd evocc-0.1.0-aarch64-apple-darwin
 $ shasum -a 256 -c SHA256SUMS
-$ export PATH="$PWD:$PATH"
+$ export PATH="$PWD/bin:$PATH"
 $ evocc --version
 ```
 

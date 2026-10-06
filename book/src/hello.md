@@ -56,10 +56,31 @@ $ evocc hello.o -o hello
 command only links.
 
 EvoCC makes code for the host by default: `aarch64-apple-darwin` on macOS and
-`aarch64-unknown-linux-gnu` on Linux. `--target` selects the other one. On macOS, the Linux target
-needs the Linux headers: give their root directory with `--sysroot=DIR`. The development options of
+`aarch64-unknown-linux-gnu` on Linux. `--target` selects the other one. The development options of
 the next chapters, such as `--emit=asm` and the interpreters, use `aarch64-unknown-linux-gnu` when
 you do not give `--target`.
+
+## Cross-compile for Linux
+
+The Linux headers go in `sysroot/aarch64-unknown-linux-gnu/`, beside `bin/`.
+With this layout, the compiler finds them without an include flag:
+
+```console
+$ evocc --target=aarch64-unknown-linux-gnu -c hello.c -o hello.o
+$ file hello.o
+hello.o: ELF 64-bit LSB relocatable, ARM aarch64, version 1 (SYSV), not stripped
+```
+
+The header tree needs a case-sensitive volume. Do not copy it to a volume
+that merges names which differ only in letter case. See [installation](install.md).
+To use another root, give `--sysroot=DIR` or set `EVOCC_SYSROOT`. The explicit
+option takes priority. `-v` prints the selected root.
+
+These commands also need an AArch64 Linux assembler. On the tested macOS host,
+the default assembler runs in the existing `evo-flight-lab:sealed` container.
+Use `--assembler=COMMAND` to select another assembler. The header bundle
+contains no linker, libc or runtime. Linux linking on a non-Linux host requires
+an explicit `--linker=COMMAND`; without it, stop at `-c`.
 
 ## More than one file
 

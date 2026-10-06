@@ -21,8 +21,10 @@
 # version comes from crates/evocc/Cargo.toml.
 #
 # The output is DIR/evocc-<version>-<target>.tar.gz. The archive holds one
-# directory of the same name: the four binaries, LICENSE, NOTICE,
+# directory of the same name: bin/ with the four binaries, LICENSE, NOTICE,
 # THIRD-PARTY-NOTICES.md, README.md and SHA256SUMS for those files. The archive
+# also includes sysroot/ when the exported Linux headers exist. Every header
+# must match its tracked contract and is listed in SHA256SUMS.
 # is deterministic. Entries are sorted, owner and group are 0, and every mtime
 # is SOURCE_DATE_EPOCH, else the commit time of HEAD. The gzip header has no
 # name and no time. The script also merges the archive digest into DIR/SHA256SUMS.
@@ -134,8 +136,8 @@ fi
 name="evocc-$version-$target"
 mtime="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct 2>/dev/null || echo 0)}"
 mkdir -p "$out"
-set -- "evo=755=$bin_dir/evo" "evocc=755=$bin_dir/evocc" "evocc-checker=755=$bin_dir/evocc-checker" \
-    "evoir-sem=755=$lean_bin" "README.md=644=README.md"
+set -- "bin/evo=755=$bin_dir/evo" "bin/evocc=755=$bin_dir/evocc" "bin/evocc-checker=755=$bin_dir/evocc-checker" \
+    "bin/evoir-sem=755=$lean_bin" "README.md=644=README.md"
 for doc in LICENSE NOTICE THIRD-PARTY-NOTICES.md; do
     if [ -f "$doc" ]; then
         set -- "$@" "$doc=644=$doc"
@@ -146,7 +148,7 @@ done
 
 echo "== package $name.tar.gz =="
 python3 - "$out" "$name" "$mtime" "$@" <<'PY'
-import gzip, hashlib, io, sys, tarfile
+import gzip, hashlib, io, json, sys, tarfile
 from pathlib import Path
 
 out, name, mtime = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3])
@@ -154,6 +156,18 @@ entries = []
 for spec in sys.argv[4:]:
     arcname, mode, path = spec.split("=", 2)
     entries.append((arcname, int(mode, 8), Path(path).read_bytes()))
+sysroot = Path("sysroot/aarch64-unknown-linux-gnu")
+if sysroot.exists():
+    contract_path = Path("contracts/sysroot-aarch64-unknown-linux-gnu.json")
+    contract = json.loads(contract_path.read_text())
+    headers = {path.relative_to(sysroot).as_posix(): path.read_bytes()
+               for path in sysroot.rglob("*") if path.is_file()}
+    actual = {name: hashlib.sha256(data).hexdigest() for name, data in headers.items()}
+    if actual != contract["files"]:
+        raise SystemExit("release: Linux headers differ from their contract; no archive written")
+    entries.extend((f"{sysroot.as_posix()}/{path}", 0o644, data)
+                   for path, data in sorted(headers.items()))
+    entries.append(("sysroot/aarch64-unknown-linux-gnu.json", 0o644, contract_path.read_bytes()))
 sums = "".join(f"{hashlib.sha256(data).hexdigest()}  {arc}\n"
                for arc, _, data in sorted(entries))
 entries.append(("SHA256SUMS", 0o644, sums.encode()))

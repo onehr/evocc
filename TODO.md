@@ -395,6 +395,26 @@ add dependencies, crates or configuration systems. Do not push.
   without guest network access. Logs retain that failure. No new image or
   disk was created. Package layout, CI, cross-build, full-workspace acceptance
   and the owner decision on macOS storage remain open.
+  Cross-build checkpoint: the actual adjacent `bin/` and `sysroot/` layout
+  produces an ELF AArch64 `hello.o` with no sysroot option or environment
+  override. The unmodified zlib 1.3.2 source builds all 15 members of `libz.a`
+  with `CFLAGS=-O` and no include paths. Its configure script needs link
+  probes: the first run correctly refused implicit Linux linking and then
+  misdetected libc features. A test-only explicit linker invokes GCC in the
+  existing sealed container; the repeated original configure finds errno,
+  fseeko, strerror and vsnprintf normally. No source or feature macro is
+  changed, and no insecure fallback is enabled. Native hello, the original
+  zlib example and minigzip round trip exit zero. The debug compiler hash is
+  `a4ffb63b8f1b5e17bc576a61af81eb171e7f97bf79f537eff5545905e9e7fa6f`
+  (version subject `32e3409a`); this is not final release acceptance.
+  Archive RED `ccc6953a` fails on the old root-level binary layout. The new
+  `bin/` layout and all 3,974 header hashes pass the five Python checks on a
+  real archive. Release-script changes use 18/60 lines; the five changed
+  workflow lines only follow the new binary paths, not the pending CI header
+  export or cross-host transfer. The archive structure check used the earlier
+  `d69cadc5` release binaries and is not a current-binary acceptance claim.
+  Book cross-compilation commands were executed. The storage warning states
+  a physical file limitation, not owner approval of a narrowed release goal.
   Exit: macOS produces ELF AArch64 objects and zlib without manual include
   flags, contract checks and full workspace gate pass. Add the cross-host CI
   link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,
