@@ -7,7 +7,7 @@ Task IDs are stable: update or split an item with cross-references; do not recyc
 IDs or silently delete unresolved work. Historical review IDs remain in their
 original ledgers; the IDs below belong to this tracker.
 
-The [README](README.md#status--2026-09-28) summarizes measured capability;
+The [evidence document](docs/evidence.md#status--2026-09-28) summarizes measured capability;
 [docs/status.md](docs/status.md) is generated from receipts. This file answers
 **what remains, what to do next, and what evidence closes it**. Detailed sources,
 commands and measurements stay in the [kernel ledger][kernel],

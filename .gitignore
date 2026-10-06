@@ -16,6 +16,7 @@ docs/*
 !docs/notebook/**
 !docs/images/
 !docs/images/**
+!docs/evidence.md
 lessons.md
 
 # Runtime evidence is machine-generated output, not source.
