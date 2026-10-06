@@ -6,7 +6,7 @@ docs/*
 !docs/checker.md
 !docs/evidence.md
 !docs/status.md
-!docs/framing-draft.md
+!docs/verified-optimization-design.md
 !docs/notebook/
 !docs/notebook/**
 !docs/images/
