@@ -404,16 +404,16 @@ and the [verification plan](docs/lean-plan.md#first-public-release-verification)
 | `tests/contracts/`, `tests/fixtures/` | Receipts and pinned corpora; C, EvoIR and output fixtures (`verification/`: proof-required inputs) |
 | `tests/acceptance/`, `tests/ui/check/` | Sealed-oracle and differential harnesses; expected `--check` diagnostics |
 | `tests/configs/`, `crates/*/tests/` | Linux configuration fragments; Rust integration tests |
-| `spec/evoir.md`, `spec/evomir.md` | The EvoIR and EvoMIR specifications |
+| `spec/` | The four pinned ground-truth documents: EvoIR, EvoMIR, target description and verification contract; index in `spec/README.md`, digests in `spec/pins.json` |
 | `docs/lean-plan.md`, `docs/checker.md` | Verification plan and theorem contract; `--check`, `--explain` and JSON diagnostics |
 | `docs/framing-draft.md`, `docs/eqsat-guard-folding-draft.md` | Verified optimization design and search contract; the `g0.ub.v1` guard slice |
-| `docs/codegen-quality-plan.md`, `spec/target.md` | Backend quality plan; contract of the target tables |
+| `docs/codegen-quality-plan.md` | Backend quality plan |
 | `docs/evidence.md`, `docs/roadmap.md`, `docs/status.md` | Results, receipts and limits; roadmap; the rendered dashboard |
 | `docs/notebook/`, `docs/images/` | Dated lab notes; figures and showcase captures |
 
 ## Documentation
 
-- Specifications: [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md), [target description](spec/target.md)
+- Specifications: [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md), [target description](spec/target.md), [verification contract](spec/verification.md)
 - Verification: [verification plan](docs/lean-plan.md), [C checker workflow](docs/checker.md)
 - Design: [verified optimization](docs/framing-draft.md), [codegen quality plan](docs/codegen-quality-plan.md)
 - Results and work: [evidence](docs/evidence.md), [roadmap](docs/roadmap.md), [TODO](TODO.md)

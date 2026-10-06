@@ -52,6 +52,8 @@ stay trusted: the native run tests them but does not prove them. Receipt:
 with `python3 tools/proof-native/proof_native.py all WORK_DIR`.
 Execution is tracked only in [TODO.md](../TODO.md#first-public-release-verification).
 
+The verification contract now lives in [spec/verification.md](../spec/verification.md); this plan keeps the history.
+
 ### Release outcome and boundary
 
 Deliver a **verified compilation core**, not a claim that the entire supported
