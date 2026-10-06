@@ -5,9 +5,9 @@ name: Book
 on:
   push:
     branches: [main]
-    paths: ["book/**", ".github/workflows/book.yml"]
+    paths: ["book/**", "crates/evocc/explain/**", "tools/gen-error-index.py", ".github/workflows/book.yml"]
   pull_request:
-    paths: ["book/**", ".github/workflows/book.yml"]
+    paths: ["book/**", "crates/evocc/explain/**", "tools/gen-error-index.py", ".github/workflows/book.yml"]
   workflow_dispatch:
 
 permissions:
@@ -40,6 +40,7 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Build the book
         run: |
+          python3 tools/gen-error-index.py
           mdbook --version
           mdbook build book --dest-dir "$RUNNER_TEMP/site"
       - uses: actions/upload-pages-artifact@v3

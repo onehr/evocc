@@ -296,43 +296,14 @@ fn json_frontend_records_preserve_locations_and_survey_boundaries() {
 }
 
 #[test]
-fn explain_uses_the_authoritative_table_and_records_missing_explanations() {
-    let spec = std::fs::read_to_string(root().join("spec/evoir.md")).unwrap();
-    let table = spec
-        .split("### 6.3 Diagnostic Authority")
-        .nth(1)
-        .unwrap()
-        .split("### 6.4")
-        .next()
-        .unwrap();
-    let mut count = 0;
-    for line in table.lines().filter(|line| line.starts_with("| `E")) {
-        let fields: Vec<_> = line.split('|').map(str::trim).collect();
-        let code = fields[1].trim_matches('`');
+fn explain_refuses_codes_without_authority_rows() {
+    for code in ["E3063", "E9999", "E2207"] {
         let out = run(&["--explain", code], None);
-        assert!(
-            out.status.success(),
-            "{code}: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let text = String::from_utf8(out.stdout).unwrap();
-        assert!(text.contains(fields[2].trim_matches('`')), "{code}: {text}");
-        assert!(text.contains(fields[3]), "{code}: {text}");
-        count += 1;
+        assert_eq!(out.status.code(), Some(1));
+        assert!(out.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&out.stderr)
+            .contains(&format!("no explanation for code {code}")));
     }
-    let authority_rows = table
-        .lines()
-        .filter(|line| line.starts_with("| `E"))
-        .count();
-    assert!(authority_rows > 0);
-    assert_eq!(count, authority_rows);
-    let missing = run(&["--explain", "E3063"], None);
-    assert!(missing.status.success());
-    assert!(String::from_utf8_lossy(&missing.stdout)
-        .contains("TODO: explanation missing from EvoIR section 6.3"));
-    let unknown = run(&["--explain", "E9999"], None);
-    assert_eq!(unknown.status.code(), Some(1));
-    assert!(unknown.stdout.is_empty());
 }
 
 #[test]

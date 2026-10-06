@@ -205,12 +205,28 @@ add dependencies, crates or configuration systems. Do not push.
   bytes, executed origins, related labels and output stability. This changes
   presentation only: no new lint, diagnostic code or semantic acceptance.
 - [ ] **P02 — Explain every authoritative diagnostic** — `OPEN`, P1.
-  Next: commit RED tests for authoritative page coverage, examples and explain
-  output, then write each explanation and generate the book index.
+  Next: run the full workspace exit gate on the committed implementation.
   Exit: complete page/table coverage, triggering and fixed examples checked,
   `--explain`, generated book index and full workspace gate pass. Report every
   `Trigger: none` exception. Budget: 300 Rust/Python lines excluding pages;
   each page at most 40 lines, index generator at most 150 lines.
+  Checkpoint: RED `7a7bc855` precedes the implementation. All 117 authority
+  rows now have hand-written pages; all 195 tagged C examples pass with the
+  first diagnostic checked or no diagnostic for the fixed example. The public
+  explanation and check-product suites pass 14 tests, including all 117 exact
+  CLI texts, table/page equality and generated-index freshness. mdBook 0.4.52
+  builds the chapter. Inserted/replaced Rust and Python total 224 lines,
+  including tests; the index generator has 38 lines. No compiler semantics,
+  code numbers, proof path or Lean source changed.
+  `Trigger: none` (20): E0109, E2902, E2918, E3006, E3007, E3017, E3018,
+  E3020, E3023, E3025, E3029, E3032, E3034, E3035, E3036, E3037, E3042,
+  E3043, E3045, E3062. Each page explains its reason. Observed differences
+  remain outside this slice: E0109 wraps without a diagnostic; the parser
+  emits E1003 for the E2918 condition; the memory fault for E3018 maps to
+  E3007. Nonzero return-address requests are rejected as E2913 before E3025.
+  The full gate is not yet run; no later package has started. Only text and
+  a temporary mdBook download/site were added; no protected artifacts were
+  deleted. Final disk accounting follows the exit gate.
 - [ ] **P03 — Add five front-end lints and level control** — `OPEN`, P1.
   Next: after P02 closes, add only unused-variable, unused-parameter,
   implicit-function-declaration, implicit-int and return-type diagnostics.

@@ -358,31 +358,18 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
     )
 }
 
-struct Explanation {
-    code: &'static str,
-    message: Option<&'static str>,
-    detected: Option<&'static str>,
-}
-
 include!(concat!(env!("OUT_DIR"), "/diagnostic_catalogue.rs"));
 
-fn explanation(code: &str) -> Option<&'static Explanation> {
-    CATALOGUE
-        .binary_search_by_key(&code, |row| row.code)
-        .ok()
-        .map(|index| &CATALOGUE[index])
-}
-
 pub fn explain(code: &str) -> Result<String, String> {
-    let row = explanation(code).ok_or_else(|| format!("unknown diagnostic code `{code}`"))?;
-    Ok(match (row.message, row.detected) {
-        (Some(message), Some(detected)) => format!(
-            "{code}: {message}\nDetected: {detected}\nAuthority: spec/evoir.md, section 6.3 Diagnostic Authority.\n\nA runtime finding describes an executed path, not every possible input.\nResource limits and unsupported execution do not establish absence of UB.\n"
-        ),
-        _ => format!(
-            "{code}\nTODO: explanation missing from EvoIR section 6.3.\nThis code is named in the specification or compiler source. Its absence from\nthe explanation table does not change the existing diagnostic's meaning.\n"
-        ),
-    })
+    let index = CATALOGUE
+        .binary_search_by_key(&code, |row| row.0)
+        .map_err(|_| format!("no explanation for code {code}"))?;
+    Ok(CATALOGUE[index]
+        .1
+        .lines()
+        .filter(|line| !line.starts_with("```"))
+        .map(|line| format!("{line}\n"))
+        .collect())
 }
 
 /// Categories describe the existing finding; unknown codes fail conservatively.
