@@ -715,6 +715,9 @@ arguments and `generic/frame.rs` lays out the frame from them.
 
 ### 6.1 ABI profiles
 
+The C driver emits the Linux ABI profile; the Darwin ABI profile serves the
+backend library and its tests (Section 1.3).
+
 | Fact | Linux | Darwin |
 |---|---|---|
 | Argument and result registers | `x0` to `x7`; `v0` to `v7` | same |
