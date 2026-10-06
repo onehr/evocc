@@ -350,8 +350,9 @@ add dependencies, crates or configuration systems. Do not push.
   interpreter execution or new proof coverage. Linux archive execution is not
   claimed by this Darwin packaging check. P05 may now start.
 - [ ] **P05 — Package the Linux header sysroot** — `OPEN`, P1.
-  Next: P04 is closed. Export sealed headers and a per-file hash contract;
-  add explicit/environment/bundled/fallback lookup without driver downloads.
+  Next: obtain the owner decision on macOS header storage, then complete the
+  Linux export and macOS-to-Linux object transfer in the release workflow.
+  Keep the full header set. Do not infer approval of an installation limit.
   October 7 entry check: four isolated driver tests reproduce three missing
   behaviors: bundled/environment lookup, selected-root errors and the explicit
   cross-linker requirement. The `-nostdinc` control already passes. Capture cap:
@@ -434,6 +435,19 @@ add dependencies, crates or configuration systems. Do not push.
   target/frontend plus capture plus the temporary directory fell by
   210,528 KiB. No protected file or shared header export was removed.
   Header-transfer CI and the owner storage decision remain open.
+  **October 7 gate checkpoint:** clean implementation `08ed5e0c` passes
+  `tools/gate-changed.sh --full-workspace --offline`: 417 suites, 3,176
+  passed, zero failed and five existing ignored campaigns. Clippy with
+  warnings denied and formatting pass. Log:
+  `.evidence/diagnostics/20261007/sysroot/08ed5e0c-full-workspace.log`, SHA-256
+  `f3ce5a249ebd40f1b1a0cab06e51268b1a67847e0ed25c8131ad180561ae701d`.
+  The original failure remains retained. This closes the workspace gate for
+  header discovery/export/packaging, not P05 or the final stage acceptance.
+  No gate process remains running. The storage decision has been requested
+  across successive turns and remains unanswered; do not rerun this gate
+  while waiting. Header CI, final clean-tree gates and the changelog remain.
+  Since the post-cleanup checkpoint, target/frontend plus this capture grew
+  by 265,796 KiB. Capture is 4,228 KiB, below 500 MiB; free space is 28 GiB.
   Exit: macOS produces ELF AArch64 objects and zlib without manual include
   flags, contract checks and full workspace gate pass. Add the cross-host CI
   link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,
