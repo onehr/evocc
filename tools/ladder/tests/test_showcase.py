@@ -138,7 +138,7 @@ class ShowcaseTests(unittest.TestCase):
 
         gallery = Gallery()
         gallery.assert_exists = lambda value: self.assertTrue((showcase.ROOT / value.split("#")[0]).is_file(), value)
-        section = (showcase.ROOT / "README.md").read_text().split("### What it builds and runs\n", 1)[1].split("#### Reproduce", 1)[0]
+        section = (showcase.ROOT / "README.md").read_text().split("## Showcase\n", 1)[1].split("### Reproduce", 1)[0]
         gallery.feed(section)
         self.assertEqual((gallery.images, gallery.cells), (15, 15))
         self.assertEqual(gallery.rows, [3, 3, 3, 3, 3])
