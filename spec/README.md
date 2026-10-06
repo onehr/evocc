@@ -11,7 +11,7 @@ defect; a fix changes the code, or it changes the document with a new revision.
 |---|---|---|
 | [`evoir.md`](evoir.md) | 2.0.0 | EvoIR: types, block-argument SSA, instructions, effects, memory, undefined behavior and diagnostics, equality saturation, text syntax, cross-IR contracts, the proof-checking interface and the reviewed rule registries |
 | [`evomir.md`](evomir.md) | 1.0.0 | EvoMIR: registers and classes, sub-width values, instructions, lowering from EvoIR, frame and calling convention, SSA destruction and allocation, emission, verification and diagnostics |
-| [`target.md`](target.md) | 2 | The internal target description: the components in `targets/aarch64/`, their form and rules, and what a correct backend operation means |
+| [`target.md`](target.md) | 1.0.0 | The internal target description: the components in `targets/aarch64/`, their form and rules, and what a correct backend operation means |
 | [`verification.md`](verification.md) | 1.0.0 | The checked compilation path: the claim, the subset `core-v1`, the semantics and refinement, the stage checkers and theorems, the pipeline theorem, the exports, proof-required mode and the trusted base |
 
 The revision column shows the state when this index was written. The revision line of each document

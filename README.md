@@ -405,7 +405,7 @@ and the [verification plan](docs/lean-plan.md#first-public-release-verification)
 | `tests/acceptance/`, `tests/ui/check/` | Sealed-oracle and differential harnesses; expected `--check` diagnostics |
 | `tests/configs/`, `crates/*/tests/` | Linux configuration fragments; Rust integration tests |
 | `spec/` | The four pinned ground-truth documents: EvoIR, EvoMIR, target description and verification contract; index in `spec/README.md`, digests in `spec/pins.json` |
-| `docs/lean-plan.md`, `docs/checker.md` | Verification plan and theorem contract; `--check`, `--explain` and JSON diagnostics |
+| `docs/lean-plan.md`, `docs/checker.md` | Verification plan and history; `--check`, `--explain` and JSON diagnostics |
 | `docs/framing-draft.md`, `docs/eqsat-guard-folding-draft.md` | Verified optimization design and search contract; the `g0.ub.v1` guard slice |
 | `docs/codegen-quality-plan.md` | Backend quality plan |
 | `docs/evidence.md`, `docs/roadmap.md`, `docs/status.md` | Results, receipts and limits; roadmap; the rendered dashboard |

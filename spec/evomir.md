@@ -525,7 +525,7 @@ table or in a family that Sections 2 and 4 admit is refused (Section 10).
 | `const.bits<N>` | `mov #imm` |
 | `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `lshr`, `ashr` on `bits<N>`, `N <= 64` | the operation, with the extensions of Section 3 |
 | `sdiv`, `udiv`, `srem`, `urem`, width <= 64 | `sdiv`/`udiv`, remainders by `msub`; `divisor_nonzero` and `signed_div_rem_no_overflow` have been asserted before, which makes the machine's answers for the excluded operands unobservable |
-| `sdiv`, `udiv`, `srem`, `urem`, width 128 | the hosted path of EvoIR Appendix D: ordinary calls to `__divti3`, `__udivti3`, `__modti3` and `__umodti3`, with argument pairs in `x0:x1` and `x2:x3` and the result in `x0:x1`; allocation sees ordinary call clobbers. The hosted target supplies the libgcc or compiler-rt helpers; no freestanding dependency is supplied silently. The guards remain before the call. |
+| `sdiv`, `udiv`, `srem`, `urem`, width 128 | the hosted path of EvoIR Section 10.1.3 ("128-bit execution"): ordinary calls to `__divti3`, `__udivti3`, `__modti3` and `__umodti3`, with argument pairs in `x0:x1` and `x2:x3` and the result in `x0:x1`; allocation sees ordinary call clobbers. The hosted target supplies the libgcc or compiler-rt helpers; no freestanding dependency is supplied silently. The guards remain before the call. |
 | `divisor_nonzero %d` | zero-extend `%d` per Section 3, `cmp %d, #0`, `cset ne` |
 | `signed_div_rem_no_overflow %a, %b` | sign-extend both per Section 3; `cmp %a` with the materialized minimum of `bits<N>`, `cset ne` into `%p`; `cmp %b` with a materialized -1, `cset ne` into `%q`; `orr %p, %q` |
 | `signed_add_defined %a, %b` / `signed_sub_defined` | at the register width: `adds`/`subs` into a scratch, then `cset vc`; below it: sign-extend both operands, `add`/`sub` at the register width, and compare the result with the sign extension of its low `N` bits (`sbfx`, `cmp`, `cset eq`), because the `V` flag reports the register width, never the source width (`bits<3>`: 3 + 3 is 6, outside -4 to 3, so 0) |
@@ -909,12 +909,14 @@ chain and the incoming arguments (read from `x29`) are unchanged.
 
 ### 6.11 Dynamic frames
 
-Each `stack.alloc` evaluates its size once, subtracts it from `sp`, and
-rounds the object address down to `max(A, 16)`. A private 16-byte header
-below the object records the previous `sp`, and the aligned outgoing area
-lies below the header; neither belongs to the object. Fixed objects, save
-slots and spill slots are addressed from `x29` (with the realignment of
-Section 6.10), not from the moving `sp`. A return restores `sp` from `x29`.
+EvoIR Section 3.7 states the object rules of `alloca.dynamic` and
+`lifetime.end`; this section states their frame. Each `stack.alloc`
+evaluates its size once, subtracts it from `sp`, and rounds the object
+address down to `max(A, 16)`. A private 16-byte header below the object
+records the previous `sp`, and the aligned outgoing area lies below the
+header; neither belongs to the object. Fixed objects, save slots and spill
+slots are addressed from `x29` (with the realignment of Section 6.10), not
+from the moving `sp`. A return restores `sp` from `x29`.
 
 `stack.release` restores the saved `sp` only when its address identifies the
 current top allocation (`sp` plus the outgoing area and the header);

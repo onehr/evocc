@@ -376,8 +376,9 @@ the sealed image `evo-flight-lab:sealed` and the Apple Container runtime. Withou
 
 The [README](../README.md) gives the pipeline theorem, its three hypotheses and a short scope
 paragraph. This section keeps the details, qualifiers and limits that the README of commit
-`3b0f18fc` stated. The [verification plan](lean-plan.md#first-public-release-verification) is the
-theorem contract.
+`3b0f18fc` stated. The [verification contract](../spec/verification.md) is the theorem contract.
+The [verification plan](lean-plan.md#first-public-release-verification) keeps the plan and its
+history.
 
 ### Proof scope
 
