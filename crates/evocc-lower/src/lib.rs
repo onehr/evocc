@@ -13461,8 +13461,8 @@ impl<'a> FunctionLowerer<'a> {
                     mem_out: mem_out.clone(),
                     world_out: world_out.clone(),
                     layout: AccessLayout {
-                        size_bytes: 32,
-                        align_bytes: 8,
+                        size_bytes: self.target.va_list_layout().size_bytes,
+                        align_bytes: self.target.va_list_layout().align_bytes,
                     },
                     volatile: CopyVolatility::None,
                 },

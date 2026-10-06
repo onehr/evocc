@@ -1757,6 +1757,7 @@ impl std::error::Error for LayoutError {}
 pub struct TargetDataLayout {
     short_wchar: bool,
     signed_char: bool,
+    pointer_va_list: bool,
 }
 
 impl TargetDataLayout {
@@ -1765,6 +1766,19 @@ impl TargetDataLayout {
         Self {
             short_wchar: false,
             signed_char: false,
+            pointer_va_list: false,
+        }
+    }
+
+    /// Apple arm64 layout. Its `va_list` is one pointer to the anonymous
+    /// arguments, which the caller passes on the stack. Plain `char`
+    /// signedness stays a separate selection.
+    #[must_use]
+    pub const fn aarch64_apple_darwin() -> Self {
+        Self {
+            short_wchar: false,
+            signed_char: false,
+            pointer_va_list: true,
         }
     }
 
@@ -1793,6 +1807,17 @@ impl TargetDataLayout {
             IntRank::UShort
         } else {
             IntRank::UInt
+        }
+    }
+
+    /// Size and alignment of `__builtin_va_list`: the 32-byte AAPCS64 record
+    /// on Linux, one pointer on Darwin.
+    #[must_use]
+    pub const fn va_list_layout(&self) -> TypeLayout {
+        if self.pointer_va_list {
+            TypeLayout::new(8, 8)
+        } else {
+            TypeLayout::new(32, 8)
         }
     }
 
@@ -1945,7 +1970,7 @@ impl<'a> LayoutContext<'a> {
     fn layout_kind(&mut self, ty: TypeId, kind: TypeKind) -> Result<TypeLayout, LayoutError> {
         match kind {
             TypeKind::Void | TypeKind::Function { .. } => Err(LayoutError::NonObjectType(ty)),
-            TypeKind::BuiltinVaList => Ok(TypeLayout::new(32, 8)),
+            TypeKind::BuiltinVaList => Ok(self.target.va_list_layout()),
             TypeKind::TargetBuiltin(kind) => {
                 kind.layout().ok_or(LayoutError::UnsupportedBuiltinType(ty))
             }
