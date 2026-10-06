@@ -137,6 +137,17 @@ int main(void) {}
 }
 
 #[test]
+fn explicit_use_and_nonreturning_calls_do_not_warn() {
+    for source in [
+        "static int retained __attribute__((used));",
+        "extern void die(void) __attribute__((noreturn)); int f(void) { die(); }",
+        "_Noreturn void die(void); int f(void) { die(); }",
+    ] {
+        expect(run(&["-Wall", "-Werror"], source), "W0005", "allow");
+    }
+}
+
+#[test]
 fn return_analysis_checks_paths_without_warning_on_complete_returns() {
     for source in [
         "int f(int x) { if (x) return 1; else return 2; }",
