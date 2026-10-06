@@ -116,9 +116,8 @@ Both ways make the same program.
 
 ## Run a program without compiling it
 
-EvoCC has two interpreters. They run `main` directly from the compiler's own representations of
-your program, without assembly and without a linker. The interpreter prints the value that `main`
-returns. Make a file `sum.c`:
+`evo run` runs `main` in the C-HIR interpreter, without assembly or a linker.
+Its exit status is the program's return value. Make a file `sum.c`:
 
 ```c
 static int sum_to(int n) {
@@ -133,18 +132,16 @@ int main(void) {
 }
 ```
 
-Run it in each interpreter:
+Run it, then inspect the exit status:
 
 ```console
-$ evocc --interpret-c-hir sum.c
-55
-$ evocc --interpret-evoir sum.c
+$ evo run sum.c; echo $?
 55
 ```
 
-The first interpreter runs C-HIR, the form of your program right after the parser. The second runs
-EvoIR, the form that the optimizer uses. They are separate programs, and they agree. [Chapter
-7](how-it-works.md) tells you more about the two forms.
+Use `evo run FILE.c -- ARGS` to pass arguments to `main(int argc, char **argv)`.
+The developer commands `evocc --interpret-c-hir` and `evocc --interpret-evoir`
+print the return value instead. [Chapter 7](how-it-works.md) explains both IRs.
 
 The interpreters run only the code in your file. They do not call into the C library. To see
 this, make a file `shout.c` that calls `puts`. It declares `puts` by hand, so it needs no header:

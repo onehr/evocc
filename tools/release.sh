@@ -11,7 +11,7 @@
 #   --with-lean      Rebuild evoir-sem even if lean/.lake/build/bin/evoir-sem exists.
 #   --skip-build     Build nothing. Package the binaries that exist.
 #
-# The script builds evocc and evocc-checker with Cargo, offline, in
+# The script builds evo, evocc and evocc-checker with Cargo, offline, in
 # target/frontend. On Linux it builds them for aarch64-unknown-linux-musl, so
 # they are static. That needs `rustup target add aarch64-unknown-linux-musl`.
 # Without it the script builds for glibc and warns. evoir-sem comes from Lake
@@ -21,7 +21,7 @@
 # version comes from crates/evocc/Cargo.toml.
 #
 # The output is DIR/evocc-<version>-<target>.tar.gz. The archive holds one
-# directory of the same name: the three binaries, LICENSE, NOTICE,
+# directory of the same name: the four binaries, LICENSE, NOTICE,
 # THIRD-PARTY-NOTICES.md, README.md and SHA256SUMS for those files. The archive
 # is deterministic. Entries are sorted, owner and group are 0, and every mtime
 # is SOURCE_DATE_EPOCH, else the commit time of HEAD. The gzip header has no
@@ -112,7 +112,7 @@ if [ "$skip_build" = false ]; then
     fi
 fi
 
-for file in "$bin_dir/evocc" "$bin_dir/evocc-checker" "$lean_bin"; do
+for file in "$bin_dir/evo" "$bin_dir/evocc" "$bin_dir/evocc-checker" "$lean_bin"; do
     [ -x "$file" ] || die "missing binary: $file"
 done
 if [ "${lean_built:-false}" = false ] &&
@@ -134,7 +134,7 @@ fi
 name="evocc-$version-$target"
 mtime="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct 2>/dev/null || echo 0)}"
 mkdir -p "$out"
-set -- "evocc=755=$bin_dir/evocc" "evocc-checker=755=$bin_dir/evocc-checker" \
+set -- "evo=755=$bin_dir/evo" "evocc=755=$bin_dir/evocc" "evocc-checker=755=$bin_dir/evocc-checker" \
     "evoir-sem=755=$lean_bin" "README.md=644=README.md"
 for doc in LICENSE NOTICE THIRD-PARTY-NOTICES.md; do
     if [ -f "$doc" ]; then

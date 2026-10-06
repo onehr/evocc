@@ -162,6 +162,8 @@ struct DriverOptions {
     macro_actions: Vec<MacroAction>,
     standard_includes: bool,
     core_entries: Vec<String>,
+    defined_functions: bool,
+    program_arguments: Option<Vec<Vec<u8>>>,
     /// `--proof-required=NEW_DIR`: no output unless every integrated stage accepts.
     proof: Option<proof_required::ProofOptions>,
     optimize_scalar_evoir: bool,
@@ -492,7 +494,11 @@ fn is_development_invocation(args: &[String]) -> bool {
     args.iter().any(|arg| {
         matches!(
             arg.as_str(),
-            "--parse-only" | "--interpret-c-hir" | "--interpret-evoir" | "--check"
+            "--parse-only"
+                | "--list-defined-functions"
+                | "--interpret-c-hir"
+                | "--interpret-evoir"
+                | "--check"
         ) || arg.starts_with("--emit=")
     })
 }
@@ -569,6 +575,8 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     let mut system_root = None;
     let mut ignored_options = Vec::new();
     let mut index = 0;
+    let mut defined_functions = false;
+    let mut program_arguments: Option<Vec<Vec<u8>>> = None;
 
     while index < args.len() {
         let arg = &args[index];
@@ -576,6 +584,24 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             "-E" => set_mode(&mut mode, DriverMode::Preprocess)?,
             "--parse-only" => set_mode(&mut mode, DriverMode::ParseOnly)?,
             "--interpret-c-hir" => set_mode(&mut mode, DriverMode::InterpretCHir)?,
+            "--list-defined-functions" => {
+                set_mode(&mut mode, DriverMode::ParseOnly)?;
+                defined_functions = true;
+            }
+            _ if arg.starts_with("--program-arg-hex=") => {
+                let hex = &arg[18..];
+                if !hex.len().is_multiple_of(2) || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    return Err("program argument must contain pairs of hexadecimal digits".into());
+                }
+                let bytes = (0..hex.len())
+                    .step_by(2)
+                    .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+                    .collect::<Vec<_>>();
+                if bytes.contains(&0) {
+                    return Err("program argument cannot contain a null byte".into());
+                }
+                program_arguments.get_or_insert_with(Vec::new).push(bytes);
+            }
             "--emit=c-hir" => set_mode(&mut mode, DriverMode::EmitCHir)?,
             "--emit=core-c-hir" => set_mode(&mut mode, DriverMode::EmitCoreCHir)?,
             _ if arg.starts_with("--core-entry=") => {
@@ -1059,6 +1085,9 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     // Apple's arm64 convention passes every anonymous argument on the stack,
     // and its `va_list` is one pointer.
     codegen.anonymous_on_stack = target.is_darwin();
+    if program_arguments.is_some() && mode != DriverMode::InterpretCHir {
+        return Err("program arguments require --interpret-c-hir".into());
+    }
     Ok(DriverOptions {
         mode,
         error_format: error_format.unwrap_or_default(),
@@ -1075,6 +1104,8 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         macro_actions,
         standard_includes,
         core_entries,
+        defined_functions,
+        program_arguments,
         proof,
         optimize_scalar_evoir,
         opt_passes,
@@ -1693,7 +1724,18 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     }
 
     match action {
-        ParsedAction::Validate => ExitCode::SUCCESS,
+        ParsedAction::Validate => {
+            if options.defined_functions {
+                for declaration in unit.iter() {
+                    if let CHirDecl::Function(f) = declaration {
+                        if f.body.is_some() {
+                            println!("{}", f.name.spelling);
+                        }
+                    }
+                }
+            }
+            ExitCode::SUCCESS
+        }
         ParsedAction::InterpretCHir => interpret_chir(options, &pp, &unit),
         ParsedAction::EmitCHir => emit_chir(&unit),
         ParsedAction::EmitCoreCHir => {
@@ -1918,11 +1960,12 @@ fn interpret_chir(
         return ExitCode::from(1);
     };
 
-    let outcome = match evocc_chir::interp::interpret_program(
+    let outcome = match evocc_chir::interp::interpret_program_with_arguments(
         unit,
         entry,
         &options.target_layout(),
         InterpreterLimits::default(),
+        options.program_arguments.as_deref(),
     ) {
         Ok(outcome) => outcome,
         Err(error) => {

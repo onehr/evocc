@@ -140,8 +140,114 @@ fn prove_checks_all_definitions_and_keeps_the_record() {
     assert!(value.contains("add") && value.contains("main"));
     assert!(std::fs::metadata(&assembly).unwrap().len() > 0);
     // The record is a product outside our input scratch directory.
-    let record_dir = Path::new(record).parent().unwrap();
+    let record_dir = Path::new(record).parent().unwrap().parent().unwrap();
+    assert!(record_dir
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .starts_with("evo-proof-"));
     std::fs::remove_dir_all(record_dir).unwrap();
+}
+
+#[test]
+fn run_preserves_non_utf8_argument_bytes() {
+    use std::os::unix::ffi::OsStringExt;
+    let temp = Scratch::new();
+    let input = temp.source("int main(int n, char **v) { return n != 2 || (unsigned char)v[1][0] != 255 || v[1][1] != 0; }");
+    let compiler = PathBuf::from(env!("CARGO_BIN_EXE_evocc"));
+    let output = Command::new(compiler.with_file_name("evo"))
+        .arg("run")
+        .arg(input)
+        .arg("--")
+        .arg(std::ffi::OsString::from_vec(vec![255]))
+        .env("EVOCC", compiler)
+        .output()
+        .unwrap();
+    success(&output);
+}
+
+#[test]
+fn prove_keeps_and_names_files_when_output_cannot_be_written() {
+    let temp = Scratch::new();
+    let input = temp.source("int main(void) { return 0; }");
+    let output = evo(&[
+        "prove",
+        input.to_str().unwrap(),
+        "-o",
+        temp.0.join("missing/out.s").to_str().unwrap(),
+    ]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    let root = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix("evo: proof files kept at "))
+        .unwrap();
+    assert!(Path::new(root).join("checked/record.json").is_file());
+    assert!(Path::new(root)
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .starts_with("evo-proof-"));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn build_failure_does_not_report_an_expected_configure_probe() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = Scratch::new();
+    std::fs::write(
+        temp.0.join("configure"),
+        "#!/bin/sh\nprintf 'not C' > probe.c\neval \"$CC -c probe.c -o probe.o\" >/dev/null 2>&1\nexit 0\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(
+        temp.0.join("configure"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    std::fs::write(temp.0.join("Makefile"), "all:\n\tfalse\n").unwrap();
+    let output = evo(&["build", temp.0.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let receipt = std::fs::read_to_string(temp.0.join("evo-build-receipt.json")).unwrap();
+    assert!(
+        receipt.contains("\"failing_command\":[\"make\","),
+        "{receipt}"
+    );
+    assert!(!receipt.contains("probe.c"), "{receipt}");
+}
+
+#[test]
+fn build_lists_source_inputs_and_counts_coded_warnings() {
+    let temp = Scratch::new();
+    std::fs::write(
+        temp.0.join("one.c"),
+        "int f(void) { int unused; return 0; }\n",
+    )
+    .unwrap();
+    std::fs::write(temp.0.join("two.c"), "int g(void) { return 0; }\n").unwrap();
+    std::fs::write(
+        temp.0.join("Makefile"),
+        "all:\n\t$(CC) -Wunused-variable -c one.c -o not-a-source.c\n\t$(CC) -c two.c -o two.o\n",
+    )
+    .unwrap();
+    let output = evo(&[
+        "build",
+        temp.0.to_str().unwrap(),
+        "--",
+        "CC=missing-compiler",
+    ]);
+    success(&output);
+    let receipt = std::fs::read_to_string(temp.0.join("evo-build-receipt.json")).unwrap();
+    assert!(
+        receipt.contains("one.c\"") && receipt.contains("two.c\""),
+        "{receipt}"
+    );
+    assert!(!receipt.contains("not-a-source.c"), "{receipt}");
+    assert!(receipt.contains("\"W0001\":1"), "{receipt}");
+    assert!(receipt.contains("\"failing_command\":null"), "{receipt}");
 }
 
 #[test]

@@ -60,62 +60,75 @@ int main(void) {
 }
 ```
 
-## Find them with `--check`
+## Find them with `evo check`
 
-`--check` runs `main` in the EvoIR interpreter. It stops at the first undefined behavior on the
-path that runs:
-
-```console
-$ evocc --check overflow.c
-overflow.c: error[E3004]: signed-integer-overflow
-$ evocc --check divide.c
-divide.c: error[E3002]: integer-division-by-zero
-$ evocc --check uninit.c
-uninit.c: error[E3001]: read-of-uninitialized-object
-$ evocc --check bounds.c
-bounds.c: error[E3011]: out-of-bounds-memory-access
-```
-
-Each diagnostic has a code, such as `E3004`, and a name, such as `signed-integer-overflow`. The
-exit status is 1:
+`evo check` runs `main` through the existing check command. It reports the first
+undefined operation on the executed path. Each command below exits with status 1:
 
 ```console
-$ evocc --check overflow.c; echo $?
-overflow.c: error[E3004]: signed-integer-overflow
-1
+$ evo check overflow.c
+error[E3004]: signed-integer-overflow
+  --> overflow.c:2:12
+   |
+ 2 |     return x * 1000;
+   |            ^^^^^^^^ signed-integer-overflow
+   |
+   = note: this operation failed on the executed path
+$ evo check divide.c
+error[E3002]: integer-division-by-zero
+  --> divide.c:2:12
+   |
+ 2 |     return total / count;
+   |            ^^^^^^^^^^^^^ integer-division-by-zero
+   |
+   = note: this operation failed on the executed path
+   = help: check the divisor before the division or remainder operation
+$ evo check uninit.c
+error[E3001]: read-of-uninitialized-object
+  --> uninit.c:4:12
+   |
+ 4 |     return score + bonus;
+   |            ^^^^^^^^^^^^^ read-of-uninitialized-object
+   |
+   = note: this operation failed on the executed path
+$ evo check bounds.c
+error[E3011]: out-of-bounds-memory-access
+  --> bounds.c:5:16
+   |
+ 5 |         sum += days[i];
+   |                ^^^^^^^ out-of-bounds-memory-access
+   |
+   = note: this operation failed on the executed path
 ```
 
-These diagnostics have no line number yet, because the EvoIR interpreter does not keep source
-positions. The C-HIR interpreter does. Use it to find the line and the column:
-
-```console
-$ evocc --interpret-c-hir overflow.c
-overflow.c:2:12: error[E3004]: signed-integer-overflow
-$ evocc --interpret-c-hir divide.c
-divide.c:2:12: error[E3002]: integer-division-by-zero
-$ evocc --interpret-c-hir uninit.c
-uninit.c:4:12: error[E3001]: read-of-uninitialized-object: score
-$ evocc --interpret-c-hir bounds.c
-bounds.c:5:16: error[E3011]: out-of-bounds-memory-access
-```
-
-The C-HIR interpreter also names the variable that `uninit.c` reads, `score`.
+The arrow gives the file, line and byte column. The label marks the failing expression.
 
 ## What a code means
 
-`--explain` prints the entry of a code:
+`evo explain` prints the tested explanation of a code:
 
 ```console
-$ evocc --explain E3004
-E3004: signed-integer-overflow
-Detected: runtime
-Authority: spec/evoir.md, section 6.3 Diagnostic Authority.
+$ evo explain E3004
+# E3004: signed-integer-overflow
 
-A runtime finding describes an executed path, not every possible input.
-Resource limits and unsupported execution do not establish absence of UB.
+An executed signed integer operation has a result outside its permitted range.
+Negating the minimum value and dividing it by minus one can also cause overflow.
+
+The checked profile reports overflow instead of assuming signed arithmetic wraps.
+Check the range before the operation, or use a suitable wider arithmetic type.
+
+int main(void) { int value = 2147483647; return value + 1; }
+
+int main(void) {
+    int value = 2147483647;
+    long result = (long)value + 1;
+    return result != 2147483648L;
+}
+
+The conversion must occur before addition, not after an overflowing result.
 ```
 
-The entry names its authority: the table of diagnostics in the EvoIR specification. The
+The authority is the table of diagnostics in the EvoIR specification. The
 [EvoIR specification, section 6.3](https://github.com/onehr/evocc/blob/main/spec/evoir.md#63-diagnostic-authority)
 lists every code.
 
@@ -125,11 +138,10 @@ Editors and scripts can read diagnostics as JSON. `--error-format=json` writes o
 
 ```console
 $ evocc --check --error-format=json overflow.c
-{"schema":"evocc.diagnostic.v1","kind":"diagnostic","severity":"error","code":"E3004","message":"signed-integer-overflow","phase":"execution","category":"undefined-behavior","source":"overflow.c","location":null,"explanation":"available"}
+{"code":"E3004","level":"error","message":"signed-integer-overflow","spans":[{"file":"overflow.c","line_start":2,"column_start":12,"line_end":2,"column_end":20,"label":"signed-integer-overflow","primary":true}],"notes":["this operation failed on the executed path"],"help":[],"rendered":"error[E3004]: signed-integer-overflow\n  --> overflow.c:2:12\n   |\n 2 |     return x * 1000;\n   |            ^^^^^^^^ signed-integer-overflow\n   |\n   = note: this operation failed on the executed path\n"}
 ```
 
-The record names the phase in which EvoCC found the problem and its category.
-`"location":null` says that this diagnostic has no line and column. When the run completes with no
+The record contains source spans, notes, help and the rendered text. When the run completes with no
 finding, `--check` writes a record of the result instead. Here is `sum.c` from chapter 3:
 
 ```console

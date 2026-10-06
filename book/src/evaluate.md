@@ -37,6 +37,19 @@ lanes takes many hours. Start with one program.
 
 ## Retained results
 
+For a local Make project, `evo build` runs its configure script, if present,
+then Make with EvoCC. Copy the pinned cJSON tree to `cjson`, then run:
+
+```console
+$ make -C cjson clean > /dev/null
+$ evo build cjson -- all test -j2
+build exit 0; log: /private/tmp/evocc-user-book.5vvZWJ/cjson/evo-build.log
+```
+
+The log path follows your directory. `cjson/evo-build-receipt.json` records
+the compiler version, target, compiled C files, coded warning counts, failed
+build command and exit status. It is not a proof or a frozen ladder result.
+
 Each lane keeps its last result. `--status` prints it without running anything:
 
 ```console

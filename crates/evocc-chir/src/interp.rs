@@ -42,7 +42,7 @@ mod floating;
 mod lifecycle;
 mod neon;
 mod vector;
-pub use lifecycle::interpret_program;
+pub use lifecycle::{interpret_program, interpret_program_with_arguments};
 
 const DEFAULT_FUEL: u64 = 100_000;
 const MAX_MEMORY_OBJECTS: u64 = 65_536;
@@ -1922,6 +1922,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn run_root(&mut self, function: SymbolId) -> Result<Option<MachineOutcome>, InterpreterError> {
+        self.run_root_arguments(function, Vec::new())
+    }
+
+    fn run_root_arguments(
+        &mut self,
+        function: SymbolId,
+        arguments: Vec<CValue>,
+    ) -> Result<Option<MachineOutcome>, InterpreterError> {
         let mut tasks = Vec::new();
         let root_span = self
             .unit
@@ -1929,7 +1937,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .symbol(function)
             .map(|symbol| symbol.span())
             .map_err(|_| InterpreterError::UnknownFunction { symbol: function })?;
-        self.enter_function(function, Vec::new(), None, None, None, false, 0, &mut tasks)?;
+        self.enter_function(function, arguments, None, None, None, false, 0, &mut tasks)?;
         let (outcome, _) = self.run_tasks(tasks)?;
         if self.termination.is_some() {
             return Ok(None);

@@ -45,55 +45,22 @@ int abs(int a) {
 Compile it with proof:
 
 ```console
-$ evocc --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-abs \
-    --proof-checker="$(command -v evoir-sem)" --core-entry=abs -O0 -fno-builtin abs.c
-evocc: proof-required result: CHECKED_TO_FINAL_ASSEMBLY: checked from typed Core source to final assembly text; record proof-abs/record.json
-// evocc-native-ub-checks=checked
-.text
-
-.globl abs
-.p2align 2
-.type abs, %function
-abs:
-    stp x29, x30, [sp, #-16]!
-    mov x29, sp
-.Labs_block0:
-    cmp w0, #0
-    b.le .Labs_block2
-.Labs_block1:
-    mov w1, w0
-    b .Labs_block3
-.Labs_block2:
-    movz w2, #0
-    subs w0, w2, w0
-    b.vs .Labs_block4
-.Labs_block5:
-    mov w1, w0
-.Labs_block3:
-    mov w0, w1
-    ldp x29, x30, [sp], #16
-    ret
-.Labs_block4:
-    brk #3004
-.size abs, .-abs
-
-.ident "EvoCC 0.0.0 aarch64-unknown-linux-gnu"
+$ evo prove abs.c -o abs.s
+checked from typed Core source to final assembly text: /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-19627-1791318427250745000/checked/record.json
 ```
 
-The options say what to check:
+The temporary path changes on each run. `abs.s` holds the checked assembly.
+The command selects all defined functions by default. Repeat `--entry NAME`
+to select entries explicitly; the proof contract still requires every output function.
+It uses Linux AArch64, `-O0` and `-fno-builtin`. Put `evoir-sem` next to `evo`,
+or set `EVOCC_PROOF_CHECKER` to its path. Failure keeps and names the proof directory.
+For the commands below, link `proof-abs` to the `checked` directory of your run:
 
-| Option | Meaning |
-|---|---|
-| `--proof-required=proof-abs` | Compile with proof, and write the proof files into the new directory `proof-abs`. |
-| `--proof-checker=PATH` | Use this Lean checker. |
-| `--core-entry=abs` | Check the function `abs`. |
-| `--emit=asm`, `-O0`, `-fno-builtin` | The subset requires these options. `-fno-builtin` makes the call of `abs` mean this definition, not a built-in function. |
-| `--target=aarch64-unknown-linux-gnu` | The subset is defined for this target. |
+```console
+$ ln -s /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-19627-1791318427250745000/checked proof-abs
+```
 
-The first line of the output comes from standard error. It gives the result,
-`CHECKED_TO_FINAL_ASSEMBLY`. The rest is the checked assembly.
-
-Look at `subs` and `b.vs` again. For `a` equal to `INT_MIN`, `-a` overflows, so `abs(INT_MIN)`
+The assembly uses `subs` and `b.vs`. For `a` equal to `INT_MIN`, `-a` overflows, so `abs(INT_MIN)`
 jumps to `brk #3004` and stops. It cannot return a wrong number. The proof covers this: the checked
 program behaves as the C source, and the C source says that this case is undefined behavior.
 

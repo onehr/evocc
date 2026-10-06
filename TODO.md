@@ -303,8 +303,19 @@ add dependencies, crates or configuration systems. Do not push.
   paths). This is not filesystem-wide accounting. Available disk is 26 GiB.
   Claim: five controlled front-end lints, not all GCC warning semantics.
 - [ ] **P04 — Add user-intent commands** — `OPEN`, P1.
-  Next: after P03 closes, add the `evo` binary with run, check, explain, prove,
-  build and version. Delegate to the existing driver; do not refactor it.
+  Next: run the full workspace gate and validate release packaging. The six
+  verbs delegate to the existing driver; no driver library was introduced.
+  RED: `9b1793f0`, seven failures because the binary did not exist. The focused
+  suite now passes eleven tests, including the real cJSON build, writable
+  argc/argv, non-UTF-8 argument bytes, retained proof files on copy failure,
+  warning counts, source/output distinction and expected configure failures.
+  The wrapper uses 406 Rust lines; driver/interpreter argument and definition
+  interfaces add 179, for 585/600 total. Book and release changes use 91/100
+  added lines. Book commands were executed in `/tmp/evocc-user-book.5vvZWJ`;
+  cJSON exits 0, lists three compiled C files and no coded warnings. Captures
+  have a 500 MiB cap. The first focused Clippy run found manual modulo parity;
+  use `is_multiple_of` instead. Its replay and the full gate remain required.
+  No later package has started. Lean and the proof-required pipeline are unchanged.
   October 7 entry check: P03 is closed. The existing C-HIR command calls main
   without arguments and rejects `main(int argc, char **argv)` with E3007.
   It has no program-argument option. A thin command wrapper alone cannot meet
