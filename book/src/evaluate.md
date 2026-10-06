@@ -27,7 +27,6 @@ files that describe and check it.
 
 To run one lane, give its name:
 
-<!-- verify after the driver change -->
 ```console
 $ python3 tools/bench.py zlib --jobs 2
 ```

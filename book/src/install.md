@@ -23,7 +23,6 @@ archive for each host. The name of the archive is `evocc-<version>-<target>.tar.
 
 These commands download version 0.1.0 for macOS, check the archive and unpack it:
 
-<!-- verify after the driver change -->
 ```console
 $ curl -LO https://github.com/onehr/evocc/releases/download/v0.1.0/evocc-0.1.0-aarch64-apple-darwin.tar.gz
 $ curl -LO https://github.com/onehr/evocc/releases/download/v0.1.0/SHA256SUMS
@@ -45,13 +44,15 @@ files `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES.md`, and its own `SHA256SUMS`
 
 Add the directory to your `PATH`, and check that the shell finds `evocc`:
 
-<!-- verify after the driver change -->
 ```console
 $ cd evocc-0.1.0-aarch64-apple-darwin
 $ shasum -a 256 -c SHA256SUMS
 $ export PATH="$PWD:$PATH"
 $ evocc --version
 ```
+
+`evocc --version` prints two lines. The first line gives the version, the commit and the date of
+the build. The second line gives the target that `evocc` makes code for by default.
 
 The `export` line lasts until you close the shell. To keep it, add the line to your shell profile,
 for example `~/.zshrc`, with the full path of the directory.
@@ -69,7 +70,6 @@ To build EvoCC from source, you need:
 
 Clone the repository and build the compiler and the certificate checker:
 
-<!-- verify after the driver change -->
 ```console
 $ git clone https://github.com/onehr/evocc.git
 $ cd evocc
@@ -93,5 +93,15 @@ Lake writes `evoir-sem` to `lean/.lake/build/bin/`. Add both directories to your
 $ export PATH="$PWD/target/frontend/release:$PWD/lean/.lake/build/bin:$PATH"
 ```
 
-Now `evocc --version` works as in the release. The rest of this book calls the three programs by
-their names, `evocc`, `evocc-checker` and `evoir-sem`, and expects them on your `PATH`.
+Now `evocc --version` works as in the release. A build of commit `7b64cc1c0b04` on macOS prints:
+
+```console
+$ evocc --version
+evocc 0.1.0 (7b64cc1c0b04 2026-10-07)
+Target: aarch64-apple-darwin
+```
+
+Your build prints the commit and the date of your checkout.
+
+The rest of this book calls the three programs by their names, `evocc`, `evocc-checker` and
+`evoir-sem`, and expects them on your `PATH`.

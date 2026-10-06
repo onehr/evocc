@@ -25,14 +25,14 @@ int main(void) {
 
 Compile it and run it:
 
-<!-- verify after the driver change -->
 ```console
 $ evocc hello.c -o hello
 $ ./hello
+Hello, world!
 ```
 
-The program prints `Hello, world!`. If you have used `gcc` or `clang`, this looks the same, and
-that is the intent: `evocc` takes the options of a usual C compiler.
+If you have used `gcc` or `clang`, this looks the same, and that is the intent: `evocc` takes the
+options of a usual C compiler.
 
 ## One step at a time
 
@@ -45,7 +45,6 @@ When you give `evocc` a C file, it does four things:
 
 You can stop after each step:
 
-<!-- verify after the driver change -->
 ```console
 $ evocc -E hello.c -o hello.i
 $ evocc -S hello.c -o hello.s
@@ -57,7 +56,10 @@ $ evocc hello.o -o hello
 command only links.
 
 EvoCC makes code for the host by default: `aarch64-apple-darwin` on macOS and
-`aarch64-unknown-linux-gnu` on Linux. `--target` selects the other one.
+`aarch64-unknown-linux-gnu` on Linux. `--target` selects the other one. On macOS, the Linux target
+needs the Linux headers: give their root directory with `--sysroot=DIR`. The development options of
+the next chapters, such as `--emit=asm` and the interpreters, use `aarch64-unknown-linux-gnu` when
+you do not give `--target`.
 
 ## More than one file
 
@@ -91,24 +93,26 @@ int main(void) {
 
 You can give both C files to `evocc` at once:
 
-<!-- verify after the driver change -->
 ```console
 $ evocc main.c greet.c -o greet
 $ ./greet
+Hello, EvoCC!
 ```
 
 Or you can compile each file on its own, the way `make` does, and link at the end. `-MMD -MF`
 writes a dependency file for `make`. It lists the headers that each file includes:
 
-<!-- verify after the driver change -->
 ```console
 $ evocc -c main.c -o main.o -MMD -MF main.d
 $ evocc -c greet.c -o greet.o -MMD -MF greet.d
 $ evocc main.o greet.o -o greet
 $ ./greet
+Hello, EvoCC!
+$ cat main.d
+main.o: main.c greet.h
 ```
 
-Both ways make the same program. It prints `Hello, EvoCC!`.
+Both ways make the same program.
 
 ## Run a program without compiling it
 
@@ -216,7 +220,6 @@ The native program returns 55, like the two interpreters.
 Most build systems take the C compiler from the variable `CC`. So you can build many projects with
 EvoCC without changing them. Here is zlib, the compression library:
 
-<!-- verify after the driver change -->
 ```console
 $ curl -LO https://zlib.net/zlib-1.3.2.tar.gz
 $ tar xzf zlib-1.3.2.tar.gz
@@ -226,14 +229,20 @@ $ make
 $ make test
 ```
 
-When all tests pass, `make test` prints lines that end in `test OK`. Some Makefiles set `CC`
-themselves. For those, give the variable on the command line: `make CC=evocc`.
+`make test` runs the tests twice: once with the static library and once with the shared library.
+When all tests pass, its output includes these two lines:
+
+```text
+		*** zlib test OK ***
+		*** zlib shared test OK ***
+```
+
+Some Makefiles set `CC` themselves. For those, give the variable on the command line:
+`make CC=evocc`.
 
 ## Driver options
 
 `evocc` accepts the options of a usual C compiler:
-
-<!-- verify after the driver change -->
 
 | Option | What it does |
 |---|---|
@@ -242,15 +251,17 @@ themselves. For those, give the variable on the command line: `make CC=evocc`.
 | `-c` | Compile and assemble to an object file. Do not link. |
 | `-o FILE` | Write the output to `FILE`. |
 | Several input files | Compile each C file, then link all the files together. |
-| `-M`, `-MMD`, `-MF FILE` | Write the dependencies for `make`: `-M` in place of the output, `-MMD` beside it, into `FILE`. |
+| `-M`, `-MM`, `-MD`, `-MMD` | Write the dependencies for `make`: `-M` and `-MM` in place of the output, `-MD` and `-MMD` beside it. `-MM` and `-MMD` leave out the system headers. |
+| `-MF FILE`, `-MT TARGET`, `-MQ TARGET`, `-MP` | Name the dependency file and the target of the rule; add a phony rule for each header. |
 | `-shared` | Link a shared library. |
-| `-l NAME`, `-L DIR` | Link the library `NAME`; search for libraries in `DIR`. |
-| `--target=TARGET` | Make code for `aarch64-apple-darwin` or `aarch64-unknown-linux-gnu`. |
-| `-I DIR`, `-D NAME[=VALUE]`, `-U NAME`, `-include FILE` | Control the preprocessor, as in GCC. |
+| `-l NAME`, `-L DIR`, `-Wl,ARGS` | Link the library `NAME`; search for libraries in `DIR`; give `ARGS` to the linker. |
+| `--target=TARGET` | Make code for `aarch64-apple-darwin` or `aarch64-unknown-linux-gnu`. The default is the host. |
+| `-I DIR`, `-D NAME[=VALUE]`, `-U NAME`, `-include FILE`, `-isystem DIR` | Control the preprocessor, as in GCC. |
 | `-std=gnu11` and other `-std=` values | Select the language standard. |
 | `-O0` to `-O3` | Select the optimization level. `-O0` keeps the control flow of the source. |
-| `-g` | Write debug information about C types (DWARF). EvoCC does not write line tables yet. |
-| An unknown `-f` option | EvoCC prints a warning and continues. |
+| `-g` | For `aarch64-unknown-linux-gnu`, write debug information about C types (DWARF). EvoCC does not write line tables yet. For `aarch64-apple-darwin`, `-g` has no effect. |
+| An unknown `-f` or `-m` option | EvoCC prints one warning and continues. `-w` turns the warning off. |
+| `--version`, `-dumpmachine`, `--help` | Print the version and the target, the target only, or a summary of the options. |
 
 EvoCC also has its own options. You meet them in the next chapters:
 

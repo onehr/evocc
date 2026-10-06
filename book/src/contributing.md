@@ -15,9 +15,9 @@ defect in the compiler.
 ## Work on this book
 
 The source of this book is in `book/src/`, one Markdown file for each chapter. `book/src/SUMMARY.md`
-lists the chapters. The book is built with [mdBook](https://rust-lang.github.io/mdBook/):
+lists the chapters. The book is built with [mdBook](https://rust-lang.github.io/mdBook/). The book
+workflow uses mdBook 0.4.52:
 
-<!-- verify after the driver change -->
 ```console
 $ mdbook build book
 $ mdbook serve book --open
