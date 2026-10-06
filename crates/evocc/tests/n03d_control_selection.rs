@@ -105,11 +105,8 @@ fn control_options_are_canonical_and_native_only() {
 #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
 #[test]
 fn selected_c_shapes_execute_against_gcc_and_clang_on_linux() {
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let dir = root.join(format!(
-        ".evidence/codegen/n03d-c5/native-control-{}",
-        std::process::id()
-    ));
+    // Disposable test outputs do not belong in retained evidence directories.
+    let dir = std::env::temp_dir().join(format!("evocc-native-control-{}", std::process::id()));
     std::fs::create_dir_all(dir.parent().unwrap()).unwrap();
     std::fs::create_dir(&dir).unwrap();
     let mut harness = String::from("unsigned inspect(unsigned x){return x&1U;}\n");

@@ -114,11 +114,8 @@ fn repeated_narrow_arguments_execute_with_independent_linux_callees() {
     // Darwin would violate EvoMIR section 6's explicit sign-extension contract.
     // MIR-only Darwin extension execution is covered independently.
     let fixture = include_str!("../../../tests/fixtures/codegen/n03d-extension-reuse.c");
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let dir = root.join(format!(
-        ".evidence/codegen/n03d-c3/native-extension-{}",
-        std::process::id()
-    ));
+    // Disposable test outputs do not belong in retained evidence directories.
+    let dir = std::env::temp_dir().join(format!("evocc-native-extension-{}", std::process::id()));
     std::fs::create_dir_all(dir.parent().unwrap()).unwrap();
     std::fs::create_dir(&dir).unwrap();
     let names = [
