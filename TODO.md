@@ -308,8 +308,9 @@ add dependencies, crates or configuration systems. Do not push.
   October 7 entry check: P03 is closed. The existing C-HIR command calls main
   without arguments and rejects `main(int argc, char **argv)` with E3007.
   It has no program-argument option. A thin command wrapper alone cannot meet
-  `evo run FILE.c -- ARGS`. Request approval for a bounded driver/interpreter
-  argument bridge before implementation; do not rewrite C source or drop ARGS.
+  `evo run FILE.c -- ARGS`. The required argument bridge is part of the explicit
+  run contract, not a new feature. Count its Rust lines in the 600-line budget;
+  preserve old invocations and do not rewrite C source or drop ARGS.
   Reproducer: `.evidence/diagnostics/20261007/evo-run-arguments-red.log`.
   Exit: verb tests, actual cJSON build receipt, tested book commands, release
   packaging and full workspace gate pass. Budget: 600 lines for the binary and

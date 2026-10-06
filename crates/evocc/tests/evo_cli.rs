@@ -1,0 +1,194 @@
+//! Exercise user commands through their installed process boundary.
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct Scratch(PathBuf);
+impl Scratch {
+    fn new() -> Self {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "evocc-user-command-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir(&path).unwrap();
+        Self(path)
+    }
+    fn source(&self, text: &str) -> PathBuf {
+        let path = self.0.join("input.c");
+        std::fs::write(&path, text).unwrap();
+        path
+    }
+}
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn evo(args: &[&str]) -> Output {
+    let compiler = PathBuf::from(env!("CARGO_BIN_EXE_evocc"));
+    Command::new(compiler.with_file_name("evo"))
+        .args(args)
+        .env("EVOCC", compiler)
+        .env(
+            "EVOCC_PROOF_CHECKER",
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lean/.lake/build/bin/evoir-sem"),
+        )
+        .output()
+        .expect("the evo binary must be built beside evocc")
+}
+
+fn success(output: &Output) {
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn each_public_verb_has_help() {
+    for verb in ["run", "check", "explain", "prove", "build", "version"] {
+        let output = evo(&[verb, "--help"]);
+        success(&output);
+        assert!(String::from_utf8_lossy(&output.stdout).contains(&format!("evo {verb}")));
+    }
+    assert!(!evo(&["unknown"]).status.success());
+}
+
+#[test]
+fn run_returns_the_program_status_and_preserves_arguments() {
+    let temp = Scratch::new();
+    let input = temp.source("int main(void) { return 7; }");
+    let output = evo(&["run", input.to_str().unwrap()]);
+    assert_eq!(
+        output.status.code(),
+        Some(7),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stdout.is_empty());
+    let input = temp.source(
+        r#"int main(int argc, char **argv) {
+        if (argc != 3 || !argv[0] || !argv[0][0] || argv[argc] != 0) return 1;
+        if (argv[1][0] != 'a' || argv[1][1] != ' ' || argv[1][2] != 'b') return 2;
+        if (argv[2][0] != 0) return 3;
+        argv[1][0] = 'z'; return argv[1][0] != 'z';
+    }"#,
+    );
+    success(&evo(&["run", input.to_str().unwrap(), "--", "a b", ""]));
+}
+
+#[test]
+fn check_reports_undefined_behavior_but_not_a_nonzero_return() {
+    let temp = Scratch::new();
+    let input = temp.source("int main(void) { return 7; }");
+    success(&evo(&["check", input.to_str().unwrap()]));
+    temp.source("int main(void) { int zero = 0; return 1 / zero; }");
+    let output = evo(&["check", input.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("error[E3002]"), "{error}");
+    assert!(error.contains("-->") && error.contains('^'), "{error}");
+}
+
+#[test]
+fn explain_prints_the_tested_page() {
+    let output = evo(&["explain", "E3002"]);
+    success(&output);
+    let expected = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args(["--explain", "E3002"])
+        .output()
+        .unwrap();
+    assert_eq!(output.stdout, expected.stdout);
+    assert_eq!(evo(&["explain", "E9999"]).status.code(), Some(1));
+}
+
+#[test]
+fn version_reports_the_underlying_compiler() {
+    let output = evo(&["version"]);
+    success(&output);
+    let expected = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert_eq!(output.stdout, expected.stdout);
+}
+
+#[test]
+fn prove_checks_all_definitions_and_keeps_the_record() {
+    let temp = Scratch::new();
+    let input =
+        temp.source("int add(int a, int b) { return a+b; } int main(void) { return add(1,2); }");
+    let assembly = temp.0.join("out.s");
+    let output = evo(&[
+        "prove",
+        input.to_str().unwrap(),
+        "-o",
+        assembly.to_str().unwrap(),
+    ]);
+    success(&output);
+    let text = String::from_utf8(output.stdout).unwrap();
+    let record = text
+        .trim()
+        .strip_prefix("checked from typed Core source to final assembly text: ")
+        .expect("one success line must identify the retained record");
+    let value = std::fs::read_to_string(record).unwrap();
+    assert!(value.contains("CHECKED_TO_FINAL_ASSEMBLY"));
+    assert!(value.contains("add") && value.contains("main"));
+    assert!(std::fs::metadata(&assembly).unwrap().len() > 0);
+    // The record is a product outside our input scratch directory.
+    let record_dir = Path::new(record).parent().unwrap();
+    std::fs::remove_dir_all(record_dir).unwrap();
+}
+
+#[test]
+fn build_runs_the_real_cjson_makefile_and_records_compilation() {
+    let temp = Scratch::new();
+    let source =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.build/ladder/cjson/cJSON-1.7.19");
+    assert!(
+        source.is_dir(),
+        "the pinned cJSON source is required for this acceptance test"
+    );
+    let project = temp.0.join("cjson");
+    assert!(Command::new("cp")
+        .arg("-R")
+        .arg(&source)
+        .arg(&project)
+        .status()
+        .unwrap()
+        .success());
+    assert!(Command::new("make")
+        .arg("clean")
+        .current_dir(&project)
+        .output()
+        .unwrap()
+        .status
+        .success());
+    let output = evo(&[
+        "build",
+        project.to_str().unwrap(),
+        "--",
+        "all",
+        "test",
+        "-j2",
+    ]);
+    success(&output);
+    let receipt = std::fs::read_to_string(project.join("evo-build-receipt.json")).unwrap();
+    for field in [
+        "version",
+        "target",
+        "sources",
+        "warnings",
+        "failing_command",
+        "exit_code",
+    ] {
+        assert!(receipt.contains(&format!("\"{field}\"")), "{receipt}");
+    }
+    assert!(receipt.contains("cJSON.c"), "{receipt}");
+    assert!(receipt.contains("\"exit_code\":0"), "{receipt}");
+    assert!(project.join("evo-build.log").is_file());
+}
