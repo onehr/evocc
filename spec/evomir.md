@@ -1,147 +1,690 @@
 # EvoMIR Specification
 
-**Revision 0.64** | **Authoritative reference** | **2026-10-03**
+**Revision 1.0.0** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
 
-Control-selection addendum (revision 0.64, N03d C5): `--isel-opt=controls`
-is OFF by default. After existing demand DCE and SSA destruction, before
-allocation, the target selector admits only these existing-operation idioms:
+## Status and scope
 
-- A terminal adjacent integer `Cmp`/`CmpImm`, `Cset`, then `Cb` or bit-zero
-  `Tb` of that Boolean may become the same compare followed by `BCond`.
-  Use the original condition for a nonzero branch and its inverse for zero;
-  preserve successors and edge arguments. The Boolean and flags must each
-  have exactly one definition and one use across the complete function.
-- Five adjacent instructions testing `lo <= x` and `x <= hi`, each through
-  `CmpImm`/`Cset`, followed by their Boolean AND (either input order), may
-  become `SUB tmp,x,#lo; CMP tmp,#(hi-lo); CSET result,LS`. For zero `lo`,
-  omit SUB. Require the same 32/64-bit source, matching signed GE/LE or
-  unsigned HS/LS predicates, and `0 <= lo <= hi <= imm12_max`. Both removed
-  Booleans and both flags have one definition/use; classes match their
-  operations. Reuse the first removed Boolean identity at the source width
-  as the private subtraction temporary; its old references all disappear.
-  The final result retains its original class. Recompute use counts before
-  applying the terminal-branch idiom to this new result.
+This document specifies EvoMIR, the machine intermediate representation of
+EvoCC, and the steps from extracted EvoIR to AArch64 assembly text:
+lowering, SSA destruction, register allocation, frame layout and emission. A
+backend step that does not respect it is unsound, whatever its measured
+results.
 
-The interval identity uses unsigned modular subtraction at machine width;
-negative signed inputs and wrapped values below `lo` fail its unsigned bound.
-This inserts no source-C arithmetic or UB obligation. Other comparisons,
-endpoints, Boolean operations, intervening instructions and CFG patterns are
-not admitted. Flags still have one adjacent consumer; no flags cross edges.
-The unchanged allocator and independent allocation verifier consume the
-selected function. Protected kernel/frame-pointer profiles suppress C5.
-There is no new opcode, interpreter, ABI, effect or registry semantics.
-Canonical selection order is `constants,local,extensions,controls`; old option
-spellings and all-OFF output remain unchanged. This is opt-in finite validation,
-not an EqSat/SMT proof or default admission.
+**Normative and informative text.** Sections 1 to 10 and Appendix A are
+normative; "must" states a requirement and "can" a permission. Paragraphs
+that start with "Example" or "Informative", and references to tests,
+fixtures, probes and measurements, are informative: they identify evidence
+and add no requirement.
 
-Repeated-selection addendum (revision 0.63, N03d C3): `--isel-opt=extensions`
-is OFF by default. After ordinary lowering and before SSA destruction and
-allocation, the target selector may reuse an earlier exact integer extension
-in the same machine block. The target pattern table admits only existing
-`Extend` forms, `Bfx` with zero low index and a proper sub-register width, and
-AND-immediate with a nonzero low contiguous mask narrower than its register.
-Keys preserve opcode, sign, source identity/class, destination class, width
-and every extract/mask parameter. No value-range inference, extension
-composition or other algebra is admitted.
+**Formal semantics of the checked subset.** The Lean checkers of Section 9.3
+accept a subset of EvoMIR: general-register scalar code under the Linux ABI
+profile, the checked UB-check profile and all optional variants OFF. For
+that subset, these Lean definitions are the formal semantics:
 
-Source and result identities must have unique definitions; a removed result
-may have only local non-edge uses. Replace those uses directly by the earlier
-retained result. Clear expression availability at block boundaries and every
-non-discardable instruction, including calls, assembly, memory and strict FP.
-Keep the original instruction order and flags adjacency. The ordinary SSA
-destruction, allocation and independent allocation verifier then run on the
-selected virtual function. No ABI, opcode, interpreter or effect meaning
-changes. All existing protected-profile restrictions apply.
+| Stage | Lean definitions |
+|---|---|
+| EvoMIR before allocation | `lean/EvoIR/Machine.lean` |
+| Allocated EvoMIR | `lean/EvoIR/Alloc/Syntax.lean`, `lean/EvoIR/Alloc/Semantics.lean` |
+| Frame, instruction templates and assembly text | `lean/EvoIR/Asm/` |
 
-The duplicate-free selection list has canonical order
-`constants,local,extensions`; old options and OFF output are unchanged.
-Existing producer-only selection comments report selected/declined sites.
-This is bounded opt-in MIR/native validation, not a B1/B6 proof or default
-admission. N07's frozen negative SMT qualification is not upgraded.
+The prose is a reading of those definitions. Where the prose and the Lean
+definitions differ on that subset, the Lean definitions win, and the
+difference is a defect in this document. Outside that subset, this document
+is the authority.
 
-Allocation-policy addendum (revision 0.62, N03c T3): an explicit optional
-same-location reload cleanup follows successful allocation, before logical
-spill-slot compaction. Section 7 defines its conservative validity boundary.
-No instruction, memory, effect, interpreter or default semantics change.
+**Related specifications.** `spec/evoir.md` (cited as "EvoIR Section N")
+governs everything above the extraction boundary and wins where the two
+meet. `spec/target.md` governs the target tables in `targets/aarch64/`: they
+hold the values of register sets, operand roles, encodings, ABI facts,
+profiles, patterns and costs, and this document states what those values
+mean. `spec/verification.md` is the contract of the checkers of Section 9.
 
-Encoding-fact addendum (revision 0.61, N07 E1): the existing immediate and
-offset facts now come from `targets/aarch64/encodings`, generated into the
-selector, validator and emitter. This migrates facts without changing selection,
-frame policy, relaxation margins or instruction/interpreter semantics. The
-validator now enforces the existing `BinaryImm` domain for all forms, not only
-logical operations: ADD/SUB use unshifted imm12, shifts require a count below
-the machine-register width, and multiply/divide have no immediate form.
+**Implementation.** The crate `crates/evocc-mir` implements this document and
+names it as its contract. A difference between the crate and a normative
+sentence is a defect; the Revision section gives the change procedure.
 
-Allocation-policy addendum (revision 0.60, N03c T2):
-`--regalloc-opt=copy-hints` optionally prefers free same-class copy-peer
-locations under Section 7. It defaults OFF and changes no instruction,
-interpreter or proof semantics. Protected profiles retain the original policy.
+**Machine-read parts.** Code reads these parts. They must keep their shape:
 
-Local-emission addendum (revision 0.58, N03d C2): `--isel-opt=local` is an
-optional composition of adjacent allocated instructions, OFF by default.
-`constants,local` requests both selection slices; the duplicate-free list has
-that canonical order regardless of input order. All C1 protected-profile
-restrictions apply. The original MIR is still independently allocation-verified;
-neither MIR semantics, interpreter behavior nor the EqSat domain changes.
+| Part | Reader |
+|---|---|
+| Revision line of this header | `tools/render-status.py` |
+| Pattern table between the `aarch64-patterns` markers (Section 5.6) | Generated by `tools/generate-target.py` from `targets/aarch64/patterns`; checked by its `--check` mode and `tools/tests/test_generate_target.py` |
+| Encoding table between the `aarch64-encodings` markers (Appendix A.1) | Generated by `tools/generate-target.py` from `targets/aarch64/encodings`; same checks |
+| The `stack.alloc` and `stack.release` rows (Section 4.6), the `alloca.dynamic` and `lifetime.end` rows (Section 5.1) and the `= stack.alloc` production (Appendix A) | `crates/evocc-mir/tests/section5_lowering.rs` |
 
-The generated pattern table admits these local sequences:
+### Terminology
 
-- W/X LSL, LSR or ASR by a constant in `[0,width)` followed by same-width
-  ADD/SUB/AND/ORR/EOR, or CMP: emit the shifted-register form. Only commutative
-  consumers may exchange operands; SUB and CMP must shift their right operand.
-- SXTB/SXTH/SXTW/UXTB/UXTH followed by ADD/SUB or CMP: emit the matching
-  extended-register form with zero additional shift. The extension reads W;
-  the result and consumer widths agree; SXTW is admitted only for X.
-- Same-width MUL followed by ADD, or SUB with the product on the right:
-  emit MADD/MSUB. No reassociation or signed-overflow obligation is removed.
-- X ADD followed by a nonvolatile scalar load/store at offset zero: emit
-  register-offset addressing. An immediately preceding single-use X LSL can
-  supply the index if its shift is zero or the access-size logarithm. No
-  writeback, atomic/SIMD fusion or strict-alignment byte expansion is admitted.
+| Term | Meaning |
+|---|---|
+| virtual register | An EvoMIR value `%vN` before allocation, with one class and one definition. |
+| physical register | A machine register, by number, after allocation: `x0` to `x30`, `v0` to `v31`. |
+| class | The kind of a virtual register: `gpr32`, `gpr64`, `simd32`, `simd64`, `simd128` or `flags` (Section 2.2). |
+| view | The spelling of a physical register at one width: `w`, `x` for a general register; `b`, `h`, `s`, `d`, `q`, `v` for a SIMD register. |
+| fixed object | The frame storage of one `frame.slot` origin (Section 6.8). |
+| spill slot | A frame location that holds a spilled virtual register: 8 bytes, 16 for `simd128`. |
+| parallel copy | A set of moves that reads every source before it writes a destination (Section 7.1). |
+| clobber | A physical register, or the flags, that an instruction writes and that no live value can occupy across it. |
+| frame record | The saved pair of `x29` and `x30`. |
+| frame | The stack storage of one activation: the frame record and the local area below it (Section 6.8). |
+| prologue, epilogue | The instructions that emission writes at entry and before each return. They are not EvoMIR instructions. |
+| template | Assembly text with operand positions that emission fills from the allocation: the fixed text of an allocated form, or the text of an `asm` (Section 8.3). |
+| ABI profile | Linux or Darwin: one set of calling-convention facts and assembly syntax (Section 1.3). |
+| UB-check profile | `checked` or `unchecked`: how `ub.assume` lowers (Section 5.2). |
+| kernel profile | The project choices in `targets/aarch64/profile-kernel` (Section 6.1). |
+| optional variant | A behavior that an option selects and that is OFF by default (Section 1.4). |
+| protected function | A function for which every optional variant is suppressed (Section 1.4). |
 
-Every omitted temporary must have exactly one definition and one use across
-the whole allocated function, counting block arguments, terminators, spills
-and assembly operands. A remaining input originally read after an omitted
-write must not occupy that write's physical register. The sequence crosses no
-intervening instruction, effect, label or guard. Preserve all live value bits,
-the original CMP's flags (otherwise preserve NZCV), and exactly the original
-memory access and alignment. Dead temporary contents need not agree; do not
-misstate this as whole-register-file identity. No scratch or access is added.
-Rows and fixed instruction costs come from the target tables. Prefer the first
-admitted strictly smaller sequence, including the three-instruction indexed
-form before a two-instruction arithmetic form. An unadmitted sequence is
-emitted exactly as before. Native-only assembly comments report selected and
-declined sites by pattern; they grant no validation or proof admission.
+## 1. Purpose and Position
 
-This is bounded, opt-in native validation, not an ISA proof. N07's model/SMT
-obligations and admission to default code generation remain separate.
+EvoMIR exists so that backend engineering can be conventional. The e-graph
+decides *which* semantics a function has; EvoMIR decides *how a machine
+computes it*, with explicit registers, explicit frame storage and explicit
+calling-convention constraints, and nothing else. The target is AArch64
+user-level code: the general-register scalar subset plus the integer-vector,
+floating-point, atomic and assembly forms of Section 4. EvoMIR sits between
+the extracted EvoIR of a function and the assembly text for the platform
+assembler. EvoMIR representations do not enter e-classes.
 
-Constant-materialization addendum (revision 0.57, N03d C1): the optional
---isel-opt=constants changes only emission of existing GPR MovImm instructions.
-Its default is OFF. The exact-input assembly adapter admits the same option;
-the assembly header records the request. Kernel markers (general-registers-only,
-system-register stack guard or nonzero patchable entry) and explicit frame-pointer
-requests suppress it, just as the section-11 codegen plan requires. SIMD constants,
-relocations, inline-assembly text and emitter-internal scratch constants retain
-their existing paths.
+### 1.1 Invariants
 
-The operation's value and effects do not change: write the immediate modulo
-the declared W/X width to the destination; a W write also clears the upper
-32 bits of its X register. Preserve NZCV, every other register and all memory.
-This is the exact_bits_zero_upper_w claim in the generated table below.
-MOVZ initializes with zeros, MOVN with the complemented shifted halfword,
-and each MOVK replaces one halfword. ORR uses the width-matched zero register
-and an admitted logical immediate, excluding zero and all ones.
+- **Semantics are fixed before EvoMIR sees them.** Two runs over the same
+  EvoIR text and options produce the same EvoMIR and assembly, byte for byte.
+- **Undefined behavior stays explicit.** An `ub.assume` lowers to a checked
+  trap under the default UB-check profile and is never dropped silently.
+- **What is not lowered fails closed.** An EvoIR form that this document
+  does not lower gets a diagnostic of Section 10 at the instruction, and the
+  driver produces no assembly for that function.
 
-Selection starts with the exact legacy MOVZ/MOVK sequence. Candidate order
-and admission come from the generated target pattern table; instruction byte
-costs come from targets/aarch64/costs. A candidate replaces the incumbent only
-if strictly smaller. Equal-cost candidates never displace the legacy spelling.
-Within a wide-move candidate, initialize the lowest halfword different from
-the fill value, then patch the remaining differing halfwords in increasing
-order. Zero and all-ones each use one initializing instruction. No scratch
-register or memory literal pool is introduced. These are three bounded
-sequence families, not globally optimal constant synthesis.
+The invariant of EvoIR Section 10.2 governs every EvoMIR form: it implements
+the abstract semantics of its EvoIR source for **all defined executions**. A
+machine instruction can differ from EvoIR outside defined executions (a shift
+by an out-of-range amount, a wrapping address computation, an unmasked
+comparison) only when an EvoIR obligation that the program has already
+asserted makes the difference unobservable. Sections 3 and 5 name each case.
+
+### 1.2 Pipeline
+
+The native path processes each function in this order:
+
+1. Lowering (Section 5) to block-argument SSA form; validation (Section 4.7).
+2. The optional `extensions` selection variant (Section 5.5).
+3. SSA destruction and dead-computation removal (Section 7.1).
+4. The optional `controls` selection variant (Section 5.5).
+5. Register allocation (Section 7) with the optional allocation variants.
+6. The allocation verifier (Section 9.2). A refusal stops the function.
+7. Frame layout (Section 6) and emission (Section 8), with the optional
+   `constants` and `local` selection variants and the frame variants.
+
+### 1.3 ABI profiles and targets
+
+EvoMIR has two ABI profiles of the AArch64 procedure call standard (AAPCS64);
+Section 6.1 lists their differences.
+
+| ABI profile | Platform | Object format | ABI table |
+|---|---|---|---|
+| Linux | `aarch64-unknown-linux-gnu` | ELF | `targets/aarch64/abi-linux` |
+| Darwin | arm64 macOS | Mach-O | `targets/aarch64/abi-darwin` |
+
+The C driver emits the Linux ABI profile only: `--target` accepts only
+`aarch64-unknown-linux-gnu` (`parse_target` in `crates/evocc/src/main.rs`).
+The backend library and its tests cover both ABI profiles, and the
+exact-input adapter `evo-ir-asm` accepts `linux-aarch64` and `darwin-arm64`.
+The library entry points that take no target (`lower_module`,
+`compile_module`, `frame_of`, `emit_module`) use the Darwin ABI profile.
+
+### 1.4 Optional variants
+
+| Option | Names, in canonical order | Section |
+|---|---|---|
+| `--isel-opt=LIST` | `constants`, `local`, `extensions`, `controls` | 5.5 |
+| `--regalloc-opt=LIST` | `copy-hints`, `reload-reuse` | 7.6 |
+| `--frame-opt=LIST` | `paired-saves`, `shared-epilogue`, `leaf-frames` | 6.13 |
+
+Every optional variant is native-only and OFF by default; without the
+option, the assembly and the object bytes do not change. `LIST` is a
+nonempty comma-separated list; an unknown or duplicate name is refused, each
+option occurs at most once, and the C driver refuses it with `--check`. The C
+driver and `evo-ir-asm` accept the same lists. The assembly header records
+the canonical request (`// evocc-native-isel=`, `// evocc-native-regalloc=`,
+`// evocc-native-frame=`), not an eligibility or a benefit. A variant changes
+no EvoIR, instruction meaning, interpreter behavior, ABI or effect, and the
+allocation verifier checks the result of every variant that runs before or
+during allocation. The comments `// evocc-local-selected NAME=N` and
+`// evocc-local-declined NAME/REASON=N` are informative.
+
+**Protected functions.** A function is protected when it is compiled with an
+explicit frame-pointer request (`-fno-omit-frame-pointer`), a leaf-frame-pointer
+request (`-mno-omit-leaf-frame-pointer`), `-mgeneral-regs-only`, a
+system-register stack guard, or a nonzero patchable entry. Every optional
+variant is suppressed for a protected function. The kernel build uses these
+conditions, and the variants are not validated there.
+
+## 2. Values, Registers and Classes
+
+### 2.1 Blocks and virtual registers
+
+An EvoMIR function is a list of blocks in EvoIR source order, the entry block
+first, each ending in a terminator. Before allocation, operands are virtual
+registers in block-argument SSA form (EvoIR Section 2); SSA destruction
+(Section 7.1) removes block arguments. After allocation, operands are
+physical registers, spill slots and frame offsets.
+
+### 2.2 Classes
+
+| Class | Holds | View |
+|---|---|---|
+| `gpr32` | `bits<N>` with `1 <= N <= 32`; an integer vector of 1, 2 or 4 bytes | `w` |
+| `gpr64` | `bits<N>` with `33 <= N <= 64`; every pointer; each half of a `bits<128>` | `x` |
+| `simd32` | `f32` | `s` |
+| `simd64` | `f64`; an 8-byte integer vector | `d` |
+| `simd128` | `f128` (Linux ABI profile only); a 16-byte integer vector; AES operands | `q` |
+| `flags` | The NZCV result of a comparison or a flag-setting form | none |
+
+The general classes and the SIMD classes are views of two register files.
+The allocator assigns one physical register per virtual register, and the
+class selects the view. A `flags` value gets no physical register: Section
+2.4 keeps its live range between two adjacent instructions.
+
+### 2.3 128-bit integers
+
+A `bits<128>` value has no class of its own. Lowering represents it as **two
+`gpr64` virtual registers**, the low half first, and turns every operation on
+it into a sequence over the halves (Section 5.1). The allocator, the verifier
+and the interpreter see only 64-bit registers; the pair is a fact of lowering
+and of the calling convention (Section 6.5). Widths from 65 to 127 and above
+128 are not lowered (`E4003`).
+
+### 2.4 Flags adjacency
+
+A `flags` value can be consumed only by the instruction that immediately
+follows its producer in the same block, and nothing between them can write
+the flags. A `flags` value has exactly one consumer and never crosses an
+edge. The validator and the allocation verifier check this rule.
+
+### 2.5 Physical registers
+
+The general bank is `x0` to `x30`; the SIMD bank is `v0` to `v31`, numbered
+from 64 in the target tables. `targets/aarch64/regfile` holds these sets:
+
+| Set | Registers |
+|---|---|
+| General registers that the allocator assigns, in order | `x0` to `x15`, then `x19` to `x28` |
+| General registers for a value live across a call | `x19` to `x28` |
+| SIMD registers that the allocator assigns, in order | `v0` to `v7`, then `v16` to `v29` |
+| SIMD registers for a value live across a call | none: such a value is spilled |
+| Reserved, never assigned | `x16`, `x17`, `x18`, `x29`, `x30`, `v8` to `v15`, `v30`, `v31` |
+
+`x16`, `x17`, `v30` and `v31` are scratch registers for emission sequences;
+SSA destruction pins its cycle scratch to `x16` (`v30` for SIMD) for one
+parallel copy (Section 7.1), and no other value occupies them. `x18` is the
+platform register under both ABI profiles. `x29` is the frame pointer and
+`x30` the link register. `v8` to `v15` are not assigned, because a callee
+preserves only their low 64 bits. `sp` is not a general register;
+`xzr`/`wzr` is an operand, never a destination. An `asm` operand can bind a
+named register only in the assigned sets or `x30`.
+
+### 2.6 Floating point
+
+**Scalar operations.** `fp.OP.f32` and `fp.OP.f64` keep the operation and the
+format of EvoIR Section 3.13. Constants use exact bit moves from a general to
+a SIMD register. Arithmetic uses FADD, FSUB, FMUL, FDIV and FNEG; conversions
+use FCVT, SCVTF, UCVTF, FCVTZS and FCVTZU; comparisons use FCMP and write a
+`gpr32` `bits<1>` directly. An invalid raw integer conversion yields zero, and
+the source UB obligations remain. Spills and copies keep the exact width.
+
+**Floating environment.** The baseline requires FPCR = 0 before an
+environment-dependent operation; when the check fails, the code executes
+`brk #3064` and never writes FPCR. `fp.env.check` is the explicit check. It
+precedes the 128-bit conversion helpers `__float[un]ti{sf,df}` and
+`__fix[uns]{sf,df}ti`, which are ordinary ABI-visible calls.
+
+**Strict operations.** `fp.strict.OP` keeps its difference from `fp.OP`
+through text, interpretation, allocation and emission, and the validated
+EvoIR world order fixes its position. FP admission is a three-level must
+analysis (unchecked, strict controls, fixed controls): fixed admission
+implies strict admission, and calls and opaque assembly invalidate both.
+Strict checks permit only the rounding-mode bits beyond FPCR = 0 and never
+write FPCR or FPSR; `fp.env.check.strict` admits dynamic rounding. Ordered
+strict comparisons use FCMPE; strict equality and the `quiet_olt`,
+`quiet_ole`, `quiet_ogt`, `quiet_oge` variants use FCMP. Explicit FMA uses
+FMADD, and no multiply-add contraction is permitted. A strict conversion to
+an integer keeps its semantic width (`fp.strict.to_signed.i8.f64`; no width
+means the register width), returns zero and raises INVALID for an invalid
+input, and masks a narrow result after the check. The interpreter carries the
+FP state in its world snapshot.
+
+**FP helper calls.** `bl.fixed_fp` and `bl.strict_fp` require a known helper
+name and its exact signature, and their admission even without an explicit
+check. A fixed helper implements pure IR under round-to-nearest-even; a
+strict helper observes dynamic rounding and accumulates status; an ordinary
+`bl` observes the actual environment, even when its symbol matches a helper.
+All three keep the physical ABI and the call clobbers. Invalid raw
+FP-to-integer inputs are replaced with zero before a call.
+
+**Binary128.** `f128` is Linux only; the Darwin ABI profile refuses it and the
+strict 128-bit conversions (`E4009`). It uses `simd128`, `q` accesses,
+full-width spills and copies, and exact two-word `vec.pack`/`vec.extract` for
+constants, negation and representation conversion. Arithmetic, FMA and
+conversions are ordinary ABI calls of `__addtf3`, `__subtf3`, `__multf3`,
+`__divtf3`, `fmal`, `__extend{sf,df}tf2`, `__trunctf{sf,df}2`,
+`__float[un]{si,di,ti}tf` and `__fix[uns]tf{si,di,ti}`, never quad opcodes.
+Comparisons use the equality/unordered and ordered helper families and test
+signs; quiet ordered predicates first test unordered status, replace
+unordered inputs with zero, and mask the result to false.
+
+*Informative.* Linux helper qualification:
+`docs/notebook/strict-floating-implementation-20260927.md`.
+
+### 2.7 Integer vectors and AES
+
+`vec.pack.N.B (args)` and `vec.extract.N.B (src, index)` keep the lane width
+`N` and the size `B` in bytes: `B` = 8 uses `simd64`, 16 uses `simd128`, and
+1, 2 or 4 uses `gpr32`. Emission expands them to lane moves and indexed
+selection. An invalid index traps with `E3011` before the hardware masks it.
+Wider vectors are local objects with scalarized operations.
+`crypto.aese`, `crypto.aesd`, `crypto.aesmc` and `crypto.aesimc` operate on
+`simd128`. SIMD classes are refused under `-mgeneral-regs-only` (`E4002`).
+
+## 3. Sub-width Values
+
+### 3.1 Normalization
+
+EvoIR values of width `N < 32` live in `gpr32` registers with the bits above
+`N` **unspecified** (`N < 64` in `gpr64` likewise). The EvoMIR interpreter
+models those bits as unspecified, not as zero: an implementation that fills
+them from a seeded source conforms, and a lowering that reads them is
+caught. An instruction reads only the low `N` bits of such a value, except
+that these operations need a normalized form, which the lowering inserts:
+
+| Operation on `bits<N>` below the register width | Form needed | Inserted before |
+|---|---|---|
+| `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `trunc` | none: the low `N` bits of the result depend only on the low `N` bits of the operands | nothing |
+| `icmp.eq`, `icmp.ne`, `lshr`, `udiv`, `urem`, `icmp.ult`, `icmp.ule`, `zext`, `divisor_nonzero` | zero-extended to the register width | `and` with the mask `2^N - 1` (`uxtb`/`uxth` when `N` is 8 or 16); both operands of a comparison |
+| `ashr`, `sdiv`, `srem`, `icmp.slt`, `icmp.sle`, `sext`, `signed_div_rem_no_overflow` | sign-extended to the register width | `sbfx` from bit `N - 1` (`sxtb`/`sxth` when `N` is 8 or 16); both operands of a comparison |
+| shift amount operand `bits<M>` | the low `M` bits are the amount | `and` with `2^M - 1` when `M` is below the register width |
+| a value stored with `store` of width `N` | none: the store writes `ceil(N / 8)` bytes, and the bits above `N` in the last byte are those of the value, which EvoIR Section 5 defines as the representation | nothing |
+| `cond_br` on `bits<1>` | bit 0 only | nothing: `tbnz`/`tbz` on bit 0 |
+
+A comparison reads every bit of the register, so `icmp.eq` and `icmp.ne`
+need the zero extension: without it, `trunc.bits<3>` of `0xffffffff`
+compared with 7 would answer 0 where EvoIR answers 1.
+
+`bits<1>` lives in a `gpr32` with bit 0 significant. A comparison produces it
+with `cset`, which writes 0 or 1 into the whole register. A `bits<1>` that
+`trunc` or `and` produces has unspecified upper bits; the table makes that
+safe.
+
+### 3.2 Shift amounts
+
+A 32-bit machine shift masks its amount modulo 32 and a 64-bit one modulo 64,
+never modulo the EvoIR width `N` of a narrower value. EvoIR's raw shifts are
+total and answer 0 (or the sign fill) for an amount of `N` or more, so the
+machine and EvoIR differ there. The difference is unobservable in a defined
+execution, because the front end asserts `shift_count_defined` before every
+shift (EvoIR Section 6). The lowering inserts nothing beyond the mask of
+Section 3.1. This is the first admissible difference of Section 1.1.
+
+### 3.3 Immediate operand selection
+
+Lowering can select the immediate form of an existing instruction for a known
+constant operand. This is instruction selection, not an EvoIR or EqSat
+rewrite: every obligation, evaluation and effect stays, and a constant
+definition stays until dead-computation removal proves it unused. Narrow
+values, `bits<128>` pairs and other operands keep their register paths.
+
+- **Shifts.** A directly known count selects the immediate `lsl`, `lsr` or
+  `asr` when the count, decoded at its own width, is below the width of the
+  shifted value. A count is never reduced modulo the machine width.
+- **Addition and subtraction** of full-register `bits<32>`/`bits<64>`: a
+  right operand in `[0, 4095]` selects the unshifted 12-bit immediate.
+  Addition can exchange its evaluated operands; subtraction cannot.
+- **AND, OR, XOR** of full-register `bits<32>`/`bits<64>`: a known operand on
+  either side selects the logical immediate when it is a valid mask, that is
+  a power-of-two element of 2 to `N` bits with one nonempty, nonfull cyclic
+  run of ones, repeated to the width `N`. Facts come from literal constants
+  and total full-width bitwise constant expressions (C's complement is XOR
+  with all ones).
+- **Comparisons** of full-register `bits<32>`/`bits<64>`: a known operand in
+  `[0, 4095]` selects `cmp rn, #imm12`. When the left operand becomes the
+  immediate, the relation is reversed (SLT/SLE become GT/GE, ULT/ULE become
+  HI/HS). A larger value is not aliased to a shifted encoding.
+- **Null pointers.** For pointer EQ and NE, an operand directly defined by
+  `ptr.null` selects `cmp rn, #0` on either side. Null facts are never
+  inferred from integer addresses, symbols, casts or nonlocal definitions.
+
+`ptr.null` lowers to `mov #0`. A typed `str.p` of that zero stores a null
+pointer fragment in the interpreter, also for function pointers, volatile
+stores and typed atomic operands. A nonzero raw integer carries no
+provenance, and an ordinary integer store of zero creates raw bytes only.
+
+## 4. Instruction Set
+
+An EvoMIR instruction names an AArch64 operation, its operands and the class
+of each definition, or it is a pseudo-form of Section 4.6, which emission
+expands. The forms of this section are exactly the admitted forms. Each row
+states the semantics that the EvoMIR interpreter (Section 9.1) implements, so
+that the tables are executable. Appendix A gives the exact text.
+
+Conventions: `.W` is the width suffix `.w` or `.x`. The width suffix selects
+the operation width and the view of every operand, whatever their classes
+are. `rd` is a definition; `rn`, `rm`, `ra`, `rt` are uses; `f` is a `flags`
+virtual register.
+
+### 4.1 Data movement
+
+| Form | Semantics |
+|---|---|
+| `mov rd, rn` | `rd := rn`; both operands have the same class. |
+| `mov rd, #imm` | `rd := imm`, any 32- or 64-bit constant for a general class; only 0 for a SIMD class. |
+| `adrp rd, @g@PAGE` and `add rd, rn, @g@PAGEOFF` | `rd :=` the address of the global `g`. `@FUNCPAGE`/`@FUNCPAGEOFF` name a function symbol, because EvoIR keeps globals and functions in two tables that can share a name. Section 8.1 gives the emitted spelling. |
+| `adr rd, ^bN` | `rd :=` the address of the label of block `N`. |
+| `ldrb`, `ldrh`, `ldr.w`, `ldr.x`, `ldrsb`, `ldrsh`, `ldrsw rd, [rn, #off]` | `rd :=` 1, 2, 4 or 8 bytes at `rn + off`, zero- or sign-extended as the mnemonic says. `off` is a scaled unsigned 12-bit or a signed 9-bit immediate. |
+| `ldr.p`, `ldr.pf` / `str.p` | An 8-byte load of an object pointer or a function pointer, or a store of a pointer. Emitted as `ldr`/`str`. The interpreter reconstructs provenance as EvoIR Sections 5.3 and 5.4 do and reports `E3013` on a partial shadow. |
+| `strb`, `strh`, `str.w`, `str.x rt, [rn, #off]` | 1, 2, 4 or 8 bytes at `rn + off` `:=` the low bytes of `rt`. |
+| `ldr.s`, `ldr.d`, `ldr.q` / `str.s`, `str.d`, `str.q` | Load or store of a `simd32`, `simd64` or `simd128` value. |
+| `ldp rd1, rd2, [rn, #off]` / `stp rt1, rt2, [rn, #off]` | Two `gpr64` registers at `rn + off` and `rn + off + 8`, optional writeback `!`. Lowering uses them for a `bits<128>` access at alignment 8 or more and for a 128-bit `va_arg`. Not single-copy atomic. |
+| ` volatile` marker | The access appears in the volatile trace (EvoIR Section 4.3) and is never merged with a neighbor. |
+| ` [align=N]` suffix on a scalar load or store | The alignment that the EvoIR access guard proves, a power of two; without it, natural alignment. It changes only strict-alignment emission (Section 8.9). |
+
+### 4.2 Atomic memory operations
+
+`atomic.load.K order [volatile] [base]` and
+`atomic.store.K order [volatile] value, [base]` keep the order, the volatile
+marker, the width and the kind `K`: `b`, `h`, `w`, `x`, or the
+provenance-carrying `p` and `pf`. The base is `gpr64`; the value is `gpr32`
+for `b`, `h`, `w` and `gpr64` otherwise. The access is naturally aligned, and
+only the orders of EvoIR Section 3.8 are valid. Relaxed accesses use
+LDR/STR of the width; consume, acquire and sequentially consistent loads use
+LDAR; release and sequentially consistent stores use STLR. There is one
+access and no DMB. No pass can turn these forms into ordinary accesses,
+split or merge them, or discard their order.
+
+`atomic.rmw.OP.K order [volatile] value, [base][, expected]` returns the old
+value. `OP` is `add`, `sub`, `and`, `or`, `xor`, `nand`, `exchange` or
+`cmpxchg` (with `expected`); orders are `relaxed`, `consume`, `acquire`,
+`release`, `acq_rel` and `seq_cst`. Emission writes an exclusive loop: LDXR
+(LDAXR for an acquiring order), the operation into a scratch register, STXR
+(STLXR for a releasing order) and a retry branch; `seq_cst` adds `dmb ish`
+before and after; a failed `cmpxchg` leaves with CLREX. The result register
+must not overlap an input.
+
+### 4.3 Arithmetic and logic
+
+| Form | Semantics |
+|---|---|
+| `add.W`, `sub.W`, `mul.W rd, rn, rm` / `add.W`, `sub.W rd, rn, #imm` | Wrapping addition, subtraction, multiplication (low bits). |
+| `sdiv.W`, `udiv.W rd, rn, rm` | Signed and unsigned quotient. Division by zero yields 0, an admissible difference because `divisor_nonzero` has been asserted before (Section 5.1). |
+| `and.W`, `orr.W`, `eor.W rd, rn, rm` / `#mask` | Bitwise operations; the immediate is an encodable logical mask (Section 3.3). |
+| `lsl.W`, `lsr.W`, `asr.W rd, rn, rm` / `#imm` | Shifts; the register amount is taken modulo the width, the immediate is below it. |
+| `rd, f = adds.W rn, rm` / `subs.W` | As `add`/`sub`, and `f :=` NZCV; `V` is signed overflow, `C` the carry. |
+| `adc.W`, `sbc.W rd, f, rn, rm` | `rn + rm + C` and `rn - rm - (1 - C)`, with `C` from `f`. |
+| `f2 = adcs.W f1, rn, rm` / `sbcs.W` | The NZCV of the carry form with the carry from `f1`; the arithmetic result is discarded. |
+| `smull rd, rn, rm` | Signed 32 x 32 to 64-bit product (`gpr32` operands, `gpr64` result). |
+| `smulh rd, rn, rm` / `umulh` | High 64 bits of the signed or unsigned 64 x 64 product. |
+| `msub.W rd, rn, rm, ra` / `madd.W` | `ra - rn * rm` and `ra + rn * rm`, wrapping. |
+| `sxtb`, `sxth`, `sxtw`, `uxtb`, `uxth rd, rn` | Sign or zero extension from 8, 16 or 32 bits. |
+| `sbfx.W rd, rn, #lsb, #width` / `ubfx.W` | Bitfield extract, sign- or zero-extending. |
+| `clz.W`, `rbit.W`, `rev16.W`, `rev.W rd, rn` | Count leading zeros; bit reverse; byte reverse in each halfword; byte reverse. |
+| `f = cmp.W rn, rm` / `cmp.W rn, #imm12` | `f :=` NZCV of `rn - rm`. |
+| `f = tst.W rn, #mask` | `f :=` NZCV of `rn & mask`. |
+| `cset rd, f, cond` | `rd := 1` if `cond` holds on `f`, else 0. |
+| `csel.W rd, f, rn, rm, cond` | `rd := cond ? rn : rm`. |
+
+Condition codes: `eq`, `ne`, `lt`, `le`, `gt`, `ge` (signed), `lo`, `ls`,
+`hi`, `hs` (unsigned), `vs`, `vc` (signed overflow), `cs`, `cc` (carry). `cs`
+and `hs` mean the same, and so do `cc` and `lo`; inverting a condition keeps
+the spelling family of the source. A pointer comparison uses only `eq` and
+`ne`.
+
+### 4.4 Floating-point, vector and crypto forms
+
+| Form | Semantics |
+|---|---|
+| `fp.OP.f32` / `fp.OP.f64 (args)` | The EvoIR floating operation `OP` (Section 2.6). |
+| `fp.strict.OP[.iN].f32` / `.f64 (args)` | The strict operation; `.iN` is the semantic width of an integer result. |
+| `fp.env.check`, `fp.env.check.strict` | The floating-environment checks (Section 2.6). |
+| `vec.pack.N.B (args)` / `vec.extract.N.B (src, index)` | Integer-vector representation forms (Section 2.7). |
+| `crypto.aese`, `.aesd`, `.aesmc`, `.aesimc (args)` | The AES instructions on `simd128` operands. |
+
+### 4.5 Control
+
+Before allocation, EvoMIR has no fall-through: every conditional form names
+both successors with their argument lists.
+
+| Form | Semantics |
+|---|---|
+| `b ^target(args)` | Unconditional branch. |
+| `b.cond, ^then(args), ^else(args)` | Branch on the NZCV value of the preceding instruction. |
+| `cbz`, `cbnz rn, ^then(args), ^else(args)` | Branch on zero or nonzero. |
+| `tbz`, `tbnz rn, #bit, ^then(args), ^else(args)` | Branch on one bit. |
+| `br rn [^a(args), ^b(args), ...]` | Indirect transfer through a `gpr64` code address, with the complete ordered successor edges from EvoIR; binds only the parameters of the selected edge. An invalid target in the interpreter is `E3048`. |
+| `bl @f(args) -> results` / `blr rn(args) -> results` | Call. The argument and result registers are explicit operands, fixed for the allocator (Section 7.4). The call writes `x30` and clobbers the call-clobbered registers (Section 6.7). |
+| `bl.fixed_fp`, `bl.strict_fp @f(...)` | Call of an FP helper (Section 2.6). |
+| `ret rs...` | Return with the listed result registers. |
+| `brk #imm16` | Trap. The immediate is the decimal part of the EvoIR diagnostic of the trap or assumption reason (`trap.unreachable_reached` is `brk #3024`). |
+| `asm.goto` | The EvoIR `asm goto` terminator (Section 4.6). |
+
+A conditional branch does not name its `flags` operand: the parser recovers
+it from the preceding instruction (Section 2.4); `cset` and `csel` name it.
+After allocation, emission can use either adjacent successor as the
+fall-through and inverts the condition when only the taken successor is next.
+This changes only the spelling, never the block order, labels, arguments or
+logical edges; edges to one target keep distinct parameter-copy routes.
+
+### 4.6 Pseudo-forms and markers
+
+Emission expands these forms; the interpreter executes them as stated.
+
+| Form | Semantics |
+|---|---|
+| `frame.slot [origin=O, size=S, align=A]` | Defines a `gpr64` `:=` the address of a fresh object of `S` bytes at alignment `A`, one per dynamic execution, as EvoIR Section 3.7 requires of `alloca`. After allocation it is a fixed object (Section 6.8). Reuse of that memory by a re-executed `alloca` is sound, because EvoIR ends the lifetime of the previous object before the site is reached again. |
+| `stack.alloc rn, [origin=O, align=A]` | Defines a `gpr64` `:=` the address of a fresh uninitialized object of the runtime unsigned `gpr64` byte count `rn`, with a distinct origin `O` and a power-of-two alignment `A`. It preserves the fixed objects and the earlier live dynamic objects, with a disjoint outgoing-argument area below the new object (Section 6.11). |
+| `stack.release rn` | Ends the logical lifetime of the dynamic object at `rn`. Native emission reclaims stack bytes only for the top dynamic allocation; otherwise the bytes stay reserved until the frame is restored. It never releases an intervening live function-lifetime allocation. |
+| `mem.copy[.volatile.read\|.volatile.write\|.volatile.readwrite] [rd], [rs], #size, #align` | Copies `size` bytes from `rs` to `rd`, transferring per-byte initializedness and pointer fragments as EvoIR Section 3.8's `copy` does (identical or disjoint ranges). Emission uses load/store pairs of the largest unit (8, 4, 2 or 1 bytes) that divides `size` and `align`, unrolled up to 64 bytes and a counted loop above. These loads never report an uninitialized read: they move representation. A volatile variant admits only sizes 1, 2, 4, 8 with `align >= size` and makes exactly one load and one store. |
+| `frame.address [place]` | Defines a `gpr64`: `incoming` (the first incoming stack slot, `x29 + 16`), `gr_top` (the top of the general register save area), `saved_lr` (`[x29, #8]`), `fp` (`x29`) or `fp_N` (the frame pointer `N` saved links up the chain). |
+| `va.save [named=N]` | Requests the variadic save areas; `N` argument registers are taken by named parameters (Section 6.12). |
+| `indirect.result` | The last argument of the next call, or the last parameter of this function, is the destination of a record result above 16 bytes and travels in `x8` (Section 6.4). |
+| `spill.store rt, [slot #S]` / `rd = spill.reload [slot #S]` | Store to and reload from a spill slot. Only the allocator inserts them. |
+| `arg.incoming [slot #S]` / `arg.outgoing rt, [slot #S]` | Read of incoming and write of outgoing stack argument slot `S`. Only the allocator inserts them (Section 6.6). |
+| `asm` / `asm.goto` | The instruction of EvoIR Section 3.11, carried through unchanged: the template, the operands with their constraints, the clobbers and, for `asm.goto`, the label successors. The interpreter does not execute it (`E3021`). Emission fills the template (Section 8.3). |
+
+The prologue and the epilogue are not instructions: the interpreter's memory
+is EvoIR's object model, with no linear stack, `sp` or return address, so
+the verifiers and the native run judge them. Only emission writes forms that
+the tables do not admit: the pre-indexed `stp` of the prologue,
+`add rd, sp, #off` for a fixed object, and the register-offset accesses of
+the `mem.copy` loop.
+
+### 4.7 Validation and immediate domains
+
+`validate_module` checks EvoMIR before allocation: the flags adjacency of
+Section 2.4; operand classes (a SIMD `mov` keeps its class, a SIMD
+`mov #imm` admits only 0); the atomic orders of Section 4.2; FP helper names
+and signatures (Section 2.6); the volatile `mem.copy` sizes of Section 4.6;
+and the immediate domain of every form, with the values of
+`targets/aarch64/encodings` (Appendix A.1):
+
+- `add`, `sub` and `cmp`: an unshifted 12-bit immediate;
+- `lsl`, `lsr` and `asr`: an amount below the operation width;
+- `and`, `orr`, `eor` and `tst`: an encodable logical mask (Section 3.3);
+- `mul`, `sdiv` and `udiv`: no immediate form.
+
+Raw EvoMIR text cannot bypass these domains. Lowering output that fails
+validation is a defect of the lowering.
+
+## 5. Lowering: EvoIR to EvoMIR
+
+### 5.1 The lowering table
+
+Lowering maps each extracted EvoIR instruction to EvoMIR instructions by the
+table below, in block order, and keeps block arguments. It never reorders
+memory operations: EvoIR's `mem` and `world` tokens are consumed here, and
+the order that they imposed becomes program order. A form that is not in the
+table or in a family that Sections 2 and 4 admit is refused (Section 10).
+
+| EvoIR | EvoMIR |
+|---|---|
+| `const.bits<N>` | `mov #imm` |
+| `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `lshr`, `ashr` on `bits<N>`, `N <= 64` | the operation, with the extensions of Section 3 |
+| `sdiv`, `udiv`, `srem`, `urem`, width <= 64 | `sdiv`/`udiv`, remainders by `msub`; `divisor_nonzero` and `signed_div_rem_no_overflow` have been asserted before, which makes the machine's answers for the excluded operands unobservable |
+| `sdiv`, `udiv`, `srem`, `urem`, width 128 | the hosted path of EvoIR Appendix D: ordinary calls to `__divti3`, `__udivti3`, `__modti3` and `__umodti3`, with argument pairs in `x0:x1` and `x2:x3` and the result in `x0:x1`; allocation sees ordinary call clobbers. The hosted target supplies the libgcc or compiler-rt helpers; no freestanding dependency is supplied silently. The guards remain before the call. |
+| `divisor_nonzero %d` | zero-extend `%d` per Section 3, `cmp %d, #0`, `cset ne` |
+| `signed_div_rem_no_overflow %a, %b` | sign-extend both per Section 3; `cmp %a` with the materialized minimum of `bits<N>`, `cset ne` into `%p`; `cmp %b` with a materialized -1, `cset ne` into `%q`; `orr %p, %q` |
+| `signed_add_defined %a, %b` / `signed_sub_defined` | at the register width: `adds`/`subs` into a scratch, then `cset vc`; below it: sign-extend both operands, `add`/`sub` at the register width, and compare the result with the sign extension of its low `N` bits (`sbfx`, `cmp`, `cset eq`), because the `V` flag reports the register width, never the source width (`bits<3>`: 3 + 3 is 6, outside -4 to 3, so 0) |
+| `signed_mul_defined %a, %b` | 32-bit: `smull` of the sign-extended operands, compare with the sign extension of its low 32 bits, `cset eq`; 64-bit: `mul` and `smulh`, compare the high word with `asr` of the low word by 63, `cset eq`; any other `N`: sign-extend to the next register width and compare the product with the sign extension of its low `N` bits |
+| `shift_count_defined.<s> %x, %amt` | extend `%amt` by its declared signedness `<s>` to the register width, `cmp` with `#N`, `cset lo`: a sign-extended negative amount exceeds every bound up to 64 as an unsigned quantity, so one unsigned comparison serves both signednesses |
+| `signed_shl_defined.<s> %x, %amt` | the conjunction of four `bits<1>`: `shift_count_defined` as above; `%x` non-negative (`cmp` with `#0` after sign extension, `cset ge`); the round trip `(x << amt) >> amt == x` with an arithmetic right shift at the register width; and, below the register width, the shifted result representable in signed `bits<N>` (compare with the sign extension of its low `N` bits), as EvoIR Section 3.3.1 defines the predicate |
+| `sext`, `zext`, `trunc` | the extension of Section 3, or nothing for `trunc` |
+| `bits<128>` forms (the pair is `lo`, `hi`) | `add`: `adds lo` then `adc hi`; `sub`: `subs lo` then `sbc hi`; `mul`: `mul lo, alo, blo`, `umulh hi, alo, blo`, `madd hi, alo, bhi, hi`, `madd hi, ahi, blo, hi`; `and`, `or`, `xor`: halfwise; `zext` to 128: `hi = 0`; `sext` to 128: `hi = asr lo, #63`; `trunc` from 128: the low half, then Section 3; `shl`, `lshr`, `ashr` by an amount `s` (the front end has asserted `s < 128`): the branch-free form of the reference compilers, that is the 64-bit shifts of both halves, the cross term `lsl`/`lsr` of the other half by `63 - s` after a one-bit pre-shift, combined by `orr`, and two `csel` on `tst s, #64` that select the case of 64 or more; `icmp.eq`/`ne`: `eor` each half pair, `orr`, compare with zero; ordered `icmp`: `cmp alo, blo`, then `sbcs` of the high halves, and `cset` with the condition of the 64-bit form (`lo` for `ult`, `lt` for `slt`; `ule` and `sle` compute the swapped subtraction and take `hs` and `ge`); `load`/`store`: `ldp`/`stp` of the halves at the address, which is not single-copy atomic, as both reference compilers emit for a `volatile u128`; `shift_count_defined` compares the amount with `#128`; `copy` is unchanged |
+| 128-bit UB predicates (the pair is `lo`, `hi`) | `divisor_nonzero`: `orr t, lo, hi`, `cmp t, #0`, `cset ne`. `signed_div_rem_no_overflow`: `eor` the high half of `%a` with `0x8000000000000000` and `orr` it with the low half of `%a`; `eor` each half of `%b` with a materialized all-ones value (not a logical immediate) and `orr` the two; `orr` both results, `cmp` with zero, `cset ne`. `signed_add_defined`: `adds t, alo, blo`, `adcs t, ahi, bhi`, `cset vc`; `signed_sub_defined`: `subs`, `sbcs`, `cset vc`. `signed_mul_defined`: take the magnitudes of both operands (negate the pair when `hi` is negative), form the 256-bit product of the magnitudes from the four 64-bit limb products with `mul`/`umulh` and carries, and answer true exactly when the high 128 bits are zero and the low 128 bits do not exceed `2^127 - 1` (operand signs equal) or `2^127` (signs differ). `shift_count_defined` with a 128-bit shifted value: bound `#128`. `signed_shl_defined` at 128: the conjunction of the count predicate, `ahi` non-negative, and the round trip through the pair shift sequences. The front end no longer emits `signed_shl_defined`; the row serves older modules. |
+| `va_start %ap` | in a variadic function only: store the five fields of Section 6.12 to the list object at `%ap` |
+| `va_arg.T %ap` | the register-then-stack procedure of Section 6.12, then a load of `T` from the computed address |
+| `va_end %ap` | nothing |
+| `icmp.*` on integers | the extensions of Section 3, `cmp`, then `cset`; when the only consumer is a `cond_br` in the same block, `cmp` then `b.cond` with no `cset` |
+| `icmp.eq`/`ne` on pointers | the same, 64-bit, no extension |
+| `ptr.null` | `mov #0` |
+| `global_addr @g` / `func_addr @f` | `adrp` + `add` with the symbol spellings of Section 4.1 |
+| `ptr.offset.<direction>.<signedness>` | the index extended per the signedness, scaled by `lsl` for a power-of-two scale and `mul` otherwise, then `add` or `sub` by the direction; the machine wraps where EvoIR computes in unbounded arithmetic and reports `E3011`, an admissible difference because the pointer-formation guard has been asserted before |
+| `ptr.to_int`, `ptr.from_int.*` | nothing: the value is the same 64-bit register |
+| `alloca` (static size and alignment) | `frame.slot` at the instruction's program point |
+| `alloca.dynamic` | `stack.alloc` at the instruction's program point, preserving byte-count operand, origin and alignment |
+| `lifetime.end` | `stack.release` for an address that originates from dynamic allocation, including explicit edge transport; a fixed object stays reserved and needs no native instruction |
+| `pointer_valid`, `access_in_bounds` | nothing: the front end already lowered the guards into `ub.assume`; the instruction has no machine effect |
+| `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker (Section 5.4 can select an immediate address) |
+| `load [volatile]` of a pointer | `ldr.p` / `ldr.pf` |
+| `store [volatile]` | `str` of the matching width, `str.p` for a pointer (Section 5.4) |
+| `atomic.load`/`atomic.store order [volatile]` | `atomic.load.K`/`atomic.store.K` with the same order, marker and kind |
+| atomic read-modify-write and compare-exchange | `atomic.rmw.OP.K` with the same order and marker |
+| `copy` with static size | `mem.copy` |
+| `copy.volatile.read/write/readwrite` | `mem.copy.volatile.read/write/readwrite`; the validated size 1, 2, 4 or 8 and alignment `>= size` give exactly one source load and one destination store, with only the specified sides observable |
+| `br ^b(args)` | `b ^b(args)` |
+| `cond_br %c, ^t(...), ^e(...)` | `tbnz %c, #0, ^t(...), ^e(...)`, or the `b.cond` fusion of the `icmp` row |
+| `br.indirect %p [^b(args), ...]` | `br %p [^b(args), ...]`, keeping the complete ordered CFG and the address arguments (Section 7.2) |
+| `ret v...` | `ret` listing the results |
+| `trap.<reason>` | `brk` with the number of the reason |
+| `ub.assume.<reason> %c` | checked UB-check profile: `tbz %c, #0, ^trap_reason(), ^continue(live...)`, or the flags selection of Section 5.3, where `^continue` is a fresh block whose arguments are exactly the registers that the rest of the source block still reads, ordered by register number, and `^trap_reason` holds `brk` for the reason; one trap block per reason, appended after the source blocks in order of first use. Unchecked UB-check profile: nothing (Section 5.2). |
+| `call @f(args, %m, %w)` / `call %p(...)` | `bl`/`blr` with explicit argument and result registers (Section 6) |
+| `uninitialized.bits<N>` | `mov #0`: any value is permitted, and zero makes the output deterministic |
+| `block_addr ^b` | `adr rd, ^bN`; a static relocation against a block uses a local symbol at its first instruction (Section 8.2) |
+| `return_address` | `frame.address [saved_lr]`, emitted as `ldr rd, [x29, #8]`, valid anywhere in the body, because a function that reads an activation address always keeps its frame record (Section 6.13) |
+| `frame_address` level 0 / level `N > 0` | `frame.address [fp]`, emitted as `mov rd, x29` / `frame.address [fp_N]`: `N` loads of the saved frame pointer from `x29` |
+| `ctlz`, `cttz`, `ctpop`, `bswap` | `ctlz`: zero-extend per Section 3, `clz` at the register width, then subtract `32 - N` or `64 - N` for a narrower `N`; `cttz`: `rbit` then `clz`, and for a narrower `N` the result capped at `N` with `cmp`/`csel`, because the unspecified upper bits can hold a set bit; `ctpop`: the general-register sequence without SIMD, after zero extension: `x - ((x >> 1) & 0x5555...)`, `(x & 0x3333...) + ((x >> 2) & 0x3333...)`, `(x + (x >> 4)) & 0x0f0f...`, multiply by `0x0101...` and `lsr` by the register width minus 8; `bswap`: `rev16` at 16 (upper bits unspecified per Section 3), `rev` at 32 or 64 |
+| scalar `f32`/`f64`; integer vectors; `asm` and `asm goto` | Sections 2.6, 2.7 and 4.6 |
+
+The UB predicates are ordinary Boolean computations; they lower whether or
+not an `ub.assume` consumes them.
+
+### 5.2 UB-check profiles
+
+The native-only option `--ub-checks=checked|unchecked` (default `checked`;
+an unknown value or a second selection is refused) selects the UB-check
+profile, and the assembly header records it (`// evocc-native-ub-checks=`).
+Under `checked`, every `ub.assume` lowers to the branch of Section 5.1,
+except one whose operand is a direct canonical `const.bits<1> 1` in the same
+source block, which lowers to nothing; no truth is inferred from aliases or
+facts. Under `unchecked`, only the lowering of `ub.assume` is omitted;
+predicates with other consumers, explicit traps and FP admission stay. The
+profiles act only at lowering: both builds of one unit consume the same
+verified EvoIR, and artifact and measurement identities include the profile.
+Interpreter modes ignore the option.
+
+### 5.3 Baseline selection rules
+
+These rules are part of the default lowering. Each selects existing EvoMIR
+instructions and adds no EvoIR operation, EqSat rule or effect permission.
+When a rule does not match, the ordinary rows apply.
+
+**Compared-value selection.** The contiguous full-width integer chain
+`c = icmp(x, y); e = zext(c); mask = 0 - e; d = a xor b; masked = d and mask;
+result = b xor masked`, where `{a, b}` is `{x, y}`, all values have one
+`bits<32>` or `bits<64>` type and every removed intermediate has one use,
+becomes `cmp x, y; csel a, b` with the same predicate. The zero is an
+existing constant or a single-use constant between the extension and the
+subtraction. Nothing else is removed or moved. Symbolic addresses are
+excluded.
+
+**Checked flag branches.** When an obligation is the only use of the Boolean
+of the immediately preceding EvoIR instruction, and that Boolean is a final
+`cset` adjacent to its flags producer, lowering removes the `cset` and
+branches with `b.<inverse-cond>` to the trap block. The continuation and its
+edge arguments stay. Any other use keeps the `cset` and `tbz`.
+
+### 5.4 Immediate addresses
+
+An ordinary typed load or store can use `[base, #offset]` for one preceding
+constant `ptr.offset` in the same block, with only constant materializations
+between them. The index is decoded at its own width and signedness, scaled
+and directed; the displacement must fit `i64` and the access immediate, and,
+when strict alignment can expand the access (Section 8.9), every byte
+displacement. The access attributes, guards and arguments stay; atomic
+operations are not selected.
+
+### 5.5 Optional selection variants
+
+`--isel-opt=LIST` selects these variants (Section 1.4). Each admits only the
+rows of the pattern table (Section 5.6). Candidate order and guards come from
+`targets/aarch64/patterns`; instruction byte costs come from
+`targets/aarch64/costs`. Costs are policy and never justify correctness. No
+variant adds a scratch register, a memory access or a literal pool.
+
+**`constants` (at emission).** Changes only the emission of a general
+`mov #imm`. The result is the immediate modulo the W or X width, a W write
+clears the upper 32 bits, and NZCV, other registers and memory are preserved
+(the claim `exact_bits_zero_upper_w`). The candidates are MOVZ/MOVK (the
+default), MOVN/MOVK and ORR from the zero register with an encodable logical
+mask other than zero and all ones. A candidate replaces the default only
+when strictly smaller. A wide-move candidate initializes the lowest halfword
+that differs from its fill value, then patches the others in increasing
+order.
+
+**`local` (at emission).** Composes adjacent allocated instructions: a
+constant shift in `[0, width)` followed by a same-width `add`, `sub`, `and`,
+`orr`, `eor` or `cmp` (the shifted-register form; only a commutative
+consumer can exchange operands); `sxtb`, `sxth`, `sxtw` (X only), `uxtb` or
+`uxth` followed by `add`, `sub` or `cmp` (the extended-register form);
+`mul` followed by `add`, or by `sub` with the product on the right (`madd`,
+`msub`); an X `add`, optionally preceded by a single-use X `lsl` by zero or
+by the logarithm of the access size, followed by a nonvolatile scalar load or
+store at offset zero (register-offset addressing, no writeback, atomic, SIMD
+or strict-alignment expansion). Every omitted temporary has exactly one
+definition and one use in the whole allocated function, counting block
+arguments, terminators, spills and assembly operands, and an input read after
+an omitted write must not occupy that write's register. The sequence crosses
+no other instruction, effect, label or guard. Live bits, the flags of the
+original `cmp` (otherwise NZCV) and the exact memory access are preserved.
+The first admitted strictly smaller sequence wins.
+
+**`extensions` (before SSA destruction).** Reuses an earlier exact integer
+extension in the same block: an extension form, `sbfx`/`ubfx` from bit zero
+narrower than the register, or `and` with a nonzero low contiguous mask
+narrower than the register. The key holds the opcode, sign, source identity
+and class, destination class, width and every extract or mask parameter. A
+removed result has a unique definition and only local uses that are not edge
+arguments; they take the retained result. Availability ends at block
+boundaries and at every non-discardable instruction (calls, assembly, memory,
+strict FP).
+
+**`controls` (after SSA destruction).** Admits two idioms whose Booleans and
+flags each have exactly one definition and one use in the whole function:
+
+- A terminal adjacent integer `cmp`, `cset`, then `cbz`/`cbnz` or bit-zero
+  `tbz`/`tbnz` of the Boolean becomes `cmp` and `b.cond` (the original
+  condition for a nonzero test, its inverse for zero), with the same
+  successors and edge arguments.
+- Five adjacent instructions that test `lo <= x` and `x <= hi` with `cmp #imm`
+  and `cset`, then AND the two Booleans, become
+  `sub t, x, #lo; cmp t, #(hi - lo); cset result, ls` (no `sub` for
+  `lo = 0`), for one 32- or 64-bit source, signed GE/LE or unsigned HS/LS
+  predicates and `0 <= lo <= hi <= 4095`. The first removed Boolean becomes
+  `t`. Unsigned modular subtraction makes inputs below `lo` fail the bound.
+
+*Informative.* These variants are bounded opt-in validation, not ISA proofs
+(obligations B1 and B6 of `spec/target.md`) and not default code generation.
+
+### 5.6 Pattern table
+
+Generated from `targets/aarch64/patterns`: root form and widths, machine
+sequence, guard and state claim of each row.
 
 <!-- aarch64-patterns:start -->
 <!-- Generated by tools/generate-target.py; edit targets/aarch64/patterns. -->
@@ -165,956 +708,245 @@ Pattern digest: 2481549c2d4c47d9c4fedf48f2795c15ab9d2648dc5fa2b72b677ee739bcc929
 | control_constant_interval | compare_interval / 32,64 | sub_compare_set | adjacent_private_ordered_imm12 | equal_live_state_edges; writes dst; flags adjacent_consumer; memory none |
 <!-- aarch64-patterns:end -->
 
-Function-placement addendum (revision 0.34): the associated validated EvoIR
-module carries each definition's optional `section`, just as it carries alignment
-and patchable-entry metadata. This association remains an explicit input through
-lowering/allocation/native emission; standalone MIR text cannot replace it. Linux
-selects `.section "name","ax",%progbits` before that function's alignment,
-entry padding, symbol and complete body, or ordinary `.text` when absent.
-Local block-address labels, CFI and `.size` remain in that same section, and
-`__patchable_function_entries` retains SHF_LINK_ORDER association with the actual
-code section. Aliases share the target symbol and allocate no body; section names
-do not alter visibility or retention. The next function reselects its own section,
-including the default, and strings are assembler-escaped rather than interpolated
-as directives. Unsupported non-ELF function placement is E4009. Linker scripts
-retain ownership of final placement/range checking; no warning suppression,
-source-specific section inference or invented relocation replaces this contract.
+## 6. Frame and Calling Convention
 
-Individual-section addendum (revision 0.49): Linux `-ffunction-sections` and
-`-fdata-sections` independently select symbol-named ELF sections for definitions
-without explicit placement. Each option and its `-fno-` form is reduced in written
-order, last occurrence winning. Both default off; explicit section attributes
-take precedence. These are native emission options, not new EvoIR object kinds
-or permission changes. The validated module and effective option values remain
-explicit emission inputs, including in any native artifact identity.
+The calling convention is the AArch64 procedure call standard (AAPCS64),
+restricted to what this document lowers; the restriction is refused, never
+approximated. The ABI tables hold the numeric facts. `generic/abi.rs` places
+arguments and `generic/frame.rs` lays out the frame from them.
 
-Functions use `.text.<symbol>` (AX, PROGBITS), with all local labels, alignment,
-CFI, complete bodies and sizes in the same section. Automatic objects use
-`.data.<symbol>` (AW, PROGBITS), `.bss.<symbol>` (AW, NOBITS) for mutable zero-fill,
-or `.rodata.<symbol>` (A, PROGBITS) for read-only data, including all-zero
-read-only data. Read-only objects with PIC relocations use
-`.data.rel.ro.<symbol>` (AW, PROGBITS). TLS uses `.tdata.<symbol>` (AWT, PROGBITS)
-or `.tbss.<symbol>` (AWT, NOBITS). Symbol size, alignment, linkage, visibility,
-relocations and TLS type remain unchanged. Names use the existing assembler
-escaping, not arbitrary directive interpolation. Aliases allocate no extra
-section or body. Lifecycle registrations remain init/fini-array roots; patchable
-entries retain SHF_LINK_ORDER to the selected code section. Module assembly is
-still bracketed by default text selection, not rewritten to follow these flags.
+### 6.1 ABI profiles
 
-These options permit linker garbage collection; they do not guarantee retention
-of an unreferenced `used` symbol, reorder source effects, duplicate definitions
-or change the existing reference/retention analysis. The linker owns reachability
-and final layout. Unsupported non-ELF individual-section options fail E4009;
-they must not be silently ignored. The disabled/default path retains its previous
-assembly. No semantic or EqSat rule is added.
-
-Native command-option addendum (2026-09-13): validated EvoIR `stack_protect`
-marks select an extra private canary slot above local storage; emission loads
-the configured global or sysreg-plus-byte-offset guard at entry and compares
-it before every normal return, calling `__stack_chk_fail` on mismatch.
-The original validated module and effective codegen options remain explicit
-inputs to native emission, including through allocation; neither is inferred
-from standalone MIR text. `pac-ret` signs LR with the incoming SP before saving
-it and authenticates after restoring that same SP; return-address builtins
-strip authentication bits. General-register-only emission omits SIMD vararg
-saves; it does not enable floating-point lowering. Positive, failure and
-over-aligned/dynamic-frame results are in `tests/fixtures/protected-frames.out`.
-
-Patchable-entry addendum (2026-09-20): the associated validated EvoIR module
-also supplies each emitted function's `patchable_entry=N,M`; standalone MIR
-text is not a replacement for that metadata input. Linux emission places M
-NOPs before the callable symbol and N-M immediately after it, before PAC,
-frame setup or any user instruction. CFI begins at the callable symbol and
-the function's size excludes its preceding pad. For N>0, an aligned 64-bit
-relocation in `__patchable_function_entries` names the first NOP and uses
-SHF_LINK_ORDER to associate the table entry with its code section; N=0 emits
-neither NOPs nor an entry. Aliases retain the callable symbol's identity,
-not a second patch region. The callable symbol still meets EvoIR's explicit
-alignment: any required extra padding precedes the patch region. Nonzero
-patching on Darwin is refused, not emitted without its ELF registration.
-
-Strict-alignment addendum (2026-09-13): scalar MIR loads/stores retain the
-EvoIR access guard's alignment as optional ` [align=N]` after the address;
-N is a positive power of two, and omission retains natural alignment.
-The abstract operation still transfers the whole value, including pointer
-provenance. Under `-mstrict-align`, emission expands an insufficiently aligned
-scalar access into byte loads/stores using reserved scratch registers;
-128-bit pairs use two individually alignment-qualified halves. Ordinary
-copy already chooses its largest safe width. `-mno-strict-align` restores
-ordinary emission; the last option wins. Measurements are in
-`tests/fixtures/strict-alignment.out`.
-
-The effective tiny code model emits `adr` for direct symbol addresses and
-literal GOT loads for interposable addresses. Requested unwind tables use
-the stable x29 CFA, explicit saved-register locations (DWARF expressions for
-over-aligned frames), per-return state restoration and PAC state toggles;
-they do not depend on the dynamically moving SP. The last explicit table
-enable/disable option wins. Native backtrace measurements are in
-`tests/fixtures/unwind-and-tiny.out`.
-
-EvoMIR is the machine-level intermediate representation of EvoCC. It sits
-between the extracted EvoIR of a function (`spec/evoir.md`, the EvoIR
-specification, which this document cites by section) and the assembly text
-handed to the platform assembler. Everything below the extraction boundary
-is governed here; everything above it is governed by the EvoIR
-specification, and where the two meet, the EvoIR specification wins.
-
-This document follows the rules of its parent: a sentence about observable
-behaviour is measured before it is written, a construct it does not admit is
-refused with a named diagnostic rather than guessed, and an executor that
-finds it silent stops and reports the gap. Revision 0.1 was implemented once
-and stopped thirteen times; revision 0.2 rules every stop and records which
-sentence was wrong.
-
-## 1. Purpose and Position
-
-EvoMIR exists so that backend engineering can be conventional. The e-graph
-decides *which* semantics a function has; EvoMIR decides *how a machine
-computes it*, with explicit registers, explicit frame slots and explicit
-calling-convention constraints, and nothing else. Its first target is the
-AArch64 scalar subset, first hosted as Darwin arm64 (the development machine,
-so that a program can be compiled, run and compared on the spot) and then as
-Linux AArch64 for the kernel. The two targets share every rule below except
-the ones the calling convention and the symbol syntax name.
-
-Three invariants carry over from the EvoIR specification and are restated
-because a backend is where they are most easily lost:
-
-- **Semantics are fixed before EvoMIR sees them.** The lowering of a
-  function is a function of its extracted EvoIR: two runs over the same
-  EvoIR text produce the same EvoMIR text, byte for byte.
-- **Undefined behaviour stays explicit.** An `ub.assume` obligation lowers
-  to a checked trap in the checked profile and is never dropped silently;
-  the profile that omits the check is a named policy, not a default.
-- **What is not lowered fails closed.** Every EvoIR form this revision does
-  not lower has a diagnostic in Section 10, reported at the instruction, and
-  the driver produces no assembly for that function.
-
-The EvoIR specification's Section 10.2 invariant governs every EvoMIR form:
-it implements the abstract semantics of its EvoIR source for **all defined
-executions**. Where a machine instruction's behaviour outside defined
-executions differs from EvoIR's (a shift by an out-of-range amount, a
-wrapping address computation, an unmasked comparison), the difference is
-admissible only when an EvoIR obligation the program has already asserted
-makes it unobservable; Section 5 names each such case.
-
-The revision 0.x series covers what the roadmap calls B1 through B4: EvoMIR
-itself, a linear-scan register allocator, the Darwin arm64 scalar ABI, and
-the native test suite. EvoMIR representations do not yet enter e-classes.
-
-## 2. Values, Registers and Classes
-
-An EvoMIR function is a list of basic blocks in the order of its EvoIR
-source, the entry block first (block 0), each holding instructions in order
-and ending in a terminator. Before register allocation, operands are
-**virtual registers** `%vN` in block-argument SSA form, the same discipline
-as EvoIR Section 2: a block's arguments are its only inputs, every value has
-one definition, and every edge lists the values it passes. Block arguments
-survive lowering and are removed by the out-of-SSA pass of Section 7, which
-runs before allocation. After allocation, operands are **physical
-registers** and **frame slots**.
-
-Every virtual register has exactly one **register class**:
-
-| Class | Holds | Physical registers |
+| Fact | Linux | Darwin |
 |---|---|---|
-| `gpr32` | `bits<N>` with `1 <= N <= 32` | `w0` to `w30` |
-| `gpr64` | `bits<N>` with `33 <= N <= 64`, every pointer | `x0` to `x30` |
-| `simd32` | f32 | `s0` to `s31` |
-| `simd64` | f64 or 8-byte integer vector | `d0` to `d31` |
-| `simd128` | hosted Linux f128 or 16-byte integer vector | `q0` to `q31` |
-| `flags` | the result of a comparison or a flag-setting arithmetic form, consumed by the next conditional | `nzcv` |
+| Argument and result registers | `x0` to `x7`; `v0` to `v7` | same |
+| Indirect-result register | `x8` | same |
+| Stack slot; stack alignment | 8 bytes; 16 bytes | same |
+| Callee-saved | `x19` to `x28` | same |
+| Call clobbers | `x0` to `x17`; `v0` to `v7`, `v16` to `v31` | same |
+| Partially preserved | low 64 bits of `v8` to `v15` | same |
+| Frame record | 16 bytes | same |
+| Variadic save slots | 8 bytes per `x`, 16 per `v`; area alignment 16 | same |
+| Record register limit | 16 bytes | same |
+| **Stack arguments** | admitted | **refused** (`E4010`) |
+| **16-byte-aligned record starts at an even register** | yes | **no** |
 
-`gpr32` and `gpr64` name the same physical register file viewed at two
-widths; the allocator assigns one physical register per virtual register and
-the class fixes the spelling. A `bits<128>` EvoIR value has no class of its
-own: lowering represents it as **two `gpr64` virtual registers**, the low
-half first, and every operation on it becomes a sequence over the halves
-(Section 5, revision 0.10). The allocator, the verifier and the interpreter
-see only 64-bit registers; the pair is a fact of lowering and of the calling
-convention (Section 6), never of allocation. Scalar FP and vector
-classes share one physical bank, including all s/d/q aliases. v30/v31 are emission scratch; v8..v15 are
-not allocated for vector temporaries because their upper halves are not
-callee-saved. Live-across-call vectors spill at full width. Integer SIMD does
-not bypass `-mgeneral-regs-only`; scalar FP is separately admitted by revision 0.33.
+The ABI profiles also differ in these places:
 
-**Scalar FP (0.33).** `fp.OP.f32/f64` preserves the operation and format from
-EvoIR 3.13; constants use exact GPR-to-SIMD bit moves. Scalar arithmetic uses
-FADD/FSUB/FMUL/FDIV/FNEG, conversions FCVT/SCVTF/UCVTF/FCVTZS/FCVTZU, and
-ordered/unordered comparisons FCMP plus the corresponding condition. Before
-environment-dependent operations the baseline requires FPCR=0; otherwise
-BRK #3064, without MSR FPCR. `fp.env.check` is the explicit machine check
-before 128-bit conversion helpers, represented as ordinary ABI-visible calls
-to `__float[un]ti{sf,df}` / `__fix[uns]{sf,df}ti`, not hidden emitter calls.
-Invalid raw integer conversions yield zero; source UB obligations remain.
-Spills/copies preserve exact width; FP predicates cannot invalidate a live
-NZCV value because the existing immediate-consumer rule still applies.
+- **Assembly syntax and object format** (Section 8.1).
+- **Host-only features.** The kernel profile admits function sections, data
+  sections, explicit sections, TLS, patchable entries and protected
+  visibility only on its host ABI profile, Linux; Darwin refuses them. The
+  kernel profile also sets the stack-protector slot to 16 bytes.
+- **Binary128** and strict 128-bit conversions: Linux only (Section 2.6).
+- **Variadic functions.** The Darwin platform passes every anonymous argument
+  on the stack. EvoMIR applies the rules of Section 6.12 under both ABI
+  profiles, so a Darwin build is correct only between EvoCC-compiled
+  functions; a call to a Darwin-compiled variadic function such as `printf`
+  passes wrong values.
+- **128-bit argument pairs**: see the conformance note of Section 6.5.
 
-**Strict scalar FP (0.45).** `fp.strict.OP.f32/f64` preserves the distinction
-from baseline `fp.OP` through text, interpretation, allocation and emission.
-Validated EvoIR world order determines instruction order before tokens are
-erased; strict arithmetic is never scheduled as pure arithmetic. It uses the
-same SIMD bank, call ABI, spills and copies. FP admission is a three-level must
-analysis (unchecked, strict controls, fixed controls): fixed admission implies
-strict admission, but not conversely; calls/opaque asm invalidate both. Strict
-checks permit only the two rounding bits beyond the baseline FPCR=0 contract,
-and never write FPCR/FPSR. Pure representation operations and the exact-domain
-predicate do not depend on rounding. Ordered strict comparisons use FCMPE;
-strict equality/inequality use FCMP. Explicit FMA uses FMADD; no multiply/add
-contraction is permitted. Hardware accumulates sticky status for executed ops.
-The `quiet_olt/quiet_ole/quiet_ogt/quiet_oge` variants also use FCMP, preserving
-the source comparison builtins' signaling-NaN-only invalid effect. Quietness
-survives canonical text and allocation; it is not inferred from result use.
+### 6.2 Arguments and results
 
-The interpreter carries explicit FP state in its existing world snapshot.
-Strict integer destinations retain their semantic width as
-`fp.strict.to_signed.iN.f64` (and unsigned/f32 analogues), independent of the
-GPR container width. Invalid raw conversions return zero and raise invalid;
-narrow results are masked only after the checked conversion. Missing width
-means the physical register width, not an inferred C type.
-Strict 128-bit integer conversions on hosted Linux use the qualified eight
-`__float[un]ti{sf,df}` / `__fix[uns]{sf,df}ti` helpers. `bl.strict_fp` preserves
-this semantic distinction through text, validation, interpretation and allocation;
-it admits the four rounding modes and accumulates flags in the current world.
-Validation requires a known helper name and its exact GPR-pair/SIMD signature.
-`fp.env.check.strict` admits dynamic rounding; ordinary `fp.env.check` still
-requires the fixed environment. Checks do not modify FPCR/FPSR. A strict helper
-call itself requires strict admission even if an explicit check is absent.
-The ordinary ABI call remains visible to allocation, including clobbers.
-Invalid raw FP-to-integer inputs are replaced with zero before the helper; a
-separate strict conversion of selected NaN/zero raises INVALID only for the
-invalid case. No runtime helper is invoked outside its defined conversion domain.
-The C E3063 guard is unchanged. Darwin strict wide helpers remain refused until
-their runtime is separately qualified. The Linux helper receipt is recorded in
-`docs/notebook/strict-floating-implementation-20260927.md`.
-**Hosted binary128 (0.48).** Linux `f128` uses the same SIMD128 bank, typed
-Q loads/stores, full-width spills and parallel copies as existing vectors.
-Constants, negation and representation conversion use exact two-word pack/
-extract operations. Arithmetic uses qualified `__addtf3`, `__subtf3`, `__multf3`
-and `__divtf3`; explicit IR FMA uses the audited hosted `fmal` contract. Format
-conversions use `__extend{sf,df}tf2` and `__trunctf{sf,df}2`; integer conversions
-use `__float[un]{si,di,ti}tf` and `__fix[uns]tf{si,di,ti}`. These are ordinary
-ABI calls with allocator-visible inputs, outputs and clobbers, never fictitious
-quad hardware opcodes. Source `fmal` remains an ordinary external library call;
-this does not authorize a new `__builtin_fmal` source spelling.
+Integer and pointer arguments of at most 64 bits go in `x0` to `x7` in order.
+Each register bank has its own counter, and all banks share one stack cursor
+in 8-byte slots; a bank never takes a register back after a piece went to the
+stack. A function returns up to eight integer or pointer results in `x0` to
+`x7` (C uses one; the randomized generator uses more); a ninth is `E4013`.
 
-Machine calls distinguish `bl.fixed_fp`, `bl.strict_fp` and ordinary `bl`.
-The first two require a qualified helper and exact signature. Fixed helpers
-implement pure IR under RNE admission and do not alter the interpreter's
-observable fenv; strict helpers observe dynamic rounding and accumulate status.
-Ordinary modeled runtime calls observe and update the actual environment;
-they must not inherit pure-IR semantics just because a symbol matches a helper.
-All three retain the same physical ABI and call clobbers. The mode survives
-text reconstruction and allocation. Fixed/strict helper calls require their
-respective admission even if an explicit check marker was omitted.
+**Narrow values.** Between EvoCC-compiled functions, a `bits<N>` argument
+with `N < 64` has unspecified upper bits, and the callee applies Section 3. A
+call is **cross-boundary** when the callee's definition is not emitted beside
+the caller, a fact that emission knows and EvoIR cannot spell; every call to
+an EvoIR `declare` is one. At a cross-boundary call, the caller zero-extends
+every argument narrower than 32 bits to 32 bits under both ABI profiles (the
+Darwin rule, harmless under Linux). EvoIR carries no parameter signedness;
+a front end that passes a signed narrow argument emits `sext` to `bits<32>`.
+The callee zero-extends a result narrower than 32 bits to 32 bits on every
+return, because it cannot know its caller.
 
-Quad comparisons use the audited equality/unordered and ordered helper families,
-testing signs rather than assuming unordered +/-1 encodings. Quiet ordered
-predicates first establish unordered status through the signaling-NaN-only
-helper, replace unordered inputs with zero for the ordered helper, then mask
-the result false. C conversion definedness is a bit-only magnitude comparison;
-it must not signal on sNaN. Invalid raw conversions select zero before invoking
-a conversion helper, raising INVALID separately only in strict execution.
-Helpers are never invoked outside their defined integer-conversion domains.
+### 6.3 Floating-point and vector arguments (Linux)
 
-The existing AAPCS64 classifier assigns scalar quad arguments/results to q0..q7
-and aligned 16-byte stack slots, and HFA1..4 to whole-register groups or wholly
-to the shared stack. Quad varargs use the existing 16-byte SIMD save slots.
-Full 128-bit values may not rely on v8..v15 upper halves surviving calls.
-Darwin quad ABI/helpers and unqualified freestanding helper runtimes remain
-outside this hosted contract. Numerical qualification and crossed ABI results
-are recorded in the September 27 implementation notebook, not inferred from
-type admission or a successful link.
+`f32`, `f64`, HFA members, 8- and 16-byte integer vectors and HVA members
+share the `v0` to `v7` counter, independent of `x0` to `x7`; results use
+`v0` to `v3` for a group. An HFA or HVA (one to four identical members,
+marked `hva=Cxvec<L, bits<N>>` in `byval`/`sret`) that does not fit goes
+wholly to the stack with contiguous object bytes; other vectors wider than 16
+bytes use the record convention. Stack transport uses the natural member
+alignment that EvoIR records (`abi_align=16`, or 8), and the shared cursor
+rounds the physical stack offset. An anonymous `float` becomes `double`.
 
-A `flags` value may be consumed only by the instruction that immediately
-follows its producer in the same block, and nothing between them may write
-flags. This is a legality rule the verifier of Section 9 checks.
+### 6.4 Records
 
-**Reserved physical registers.** `x18` is reserved by the platform on Darwin
-and is never allocated; `x16` and `x17` are the intra-procedure-call
-scratch registers, used only by emitted sequences and never live across an
-instruction the allocator did not emit; `x29` is the frame pointer and
-`x30` the link register, both saved in every prologue (Section 6); `sp` is
-not a general register. The zero register `xzr`/`wzr` is an operand, never a
-destination.
+EvoIR passes a record as a pointer to a copy marked `byval(size, align)` and
+returns one through a pointer marked `sret(size, align)` (EvoIR Section
+10.1.3). The machine applies AAPCS64 to those marks, so an EvoCC object
+agrees with a GCC or Clang object. A `byval` record of at most 16 bytes is
+loaded into the next one or two general registers as 8-byte chunks (with
+alignment 16 from an even register under Linux, from the next register under
+Darwin), never split between the last register and the stack, and the callee
+stores it into a fixed object. A larger `byval` record stays a pointer to the
+caller's copy. An `sret` result of at most 16 bytes returns in `x0` and `x1`;
+above 16 bytes, the destination pointer travels in `x8` (`indirect.result`).
 
-## 3. Sub-width Values
+*Informative.* Probes: `.evidence/builtin-probes/20260902-2c23684c/p35-int128.c`,
+`.evidence/builtin-probes/20260906-b10/`.
 
-EvoIR values of width `N < 32` live in `gpr32` registers with the bits above
-`N` **unspecified** (`N < 64` in `gpr64` likewise). The EvoMIR interpreter
-models those bits as unspecified, not as zero: an implementation that fills
-them from a seeded source is conforming, and a lowering that reads them is
-thereby caught. An instruction that reads such a value reads only its low
-`N` bits, except that the following operations need a normalized form,
-which the lowering inserts explicitly:
+### 6.5 128-bit arguments and results
 
-| Operation on `bits<N>` below the register width | Form needed | Inserted before |
-|---|---|---|
-| `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `trunc` | none: the low `N` bits of the result depend only on the low `N` bits of the operands | nothing |
-| `icmp.eq`, `icmp.ne`, `lshr`, `udiv`, `urem`, `icmp.ult`, `icmp.ule`, `zext` | zero-extended to the register width | `and` with the mask `2^N - 1` (`uxtb`/`uxth` when `N` is 8 or 16); both operands of a comparison |
-| `ashr`, `sdiv`, `srem`, `icmp.slt`, `icmp.sle`, `sext` | sign-extended to the register width | `sbfx` from bit `N - 1` (`sxtb`/`sxth` when `N` is 8 or 16); both operands of a comparison |
-| shift amount operand `bits<M>` | the low `M` bits are the amount | `and` with `2^M - 1` when `M` is below the register width |
-| a value stored with `store` of width `N` | none: the store writes `ceil(N / 8)` bytes and the bits above `N` in the last byte are those of the value, which EvoIR Section 5 defines as the representation | nothing |
-| `cond_br` on `bits<1>` | bit 0 only | nothing: `tbnz`/`tbz` on bit 0 |
+A `bits<128>` result is `x0`:`x1`, the low half in `x0`. Under Linux, a
+`bits<128>` argument takes `x(2k)`:`x(2k+1)`, the low half in the even
+register: after one 64-bit argument `x2`:`x3` (`x1` skipped), after two
+`x2`:`x3`, after seven the stack, 16-byte aligned, with `x7` unused. The
+Darwin platform does not round: `x1`:`x2` after one 64-bit argument.
 
-Revision 0.1 listed `icmp.eq` and `icmp.ne` in the first row; that was
-wrong (a comparison reads every bit of the register, so `trunc.bits<3>` of
-`0xffffffff` compared with the constant 7 answered 0 where EvoIR answers 1)
-and the executor found it by hand before the campaign could.
+**Conformance note.** The implementation rounds to an even pair under both
+ABI profiles (`record_plan` in `crates/evocc-mir/src/lower.rs`). Under the
+Darwin ABI profile, a `bits<128>` argument after an odd number of
+general-register positions therefore disagrees with the platform at a
+cross-boundary call; calls between EvoCC functions agree. The native pair
+checks run on the Linux lane only.
 
-**Shift amounts.** A 32-bit machine shift masks its amount modulo 32 and a
-64-bit one modulo 64, never modulo the EvoIR width `N` of a narrower value.
-EvoIR's raw shifts are total and answer 0 (or the sign fill) for an amount
-of `N` or more, so the machine and EvoIR differ there. The difference is
-unobservable in a defined execution because the front end asserts
-`shift_count_defined` as an obligation before every shift (EvoIR Section
-6); the lowering therefore inserts nothing beyond the mask of the row above,
-and this is the first of the admissible differences Section 1 names.
+*Informative.* Linux: `p35-int128.c` (`ret128`, `take_after_one`,
+`take_after_two`, `take_after_seven`) under GCC-14 and Clang-19. Darwin:
+`.evidence/builtin-probes/20260905-b6/b6-darwin-abi.out` under Apple clang.
 
-A directly known scalar constant count may select the existing immediate form
-of `lsl`, `lsr` or `asr` (revision 0.43). Decode it at its own `bits<M>` width,
-with `M <= 64`, and require the resulting amount to be below the shifted value's
-width `N <= 64`; do not mask a count modulo the machine width to select it.
-The source count obligation and the operand's zero/sign extension remain in
-place. Dynamic/out-of-range counts and 128-bit pair operations keep their
-existing paths. This is instruction selection, not an EqSat rewrite.
+### 6.6 Stack arguments
 
-For full-register `bits<32>`/`bits<64>` addition and subtraction, a directly
-known right operand in `[0, 4095]` may select the existing unsigned twelve-bit
-immediate form (revision 0.44). Addition may commute already evaluated SSA
-operands to place such a constant on the right; subtraction may not. Preserve
-all source checked-arithmetic obligations and evaluations. Narrow/pair values,
-other operations, dynamic values and constants outside this bounded selection
-keep their established paths; this adds no EqSat rule or flag-setting form.
+Under Linux, an argument that finds no register goes to the stack in an
+8-byte slot, in argument order at increasing addresses from the caller's
+`sp`; a `bits<128>` uses a 16-byte-aligned 16-byte slot, and a narrow value
+the low bytes of its slot. The caller writes slot `i` with `arg.outgoing` at
+`[sp, #8 * i]`; the callee reads it with `arg.incoming` at
+`x29 + 16 + 8 * i`. When the pins of a call leave no register for a stack
+argument value, its store precedes the fixed-register copies. The
+Darwin platform packs stack arguments by natural alignment; that rule is not
+implemented, so the Darwin ABI profile refuses stack arguments (`E4010`).
 
-For full-register `bits<32>`/`bits<64>` AND/OR/XOR (revision 0.52), a known
-operand may select the existing logical immediate form. A valid mask is a
-power-of-two element of 2..N bits, containing one nonempty, nonfull cyclic run
-of ones, repeated to the operation width N. Zero, all ones and bits above N
-are not encodable. The MIR validator independently rejects those invalid forms.
-Both operands have already been evaluated; these commutative operations may
-place either known operand on the immediate side. Facts come from literal
-constants and total full-width bitwise constant expressions, including C's
-complement represented by XOR with all ones. Keep the original computations
-until ordinary dead-instruction removal proves them unused. No access, effect,
-obligation or CFG binding is evaluated early or removed by constant tracking;
-narrow/pair and nonmatching operations retain their existing paths. This is
-machine instruction selection, not a new EvoIR or EqSat rule.
+### 6.7 Preserved registers
 
-For full-register `bits<32>`/`bits<64>` integer comparisons (revision 0.53),
-a known operand in `[0, 4095]` may select the existing `cmp rn, #imm12` form.
-If the left operand is selected as the immediate, reverse the comparison's
-relation: EQ/NE remain EQ/NE, SLT/SLE become GT/GE and ULT/ULE become HI/HS.
-This swaps already evaluated SSA values, not source evaluation. Preserve
-the existing adjacent flags consumer, branch fusion and checked obligations.
-Narrow/pair values, non-null pointer comparisons, negative or otherwise
-unencodable constants and dynamic operands retain the established
-extension/register paths. Pure known
-definitions remain until ordinary unused-definition removal proves them dead;
-there is no new IR operation, effect permission or EqSat rewrite.
-The current immediate comparison form is unshifted: validation rejects operands
-outside `[0, 4095]`, even if an assembler could alias a larger number to a
-different shifted encoding. Raw MIR does not bypass this constraint.
+`x19` to `x28`, `x29`, `x30` and `sp` are callee-saved; `x0` to `x17` are
+call-clobbered; `x18` is never used. A callee preserves only the low 64 bits
+of `v8` to `v15`; every other SIMD register is call-clobbered. The allocator
+never assigns `v8` to `v15`. When an `asm` clobbers one of them, the
+prologue saves its low 64 bits (`d8` to `d15`) and the epilogue restores
+them.
 
-For pointer EQ/NE (revision 0.54), a directly defined `ptr.null` operand may
-select the existing 64-bit `cmp rn, #0` form on either side. The other operand
-retains its provenance; MIR interpretation uses the same identity comparison
-as register CMP. Do not infer null-definition facts from arbitrary integer
-addresses, symbol spellings, casts or nonlocal definitions. Both operands are
-already evaluated, and flags consumers, effects and guards remain unchanged.
-Ordinary unused-definition removal may remove the now-unused null register.
-The existing `ptr.null` machine representation remains `mov #0`: a typed
-`str.p` of that zero stores a null pointer fragment in the MIR interpreter,
-including for function pointers and volatile stores. Typed atomic stores and
-admitted pointer exchange/compare-exchange operands use that same conversion;
-their order, status and observable events are unchanged. A nonzero raw integer is
-not pointer provenance; an ordinary integer store of zero creates only raw
-bytes, not a pointer fragment. This corrects interpretation of existing forms,
-not C pointer conversions or memory initializedness rules.
+### 6.8 Frame layout
 
-`bits<1>` lives in a `gpr32` with bit 0 significant. Comparisons produce
-their `bits<1>` result with `cset`, which writes 0 or 1 into the whole
-register; a `bits<1>` produced by `trunc` or `and` has unspecified upper
-bits, and the table above is what makes that safe.
+By default every function keeps a frame record. `generic/frame.rs` places
+each area of the local area at an offset above the aligned `sp` after the
+prologue. From the bottom up:
 
-Width 128 is lowered as a pair of halves (Sections 2, 5 and 6). Widths
-from 65 to 127 and above 128 are not lowered (`E4003`).
+1. The outgoing argument area.
+2. The variadic save areas (Section 6.12): general, then vector, adjacent and
+   16-byte aligned.
+3. The spill slots: 8 bytes each, two adjacent slots for a `simd128`.
+4. The fixed objects, one per distinct origin, each at its own alignment, in
+   origin order from the top downward.
+5. The callee-saved save slots, 8 bytes each, in register order.
+6. The save slots of partially preserved registers (Section 6.7).
+7. Padding to the frame alignment.
+8. With the stack protector: the 16-byte canary slot, above all other areas.
 
-## 4. Instruction Set
+The frame size is a multiple of 16; the frame alignment is the largest
+alignment of a fixed object, at least 16; `sp` is 16-byte aligned at every
+call. Two origins share frame bytes only when each address has one
+definition, every use is a direct, bounded, nonvolatile access in the
+defining block, the access intervals do not overlap, and size and alignment
+are equal; object identity and lifetimes do not change. Without dynamic
+allocation, emission addresses every slot from `sp` with a non-negative
+scaled offset (through `x16` beyond the limit of Appendix A.1); with dynamic
+allocation, from `x29` (Section 6.11). Incoming stack arguments are read from
+`x29`.
 
-An EvoMIR instruction names an AArch64 operation, its destination register
-class and its operands, or one of the four pseudo-forms this section marks
-as such, which emission expands. The forms this revision admits are exactly
-these; an operation absent from the table is not part of EvoMIR. Each row
-states the semantics the EvoMIR interpreter (Section 9) implements, so that
-the table is executable, not descriptive.
-
-**Data movement.**
-
-**Integer-vector representation forms (revision 0.32).**
-`%v = vec.pack.N.B (%args)` and `%v = vec.extract.N.B (%src, %index)`
-preserve lane width N and representation bytes B. B=8/16 uses simd64/simd128;
-local B=1/2/4 uses gpr32. Pack/extract expand to lane moves and indexed
-selection; an invalid index traps E3011 before hardware index masking.
-Wider vectors are represented by local objects and scalarized operations.
-The machine text, validator and interpreter retain both N and B.
-
-**Linux ELF registrations and TLS (revision 0.32).** Lifecycle roots emit
-aligned symbol relocations into `.init_array.NNNNN`/`.fini_array.NNNNN`,
-or the unsuffixed default-priority sections. CRT/loader performs ordering
-and lifetime processing; no hidden calls are inserted into ordinary main.
-TLS emits SHF_TLS `.tdata`/`.tbss` (or the explicit TLS section), STT_TLS,
-template bytes/relocations and declared alignment; the linker builds PT_TLS.
-Global/local-dynamic addressing uses the standard TLSDESC sequence and
-resolver clobbers, with TPIDR_EL0, never x18. Initial/local-exec use their
-corresponding relocations; explicit model choices are preserved. Native
-loader/runtime owns thread creation and late-loaded TLS instantiation.
-
-| Form | Semantics |
-|---|---|
-| `mov rd, rn` | `rd := rn` |
-| `mov rd, #imm` (`movz`/`movk`/`movn`, or admitted C1 `orr` from zero at emission) | `rd := imm`, any 32- or 64-bit constant |
-| `adrp rd, @g@PAGE` + `add rd, rd, @g@PAGEOFF` | `rd := address of the global g`; `@f@FUNCPAGE` / `@f@FUNCPAGEOFF` for a function symbol, since EvoIR keeps globals and functions in two tables that may share a name and Section 8 gives both one platform prefix (Darwin spelling; Linux uses `:pg_hi21:` and `:lo12:`) |
-| `ldr rd, [rn, #off]` / `ldrb` / `ldrh` / `ldrsb` / `ldrsh` / `ldrsw` | `rd := memory[rn + off]` of 8, 4, 2 or 1 bytes, zero- or sign-extended as the mnemonic says; `off` is a scaled unsigned 12-bit immediate or a signed 9-bit immediate |
-| `ldr.p rd, [rn, #off]` / `ldr.pf` / `str.p rt, [rn, #off]` | an eight-byte load or store whose value is an object pointer (`ldr.p`), a function pointer (`ldr.pf`) or a stored pointer (`str.p`); emitted as `ldr`/`str`, but distinguished so that the interpreter reconstructs provenance exactly as EvoIR Sections 5.3 and 5.4 do and reports `E3013` on a partial shadow |
-| `str rt, [rn, #off]` / `strb` / `strh` | `memory[rn + off] := low bytes of rt` |
-| `ldp`/`stp rt1, rt2, [rn, #off]` | two registers, prologue and epilogue only (Section 6) |
-| ` volatile` marker on any load or store | the access appears in the volatile trace (EvoIR Section 4.3); it adds nothing else on this target and forbids merging with a neighbouring access, which this revision never does |
-
-**Scalar atomic memory operations (revision 0.31).** `atomic.load.K order
-[volatile] [base]` and `atomic.store.K order [volatile] value, [base]`
-retain order, volatile, width and pointer kind. `K` is `b`, `h`, `w`, `x`,
-`p` or `pf`; the last two are provenance-carrying object/function pointers.
-The base is gpr64, values are gpr32 for b/h/w and gpr64 otherwise, and the
-access requires natural alignment. Validation accepts only the load/store
-orders specified by EvoIR 3.8. The interpreter uses its shared atomic event
-and memory rules, not a concurrent memory-model simulation.
-
-On AArch64 Normal memory, relaxed b/h/w/x use LDRB/LDRH/LDR W/LDR X and
-STRB/STRH/STR W/STR X. Consume/acquire/SC loads use LDARB/LDARH/LDAR W/LDAR X;
-release/SC stores use STLRB/STLRH/STLR W/STLR X. Pointer accesses use the X
-form. There is one source access; no additional DMB is inserted for relaxed
-accesses, and the volatile marker does not select a second access. No pass
-may replace these with ordinary accesses, split/merge them, or discard order.
-
-**Arithmetic and logic.** Every form has a 32-bit (`w`) and a 64-bit (`x`)
-spelling chosen by the destination class.
-
-| Form | Semantics |
-|---|---|
-| `add rd, rn, rm` / `add rd, rn, #imm12` | wrapping addition |
-| `sub rd, rn, rm` / `sub rd, rn, #imm12` | wrapping subtraction |
-| `adds`, `subs rd, rn, rm` | as `add`/`sub`, and write `nzcv`; `v` is the signed-overflow flag, `c` the carry |
-| `mul rd, rn, rm` | wrapping multiplication, low bits |
-| `smull xd, wn, wm` / `smulh xd, xn, xm` | signed 32x32 to 64 product / the high 64 bits of a signed 64x64 product |
-| `msub rd, rn, rm, ra` | `rd := ra - rn * rm` (remainders) |
-| `sdiv rd, rn, rm` / `udiv rd, rn, rm` | signed / unsigned quotient; division by zero yields 0 on the machine, an admissible difference because `divisor_nonzero` has been asserted before (Section 5) |
-| `and`, `orr`, `eor rd, rn, rm` / `#bitmask` | bitwise; the immediate form only for encodable bitmask immediates |
-| `lsl`, `lsr`, `asr rd, rn, rm` / `#imm` | shifts; the register form uses the low 5 or 6 bits of `rm` |
-| `sxtb`, `sxth`, `sxtw`, `uxtb`, `uxth` | extensions |
-| `sbfx rd, rn, #lsb, #width` / `ubfx` | bitfield extract, sign- or zero-extending |
-| `cmp rn, rm` / `cmp rn, #imm12` | sets `nzcv` from `rn - rm` |
-| `cset rd, cond` | `rd := 1` if `cond` holds on `nzcv`, else 0 |
-| `csel rd, rn, rm, cond` | `rd := cond ? rn : rm` |
-
-**Control.** Pre-allocation EvoMIR has no fall-through: every conditional
-form names both successors with their argument lists. After edge-copy placement
-and allocation, emission uses either physically adjacent successor as the
-fall-through: when only the taken successor is next, it inverts the condition
-and branches to the untaken successor instead (revision 0.42). This changes
-only instruction spelling, not block order, labels, arguments, effects or
-logical CFG edges. Equal-target edges retain their distinct parameter-copy
-routes. Long-branch relaxation applies after this layout choice, preserving
-the selected fall-through and the other edge's reachability.
-
-| Form | Semantics |
-|---|---|
-| `b ^target(args)` | unconditional branch |
-| `br rn [^a(args), ^b(args), ...]` | indirect transfer through a `gpr64` code address, with the complete ordered successor edges from EvoIR; simultaneously binds only the selected edge's parameters; invalid interpreted target is E3048 |
-| `b.cond ^then(args), ^else(args)` | branch on `nzcv` |
-| `cbz`/`cbnz rn, ^then(args), ^else(args)` | branch on zero / nonzero |
-| `tbz`/`tbnz rn, #bit, ^then(args), ^else(args)` | branch on one bit |
-| `bl @f(args) -> results` / `blr rn(args) -> results` | call; the argument and result registers are explicit operands so the allocator sees them as fixed (Section 7); writes `x30` |
-| `ret rs...` | return with the result registers listed |
-| `brk #imm16` | trap; the immediate is the decimal part of the EvoIR diagnostic the trap or assumption reason carries (`trap.unreachable_reached` is `brk #3024`), which fits sixteen bits and is an authority both documents share |
-
-A conditional terminator does not name its `flags` operand: the parser recovers it from the instruction that Section 2's adjacency rule requires to precede it, while `cset` and `csel` name theirs. This asymmetry is intended (revision 0.3).
-
-Condition codes used: `eq`, `ne`, `lt`, `le`, `gt`, `ge` (signed), `lo`,
-`ls`, `hi`, `hs` (unsigned), `vs`, `vc` (signed overflow set / clear),
-`cs`, `cc` (carry).
-
-**Pseudo-forms.** Emission expands these; the interpreter executes them as
-stated.
-
-| Form | Semantics |
-|---|---|
-| `frame.slot rd [origin=O, size=S, align=A]` | `rd := the address of a fresh object of S bytes at alignment A`, one per dynamic execution of the instruction, as EvoIR Section 3.7 requires of `alloca`; after allocation the slot is a fixed frame offset (Section 6), and the reuse of that memory by a re-executed `alloca` is sound because EvoIR ends the previous object's lifetime before the site is reached again |
-| `stack.alloc rd, rn [origin=O, align=A]` | fresh uninitialized object of the runtime unsigned `gpr64` byte count `rn`, with distinct origin O and power-of-two alignment A; `rd` is `gpr64`; preserves fixed-frame storage and earlier live dynamic objects, with a disjoint outgoing-argument area below the new object (Section 6) |
-| `stack.release rn` | ends the dynamic object's logical lifetime in the object interpreter; native emission reclaims stack bytes only if this object is still the top dynamic allocation, otherwise retaining the bytes until later frame restoration; never releases an intervening live function-lifetime allocation |
-| `mem.copy [dst], [src], #size, #align` | copies `size` bytes from `src` to `dst`, transferring per-byte initializedness and pointer fragments exactly as EvoIR Section 3.8's `copy` does (identical or disjoint ranges); emission expands it to `ldr`/`str` pairs of the largest aligned width, unrolled up to 64 bytes and a counted loop above; the loads of the expansion never report an uninitialized read, because they move representation, not values |
-| `spill.store %v, slot` / `spill.load rd, slot` | the store of a virtual register to its spill slot and the reload from it, inserted by the allocator; emission expands them to `str`/`ldr` at the stable frame slot, from `sp` only when it remains fixed and otherwise using the entry-frame base (Section 6) |
-| the prologue and epilogue | synthesized at emission from Section 6 and never present as instructions: the interpreter's memory is EvoIR's object model, with no linear stack, no `sp` and no return address, so they are not interpretable; the allocated form is judged by the verifier and the native run (revision 0.4) |
-| the register-offset addressing of `mem.copy`'s counted loop | emission's business, like the prologue's pre-indexed `stp` and `frame.slot`'s `add rd, sp, #off`: the loop counts an offset in a register, so the expansion uses the register-offset form of `ldr`/`str`, which the table's immediate rows do not admit and which only emission ever writes (revision 0.5) |
-| `asm` / `asm.goto` | the EvoIR instruction of its specification's Section 3.11, carried through unchanged: the template, its operands with their constraints, its clobbers and, for `asm.goto`, its label successors. The interpreter does not execute it (it reports `E3021`); emission writes the template with each operand reference replaced by the operand's assigned register, memory address or immediate |
-
-## 5. Lowering: EvoIR to EvoMIR
-
-Lowering maps each extracted EvoIR instruction to a sequence of EvoMIR
-instructions by the table below, in block order, keeping block arguments,
-and never reorders memory operations: EvoIR's `mem` and `world` tokens are
-consumed here, and the order they imposed becomes program order. A form not
-in the table is refused with the diagnostic named in Section 10.
-
-| EvoIR | EvoMIR |
-|---|---|
-| `const.bits<N>` | `mov #imm` |
-| `add`, `sub`, `mul`, `and`, `or`, `xor`, `shl`, `lshr`, `ashr` on `bits<N>`, `N <= 64` | the operation, with the extensions of Section 3 |
-| `sdiv`, `udiv`, `srem`, `urem`, width <= 64 | `sdiv`/`udiv`, remainders by `msub`; `divisor_nonzero` and `signed_div_rem_no_overflow` have been asserted before, which makes the machine's answers for the excluded operands unobservable |
-| `sdiv`, `udiv`, `srem`, `urem`, width 128 | the already-approved S08 hosted path (EvoIR Appendix D): ordinary calls to `__divti3`, `__udivti3`, `__modti3`, `__umodti3`, respectively, with low/high argument pairs in `x0:x1` and `x2:x3` and the result in `x0:x1`; allocation sees ordinary call clobbers and preserves live values. The hosted target must supply libgcc/compiler-rt helpers; no freestanding dependency is silently supplied. The original divide/remainder/overflow guards remain before the call. |
-| `divisor_nonzero %d` | zero-extend `%d` per Section 3, `cmp %d, #0` then `cset ne` |
-| `signed_div_rem_no_overflow %a, %b` | sign-extend both per Section 3; `cmp %a, #INT_MIN_N` (the minimum of `bits<N>`, materialized), `cset ne` into `%p`; `cmp %b, #-1`, `cset ne` into `%q`; `orr %p, %q` |
-| `signed_add_defined %a, %b` / `signed_sub_defined` | at the register width: `adds`/`subs` into a scratch, then `cset vc`; below it: sign-extend both operands, `add`/`sub` at the register width, and compare the result with the sign extension of its low `N` bits (`sbfx` then `cmp`, `cset eq`), because the `v` flag reports the register and never the source width (revision 0.3; `bits<3>`: 3 + 3 is 6, outside -4..3, so 0) |
-| `signed_mul_defined %a, %b` | 32-bit: `smull` the sign-extended operands, compare with the sign extension of its low 32 bits, `cset eq`; 64-bit: `mul` and `smulh`, compare the high word with `asr` of the low word by 63, `cset eq`; any other `N` sign-extends to the next register width and compares the product with the sign extension of its low `N` bits (revision 0.3) |
-| `shift_count_defined.<s> %x, %amt` | extend `%amt` by its declared signedness `<s>` to the register width, `cmp` with `#N`, `cset lo`: a sign-extended negative amount exceeds every bound up to 64 as an unsigned quantity, so one unsigned comparison serves both signednesses (revision 0.3; zero-extending a signed `bits<1>` amount of 1 had answered 1 where EvoIR decodes -1 and answers 0) |
-| `signed_shl_defined.<s> %x, %amt` | the conjunction of four `bits<1>`: `shift_count_defined` as above; `%x` non-negative (`cmp` with `#0` after sign extension, `cset ge`); the round trip `(x << amt) >> amt == x` with an arithmetic right shift at the register width; and, below the register width, the shifted result representable in signed `bits<N>` (compare with the sign extension of its low `N` bits), as EvoIR 3.3.1 defines the predicate (revision 0.3) |
-| `sext`, `zext`, `trunc` | the extension of Section 3, or nothing for `trunc` |
-| `bits<128>` forms (revision 0.10; the pair is `lo`, `hi`) | `add`: `adds lo` then `adc hi`; `sub`: `subs lo` then `sbc hi`; `mul`: `mul lo, alo, blo`, `umulh hi, alo, blo`, `madd hi, alo, bhi, hi`, `madd hi, ahi, blo, hi`; `and`, `or`, `xor`: halfwise; `zext` to 128: `hi = 0`; `sext` to 128: `hi = asr lo, #63`; `trunc` from 128: the low half, then Section 3; `shl`, `lshr`, `ashr` by an amount `s` (the front end has asserted `s < 128`): the branch-free form the oracles emit, that is the 64-bit shifts of both halves, the cross term `lsl`/`lsr` of the other half by `63 - s` after a one-bit pre-shift, combined by `orr`, and two `csel` on `tst s, #64` selecting the 64-or-more case (`p35-int128.c`, `shl_var`, `lshr_var`, both compilers); `icmp.eq`/`ne`: `eor` each half pair, `orr`, compare with zero; ordered `icmp`: `cmp alo, blo` then `sbcs xzr, ahi, bhi` and `cset` with the 64-bit form's condition (`lo` for `ult`, `lt` for `slt`; `ule` and `sle` compute the swapped subtraction and take `hs` and `ge`); `load`/`store`: `ldp`/`stp` of the halves at the address, which is not single-copy atomic, exactly as both oracles emit for a `volatile u128` (the cohort's atomic 128-bit accesses are `asm`); `shift_count_defined` compares the amount with `#128`; `copy` is unchanged; the UB predicates and hosted division/remainder follow their current rows in this table |
-| 128-bit UB predicates (revision 0.26; the pair is `lo`, `hi`) | `divisor_nonzero`: `orr t, lo, hi`, `cmp t, #0`, `cset ne`. `signed_div_rem_no_overflow`: `%a` is `MIN` when `lo == 0` and `hi == 0x8000000000000000`, `%b` is `-1` when both halves are all ones; the predicate is the negation of their conjunction, computed with `cmp`/`ccmp` and one `cset`. `signed_add_defined`: `adds t, alo, blo`, `adcs t, ahi, bhi`, `cset vc`; `signed_sub_defined`: `subs`, `sbcs`, `cset vc`. `signed_mul_defined`: take the magnitudes of both operands (negate the pair when `hi` is negative), form the 256-bit product of the magnitudes from the four 64-bit limb products with `mul`/`umulh` and carries, and answer true exactly when the high 128 bits are zero and the low 128 bits do not exceed `2^127 - 1` (operand signs equal) or `2^127` (signs differ). `shift_count_defined` with a 128-bit shifted value: as at narrower widths with bound `#128`. `signed_shl_defined` at 128: the conjunction of the count predicate, `ahi` non-negative, and the round trip through the pair shift sequences of revision 0.10 (`(x << amt) >> amt == x` with the arithmetic right shift). Under EvoIR 1.9.88 the front end no longer emits `signed_shl_defined`, so the row serves older modules. |
-| `va_start %ap` | in a variadic function only: store to the list object at `%ap` the five fields of Section 6 (`stack`, `gr_top`, `vr_top`, `gr_offs`, `vr_offs`) |
-| `va_arg.T %ap` | the register-then-stack procedure of Section 6 for `T`'s size and alignment, ending in a load of `T` from the computed address |
-| `va_end %ap` | nothing |
-| `icmp.*` on integers | the extensions of Section 3, `cmp`, then `cset`; when the only consumer is a `cond_br` in the same block, `cmp` then `b.cond` with no `cset` |
-| `icmp.eq`/`ne` on pointers | the same, 64-bit, no extension |
-| `ptr.null` | `mov #0` |
-| `global_addr @g` / `func_addr @f` | `adrp` + `add` with the symbol spellings of Section 4 |
-| `ptr.offset.<direction>.<signedness>` | the index extended per the signedness, scaled by `lsl` when the scale is a power of two and `mul` otherwise, then `add` for the add direction and `sub` for the subtract direction; the machine wraps where EvoIR computes in unbounded arithmetic and reports `E3011`, an admissible difference because the pointer-formation guard has been asserted before |
-| `alloca` (static size and alignment) | `frame.slot` at the instruction's program point |
-| `alloca.dynamic` | `stack.alloc` at the instruction's program point, preserving byte-count operand, origin and alignment |
-| `lifetime.end` | `stack.release` for an address originating from dynamic allocation, including explicit edge transport; fixed frame slots remain reserved and need no native instruction |
-| `pointer_valid`, `access_in_bounds` | nothing: the guards are the obligations the front end already lowered into `ub.assume`; the instruction itself has no machine effect |
-| `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker; bounded immediate address selection below preserves access attributes |
-| `load [volatile]` of a pointer | `ldr.p` / `ldr.pf` |
-| `store [volatile]` | `str` of the matching width, `str.p` for a pointer; bounded immediate address selection below preserves access attributes |
-| `atomic.load/store order [volatile]` | corresponding `atomic.load/store.K` with identical order/volatile and scalar/pointer kind |
-| `copy` with static size | `mem.copy` |
-| `copy.volatile.read/write/readwrite` | `mem.copy.volatile.read/write/readwrite`; validated size 1/2/4/8 and alignment >= size guarantee exactly one source load and one destination store, with only the specified sides observable; initializedness and pointer metadata follow ordinary `mem.copy` |
-| `br ^b(args)` | `b ^b(args)` |
-| `cond_br %c, ^t(...), ^e(...)` | `tbnz %c, #0, ^t(...), ^e(...)` (or the `b.cond` fusion above) |
-| `br.indirect %p [^b(args), ...]` | `br %p [^b(args), ...]`, retaining the complete ordered CFG and address arguments; effect ordering is preserved as above, and Section 7 implements simultaneous entry bindings |
-| `ret v...` | `ret` listing the results |
-| `trap.<reason>` | `brk` with the reason's number |
-| `ub.assume.<reason> %c` | checked profile: `tbz %c, #0, ^trap_reason(), ^continue(live...)` (or the equivalent adjacent-flags selection below), where `^continue` is a fresh block whose arguments are exactly the registers the rest of the source block still reads, ordered by register number, and `^trap_reason` holds `brk` for the reason; one trap block per reason, appended after the source blocks in order of first use. Unchecked profile: nothing. Selection is the explicit native-only `--ub-checks=checked\|unchecked` driver profile recorded in the receipt, default checked |
-| `call @f(args, %m, %w)` / `call %p(...)` | `bl`/`blr` with explicit argument and result registers (Section 6) |
-| `uninitialized.bits<N>` | `mov #0` (any value is permitted; zero is chosen so the output is deterministic) |
-| `ptr.to_int`, `ptr.from_int.*` | nothing: the value is the same 64-bit register (revision 0.12) |
-| `block_addr ^b` | `adr rd, <label of block b>` (revision 0.15); a static relocation against a block uses a local symbol `.L<function>.<block>` the emitter places at the block's first instruction |
-| `return_address` | `ldr rd, [x29, #8]`: the saved link register of this frame record, valid anywhere in the body because a function using an activation address always keeps its frame pointer (revision 0.17; opt-in leaf exclusion in revision 0.56) |
-| `frame_address` | `mov rd, x29` (revision 0.17) |
-| `ctlz`, `cttz`, `ctpop`, `bswap` (revision 0.14) | `ctlz`: zero-extend per Section 3, `clz` at the register width, then subtract `32 - N` or `64 - N` for a narrower `N`; `cttz`: `rbit` then `clz`, and for a narrower `N` the result capped at `N` with `cmp`/`csel`, since the unspecified upper bits may hold a set bit; `ctpop`: the general-register sequence both oracles use without SIMD (`p39.out`, Clang-19; GCC-14 calls `__popcountdi2`, which the kernel does not provide): `x - ((x >> 1) & 0x5555...)`, `(x & 0x3333...) + ((x >> 2) & 0x3333...)`, `(x + (x >> 4)) & 0x0f0f...`, multiply by `0x0101...` and `lsr` by the register width minus 8, after zero extension; `bswap`: `rev16` (16, upper bits unspecified per Section 3), `rev` at 32 or 64 |
-
-**Native UB-check profiles (2026-09-29; R02d).**
-Revision 0.55 discharges a checked `UbAssume` only when its operand is a
-direct canonical `const.bits<1> 1` in that source block. This common baseline
-rule applies equally with EqSat on or off. It does not infer truth from an
-alias or from facts, and leaves the EvoIR obligation and function effects
-unchanged. Source-authored true constants are not certified guard savings.
-
-Revision 0.54 specifies the unchecked alternative above, but the inspected
-path at `6be4796` did not implement it. The R02d implementation adds
-`--ub-checks=checked|unchecked` to the C driver and exact-input `evo-ir-asm`
-adapter, and an explicit `UbCheckProfile` to native lowering. Omission defaults
-to checked; unknown values and duplicate C-driver selections are rejected.
-The assembly header records the effective profile. Native artifact/cache and
-measurement identities must additionally bind the profile; an assembly comment
-alone is not proof of effective guard selection. The unchecked path omits only
-the lowering of `UbAssume`; predicates with other consumers, explicit traps,
-FP environment admission and all other mandatory checks remain unchanged.
-It does not authorize benchmark-side IR deletion or alter either interpreter.
-The flag is accepted by interpretation/IR-emission modes but has no semantic
-effect there: source obligations and interpreter failures are preserved.
-Performance admission additionally requires the matched checked execution in
-the [Q2/Q3 design](../docs/framing-draft.md#51-correctness-admission-and-workload-inventory).
-The native-profile switch operates only at MIR lowering: checked and
-unchecked twins must consume the same canonical verified EvoIR and immutable
-chain/proof bundle, with identical IR/chain digests in their receipts. Distinct
-native profile/cache identities remain necessary; matching source/argv alone
-does not establish this shared-input invariant. Full R02d acceptance still
-requires native execution, forged-twin rejection and the full workspace gate;
-the driver option by itself is not completion evidence.
-
-**Bounded immediate addresses (revision 0.40).** An ordinary typed load/store
-may use the existing `[base, #offset]` form for one preceding constant
-`ptr.offset` in the same machine block. Decode the index at its own width and
-signedness, then apply scale/direction; the exact displacement must fit `i64`
-and the access's signed-unscaled or unsigned-scaled immediate. Preserve kind,
-width, alignment, volatility and access position; when strict alignment can
-expand the access, every resulting byte displacement must fit too. Only
-constant materializations may intervene: do not select through an access, call,
-assembly, other computation or guard/CFG boundary, or combine offset chains.
-Pointer-validity/access checks and explicit continuation arguments remain;
-atomic operations are unchanged. Unmatched addresses retain their original
-register computation. Ordinary dead-computation removal may subsequently
-remove the now-unused address expression, without removing a memory operation.
-
-The UB predicates were absent from revision 0.1's table, which refused
-19,410 of 20,000 generated functions; they are ordinary boolean
-computations and lower whether or not a `ub.assume` consumes them.
-
-Every form outside this table and the later explicitly admitted families is
-refused; scalar f32/f64 is admitted by revision 0.33, not by the legacy E4001 row.
-
-**Compared-value selection (0.36).** Instruction selection may replace the
-contiguous full-width integer chain `c=icmp(x,y); e=zext(c); mask=0-e;
-d=a xor b; masked=d and mask; result=b xor masked` with `cmp x,y; csel a,b`,
-using the same signed/unsigned predicate, when a/b are x/y in either order.
-All arithmetic values have the same `bits<32>` or `bits<64>` type; every removed
-intermediate has exactly one use. The zero may be an existing constant or a
-single-use constant between extension and subtraction. Otherwise the ordinary
-rows apply. No intervening instruction, effect, guard, operand evaluation or
-block binding is removed or moved; source symbolic-address operands are excluded.
-The comparison's flags have their one adjacent CSEL consumer under Section 2.
-This selects existing machine instructions, without adding an EvoIR operation,
-expanding the EqSat allowlist, or authorizing speculative conditional arms.
-
-**Checked flag branches (0.37).** When an obligation is the only use of the
-immediately preceding EvoIR instruction's Boolean result, and that result's
-machine definition is a final `cset c, flags, condition` adjacent to its flags
-producer, selection may remove the CSET and use `b.<inverse-condition>` to the
-same reason's trap. The original success continuation and every live edge
-argument remain; the flags producer and branch are adjacent under Section 2.
-Other uses, including successor arguments or a second obligation, require the
-Boolean to remain materialized. Intervening source instructions prevent this
-selection, and unmatched forms retain TBZ. This is only selection of existing
-instructions: no predicate, effect, trap, source-width test or EqSat restriction
-is removed, and the allocator's coalescing policy is unchanged.
-
-## 6. Frame and Calling Convention (Darwin arm64, scalar)
-
-**Linux integer-vector ABI (revision 0.32).** 8/16-byte vectors use v0..v7,
-independently of x0..x7; the ninth and later vectors use the shared argument
-stack with 8/16-byte alignment. All argument classes share that stack cursor,
-so a 128-bit integer or aligned record after a stacked 8-byte vector must
-round the physical stack offset, not the count of integer arguments.
-Homogeneous vector aggregates of one to four identical short vectors retain
-`hva=Cxvec<L, bits<N>>` in byval/sret marks. They use consecutive SIMD
-registers or go wholly to stack if the group does not fit; return uses v0..v3.
-Nonhomogeneous and wider-than-16-byte vectors use the ordinary by-reference
-record convention. Variadic vectors use the VR save area (16-byte slots),
-with HVA register slots gathered into their contiguous object layout;
-stack-resident HVAs use their packed object layout, not save-area stride.
-Mixed-compiler acceptance is required; self-calls alone cannot validate ABI.
-
-**Linux scalar FP/HFA ABI (0.33).** f32/f64 and HFA members consume the same
-v0..v7 cursor as integer vectors/HVAs. HFA groups go wholly to stack when they
-do not fit, with contiguous object bytes (not one eight-byte slot per float);
-return uses v0..v3. Anonymous float is promoted to double; double/HFA va_arg
-uses VR save slots when available and the packed stack object otherwise.
-HFA stack transport consumes the natural-member alignment recorded by EvoIR
-(`abi_align=16`, or 8 when omitted), not the complete object's overalignment.
-Caller placement, callee entry and `va_arg` use that same cursor alignment;
-copies from the stack may not claim a stronger source alignment than it supplies.
-This does not import Linux variadic rules into Darwin.
-
-The convention is Apple's AArch64 variant of AAPCS64, restricted to what
-this revision lowers; the restriction is refused, never approximated.
-
-**Records (revision 0.18; withdraws `E4011`).** EvoIR passes a record as a
-pointer to a copy marked `byval(size, align)` and returns one through a
-destination pointer marked `sret(size, align)` (EvoIR 10.1.3). The machine
-applies AAPCS64 to those marks on both targets, so an EvoCC object agrees
-with a GCC or clang object on either side of the call: a `byval` record of
-at most 16 bytes is loaded from the copy into the next one or two general
-registers as 8-byte chunks (a record whose alignment is 16 starts at an
-even register on Linux, as a `bits<128>` does) and, in the callee, stored
-into a frame slot that becomes the parameter's place; a `byval` record
-above 16 bytes stays a pointer to the caller's copy in the next register or
-stack slot, which is what AAPCS64 does too. An `sret` result of at most 16
-bytes is loaded by the callee into `x0` and `x1` before `ret` and stored by
-the caller into its destination; above 16 bytes the destination pointer
-travels in `x8`, not in an argument register, and the callee writes through
-`x8`. Measured shapes: `.evidence/builtin-probes/20260902-2c23684c/p35-int128.c`
-(`take_union`, `take_pair`) and the zstd fault (`tests/contracts/ladder-zstd-receipt.json`).
-
-**Arguments and results.** Integer and pointer arguments of at most 64 bits
-go in `x0` to `x7` in order. Between two EvoCC-compiled functions, a
-`bits<N>` argument with `N < 64` is passed in the low bits of its register
-with the upper bits unspecified, and the callee applies Section 3 before
-reading it as anything but a low-`N`-bit value. Across the host boundary the
-platform rule governs instead: a caller extends an argument narrower than 32
-bits to 32 bits and a callee may assume the bits above its parameter's width
-are that extension (Apple's AArch64 variant; revision 0.5, after the
-executor found the two rules unreconciled and the probe passed only because
-each host function masked its own argument; eighteen of forty comparisons
-failed once the probe stopped masking and was built at `-O2`). A call is
-**cross-boundary** when the callee's definition is not emitted beside the
-caller, which is a fact emission holds and EvoIR cannot spell, since every
-call EvoIR admits names a function the module defines (revision 0.7).
-
-EvoIR carries no signedness on a parameter, so the extension EvoMIR inserts
-is a **zero extension**: the value of a `bits<N>` is its low `N` bits, and a
-front end that must pass a signed narrow argument emits `sext` to
-`bits<32>` before the call, which is a lowering rule of the EvoIR
-specification, not a machine one (revision 0.7). A **result** narrower than 32 bits is
-zero-extended to 32 bits by the *callee*, on every return, not only where a
-boundary is known: a callee cannot know its caller, and the internal rule
-leaves those bits unspecified, so specifying them breaks nothing. Measured
-at revision 0.9, before the extension existed: a function returning
-`bits<8>` of the value 1 computed by negation returned 4294967295 where the
-host compiler's build of the same function returned 255, at every width
-tried; after it, 597 comparisons over three widths agree. `E4014` is
-therefore withdrawn. A ninth integer argument is refused (`E4010`); an aggregate argument
-or result is refused (`E4011`); a variadic call or callee is refused
-(`E4012`, the EvoIR `E3030` boundary). **Results:** an EvoMIR function
-returns up to eight integer or pointer results in `x0` to `x7` in order.
-C lowering never produces more than one, so the C ABI is unaffected; the
-convention exists so that the machine lane of Section 9 can execute the
-multi-result functions the randomized generator writes (revision 0.1's
-single-result rule refused 16,926 of 20,000). A ninth result is `E4013`.
-Measured against the reference compilers before this revision is first
-used for a call across the boundary (Section 9 names the probe).
-
-**Preserved registers.** `x19` to `x28`, `x29`, `x30` and `sp` are
-callee-saved; `x0` to `x17` are caller-saved; `x18` is untouchable.
-
-**Frame layout.** By default every function keeps a frame pointer. The prologue is
+### 6.9 Prologue and epilogue
 
 ```text
+paciasp                         ; with return signing
 stp x29, x30, [sp, #-16]!
 mov x29, sp
-sub sp, sp, #frame          ; frame is a multiple of 16
-stp/str of each used callee-saved register into its slot
+sub sp, sp, #frame              ; when frame is nonzero
+mov x16, sp                     ; over-aligned frame only (Section 6.10)
+and x16, x16, #-A
+mov sp, x16
+str each used callee-saved register, then each saved d8 to d15
+load the stack guard, str it into the canary slot          ; stack protector
+str x_k to x7 into the general save area                   ; variadic
+add x16, sp, #vector_area; stp q0, q1 ... q6, q7           ; variadic
 ```
 
-and the epilogue reverses it. Below the saved pair, in order: the
-callee-saved save area, then one slot per `frame.slot` (its declared size,
-rounded to its declared alignment, laid out in origin order from the top of
-the frame downward), then the spill area (one 8-byte slot per spilled
-virtual register), then the register save area of a variadic function
-(Section 6, 64 bytes), then outgoing stack arguments (Linux only, revision 0.10).
-`sp` stays 16-byte aligned at every call. Fixed slots remain in this frame;
-EvoIR's approved `alloca.dynamic` additionally moves `sp` at runtime.
+The epilogue restores the saved `d` registers and the callee-saved
+registers, then executes `mov sp, x29` (over-aligned or dynamic frame) or
+`add sp, sp, #frame`, `ldp x29, x30, [sp], #16`, `autiasp` with return
+signing, and `ret`. With the stack protector, every normal return first
+compares the canary with the guard and calls `__stack_chk_fail` on a
+mismatch.
 
-**Opt-in frame emission (revision 0.56).** The native-only `--frame-opt=LIST`
-selects a nonempty, duplicate-free subset of `paired-saves`, `shared-epilogue`
-and `leaf-frames`. The option occurs at most once and unknown names are errors;
-it is refused with `--check`. The exact-input `evo-ir-asm` adapter accepts the
-same list. All three default off: their absence leaves assembly and object
-bytes unchanged. The assembly header records the canonical requested list;
-eligibility is per function, so that header is not a transformation count.
-These variants do not change allocation, frame size, slot offsets, preservation
-sets, argument placement, EvoIR, certificates or interpreter behavior.
+A validated EvoIR `stack_protect` mark adds the canary slot; the guard is
+`__stack_chk_guard` through the GOT or a system register plus a byte offset.
+`pac-ret` signs `x30` with the incoming `sp` and authenticates it after `sp`
+is restored; return-address builtins strip the authentication bits. Under
+`-mgeneral-regs-only`, no SIMD register is saved, including the vector save
+area.
 
-- `paired-saves`: in a nondynamic frame, adjacent callee-saved slots at `o`
-  and `o+8`, with `o` a multiple of 8 and `0 <= o <= 504`, use one `stp` / `ldp`
-  of the corresponding X registers or preserved D halves. Odd remainders,
-  nonadjacent or unencodable slots and dynamic frames keep single transfers.
-  Each register retains its individual CFI rule immediately after the pair,
-  including Section 6's over-aligned saved-location expression.
-- `shared-epilogue`: with at least two return terminators and an exit sequence
-  longer than one instruction, place one complete exit at the last return in
-  layout order behind a function-unique local label. Every other return branches
-  there. The exit includes the entire canary check before any restoration,
-  restores the original SP before authentication, and retains its CFI
-  remember/restore-state pair. The label is stable under conditional-branch
-  relaxation. A sole return, or a frameless unsigned leaf whose exit is only
-  `ret`, is unchanged.
-- `leaf-frames`: omit the frame-record push, frame-pointer setup, frame-record
-  pop and their CFI only when there are no calls, saves, slots, spills,
-  outgoing/variadic areas, dynamic allocations/releases, stack guard, inline
-  assembly, incoming stack arguments or activation/incoming/save-area address
-  reads. The frame size must be zero. Return signing still emits
-  `paciasp` / `autiasp` at the unchanged SP; unwind tables retain the entry CFA
-  (`sp+0`) and applicable authentication-state directives.
+*Informative.* Positive, failure, over-aligned and dynamic-frame results are
+in `tests/fixtures/protected-frames.out`.
 
-Until separate kernel validation, **all** variants are suppressed by explicit
-frame-pointer or leaf-frame-pointer requests, `-mgeneral-regs-only`, a sysreg
-stack guard, or a nonzero patchable entry. This is the narrower N03f handoff
-admission rule, not a claim that paired saves require frame-pointer omission.
-No variant is automatically enabled by `-O2` or `-fomit-frame-pointer`.
+### 6.10 Over-aligned frames
 
-**Driver compatibility with the existing native model (revision 0.56).**
-`-fno-omit-frame-pointer` requests the unchanged frame-emission path;
-`-fomit-frame-pointer` clears that request (last occurrence wins), and permits
-removal only with the explicit leaf variant and its eligibility above.
-`-mno-omit-leaf-frame-pointer` sets an independent retaining request, not
-cleared by `-fomit-frame-pointer`. Neither
-spelling introduces ancestor return-address support. The backend has no sibling
-or tail-call transformation, so `-fno-optimize-sibling-calls` also selects the
-existing call/frame behavior.
+When a fixed object declares an alignment `A` greater than 16, the frame size
+is rounded up to a multiple of `A` plus `A - 16` of slack, and the prologue
+realigns `sp` through `x16` (a logical instruction cannot read `sp`). Every
+slot offset that is a multiple of `A' <= A` then gives an address that is a
+multiple of `A'`. The epilogue restores `sp` with `mov sp, x29`. The frame
+chain and the incoming arguments (read from `x29`) are unchanged.
 
-`-fno-align-functions`, `-fno-align-jumps`, `-fno-align-labels` and
-`-fno-align-loops` disable optional performance padding, which this backend does
-not insert. They never cancel instruction alignment, source `aligned` attributes,
-the effective minimum function alignment or patch-region requirements. Similarly,
-`-fno-prefetch-loop-arrays`, `-fno-tree-ch` and
-`-fno-tree-loop-distribute-patterns` forbid absent automatic prefetch,
-loop-header-copying and loop-pattern distribution/library-call transformations.
-Explicit source calls/builtins and object-copy lowering are not those transforms.
-These options leave existing IR/native semantics unchanged; any future pass
-implementing such a transform must honor them. Positive transform options and
-GCC allocator/reordering algorithms outside the bounded compatibility below
-remain unsupported. The application
-projectors preserve these admitted options and their written order. This is not
-a promise to reproduce GCC's optimization quality or assembly.
-See [GCC 14.2 optimization options](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Optimize-Options.html)
-for the source option meanings; the exact EvoCC behavior is specified above.
+*Informative.* The probe checks the addresses and live bytes of 32 recursive
+`aligned(256)` objects
+(`.evidence/builtin-probes/20260909-alignment-specifiers/stack.c`).
 
-**Bounded GCC tuning compatibility (revision 0.51).** The driver also admits
-exactly `-fira-region=one`, `-fira-hoist-pressure`, and
-`-freorder-blocks-algorithm=simple` as the following existing backend choices:
-allocation is one whole-function problem (Section 7), there is no code-hoisting
-pass to make pressure-guided hoisting decisions, and block placement preserves
-the allocated block sequence without trace-cache duplication. The hoisting
-pressure option does not enable a hoisting pass. The simple placement choice
-does not request GCC's particular locality heuristic, and the region choice
-does not request GCC's graph-coloring allocator. None changes source semantics,
-predefined macros, ABI, IR/proof identity, call preservation or native results.
-Their operation is deliberately no different from the current default; a future
-loop allocator, hoisting pass or block-placement optimization must honor these
-choices instead of inheriting these admissions as unconditional no-ops.
-Other region/algorithm values, positive hoisting, trace-cache replication and
-partition requests still fail closed. This bounded optimization compatibility
-must not be generalized to ABI/layout/language flags such as `-fpack-struct` or
-`-mabi`, or to `-Ofast`. Application projection preserves these requests even
-when the driver rejects them; listing a discarded semantic option is not an
-implementation of it. Diagnostic/output/assembler projection has separate
-acceptance obligations and is not declared complete here.
+### 6.11 Dynamic frames
 
-**Dynamic frames (revision 0.41, synchronization with EvoIR Appendix D).**
-Each `stack.alloc` evaluates its existing size operand once, subtracts that
-unsigned byte count from the current SP and rounds the object address down to
-`max(A, 16)` alignment. A private 16-byte header below the object records the
-previous SP; below that header, emission reserves the aligned outgoing-argument
-area. The header and outgoing arguments are not bytes of the user object.
-Fixed objects, callee-save slots and spills use addresses derived from the
-stable entry frame (`x29`, including the fixed frame's realignment), not the
-moving SP. Returning restores SP from `x29` before restoring the saved frame
-record; recursion therefore retains distinct activations.
+Each `stack.alloc` evaluates its size once, subtracts it from `sp`, and
+rounds the object address down to `max(A, 16)`. A private 16-byte header
+below the object records the previous `sp`, and the aligned outgoing area
+lies below the header; neither belongs to the object. Fixed objects, save
+slots and spill slots are addressed from `x29` (with the realignment of
+Section 6.10), not from the moving `sp`. A return restores `sp` from `x29`.
 
-`stack.release` restores the saved SP only when its object address identifies
-the current top allocation (current SP plus the outgoing area and header).
-Otherwise it leaves native stack storage reserved: ending a VLA scope must
-not pop a later function-lifetime `alloca`. Logical lifetime still ends,
-including in the interpreter, so retaining bytes does not authorize later
-access. Allocation and release use reserved scratch registers and do not
-clobber live NZCV. No stack-overflow guarantee or general non-top reclamation
-is introduced. These are the already-approved function-lifetime and VLA
-rules, not a new dynamic-storage model.
+`stack.release` restores the saved `sp` only when its address identifies the
+current top allocation (`sp` plus the outgoing area and the header);
+otherwise the storage stays reserved, so ending the scope of a
+variable-length array never pops a later function-lifetime `alloca`. The
+logical lifetime ends in every case. Allocation and release use the scratch
+registers and keep a live NZCV value. There is no stack-overflow guarantee.
 
-Physical frame bytes may be reused by distinct logical origins only when the
-address has one definition and every use is a direct, bounded, nonvolatile
-load/store/copy in the defining block, with disjoint closed access intervals
-(different blocks cannot overlap under this nonescape condition).
-Reuse requires identical size and alignment; address transport, arithmetic,
-calls, assembly, spills and repeated definitions retain separate storage.
-The origin-to-offset table retains every origin, object identity and lifetime
-semantics are unchanged, and simultaneous copy operands never overlap merely
-because their access instructions have the same index.
+### 6.12 Variadic functions
 
-**Over-aligned frames (revision 0.26).** When any `frame.slot` of the
-function declares an alignment `A` greater than 16, the frame is realigned:
-the prologue's `sub sp, sp, #frame` uses a frame size rounded up to a
-multiple of `A` plus `A - 16` of slack, and is followed by `mov x16, sp`,
-`and x16, x16, #-A`, `mov sp, x16`, using the reserved scratch register.
-The logical instruction cannot read `sp`: both sealed assemblers reject
-`and sp, sp, #-256` and accept this scratch-register sequence,
-so that `sp` itself is a multiple of `A`; every slot keeps its non-negative
-offset from `sp`, and a slot whose alignment is `A'` sits at an offset that
-is a multiple of `A'`, which now makes its address a multiple of `A'` for
-every `A' <= A`. The epilogue restores `sp` from the frame pointer, `mov sp,
-x29`, before the `ldp` of the saved pair, since the realigned `sp` is no
-longer `x29 - frame`. Incoming stack arguments are still read from `x29`,
-the frame chain is unchanged, and a function without such a slot is emitted
-exactly as before. Both oracles realign this way and the probe checks the
-real address and the live bytes of 32 recursive `aligned(256)` objects
-(`.evidence/builtin-probes/20260909-alignment-specifiers/stack.c`); the
-subject's earlier emission kept `sp` at 16 and returned a wrong value, the
-first silent native error the alignment work found. Every slot (object, spill, save area) is addressed
-from `sp` with a non-negative scaled offset, never from `x29`, so that frames
-above 256 bytes stay inside the unsigned twelve-bit immediate form; `x29`
-serves the unwinder and the debugger, not the code (revision 0.4).
+**Calls.** A call passes anonymous arguments exactly as named ones. The front
+end has already promoted narrow values, so nothing is inserted.
 
-**Stack arguments** (beyond `x7`). On the Linux target (revision 0.10) an
-argument that finds no register goes to the stack in an 8-byte slot, slots
-assigned in argument order at increasing addresses from the caller's `sp` at
-the call, a `bits<128>` in a 16-byte-aligned 16-byte slot; a narrow value
-occupies the low bytes of its slot with the rest unspecified (both oracles
-`str w` a promoted `char` into an 8-byte slot, `p34-callsite.c`). The
-caller reserves the outgoing area below its frame (Section 6 frame layout,
-"outgoing stack arguments"), and the callee reads slot `i` at `x29 + 16 +
-8 * i`, since the prologue saves the pair first. On Darwin the platform
-packs stack arguments by natural alignment instead; that rule is still
-unmeasured, so more than eight integer arguments stay `E4010` there.
+**Save areas.** The prologue of a variadic callee stores `x_k` to `x7` into
+the 64-byte general area at offsets `8 * k` to 56, where `k` is the number of
+argument registers of the named parameters (a `bits<128>` consumes two, with
+the rounding of Section 6.5), and `q0` to `q7` into the 128-byte vector area
+at offsets `16 * j`. It stores the vector registers even when it reads no
+floating-point value, because a reference-compiled caller passes an
+anonymous `double` in `q0` to `q7` and a `va_list` handed on (`vsnprintf`)
+is read by another function's `va_arg`.
 
-**128-bit arguments and results (revision 0.10; Darwin corrected at
-0.13).** On Linux a `bits<128>` argument takes two consecutive registers
-`x(2k)`, `x(2k+1)`, the low half in the even one: the next register number
-is rounded up to even first, so after one 64-bit argument it is `x2`:`x3`
-with `x1` skipped, after two it is `x2`:`x3` with nothing skipped, and
-after seven it goes to the stack, whole, 16-aligned, with `x7` unused. On
-Darwin the platform does **not** round: the argument takes the next two
-registers whatever their parity, `x1`:`x2` after one 64-bit argument and
-`x3`:`x4` after three, and after seven it goes to the stack (measured with
-Apple clang, `.evidence/builtin-probes/20260905-b6/b6-darwin-abi.c`,
-`b6-darwin-abi.out`, functions `take_after_one`, `take_after_three`,
-`take_after_seven`; the executor found the revision 0.10 sentence
-unmeasured on Darwin and stopped rather than guess). A `bits<128>` result is `x0`:`x1`, low half in
-`x0`. Every row is measured with both oracles (`p35-int128.c`, functions
-`ret128`, `take_after_one`, `take_after_two`, `take_after_seven`; `p34-p35.out`
-and `p34-p35-clang.out`). Records are never passed by value in EvoIR (its
-10.1.3 sends a pointer to a copy), so the oracles' rule for 16-byte-aligned
-records (`take_union`, even pair) is recorded and unused.
+**The list object** is 32 bytes: `stack` (pointer, offset 0), `gr_top` (8),
+`vr_top` (16), `gr_offs` (signed 32-bit, 24) and `vr_offs` (28). `va_start`
+stores `stack = x29 + 16 + named_stack_bytes` (the extent of the named
+incoming stack arguments with alignment padding, rounded up to 8, without the
+final padding of the caller's area); `gr_top =` general area `+ 64` and
+`gr_offs = -8 * (8 - k)`; `vr_top =` vector area `+ 128` and
+`vr_offs = -16 * (8 - v)`, where `v` (at most 8) is the number of vector
+registers that named FP, HFA, vector and HVA parameters consumed.
 
-**Variadic functions (revision 0.10; withdraws `E4012`).** A call passes
-anonymous arguments exactly as it passes named ones: same registers, same
-slots, no distinction (`call_v` and `call_f` in `p34-callsite.c` are
-instruction-for-instruction identical under both oracles), and the front
-end has already promoted narrow values, so nothing is inserted. A variadic
-**callee** reserves a 64-byte, 16-byte-aligned **register save area** in its
-frame and stores `x_k` to `x7` into it at offsets `8 * k` to `56` in the
-prologue, where `k` is the number of argument registers its named
-parameters consumed (a `bits<128>` parameter consumes two and the rounding
-above). The list object is 32 bytes: `stack` (a pointer, offset 0),
-`gr_top` (offset 8), `vr_top` (offset 16), `gr_offs` (a signed 32-bit
-integer, offset 24), `vr_offs` (offset 28). `va_start` stores
-`stack = x29 + 16 + named_stack_bytes`, where `named_stack_bytes` is the
-extent of named incoming stack arguments, including argument-alignment
-padding and rounded up to 8 bytes, but excluding final caller stack-area
-padding. With no named stack arguments it is zero. This is the AAPCS64
-`va_start` rule, measured with both sealed oracles in
-`.evidence/builtin-probes/20260907-variadic-stack/results.txt` and covered by
-`tests/fixtures/variadic-named-stack.c`. The remaining fields are `gr_top = save area +
-64`, `gr_offs = -8 * (8 - k)`; `k = 8` gives `gr_offs = 0` and every
-general-register argument comes from the stack.
-
-**Vector register save area (revision 0.28).** A variadic callee also
-reserves a 128-byte, 16-byte-aligned vector save area and stores `q0` to
-`q7` into it at offsets `16 * j` in the prologue (`stp q0, q1, ...`
-pairs), and `va_start` stores `vr_top = vector save area + 128` and
-`vr_offs = -128`. It does so even though this profile executes no
-floating point: the callee's own code never reads those registers, but a
-caller compiled by a reference compiler passes a `double` anonymous
-argument in `q0` to `q7`, and a `va_list` this function hands to another
-function (`vsnprintf`) is read by that function's `va_arg` of `double`,
-which takes `vr_offs < 0` as "the value is in the save area". Both sealed
-oracles store all eight registers and write `-128` at `-O0` and `-O2`
-(`.evidence/builtin-probes/20260909-variadic-vector-save/wrapper.c`,
-`results.txt`, printing `7 1e+09 11`); the earlier text, which set
-`vr_offs = 0` and called the field never read, described a program built
-entirely without floating point and was wrong for a mixed link. Measured
-consequence: with `vr_offs = 0`, every musl variadic wrapper EvoCC compiled
-(`snprintf`, `swprintf`, `fprintf`) made the floating-point formatting
-tests of libc-test fail (`printf-fmt-g-*`, `printf-1e9-oob`, `snprintf`,
-`swprintf`, `strtod_simple`: 12 cases in run `20260909T070307Z`), and the
-bisection could not separate them, which capped the passing build at 498
-of 995 assembled units. Named scalar FP, HFAs and integer vectors/HVAs consume vector
-registers: `vr_offs = -16 * (8 - named_vector_registers)` with the count
-capped at eight. Revision 0.33 admits `va_arg.f64` and marked scalar HFAs.
-Darwin passes every anonymous
-argument on the stack and has no save areas (revision 0.20's note). `va_arg` of a type of size `S` (rounded up to a
-multiple of 8 as `S8`) and alignment `A` performs the procedure of the
-AAPCS64 Appendix B restricted to general registers:
+**`va_arg`** of a type of size `S` (rounded up to a multiple of 8 as `S8`)
+and alignment `A` follows AAPCS64 Appendix B. For a general-register type:
 
 ```text
 offs = gr_offs
@@ -1128,468 +960,543 @@ if A == 16: address = (address + 15) & ~15
 stack = address + S8
 ```
 
-then loads `T` from `address`. This procedure, written by hand in
-`p34-varargs.c`, agrees with GCC-14's and Clang-19's own `va_arg` on
-fourteen consecutive items covering `int`, `long`, `__int128` (the
-16-byte rounding of `gr_offs` and of `stack`), a 16-byte record in the
-save area, a 24-byte record by reference, and the crossing from registers
-to stack for `k` of 1, 7 and 8. `va_end` emits nothing. Only the promoted
-scalar types of EvoIR 3.10 reach `va_arg`; the record rows above are
-measured for the day a unit needs them.
+then loads `T` from `address`. `va_arg.f64` and marked scalar HFAs use the
+same procedure on `vr_offs`, `vr_top` and 16-byte slots; HVA register slots
+are gathered into their contiguous object layout, and a stack-resident HFA or
+HVA uses its packed layout. `va_end` emits nothing. Only the promoted scalar
+types of EvoIR Section 3.10 and marked HFA and HVA types reach `va_arg`.
+
+*Informative.* Probes: `p34-varargs.c` (fourteen items, GCC-14 and Clang-19),
+`.evidence/builtin-probes/20260907-variadic-stack/results.txt` and
+`.evidence/builtin-probes/20260909-variadic-vector-save/wrapper.c`.
+
+### 6.13 Optional frame variants
+
+`--frame-opt=LIST` selects these variants (Section 1.4). They change no
+allocation, frame size, slot offset, preserved set, argument placement,
+EvoIR or interpreter behavior. Eligibility is per function, and `-O2` or
+`-fomit-frame-pointer` enables none of them.
+
+- **`paired-saves`.** Without dynamic allocation, adjacent save slots at `o`
+  and `o + 8` (`o` a multiple of 8, `0 <= o <= 504`) use one `stp`/`ldp`;
+  each register keeps its own CFI rule.
+- **`shared-epilogue`.** With two or more returns and an exit longer than one
+  instruction, one complete exit (canary check, restoration, authentication,
+  CFI state) sits at the last return behind a function-unique label, and the
+  other returns branch there.
+- **`leaf-frames`.** The frame record and its CFI are omitted when the frame
+  size is zero and the function has no calls, saves, fixed objects, spill
+  slots, outgoing or variadic areas, dynamic allocations, stack guard, inline
+  assembly, incoming stack arguments, or reads of an activation, incoming or
+  save-area address. Return signing and the entry CFA (`sp + 0`) stay.
+
+### 6.14 Compatibility options
+
+`-fno-omit-frame-pointer` requests the default frame path and makes the
+function protected; `-fomit-frame-pointer` clears that request (last
+occurrence wins) and permits frame removal only through `leaf-frames`;
+`-mno-omit-leaf-frame-pointer` is an independent request. These options name
+existing behavior: `-fno-optimize-sibling-calls`, `-fno-align-functions`,
+`-fno-align-jumps`, `-fno-align-labels`, `-fno-align-loops`,
+`-fno-prefetch-loop-arrays`, `-fno-tree-ch` and
+`-fno-tree-loop-distribute-patterns` forbid transformations and padding that
+the backend does not perform; `-fira-region=one`, `-fira-hoist-pressure` and
+`-freorder-blocks-algorithm=simple` name one whole-function allocation, no
+hoisting pass and block placement in allocated order. They change no
+semantics, ABI or output, and a future pass must honor them. Other values,
+positive transformation options, `-fpack-struct`, `-mabi` and `-Ofast` are
+refused.
 
 ## 7. Out-of-SSA and Register Allocation
 
-**Out-of-SSA.** Block arguments are removed by placing, on each edge, the
-parallel copy from the values the terminator passes to the target's
-arguments, resolved into a sequence of moves with at most one scratch: a
-reserved virtual register that the allocator pins to `x16`, which is
-excluded from the allocatable set, so that the pass stays on virtual
-registers (revision 0.4). Where the copy goes is a rule, not a choice: at
-the end of the predecessor when the predecessor has one successor; at the
-top of the target when the target has one predecessor; otherwise the edge
-is split by inserting a block. A copy placed at the end of a predecessor
-with two successors would run on both edges, and a copy placed between a
-`cmp` and its `b.cond` would break the adjacency rule of Section 2; the
-allocation verifier found both before this sentence existed. The entry
-block's arguments have no incoming edge and survive this pass as the
-function's parameters; the allocator removes them by assigning `x0`
-onwards. This happens before allocation, as its own pass; the lowering of
-Section 5 does not do it.
+### 7.1 SSA destruction
 
-**Identical-value transport (revision 0.38).** At the validated SSA boundary,
-an ordinary block parameter may be identified with its sole distinct incoming
-value when all other incoming bindings pass that same parameter unchanged.
-Repeat this rule through forwarding chains; a phi with two distinct incoming
-definitions is not a trivial phi, even if their constant bits happen to agree.
-Counters, exchanged values and ordinary merges retain their parallel copies.
-Complete incoming edges are inspected, including different bindings from the
-same predecessor/target pair. Entry parameters remain caller bindings; entry
-backedges and functions containing fixed-register assembly operands, `asm.goto`
-or indirect dispatch are initially excluded from this reduction. Ordinary
-assembly in validated SSA form admits input/address-use rewriting, without
-altering its outputs, constraints, clobbers, effects or position (revision 0.39).
-Read/write or tied forms that redefine a virtual register do not satisfy that
-SSA precondition. In particular, an indirect union-copy
-self-edge may overwrite the source needed by another target, whose independent
-receiving location must not be removed by a direct-edge identity argument.
-Remove only the proven transport
-copies and rewrite their uses during SSA destruction, never in the local-SSA
-input form. No instruction, memory access, guard, lifecycle action, label or
-successor is moved or removed by this identity rule. Remaining copies follow
-the placement/cycle rules above and the independent allocation verifier.
+SSA destruction is its own pass before allocation. On each edge, it places
+the parallel copy from the values that the terminator passes to the
+arguments of the target, as a sequence of moves with at most one scratch: a
+reserved virtual register that the allocator pins to `x16` (`v30` for SIMD).
+The place of a copy is a rule:
 
-**Indirect entries (revision 0.29).** A computed edge cannot be split merely
-by changing its CFG target: `block_addr` and static relocations still denote
-the original label. Its explicit SSA parameters require non-conflicting
-receiving locations across all candidate targets. Before allocation, form
-one joint parallel-copy batch from all edges into distinct destination
-parameter virtual registers. Keep all destinations live at dispatch through
-the complete CFG, so allocation assigns independent registers or private
-spill slots; only proven identical address payloads may share a location.
-These spills implement SSA transport and are not new EvoIR storage objects.
-Resolve copy cycles using the existing scratch rule. If a self-edge's copy
-overwrites the virtual register holding the target, first capture the target
-in a fresh ordinary virtual register; keep it live through the final `br`.
-Direct, conditional and assembly edges use the same destination parameters.
-The final transfer emits `br xn`, not a call, with no ABI clobber or link-register
-write. Effect tokens disappear only after their ordering constraints have
-been respected; real address operands do not disappear with them.
+1. at the end of the predecessor, when it has one successor;
+2. otherwise at the top of the target, when it has one predecessor;
+3. otherwise in a new block that splits the edge.
 
-This joint batch prepares receiving locations only: it cannot perform object
-reads, scope entry/exit or other effects for unselected edges. Such actions
-must be routed on the selected path before dispatch by explicit control flow
-as specified in EvoIR 3.9. Label identities and every CFG successor survive
-lowering, allocation and emission, including labels referenced only by a
-static relocation. Missing edges are never repaired by assuming a likely
-target.
+A copy at the end of a predecessor with two successors would run on both
+edges, and a copy between a `cmp` and its `b.cond` would break Section 2.4.
+The arguments of the entry block survive as the function parameters; the
+allocator binds them to the ABI argument locations.
 
-**Assembly operands.** A constraint fixes what an `asm` operand may be, and
-the allocator must satisfy it before it satisfies anything else:
+**Dead-computation removal.** SSA destruction removes every discardable
+computation whose result nothing demands. Instructions that the `insts`
+table marks as not discardable (memory accesses, calls, assembly, guards)
+are never removed. The `evo-ir-asm` option `--retain-dead-computations`
+turns the removal off for attribution measurements.
+
+**Identical-value transport.** At the validated SSA boundary, a block
+parameter is identified with its sole distinct incoming value when all other
+incoming bindings pass that parameter unchanged, through forwarding chains;
+two distinct definitions are never identified. Entry parameters, entry
+back-edges, and functions with fixed-register assembly operands, `asm.goto`
+or indirect dispatch are excluded, and ordinary assembly admits only the
+rewriting of its input and address uses. Only proven transport copies are
+removed; no instruction, guard, label or successor moves.
+
+### 7.2 Indirect entries
+
+A computed edge cannot be split, because `block_addr` and static relocations
+denote the original label. SSA destruction forms one joint parallel copy from
+all edges into distinct destination parameters that stay live at the
+dispatch, so they get independent registers or private spill slots. When a
+self-edge's copy overwrites the target register, the target is first copied
+to a fresh register live through the final `br xn`, which is not a call.
+Effects of unselected edges are routed before the dispatch by explicit
+control flow (EvoIR Section 3.9). Every label and successor survives to
+emission; a missing edge is never repaired by a guess.
+
+### 7.3 Assembly operands
+
+The allocator satisfies `asm` constraints before anything else:
 
 | Constraint | Requirement on the allocator |
 |---|---|
-| `r`, `=r`, `+r` | any register of the operand's class |
-| `=&r`, `+&r` | a register no input operand of the same `asm` holds (early clobber) |
-| `rZ` | as `r`, except that an operand known to be the constant zero is the zero register and consumes no allocation |
-| `Q`, `=Q`, `+Q`, `Qo` | a register holding the operand's address, and the emitted reference is `[reg]` |
-| a digit | the same register as the output that digit names (a tied operand); the two intervals are one |
-| `I`, `J`, `K`, `L`, `i`, `n` | no register: the operand is an immediate the emitter writes literally, and the lowering has already refused a non-constant |
-| `p` | a register holding the address |
+| `r`, `=r`, `+r` | any general register of the class of the operand |
+| `=&r`, `+&r` | a general register that no input operand of the same `asm` holds (early clobber) |
+| `w`, `=w`, `+w` | any SIMD register of the class of the operand |
+| `=&w`, `+&w` | a SIMD register that no input operand holds |
+| `rZ` | as `r`; an operand known to be zero is the zero register and takes no allocation |
+| `Q`, `=Q`, `+Q`, `Qo` | a register that holds the address of the operand; the reference is `[reg]` |
+| a digit | the register of the output that the digit names (tied); the two live ranges are one |
+| `I`, `J`, `K`, `L`, `i`, `n` | no register: an immediate that emission writes literally; lowering refuses a non-constant |
+| `p` | a register that holds the address |
 
-A clobber names a register the `asm` writes: the allocator treats the whole
-instruction as defining it, so no live value may occupy it across the
-instruction, and `cc` clobbers the flags, which ends any `flags` value's
-adjacency. `memory` constrains nothing here; the maximal effects of the
-EvoIR instruction already order the `asm` against every other access.
-Defined at revision 0.6.
+**Clobbers.** No live value occupies a clobbered register across the `asm`.
+`cc` clobbers the flags. `memory` constrains nothing here, because the
+maximal effects of the EvoIR instruction already order the `asm`. `vN`, `dN`
+and `sN` name one physical register. Scratch registers are never assigned.
 
-**Fixed input occurrences (revision 0.39).** The same source value may supply
-independent operands bound to different physical registers. Materialize their
-distinct boundary copies before applying fixed locations; identical value and
-location requirements may share a copy. A tied input still shares its output's
-location, and contradictory fixed requirements within that tie remain invalid.
-This does not pin the original value's entire lifetime or change asm effects.
+**Fixed inputs.** One value can supply operands bound to different physical
+registers; each gets its own boundary copy before the fixed locations apply.
+A tied input shares its output's location, and contradictory fixed
+requirements in a tie are invalid.
 
-For EvoIR 1.9.80, an `i` operand may instead be a symbol plus a signed
-64-bit addend. It occupies no register and allocates no object. Lowering
-derives it from the existing address definitions, pointer casts and constant
-64-bit additions/subtractions; an unresolvable immediate is refused, never
-replaced by a register or zero. EvoMIR text writes `@symbol+addend` (the
-addend includes its sign and is always present, including `+0`); a label
-target is `@function^bN+addend`. Emission uses the same platform symbol or
-block spelling as static relocations, and `%c` suppresses any immediate prefix.
-Only `i` admits symbolic operands. The interpreter's opaque-assembly refusal
-and the allocator's register constraints are unchanged (revision 0.25).
+**Symbolic immediates.** An `i` operand can be a symbol plus a signed 64-bit
+addend, derived from address definitions, pointer casts and constant 64-bit
+additions or subtractions; an unresolvable one is refused. The text writes
+`@symbol+addend` (sign always present) or `@function^bN+addend` for a label.
 
-**Approved SIMD assembly (integer vectors 2026-09-20; scalar FP 0.50).**
-The `w`, `=w`, `+w`, `=&w` and `+&w` constraints carry `simd64`/`simd128`
-integer/polynomial vectors and scalar f32/f64 as `simd32`/`simd64` in the existing
-shared SIMD register bank; a tied input inherits its output's class and
-location, including an early-clobber output, while independent inputs and
-distinct outputs must not overlap forbidden locations. Input copies precede
-the asm, output stores follow it (on each selected `asm.goto` successor),
-and existing spill/parallel-copy machinery preserves all 32/64/128 operand bits and
-live source values. The allocator excludes every aliased clobber and its
-reserved scratch registers; the independent checker validates the constraint
-bank and assigned physical bank as well as overlap and dataflow. Default
-references emit `vN`; `%b/%h/%s/%d/%q` select that register's views, with
-accepted `vN/dN/sN` clobbers normalized to the same physical identity.
-`-mgeneral-regs-only` still rejects generated SIMD use; this extension does
-not admit f128, half, floating-vector or SVE asm or pretend that interpreters
-execute asm. Scalar default references still print `vN`; explicit `%s/%d`
-select the usual scalar instruction views. Transport does not quiet NaNs or
-raise FP status. The opaque instruction retains `fenv=true`; FP admission
-facts are invalidated across ordinary/goto assembly, and subsequent numeric
-operations recheck their own required controls. No new register bank, spill
-format, memory opcode or implicit floating-environment channel is introduced.
+**SIMD operands.** `w` constraints carry vectors as `simd64`/`simd128` and
+`f32`/`f64` as `simd32`/`simd64`. Input copies precede the `asm`; output
+stores follow it, on each selected `asm.goto` successor. Transport keeps all
+bits and raises no FP status. The `asm` keeps `fenv=true`, so FP admission
+facts are invalidated across it. `f128`, half precision, floating vectors
+and SVE are not admitted in `asm`.
 
-**Linear scan.** Instructions are numbered in block order (the order of
-Section 2); a virtual register's live interval is from its definition to
-its last use, extended across any block in which it is live on entry to
-cover the whole block. The allocator walks intervals by start point,
-assigns a free physical register of the class, and on exhaustion spills the
-interval with the furthest next use to a frame slot; a spilled value is
-reloaded before each use and stored after its definition. Fixed operands
-(argument and result registers at calls and at the function boundary,
-`x16`/`x17` in emitted sequences) are pre-assigned intervals the allocator
-must respect; a call clobbers every caller-saved register, so an interval
-live across a call is assigned a callee-saved register or spilled. Ties are
-broken by virtual register number, and among free registers the first in the
-target's ordered class/across-call candidate pool is taken by default, so
-allocation is deterministic and the emitted text is a stable digest.
-Physical allocation performs no interference-relaxing coalescing beyond removing a
-move whose two operands got the same register; the preceding identical-value
-SSA transport reduction is independent of physical locations.
+### 7.4 Linear scan
 
-**Copy-location hints (revision 0.60).** The explicit native-only option
-`--regalloc-opt=copy-hints` may prefer an assigned or fixed location of a
-same-class copy peer. Peers are examined in deterministic instruction order.
-The location must belong to the unchanged candidate pool and be free over
-the entire existing interval, including future pins and assembly clobbers.
-A hint must not add a new callee-save location when the ordinary free choice
-would not. Otherwise use the ordinary first-free choice. Interval bounds,
-overlap, tied/early-clobber constraints, spill priorities and the independent
-allocation verifier are unchanged. The option never forces a register or
-admits a cross-class copy. Only existing physically identical copies can be
-removed. Kernel markers, nonzero patchable entries and explicit frame-pointer
-requests suppress the option, as for selection/frame variants. Its header
-records the request, not eligibility or a size claim; OFF preserves old output.
+Instructions are numbered in block order. A live range runs from the
+definition to the last use, extended over every block in which the value is
+live on entry. The allocator walks live ranges by start point and assigns
+the first free register of the class in the order of Section 2.5 (the
+across-call set for a range that spans a call). Argument and result
+registers, `x8` for an indirect result and the scratch pins are pre-assigned.
+Allocation is deterministic.
 
-**Bounded spill progress (revision 0.59).** The implementation retains its
-64-retry ceiling. Spill-rewrite temporaries are not recursively spillable:
-each retry must spill at least one previously unspilled value from before the
-first rewrite. If no such victim remains, allocation refuses instead of
-expanding reload/store code again. This is a fail-closed implementation limit,
-not a proof that every refused function has no possible allocation. It does
-not relax the independent output verifier or change instruction semantics.
-When call-argument pins exhaust a stack argument's entire candidate pool,
-the already-evaluated outgoing stack arguments are stored before those
-fixed-register copies. Store order, copy order, offsets and call bindings
-remain unchanged; no instruction moves outside that call's generated
-preparation sequence. Nonsaturated preparations retain their prior order.
+**Spills.** When no register is free, the allocator spills the overlapping
+live range whose next use is furthest away; on equal distance, the lower
+virtual register number is spilled. If the current live range reaches
+further than all of them, it is spilled. A spilled value is reloaded before
+each use and stored after its definition, and the scan runs again, at most
+64 times. Spill temporaries cannot be spilled again: each retry must spill a
+value that existed before the first rewrite, or allocation refuses. This is
+a fail-closed limit, not a proof that no allocation exists.
 
-**Local reload reuse (revision 0.62).** `--regalloc-opt=reload-reuse`, optionally
-combined with `copy-hints` in the same comma-separated list, can remove a
-repeated reload of the same logical spill slot and exact register class into
-the same assigned physical location. It runs after scan and identity-copy
-removal, before slot compaction. Both holders require unique definitions;
-the removed destination's uses must remain local to that block, with no edge
-transport. Uses are redirected to the retained definition. No live interval,
-physical assignment or spill decision is changed; a removed identity's unused
-assignment is dropped. The independent allocation verifier is unchanged.
+**After the scan.** The allocator removes each move whose two operands got
+the same register; it does no other coalescing. Then it compacts the logical
+spill slots: slots that are never live at the same time share storage.
 
-Availability is block-local and invalidated by any overlapping physical
-definition, a write to that logical spill slot, calls, assembly and every
-non-discardable non-spill instruction. Only locations in the unchanged
-ordinary candidate pools are remembered; reserved expansion scratch is not.
-Stores are not forwarded. Class/width changes, multiple definitions and
-nonlocal uses keep their reloads. The rewrite uses existing spill and operand
-facts and changes no instruction meaning. The same protected profiles suppress
-both allocation variants; omission remains OFF. Unknown, empty and duplicate
-list entries are refused. The header records the canonical request, not an
-eligibility, proof or benefit claim.
+### 7.5 What the allocation must satisfy
 
-The output is verified, not trusted (Section 9): every physical register
-read is defined on every path, no two simultaneously live values share a
-register, and every `flags` producer is adjacent to its consumer.
+The output is verified, not trusted (Section 9.2): every register read holds
+the expected value on every path, no two simultaneously live values share a
+register, every constraint of Section 7.3 holds, and every `flags` producer
+is adjacent to its consumer.
+
+### 7.6 Optional allocation variants
+
+`--regalloc-opt=LIST` selects these variants (Section 1.4). Live ranges,
+constraints, spill priorities and the allocation verifier are unchanged.
+
+**`copy-hints`.** For a same-class copy, the allocator can prefer a location
+that a copy peer already has, when it is in the candidate set and free over
+the whole live range, including future pins and assembly clobbers. A hint
+never opens an unused callee-saved register and never forces a register.
+
+**`reload-reuse`.** Before spill-slot compaction, a repeated reload of the
+same spill slot, with the same class, into the same physical register can be
+removed when both values have unique definitions and the removed value has
+only uses in its block, not on edges. Availability ends at the block end, an
+overlapping physical definition, a write to that slot, a call, assembly and
+every non-discardable instruction that is not a spill. Stores are not
+forwarded.
 
 ## 8. Emission
 
-**The two targets.** They differ in four places and nowhere else, each
-measured by emitting one module both ways (revision 0.9):
+### 8.1 ABI profile syntax
 
-| | Darwin arm64 | Linux AArch64 |
+The ABI profile is a parameter of emission, not a build-time choice.
+
+| | Linux | Darwin |
 |---|---|---|
-| symbol prefix | `_main` | `main` |
-| page-relative pair | `_g@PAGE`, `_g@PAGEOFF` | `:pg_hi21:g`, `:lo12:g` |
-| sections | `.section __TEXT,__text,…`, `.section __DATA,__data` | `.text`, `.data` |
-| local labels | `Lmain_block0` | `.Lmain_block0` |
+| Symbol prefix | none (`main`) | `_` (`_main`) |
+| Local label prefix | `.L` | `L` |
+| Page address of `g` | `adrp x, g`; `add x, x, :lo12:g` | `adrp x, _g@PAGE`; `add x, x, _g@PAGEOFF` |
+| GOT address of `g` | `adrp x, :got:g`; `ldr x, [x, #:got_lo12:g]` | `adrp x, _g@GOTPAGE`; `ldr x, [x, _g@GOTPAGEOFF]` |
+| Text section | `.text` | `.section __TEXT,__text,regular,pure_instructions` |
+| Data section | `.data` | `.section __DATA,__data` |
+| Read-only section | `.section .rodata,"a",%progbits` | `.section __TEXT,__const` |
+| Zero-filled section | `.bss` | `.section __DATA,__bss,zerofill` |
+| Symbol type and size | `.type`, `.size` | none |
+| Weak definition | `.weak name` | `.globl name`, `.weak_definition name` |
+| Weak reference | `.weak name` | `.weak_reference name` |
+| Hidden visibility | `.hidden` | `.private_extern` |
+| Protected visibility | `.protected` | refused |
+| Lifecycle registrations | `.init_array.NNNNN`, `.fini_array.NNNNN` | `__DATA,__mod_init_func` |
+| Producer note | `.ident "EvoCC VERSION aarch64-unknown-linux-gnu"` | none |
 
-The target is a parameter of emission (`darwin-arm64`, `linux-aarch64`), not
-a build-time choice.
+The EvoMIR text spells `@FUNCPAGE`/`@FUNCPAGEOFF` for a function symbol;
+the emitted page spelling is the same for globals and functions.
 
-The assembly text is the platform assembler's syntax. Functions are emitted
-in module order, each as `.globl` (external functions only, revision 0.16)/`.p2align log2(align)` (the function's `align=N`, EvoIR 1.9.88, 4 when absent; revision 0.26)/label/body; globals as data
-in `.data`/`.bss`/`.rodata` (`__DATA,__data` etc. on Darwin) with their
-EvoIR initial bytes; symbols get the platform prefix (`_` on Darwin).
-Static pointer relocations are supported: revision 0.12 emits each
-`(offset, @symbol, addend)` as `.xword symbol+addend` at its specified byte
-offset, preserving surrounding data; revision 0.15 also permits the
-function/block local symbols of Section 5. This is in addition to address
-materialization and call relocations; the later external-symbol, linkage,
-TLS and relative-label rules specify their own forms. A static pointer is
-not itself a refusal (`E4005` was withdrawn at 0.12); frontend `E3026`
-remains the boundary for unsupported initializer expressions, not all
-symbolic addresses. In `%l[...]` the bracket holds the label's position in the declared list, counting from zero, or `bN` naming that position; a label has no name of its own in either representation (revision 0.8, taken at the point of use and to be revisited when a C front end lowers a real `asm goto`). An `asm` is emitted as its template with every operand reference replaced:
-`%0` to `%9` and `%[name]` by the operand's register in its natural width,
-`%w0` and `%x0` by the 32-bit and 64-bit spelling of that register, a `Q`
-operand by `[reg]`, an immediate operand by its value, `%l[label]` by the
-block label, and `%%` by one percent. The template's own text is copied
-verbatim and never parsed. The emitted text is
-deterministic and is what the receipt digests.
+### 8.2 Functions and data
 
-**External symbols (revision 0.24).** A `call @f` whose `@f` is an EvoIR
-`declare` uses the platform's `bl` symbol spelling. The address of an EvoIR
-`extern` object or `declare` function, whether strong or weak, uses GOT indirection: Linux emits
-`adrp reg, :got:symbol` followed by `ldr reg, [reg, #:got_lo12:symbol]`;
-Darwin uses `_symbol@GOTPAGE` and `_symbol@GOTPAGEOFF`. This reads the
-linker's address slot, not the C object's contents, and adds no EvoIR memory
-operation. An absent weak definition has address zero. Defined objects and
-functions keep the direct page-relative recipe; calls are unchanged. The object file carries
-undefined symbol references resolved by the linker, including in a PIE without
-requiring a direct relocation against external data. The minimal `environ`
-program is measured against GCC-14 and Clang-19 in
-`.evidence/builtin-probes/20260908-external-object-pie/results.txt`; both source
-builds run with exit zero, while the former direct-address subject fails PIE
-linking. This body change is authorized by the user's 2026-09-08 benchmark
-closure instruction. Every such call is cross-boundary in the sense of Section 6, so the
-platform's extension rule applies to its narrow arguments. The native lane
-of Section 9 may link a program against the host C library for the 10.1.14
-library set and against reference-compiled objects for anything else; the
-interpreter lanes report the EvoIR codes `E3039`/`E3040` and the native
-result decides, exactly as for assembly (revision 0.6).
+The assembly text starts with the header lines of Sections 1.4 and 5.2.
+Functions follow in module order: `.globl` (external functions only),
+`.p2align log2(N)` for `align=N` (`.p2align 2` without it), `.type` (Linux),
+the label, the body and `.size` (Linux). Globals follow with their EvoIR
+initial bytes. The text is deterministic and is what the receipts digest.
+Each static relocation `(offset, @symbol, addend)` of a global is
+`.xword symbol+addend` at its offset; it can name a function, a global, or the
+local symbol `.L<function>.<block>` at the first instruction of a block.
 
-The first replay exposed the same relocation defect for an external function
-address (`longjmp` in TinyCC). Both sealed source builds of
-`tests/fixtures/external-function-pie.c` pass PIE linking and execution, whereas
-the direct subject reference to `puts` fails linking under both; see
-`.evidence/builtin-probes/20260908-external-object-pie/function-results.txt`.
-The address rule is consequently shared by both undefined-symbol tables,
-not specialized to the first failing symbol kind.
+**Data spelling.** A global whose bytes are all zero, whose `initialized=`
+bits are all set and which has no relocation goes to the zero-filled section
+as alignment, symbol and one `.zero N`; emission returns to the text section
+after it when it is the last global. Every other global goes to the data
+section, where a run of at least sixteen zero bytes is one `.zero N` and the
+bytes between runs are `.byte` lists of at most sixteen. A run never crosses a
+relocation. A byte whose `initialized=` bit is clear is emitted as zero, and a
+global that is not fully initialized is never zero-filled.
 
-**Linkage (revision 0.16).** An EvoIR function or global whose
-`visibility` is `internal` is emitted without `.globl`, so its symbol is
-local to the object. Before emission, every internal function that no
-`call`, `func_addr`, `block_addr` relocation or other emitted function
-references is dropped, and the check repeats until no internal function
-is dropped; an internal global is kept, since data is cheap and a
-relocation may name it. Module assembly may reference any symbol, so a
-symbol named in a module assembly entry counts as referenced. This is
-what lets two EvoCC objects that share a header link together (EvoIR
-1.9.70).
+### 8.3 Inline assembly
 
-**Linkage marks (revision 0.22).** A function or global with `linkage=weak`
-(EvoIR 1.9.79) is emitted with `.weak name` where `.globl name` would stand;
-on Darwin the definition is `.globl name` followed by `.weak_definition name`.
-An `extern` or `declare` with `linkage=weak` is emitted as `.weak name`
-(Darwin `.weak_reference name`) with no definition, so the linker resolves the
-reference to zero when nothing defines it. An `alias @name = @target` is
-emitted directly after the target's definition as `.globl name` (`.weak name`
-when the alias is weak, nothing when it is internal), `.type name, %function`
-or `%object` following the target's kind on ELF, and `.set name, target`, both
-symbols carrying the platform prefix. An alias counts as a reference to its
-target, so an internal target of an emitted alias is never dropped. Nothing is
-copied: the alias has no bytes and no body of its own, and a symbol size,
-where the emitter states one, is stated for the target only. The Linux target
-is the one this revision measures; the Darwin spellings are stated, not yet
-measured.
+An `asm` is emitted as its template with every operand reference replaced:
+`%0` to `%9` and `%[name]` by the register of the operand in its natural
+width; `%w0` and `%x0` by the 32-bit and 64-bit spelling; a SIMD operand by
+`vN`, or by a view with `%b`, `%h`, `%s`, `%d`, `%q`; a `Q` operand by
+`[reg]`; an immediate by its value (`%c` suppresses the prefix); a symbolic
+immediate by the profile spelling of the symbol or block; `%l[label]` by the
+block label; `%%` by one percent sign. In `%l[...]`, the bracket holds the
+position of the label in the declared list, counting from zero, or `bN` that
+names that position. The template text is copied verbatim and never parsed.
 
-**ELF visibility (revision 0.30).** Carry the validated EvoIR symbol marks
-through allocation to emission. Hidden and protected definitions remain
-global/weak according to their independent strength; emit `.hidden` or
-`.protected` for definitions, aliases and actually referenced declarations.
-An unused undefined declaration must not create a new linker dependency.
-Protected binding applies to the final executable/DSO, not this module;
-strong hidden/protected references may use direct addresses, whereas
-default-visible PIC references use the GOT even for a same-module definition.
-Weak references retain GOT lookup and unresolved-null behavior. Direct calls
-retain named relocations so the linker applies final component binding.
-Source visibility("internal") already arrives as hidden, never as C static.
-Darwin has no protected equivalent: native compilation refuses that mark,
-not silently replacing it with hidden. The ELF component probes are
-`tests/fixtures/symbol-component-*.c`; `.protected` has the GNU assembler's
-[component-binding semantics](https://sourceware.org/binutils/docs/as/Protected.html).
+### 8.4 External symbols
 
-**Data spelling (revision 0.20).** A global whose bytes are all zero,
-whose EvoIR 2.1 `initialized=` bits are all set and which carries no
-relocation is emitted in the target's zero-filled section (`.bss`;
-`.section __DATA,__bss,zerofill` on Darwin) as alignment, symbol and one
-`.zero N`, and emission returns to the text section after the last global
-when that global was zero-filled. Every other global is emitted in the data
-section, where a run of at least sixteen zero bytes is one `.zero N` and
-the bytes between runs are `.byte` lists of at most sixteen; a run never
-crosses a relocation, which keeps the `.xword symbol+addend` at its own
-offset. A byte whose `initialized=` bit is clear is emitted as the zero
-EvoIR stores for it, and a global that is not fully initialized is never
-zero-filled. Measured: a 1,000,001-byte zero array went from 1,000,003
-assembly lines to 4 and the static image to within 56 bytes of GCC's.
+A `call @f` to an EvoIR `declare` uses the profile's `bl` spelling and is
+cross-boundary (Section 6.2). The address of an EvoIR `extern` object or
+`declare` function, strong or weak, uses GOT indirection (Section 8.1): it
+reads the linker's address slot, adds no EvoIR memory operation, and is zero
+for an absent weak definition. Defined symbols keep direct page-relative
+addresses, so a PIE needs no direct relocation against external data. The
+interpreter lanes report `E3039`/`E3040` for external calls, and the native
+run decides.
 
-**Darwin variadic note (revision 0.20).** Apple's AArch64 variant passes
-every anonymous argument on the stack, where Linux uses the same registers
-as for named arguments (Section 6, revision 0.10). The Darwin lane still
-judges by exit status only; `printf` through a Darwin build prints wrong
-values until a Darwin variadic rule is measured and written.
+*Informative.* PIE measurements:
+`.evidence/builtin-probes/20260908-external-object-pie/results.txt`,
+`tests/fixtures/external-function-pie.c`.
 
-**Module assembly (revision 0.14).** Every entry of the EvoIR module
-assembly table (EvoIR 2.1, revision 1.9.66) is emitted verbatim, in table
-order, after the last function and the last global of the unit. Emission
-does not parse an entry and substitutes nothing into it; it precedes the
-first entry with a `.text` directive and follows the last with one, so an
-entry that switches sections cannot change where a later revision's
-trailing output lands.
+### 8.5 Linkage
+
+**Internal symbols.** A function or global with `visibility` `internal` is
+emitted without `.globl`. An internal function that no call, address,
+relocation, alias or module assembly entry references is dropped, repeatedly
+until none is dropped. Internal globals are kept.
+
+**Linkage marks.** `linkage=weak` on a definition gives the weak definition
+spelling of Section 8.1 in place of `.globl`. An `extern` or `declare` with
+`linkage=weak` gives a weak reference with no definition, which the linker
+resolves to zero when nothing defines it. An `alias @name = @target` follows
+the definition of the target: `.globl name` (`.weak name` when weak, nothing
+when internal), `.type name, %function` or `%object` on ELF, and
+`.set name, target`, both with the profile prefix. An alias is a reference to
+its target and has no bytes or body; a size is stated for the target only.
+The Darwin spellings are stated, not measured.
+
+**Visibility.** Emission writes the visibility directive for definitions,
+aliases and referenced declarations; an unused declaration creates no linker
+dependency. Strength is independent of visibility. Strong hidden and
+protected references can use direct addresses; default-visible PIC
+references use the GOT even for a local definition; weak references keep the
+GOT. Direct calls keep named relocations.
+
+*Informative.* ELF component probes: `tests/fixtures/symbol-component-*.c`.
+
+### 8.6 Sections
+
+**Function placement.** The validated EvoIR module supplies each
+definition's `section`, alignment and patchable entry as emission inputs that
+EvoMIR text cannot replace. Linux selects `.section "name","ax",%progbits`
+(or the text section) before the alignment, padding, symbol and body; labels,
+CFI and `.size` stay there. Names are escaped, never interpolated.
+
+**Individual sections.** `-ffunction-sections` and `-fdata-sections` (off by
+default; with their `-fno-` forms, the last occurrence wins) select
+symbol-named sections for definitions without an explicit section:
+`.text.<symbol>`, `.data.<symbol>`, `.bss.<symbol>` (mutable zero-fill),
+`.rodata.<symbol>`, `.data.rel.ro.<symbol>` (read-only with PIC
+relocations), `.tdata.<symbol>` and `.tbss.<symbol>`. Symbol attributes do
+not change, and aliases get no section. These options permit linker garbage
+collection; they do not guarantee the retention of a `used` symbol.
+
+**Lifecycle and TLS.** Lifecycle roots emit aligned symbol relocations into
+`.init_array.NNNNN`/`.fini_array.NNNNN` (unsuffixed for the default
+priority). TLS emits `.tdata`/`.tbss` with SHF_TLS and STT_TLS; global- and
+local-dynamic addressing use TLSDESC with its resolver clobbers and
+TPIDR_EL0, never `x18`; initial- and local-exec use their relocations.
+
+Placement and these sections on Darwin are refused (`E4009`), never ignored.
+
+### 8.7 Patchable entries
+
+For `patchable_entry=N,M`, Linux emission places `M` NOPs before the
+callable symbol and `N - M` after it, before return signing and frame setup;
+CFI and the function size start at the symbol. For `N > 0`, an aligned
+64-bit relocation in `__patchable_function_entries` names the first NOP,
+with SHF_LINK_ORDER to the code section. Alignment padding precedes the
+patch region. Darwin refuses a nonzero patchable entry.
+
+### 8.8 Unwind tables and the tiny code model
+
+Requested unwind tables use the stable `x29` CFA, explicit saved-register
+locations (DWARF expressions for over-aligned frames), per-return state
+restoration and return-signing state toggles; the last explicit option wins.
+The tiny code model emits `adr` for a direct address and `ldr x, :got:g` for
+an interposable one.
+
+*Informative.* Backtrace measurements: `tests/fixtures/unwind-and-tiny.out`.
+
+### 8.9 Strict alignment
+
+Scalar loads and stores keep the alignment of the EvoIR access guard as the
+` [align=N]` suffix (Section 4.1); the operation still transfers the whole
+value, including provenance. Under `-mstrict-align`, emission expands an
+insufficiently aligned scalar access into byte accesses through the scratch
+registers; a 128-bit pair uses two individually aligned halves.
+`-mno-strict-align` restores ordinary emission; the last option wins.
+
+*Informative.* Measurements: `tests/fixtures/strict-alignment.out`.
+
+### 8.10 Encodings, constants and branch relaxation
+
+The immediate and offset facts of `targets/aarch64/encodings` are generated
+into the selector, the validator and the emitter (Appendix A.1). They are
+encoding limits, not optimization permissions.
+
+`mov #imm` emits `movz` of the low halfword and `movk` of each nonzero
+higher halfword, unless the `constants` variant applies. A large add or
+subtract immediate is split into one shifted and one unshifted 12-bit chunk.
+Frame offsets keep a conservative 32-bit scaled bound. A conditional branch
+beyond its reach, with a factor-of-two margin, is emitted as the inverted
+short branch over an unconditional branch; the fall-through choice of
+Section 4.5 and the other edge stay.
+
+### 8.11 Module assembly
+
+Every entry of the EvoIR module assembly table (EvoIR Section 2.1) is
+emitted verbatim, in table order, after the last function and the last global
+of the unit. Emission does not parse an entry. It writes the profile's
+text-section directive before the first entry and after the last, so that an
+entry that switches sections cannot change where later output lands.
 
 ## 9. Verification
 
-Three instruments, each independent of the lowering:
+Four instruments, each independent of the lowering, check the backend;
+`spec/verification.md` states what each checker proves. A function with an
+`asm` is outside the interpreter lane.
 
-A function containing an `asm` is outside instrument one: neither
-interpreter executes one, so such a function is judged by the allocation
-verifier and the native run alone. That is the price of admitting assembly
-and it is stated here rather than discovered later.
+### 9.1 The EvoMIR interpreter
 
-1. **The EvoMIR interpreter.** Every Section 4 form has executable
-   semantics; an interpreter executes an EvoMIR function on the same inputs
-   as the EvoIR interpreter and the two must agree on results, traps and the
-   volatile trace. The randomized semantic gate of the middle end runs a
-   third lane: EvoIR before, EvoIR after optimization, EvoMIR after
-   lowering, all three agreeing or the program is a mismatch to shrink. A
-   lowering refusal is counted by code, not compared. This lane exists
-   before any native run, so lowering defects are found without an
-   assembler in the loop.
-2. **The allocation verifier.** A separate pass over the allocated function
-   checks the three properties of Section 7 by dataflow; the allocator does
-   not certify itself.
-3. **Native differential runs.** The assembled program is run on the host
-   and its output compared with the reference compiler's build of the same C
-   source (the layout oracle's GCC-14 on the sealed container for Linux;
-   the host toolchain for Darwin, recorded by version). The native suite of
-   the roadmap's B4 is the corpus; the receipt records every program's
-   output digest under both compilers.
+Every Section 4 form except `asm` and `asm.goto` has executable semantics.
+The interpreter must agree with the EvoIR interpreter on results, traps and
+the volatile trace. The randomized semantic gate runs it as a third lane
+(EvoIR before and after optimization, EvoMIR after lowering); a mismatch is
+shrunk, and a lowering refusal is counted by code, not compared.
 
-**The native corpus.** The randomized generator's seed space is pinned by
-the middle-end campaigns (a seed names one module forever), so the native
-lane does not change it. It draws from a second generator mode with its own
-seed space, `native-main`, whose `main` takes no arguments and returns one
-`bits<32>`, and its programs are compared by exit status modulo 256, the
-eight bits a process status carries (revision 0.4).
+### 9.2 The allocation verifier
 
-A probe precedes every calling-convention sentence that is used: before the
-first cross-boundary call is emitted, a probe program compiled by the host
-compiler calls EvoCC-compiled functions with each argument shape this
-revision admits, and vice versa, and the receipt names it.
+`crates/evocc-mir/src/generic/allocverify.rs` checks every allocated function
+before emission by a forward dataflow over the allocated blocks, the
+assignment and the target facts. It never reads the intervals, pins,
+liveness or spill decisions of the allocator. It refuses (`E4020`) when:
+
+- a virtual register has no assignment, or one in an incompatible bank;
+- a value live on entry is not in its ABI argument register, or two entry
+  values share a register;
+- a register read does not hold the expected virtual register on every path
+  (a call clears the call-clobbered registers; an `asm` clears its clobbers);
+- a `flags` producer is not followed by its consumer;
+- an `asm` operand violates its bank, fixed binding, tie or early clobber, or
+  a symbolic operand is not under `i`;
+- an atomic read-modify-write result overlaps an input of its loop.
+
+### 9.3 The Lean checkers
+
+For the checked subset (Status and scope), the Lean checkers validate each
+compilation. Each reads untrusted proposals or hints and decides without
+trusting them:
+
+| Checker | Definition | What it relates |
+|---|---|---|
+| `checkLowering` | `lean/EvoIR/MachineLowering.lean` | The EvoIR program, its SSA EvoMIR and the post-SSA EvoMIR: instruction selection and SSA transport |
+| `checkAllocation` | `lean/EvoIR/Alloc/Check.lean` | The post-SSA EvoMIR and the allocated EvoMIR, with per-block hints |
+| `checkAsm` | `lean/EvoIR/Asm/Check.lean` | The allocated EvoMIR, the assembly AST and the frame hints: frame layout (`frameOk`), allocatable registers (`x0` to `x15`, `x19` to `x28`), entry structure, stack bound, and the fixed templates of prologue, instructions, terminators and epilogue |
+| `printMatches` | `lean/EvoIR/Asm/Print.lean` | The printed assembly AST and the actual assembly text, byte for byte |
+
+The checkers read the exchange formats of Appendix A.2. The templates of
+`checkAsm` are those of emission with all optional variants OFF. `checkAsm`
+has no template for `frame.slot`, ordinary loads and stores or
+`stack.release`, so it refuses a function that contains them; spills and
+stack-argument accesses have templates. [verification.md](verification.md)
+gives the theorems, their assumptions and the gate that runs these checkers.
+
+### 9.4 Native differential runs
+
+The assembled program runs on the host, and its output is compared with the
+reference compiler's build of the same C source: GCC-14 in the sealed
+container for Linux, the host toolchain for Darwin. The receipt records each
+output digest under both compilers. A calling-convention rule is measured
+before it is used: a host-compiled probe calls EvoCC-compiled functions with
+each admitted argument shape, and the reverse.
+
+**The native corpus.** The middle-end campaigns pin the seed space of the
+randomized generator, so the native lane uses a second generator mode,
+`native-main`, with its own seeds. Its `main` takes no arguments and returns
+one `bits<32>`; programs are compared by exit status modulo 256.
 
 ## 10. Diagnostics
 
 Active refusals are reported at the EvoIR instruction that could not be
-lowered; the driver emits no assembly for a function with any of them.
-Withdrawn codes remain named so historical receipts can be read. In particular,
-the former static-pointer-data, indirect-branch, level-zero frame-address and
-pointer-difference boundaries are implemented; the old 1.9.61 impossibility
-description is not the current supported profile.
+lowered, and the driver emits no assembly for that function. Withdrawn codes
+keep their names, so that old receipts can be read.
 
 | Code | Name | Meaning |
 |---|---|---|
-| `E4001` | legacy `not-lowered: floating-point` | Withdrawn for admitted scalar f32/f64; deferred formats remain frontend refusals |
-| `E4002` | `not-lowered: vector` | Unsupported vector execution or external ABI; supported integer vectors are admitted. Sub-8-byte native arguments/results remain refused after conflicting cross-link controls (`integer-vector-small*.c`), without rejecting local operations. |
-| `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`; width 128 includes the UB predicates and hosted division/remainder |
-| `E4004` | `not-lowered: tuple` | tuple-typed value |
-| `E4005` | `not-lowered: static-pointer-data` | withdrawn at revision 0.12: a relocation `(offset, @symbol, addend)` is emitted as `.xword symbol+addend` at its offset, the surrounding bytes as before |
-| `E4006` | legacy `not-lowered: indirect-branch` | withdrawn for the complete `br.indirect` edge-binding path in revision 0.29 (EvoIR 1.9.92); foreign/invalid targets and malformed successor bindings retain their independent checks |
-| `E4007` | `not-lowered: frame-address` | withdrawn at revision 0.17 (EvoIR 1.9.72 lowers level zero) |
-| `E4008` | legacy `not-lowered: pointer-difference` | withdrawn with EvoIR 1.9.67: `ptr.to_int` operands, 64-bit subtraction and exact signed division lower through existing scalar forms; the C-HIR same-object check is unchanged |
-| `E4009` | `not-lowered: unsupported-form` | any EvoIR instruction absent from Section 5 |
-| `E4010` | `abi: too-many-register-arguments` | more than eight integer arguments on Darwin (Linux lowers stack arguments, revision 0.10) |
-| `E4011` | `abi: aggregate-by-value` | withdrawn at revision 0.18: `byval`/`sret` records follow AAPCS64 (Section 6) |
-| `E4012` | `abi: variadic` | withdrawn at revision 0.10: variadic callees and callers lower (Section 6); the name is kept so old receipts read |
-| `E4013` | `abi: too-many-results` | more than eight ordinary results |
-| `E4020` | `allocation: verifier-refused` | the allocation verifier found a violation; internal, must never reach a user of a released build |
+| `E4001` | `not-lowered: floating-point` | Withdrawn: scalar `f32`/`f64` are admitted (Section 2.6); other formats remain front-end refusals. |
+| `E4002` | `not-lowered: vector` | An unsupported vector execution or external vector ABI, or a SIMD class under `-mgeneral-regs-only`. Native arguments and results of integer vectors below 8 bytes are refused; local operations on them are admitted. |
+| `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`. Width 128 is admitted, including the UB predicates and hosted division. |
+| `E4004` | `not-lowered: tuple` | A tuple-typed value. |
+| `E4005` | `not-lowered: static-pointer-data` | Withdrawn: static relocations are emitted (Section 8.2). |
+| `E4006` | `not-lowered: indirect-branch` | Withdrawn: `br.indirect` lowers with complete edge bindings (Section 7.2). Invalid targets and malformed bindings keep their own checks. |
+| `E4007` | `not-lowered: frame-address` | Withdrawn: `frame_address` lowers (Section 5.1). |
+| `E4008` | `not-lowered: pointer-difference` | Withdrawn: `ptr.to_int` operands, 64-bit subtraction and exact signed division lower through scalar forms. |
+| `E4009` | `not-lowered: unsupported-form` | An EvoIR instruction absent from Section 5, or a form that the ABI profile does not admit (binary128, section placement or a patchable entry on Darwin). |
+| `E4010` | `abi: too-many-register-arguments` | More than eight general-register argument positions on the Darwin ABI profile (Section 6.6). |
+| `E4011` | `abi: aggregate-by-value` | Withdrawn: `byval`/`sret` records follow AAPCS64 (Section 6.4). |
+| `E4012` | `abi: variadic` | Withdrawn: variadic callees and callers lower (Section 6.12). |
+| `E4013` | `abi: too-many-results` | More than eight ordinary results. |
+| `E4020` | `allocation: verifier-refused` | The allocation verifier found a violation. Internal; it must never reach a user of a released build. |
 
 ## Appendix A. Textual Form
 
-**`indirect.result` (revision 0.19).** A zero-operand marker that names the
-virtual register carrying an `sret` destination above 16 bytes, so that
-allocation pins it to `x8` for the call it belongs to (Section 6, revision
-0.18). It is written `%v = indirect.result` at the call's program point,
-emits no instruction, and is the executor's spelling recorded here after the
-record-convention window, as revision 0.8 did for assembly.
-
-The textual form is canonical (one rendering per function, the EvoIR
-Section 9.4 byte rules: four-space indent, `", "` between operands, one
-blank line between blocks and between functions, one final newline) and
-round-trips through a parser, so that tests can state EvoMIR by hand and
-the receipt can digest it.
+The textual form of EvoMIR before allocation is canonical, with the byte
+rules of EvoIR Section 9.4, and round-trips through `render_module` and
+`parse_module`. A definition carries its class; a use does not. A module can
+start with EvoIR global data lines (EvoIR Section 9) and one blank line.
 
 ```text
-function        := "func @" ident " {" newline block+ "}" newline
-block           := "^" ident "(" params ")" ":" newline (indent instruction newline)* indent terminator newline
-params          := [ "%v" int ":" class ("," " " "%v" int ":" class)* ]
-class           := "gpr32" | "gpr64" | "flags"
-instruction     := "%v" int ":" class " = " op operands
-                 | "%v" int ":" class ", %v" int ":flags = " ("adds"|"subs") ".w"|".x" operands   ; a register and the flags
-                 | "%v" int ":" class " = " op ".w"|".x" operands        ; width suffix on two-width forms
-                 | "%v" int ":" class " = frame.slot [origin=" ident ", size=" int ", align=" int "]"
-                 | "%v" int ":gpr64 = stack.alloc " reg ", [origin=" int ", align=" int "]"
-                 | "stack.release " reg
-                 | "mem.copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"] " [" reg "], [" reg "], #" int ", #" int
-                 | store-form [" volatile"]
-                 | "%v" int ":" class " = atomic.load." atomic-kind " " atomic-order [" volatile"] " [" reg "]"
-                 | "atomic.store." atomic-kind " " atomic-order [" volatile"] " " reg ", [" reg "]"
+function        := "func @" ident " {" newline block (newline block)* "}" newline
+block           := label "(" [def ("," " " def)*] "):" newline
+                   (indent instruction newline)* indent terminator newline
+label           := "^entry" | "^b" int          ; the first block is ^entry
+def             := "%v" int ":" class
+use             := "%v" int
+class           := "gpr32" | "gpr64" | "simd32" | "simd64" | "simd128" | "flags"
+W               := ".w" | ".x"
+instruction     := def " = " value-form
+                 | def " = frame.slot [origin=" int ", size=" int ", align=" int "]"
+                 | def " = stack.alloc " use ", [origin=" int ", align=" int "]"
+                 | def ", " def " = " ("adds" | "subs") W " " use ", " use
+                 | def ", " def " = ldp" [" volatile"] " [" use ", #" int "]" ["!"]
+                 | "stp" [" volatile"] " " use ", " use ", [" use ", #" int "]" ["!"]
+                 | store-op [" volatile"] " " use ", [" use ", #" int "]" [" [align=" int "]"]
+                 | "atomic.store." atomic-kind " " atomic-order [" volatile"] " " use ", [" use "]"
+                 | "stack.release " use
+                 | "mem.copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"]
+                   " [" use "], [" use "], #" int ", #" int
                  | call-form
+                 | "indirect.result"
+                 | "fp.env.check" [".strict"]
+                 | "va.save [named=" int "]"
+                 | [def ("," " " def)* " = "] "asm" asm-body
+value-form      := "mov " use | "mov #" int
+                 | "adrp @" ident "@" ["FUNC"] "PAGE"
+                 | "add " use ", @" ident "@" ["FUNC"] "PAGEOFF"
+                 | "adr ^b" int
+                 | load-op [" volatile"] " [" use ", #" int "]" [" [align=" int "]"]
+                 | binop W " " use ", " (use | "#" int)
+                 | ("msub" | "madd") W " " use ", " use ", " use
+                 | ("adc" | "sbc" | "adcs" | "sbcs") W " " use ", " use ", " use
+                 | ("smull" | "smulh" | "umulh") " " use ", " use
+                 | ("clz" | "rbit" | "rev16" | "rev") W " " use
+                 | ("sxtb" | "sxth" | "sxtw" | "uxtb" | "uxth") " " use
+                 | ("sbfx" | "ubfx") W " " use ", #" int ", #" int
+                 | "cmp" W " " use ", " (use | "#" int)
+                 | "tst" W " " use ", #" int
+                 | "cset " use ", " cond
+                 | "csel" W " " use ", " use ", " use ", " cond
+                 | "atomic.load." atomic-kind " " atomic-order [" volatile"] " [" use "]"
+                 | "atomic.rmw." rmw-op "." atomic-kind " " atomic-order [" volatile"]
+                   " " use ", [" use "]" [", " use]
+                 | "fp." ["strict."] fp-op [".i" int] (".f32" | ".f64") " (" uses ")"
+                 | "vec." ("pack" | "extract") "." int "." int " (" uses ")"
+                 | "crypto." ("aese" | "aesd" | "aesmc" | "aesimc") " (" uses ")"
+                 | "frame.address [" ("incoming" | "gr_top" | "saved_lr" | "fp" | "fp_" int) "]"
+load-op         := "ldrb" | "ldrh" | "ldrsb" | "ldrsh" | "ldrsw"
+                 | "ldr.w" | "ldr.x" | "ldr.p" | "ldr.pf" | "ldr.s" | "ldr.d" | "ldr.q"
+store-op        := "strb" | "strh" | "str.w" | "str.x" | "str.p" | "str.s" | "str.d" | "str.q"
+binop           := "add" | "sub" | "mul" | "sdiv" | "udiv" | "and" | "orr" | "eor"
+                 | "lsl" | "lsr" | "asr"
+cond            := "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "lo" | "ls" | "hi" | "hs"
+                 | "vs" | "vc" | "cs" | "cc"
 atomic-kind     := "b" | "h" | "w" | "x" | "p" | "pf"
-atomic-order    := "relaxed" | "consume" | "acquire" | "release" | "seq_cst"
-terminator      := "b ^" ident "(" args ")"
-                 | "br " reg " [" indirect-edge (", " indirect-edge)* "]"
-                 | ("b." cond | "cbz " reg | "cbnz " reg | "tbz " reg ", #" int | "tbnz " reg ", #" int) ", ^" ident "(" args ")" ", ^" ident "(" args ")"
-                 | "ret" [" " reg ("," " " reg)*]
+atomic-order    := "relaxed" | "consume" | "acquire" | "release" | "acq_rel" | "seq_cst"
+rmw-op          := "add" | "sub" | "and" | "or" | "xor" | "nand" | "exchange" | "cmpxchg"
+call-form       := ("bl" | "bl.fixed_fp" | "bl.strict_fp") " @" ident "(" uses ")" [results]
+                 | "blr " use "(" uses ")" [results]
+results         := " -> " def ("," " " def)*
+uses            := [use ("," " " use)*]
+edge            := label "(" uses ")"
+terminator      := "b " edge
+                 | "b." cond ", " edge ", " edge
+                 | ("cbz" | "cbnz") " " use ", " edge ", " edge
+                 | ("tbz" | "tbnz") " " use ", #" int ", " edge ", " edge
+                 | "br " use " [" edge (", " edge)* "]"
+                 | "ret" [" " use ("," " " use)*]
                  | "brk #" int
-indirect-edge   := "^" ident "(" args ")"
-call-form       := ("bl @" | "bl.strict_fp @") ident "(" args ")" [" -> " results] | "blr " reg "(" args ")" [" -> " results]
-asm-form        := "%v" int ":" class " = asm" [".volatile"] " " string
-                   " outputs [" asm-out ("," " " asm-out)* "]"
-                   " inputs [" asm-in ("," " " asm-in)* "]"
-                   " clobbers [" string ("," " " string)* "]"
-                 ; a register output is the instruction's result, as the higher IR writes it;
-                 ; a memory output names its address register in the list, since it is not a result
-asm-goto-form   := "asm.goto" [".volatile"] " " string " outputs [...] inputs [...] clobbers [...]"
-                   " labels [^" ident "()" ("," " ^" ident "()")* "]"
-                   " fallthrough ^" ident "()"
-asm-out         := string "(" ident ")"
-asm-in          := string "(" ident ")" ": " (reg | "#" int | "#zero:" class | asm-symbol)
-asm-symbol      := "@" ident ["^b" int] ("+" int | "-" positive-int)
-symbol          := "@" ident "@PAGE" | "@" ident "@PAGEOFF" | "@" ident "@FUNCPAGE" | "@" ident "@FUNCPAGEOFF"
+                 | "asm.goto" asm-body " labels [" [edge (", " edge)*] "] fallthrough " edge
+asm-body        := [".volatile"] " " string " outputs [" [asm-out ("," " " asm-out)*] "]"
+                   " inputs [" [asm-in ("," " " asm-in)*] "]"
+                   " clobbers [" [string ("," " " string)*] "]"
+asm-out         := string ["(" ident ")"] [": " use]  ; a memory output names its address
+asm-in          := string ["(" ident ")"] ": " (use | "#" int | "#zero:" class | asm-symbol)
+asm-symbol      := "@" ident ["^b" int] ("+" | "-") int
 ```
 
-Before allocation (the entry block's label is spelled, as every block's is):
+`fp-op` is the mnemonic of an EvoIR floating operation (EvoIR Section 3.13).
+A register output of an `asm` is a result of the instruction; a memory output
+is not, so the output list names its address register. The parser reads
+`#zero:` operands of `gpr32` and `gpr64` only. `spill.*` and `arg.*` exist
+only after allocation; the canonical text has no production for them.
+
+**Example.**
 
 ```text
 func @dot {
@@ -1601,29 +1508,16 @@ func @dot {
 }
 ```
 
-After allocation the same function names physical registers and frame
-slots, and block arguments are gone:
-
-```text
-func @dot {
-entry:
-    w2 = ldr.w [x0, #0]
-    w3 = ldr.w [x1, #0]
-    w0 = mul.w w2, w3
-    ret
-}
-```
+*Informative.* `render_allocated` writes an allocated function for
+diagnostics, without a parser: physical registers, no classes, labels
+`entry:` and `bN:`, spills as `str.x x19, [slot #0]`, and a bare `ret`.
 
 ### A.1. Generated encoding facts
 
-These limits describe encodings, not optimization permissions. In particular,
-the frame-transfer path retains its conservative 32-bit scaled bound, paired
-saves retain eight-byte slots, and relaxation retains the prior factor-of-two
-margin. The two-instruction ADD/SUB expansion is the union of one shifted
-chunk and one unshifted chunk, not a larger single-instruction immediate.
-Logical masks are the cyclic-run/repetition domain specified in Section 3;
-zero, all-ones and out-of-width values remain excluded. Source shift selection
-still additionally requires a count below the source value's width.
+These limits describe encodings, not optimization permissions (Section 8.10).
+Logical masks are the cyclic-run domain of Section 3.3; zero, all ones and
+out-of-width values are excluded. Shift selection also requires a count
+below the width of the source value.
 
 <!-- aarch64-encodings:start -->
 Generated from targets/aarch64/encodings by tools/generate-target.py.
@@ -1653,65 +1547,53 @@ Description digest: 96d58a17f4b979210e5fa38cb8fe2a3a76d311cc5707428505b7c568a072
 
 <!-- aarch64-encodings:end -->
 
-## Appendix B. Revision History
+### A.2. Exchange formats
 
-| Revision | Date | Change |
-|---|---|---|
-| 0.62 | 2026-10-03 | Add opt-in local same-location reload reuse after allocation; preserve constraints, independent verification, instruction semantics and OFF output. |
-| 0.61 | 2026-10-03 | Generate existing immediate/addressing limits and enforce malformed BinaryImm rejection; preserve ordinary object bytes, frame policy and branch-relaxation margins. |
-| 0.59 | 2026-10-02 | Require progress when rewriting spills; refuse recursive spill-temporary expansion and prepare saturated-bank stack arguments before fixed copies. No instruction, ABI-layout or interpreter semantics change. |
-| 0.58 | 2026-10-02 | Opt-in adjacent single-use shift, extension, product and indexed-access emission; preserve live state, flags, access order and all protected/default paths. No MIR or interpreter operation added. |
-| 0.54 | 2026-09-28 | Select existing immediate-zero pointer equality for direct null definitions; preserve identity and repair typed null-pointer stores in MIR interpretation without admitting nonzero raw provenance or integer-store pointer fragments. |
-| 0.53 | 2026-09-28 | Select unshifted immediate full-register comparisons with correct reversed relations; independently reject malformed imm12 values, preserving flags adjacency, source evaluation, guards and nonmatching paths. |
-| 0.52 | 2026-09-28 | Select existing encodable full-width logical immediates, including exact bitwise constant expressions; reject malformed logical immediates in MIR validation without changing operand evaluation or effects. |
-| 0.51 | 2026-09-28 | Bound three GCC tuning option admissions to existing whole-function allocation, absent hoisting and nonduplicating block placement; preserve unsupported semantic requests through application projection. |
-| 0.50 | 2026-09-27 | Admit exact scalar f32/f64 SIMD assembly bindings through existing allocation, spills, selected edges and floating-environment invalidation. |
-| 0.49 | 2026-09-27 | Emit independently selected per-function/data ELF sections, preserving explicit placement, TLS/storage kind, aliases, lifecycle/patch roots and written option overrides. |
-| 0.48 | 2026-09-27 | Hosted Linux binary128 via qualified helpers; shared SIMD128 scalar/HFA/varargs ABI, exact strict status and conversion/NaN adapters. |
-| 0.47 | 2026-09-27 | Qualified Linux strict integer128 conversion calls, explicit strict admission and preserved helper semantics. |
-| 0.46 | 2026-09-27 | Preserve quiet relational predicate identity and use FCMP rather than the signaling FCMPE path. |
-| 0.45 | 2026-09-27 | Add strict FP operations, machine strictness and logical integer conversion widths, dynamic-rounding admission, FPSR effects and explicit FMA; retain the shared SIMD bank. |
-| 0.44 | 2026-09-26 | Select existing unsigned twelve-bit add/sub immediates for directly known full-register constants; commute only already-evaluated ADD operands, preserving source checks and nonmatching paths. |
-| 0.43 | 2026-09-26 | Select existing immediate scalar shifts for directly known in-range counts decoded at their own width; retain source obligations, operand extensions and dynamic/pair paths. |
-| 0.42 | 2026-09-26 | Select either adjacent conditional successor as fall-through after parameter-copy placement; invert only the emitted condition, retaining logical edges, labels and long-branch relaxation. |
-| 0.41 | 2026-09-26 | Errata: synchronize dynamic allocation/release forms, grammar and frame rules with the existing EvoIR Appendix D contract and implementation; fixed storage remains stable, only the top dynamic allocation can be popped, and function-lifetime allocations are not reclaimed at VLA scope exit. No new execution scope. |
-| 0.40 | 2026-09-26 | Select bounded same-block constant pointer offsets into existing ordinary load/store immediates, preserving access attributes, strict-alignment encodability, guards and effect boundaries. |
-| 0.39 | 2026-09-24 | Forward direct-edge identities through ordinary validated-SSA assembly without changing its effects; distinguish independent fixed input occurrences of the same value while preserving genuine tied-operand conflicts. |
-| 0.38 | 2026-09-24 | Remove only proven trivial block-argument transport during SSA destruction, including unchanged loop cycles; retain nontrivial merges, complete edges, original effects and deterministic physical allocation. |
-| 0.37 | 2026-09-24 | Select an adjacent single-use checked Boolean directly with its producer's flags and an inverted conditional trap branch; retain every guard, effect and continuation argument, with ordinary TBZ for unmatched forms. |
-| 0.36 | 2026-09-23 | Select the bounded, single-use full-width compared-value bit mux with existing adjacent CMP/CSEL. Preserve all prior evaluations, guards, effects and block bindings; unmatched chains retain ordinary lowering. |
-| 0.35 | 2026-09-23 | Errata: synchronize 128-bit division/remainder lowering and E4003 with the approved hosted runtime path; mark E4006/E4008 withdrawn under existing indirect-edge/pointer-difference rules and remove the stale 1.9.61 diagnostic boundary claim. No new execution scope or waived guard. |
-| 0.34 | 2026-09-21 | Preserve validated function-section placement through native emission, including aliases, code labels, CFI and link-ordered patch registrations; restore each following function's own placement. |
-| 0.31 | 2026-09-15 | Carry bounded scalar atomic order/volatile/pointer metadata through validation, text, allocation and interpretation; emit the natural-width AArch64 LDR/STR or LDAR/STLR mapping. |
-| 0.32 | 2026-09-15 | Add integer SIMD representation/classes, real fixed/variadic vector and HVA ABI, ELF lifecycle registrations, and all four Linux TLS addressing models. |
-| 0.33 | 2026-09-20 | Add shared-bank scalar FP, fail-closed FPCR checks, visible 128-bit conversion calls and scalar/HFA ABI. |
-| 0.30 | 2026-09-15 | Emit the reviewed protected/hidden ELF binding without changing C linkage or weak strength; preserve interposition for same-module default-visible PIC definitions and retain all symbol marks through native emission. |
-| 0.29 | 2026-09-12 | Specifies computed branches with complete CFG edges, joint pre-allocation parameter transport, cycle/spill handling and live target capture, preserving direct-entry and code-label identity. Implements the approved design boundary, not a native acceptance claim. |
-| 0.28 | 2026-09-09 | A variadic callee saves `q0` to `q7` in a 128-byte vector save area and writes `vr_top`/`vr_offs = -128`, as both oracles do; the earlier `vr_offs = 0` lost every `double` a reference-compiled caller passed through an EvoCC-compiled wrapper, the cause of musl's floating-point formatting failures in the mixed link. |
-| 0.27 | 2026-09-09 | Corrects the stack-realignment instruction sequence to use the reserved scratch register, because logical instructions cannot read SP. Both sealed assemblers reject the previous spelling and accept the replacement. Authorized review correction; this changes no compiler code. |
-| 0.26 | 2026-09-09 | Specifies frame realignment (instruction spelling corrected in 0.27) when a slot's alignment exceeds 16 and restores `sp` from `x29`; emits a function's `align=N` as `.p2align`; lowers the 128-bit UB predicates (flags for add/sub, a magnitude product for mul, pair compares for division and shift counts), leaving only 128-bit division and remainder under `E4003`. |
-| 0.25 | 2026-09-08 | Carry EvoIR 1.9.80 symbolic assembly immediates without a register, with canonical signed-addend text and target-correct symbol/block emission. This revision changes the contract, not compiler code. |
-| 0.24 | 2026-09-08 | Apply the measured PIE address rule to strong undefined functions as well as objects; direct calls and defined symbols remain unchanged. The original TinyCC replay exposed longjmp immediately after environ. This revision changes the contract, not compiler code. |
-| 0.23 | 2026-09-08 | Define PIE-safe GOT addressing for all undefined external objects; retain direct defined-object addressing and calls, and the GOT recipe for unresolved weak function addresses. Authorized benchmark closure, measured by the sealed environ probe. This revision changes the contract, not compiler code. |
-| 0.22 | 2026-09-08 | Emits `linkage=weak` as `.weak` (Darwin `.weak_definition`/`.weak_reference`) and `alias` records as `.set name, target` after the target, with the alias's own linkage directive and type (EvoIR 1.9.79). |
-| 0.21 | 2026-09-07 | Corrects the variadic stack start to follow named stack arguments, using the same ABI placement as calls; the nine-named-argument probe agrees under both sealed oracles. |
-| 0.20 | 2026-09-07 | Zero data goes to the zero-filled section and zero runs are `.zero` (the record of the emitter's run encoding); notes the Darwin variadic gap. |
-| 0.19 | 2026-09-07 | Records the `indirect.result` marker the record-convention window introduced for the `x8` destination register. |
-| 0.18 | 2026-09-06 | Records marked `byval`/`sret` follow AAPCS64: up to 16 bytes in general registers, larger by pointer, results in `x0`/`x1` or through `x8` (EvoIR 1.9.73). |
-| 0.17 | 2026-09-06 | The return address is the saved link register of the frame record and the frame address is the frame pointer (EvoIR 1.9.72). |
-| 0.16 | 2026-09-06 | Internal functions and globals are emitted as local symbols, and internal functions nothing references are dropped before emission (EvoIR 1.9.70). |
-| 0.15 | 2026-09-06 | A label address is `adr` of the block's local symbol, and a static relocation may name that symbol (EvoIR 1.9.68). |
-| 0.14 | 2026-09-06 | Bit counting and byte swap lower to `clz`, `rbit`, `rev` and the general-register population-count sequence; module assembly is emitted verbatim after all code and data (EvoIR 1.9.66). |
-| 0.13 | 2026-09-05 | Corrects the 128-bit argument rule for Darwin: Apple clang does not round the register number to even, so the pair takes the next two registers; Linux keeps the AAPCS64 rounding. Measured by the executor of the register-pair window. |
-| 0.12 | 2026-09-05 | Pointer-integer conversions lower to nothing; static relocations are emitted as `.xword symbol+addend` inside the global's bytes (`E4005` withdrawn), matching EvoIR 1.9.65. |
-| 0.11 | 2026-09-05 | External functions and objects (EvoIR 1.9.64 `declare`/`extern`) are emitted as undefined symbol references with the defined-symbol spellings; the linker resolves them, and the native lane may link against the host library for the library set. |
-| 0.10 | 2026-09-05 | Opens the two forms the sixth lowering survey put first: `bits<128>` as a pair of `gpr64` halves with measured sequences for every scalar form but division, the even-aligned pair convention for arguments and `x0`:`x1` for results; variadic callees and callers on Linux, with the register save area, the five-field list object and the general-registers-only `va_arg` procedure that agrees with both oracles on fourteen items; stack arguments in 8-byte slots on Linux. `E4012` withdrawn, `E4003` and `E4010` narrowed. The executor's spellings enter Appendix A with the implementation, as revision 0.8 did for assembly. |
-| 0.9 | 2026-09-04 | The same 384 C programs compile, link, run and agree on both targets: on the host under Apple clang, and inside the sealed container under GCC-14 for Linux AArch64. Settles the narrow result by probe (the callee extends; `E4014` withdrawn) and states the four places the two targets differ. |
-| 0.8 | 2026-09-04 | Inline assembly runs on the machine: eleven constraint rows and both `asm.goto` edges assembled, linked, run and agreeing with host-compiled equivalents. Gives Appendix A its assembly productions, in the executor's spelling, and fixes `%l[...]` as the label's position in the declared list. |
-| 0.7 | 2026-09-04 | 384 C programs compiled by the whole pipeline, run natively, and agreeing with the host compiler's build of the same source. Defines a cross-boundary call as one whose callee emission does not define, makes the argument extension a zero extension because EvoIR carries no parameter signedness, and refuses a narrow result across the boundary as `E4014` until a probe settles it. |
-| 0.6 | 2026-09-04 | Carries inline assembly through the machine representation: the constraint classes the allocator must satisfy, including early clobber, tied operands, address operands and register clobbers; emission substitutes operand references into the template and copies its text verbatim; a function containing an `asm` is judged by the verifier and the native run, not by the interpreter. |
-| 0.5 | 2026-09-04 | 256 generated programs assembled, linked, run and agreeing with the interpreter on exit status; a fourth gate lane; a sixteen-shape calling-convention probe, 32 comparisons, 0 failures. States the cross-boundary argument extension the platform requires, distinct from the internal rule, and records that emission may write addressing forms the Section 4 tables do not admit. |
-| 0.4 | 2026-09-04 | First native runs: five assembled programs agree with the interpreter on exit status. Rules the allocation and emission findings: the out-of-SSA scratch is a pinned virtual register, copy placement is a three-way rule, entry arguments become parameters the allocator assigns, the lowest free register is taken, spill accesses are pseudo-forms, frame slots are addressed from `sp`, the prologue is synthesized at emission and not interpretable; the native lane uses a second generator mode so pinned seeds stay pinned. |
-| 0.3 | 2026-09-04 | Second implementation: 20,000 of 20,000 generated programs lowered and judged by the three-lane gate with 0 mismatches. Rules the executor's five predicate-row findings: overflow flags report the register, so narrower widths compare with the sign extension of the low N bits (add, sub, mul); shift amounts extend by their declared signedness; the signed left-shift predicate conjoins count, sign, round trip and representability; the division predicates extend first; the grammar spells a two-definition adds/subs and states the conditional-terminator asymmetry. |
-| 0.2 | 2026-09-04 | Rules the thirteen stops of the first implementation: lowering rows for every UB predicate; `icmp.eq`/`ne` moved to the zero-extended row after a measured counterexample; `frame.slot` as a per-execution pseudo-form reconciling `alloca` with EvoIR 3.7; `ldr.p`/`ldr.pf`/`str.p` for provenance; a grammar for the textual form with the executor's spellings (symbols, the volatile marker, explicit call registers, two-successor conditionals, spelled entry labels); the `ub.assume` continuation-block construction; `brk` immediates as the diagnostic's decimal part; shift amounts and `ptr.offset` wrapping as obligation-covered differences; `mem.copy` as a pseudo-form transferring initializedness and provenance; block arguments kept until the Section 7 pass; up to eight results in `x0`..`x7` for the machine lane; the five unreachable codes named as such. |
-| 0.1 | 2026-09-04 | First statement: purpose, register classes, sub-width representation, the AArch64 scalar instruction subset with executable semantics, the lowering table with fail-closed boundaries, the Darwin arm64 scalar calling convention and frame layout, out-of-SSA and linear scan, emission, three verification instruments, and the `E4xxx` diagnostics. |
+*Informative.* The Lean checkers read JSON formats for the Linux ABI profile
+and the checked UB-check profile; each exporter refuses other forms.
+
+| Format | Producer | Reader | Content |
+|---|---|---|---|
+| `core-mir-v1` | `crates/evocc-mir/src/core_machine_export.rs` | `lean/EvoIR/MachineReader.lean` | EvoMIR before allocation: classes `gpr32`, `gpr64`, `flags`; `mov`, `mov #imm`, binary and flag-setting arithmetic, `smull`/`smulh`/`umulh`, `msub`, `madd`, extensions, bitfield extracts, `cmp`, `tst`, `cset`, `csel`, W and X loads and stores, `frame.slot`, `stack.release`, ordinary `bl`; terminators `b`, `b.cond`, `cbz`/`cbnz`, `tbz`/`tbnz`, `ret`, `brk` |
+| `core-alloc-v1`, `core-alloc-pair-v1` | `crates/evocc-mir/src/verify_alloc.rs` (`evo-alloc-export`) | `lean/EvoIR/Alloc/Reader.lean` | The post-SSA program and its allocation, with spill, reload and stack-argument forms |
+| `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
+
+## Revision
+
+**Revision 1.0.0, 2026-10-06.** This revision is the pinned ground truth of
+EvoMIR. It specifies the same machine IR and backend as revision 0.64 of
+2026-10-03, as one text: the development addenda are folded into the
+sections that they amend, and the revision history is removed. It corrects
+statements that disagreed with the code or the target tables (the register
+sets of Section 2.5, the instruction set of Section 4, the frame layout of
+Section 6.8, the Linux page-address spelling of Section 8.1, the grammar of
+Appendix A) and adds the conformance note of Section 6.5. No instruction, ABI
+rule or emitted byte changes.
+
+The complete history is in git: `git log -- docs/evomir-spec.md spec/evomir.md`.
+
+**Change procedure.** A change to this document must follow these steps:
+
+1. Edit the normative text. Keep the machine-read parts in their shape;
+   change a generated table only through its source table and the generator.
+2. Bump the revision in the header: patch for a correction, minor for a
+   compatible addition, major for an incompatible change. Replace the
+   paragraph above. A new rule about observable behavior names its evidence.
+3. Update the digest of this file in `spec/pins.json`.
+4. Run the gate. Every command must pass:
+   `CARGO_TARGET_DIR=target/frontend cargo test --offline -p evocc-mir --test section5_lowering`;
+   `python3 tools/generate-target.py --check`;
+   `python3 -m unittest tools.tests.test_generate_target`.
+
+**What the 0.x series added** (informative):
+
+| Revisions | Content |
+|---|---|
+| 0.1 to 0.9 | Classes, sub-width representation, scalar instruction set with executable semantics, lowering table, linear scan, verifier, inline assembly, cross-boundary extension; the 384-program native corpus on both ABI profiles. |
+| 0.10 to 0.19 | `bits<128>` pairs, Linux stack arguments and variadic functions, bit counting, module assembly, block addresses, linkage, activation addresses, `byval`/`sret` records. |
+| 0.20 to 0.30 | Zero-fill data, weak symbols and aliases, PIE-safe external addresses, symbolic assembly immediates, over-aligned frames, 128-bit UB predicates, vector save area, computed branches, ELF visibility. |
+| 0.31 to 0.35 | Scalar atomics, integer vectors and HVAs, ELF lifecycle and TLS, scalar floating point, function placement, hosted 128-bit division. |
+| 0.36 to 0.44 | Compared-value and checked-flag selection, identical-value transport, fixed input occurrences, immediate addresses, dynamic frames, fall-through choice, immediate shifts and add/sub. |
+| 0.45 to 0.50 | Strict floating point, quiet predicates, strict 128-bit conversions, hosted binary128, individual ELF sections, SIMD assembly operands. |
+| 0.51 to 0.56 | GCC tuning compatibility, logical and compare immediates, null-pointer compares, UB-check profiles, optional frame variants. |
+| 0.57 to 0.64 | Generated target tables; optional selection and allocation variants; bounded spill progress; generated encoding facts. |
