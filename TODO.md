@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P02, P03, P04, P05, B08, B08b, B08d, B08d10 | P01 is complete. Complete P02 through P05 in order under the October 7 product contract. Verification work is paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P03, P04, P05, B08, B08b, B08d, B08d10 | P01 and P02 are complete. Complete P03 through P05 in order under the October 7 product contract. Verification work is paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -204,8 +204,8 @@ add dependencies, crates or configuration systems. Do not push.
   evocc/diagnostics and evocc/main. Tests preserve legacy short output, source
   bytes, executed origins, related labels and output stability. This changes
   presentation only: no new lint, diagnostic code or semantic acceptance.
-- [ ] **P02 — Explain every authoritative diagnostic** — `OPEN`, P1.
-  Next: run the full workspace exit gate on the committed implementation.
+- [x] **P02 — Explain every authoritative diagnostic** — `DONE`, P1.
+  Next: retain the tested pages and index while adding the five approved lints.
   Exit: complete page/table coverage, triggering and fixed examples checked,
   `--explain`, generated book index and full workspace gate pass. Report every
   `Trigger: none` exception. Budget: 300 Rust/Python lines excluding pages;
@@ -229,6 +229,25 @@ add dependencies, crates or configuration systems. Do not push.
   catalogue; the full gate must be repeated. No later package has started. Only text and
   a temporary mdBook download/site were added; no protected artifacts were
   deleted. Final disk accounting follows the exit gate.
+  Completion: RED `7a7bc855`, implementation `73d558fb`, catalogue-test
+  correction `48b31f1f`. The clean final subject passes the full offline
+  workspace gate: 413 suites, 3,151 passed, zero failed, five pre-existing
+  ignored campaigns; Clippy with warnings denied and formatting pass. Log:
+  `.evidence/diagnostics/20261007/48b31f1f-full-workspace.log` (SHA-256
+  `442f838b211c46e00454b13f998589830fa61b5fa83474f92127b6a263420312`).
+  The prior sandbox run had two Linux container permission failures; the
+  complete authorized replay passes both, without skipping tests. Both failed
+  attempts are retained beside the final log. The 117 pages total 2,041 lines
+  (maximum 27 each); the generated index has 2,174 lines. Examples: 97 trigger
+  and 98 fixed cases, all checked. The 20 exceptions above remain explicit.
+  The Rust/Python budget is 229/300 including tests. The index generator,
+  five specification pins and Git whitespace checks pass. mdBook 0.4.52 built
+  the chapter; no hosted CI result is claimed. The temporary book binary,
+  archive and HTML site were removed (about 16 MiB); protected data was not
+  removed. From the measured 02:59 checkpoint, target/frontend plus temporary
+  capture fell by 19,396 KiB before retained-log copies. The full-package
+  build-cache baseline was not measured; no full-package disk delta is claimed.
+  Available space is 30 GiB. No later package started before this gate passed.
 - [ ] **P03 — Add five front-end lints and level control** — `OPEN`, P1.
   Next: after P02 closes, add only unused-variable, unused-parameter,
   implicit-function-declaration, implicit-int and return-type diagnostics.
