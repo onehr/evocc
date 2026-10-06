@@ -12,6 +12,17 @@ The first public version.
 - A C compiler for AArch64, written in Rust: its own preprocessor, parser, three intermediate
   representations (C-HIR, EvoIR and EvoMIR), optimizer, register allocator and assembly emitter.
   The platform assembler and linker build the final program.
+- A drop-in `cc` driver. `evocc` takes several inputs and one action (`-E`, `-S`, `-c`, or a
+  link), `-o`, `-x`, the usual preprocessor options and the `-M` family of dependency options. It
+  runs the platform assembler and linker and passes `-l`, `-L`, `-Wl,`, `-shared` and `-static` to
+  the linker. An unknown `-f` or `-m` option prints one warning, and the build continues. With
+  `CC=evocc`, cJSON 1.7.19 and zlib 1.3.2 build and pass their own tests on macOS.
+- The target `aarch64-apple-darwin`, the default on macOS. It emits Mach-O assembly and uses the
+  Apple variadic convention: every anonymous argument goes on the stack, and `va_list` is one
+  pointer. `aarch64-unknown-linux-gnu` is the default on Linux. On macOS, the sealed container
+  assembles and links for Linux.
+- `--version`, which prints the version, the commit and the date of the build, and the target.
+  `-dumpmachine`, `-dumpversion` and `--help` are also available.
 - Two interpreters, one for C-HIR and one for EvoIR, that stop at undefined behavior with a
   numbered diagnostic (`--interpret-c-hir`, `--interpret-evoir`).
 - `--check`, which runs the executed path and reports undefined behavior; `--explain` for each
@@ -25,11 +36,13 @@ The first public version.
   checkers in `evoir-sem` check each stage of the actual compilation, and the theorem
   `checkPipeline_sound` covers the chain from typed Core source to the final assembly text. A
   refusal writes no output.
-- Four pinned specifications in `spec/`: EvoIR 2.0.0, EvoMIR 1.0.0, the target description 1.0.0
+- Four pinned specifications in `spec/`: EvoIR 2.0.0, EvoMIR 1.0.1, the target description 1.0.0
   and the verification contract 1.0.0.
 - The evaluation ladder, `tools/bench.py`: conformance suites, fifteen application lanes and Linux
   build, boot, kselftest and KUnit lanes. Each lane writes a receipt.
-- The EvoCC Book in `book/`.
+- The EvoCC Book in `book/`: installation, a first program, undefined behavior, compiling with
+  proof, checked optimization, how EvoCC works and the evaluation. A workflow builds it with
+  mdBook and publishes it to GitHub Pages.
 - The Apache License 2.0 (copyright 2026 Haoran Wang, NexRidge), a `NOTICE` file and third-party
   notices.
 
