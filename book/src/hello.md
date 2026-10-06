@@ -249,7 +249,7 @@ themselves. For those, give the variable on the command line: `make CC=evocc`.
 | `-I DIR`, `-D NAME[=VALUE]`, `-U NAME`, `-include FILE` | Control the preprocessor, as in GCC. |
 | `-std=gnu11` and other `-std=` values | Select the language standard. |
 | `-O0` to `-O3` | Select the optimization level. `-O0` keeps the control flow of the source. |
-| `-g` | Accepted for compatibility with build systems. |
+| `-g` | Write debug information about C types (DWARF). EvoCC does not write line tables yet. |
 | An unknown `-f` option | EvoCC prints a warning and continues. |
 
 EvoCC also has its own options. You meet them in the next chapters:

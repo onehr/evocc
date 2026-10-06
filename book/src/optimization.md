@@ -106,9 +106,9 @@ output.evo
 resources.json
 ```
 
-The optimizer ran twice. The first run, `000`, made the change. The second run, `001`, found
-nothing more to do. Each run has the EvoIR before and after it, and a certificate in a `.proof.evp`
-file:
+The optimizer ran two transactions. The first, `000`, made the change. The second, `001`, found
+nothing more to change, so the chain stopped. Each transaction has the EvoIR before and after it,
+and a certificate in a `.proof.evp` file:
 
 ```console
 $ cat certs/000.proof.evp
@@ -231,8 +231,8 @@ f:
 ```
 
 The `mul` instruction is gone. The overflow check, `smull` to `brk #3004`, is still there, because
-the obligation is still there. A separate family of guard rules can remove a check when a proved
-fact shows that it can never fail. That family is part of the same checked chain.
+the obligation is still there. A separate, opt-in family of guard rules can remove a check when a
+proved fact shows that it can never fail. Those rules go through the same checked chain.
 
 ## Optimization and proof together
 
