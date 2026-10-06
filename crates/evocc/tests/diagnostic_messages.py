@@ -166,9 +166,11 @@ let x = Error { message: r#"missing input"#.into() };
 self.report("E1001", "expected declaration", span);
 self.usage(&format!("unknown option {option}"));
 #[cfg(test)] mod tests { let x = Error {message: "UPPERCASE"}; }
+fn later() { #[cfg(test)] fault::check()?; Err("later production error"); }
 '''
     assert [text for _, _, text in templates(sample)] == [
-        'invalid value:', 'missing input', 'expected declaration', 'unknown option']
+        'invalid value:', 'missing input', 'expected declaration', 'unknown option',
+        'later production error']
     assert templates('let x = Err("TLS detail");', 'crates/evocc-lower/src/lib.rs') == [(1, 'detail', 'TLS detail')]
     assert templates('fn message(self) -> String { "lowering failed".into() }',
                      'crates/evocc-lower/src/lib.rs') == [(1, 'header', 'lowering failed')]
