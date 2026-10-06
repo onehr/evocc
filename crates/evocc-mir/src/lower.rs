@@ -131,7 +131,20 @@ pub fn lower_module_for_profile(
     external: &dyn Fn(&str) -> bool,
     ub_checks: UbCheckProfile,
 ) -> Result<MModule, Vec<Refusal>> {
-    lower_module_with_guard_control(target, module, external, ub_checks, &BTreeMap::new())
+    lower_module_with_guard_control(target, module, external, ub_checks, &BTreeMap::new(), false)
+}
+
+/// The same, with the Apple arm64 variadic convention: every anonymous
+/// argument of a variadic call goes to the stack in 8-byte slots, and
+/// `va_list` is one pointer to the next anonymous argument
+/// (`CodegenOptions::anonymous_on_stack`).
+pub(crate) fn lower_module_with_anonymous_on_stack(
+    target: Target,
+    module: &Module,
+    external: &dyn Fn(&str) -> bool,
+    ub_checks: UbCheckProfile,
+) -> Result<MModule, Vec<Refusal>> {
+    lower_module_with_guard_control(target, module, external, ub_checks, &BTreeMap::new(), true)
 }
 
 /// UNVERIFIED_DIAGNOSTIC, not a certified lowering or a driver profile.
@@ -148,6 +161,7 @@ pub fn lower_module_for_guard_attribution(
         external,
         UbCheckProfile::Checked,
         true_predicates,
+        false,
     )
 }
 
@@ -157,10 +171,11 @@ fn lower_module_with_guard_control(
     external: &dyn Fn(&str) -> bool,
     ub_checks: UbCheckProfile,
     true_predicates: &BTreeMap<String, BTreeSet<u32>>,
+    anonymous_on_stack: bool,
 ) -> Result<MModule, Vec<Refusal>> {
     let mut refusals = Vec::new();
     for function in &module.functions {
-        scan_function(target, module, function, &mut refusals);
+        scan_function(target, module, function, anonymous_on_stack, &mut refusals);
         if let Some(claimed) = true_predicates.get(&function.name) {
             let actual: BTreeSet<_> = function
                 .blocks
@@ -220,6 +235,7 @@ fn lower_module_with_guard_control(
                 .get(&function.name)
                 .cloned()
                 .unwrap_or_default(),
+            anonymous_on_stack,
         ) {
             Ok(lowered) => functions.push(lowered),
             Err(detail) => refusals.push(Refusal {
@@ -459,6 +475,7 @@ fn scan_function(
     target: Target,
     module: &Module,
     function: &Function,
+    anonymous_on_stack: bool,
     refusals: &mut Vec<Refusal>,
 ) {
     let entry_block = function.blocks.first().map_or(0, |block| block.id);
@@ -508,7 +525,7 @@ fn scan_function(
             "binary128 ABI is qualified only for Linux".into(),
         );
     }
-    let plan = record_plan(target, &marked, true);
+    let plan = record_plan(target, &marked, true, None);
     // Section 10's `E4010` is "more than eight integer arguments on Darwin
     // (Linux lowers stack arguments, revision 0.10)": the ABI table's
     // `stack-arguments` fact.
@@ -597,11 +614,20 @@ fn scan_function(
             }
         }
         for (index, inst) in block.insts.iter().enumerate() {
-            scan_inst(target, module, inst, block.id, index, &mut report);
+            scan_inst(
+                target,
+                module,
+                anonymous_on_stack,
+                inst,
+                block.id,
+                index,
+                &mut report,
+            );
         }
         scan_inst(
             target,
             module,
+            anonymous_on_stack,
             &block.terminator,
             block.id,
             block.insts.len(),
@@ -613,6 +639,7 @@ fn scan_function(
 fn scan_inst(
     target: Target,
     module: &Module,
+    anonymous_on_stack: bool,
     inst: &Inst,
     block: u32,
     index: usize,
@@ -814,8 +841,35 @@ fn scan_inst(
                 })
                 .unwrap_or(&[]);
             let marks = call_argument_marks(marks, arg_marks, args.len());
-            let positions =
-                record_plan(target, &marked_types(&arg_types(args), &marks), true).positions;
+            let anonymous = if anonymous_on_stack {
+                module
+                    .functions
+                    .iter()
+                    .find(|function| &function.name == callee)
+                    .map(|function| {
+                        let params: Vec<_> = function.params.iter().map(|p| p.ty.clone()).collect();
+                        anonymous_start(function.variadic, &params)
+                    })
+                    .or_else(|| {
+                        module
+                            .declares
+                            .iter()
+                            .find(|declaration| &declaration.name == callee)
+                            .map(|declaration| {
+                                anonymous_start(declaration.variadic, &declaration.params)
+                            })
+                    })
+                    .flatten()
+            } else {
+                None
+            };
+            let positions = record_plan(
+                target,
+                &marked_types(&arg_types(args), &marks),
+                true,
+                anonymous,
+            )
+            .positions;
             if positions > target.abi().general_arguments() && !target.abi().facts.stack_arguments {
                 report(
                     E4010,
@@ -861,8 +915,19 @@ fn scan_inst(
                 _ => Vec::new(),
             };
             let marks = call_argument_marks(&marks, arg_marks, args.len());
-            let positions =
-                record_plan(target, &marked_types(&arg_types(args), &marks), true).positions;
+            let anonymous = match &callee.ty {
+                EvoIRType::FnPtr {
+                    params, variadic, ..
+                } if anonymous_on_stack => anonymous_start(*variadic, params),
+                _ => None,
+            };
+            let positions = record_plan(
+                target,
+                &marked_types(&arg_types(args), &marks),
+                true,
+                anonymous,
+            )
+            .positions;
             if positions > target.abi().general_arguments() && !target.abi().facts.stack_arguments {
                 report(
                     E4010,
@@ -932,6 +997,8 @@ struct Lowerer {
     /// Named argument register count and incoming stack extent in bytes.
     /// `None` in a fixed function; both are from the call placement plan.
     named_arguments: Option<(u8, u8, u64)>,
+    /// The Apple variadic convention (`CodegenOptions::anonymous_on_stack`).
+    anonymous_on_stack: bool,
     /// Every `const` this function has lowered, by value id.
     ///
     /// EvoIR Section 3.11 admits immediate assembly operands (`I`, `J`, `K`,
@@ -1642,6 +1709,7 @@ fn lower_function(
     external: &dyn Fn(&str) -> bool,
     ub_checks: UbCheckProfile,
     diagnostic_true_predicates: BTreeSet<u32>,
+    anonymous_on_stack: bool,
 ) -> Result<MFunction, String> {
     let entry = function
         .blocks
@@ -1671,6 +1739,7 @@ fn lower_function(
         named_arguments: function
             .variadic
             .then(|| named_argument_extent(target, function)),
+        anonymous_on_stack,
         constants: HashMap::new(),
         null_pointers: HashSet::new(),
         symbolic_addresses: HashMap::new(),
@@ -1724,33 +1793,52 @@ fn lower_function(
 pub(crate) struct Signatures<'a> {
     tls: &'a [evocc_evoir::TlsSymbol],
     functions: HashMap<&'a str, &'a [ParamMark]>,
+    /// The ordinary position of the first anonymous argument of each
+    /// variadic callee.
+    variadic: HashMap<&'a str, usize>,
 }
 
 impl<'a> Signatures<'a> {
     fn of(module: &'a Module) -> Self {
         let mut functions: HashMap<&'a str, &'a [ParamMark]> = HashMap::new();
+        let mut variadic: HashMap<&'a str, usize> = HashMap::new();
         for function in &module.functions {
             functions.insert(function.name.as_str(), function.param_marks.as_slice());
+            let params: Vec<_> = function.params.iter().map(|p| p.ty.clone()).collect();
+            if let Some(start) = anonymous_start(function.variadic, &params) {
+                variadic.insert(function.name.as_str(), start);
+            }
         }
         for declaration in &module.declares {
             functions.insert(
                 declaration.name.as_str(),
                 declaration.param_marks.as_slice(),
             );
+            if let Some(start) = anonymous_start(declaration.variadic, &declaration.params) {
+                variadic.insert(declaration.name.as_str(), start);
+            }
         }
         for alias in &module.aliases {
             if let Some(marks) = functions.get(alias.target.as_str()).copied() {
                 functions.insert(alias.name.as_str(), marks);
             }
+            if let Some(start) = variadic.get(alias.target.as_str()).copied() {
+                variadic.insert(alias.name.as_str(), start);
+            }
         }
         Self {
             functions,
             tls: &module.tls,
+            variadic,
         }
     }
 
     fn marks(&self, callee: &str) -> &[ParamMark] {
         self.functions.get(callee).copied().unwrap_or(&[])
+    }
+
+    fn anonymous_start(&self, callee: &str) -> Option<usize> {
+        self.variadic.get(callee).copied()
     }
 }
 
@@ -1791,7 +1879,7 @@ fn lower_block(
     });
     let plan = marked
         .as_ref()
-        .map(|marked| record_plan(target, marked, true));
+        .map(|marked| record_plan(target, marked, true, None));
     let mut args = Vec::new();
     let mut prologue: Vec<MInst> = Vec::new();
     let mut indirect_result = false;
@@ -2037,6 +2125,13 @@ fn lower_block(
         // computed address". The procedure branches, so it is written here,
         // where a block can be split, exactly as the `ub.assume` row above is.
         if let Inst::VaAccess(access) = inst {
+            if lowerer.anonymous_on_stack {
+                if let Some((slot, alignment)) = variadic_access_slot(&access.op) {
+                    lower_stack_va_arg(lowerer, &mut insts, access, slot, alignment)?;
+                    lowerer.address_preparation = AddressPreparation::default();
+                    continue;
+                }
+            }
             if let Some((slot, alignment)) = variadic_access_slot(&access.op) {
                 let vector_group = match &access.op {
                     VariadicOp::Arg(result) => {
@@ -3468,7 +3563,17 @@ fn lower_inst(
             ..
         } => {
             let marks = call_argument_marks(signatures.marks(callee), arg_marks, args.len());
-            let plan = record_plan(target, &marked_types(&arg_types(args), &marks), true);
+            let anonymous = if lowerer.anonymous_on_stack {
+                signatures.anonymous_start(callee)
+            } else {
+                None
+            };
+            let plan = record_plan(
+                target,
+                &marked_types(&arg_types(args), &marks),
+                true,
+                anonymous,
+            );
             let (mut arguments, returned) = call_arguments(lowerer, insts, args, &marks, &plan)?;
             if external(callee) {
                 // Section 6, revision 0.5: across the host boundary "a caller
@@ -3481,7 +3586,10 @@ fn lower_inst(
                 // reachable from EvoIR alone.
                 let mut slot = 0;
                 let ordinary = args.iter().filter(|value| is_register_type(&value.ty));
-                for (value, placed) in ordinary.zip(&plan.items) {
+                for (position, (value, placed)) in ordinary.zip(&plan.items).enumerate() {
+                    if let Some(start) = plan.anonymous.filter(|start| start.item == position) {
+                        slot += start.general + start.vector;
+                    }
                     slot += placed.fillers;
                     match placed.passing {
                         Passing::Chunks(ref chunks) => slot += chunks.len(),
@@ -3536,7 +3644,18 @@ fn lower_inst(
                 _ => Vec::new(),
             };
             let marks = call_argument_marks(&marks, arg_marks, args.len());
-            let plan = record_plan(target, &marked_types(&arg_types(args), &marks), true);
+            let anonymous = match &callee.ty {
+                EvoIRType::FnPtr {
+                    params, variadic, ..
+                } if lowerer.anonymous_on_stack => anonymous_start(*variadic, params),
+                _ => None,
+            };
+            let plan = record_plan(
+                target,
+                &marked_types(&arg_types(args), &marks),
+                true,
+                anonymous,
+            );
             let pointer = lowerer.reg(callee)?;
             let (arguments, returned) = call_arguments(lowerer, insts, args, &marks, &plan)?;
             let mut outputs = call_results(lowerer, results)?;
@@ -4831,6 +4950,7 @@ fn named_argument_extent(target: Target, function: &Function) -> (u8, u8, u64) {
         target,
         &marked_types(&declared, &function.param_marks),
         true,
+        None,
     );
     let marked = marked_types(&declared, &function.param_marks);
     let abi = target.abi();
@@ -4939,6 +5059,10 @@ fn lower_va_start(
         kind: StoreKind::P,
         volatile: false,
     });
+    // The Apple variadic convention: the list is this one pointer.
+    if lowerer.anonymous_on_stack {
+        return Ok(());
+    }
 
     let top = lowerer.fresh(RegClass::Gpr64);
     insts.push(MInst::FrameAddress {
@@ -4993,6 +5117,99 @@ fn lower_va_start(
         kind: StoreKind::W,
         volatile: false,
     });
+    Ok(())
+}
+
+/// `va_arg` under the Apple variadic convention: the list is one pointer to
+/// the next anonymous argument on the caller's stack. Align it to 16 for a
+/// 16-byte type, read the argument there, and advance the pointer by the slot.
+fn lower_stack_va_arg(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    access: &evocc_evoir::VariadicAccess,
+    slot: u64,
+    alignment: u64,
+) -> Result<(), String> {
+    let field = lowerer.abi.va_list.stack;
+    let ap = lowerer.reg(&access.list)?;
+    let raw = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::Load {
+        align: 0,
+        dst: raw,
+        base: ap,
+        offset: field,
+        kind: LoadKind::P,
+        volatile: false,
+    });
+    let address = if alignment == 16 {
+        round_to_sixteen(lowerer, insts, raw)
+    } else {
+        raw
+    };
+    let bumped = lowerer.binary_imm(insts, BinOp::Add, address, slot, Width::X);
+    insts.push(MInst::Store {
+        align: 0,
+        src: bumped,
+        base: ap,
+        offset: field,
+        kind: StoreKind::P,
+        volatile: false,
+    });
+    match &access.op {
+        VariadicOp::ArgRecord { destination, shape } => {
+            let destination = lowerer.reg(destination)?;
+            // A record above sixteen bytes that is not a vector group travels
+            // as a pointer to the caller's copy.
+            let source = if shape.size > 16 && shape.simd_members().is_none() {
+                let source = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::Load {
+                    align: 0,
+                    dst: source,
+                    base: address,
+                    offset: 0,
+                    kind: LoadKind::P,
+                    volatile: false,
+                });
+                source
+            } else {
+                address
+            };
+            insts.push(MInst::MemCopy {
+                dst: destination,
+                src: source,
+                size: shape.size,
+                align: shape.align.min(8),
+                volatile: evocc_memory::CopyVolatility::None,
+            });
+        }
+        VariadicOp::Arg(result) if is_pair(&result.ty) => {
+            let (low, high) = lowerer.fresh_pair();
+            insts.push(MInst::Ldp {
+                rt1: low,
+                rt2: high,
+                base: address,
+                offset: 0,
+                writeback: false,
+                volatile: false,
+            });
+            lowerer.bind_pair(result, low, high);
+        }
+        VariadicOp::Arg(result) => {
+            let kind = load_kind(&result.ty)?;
+            let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+            let dst = lowerer.fresh(class);
+            insts.push(MInst::Load {
+                align: 0,
+                dst,
+                base: address,
+                offset: 0,
+                kind,
+                volatile: false,
+            });
+            lowerer.bind(result, dst);
+        }
+        VariadicOp::Start | VariadicOp::End => {}
+    }
     Ok(())
 }
 
@@ -5756,10 +5973,39 @@ struct Placed {
 struct RecordPlan {
     items: Vec<Placed>,
     /// Positions consumed, fillers included. A position at or above eight is a
-    /// stack slot, which Darwin refuses (`E4010`).
+    /// stack slot, which Darwin refuses (`E4010`). Under the Apple variadic
+    /// convention only the named arguments count.
     positions: usize,
     /// Whether the list ends with a destination pointer that goes to `x8`.
     indirect_result: bool,
+    /// The Apple variadic convention: the first anonymous argument and the
+    /// registers that stay unused before it.
+    anonymous: Option<AnonymousStart>,
+}
+
+/// Where the anonymous arguments of a variadic call begin when they all go to
+/// the stack. Zero fillers take the `general` and `vector` argument registers
+/// that the named arguments leave, so each anonymous piece finds a stack slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct AnonymousStart {
+    item: usize,
+    general: usize,
+    vector: usize,
+}
+
+/// The ordinary position of the first anonymous argument of a call to a
+/// callee with this signature, when the callee is variadic.
+fn anonymous_start(variadic: bool, params: &[EvoIRType]) -> Option<usize> {
+    variadic.then(|| params.iter().filter(|ty| is_register_type(ty)).count())
+}
+
+/// Whether an argument travels in vector registers, not general registers.
+fn uses_vector_bank(ty: &EvoIRType, mark: &ParamMark) -> bool {
+    match mark {
+        ParamMark::ByVal(shape) => shape.simd_members().is_some(),
+        ParamMark::None => simd_argument_bytes(ty).is_some(),
+        ParamMark::Sret(_) => false,
+    }
 }
 
 /// Where each ordinary argument of a signature goes.
@@ -5771,6 +6017,7 @@ fn record_plan(
     target: Target,
     arguments: &[(EvoIRType, ParamMark)],
     pair_rounding: bool,
+    anonymous_from: Option<usize>,
 ) -> RecordPlan {
     let abi = target.abi();
     let general = abi.general_arguments();
@@ -5780,7 +6027,47 @@ fn record_plan(
     let mut next_vector = 0_usize;
     let mut cursor = abi.argument_cursor();
     let mut indirect_result = false;
-    for (ty, mark) in arguments {
+    let mut anonymous = None;
+    let mut named_positions = None;
+    for (position, (ty, mark)) in arguments.iter().enumerate() {
+        // The Apple variadic convention: the named arguments keep their
+        // registers, and the anonymous ones start on the stack. A bank that
+        // no anonymous argument uses keeps its free registers.
+        if anonymous_from == Some(position) {
+            let rest = &arguments[position..];
+            let fill_general = rest
+                .iter()
+                .any(|(ty, mark)| !uses_vector_bank(ty, mark) && !mark.is_sret());
+            let fill_vector = rest.iter().any(|(ty, mark)| uses_vector_bank(ty, mark));
+            let general_left = if fill_general {
+                general.saturating_sub(usize::from(cursor.used(general_bank())))
+            } else {
+                0
+            };
+            let vector_left = if fill_vector {
+                vectors.saturating_sub(usize::from(cursor.used(vector_bank())))
+            } else {
+                0
+            };
+            for _ in 0..general_left {
+                let _ = place(&mut cursor, RegClass::Gpr64);
+            }
+            for _ in 0..vector_left {
+                let _ = place(&mut cursor, RegClass::Simd64);
+            }
+            named_positions = Some(next);
+            if fill_general {
+                next = next.max(general);
+            }
+            if fill_vector {
+                next_vector = next_vector.max(vectors);
+            }
+            anonymous = Some(AnonymousStart {
+                item: position,
+                general: general_left,
+                vector: vector_left,
+            });
+        }
         match mark {
             ParamMark::Sret(shape) => {
                 if shape.size > abi.record_register_bytes && shape.simd_members().is_none() {
@@ -5828,7 +6115,7 @@ fn record_plan(
                 // clang and `x2`:`x3` under GCC-14,
                 // `.evidence/builtin-probes/20260906-b10/`).
                 if shape.size != 0
-                    && abi.aligned_record_pair_rounding
+                    && (abi.aligned_record_pair_rounding || anonymous.is_some())
                     && shape.align == 16
                     && cursor.pair_padding(general_bank()) != 0
                 {
@@ -5913,8 +6200,9 @@ fn record_plan(
     }
     RecordPlan {
         items,
-        positions: next,
+        positions: named_positions.unwrap_or(next),
         indirect_result,
+        anonymous,
     }
 }
 
@@ -6039,7 +6327,24 @@ fn call_arguments(
     let mut returned = None;
     let mut indirect_destination = None;
     let ordinary = args.iter().filter(|value| is_register_type(&value.ty));
-    for (value, placed) in ordinary.zip(&plan.items) {
+    for (position, (value, placed)) in ordinary.zip(&plan.items).enumerate() {
+        // The Apple variadic convention: zero the argument registers that the
+        // named arguments leave, so that the anonymous arguments go to the
+        // stack. The callee reads none of these registers.
+        if let Some(start) = plan.anonymous.filter(|start| start.item == position) {
+            for _ in 0..start.general {
+                let filler = lowerer.word(insts, 0);
+                registers.push(filler);
+            }
+            for _ in 0..start.vector {
+                let filler = lowerer.fresh(RegClass::Simd64);
+                insts.push(MInst::MovImm {
+                    dst: filler,
+                    imm: 0,
+                });
+                registers.push(filler);
+            }
+        }
         for _ in 0..placed.fillers {
             // The skipped register is passed as zero rather than left
             // undefined, so that two lowerings of one unit agree byte for byte.

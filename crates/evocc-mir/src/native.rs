@@ -203,6 +203,13 @@ fn compile_module_with_guard_control(
             &|name| !keep(name),
             claimed,
         )
+    } else if options.anonymous_on_stack {
+        crate::lower::lower_module_with_anonymous_on_stack(
+            target,
+            module,
+            &|name| !keep(name),
+            options.ub_checks,
+        )
     } else {
         lower_module_for_profile(target, module, &|name| !keep(name), options.ub_checks)
     }

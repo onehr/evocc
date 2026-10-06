@@ -60,6 +60,11 @@ pub struct CodegenOptions {
     pub allocation: crate::generic::allocation::AllocationOptions,
     pub frame_pointer_required: bool,
     pub leaf_frame_pointer_required: bool,
+    /// The Apple arm64 variadic convention: a call passes every anonymous
+    /// argument on the stack, and `va_list` is one pointer to them. Off by
+    /// default, so the library keeps the AAPCS64 rule of Section 6 under both
+    /// ABI profiles. The C driver sets it for `aarch64-apple-darwin`.
+    pub anonymous_on_stack: bool,
 }
 
 impl CodegenOptions {
