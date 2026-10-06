@@ -432,9 +432,9 @@ fn odd_width_evoir_conversions_keep_the_existing_interpreter_observation() {
 #[test]
 fn all_selected_families_execute_against_unsigned_c_reference_expressions() {
     use std::process::Command;
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let dir = root.join(format!(
-        ".evidence/codegen/n03d-c3/native-patterns-{}",
+    // Disposable test files must not be removed from retained evidence.
+    let dir = std::env::temp_dir().join(format!(
+        "evocc-native-extension-patterns-{}",
         std::process::id()
     ));
     std::fs::create_dir_all(dir.parent().unwrap()).unwrap();

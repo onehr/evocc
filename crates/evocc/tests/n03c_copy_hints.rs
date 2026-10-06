@@ -44,11 +44,9 @@ fn native_copy_hints_match_off_and_clang_across_edges_and_calls() {
         ("Vec", "vector_across", "Vec x, U y", "((Vec){x,y}),z"),
         ("U", "reload_pressure", "unsigned n, U x, U y", "n%5,x,y"),
     ];
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let directory = root.join(format!(
-        ".evidence/codegen/n03c-t2/native-copies-{}",
-        std::process::id()
-    ));
+    // Disposable test files must not be removed from retained evidence.
+    let directory =
+        std::env::temp_dir().join(format!("evocc-native-copies-{}", std::process::id()));
     std::fs::create_dir_all(directory.parent().unwrap()).unwrap();
     std::fs::create_dir(&directory).unwrap();
     let mut harness = String::from("typedef unsigned long U; typedef unsigned __int128 Wide; typedef U Vec __attribute__((vector_size(16)));\n");

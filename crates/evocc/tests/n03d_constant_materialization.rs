@@ -164,9 +164,9 @@ fn native_sequences_preserve_flags_and_clear_upper_bits_of_writes() {
     harness.push_str(&format!(
         "int main(void) {{ for (unsigned long f=0; f<16; ++f) {{ {checks} }} return 0; }}\n"
     ));
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let dir = root.join(format!(
-        ".evidence/codegen/n03d/native-flags-{}",
+    // Disposable test files must not be removed from retained evidence.
+    let dir = std::env::temp_dir().join(format!(
+        "evocc-native-constant-flags-{}",
         std::process::id()
     ));
     std::fs::create_dir_all(dir.parent().unwrap()).unwrap();

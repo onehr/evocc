@@ -454,11 +454,8 @@ fn native_fused_forms_match_values_and_all_nzcv_bits() {
         }
     }
     assert_eq!(cases.len(), 139);
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let dir = root.join(format!(
-        ".evidence/codegen/n03d-c2/native-flags-{}",
-        std::process::id()
-    ));
+    // Disposable test files must not be removed from retained evidence.
+    let dir = std::env::temp_dir().join(format!("evocc-native-local-flags-{}", std::process::id()));
     std::fs::create_dir_all(dir.parent().unwrap()).unwrap();
     std::fs::create_dir(&dir).unwrap();
     let mut assembly = String::new();

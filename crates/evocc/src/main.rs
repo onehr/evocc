@@ -672,7 +672,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             _ if arg.starts_with("--eq-") => {
                 let (key, value) = arg
                     .split_once('=')
-                    .ok_or("EqSat options require --eq-KEY=VALUE")?;
+                    .ok_or("options for EqSat require --eq-KEY=VALUE")?;
                 if value.is_empty() {
                     return Err("empty EqSat option".into());
                 }
@@ -978,7 +978,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     })?;
     if mode == DriverMode::EmitCoreCHir {
         if core_entries.is_empty() || optimization != 0 || standard_builtins {
-            return Err("Core C-HIR export requires --core-entry=NAME, -O0 and -fno-builtin; it is not a compilation proof".into());
+            return Err("source export for Core C-HIR requires --core-entry=NAME, -O0 and -fno-builtin; it is not a compilation proof".into());
         }
     } else if !core_entries.is_empty() && proof.is_none() {
         return Err("--core-entry requires --emit=core-c-hir".into());
@@ -1028,7 +1028,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         || !(1..=8).contains(&schedule.max_transactions)
         || !(1..=300_000).contains(&eq_timeout_ms)
     {
-        return Err("EqSat options require -Oeq-scalar and admitted resource limits".into());
+        return Err("options for EqSat require -Oeq-scalar and admitted resource limits".into());
     }
     if guard_is_sysreg {
         codegen.stack_guard = StackGuard::SystemRegister {

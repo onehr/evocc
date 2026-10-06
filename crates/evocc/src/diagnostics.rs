@@ -170,9 +170,14 @@ impl Diagnostic {
             1,
             1,
         );
+        let header = if message.starts_with('-') {
+            format!("option {message}")
+        } else {
+            message.to_owned()
+        };
         Self::new(
             code,
-            message,
+            &header,
             Span::source("<command-line>", source.as_bytes(), span, message),
         )
     }

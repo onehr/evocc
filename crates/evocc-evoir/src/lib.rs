@@ -4097,7 +4097,7 @@ impl fmt::Display for InterpreterError {
             ),
             Self::UnsupportedInstruction { block, operation } => write!(
                 formatter,
-                "EvoIR interpreter does not support {operation} in block {block}"
+                "interpreter does not support {operation} in EvoIR block {block}"
             ),
             Self::FrameAddressUnavailable { block, depth } => write!(
                 formatter,

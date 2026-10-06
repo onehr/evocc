@@ -83,9 +83,9 @@ def templates(source, path='crates/evocc/src/main.rs'):
     for begin, end, text in values:
         prefix = source[max(0, begin - 250):begin]
         direct = re.search(
-            r'(?:\b(?:message|detail)\s*:|\b(?:usage|fail|warn|error|Err|ok_or)\s*\()'
+            r'(?:\b(?:message|detail)\s*:|\blet\s+message\s*=|\b(?:usage|fail|warn|error|Err|ok_or)\s*\()'
             r'\s*(?:&\s*)?(?:format!\s*\(\s*)?$', prefix)
-        report = re.search(r'\breport\s*\(\s*"E\d{4}"\s*,\s*(?:format!\s*\(\s*)?$', prefix)
+        report = re.search(r'"E\d{4}"\s*,\s*(?:&\s*)?(?:format!\s*\(\s*)?$', prefix)
         method = any(a <= begin < b for a, b in ranges)
         display = any(a <= begin < b for a, b in displays)
         if direct or report or method or display:
@@ -187,7 +187,8 @@ if __name__ == '__main__':
     self_test()
     if rule != 'inventory':
         role = rule if rule in {'label', 'note', 'help'} else 'header'
-        rows = [(where, text) for where, kind, text in inventory() if kind == role]
+        rows = [(where, text) for where, kind, text in inventory()
+                if kind == role or (kind == 'detail' and rule in {'period', 'prefix'})]
         assert rows, f'no {role} messages checked'
         failures = [f'{where}: {text}' for where, text in rows if not accepts(rule, text)]
         assert not failures, '\n'.join(failures)
