@@ -122,12 +122,61 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
+| APPLICATION | P01, P02, P03, P04, P05, B08, B08b, B08d, B08d10 | Complete P01 through P05 in order under the October 7 product contract. Verification work is paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
+
+## Diagnostics and command-line product work
+
+Owner contract: October 7. Complete these packages in order. Close each package
+with its RED test commit, implementation, full offline workspace gate and the
+observed exit results. Do not start the next package before that gate passes.
+Do not change Lean, the verification specification, the proof-required pipeline
+or rewrite checkers. Preserve existing emitted IR and assembly bytes. Do not
+add dependencies, crates or configuration systems. Do not push.
+
+- [ ] **P01 — Render source diagnostics and freeze their format** — `OPEN`, P1.
+  Next: commit public renderer REDs, retain source spans and implement text,
+  short, color and JSON presentation. Add and pin `spec/diagnostics.md`.
+  Exit: at least 40 text/JSON UI snapshots, workspace message-style checks,
+  the hand-written JSON validator and full workspace gate pass. Budget:
+  900 production Rust lines and 300 specification lines. Runtime locations
+  must come from execution metadata, not a guessed source expression.
+- [ ] **P02 — Explain every authoritative diagnostic** — `OPEN`, P1.
+  Next: after P01 closes, write and test each diagnostic-table explanation.
+  Exit: complete page/table coverage, triggering and fixed examples checked,
+  `--explain`, generated book index and full workspace gate pass. Report every
+  `Trigger: none` exception. Budget: 300 Rust/Python lines excluding pages;
+  each page at most 40 lines, index generator at most 150 lines.
+- [ ] **P03 — Add five front-end lints and level control** — `OPEN`, P1.
+  Next: after P02 closes, add only unused-variable, unused-parameter,
+  implicit-function-declaration, implicit-int and return-type diagnostics.
+  Exit: warning-level UI matrix, unchanged zlib/cJSON builds with recorded
+  warnings and full workspace gate pass. Pin the revised authority table.
+  Budget: 700 production Rust lines. No lint registry or new lint framework.
+- [ ] **P04 — Add user-intent commands** — `OPEN`, P1.
+  Next: after P03 closes, add the `evo` binary with run, check, explain, prove,
+  build and version. Delegate to the existing driver; do not refactor it.
+  Exit: verb tests, actual cJSON build receipt, tested book commands, release
+  packaging and full workspace gate pass. Budget: 600 lines for the binary and
+  100 lines for release-script and book changes.
+- [ ] **P05 — Package the Linux header sysroot** — `OPEN`, P1.
+  Next: after P04 closes, export sealed headers and a per-file hash contract;
+  add explicit/environment/bundled/fallback lookup without driver downloads.
+  Exit: macOS produces ELF AArch64 objects and zlib without manual include
+  flags, contract checks and full workspace gate pass. Add the cross-host CI
+  link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,
+  120 export-script lines, 60 release-script lines and 40 workflow lines.
+
+Final acceptance also requires at least 60 UI cases, tested explanations,
+six verbs, bundled-header cross compilation, clean-tree full workspace and
+Lean gates, and the 0.1.0 changelog entry. The final Lean gate checks existing
+work; it does not reopen the paused verification track. Capture retention is
+at most 500 MiB per package. Only use `target/frontend` and two Cargo jobs.
+Never delete `.build/`, `.evidence/`, contracts, fixtures or `lean/.lake`.
 
 ### Working sequence and release gates
 
