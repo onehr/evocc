@@ -1,0 +1,89 @@
+# Contributing to EvoCC
+
+Thank you for your interest in EvoCC. This page tells you how to build the compiler, how a change
+moves from a failing test to a commit, and where to ask questions. [The EvoCC Book](book/src/SUMMARY.md)
+explains how to use the compiler.
+
+## Where to ask
+
+- To ask a question or to propose an idea, open an
+  [issue](https://github.com/onehr/evocc/issues).
+- To report a bug, a wrong-code result or a refused proof, use the matching issue template.
+- To report a security problem, do not open an issue. Follow [SECURITY.md](SECURITY.md).
+
+## Build
+
+EvoCC builds offline. The three Rust dependencies are in `vendor/`, and
+[`.cargo/config.toml`](.cargo/config.toml) points Cargo at them.
+
+```sh
+CARGO_TARGET_DIR=target/frontend cargo build --release --offline -j 2 -p evocc -p evocc-proofcheck
+```
+
+- Use the one build tree, `target/frontend`, with two jobs. Do not make a second tree.
+- Check the free disk space with `df -h .` first. Do not start a build below 25 GiB free.
+- [`rust-toolchain.toml`](rust-toolchain.toml) pins Rust. [`lean/lean-toolchain`](lean/lean-toolchain)
+  pins Lean.
+- Build the Lean checkers from inside `lean/`: `(cd lean && lake build)`. Do not run `lake` from the
+  repository root.
+
+## The change workflow
+
+Each change follows the same steps, in this order:
+
+1. **Find the task.** [TODO.md](TODO.md) gives each task a stable ID. Add a task if none fits.
+   `python3 tools/render-status.py --todo` checks and prints the queues.
+2. **RED.** Commit a test that fails, in its own commit. It must fail for the reason that the change
+   removes.
+3. **Implementation.** Fix the cause in shared code. Do not special-case the test.
+4. **Targeted tests.** Run the tests of the crates that you changed, for example
+   `cargo test --offline -p evocc-lower`.
+5. **Original-program replay.** Run the unchanged program that showed the problem again, for
+   example its `tools/bench.py` lane. A reduced test that passes does not show that the original
+   program passes.
+6. **Gate.** Run `tools/gate-changed.sh <base-commit>`. It tests the changed crates and the crates
+   that depend on them, then runs Clippy and rustfmt. Use
+   `tools/gate-changed.sh --full-workspace --offline` for a full run.
+7. **Receipt.** Record the result where the claim lives: a receipt in `tests/contracts/`, a row in
+   [docs/evidence.md](docs/evidence.md), or the lane receipt that `tools/bench.py` writes. A receipt
+   names the compiler, the inputs and the limits of the result.
+8. **Tracker.** Update the line of the task in TODO.md in the same commit. If a receipt changed, run
+   `python3 tools/render-status.py` and commit `docs/status.md`. `--check` must pass.
+
+A gate that cannot find its evidence fails. A skip, a timeout or a missing result is not a pass.
+
+## Specifications
+
+The documents in [`spec/`](spec/README.md) are pinned by SHA-256 in `spec/pins.json`. When you
+change a document:
+
+1. Edit the document and increase its revision line.
+2. Run `python3 tools/check-spec-pins.py --update`.
+3. Commit the document and `spec/pins.json` together.
+
+`tools/gate-changed.sh` refuses a changed document with an old pin. When code and a specification
+disagree, one of them has a defect. Fix the code, or change the document with a new revision.
+
+## Lean proofs
+
+- Do not commit `sorry`.
+- Do not add an axiom. The theorems depend only on `propext`, `Classical.choice` and `Quot.sound`,
+  and `#print axioms` checks in the Lean tests make `lake build` fail on a new one.
+- Run `tools/gate-lean.sh` for a change in `lean/` or in a stage export. It rebuilds the proofs,
+  checks the rule registry and the vectors, and audits every axiom. It also rewrites a tracked
+  receipt, so commit that receipt with your change.
+
+## Commit messages
+
+- Write the subject in the imperative mood: "Reject a pointer argument in core-v1", not
+  "Rejected ..." or "Rejects ...".
+- Keep the subject short. Put the reason for the change in the body.
+- Make one logical change per commit. The RED test is its own commit.
+- Do not add attribution trailers or tool signatures.
+
+## License
+
+EvoCC is licensed under the [MIT license](LICENSE-MIT) or the [Apache License 2.0](LICENSE-APACHE),
+at your option. Unless you explicitly state otherwise, any contribution intentionally submitted for
+inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above,
+without any additional terms or conditions.
