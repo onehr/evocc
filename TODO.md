@@ -124,7 +124,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10 | Implement the retained warning policies, then finish the separately patched wordexp lane and reference-case accounting; full musl also needs L04. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
-| AUDIT | T03 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. |
+| AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -2968,6 +2968,74 @@ Limits of the accepted result:
     The native run tests them but does not prove them.
 
   The first paragraph is history.
+
+### Defects found by the specification review
+
+The specification editors found these code defects on 2026-10-06, when they
+stabilized the pinned documents in `spec/`. Each one is a difference between
+the code and a pinned document. A fix changes the code, or it changes the
+document with a new revision. None of them changes the claim of
+`spec/verification.md`: that claim does not depend on the Rust certificate
+parser, the EvoMIR text parser or the Darwin ABI profile, and floating
+builtins are outside `core-v1`.
+
+- [ ] **D01 — Give builtin-argument-type its own diagnostic code** — `OPEN`, P2.
+  `E2911` names two diagnostics: `static-assertion-failed` and
+  `builtin-argument-type`. The parser reports `builtin-argument-type` for a
+  wrong operand type of a quiet floating comparison builtin
+  (`__builtin_isgreater` and its family) in
+  `crates/evocc-parser/src/floating.rs`. The Diagnostic Authority table of
+  `spec/evoir.md` section 6.3 lists `E2911` only as
+  `static-assertion-failed`, and section 3.13.1 also names `E2911` for the
+  wrong operand type. Next action: give `builtin-argument-type` a new code,
+  add it to the section 6.3 table and correct section 3.13.1. Exit: one code
+  per diagnostic, the section 6.3 table updated, and
+  `crates/evocc/tests/check_product.rs` extended to check the new code.
+
+- [ ] **D02 — Refuse the EVP epoch marker 0** — `OPEN`, P2.
+  `parse_evp1` in `crates/evocc-proof/src/evp1.rs` accepts an `epoch 0`
+  marker. `spec/evoir.md` section 11.3 numbers the epochs from 1 and says
+  that a marker `0` is malformed (status 2). No test covers the marker `0`.
+  Next action: make the reader refuse `epoch 0` as malformed, and add a test
+  with an `evp2` certificate that is valid except for this marker. Exit: the
+  reader refuses `epoch 0`, and a test shows the refusal.
+
+- [ ] **D03 — Read every EvoMIR text form that the writer prints** — `OPEN`, P2.
+  The EvoMIR writer `crates/evocc-mir/src/text.rs` prints `spill.store`,
+  `spill.reload`, `arg.incoming` and `arg.outgoing`, and a `#zero:` asm
+  operand of each register class. The parser
+  `crates/evocc-mir/src/text_parse.rs` reads none of the `spill.*` and
+  `arg.*` forms, and it reads `#zero:` only for `gpr32` and `gpr64`.
+  `spec/evomir.md` Appendix A records these two limits. Next action: add a
+  parser production for each form that the writer prints, then remove the
+  limits from Appendix A. Exit: the parser reads every form that the writer
+  prints, and a round-trip test (write, parse, write) gives the same text.
+
+- [ ] **D04 — Darwin profile: 128-bit argument pairs** — `OPEN`, P2.
+  Under the Darwin ABI profile, `record_plan` in
+  `crates/evocc-mir/src/lower.rs` rounds a `bits<128>` argument to an even
+  register pair, as under Linux. Apple clang does not round: after one
+  64-bit argument, the pair is `x1`:`x2`
+  (`.evidence/builtin-probes/20260905-b6/b6-darwin-abi.out`). Thus a call
+  across the boundary to Darwin-compiled code can pass wrong values; calls
+  between EvoCC functions agree. `spec/evomir.md` section 6.5 records this in
+  its conformance note. The C driver emits the Linux ABI profile, so only the
+  Darwin profile of the backend library is affected. Next action: decide if
+  the Darwin profile follows the platform or keeps the even pair as an
+  intended difference. Exit: the decision in section 6.5 and a test: the
+  test shows the platform placement, or the section documents the difference
+  as intended and the test shows the even pair.
+
+- [ ] **D05 — Darwin profile: variadic rules** — `OPEN`, P2.
+  `lower_va_start` in `crates/evocc-mir/src/lower.rs` builds the AAPCS64
+  (Linux) `va_list` under both ABI profiles, and a call passes anonymous
+  arguments as named ones. The Darwin platform passes every anonymous
+  argument on the stack. `spec/evomir.md` sections 6.1 and 6.12 state that a
+  Darwin build is correct only between EvoCC-compiled functions. Next
+  action: write a test that compares a Darwin variadic call and `va_arg` with
+  the Darwin reference (Apple clang). Then fix the Darwin profile, or record
+  the difference as a decision in section 6.12. Exit: the test against the
+  Darwin reference, and a fix or a documented decision.
 
 ## Codegen quality track — next quarter
 
