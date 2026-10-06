@@ -174,3 +174,32 @@ fn runtime_span_points_into_the_included_source() {
     );
     assert!(text.contains("return 9 / n;"), "{text}");
 }
+
+#[test]
+fn conflicting_declaration_labels_the_previous_declaration() {
+    let output = run(&["--parse-only"], "int value;\ndouble value;\n");
+    assert_eq!(output.status.code(), Some(1));
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert!(text.contains("--> /dev/stdin:2:"), "{text}");
+    assert!(text.contains("::: /dev/stdin:1:"), "{text}");
+    assert!(text.contains("previous declaration is here"), "{text}");
+}
+
+#[test]
+fn resource_limits_are_not_reported_as_success_or_undefined_behavior() {
+    let output = run(&["--check"], "int main(void) { for (;;) {} }\n");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert!(text.contains("error[E3008]"), "{text}");
+    assert!(text.contains("execution reached a resource limit"), "{text}");
+}
+
+#[test]
+fn unsupported_execution_does_not_establish_absence_of_undefined_behavior() {
+    let output = run(&["--check"], "extern int missing(void); int main(void) { return missing(); }");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert!(text.contains("execution is not supported for this operation"), "{text}");
+}
