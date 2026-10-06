@@ -108,6 +108,38 @@ fn malformed_probe_honors_the_json_channel() {
 }
 
 #[test]
+fn option_names_do_not_replace_the_header_sentence() {
+    let args = [
+        "--emit=asm",
+        "--proof-required=unused",
+        "-Oeq-scalar",
+        "--core-entry=f",
+        "-O0",
+        "-fno-builtin",
+        "missing.c",
+    ];
+    let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args(args)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        text.starts_with("error: option -Oeq-scalar in proof-required mode requires"),
+        "{text}"
+    );
+    let short = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args(args)
+        .arg("--error-format=short")
+        .output()
+        .unwrap();
+    assert_eq!(short.status.code(), Some(1));
+    assert!(String::from_utf8(short.stderr)
+        .unwrap()
+        .starts_with("evocc: -Oeq-scalar in proof-required mode requires"));
+}
+
+#[test]
 fn explicit_color_does_not_depend_on_redirection() {
     let source = "int main(void) { return missing; }";
     let always = run(&["--parse-only", "--color=always"], source);
