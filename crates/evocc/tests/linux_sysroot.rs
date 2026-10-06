@@ -8,6 +8,21 @@ use std::sync::atomic::{AtomicU32, Ordering};
 static NEXT: AtomicU32 = AtomicU32::new(0);
 const TARGET: &str = "aarch64-unknown-linux-gnu";
 
+#[test]
+fn header_export_contract_checks_run_in_the_workspace_gate() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new("python3")
+        .arg(root.join("tools/tests/test_sysroot.py"))
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 struct Work(PathBuf);
 
 impl Work {

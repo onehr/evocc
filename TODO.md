@@ -376,6 +376,25 @@ add dependencies, crates or configuration systems. Do not push.
   are removed. Since the prior 04:47 target measurement, target/frontend grew
   by 123,468 KiB before the final Clippy completion; this is a checkpoint,
   not final package disk accounting. Available space remains 29 GiB.
+  Export checkpoint: RED `32e3409a` records two failures because the exporter
+  was absent. `tools/export-sysroot.sh` now uses 106/120 lines, reads the actual
+  image identity and GCC version, follows header-directory symlinks, refuses
+  case-insensitive storage and keeps differing existing files intact. The
+  existing case-sensitive volume holds one new 63,676 KiB export at
+  `.build/k7-coverage/case/product-sysroot-20261007/`. Its tracked contract is
+  `contracts/sysroot-aarch64-unknown-linux-gnu.json`: 3,974 files. Independent
+  `find -L` and `sha256sum` in the image find zero missing, extra or changed
+  files. GCC reports no `include-fixed` directory; the contract records that.
+  A second export preserves contract SHA-256
+  `32bdf48db11bdb7f2a8de5a6742766bd3b55c3c400db6d472663d298ba6414f5`.
+  Four Python checks pass with the real export; all seven sysroot Rust tests
+  pass, including the contract check invoked by the workspace test. Formatting
+  and shell syntax pass. The first runtime command refused a bare image digest;
+  the exporter now uses the installed Apple image tag and checks that its
+  metadata is unchanged, while Docker uses the immutable image ID. Both run
+  without guest network access. Logs retain that failure. No new image or
+  disk was created. Package layout, CI, cross-build, full-workspace acceptance
+  and the owner decision on macOS storage remain open.
   Exit: macOS produces ELF AArch64 objects and zlib without manual include
   flags, contract checks and full workspace gate pass. Add the cross-host CI
   link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,

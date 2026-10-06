@@ -38,6 +38,9 @@ lean/vectors/
 target/
 target-*/
 
+# Exported Linux headers. Their file hashes are tracked under contracts/.
+/sysroot/
+
 # OS noise.
 .DS_Store
 .claude/worktrees/
