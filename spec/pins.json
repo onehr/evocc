@@ -1,6 +1,10 @@
 {
   "format": "evocc-spec-pins-v1",
   "pins": {
+    "spec/diagnostics.md": {
+      "revision": "1.0.0",
+      "sha256": "28dd70cac1d08fad684e8a394b2918312dcc540dd79b0a2e706eee9243beb3c3"
+    },
     "spec/evoir.md": {
       "revision": "2.0.0",
       "sha256": "6ceb63ab84d6b5c5ccf9c48ce93b03b49215a9363298eed461d62a044ee55c32"

@@ -63,6 +63,18 @@ pub fn interpret_program(
     entry_args: &[RuntimeValue],
     limits: InterpreterLimits,
 ) -> Result<InterpreterOutcome, InterpreterError> {
+    interpret_program_with_site(module, entry_args, limits, &mut None)
+}
+
+/// Preserve the execution site on failure without changing the error or
+/// executing the program a second time. Initialization errors have no site.
+pub fn interpret_program_with_site(
+    module: &Module,
+    entry_args: &[RuntimeValue],
+    limits: InterpreterLimits,
+    site: &mut Option<ExecutionSite>,
+) -> Result<InterpreterOutcome, InterpreterError> {
+    *site = None;
     let target = TargetDataLayout::aarch64_unknown_linux_gnu();
     let alignment = module
         .functions
@@ -71,5 +83,5 @@ pub fn interpret_program(
         .max()
         .unwrap_or(4);
     let state = ExecutionState::for_target(&target, alignment)?;
-    interpret_module_execution(module, "main", entry_args, limits, state, true)
+    interpret_module_execution(module, "main", entry_args, limits, state, true, site)
 }

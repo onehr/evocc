@@ -148,6 +148,9 @@ impl LanguageMode {
 struct DriverOptions {
     mode: DriverMode,
     error_format: diagnostics::Format,
+    color: diagnostics::Color,
+    source_bytes: std::cell::RefCell<Vec<u8>>,
+    included_bytes: std::cell::RefCell<std::collections::BTreeMap<String, Vec<u8>>>,
     target: DriverTarget,
     input: String,
     include_paths: Vec<String>,
@@ -206,6 +209,31 @@ struct DriverOptions {
 }
 
 impl DriverOptions {
+    fn diagnostic_source(&self, file: &str) -> Vec<u8> {
+        if file == self.input {
+            self.source_bytes.borrow().clone()
+        } else {
+            self.included_bytes
+                .borrow()
+                .get(file)
+                .cloned()
+                .unwrap_or_default()
+        }
+    }
+
+    fn emit_span(&self, file: &str, span: evocc_common::SourceSpan, code: &str, message: &str) {
+        let bytes = self.diagnostic_source(file);
+        let diagnostic = diagnostics::Diagnostic::new(
+            code,
+            message,
+            diagnostics::Span::source(file, &bytes, span, message),
+        );
+        eprint!(
+            "{}",
+            diagnostics::render(&diagnostic, self.error_format, self.color)
+        );
+    }
+
     fn emit_error(&self, file: &str, line: u32, column: u32, code: &str, message: &str) {
         let location = (line != 0 && column != 0)
             .then_some((line, column))
@@ -266,6 +294,15 @@ impl DriverOptions {
     fn record_opened_files(&self, pp: &Preprocessor) {
         *self.opened_files.borrow_mut() =
             pp.opened_sources().into_iter().map(str::to_owned).collect();
+        *self.included_bytes.borrow_mut() = pp
+            .opened_sources()
+            .into_iter()
+            .filter(|path| *path != self.input)
+            .filter_map(|path| {
+                pp.source_contents(path)
+                    .map(|bytes| (path.to_owned(), bytes.to_vec()))
+            })
+            .collect();
     }
 }
 
@@ -456,6 +493,7 @@ fn run_options(options: &DriverOptions) -> ExitCode {
 fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String> {
     let mut mode = None;
     let mut error_format = None;
+    let mut color = diagnostics::Color::Auto;
     let mut target = None;
     let mut input = None;
     let mut include_paths = Vec::new();
@@ -529,6 +567,9 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             "--emit=asm" => set_mode(&mut mode, DriverMode::EmitAsm)?,
             "--interpret-evoir" => set_mode(&mut mode, DriverMode::InterpretEvoIr)?,
             "--check" => set_mode(&mut mode, DriverMode::Check)?,
+            _ if arg.starts_with("--color=") => {
+                color = diagnostics::Color::parse(arg.strip_prefix("--color=").unwrap())?;
+            }
             _ if arg.starts_with("--error-format=") => {
                 let selected =
                     diagnostics::Format::parse(arg.strip_prefix("--error-format=").unwrap())?;
@@ -993,6 +1034,9 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     Ok(DriverOptions {
         mode,
         error_format: error_format.unwrap_or_default(),
+        color,
+        source_bytes: std::cell::RefCell::new(Vec::new()),
+        included_bytes: std::cell::RefCell::new(std::collections::BTreeMap::new()),
         target,
         input: input.ok_or_else(|| "an input file is required".to_string())?,
         include_paths,
@@ -1089,11 +1133,10 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
     options.record_opened_files(&pp);
     if pp.has_errors() {
         for error in pp.errors() {
-            options.emit_error(
+            options.emit_span(
                 pp.source_path(error.span.file)
                     .unwrap_or(options.input.as_str()),
-                error.span.line_start.max(1),
-                error.span.column_start.max(1),
+                error.span,
                 error.code,
                 &error.message,
             );
@@ -1125,16 +1168,16 @@ fn read_and_lex(options: &DriverOptions) -> Result<(Vec<u8>, Vec<evocc_lex::Toke
         }
     };
     let src = bytes;
+    options.source_bytes.replace(src.clone());
 
     let mut tokens = Vec::new();
     let mut lex = Lexer::from_bytes(FileId::new(1), &src);
     lex.set_legacy_literal_prefixes(language.legacy_literal_prefixes());
     while let Some(token) = lex.next() {
         if matches!(token.kind, TokenKind::Error | TokenKind::EncodingError) {
-            options.emit_error(
+            options.emit_span(
                 file,
-                token.span.line_start.max(1),
-                token.span.column_start.max(1),
+                token.span,
                 if token.kind == TokenKind::EncodingError {
                     "E0002"
                 } else {
@@ -1505,11 +1548,10 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     options.record_opened_files(&pp);
     if pp.has_errors() {
         for error in pp.errors() {
-            options.emit_error(
+            options.emit_span(
                 pp.source_path(error.span.file)
                     .unwrap_or(options.input.as_str()),
-                error.span.line_start.max(1),
-                error.span.column_start.max(1),
+                error.span,
                 error.code,
                 &error.message,
             );
@@ -1550,11 +1592,10 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         };
         if !reported.is_empty() {
             for diagnostic in reported {
-                options.emit_error(
+                options.emit_span(
                     pp.source_path(diagnostic.span.file)
                         .unwrap_or(options.input.as_str()),
-                    diagnostic.span.line_start.max(1),
-                    diagnostic.span.column_start.max(1),
+                    diagnostic.span,
                     diagnostic.code,
                     &diagnostic.message,
                 );
@@ -1591,70 +1632,93 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         }
         ParsedAction::EmitEvoIr | ParsedAction::EmitAsm | ParsedAction::InterpretEvoIr => {
             let target = options.target_layout();
-            match evocc_lower::lower_unit_with_source(
-                &unit,
-                &target,
-                options.optimization != 0,
-                |resolved, mut module| {
-                    if options.target.is_darwin() {
-                        darwin::apply_assembler_labels(resolved, &mut module);
+            let consume = |resolved: &evocc_chir::CHirUnit<'_>,
+                           mut module: Module,
+                           locations: evocc_lower::SourceLocations| {
+                let original = matches!(action, ParsedAction::InterpretEvoIr)
+                    .then(|| module.functions.clone());
+                if options.target.is_darwin() {
+                    darwin::apply_assembler_labels(resolved, &mut module);
+                }
+                for function in &mut module.functions {
+                    if function.patchable_entry.is_none() {
+                        function.patchable_entry = options.patchable_entry;
                     }
-                    for function in &mut module.functions {
-                        if function.patchable_entry.is_none() {
-                            function.patchable_entry = options.patchable_entry;
-                        }
+                }
+                // Validated passes run before the independently certified
+                // EqSat chain. The default path performs no TV executions.
+                let module = match apply_development_passes(module, options) {
+                    Ok(module) => module,
+                    Err(detail) => {
+                        options
+                            .error_format
+                            .usage(&format!("translation validation failed: {detail}"));
+                        return ExitCode::from(1);
                     }
-                    // Validated passes run before the independently certified
-                    // EqSat chain. The default path performs no TV executions.
-                    let module = match apply_development_passes(module, options) {
-                        Ok(module) => module,
+                };
+                let (module, rewrites) = if options.optimize_scalar_evoir {
+                    match optimize_scalar_evoir(module, options) {
+                        Ok((module, rewrites)) => (module, Some(rewrites)),
                         Err(detail) => {
                             options
                                 .error_format
-                                .usage(&format!("translation validation failed: {detail}"));
+                                .usage(&format!("verified optimization failed: {detail}"));
                             return ExitCode::from(1);
                         }
-                    };
-                    let (module, rewrites) = if options.optimize_scalar_evoir {
-                        match optimize_scalar_evoir(module, options) {
-                            Ok((module, rewrites)) => (module, Some(rewrites)),
-                            Err(detail) => {
-                                options
-                                    .error_format
-                                    .usage(&format!("verified optimization failed: {detail}"));
-                                return ExitCode::from(1);
-                            }
-                        }
-                    } else {
-                        if let Some(path) = &options.eq_proof_dir {
-                            if let Err(detail) = evocc_eqopt::write_identity_chain(&module, path) {
-                                options
-                                    .error_format
-                                    .usage(&format!("identity-chain publication failed: {detail}"));
-                                return ExitCode::from(1);
-                            }
-                        }
-                        (module, None)
-                    };
-                    match action {
-                        ParsedAction::EmitEvoIr => emit_evoir(&module),
-                        ParsedAction::EmitAsm => match &options.proof {
-                            Some(proof) => proof_required::run(
-                                options,
-                                proof,
-                                &src,
-                                &unit,
-                                &module,
-                                rewrites.as_ref(),
-                                resolved,
-                            ),
-                            None => emit_asm(options, &module, resolved),
-                        },
-                        ParsedAction::InterpretEvoIr => interpret_evoir(options, &module),
-                        _ => unreachable!("matched EvoIR action"),
                     }
-                },
-            ) {
+                } else {
+                    if let Some(path) = &options.eq_proof_dir {
+                        if let Err(detail) = evocc_eqopt::write_identity_chain(&module, path) {
+                            options
+                                .error_format
+                                .usage(&format!("identity-chain publication failed: {detail}"));
+                            return ExitCode::from(1);
+                        }
+                    }
+                    (module, None)
+                };
+                match action {
+                    ParsedAction::EmitEvoIr => emit_evoir(&module),
+                    ParsedAction::EmitAsm => match &options.proof {
+                        Some(proof) => proof_required::run(
+                            options,
+                            proof,
+                            &src,
+                            &unit,
+                            &module,
+                            rewrites.as_ref(),
+                            resolved,
+                        ),
+                        None => emit_asm(options, &module, resolved),
+                    },
+                    ParsedAction::InterpretEvoIr => interpret_evoir(
+                        options,
+                        &module,
+                        &pp,
+                        &locations,
+                        original.as_deref().unwrap_or_default(),
+                    ),
+                    _ => unreachable!("matched EvoIR action"),
+                }
+            };
+            let lowered = if matches!(action, ParsedAction::InterpretEvoIr) {
+                evocc_lower::lower_unit_with_locations(
+                    &unit,
+                    &target,
+                    options.optimization != 0,
+                    consume,
+                )
+            } else {
+                evocc_lower::lower_unit_with_source(
+                    &unit,
+                    &target,
+                    options.optimization != 0,
+                    |source, module| {
+                        consume(source, module, evocc_lower::SourceLocations::default())
+                    },
+                )
+            };
+            match lowered {
                 Ok(result) => result,
                 Err(error) => {
                     let span = error.span();
@@ -1916,7 +1980,13 @@ fn assemble(
     Ok(text)
 }
 
-fn interpret_evoir(options: &DriverOptions, module: &Module) -> ExitCode {
+fn interpret_evoir(
+    options: &DriverOptions,
+    module: &Module,
+    pp: &Preprocessor,
+    locations: &evocc_lower::SourceLocations,
+    original: &[evocc_evoir::Function],
+) -> ExitCode {
     let (arguments, declared_results) = match evoir_main_contract(module) {
         Ok(contract) => contract,
         Err(message) => {
@@ -1924,14 +1994,60 @@ fn interpret_evoir(options: &DriverOptions, module: &Module) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let outcome =
-        match evocc_evoir::interpret_program(module, &arguments, EvoIrLimits::new(100_000)) {
-            Ok(outcome) => outcome,
-            Err(error) => {
+    let mut site = None;
+    let outcome = match evocc_evoir::interpret_program_with_site(
+        module,
+        &arguments,
+        EvoIrLimits::new(100_000),
+        &mut site,
+    ) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            let origin = site.and_then(|site| {
+                let function = module.functions.get(site.function)?;
+                let original = original
+                    .iter()
+                    .find(|before| before.name == function.name)?;
+                let block = function
+                    .blocks
+                    .iter()
+                    .find(|block| block.id == site.block)?;
+                let instruction = block
+                    .insts
+                    .get(site.instruction)
+                    .unwrap_or(&block.terminator);
+                // Do not use value IDs from a function rewritten after lowering.
+                let precise = (function == original)
+                    .then(|| locations.instruction(&original.name, instruction))
+                    .flatten();
+                precise
+                    .or_else(|| locations.declaration(&original.name))
+                    .map(|span| (span, precise.is_some()))
+            });
+            if let Some((span, precise)) = origin {
+                let file = pp.source_path(span.file).unwrap_or(&options.input);
+                let bytes = options.diagnostic_source(file);
+                let mut diagnostic = diagnostics::Diagnostic::new(
+                    error.code(),
+                    &error.message(),
+                    diagnostics::Span::source(file, &bytes, span, &error.message()),
+                );
+                diagnostic.notes.push(if precise { "this operation failed on the executed path" } else { "the executing function is shown; this instruction has no retained expression position" }.into());
+                if matches!(error.code(), "E3002" | "E3003") {
+                    diagnostic.help.push(
+                        "check the divisor before the division or remainder operation".into(),
+                    );
+                }
+                eprint!(
+                    "{}",
+                    diagnostics::render(&diagnostic, options.error_format, options.color)
+                );
+            } else {
                 options.emit_execution_error(&options.input, None, error.code(), &error.message());
-                return ExitCode::from(1);
             }
-        };
+            return ExitCode::from(1);
+        }
+    };
     if outcome.return_values.len() != declared_results.len()
         || outcome
             .return_values

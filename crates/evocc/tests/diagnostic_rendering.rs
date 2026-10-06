@@ -47,7 +47,7 @@ fn short_keeps_the_single_line_channel() {
     let text = String::from_utf8(output.stderr).unwrap();
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(text.lines().count(), 1, "{text}");
-    assert!(text.starts_with("/dev/stdin:1:24: error[E2001]:"), "{text}");
+    assert!(text.starts_with("/dev/stdin:1:25: error[E2001]:"), "{text}");
 }
 
 #[test]
@@ -98,4 +98,79 @@ assert r['notes'] and r['help'] and 'return 10 / divisor;' in r['rendered']
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn assert_runtime_site(options: &[&str], source: &str, line: u32, snippet: &str) {
+    let output = run(options, source);
+    assert_eq!(output.status.code(), Some(1));
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert!(text.contains(&format!("--> /dev/stdin:{line}:")), "{text}");
+    assert!(text.contains(snippet), "{text}");
+    assert!(
+        text.contains("this operation failed on the executed path"),
+        "{text}"
+    );
+}
+
+#[test]
+fn runtime_span_follows_the_executed_branch_not_the_first_division() {
+    assert_runtime_site(
+        &["--check"],
+        "int main(void) {\n int zero = 0;\n if (zero) return 1 / zero;\n return 2 / zero;\n}\n",
+        4,
+        "return 2 / zero;",
+    );
+}
+
+#[test]
+fn runtime_span_names_the_callee_not_the_call_site() {
+    assert_runtime_site(
+        &["--check"],
+        "int fail(int n) {\n return 2 / n;\n}\nint main(void) {\n return fail(0);\n}\n",
+        2,
+        "return 2 / n;",
+    );
+}
+
+#[test]
+fn runtime_span_keeps_the_parent_operation_after_lowering_children() {
+    assert_runtime_site(
+        &["--check"],
+        "int main(void) {\n int zero = 0;\n return 10 /\n (zero + 0);\n}\n",
+        3,
+        "return 10 /",
+    );
+}
+
+#[test]
+fn runtime_span_survives_optimized_block_and_value_numbering() {
+    assert_runtime_site(
+        &["--check", "-O2"],
+        "int unused(void) { return 0; }\nint main(void) {\n int zero = 0;\n if (1) return 2 / zero;\n return 0;\n}\n",
+        4,
+        "if (1) return 2 / zero;",
+    );
+}
+
+#[test]
+fn runtime_span_points_into_the_included_source() {
+    let dir = std::env::temp_dir().join(format!("evocc-diagnostic-include-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let header = dir.join("fail.h");
+    std::fs::write(&header, "int fail(int n) {\n return 9 / n;\n}\n").unwrap();
+    let header = std::fs::canonicalize(header).unwrap();
+    let source = format!(
+        "#include \"{}\"\nint main(void) {{ return fail(0); }}\n",
+        header.display()
+    );
+    let output = run(&["--check"], &source);
+    let text = String::from_utf8(output.stderr).unwrap();
+    std::fs::remove_file(&header).unwrap();
+    std::fs::remove_dir(&dir).unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        text.contains(&format!("--> {}:2:", header.display())),
+        "{text}"
+    );
+    assert!(text.contains("return 9 / n;"), "{text}");
 }

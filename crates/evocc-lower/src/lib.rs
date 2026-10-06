@@ -465,6 +465,31 @@ struct FunctionLowerer<'a> {
     size_symbols: &'a BTreeSet<SymbolId>,
     active_control: ControlTargets,
     fenv_access: bool,
+    source_span: SourceSpan,
+    source_values: Option<BTreeMap<u32, SourceSpan>>,
+}
+
+/// Diagnostic origins are not part of the serialized or executable IR.
+#[derive(Default)]
+pub struct SourceLocations {
+    functions: BTreeMap<String, (SourceSpan, BTreeMap<u32, SourceSpan>)>,
+}
+
+impl SourceLocations {
+    /// Resolve a result-producing instruction, or the predicate of an obligation.
+    /// Synthetic control flow has no expression origin and uses the declaration.
+    pub fn instruction(&self, function: &str, instruction: &Inst) -> Option<SourceSpan> {
+        let (_, values) = self.functions.get(function)?;
+        let value = match instruction {
+            Inst::UbAssume(condition, _) => Some(condition),
+            _ => inst_results(instruction).first().copied(),
+        }?;
+        values.get(&value.id).copied()
+    }
+
+    pub fn declaration(&self, function: &str) -> Option<SourceSpan> {
+        self.functions.get(function).map(|(span, _)| *span)
+    }
 }
 
 /// Lower a complete C-HIR translation unit into one validated EvoIR module.
@@ -496,6 +521,30 @@ pub fn lower_unit_with_source<R>(
     optimize: bool,
     consume: impl FnOnce(&CHirUnit<'_>, Module) -> R,
 ) -> Result<R, LowerError> {
+    lower_unit_with_origins(unit, target, optimize, false, |source, module, _| {
+        consume(source, module)
+    })
+}
+
+/// Keep source origins for diagnostic execution. Ordinary compilation does not
+/// allocate this map. Value origins follow final SSA renumbering.
+pub fn lower_unit_with_locations<R>(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    optimize: bool,
+    consume: impl FnOnce(&CHirUnit<'_>, Module, SourceLocations) -> R,
+) -> Result<R, LowerError> {
+    lower_unit_with_origins(unit, target, optimize, true, consume)
+}
+
+fn lower_unit_with_origins<R>(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    optimize: bool,
+    record: bool,
+    consume: impl FnOnce(&CHirUnit<'_>, Module, SourceLocations) -> R,
+) -> Result<R, LowerError> {
+    let mut locations = record.then(SourceLocations::default);
     unit.symbol_linkage().map_err(LowerError::Linkage)?;
     // Check the entire source inventory before selecting emitted bodies. Its
     // allocation identities must remain stable for cross-interpreter traces.
@@ -523,11 +572,17 @@ pub fn lower_unit_with_source<R>(
                 reason: e.message,
             }
         })?;
-        let module = lower_resolved_unit(&rewritten, target, None, optimize)?;
-        return Ok(consume(&rewritten, module));
+        let module = lower_resolved_unit(&rewritten, target, None, optimize, &mut locations)?;
+        return Ok(consume(&rewritten, module, locations.unwrap_or_default()));
     }
-    let module = lower_resolved_unit(unit, target, Some(&source_manifest), optimize)?;
-    Ok(consume(unit, module))
+    let module = lower_resolved_unit(
+        unit,
+        target,
+        Some(&source_manifest),
+        optimize,
+        &mut locations,
+    )?;
+    Ok(consume(unit, module, locations.unwrap_or_default()))
 }
 
 fn lower_resolved_unit(
@@ -535,6 +590,7 @@ fn lower_resolved_unit(
     target: &TargetDataLayout,
     source_manifest: Option<&AllocationSiteManifest<'_>>,
     optimize: bool,
+    locations: &mut Option<SourceLocations>,
 ) -> Result<Module, LowerError> {
     let linkage = unit.symbol_linkage().map_err(LowerError::Linkage)?;
     let lifecycle = evocc_chir::lifecycle::registrations(unit).map_err(|span| {
@@ -773,7 +829,7 @@ fn lower_resolved_unit(
             &string_origins,
             &immutable_globals,
         )
-        .lower(function, optimize)?;
+        .lower(function, optimize, locations)?;
         lowered.push(function);
         label_addresses.extend(addresses);
     }
@@ -4079,6 +4135,8 @@ impl<'a> FunctionLowerer<'a> {
             size_symbols,
             active_control: ControlTargets::default(),
             fenv_access: false,
+            source_span: info.span,
+            source_values: None,
         }
     }
 
@@ -4086,8 +4144,10 @@ impl<'a> FunctionLowerer<'a> {
         mut self,
         declaration: &FunctionDecl<'a>,
         optimize: bool,
+        locations: &mut Option<SourceLocations>,
     ) -> Result<(Function, BTreeMap<usize, String>), LowerError> {
         self.optimize = optimize;
+        self.source_values = locations.as_ref().map(|_| BTreeMap::new());
         let body = declaration
             .body
             .ok_or_else(|| LowerError::MalformedFunction {
@@ -4457,6 +4517,8 @@ impl<'a> FunctionLowerer<'a> {
             params.len(),
             self.info.span,
         )?;
+        let source_span = self.info.span;
+        let source_values = self.source_values.take();
         let mut function = Function {
             section: self.info.section.clone(),
             patchable_entry: self.info.patchable_entry,
@@ -4489,7 +4551,16 @@ impl<'a> FunctionLowerer<'a> {
         if optimize {
             reuse::reuse_pure_block_values(&mut function);
         }
-        renumber_function(&mut function)?;
+        let value_map = renumber_function(&mut function)?;
+        if let (Some(locations), Some(values)) = (locations, source_values) {
+            let values = values
+                .into_iter()
+                .filter_map(|(id, span)| value_map.get(&id).map(|new| (*new, span)))
+                .collect();
+            locations
+                .functions
+                .insert(function.name.clone(), (source_span, values));
+        }
         Ok((function, label_addresses))
     }
 
@@ -4725,6 +4796,11 @@ impl<'a> FunctionLowerer<'a> {
     }
 
     fn emit(&mut self, state: &State, instruction: Inst) -> Result<(), LowerError> {
+        if let Some(origins) = &mut self.source_values {
+            for value in inst_results(&instruction) {
+                origins.insert(value.id, self.source_span);
+            }
+        }
         let block = self.block_mut(state.block)?;
         if block.terminator.is_some() {
             return Err(LowerError::InvalidControlFlow {
@@ -5626,6 +5702,7 @@ impl<'a> FunctionLowerer<'a> {
         live_after: &BTreeSet<SymbolId>,
         control: &ControlTargets,
     ) -> Result<Flow, LowerError> {
+        let previous_span = std::mem::replace(&mut self.source_span, statement.span());
         self.record_constant_prefix(statement);
         let previous = std::mem::replace(&mut self.active_control, control.clone());
         let scope = match statement {
@@ -5642,6 +5719,7 @@ impl<'a> FunctionLowerer<'a> {
             self.pending_gotos = pending;
         }
         self.active_control = previous;
+        self.source_span = previous_span;
         result
     }
 
@@ -9969,6 +10047,17 @@ impl<'a> FunctionLowerer<'a> {
         expression: &'a CHirExpr<'a>,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        let previous_span = std::mem::replace(&mut self.source_span, expression.span());
+        let result = self.lower_expr_with_origin(expression, state);
+        self.source_span = previous_span;
+        result
+    }
+
+    fn lower_expr_with_origin(
+        &mut self,
+        expression: &'a CHirExpr<'a>,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
         // An arithmetic continuation does not need a native stack frame.
         // Preserve preorder constant admission and left-before-right effects;
         // the existing binary tail threads the saved left value through any
@@ -9976,6 +10065,7 @@ impl<'a> FunctionLowerer<'a> {
         let mut pending = Vec::new();
         let mut next = expression;
         let mut value = loop {
+            self.source_span = next.span();
             if let Some(value) = self.fold_expression(next, state) {
                 break value?;
             }
@@ -10008,6 +10098,7 @@ impl<'a> FunctionLowerer<'a> {
             }
         };
         while let Some((operator, left, right, span)) = pending.pop() {
+            self.source_span = span;
             value = self.lower_binary_after_left(operator, (left, right), value, span, state)?;
         }
         Ok(value)
@@ -16096,7 +16187,7 @@ fn replace_inst_target(instruction: &mut Inst, old: BlockId, new: BlockId) {
     }
 }
 
-fn renumber_function(function: &mut Function) -> Result<(), LowerError> {
+fn renumber_function(function: &mut Function) -> Result<HashMap<u32, u32>, LowerError> {
     let block_map = function
         .blocks
         .iter()
@@ -16145,7 +16236,7 @@ fn renumber_function(function: &mut Function) -> Result<(), LowerError> {
         }
         remap_inst(&mut block.terminator, &block_map, &value_map)?;
     }
-    Ok(())
+    Ok(value_map)
 }
 
 fn remap_value(value: &mut Value, value_map: &HashMap<u32, u32>) -> Result<(), LowerError> {

@@ -727,6 +727,7 @@ pub struct Preprocessor {
     signed_char: bool,
     source_ids: HashMap<String, FileId>,
     source_paths: HashMap<FileId, String>,
+    source_contents: HashMap<String, Vec<u8>>,
     line_controls: HashMap<FileId, Vec<LineControl>>,
     reserved_file_ids: HashSet<FileId>,
     next_file_id: u32,
@@ -766,6 +767,7 @@ impl Preprocessor {
             signed_char: false,
             source_ids: HashMap::new(),
             source_paths: HashMap::new(),
+            source_contents: HashMap::new(),
             line_controls: HashMap::new(),
             reserved_file_ids: HashSet::new(),
             next_file_id: 1,
@@ -903,6 +905,11 @@ impl Preprocessor {
         self.source_paths.get(&file).map(String::as_str)
     }
 
+    /// Bytes read in this preprocessing run, not a later read of the file.
+    pub fn source_contents(&self, path: &str) -> Option<&[u8]> {
+        self.source_contents.get(path).map(Vec::as_slice)
+    }
+
     /// Return every source file that this preprocessing run opened, in the
     /// order of first use. The entry file comes first. Forced includes and
     /// headers follow with their resolved paths.
@@ -967,6 +974,8 @@ impl Preprocessor {
         self.empty_macro_pop_count = 0;
         self.macro_stacks.clear();
         self.register_entry_source(&tokens);
+        self.source_contents
+            .insert(self.current_file.clone(), source.to_vec());
         let mut expanding: HashSet<String> = HashSet::new();
         let entry_span = tokens
             .tokens
@@ -1061,6 +1070,8 @@ impl Preprocessor {
         expanding: &mut HashSet<String>,
     ) -> Result<TokenStream, std::io::Error> {
         let content = std::fs::read(resolved)?;
+        self.source_contents
+            .insert(resolved.to_owned(), content.clone());
         let file = self.intern_source(resolved);
         let mut lexer = evocc_lex::Lexer::from_bytes(file, &content);
         lexer.set_legacy_literal_prefixes(self.macros.legacy_literal_prefixes);
@@ -1106,6 +1117,7 @@ impl Preprocessor {
     fn reset_source_table(&mut self) {
         self.source_ids.clear();
         self.source_paths.clear();
+        self.source_contents.clear();
         self.reserved_file_ids.clear();
         self.next_file_id = 1;
     }

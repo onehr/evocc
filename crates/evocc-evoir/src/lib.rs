@@ -899,7 +899,7 @@ pub struct LifecycleRegistration {
 }
 
 mod lifecycle;
-pub use lifecycle::interpret_program;
+pub use lifecycle::{interpret_program, interpret_program_with_site};
 mod tls;
 pub use tls::{TlsAddress, TlsModel, TlsSymbol};
 
@@ -4474,9 +4474,21 @@ fn interpret_module_in_state(
     limits: InterpreterLimits,
     state: ExecutionState,
 ) -> Result<InterpreterOutcome, InterpreterError> {
-    interpret_module_execution(module, entry_name, entry_args, limits, state, false)
+    interpret_module_execution(
+        module, entry_name, entry_args, limits, state, false, &mut None,
+    )
 }
 
+/// The instruction about to execute. The index after the last ordinary
+/// instruction denotes the terminator. No source-language position is guessed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExecutionSite {
+    pub function: usize,
+    pub block: BlockId,
+    pub instruction: usize,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn interpret_module_execution(
     module: &Module,
     entry_name: &str,
@@ -4484,6 +4496,7 @@ fn interpret_module_execution(
     limits: InterpreterLimits,
     mut state: ExecutionState,
     program: bool,
+    site: &mut Option<ExecutionSite>,
 ) -> Result<InterpreterOutcome, InterpreterError> {
     validate_module(module).map_err(|message| InterpreterError::InvalidModule { message })?;
     let mut function_indices: HashMap<&str, usize> = module
@@ -4577,6 +4590,7 @@ fn interpret_module_execution(
                 });
             };
             root_kind = kind;
+            *site = None;
             let function = &module.functions[index];
             let block = function.blocks[0].id;
             let values = if kind == lifecycle::EntryKind::Main {
@@ -4604,6 +4618,12 @@ fn interpret_module_execution(
                 .ok_or_else(|| InterpreterError::InvalidModule {
                     message: "interpreter frame stack became empty".to_owned(),
                 })?;
+        let frame = &frames[frame_index];
+        *site = Some(ExecutionSite {
+            function: frame.function_index,
+            block: frame.block,
+            instruction: frame.next_instruction,
+        });
         if !frames[frame_index].entered {
             enter_module_frame(module, &mut frames[frame_index])?;
         }

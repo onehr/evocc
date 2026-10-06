@@ -139,12 +139,20 @@ or rewrite checkers. Preserve existing emitted IR and assembly bytes. Do not
 add dependencies, crates or configuration systems. Do not push.
 
 - [ ] **P01 — Render source diagnostics and freeze their format** — `OPEN`, P1.
-  Next: commit public renderer REDs, retain source spans and implement text,
-  short, color and JSON presentation. Add and pin `spec/diagnostics.md`.
+  Next: migrate the remaining diagnostic paths and old snapshots to the pinned
+  format, add the complete UI population and workspace message-style checks.
   Exit: at least 40 text/JSON UI snapshots, workspace message-style checks,
   the hand-written JSON validator and full workspace gate pass. Budget:
   900 production Rust lines and 300 specification lines. Runtime locations
   must come from execution metadata, not a guessed source expression.
+  October 7 checkpoint: renderer REDs committed at `77dec0cc`; nine public
+  presentation/location tests pass. Runtime origins follow the executed
+  instruction through calls and SSA renumbering. Included source snippets use
+  the bytes read during preprocessing. A paired lowering test checks identical
+  IR and execution results with source capture on and off. The presentation
+  contract is pinned at revision 1.0.0 (126 lines). This is partial work:
+  legacy diagnostic paths, the 40-case corpus, style checks and the full
+  workspace exit remain open. P02 through P05 have not started.
 - [ ] **P02 — Explain every authoritative diagnostic** — `OPEN`, P1.
   Next: after P01 closes, write and test each diagnostic-table explanation.
   Exit: complete page/table coverage, triggering and fixed examples checked,
