@@ -48,11 +48,22 @@ pub fn check(
     target: &TargetDataLayout,
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
+    let mut nonreturning = HashSet::new();
+    inline::for_each_declaration(unit, |declaration| {
+        if let CHirDecl::Function(f) = declaration {
+            if f.attributes
+                .iter()
+                .any(|a| a.semantic_name() == Some("noreturn"))
+            {
+                nonreturning.insert(f.symbol);
+            }
+        }
+    });
     let unused = |symbol, attributes: &[Attribute]| {
         !used.contains(&symbol)
             && !attributes
                 .iter()
-                .any(|a| a.semantic_name() == Some("unused"))
+                .any(|a| matches!(a.semantic_name(), Some("unused" | "used")))
     };
     inline::for_each_declaration(unit, |declaration| match declaration {
         CHirDecl::Object(o)
@@ -88,7 +99,7 @@ pub fn check(
             if f.name.spelling != "main"
                 && matches!(unit.types().get(f.ty).map(|t| &t.kind), Some(TypeKind::Function { return_type, .. })
                     if !matches!(unit.types().get(*return_type).map(|t| &t.kind), Some(TypeKind::Void)))
-                && falls_through(f.body.unwrap(), unit, target)
+                && falls_through(f.body.unwrap(), unit, target, &nonreturning)
             {
                 findings.push(Finding {
                     lint: 4,
@@ -103,10 +114,16 @@ pub fn check(
 
 /// Build only control edges. Return values and executed expressions are unchanged.
 /// A reachable exit reports a warning, not a proof of undefined execution.
-fn falls_through(body: &CHirStmt<'_>, unit: &CHirUnit<'_>, target: &TargetDataLayout) -> bool {
+fn falls_through(
+    body: &CHirStmt<'_>,
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    nonreturning: &HashSet<SymbolId>,
+) -> bool {
     struct Flow<'u, 'a> {
         unit: &'u CHirUnit<'a>,
         target: &'u TargetDataLayout,
+        nonreturning: &'u HashSet<SymbolId>,
         edges: Vec<Vec<usize>>,
         labels: HashMap<String, usize>,
         jumps: Vec<(usize, String)>,
@@ -143,6 +160,11 @@ fn falls_through(body: &CHirStmt<'_>, unit: &CHirUnit<'_>, target: &TargetDataLa
         ) -> usize {
             match s {
                 CHirStmt::Return(..) | CHirStmt::Expr(CHirExpr::BuiltinUnreachable { .. }, _) => {
+                    self.node(vec![])
+                }
+                CHirStmt::Expr(CHirExpr::Call(CHirExpr::Ident { symbol, .. }, _, _), _)
+                    if self.nonreturning.contains(symbol) =>
+                {
                     self.node(vec![])
                 }
                 CHirStmt::Compound(items, ..) => {
@@ -217,6 +239,7 @@ fn falls_through(body: &CHirStmt<'_>, unit: &CHirUnit<'_>, target: &TargetDataLa
     let mut graph = Flow {
         unit,
         target,
+        nonreturning,
         edges: vec![vec![]],
         labels: HashMap::new(),
         jumps: Vec::new(),
