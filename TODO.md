@@ -352,6 +352,16 @@ add dependencies, crates or configuration systems. Do not push.
 - [ ] **P05 — Package the Linux header sysroot** — `OPEN`, P1.
   Next: P04 is closed. Export sealed headers and a per-file hash contract;
   add explicit/environment/bundled/fallback lookup without driver downloads.
+  October 7 entry check: four isolated driver tests reproduce three missing
+  behaviors: bundled/environment lookup, selected-root errors and the explicit
+  cross-linker requirement. The `-nostdinc` control already passes. Capture cap:
+  500 MiB under `.evidence/diagnostics/20261007/sysroot/`; retain only logs,
+  contracts and required small outputs. The repository volume is case-insensitive.
+  The sealed headers have distinct `xt_CONNMARK.h` and `xt_connmark.h` files,
+  with different contents, on the existing case-sensitive test volume. A full
+  sysroot cannot be unpacked faithfully on the repository volume. Owner decision
+  requested: require a case-sensitive sysroot location for this release, or
+  approve a separate storage/lookup change. Do not drop or rename headers.
   Exit: macOS produces ELF AArch64 objects and zlib without manual include
   flags, contract checks and full workspace gate pass. Add the cross-host CI
   link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,
