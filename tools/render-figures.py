@@ -8,7 +8,6 @@ Requires rsvg-convert on PATH for the PNGs (the SVGs are written regardless).
 from __future__ import annotations
 
 import html
-import math
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,7 +17,6 @@ OUT = Path(__file__).resolve().parent.parent / "docs" / "images"
 BG, PANEL, PANEL2, STROKE = "#0b1117", "#111925", "#0e151f", "#232d3a"
 TEXT, MUTED, GRAY = "#f0f3f6", "#9aa4b2", "#4a5462"
 BLUE, CYAN, GREEN = "#58a6ff", "#79c0ff", "#3fb950"
-RED, AMBER = "#f85149", "#d4a72c"
 SANS = "Helvetica Neue, Helvetica, Arial, sans-serif"
 MONO = "JetBrains Mono, Menlo, monospace"
 
@@ -30,7 +28,7 @@ class Canvas:
         markers = "".join(
             f'<marker id="arr-{c[1:]}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" '
             f'markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="{c}"/></marker>'
-            for c in (STROKE, BLUE, CYAN, GREEN, GRAY, RED, AMBER)
+            for c in (STROKE, BLUE, CYAN, GREEN, GRAY)
         )
         self.parts.append(
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
@@ -72,24 +70,6 @@ class Canvas:
     def raw(self, s):
         self.parts.append(s)
 
-    def seal(self, x, y, r=9):
-        self.raw(
-            f'<circle cx="{x}" cy="{y}" r="{r}" fill="{BG}" stroke="{GREEN}" stroke-width="1.4"/>'
-            f'<path d="M{x - 4} {y} L{x - 1} {y + 3} L{x + 4.5} {y - 3.5}" fill="none" stroke="{GREEN}" '
-            f'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
-        )
-
-    def pill(self, cx, cy, s, color, opacity=1.0, size=17, fill=PANEL, strike=False, sw=1.4):
-        w = 10.6 * len(s) * size / 17 + 34
-        h = 40
-        self.raw(f'<g opacity="{opacity}">')
-        self.raw(f'<rect x="{cx - w / 2}" y="{cy - h / 2}" width="{w}" height="{h}" rx="20" fill="{fill}" stroke="{color}" stroke-width="{sw}"/>')
-        self.raw(f'<text x="{cx}" y="{cy + 6}" font-family="{MONO}" font-size="{size}" fill="{TEXT}" text-anchor="middle">{html.escape(s)}</text>')
-        if strike:
-            self.raw(f'<line x1="{cx - w / 2 + 14}" y1="{cy}" x2="{cx + w / 2 - 14}" y2="{cy}" stroke="{color}" stroke-width="1.4"/>')
-        self.raw("</g>")
-        return w, h
-
     def chip(self, x, y, s, color):
         w = 8.6 * len(s) + 26
         self.raw(f'<rect x="{x}" y="{y}" width="{w}" height="28" rx="14" fill="{color}" fill-opacity="0.12" stroke="{color}" stroke-opacity="0.5"/>')
@@ -114,51 +94,6 @@ def wrap(s: str, width: int) -> list[str]:
             cur = (cur + " " + word).strip()
     lines.append(cur)
     return lines
-
-
-def concept() -> None:
-    c = Canvas(1200, 640)
-    c.text(60, 84, "EvoCC", 46, TEXT, "700", spacing=-1)
-    c.text(60, 128, "a C compiler whose optimizer keeps every equivalent form", 26, TEXT, "500")
-    c.text(60, 162, "Written from scratch in Rust, no LLVM or GCC inside. A rewrite adds a form, a separate checker", 16, MUTED)
-    c.text(60, 184, "verifies each union, and a cost model picks one at the end. Target: AArch64, the Linux 6.18 kernel.", 16, MUTED)
-    lx = 220
-    c.text(lx, 250, "a pass-based compiler", 14, MUTED, "500", SANS, "middle", 1, 1)
-    chain = ["x * 2", "x + x", "(x << 1) | 0", "x << 1"]
-    ys = [300, 366, 432, 498]
-    for i, (s, y) in enumerate(zip(chain, ys)):
-        last = i == len(chain) - 1
-        w, h = c.pill(lx, y, s, GRAY, 1.0 if last else 0.3 + 0.18 * i, 18, strike=not last)
-        if not last:
-            c.arrow(lx, y + h / 2 + 2, lx, ys[i + 1] - h / 2 - 4, GRAY, 1.4, 0.4 + 0.15 * i)
-    c.text(lx, 560, "each pass replaces the last form", 14, MUTED, "normal", SANS, "middle")
-    c.text(lx, 580, "the others are gone", 14, MUTED, "normal", SANS, "middle")
-    c.line(430, 250, 430, 590, STROKE)
-    cx, cy, r = 760, 420, 138
-    c.raw(f'<circle cx="{cx}" cy="{cy}" r="{r + 80}" fill="url(#glow)"/>')
-    c.text(cx, 250, "EvoCC", 14, BLUE, "600", SANS, "middle", 1, 1)
-    forms = ["x * 2", "x + x", "x << 1", "(x << 1) | 0", "2 * x"]
-    n, chosen = len(forms), 2
-    c.raw(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{BLUE}" stroke-opacity="0.35" stroke-width="1.2" stroke-dasharray="3 6"/>')
-    c.raw(f'<circle cx="{cx}" cy="{cy}" r="7" fill="{BLUE}"/>')
-    c.text(cx, cy + 32, "one e-class", 13, BLUE, "500", SANS, "middle")
-    for i, s in enumerate(forms):
-        ang = -math.pi / 2 + i * 2 * math.pi / n
-        px, py = cx + r * math.cos(ang), cy + r * math.sin(ang)
-        c.line(cx + 12 * math.cos(ang), cy + 12 * math.sin(ang), cx + (r - 34) * math.cos(ang), cy + (r - 34) * math.sin(ang), BLUE, 1.2, 0.7)
-        c.seal(cx + (r / 2) * math.cos(ang), cy + (r / 2) * math.sin(ang), 8)
-        c.pill(px, py, s, GREEN if i == chosen else "#2f4f7f", 1.0, 18, "#10231a" if i == chosen else PANEL, sw=2 if i == chosen else 1.4)
-    ang = -math.pi / 2 + chosen * 2 * math.pi / n
-    px, py = cx + r * math.cos(ang), cy + r * math.sin(ang)
-    bx, by = 1000, py - 4
-    c.arrow(px + 52, py, bx - 14, py, GREEN, 1.6)
-    c.rect(bx, by - 34, 150, 88, PANEL, GREEN, 10, 1.4)
-    c.text(bx + 14, by - 10, "picked by cost", 12, MUTED)
-    c.text(bx + 14, by + 14, "lsl x0, x0, #1", 15, GREEN, "normal", MONO)
-    c.text(bx + 14, by + 38, "AArch64", 12, MUTED)
-    c.seal(470, 611, 8)
-    c.text(486, 616, "each union has a certificate; evo-proofcheck, a separate program, re-checks it", 14, MUTED)
-    c.write("evocc-concept")
 
 
 def overview() -> None:
@@ -285,7 +220,7 @@ def ladder() -> None:
         x += 40
     c.text(60, 520, "filled: measured at least once, with its reading. For each program the receipt records the units EvoCC compiled in a passing build and, for the rest, the diagnostic that kept them out.", 13, MUTED)
     c.text(60, 544, "the backend has no floating point yet; the programs after F1 wait for it.", 13, MUTED)
-    c.text(60, 590, "github.com/onehr/evocc  ·  docs/roadmap.md", 14, MUTED, "normal", MONO)
+    c.text(60, 590, "github.com/onehr/evocc  ·  docs/archive/roadmap.md", 14, MUTED, "normal", MONO)
     c.write("evocc-ladder")
 
 
@@ -330,128 +265,13 @@ def milestones() -> None:
             c.raw(f'<circle cx="{lx + 8}" cy="292" r="2.5" fill="{col}"/>')
         c.text(lx + 22, 297, label, 13, MUTED)
         lx += 105
-    c.text(1140, 297, "docs/roadmap.md", 13, MUTED, "normal", MONO, "end")
+    c.text(1140, 297, "docs/archive/roadmap.md", 13, MUTED, "normal", MONO, "end")
     c.write("evocc-milestones")
-
-
-def eqsat() -> None:
-    """Verified EqSat: the path of one translation unit, the trust layers, the numbers."""
-    c = Canvas(1600, 1010)
-    c.text(60, 64, "Verified EqSat", 40, TEXT, "700")
-    c.text(60, 94, "every rewrite carries a certificate that a separate program replays; nothing optimized is published on the optimizer's own authority", 17, MUTED)
-    c.raw('<rect x="60" y="110" width="1480" height="2" fill="url(#hair)" opacity="0.8"/>')
-
-    # offline Lean audit
-    lx, ly, lw, lh = 560, 130, 480, 66
-    c.rect(lx, ly, lw, lh, PANEL2, GREEN, 10, 1.4)
-    c.text(lx + lw / 2, ly + 27, "Lean 4 audit, offline; never runs at compile time", 16, GREEN, "600", SANS, "middle")
-    c.text(lx + lw / 2, ly + 49, "registry text in the spec → generated rule data → RuleCovered proofs → audit receipt", 12.5, MUTED, "normal", SANS, "middle")
-
-    nx, nw, nh, ny, gap = 70, 200, 120, 250, 52
-    stations = [
-        ("1 · LOWERING", "C → EvoIR", ["ordinary -O2 folds, CSE,", "block joins; every C check", "explicit as ub.assume"], STROKE),
-        ("2 · CHAIN PRODUCER", "transaction k ≤ 8", ["eligible scalar regions", "p0.scalar.v4, known bits", "policy accepts or rejects"], STROKE),
-        ("3 · CERTIFICATE", "EVP bundle", ["before.evo · after.evo", "proof.evp: every union,", "binding and premise"], STROKE),
-        ("4 · CHECKER", "independent replay", ["own eligibility and facts", "whole-module splice", "binary pinned by SHA-256"], BLUE),
-        ("5 · PUBLICATION", "chain VERIFIED", ["immutable chain record", "retained bundles", "state committed atomically"], STROKE),
-        ("6 · BACKEND (tested)", "EvoMIR twins", ["checked: ub.assume → trap", "unchecked: only after the", "checked twin passed"], STROKE),
-    ]
-    for i, (eyebrow, name, subs, col) in enumerate(stations):
-        x = nx + i * (nw + gap)
-        c.rect(x, ny, nw, nh, PANEL, col, 10, 1.8 if col != STROKE else 1.2)
-        c.text(x + 16, ny + 24, eyebrow, 11.5, GRAY, "600", SANS, "start", 1.0, 0.6)
-        c.text(x + 16, ny + 50, name, 16 if i == 1 else 18, TEXT, "700", MONO if i in (1, 2, 5) else SANS)
-        for j, s_ in enumerate(subs):
-            c.text(x + 16, ny + 74 + j * 17, s_, 12.5, MUTED)
-        if i < len(stations) - 1:
-            c.arrow(x + nw + 4, ny + nh / 2, x + nw + gap - 4, ny + nh / 2, STROKE)
-    labels = [("SHA-256", "input digest"), ("rewrites and", "fact premises"), ("three files,", "nothing else"), ("exit 0", "per transaction"), ("one verified IR,", "two native profiles")]
-    for i, (a, b) in enumerate(labels):
-        cx = nx + i * (nw + gap) + nw + gap / 2
-        c.text(cx, ny + nh + 22, a, 12, GRAY, "normal", SANS, "middle")
-        c.text(cx, ny + nh + 38, b, 12, GRAY, "normal", SANS, "middle")
-    # registry digest into producer and checker
-    for tx in (nx + 1 * (nw + gap) + nw / 2, nx + 3 * (nw + gap) + nw / 2):
-        sx = 700 if tx < 800 else 900
-        c.raw(f'<path d="M{sx} {ly + lh} C{sx} {ly + lh + 30} {tx} {ny - 34} {tx} {ny - 4}" fill="none" stroke="{GREEN}" stroke-width="1.4" stroke-dasharray="6 4" marker-end="url(#arr-{GREEN[1:]})"/>')
-    c.text(950, ny - 14, "same registry digest, compiled into producer and checker", 12.5, GREEN, "normal", SANS, "start")
-    # loop back and reject branch
-    x2 = nx + 1 * (nw + gap) + nw / 2
-    x4 = nx + 3 * (nw + gap) + 60
-    c.raw(f'<path d="M{x4} {ny + nh} C{x4} {ny + nh + 100} {x2 + 40} {ny + nh + 100} {x2} {ny + nh + 6}" fill="none" stroke="{STROKE}" stroke-width="1.6" marker-end="url(#arr-{STROKE[1:]})"/>')
-    c.text(620, ny + nh + 126, "exit 0 and changed → next transaction (≤ 8); unchanged → terminal no-op proof, then publish", 13, MUTED, "normal", SANS, "middle")
-    rx, rw = 900, 470
-    c.arrow(nx + 3 * (nw + gap) + 170, ny + nh + 4, nx + 3 * (nw + gap) + 170, ny + nh + 60, RED, 1.6)
-    c.rect(rx, ny + nh + 62, rw, 58, PANEL2, RED, 10, 1.4)
-    c.text(rx + rw / 2, ny + nh + 86, "exit 2 malformed · exit 3 invalid · timeout · crash", 13.5, RED, "600", SANS, "middle")
-    c.text(rx + rw / 2, ny + nh + 106, "whole chain REJECTED, staged state discarded, nothing emitted", 12.5, MUTED, "normal", SANS, "middle")
-
-    # trust layers
-    by0 = 536
-    bands = [
-        ("PROVED IN LEAN", ["offline, per registry revision;", "kernel-only except nine", "enumerated analysis rows"], GREEN, [
-            ("55 rule equalities", ["RuleCovered: every width", "environment, stated facts/guards"]),
-            ("known-bits analysis", ["transfers, meet/join, covers,", "known-zero; add/sub/mul/icmp SAT"]),
-            ("audit receipt", ["axioms per theorem, Lean 4.32.2,", "registry digest 1a539160…"]),
-        ]),
-        ("REPLAYED PER COMPILE", ["independent Rust checker,", "separate process, pinned", "binary, closed exit classes"], BLUE, [
-            ("every union", ["is an admitted rule firing", "or a congruence"]),
-            ("facts recomputed", ["eligibility, taint, seed facts", "re-derived; premises checked"]),
-            ("whole-module splice", ["after.evo must equal the", "rebuilt module byte for byte"]),
-            ("chain and identity", ["adjacent digests, trusted", "SHA-256, 45 legal state tuples"]),
-        ]),
-        ("TESTED, NOT PROVED", ["differential and corpus", "evidence; the trusted", "implementation base"], AMBER, [
-            ("Rust ↔ Lean model", ["P0: 1,325,045 comparisons", "agree (evidence, not proof)"]),
-            ("parser · lowering · facts", ["21,000-program scalar and MIR", "gates, 0 mismatches"]),
-            ("backend · allocation · ABI", ["384/384 native corpora, Linux", "and Darwin; kernel boot"]),
-        ]),
-    ]
-    bh, bgap = 92, 14
-    for bi, (title, subs, col, items) in enumerate(bands):
-        y = by0 + bi * (bh + bgap)
-        c.rect(70, y, 1460, bh, PANEL2, col, 10, 1.4)
-        c.text(90, y + 28, title, 14, col, "700", SANS, "start", 1.0, 0.6)
-        for j, s_ in enumerate(subs):
-            c.text(90, y + 49 + j * 15, s_, 11.5, MUTED)
-        iw = 290
-        for k, (name, lines_) in enumerate(items):
-            ix = 320 + k * (iw + 18)
-            c.rect(ix, y + 12, iw, bh - 24, PANEL, STROKE, 7, 1.0)
-            c.text(ix + 14, y + 35, name, 14, TEXT, "600")
-            for j, s_ in enumerate(lines_):
-                c.text(ix + 14, y + 54 + j * 15, s_, 11.5, MUTED)
-    # arrows between layers
-    c.raw(f'<path d="M1390 {by0 + bh} V{by0 + bh + bgap - 4}" stroke="{GREEN}" stroke-width="1.4" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-{GREEN[1:]})"/>')
-    c.raw(f'<path d="M445 {by0 + bh} V{by0 + bh + bgap - 4}" stroke="{GREEN}" stroke-width="1.4" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-{GREEN[1:]})"/>')
-    c.raw(f'<path d="M445 {by0 + 2 * (bh + bgap)} V{by0 + 2 * (bh + bgap) - bgap + 4}" stroke="{AMBER}" stroke-width="1.4" fill="none" marker-end="url(#arr-{AMBER[1:]})"/>')
-
-    # numbers
-    sy = 868
-    c.text(70, sy - 8, "Numbers on 2026-10-01, from receipts", 15, TEXT, "600")
-    stats = [
-        ("55 / 55", "rules proved in Lean 4, kernel-only; 9 analysis rows SAT-backed", GREEN),
-        ("8,854 + 138", "certificates replayed by the independent checker, 0 rejections", BLUE),
-        ("1,024", "policy evaluations: best policy beats the default by at most 4 bytes", CYAN),
-        ("−0.8 … −2.4 %", "object .text on changed zlib, zstd, cJSON units; latency not measurable", GREEN),
-        ("NOT_ACCEPTED", "G2 whole-kernel, Q2 versus GCC, Q3 AI improvement; AI campaign not admitted", RED),
-    ]
-    sw_ = (1460 - 4 * 16) / 5
-    for i, (big, small, col) in enumerate(stats):
-        sx = 70 + i * (sw_ + 16)
-        c.rect(sx, sy + 4, sw_, 100, PANEL2)
-        c.text(sx + 16, sy + 40, big, 24, col, "700", MONO)
-        for j, s_ in enumerate(wrap(small, 34)[:3]):
-            c.text(sx + 16, sy + 62 + j * 15, s_, 12, MUTED)
-    c.text(70, 992, "docs/framing-draft.md · docs/notebook/eqsat-*.md · tests/contracts/eqsat-*.json · tests/fixtures/eqsat-chains/verified-chain", 12.5, MUTED, "normal", MONO)
-    c.text(1530, 992, "the claim ceiling is the weakest layer a result depends on; this is not a verified compiler", 12.5, MUTED, "normal", SANS, "end")
-    c.write("evocc-eqsat")
 
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    concept()
     overview()
     ladder()
     milestones()
-    eqsat()
     print("rendered:", ", ".join(p.name for p in sorted(OUT.iterdir()) if p.suffix in (".svg", ".png")))

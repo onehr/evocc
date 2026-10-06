@@ -120,5 +120,5 @@
 <text x="1426.666666666667" y="472" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#3fb950" text-anchor="middle" opacity="1" letter-spacing="1">Linux 6.18.44</text>
 <text x="60" y="520" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">filled: measured at least once, with its reading. For each program the receipt records the units EvoCC compiled in a passing build and, for the rest, the diagnostic that kept them out.</text>
 <text x="60" y="544" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">the backend has no floating point yet; the programs after F1 wait for it.</text>
-<text x="60" y="590" font-family="JetBrains Mono, Menlo, monospace" font-size="14" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">github.com/onehr/evocc  ·  docs/roadmap.md</text>
+<text x="60" y="590" font-family="JetBrains Mono, Menlo, monospace" font-size="14" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">github.com/onehr/evocc  ·  docs/archive/roadmap.md</text>
 </svg>

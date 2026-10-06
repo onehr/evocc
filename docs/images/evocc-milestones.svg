@@ -51,5 +51,5 @@
 <text x="292" y="297" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">next</text>
 <circle cx="383" cy="292" r="6" fill="#0b1117" stroke="#4a5462" stroke-width="2"/>
 <text x="397" y="297" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="start" opacity="1.0" letter-spacing="0">later</text>
-<text x="1140" y="297" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="end" opacity="1.0" letter-spacing="0">docs/roadmap.md</text>
+<text x="1140" y="297" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="normal" fill="#9aa4b2" text-anchor="end" opacity="1.0" letter-spacing="0">docs/archive/roadmap.md</text>
 </svg>
