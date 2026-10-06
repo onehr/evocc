@@ -1,0 +1,118 @@
+# CI: the Rust workspace on both hosts, the Lean proof layer, and the docs.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TARGET_DIR: target/frontend
+  CARGO_BUILD_JOBS: "2"
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      # rustup reads the channel and the components from rust-toolchain.toml.
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install || rustup show
+          rustc --version && cargo --version
+      # A fresh checkout rebuilds the workspace crates. The cache keeps the rest.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target/frontend"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --offline --locked -- -D warnings
+      - name: cargo test
+        run: cargo test --workspace --offline --locked --no-fail-fast
+
+  lean:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      # elan installs the toolchain that lean/lean-toolchain pins.
+      - name: Install elan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.1.2/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      # lean/.lake is about 5 GB, so only main saves it.
+      - uses: actions/cache/restore@v4
+        id: lake
+        with:
+          path: lean/.lake
+          key: lake-${{ runner.arch }}-${{ hashFiles('lean/lean-toolchain', 'lean/lakefile.toml') }}-${{ hashFiles('lean/**/*.lean') }}
+          restore-keys: lake-${{ runner.arch }}-${{ hashFiles('lean/lean-toolchain', 'lean/lakefile.toml') }}-
+      # Registry check, generator tests, lake build, self-test, vectors, axiom audit.
+      - name: tools/gate-lean.sh
+        run: tools/gate-lean.sh
+      - if: github.ref == 'refs/heads/main' && steps.lake.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: lean/.lake
+          key: ${{ steps.lake.outputs.cache-primary-key }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lean-p0-receipt
+          path: tests/contracts/lean-p0-receipt.json
+
+  docs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: docs/status.md matches the receipts
+        run: python3 tools/render-status.py --check > /dev/null
+      - name: spec/ matches spec/pins.json
+        run: python3 tools/check-spec-pins.py
+      # Relative links only. External URLs are not fetched.
+      - name: Relative links in tracked Markdown resolve
+        shell: python3 {0}
+        run: |
+          import re, subprocess, sys
+          from pathlib import Path
+          from urllib.parse import unquote
+          link = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)"
+                            r"|^\s*\[[^\]]+\]:\s*<?(\S+?)>?(?:\s|$)|(?:href|src)=\"([^\"]+)\"")
+          files = subprocess.check_output(["git", "ls-files", "*.md"], text=True).split()
+          checked = broken = 0
+          for name in files:
+              path, fenced = Path(name), False
+              for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                  if line.lstrip().startswith(("```", "~~~")):
+                      fenced = not fenced
+                  if fenced:
+                      continue
+                  for match in link.finditer(re.sub(r"`[^`]*`", "", line)):
+                      url = next(group for group in match.groups() if group)
+                      if re.match(r"^([a-z][a-z0-9+.-]*:|#)", url, re.I):
+                          continue
+                      target = unquote(url.split("#")[0].split("?")[0])
+                      base = Path(".") if target.startswith("/") else path.parent
+                      checked += 1
+                      if target and not (base / target.lstrip("/")).exists():
+                          print(f"{name}:{number}: broken link: {url}")
+                          broken += 1
+          print(f"{len(files)} files, {checked} relative links, {broken} broken")
+          sys.exit(1 if broken else 0)

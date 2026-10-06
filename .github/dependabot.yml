@@ -1,0 +1,8 @@
+# Keep the pinned GitHub Actions current. Cargo stays out: the crates are
+# vendored in vendor/, and a lock file bump alone breaks the offline build.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
