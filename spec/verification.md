@@ -134,20 +134,25 @@ stuck or malformed. `Core.Transition.Refines.trans` (`Core/Simulation.lean`) com
 
 ### 4.1 Stage table
 
-| Stage | Lean row | Runs | Roles |
+| Stage | Checks | Runs | Roles |
 |---|---|---|---|
-| Source to EvoIR | `source-to-evoir` | Once, on the EvoIR before the first rewrite step | `source`, `ir`, optional `proposal` |
-| Rewrite steps | `evoir-rewrite` | Once for each rewrite step | `source`, `before`, `after`, `certificate` |
-| Lowering | `evoir-to-post-ssa-mir` | Once, on the EvoIR after the last step | `source`, `ir`, `ssa`, `postssa` |
-| Allocation | `post-ssa-mir-to-allocated-mir` | Once | `source`, `postssa`, `allocation` |
-| Frame and emission | `allocated-mir-to-assembly-text` | Once | `source`, `allocation`, `asm`, `text` |
+| `source-to-evoir` | Source to EvoIR (4.2) | Once, on the EvoIR before the first rewrite step | `source`, `ir`, optional `proposal` |
+| `rewrite` | Rewrite steps (4.3) | Once for each rewrite step | `source`, `before`, `after`, `certificate` |
+| `lowering` | Lowering (4.4) | Once, on the EvoIR after the last step | `source`, `ir`, `ssa`, `postssa` |
+| `allocation` | Allocation (4.5) | Once | `source`, `postssa`, `allocation` |
+| `frame-emission` | Frame and emission (4.6) | Once | `source`, `allocation`, `asm`, `text` |
 
-The Lean table is `Eval.stages` (`Eval.lean`); the Rust table `STAGES` must have the same rows,
-identifiers and roles, plus `PIPELINE`. `evoir-sem --check-stage ID ROLE=PATH ...` runs one row on
-one entry: `STAGE_ACCEPTED stage=ID entry=NAME ...` (exit 0), `STAGE_REJECTED` (exit 1),
-`STAGE_INPUT_UNSUPPORTED` (exit 2), or exit 64 for a wrong role list (`--list-stages` lists IDs).
+Each stage has one identifier, in the first column. It is the stage argument of `--check-stage`,
+the `stage=` word of the checker output, the `id` of the record row (7.4), the reader name in the
+digest chain (7.3) and the prefix of the log files (7.2). The Lean table is `Eval.stages`
+(`Eval.lean`); the Rust table `STAGES` must have the same rows, identifiers and roles, plus the
+final row `pipeline` (5.1). `evoir-sem --check-stage STAGE ROLE=PATH ...` runs one row on one
+entry, for example `evoir-sem --check-stage source-to-evoir source=PATH ir=PATH`. It prints
+`STAGE_ACCEPTED stage=STAGE entry=NAME ...` (exit 0), `STAGE_REJECTED stage=STAGE ...` (exit 1) or
+`STAGE_INPUT_UNSUPPORTED stage=STAGE ...` (exit 2). An unknown stage or a wrong role list gives
+`STAGE_COMMAND_INVALID` (exit 64). `--list-stages` lists the identifiers and their roles.
 
-### 4.2 Source to EvoIR
+### 4.2 Source to EvoIR: `source-to-evoir`
 
 The checkers are `Core.Source.checkWellFormed` (`Core/WellFormed.lean`), then
 `Core.Symbolic.checkSourceTargetPair` (`Core/SourceTargetCheck.lean`). The validator checks ranks
@@ -174,7 +179,7 @@ The hypotheses are the accepted check and typed arguments; `loopInputValues` add
 world tokens if `tokens` holds. `Core.Source.checked_source_safety` (`Core/ValidatorSafety.lean`):
 if `checkWellFormed` accepts, no reachable state of a selected, typed entry is malformed.
 
-### 4.3 Rewrite steps
+### 4.3 Rewrite steps: `rewrite`
 
 `Rewrite.checkRewrite` (`Rewrite/Check.lean`) replays each certificate region, rebuilds the program
 after the step with `replaceAll` and compares it with the given one (section 9). In
@@ -201,7 +206,7 @@ theorem source_rewrite_refines {source : Source.Program} {before after : Program
 The hypothesis `safe` (each reachable state before the step steps or has an observation) is the
 field `progress` of the source refinement. `Rewrite.check_source_rewrite_refines` composes one step.
 
-### 4.4 Lowering
+### 4.4 Lowering: `lowering`
 
 `Machine.checkLowering` (`MachineLowering.lean`) checks instruction selection (EvoIR to SSA EvoMIR)
 and SSA removal (to post-SSA) on the same SSA program and entry state, with the always-on dead-code
@@ -222,7 +227,7 @@ structure CheckedLowering (source : IR.Program) (ssa target : Program)
 The hypothesis is a typed value list; `sourceArgument` zero-extends to 64 bits.
 `Machine.source_machine_refines` (`MachineCorrespondence.lean`) composes it with the source result.
 
-### 4.5 Allocation
+### 4.5 Allocation: `allocation`
 
 `Alloc.checkAllocation` (`Alloc/Check.lean`) walks each post-SSA block and the allocated block with
 the same identifier in lockstep, from untrusted hints (one abstract state per block entry). It
@@ -246,7 +251,7 @@ theorem checkAllocation_sound_args (pre : Machine.Program) (post : Program) (hin
 `progress` (the program before allocation is never stuck or malformed; the lowering refinement
 discharges it) and `agrees` (`Alloc.EntryAgrees`: equal after register-class normalization).
 
-### 4.6 Frame and emission
+### 4.6 Frame and emission: `frame-emission`
 
 The checkers are `Asm.Check.checkAsm` (`Asm/Check.lean`), `Asm.printMatches` (`Asm/Print.lean`) and
 `Pipeline.resultViewOk`. `checkAsm` checks the allocated program, the AST and untrusted frame hints:
@@ -290,7 +295,9 @@ runs `refusal`: `accepted`, `rejected stage reason` or `unsupported reason`. An 
 certificate and an allocation export with a wrong post-SSA copy are rejections. `evoir-sem
 --check-pipeline ROLE=PATH ...` runs it, with `proposal` at most once, `after` and `certificate`
 once for each step in step order, and the other roles once; it prints `PIPELINE_ACCEPTED entry=NAME
-...` (exit 0), `PIPELINE_REJECTED stage=ID ...` (exit 1) or `PIPELINE_INPUT_UNSUPPORTED` (exit 2).
+...` (exit 0), `PIPELINE_REJECTED stage=STAGE ...` (exit 1) or `PIPELINE_INPUT_UNSUPPORTED` (exit
+2), or `PIPELINE_COMMAND_INVALID` (exit 64) for a wrong role list. `STAGE` is the identifier (4.1)
+of the first stage that refuses. The driver runs this command as the row `pipeline`.
 
 ### 5.2 The theorems
 
@@ -416,24 +423,26 @@ option may occur once (a proposal once per entry), and only with `--proof-requir
 checks each step. (3) Export (section 6), with the output checks of section 2.2 and at least one
 step with `-Oeq-scalar`. (4) The assembly text, then the checker location and digest. (5) The digest
 chain. (6) `NEW_DIR`, `inputs/` and `checks/`; each input is written once. (7) The driver rows in
-order: source to EvoIR, rewrite steps, lowering, allocation, frame and emission, `PIPELINE`; each
-row for each entry, the rewrite row also for each step; logs in `checks/ID-ENTRY[-NNN].out` and
+order: `source-to-evoir`, `rewrite`, `lowering`, `allocation`, `frame-emission`, `pipeline`; each
+row for each entry, the row `rewrite` also for each step; logs in `checks/STAGE-ENTRY[-NNN].out` and
 `.err`. (8) A second digest of each input: the checker must not change an input. (9) `output.s` and
-`record.json`, each created new, then the text on standard output. `PIPELINE` is the final decision;
+`record.json`, each created new, then the text on standard output. `pipeline` is the final decision;
 each row before it must also accept. Checker exit 0 is an acceptance only with exactly one output
-line that is, or starts with, `STAGE_ACCEPTED stage=ID entry=ENTRY` (`PIPELINE_ACCEPTED
-entry=ENTRY`). Exit 1 is a rejection, exit 2 an unsupported input, anything else (a signal, the time
-limit, a missing line) a checker failure.
+line that is, or starts with, `STAGE_ACCEPTED stage=STAGE entry=ENTRY` (`PIPELINE_ACCEPTED
+entry=ENTRY` for `pipeline`). Exit 1 is a rejection, exit 2 an unsupported input, anything else (a
+signal, the time limit, a missing line) a checker failure.
 
 ### 7.3 Digest chain
 
 Two adjacent readers must read the same bytes. Before a checker runs, the driver compares SHA-256
-digests: the EvoIR of source to EvoIR and the `before` file of step 0; the `after` file of step `k`
-and the `before` file of step `k + 1`; the `after` file of the last step and the EvoIR of lowering
-(without steps, `evoir.evo` for both); `post-ssa-evomir.json` for lowering and allocation;
-`allocation.json` for allocation and frame and emission; `assembly.s` for frame and emission and the
-published `output.s`. A different digest is a gap and gives exit 4. The `PIPELINE` row reads
-`evoir.evo` and the `after` and `certificate` files; the chain binds the other EvoIR files to them.
+digests: the EvoIR of `source-to-evoir` and the `before` file of step 0; the `after` file of step
+`k` and the `before` file of step `k + 1`; the `after` file of the last step and the EvoIR of
+`lowering` (without steps, `evoir.evo` for both); `post-ssa-evomir.json` for `lowering` and
+`allocation`; `allocation.json` for `allocation` and `frame-emission`; `assembly.s` for
+`frame-emission` and the published `output.s`. A different digest is a gap and gives exit 4. In the
+record, a reader is its stage identifier, `rewrite step K` for step `K`, or `publication` for
+`output.s`. The `pipeline` row reads `evoir.evo` and the `after` and `certificate` files; the chain
+binds the other EvoIR files to them.
 
 ### 7.4 Record
 
@@ -443,10 +452,12 @@ published `output.s`. A different digest is a gap and gives exit 4. The `PIPELIN
 the driver and the checker); `checker_digest_pinned`; `checker_timeout_ms`; `rewrite_checker` (only
 with `-Oeq-scalar`); `entries` (`entry` and `closure`, its function names); `stages` (one row per
 row of the driver table); `chain` (one link per pair of section 7.3: `sha256` and `read_by`, two
-objects with `stage`, `role`, `path`); `output` (`path`, `sha256`, `checked`, `note`); `trusted`
-(section 8). A checked stage row has `id`, `name`, `status` (`CHECKED`), `theorem` and `results`;
-each result has `entry`, `step` (rewrite row), `result` (`ACCEPTED`), `inputs` (`role`, `path`,
-`sha256`) and `report` (the acceptance line). Other rows have `id`, `name`, `status`, `reason`.
+objects with `stage`, `role`, `path`); `output` (`path`, `sha256`, `checked`, `note`:
+"frame-emission checked these bytes: the printed assembly AST is equal to them."); `trusted`
+(section 8). A checked stage row has `id` (the stage identifier of 4.1, or `pipeline`), `status`
+(`CHECKED`), `theorem` and `results`; each result has `entry`, `step` (row `rewrite`), `result`
+(`ACCEPTED`), `inputs` (`role`, `path`, `sha256`) and `report` (the acceptance line). Other rows
+have `id`, `status`, `reason`. A stage row has no other name field.
 
 ### 7.5 Result labels
 
@@ -454,7 +465,7 @@ each result has `entry`, `step` (rewrite row), `result` (`ACCEPTED`), `inputs` (
 current row is integrated, so `result` must be `CHECKED_TO_FINAL_ASSEMBLY`, `scope` must be "checked
 from typed Core source to final assembly text", and `all_stages_checked` and `output.checked` must
 be `true`. A row without roles is `NOT_CHECKED` ("not integrated"); its result must not be called
-checked to assembly text. Without `-Oeq-scalar`, the rewrite row is `NOT_CHECKED`.
+checked to assembly text. Without `-Oeq-scalar`, the row `rewrite` is `NOT_CHECKED`.
 
 ### 7.6 Exit codes
 
@@ -462,7 +473,7 @@ checked to assembly text. Without `-Oeq-scalar`, the rewrite row is `NOT_CHECKED
 |---|---|
 | 0 | Each row accepted each entry. `output.s` and `record.json` exist; the text is on standard output. |
 | 1 | An incorrect command line, a refused admission, or a compilation error before the proof inputs exist, a refusal of a rewrite step by the Rust certificate checker included. |
-| 3 | A stage checker rejected an entry (checker exit 1). |
+| 3 | A stage checker rejected an entry (checker exit 1). Standard error names the row: `stage STAGE for entry ...`, where `STAGE` is a stage identifier or `pipeline`. |
 | 4 | A proof input is missing, changed, not readable or not writable; the chain has a gap; `NEW_DIR` exists; the checker reported an unsupported input (checker exit 2); or `-Oeq-scalar` gave no step. |
 | 5 | The checker is missing or not readable, has another digest than the pinned one, failed, timed out, or gave no acceptance line. |
 | 6 | The source or the output is outside `core-v1`, or the driver refused to lower or export a snapshot. |
@@ -474,7 +485,7 @@ not exist, and standard error must contain "no output was written"; `NEW_DIR/inp
 `NEW_DIR/checks/` can exist as diagnosis. Exit 1 before the proof inputs exist leaves no `NEW_DIR`;
 exit 1 after the record exists means that standard output could not be written. There is no fallback
 to ordinary compilation, to the program without a rewrite step, or to the finite request. `output.s`
-must hold exactly the bytes that frame and emission and `PIPELINE` read.
+must hold exactly the bytes that `frame-emission` and `pipeline` read.
 
 ## 8. Trusted base
 

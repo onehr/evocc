@@ -340,11 +340,11 @@ function of each output was an entry. Each loop entry had its proposal file.
 
 In `source-execution.c`, the functions `loop_join` and `control` are also entries. Their proposals
 are the elements for symbols 7 and 56 of
-`tests/fixtures/verification/source-execution.cutpoints.json`. Without these proposals, V01
-refuses the module with exit 3. This is a missing input, not a defect of the mode. The acceptance
-run binds implementation commit `8770b186`. At that commit, the full workspace gate passes (407
-suites, 3,102 passed, 0 failed, 5 ignored; Clippy and formatting pass), and the Lean gate passes
-(receipt Lean commit `5d917f39`). The
+`tests/fixtures/verification/source-execution.cutpoints.json`. Without these proposals, the stage
+`source-to-evoir` refuses the module with exit 3. This is a missing input, not a defect of the mode.
+The acceptance run binds implementation commit `8770b186`. At that commit, the full workspace gate
+passes (407 suites, 3,102 passed, 0 failed, 5 ignored; Clippy and formatting pass), and the Lean
+gate passes (receipt Lean commit `5d917f39`). The
 [TODO entry for V06](../TODO.md#first-public-release-verification) records the binary digests.
 After V07, the sweep passes again at `e657709b`: 17 of 17 modules, 107 of 107 entries and both
 optimized cases. The 19 `output.s` files are byte-identical to the earlier output. The
@@ -417,56 +417,57 @@ runs forever, the source runs forever. (3) No reachable compiled state is stuck.
 
 | Stage | What the checker compares | Checker | Theorem | File |
 |---|---|---|---|---|
-| V01 | Typed Core source and EvoIR: types, order, conversions, diagnostics, loops, calls, private storage | `checkSourceTargetPair` | `check_source_target_refines` | [`Core/SourceTargetCheck.lean`](../lean/EvoIR/Core/SourceTargetCheck.lean) |
-| V05 | One rewrite step: EvoIR before and after, and the certificate | `checkRewrite` | `checkRewrite_refines`, `source_rewrite_refines` | [`Rewrite/Soundness.lean`](../lean/EvoIR/Rewrite/Soundness.lean) |
-| V02 | EvoIR, SSA EvoMIR and post-SSA EvoMIR: instruction selection, then edge copies | `checkLowering` | field `checked` of its result; `source_machine_refines` | [`MachineLowering.lean`](../lean/EvoIR/MachineLowering.lean), [`MachineCorrespondence.lean`](../lean/EvoIR/MachineCorrespondence.lean) |
-| V03 | Post-SSA and allocated EvoMIR: registers and spill slots | `checkAllocation` | `checkAllocation_sound` | [`Alloc/Soundness.lean`](../lean/EvoIR/Alloc/Soundness.lean) |
-| V04 | Allocated EvoMIR and assembly AST (frame, emission); printed AST and assembly text, byte for byte | `checkAsm`, `printMatches` | `checkAsm_sound`, `source_asm_refines` | [`Asm/Soundness.lean`](../lean/EvoIR/Asm/Soundness.lean), [`Asm/Baseline.lean`](../lean/EvoIR/Asm/Baseline.lean) |
+| `source-to-evoir` | Typed Core source and EvoIR: types, order, conversions, diagnostics, loops, calls, private storage | `checkSourceTargetPair` | `check_source_target_refines` | [`Core/SourceTargetCheck.lean`](../lean/EvoIR/Core/SourceTargetCheck.lean) |
+| `rewrite` | One rewrite step: EvoIR before and after, and the certificate | `checkRewrite` | `checkRewrite_refines`, `source_rewrite_refines` | [`Rewrite/Soundness.lean`](../lean/EvoIR/Rewrite/Soundness.lean) |
+| `lowering` | EvoIR, SSA EvoMIR and post-SSA EvoMIR: instruction selection, then edge copies | `checkLowering` | field `checked` of its result; `source_machine_refines` | [`MachineLowering.lean`](../lean/EvoIR/MachineLowering.lean), [`MachineCorrespondence.lean`](../lean/EvoIR/MachineCorrespondence.lean) |
+| `allocation` | Post-SSA and allocated EvoMIR: registers and spill slots | `checkAllocation` | `checkAllocation_sound` | [`Alloc/Soundness.lean`](../lean/EvoIR/Alloc/Soundness.lean) |
+| `frame-emission` | Allocated EvoMIR and assembly AST (frame, emission); printed AST and assembly text, byte for byte | `checkAsm`, `printMatches` | `checkAsm_sound`, `source_asm_refines` | [`Asm/Soundness.lean`](../lean/EvoIR/Asm/Soundness.lean), [`Asm/Baseline.lean`](../lean/EvoIR/Asm/Baseline.lean) |
 
 ```text
 Typed Core C-HIR                complete selected functions and callees
-        |  source-to-EvoIR checker                      V01
+        |  source-to-EvoIR checker                      source-to-evoir
 Actual EvoIR
-        |  rewrite-step checker, only with -Oeq-scalar  V05
+        |  rewrite-step checker, only with -Oeq-scalar  rewrite
 Rewritten EvoIR                 the same program if no rewrite ran
-        |  instruction-selection checker                V02
+        |  instruction-selection checker                lowering
 SSA EvoMIR                      virtual registers and block arguments
-        |  edge and copy checker                        V02
+        |  edge and copy checker                        lowering
 Post-SSA EvoMIR                 virtual registers and explicit copies
-        |  allocation checker                           V03
+        |  allocation checker                           allocation
 Allocated EvoMIR                physical registers and spill slots
-        |  frame, emission and print checker            V04
+        |  frame, emission and print checker            frame-emission
 Final assembly text             the published output.s
         ---------------------  current formal boundary
         |  assembler, linker and runtime libraries
 Native program                  tested; not covered by these theorems
 ```
 
-V01 also has a source validator for types, bindings, definite initialization, sequencing, scopes and
-the direct-call graph. Its theorem `checked_source_safety`
+`source-to-evoir` also has a source validator for types, bindings, definite initialization,
+sequencing, scopes and the direct-call graph. Its theorem `checked_source_safety`
 ([`ValidatorSafety.lean`](../lean/EvoIR/Core/ValidatorSafety.lean)) says that an accepted source
 never stops in a malformed state. The checked `abs(INT_MIN)` must report `E3004`; it cannot return
 `INT_MIN`. Loop checks prove relations at checkpoints from an untrusted proposal; they do not unroll
-a loop. V02 checks both steps against the same SSA program and entry state, and also checks the
-always-on dead-code elimination and dead poison normalization.
+a loop. `lowering` checks both steps against the same SSA program and entry state, and also checks
+the always-on dead-code elimination and dead poison normalization.
 
 ### The pipeline theorem and the ABI entry assumption
 
-`checkPipeline` ([`Check.lean`](../lean/EvoIR/Pipeline/Check.lean)) runs V01, V05 for zero or more
-rewrite steps, V02, V03 and V04 on the same values. In words, `checkPipeline_sound` says: if the
-check accepts, the printed assembly AST is the actual text. Take the selected entry function `f`,
-any argument list of its parameter types, and any assembly entry state that obeys the ABI. Then the
-source has an initial state, and the assembly refines the source from these two states. The theorem
-holds for each such argument list, not only for tested values.
+`checkPipeline` ([`Check.lean`](../lean/EvoIR/Pipeline/Check.lean)) runs `source-to-evoir`,
+`rewrite` for zero or more rewrite steps, `lowering`, `allocation` and `frame-emission` on the same
+values. In words, `checkPipeline_sound` says: if the check accepts, the printed assembly AST is the
+actual text. Take the selected entry function `f`, any argument list of its parameter types, and any
+assembly entry state that obeys the ABI. Then the source has an initial state, and the assembly
+refines the source from these two states. The theorem holds for each such argument list, not only
+for tested values.
 
 `AbiSourceEntry` ([`Asm/Soundness.lean`](../lean/EvoIR/Asm/Soundness.lean)): the caller obeys
 AAPCS64 for the low bits of each argument and gives sufficient stack. Control is at the first line
 of `f`; the stack pointer `E` is 16-byte aligned; `x30` holds a return address outside the program.
 For an argument of width `w`, the low `w` bits of its register (`x0` to `x7`) or 8-byte stack slot
 are the argument. The upper bits are free: the theorem holds for each value of them. Task V07
-replaced the older `AbiEntry`, which required zero upper bits; `entryViewsOk` now refuses at `V02`
-an entry that does not read each 32-bit parameter through a 32-bit register. `AbiSourceEntry` reads
-the allocated program only for the index and the stack need of `f`.
+replaced the older `AbiEntry`, which required zero upper bits; `entryViewsOk` now refuses at
+`lowering` an entry that does not read each 32-bit parameter through a 32-bit register.
+`AbiSourceEntry` reads the allocated program only for the index and the stack need of `f`.
 
 `SourceToAsmRefines` is *refines* between the source and the AArch64 semantics. The proof joins the
 stage theorems with `Refines.trans`; the intermediate entry states are not hypotheses.
@@ -502,11 +503,11 @@ The toolchain is `leanprover/lean4:v4.32.2`, with no dependencies and no Mathlib
 
 | Part of `lean/` | Content | Files | Lines |
 |---|---|---:|---:|
-| `EvoIR/Core/` | Source and EvoIR syntax, readers and semantics; validator; V01 | 163 | 29,854 |
-| `EvoIR/Machine*.lean` | EvoMIR syntax, readers and semantics; V02 | 142 | 19,626 |
-| `EvoIR/Asm/` | AArch64 subset, printer, V04, baseline composition | 27 | 6,277 |
-| `EvoIR/Rewrite/` | V05 | 12 | 3,601 |
-| `EvoIR/Alloc/` | Allocated EvoMIR, V03 | 10 | 3,357 |
+| `EvoIR/Core/` | Source and EvoIR syntax, readers and semantics; validator; `source-to-evoir` | 163 | 29,854 |
+| `EvoIR/Machine*.lean` | EvoMIR syntax, readers and semantics; `lowering` | 142 | 19,626 |
+| `EvoIR/Asm/` | AArch64 subset, printer, `frame-emission`, baseline composition | 27 | 6,277 |
+| `EvoIR/Rewrite/` | `rewrite` | 12 | 3,601 |
+| `EvoIR/Alloc/` | Allocated EvoMIR, `allocation` | 10 | 3,357 |
 | `EvoIR/Proofs/` | Rule and known-bits proofs | 7 | 1,301 |
 | `EvoIR/Pipeline/` | Pipeline check, theorem and tests | 4 | 730 |
 | Other `EvoIR/*.lean` | Rule language, registries, poison normalization, command line | 18 | 3,312 |
@@ -530,8 +531,8 @@ checked native diagnostic.
 | Limit | Content |
 |---|---|
 | ABI entry | The theorem assumes `AbiSourceEntry`. |
-| Allocation | V03 refuses an allocation with edge bridge blocks. No pilot entry has one. |
-| Rewrites | V05 refuses the root-deletion (alias) certificate form, for example the P0 alias form of `p0_001_add_zero_rhs`, and an extraction with more than one instruction. It does not use facts through add, sub, mul and comparison: their result is "unknown", because their proofs use SAT reflection. |
+| Allocation | `allocation` refuses an allocation with edge bridge blocks. No pilot entry has one. |
+| Rewrites | `rewrite` refuses the root-deletion (alias) certificate form, for example the P0 alias form of `p0_001_add_zero_rhs`, and an extraction with more than one instruction. It does not use facts through add, sub, mul and comparison: their result is "unknown", because their proofs use SAT reflection. |
 | Options | Linux AArch64, default code generation options, `-O0 -fno-builtin`. The one optional rewrite option is `-Oeq-scalar` with `--eq-checker-sha256`. |
 | Entries | Each function in the output must be a selected entry. A loop entry needs an untrusted proposal, `--proof-proposal=NAME=PATH`. Each pipeline check has one selected entry. |
 
@@ -552,39 +553,41 @@ the published text. Tests check the trusted parts but do not prove them.
 ### Proof-required mode details
 
 `--proof-required=NEW_DIR` needs a directory that does not exist. The driver exports the inputs of
-each stage into `NEW_DIR/inputs/` (with `-Oeq-scalar`, also each rewrite step). It runs
-`evoir-sem --check-stage` for V01, V05, V02, V03 and V04 for each `--core-entry`, then
-`evoir-sem --check-pipeline` as the final decision. If all accept, the driver writes
+each stage into `NEW_DIR/inputs/` (with `-Oeq-scalar`, also each rewrite step). It runs `evoir-sem
+--check-stage` for `source-to-evoir`, `rewrite`, `lowering`, `allocation` and `frame-emission` for
+each `--core-entry` (for example `evoir-sem --check-stage source-to-evoir source=PATH ir=PATH`),
+then `evoir-sem --check-pipeline` as the final decision. If all accept, the driver writes
 `NEW_DIR/output.s` with the checked bytes and `NEW_DIR/record.json`. Options:
 `--proof-checker-sha256`, `--proof-timeout-ms`, `--proof-proposal`.
 
 In the record, `result` is `CHECKED_TO_FINAL_ASSEMBLY` and `scope` is "checked from typed Core
-source to final assembly text". `stages` has one row for each stage and for `PIPELINE`, with its
-theorem and input digests. `chain` shows that adjacent stages read the same bytes and that
-`output.s` is the text that V04 checked. `checker` and `rewrite_checker` give the digests of the
-Lean checker and the Rust certificate checker. `trusted` lists the trusted base above.
+source to final assembly text". `stages` has one row for each stage and for `pipeline`, with its
+identifier, theorem and input digests. `chain` shows that adjacent stages read the same bytes and
+that `output.s` is the text that `frame-emission` checked. `checker` and `rewrite_checker` give the
+digests of the Lean checker and the Rust certificate checker. `trusted` lists the trusted base
+above.
 
 Exit codes: 0, each check accepted each entry; 1, a command-line or compilation error before the
 proof inputs exist; 3, a stage rejected an entry; 4, a proof input is missing, changed or not
 readable; 5, the checker is missing, failed or timed out; 6, a construct is outside `core-v1`. On a
 failure, the driver writes no `output.s` and no record. A refused rewrite step stops the
 compilation, with no fallback; the Rust certificate checker also runs on each step. A private frame
-object is refused, and an option that changes the text fails the V04 print check.
+object is refused, and an option that changes the text fails the `frame-emission` print check.
 
 ### EqSat proof layers and limits
 
 The bounded scalar optimizer uses an e-graph over an admitted scalar subset; not every program goes
 through it. Equivalent alternatives stay until extraction. A failed optimization rolls back the
 graph and the module. This does not solve all phase ordering or promise faster code. The registry
-digest pins the producer and the checker. V05 puts a rewrite step into the pipeline theorem:
-`checkRewrite` replays each region with the tables `p0Covered` and `g0Covered`, whose entries carry
-their `RuleCovered` theorems. It rebuilds the program and compares it with the given one. It
-refuses any difference outside the replaced roots, a deleted obligation included.
+digest pins the producer and the checker. The stage `rewrite` puts a rewrite step into the pipeline
+theorem: `checkRewrite` replays each region with the tables `p0Covered` and `g0Covered`, whose
+entries carry their `RuleCovered` theorems. It rebuilds the program and compares it with the given
+one. It refuses any difference outside the replaced roots, a deleted obligation included.
 
 | Layer | What it gives |
 |---|---|
 | Rule proofs | All 55 + 7 rules, for all widths, under their premises. Kernel-only. |
-| [Known-bits proofs](../lean/EvoIR/Proofs/Transfer.lean) | Transfer functions, lattice and side conditions. The add, sub, mul and comparison rows use SAT reflection (`bv_decide`): they are **native-backed** and trust the Lean compiler and the SAT/LRAT path. V05 does not use them. |
+| [Known-bits proofs](../lean/EvoIR/Proofs/Transfer.lean) | Transfer functions, lattice and side conditions. The add, sub, mul and comparison rows use SAT reflection (`bv_decide`): they are **native-backed** and trust the Lean compiler and the SAT/LRAT path. The stage `rewrite` does not use them. |
 | Rust `evocc-checker` | One certificate follows the allowed rules. It does not call Lean. |
 | [Rust–Lean correspondence tests](../tests/contracts/lean-correspondence-receipt.json) | Agreement on recorded vectors; not a proof that Rust equals the Lean model. |
 
