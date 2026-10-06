@@ -35,7 +35,7 @@ On Linux, use the name with `aarch64-unknown-linux-gnu`, and use `sha256sum -c -
 `shasum -a 256 -c -`.
 
 The archive holds one directory. That directory holds the three programs of EvoCC, the README, the
-licenses and its own `SHA256SUMS`:
+files `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES.md`, and its own `SHA256SUMS`:
 
 | Program | What it does |
 |---|---|
