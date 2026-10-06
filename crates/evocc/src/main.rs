@@ -366,7 +366,7 @@ const IMPLEMENTED_EVOIR_PROBES: &[&str] = &[
 const NOT_IMPLEMENTED_EXIT: u8 = 69;
 
 fn not_implemented(capability: &str) -> ExitCode {
-    eprintln!("evocc: capability `{capability}` is NOT_IMPLEMENTED");
+    diagnostics::Format::Text.usage(&format!("capability `{capability}` is NOT_IMPLEMENTED"));
     ExitCode::from(NOT_IMPLEMENTED_EXIT)
 }
 
@@ -438,7 +438,7 @@ fn main() -> ExitCode {
         eprintln!(
             "       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]"
         );
-        eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
+        error_format.usage("unrecognized invocation is NOT_IMPLEMENTED");
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
 
@@ -462,7 +462,9 @@ fn main() -> ExitCode {
             }
         }
         // Unknown probe: fail closed.
-        eprintln!("evocc: unrecognized probe invocation is NOT_IMPLEMENTED: {probe_args:?}");
+        error_format.usage(&format!(
+            "unrecognized probe invocation is NOT_IMPLEMENTED: {probe_args:?}"
+        ));
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
 

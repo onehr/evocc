@@ -213,7 +213,10 @@ fn broad_evoir_and_unrelated_capability_probes_remain_not_implemented() {
         assert_eq!(output.stdout, b"", "args={args:?}");
         assert_eq!(
             String::from_utf8(output.stderr).expect("probe stderr is UTF-8"),
-            format!("evocc: capability `{capability}` is NOT_IMPLEMENTED\n"),
+            format!(
+                "error: capability `{capability}` is NOT_IMPLEMENTED\n  --> <command-line>:1:1\n   |\n 1 | {capability} --probe\n   | {} capability `{capability}` is NOT_IMPLEMENTED\n   |\n",
+                "^".repeat(capability.len() + " --probe".len())
+            ),
             "args={args:?}"
         );
     }

@@ -139,7 +139,7 @@ or rewrite checkers. Preserve existing emitted IR and assembly bytes. Do not
 add dependencies, crates or configuration systems. Do not push.
 
 - [ ] **P01 — Render source diagnostics and freeze their format** — `OPEN`, P1.
-  Next: finish workspace message-style checks and remaining invocation errors,
+  Next: finish workspace message-style checks,
   then run the full workspace exit gate.
   Exit: at least 40 text/JSON UI snapshots, workspace message-style checks,
   the hand-written JSON validator and full workspace gate pass. Budget:
@@ -159,7 +159,7 @@ add dependencies, crates or configuration systems. Do not push.
   diagnostics and includes. Input errors use command-line source rather than
   invented C positions. Runtime refusal and resource-limit notes keep their
   meaning. Targeted Clippy passes with warnings denied. Conservative inserted
-  production Rust is 754 of 900 lines. The 13 legacy-format suites now request
+  production Rust at this checkpoint was 754 of 900 lines. The 13 legacy-format suites now request
   `short` explicitly and pass on replay; their diagnostic codes, locations and
   exits remain checked. Two native suites pass all eight tests after moving
   disposable files outside retained evidence (`a294e3df`). The broad driver run
@@ -167,6 +167,13 @@ add dependencies, crates or configuration systems. Do not push.
   gate has not run. This is partial work: workspace-wide
   style checks, remaining invocation errors and the full workspace exit remain
   open. P02 through P05 have not started.
+  Third checkpoint: RED `13f68767` records three command-line renderer bypasses.
+  Empty invocations, unsupported capabilities and malformed probes now retain
+  exit 69 but use the common renderer and command-line span. The diagnostic,
+  product, EvoIR CLI and cc-driver suites pass 44 tests; targeted Clippy with
+  warnings denied and workspace formatting pass. Conservative production Rust
+  insertions, including blank lines, are 765 of 900. Workspace-wide message
+  style and the full workspace exit remain open. No later package has started.
 - [ ] **P02 — Explain every authoritative diagnostic** — `OPEN`, P1.
   Next: after P01 closes, write and test each diagnostic-table explanation.
   Exit: complete page/table coverage, triggering and fixed examples checked,
