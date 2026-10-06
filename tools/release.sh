@@ -21,7 +21,7 @@
 # version comes from crates/evocc/Cargo.toml.
 #
 # The output is DIR/evocc-<version>-<target>.tar.gz. The archive holds one
-# directory of the same name: the three binaries, LICENSE-MIT, LICENSE-APACHE,
+# directory of the same name: the three binaries, LICENSE, NOTICE,
 # THIRD-PARTY-NOTICES.md, README.md and SHA256SUMS for those files. The archive
 # is deterministic. Entries are sorted, owner and group are 0, and every mtime
 # is SOURCE_DATE_EPOCH, else the commit time of HEAD. The gzip header has no
@@ -136,7 +136,7 @@ mtime="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct 2>/dev/null || echo 0)}"
 mkdir -p "$out"
 set -- "evocc=755=$bin_dir/evocc" "evocc-checker=755=$bin_dir/evocc-checker" \
     "evoir-sem=755=$lean_bin" "README.md=644=README.md"
-for doc in LICENSE-MIT LICENSE-APACHE THIRD-PARTY-NOTICES.md; do
+for doc in LICENSE NOTICE THIRD-PARTY-NOTICES.md; do
     if [ -f "$doc" ]; then
         set -- "$@" "$doc=644=$doc"
     else
