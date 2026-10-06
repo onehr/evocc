@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P01, P02, P03, P04, P05, B08, B08b, B08d, B08d10 | Complete P01 through P05 in order under the October 7 product contract. Verification work is paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P02, P03, P04, P05, B08, B08b, B08d, B08d10 | P01 is complete. Complete P02 through P05 in order under the October 7 product contract. Verification work is paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -138,9 +138,8 @@ Do not change Lean, the verification specification, the proof-required pipeline
 or rewrite checkers. Preserve existing emitted IR and assembly bytes. Do not
 add dependencies, crates or configuration systems. Do not push.
 
-- [ ] **P01 — Render source diagnostics and freeze their format** — `OPEN`, P1.
-  Next: run the full workspace exit gate on the final command-span and message
-  inventory implementation; close only after that exact subject passes.
+- [x] **P01 — Render source diagnostics and freeze their format** — `DONE`, P1.
+  Next: retain the format and snapshots while implementing explanation pages.
   Exit: at least 40 text/JSON UI snapshots, workspace message-style checks,
   the hand-written JSON validator and full workspace gate pass. Budget:
   900 production Rust lines and 300 specification lines. Runtime locations
@@ -193,8 +192,21 @@ add dependencies, crates or configuration systems. Do not push.
   started. Build space is above the 25 GiB admission threshold; only the
   unused, rebuildable target/frontend incremental cache was removed (5.8 GiB),
   after process and open-handle checks. No protected artifact was removed.
+  Completion: the final clean subject `a05d24e8` passes the full offline
+  workspace gate: 412 suites, 3,148 passed, zero failed, five pre-existing
+  ignored campaigns; Clippy with warnings denied and formatting pass. Log:
+  `.evidence/diagnostics/20261007/a05d24e8-full-workspace.log` (under 500 MiB).
+  All 42 C/text/JSON snapshot triples pass without UPDATE_EXPECT. The 34-line
+  JSON validator, eight style tests and 17 public rendering tests pass; a
+  separate PTY check confirms automatic terminal color. The contract is 126
+  lines and the production Rust budget is 782/900. The eight production files
+  are cpp/lib, evoir/lib, evoir/lifecycle, lower/lib, parser/lib, evocc/cc,
+  evocc/diagnostics and evocc/main. Tests preserve legacy short output, source
+  bytes, executed origins, related labels and output stability. This changes
+  presentation only: no new lint, diagnostic code or semantic acceptance.
 - [ ] **P02 — Explain every authoritative diagnostic** — `OPEN`, P1.
-  Next: after P01 closes, write and test each diagnostic-table explanation.
+  Next: commit RED tests for authoritative page coverage, examples and explain
+  output, then write each explanation and generate the book index.
   Exit: complete page/table coverage, triggering and fixed examples checked,
   `--explain`, generated book index and full workspace gate pass. Report every
   `Trigger: none` exception. Budget: 300 Rust/Python lines excluding pages;
