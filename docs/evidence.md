@@ -2,7 +2,7 @@
 
 This document collects the measured results of EvoCC. The [README](../README.md) describes the
 design and the use of the compiler. The results below link to their receipts in
-[`tests/contracts/`](../tests/contracts/) and their ledgers in [`docs/notebook/`](notebook/). This
+[`tests/contracts/`](../tests/contracts/) and their dated ledgers in [`docs/archive/notebook/`](archive/notebook/). This
 document is not a live status. The generated [status dashboard](status.md) shows the current
 receipt checkpoint, and [TODO.md](../TODO.md) gives the remaining work.
 
@@ -70,8 +70,8 @@ of that day. The unchanged-program replays of September 27 cover torture, c-test
 toybox, LLVM SingleSource, jq, cJSON and musl. The other lanes keep their earlier measurements.
 This is not a completed fresh 15-lane campaign and not a kernel-test rerun. Each receipt keeps its
 compiler and input identity. See the generated [status dashboard](status.md), the
-[pinned roadmap](roadmap.md), the [application ledger](notebook/benchmark-evaluation-20260915.md)
-and the [kernel issue ledger](notebook/kernel-selftest-gaps-20260914.md). The Git-tracked
+[archived roadmap](archive/roadmap.md), the [application ledger](archive/notebook/benchmark-evaluation-20260915.md)
+and the [kernel issue ledger](archive/notebook/kernel-selftest-gaps-20260914.md). The Git-tracked
 [TODO list](../TODO.md) gives each remaining task a stable ID, a priority, a next action and an
 evidence-based closure condition.
 
@@ -183,7 +183,7 @@ lifecycle registration and the approved GNU extensions are implemented with targ
 scalar FP engine has **661,848** independent numerical checks across 32 operations. The strict FP
 adapter and the world-threaded IR/backend, the dynamic-rounding source mode and non-trapping
 lexical `FENV_ACCESS` now have
-[targeted value/status and native checks](notebook/strict-floating-implementation-20260927.md). The
+[targeted value/status and native checks](archive/notebook/strict-floating-implementation-20260927.md). The
 musl replay of September 27 keeps 1,271 EvoCC objects through two complete libc-test runs with no
 added failures. It is still a mixed build, not full musl acceptance. The scalar `w` asm extension
 and its original pthread regressions are repaired. Binary128 source/IR, both interpreters and the
@@ -191,7 +191,7 @@ hosted native helpers/ABI now have targeted tests. The fresh 69/69-object origin
 jq also passes. Floating complex/vectors and other explicitly refused forms stay outside the
 current source profile. FP is not the only remaining application or kernel-test blocker.
 
-The [remaining-semantics brief](notebook/remaining-semantics-research-brief-20260921.md) itemizes
+The [remaining-semantics brief](archive/notebook/remaining-semantics-research-brief-20260921.md) itemizes
 other measured dialect boundaries. These include the tiny-vector external ABI, integer-complex
 division, pointer-to-VLA type queries and nonzero-depth return addresses.
 
@@ -235,13 +235,13 @@ Every row has a receipt. The right column is the claim ceiling, not a summary.
 | Date | What ran | Numbers | What it does and does not establish |
 |---|---|---|---|
 | 2026-09-09 | Lean audit of `p0.scalar.v4` | 55 / 55 rules proved, kernel-only; [receipt](../tests/contracts/lean-p0-receipt.json) | Rules are sound equalities of the modeled semantics. Not a proof of the compiler. |
-| 2026-09-29 | Shared verified chain ([R01a](notebook/verified-eqsat-implementation-20260929.md), [requalification](notebook/eqsat-review-closure-20260929.md)) | Driver and evaluator run one chain; 45 legal transaction states; checker pinned by SHA-256; full workspace 2,850 tests, 0 failures | Optimized output cannot be emitted without independent replay. Integration found and fixed two real producer defects. |
-| 2026-09-30 | Bounded Linux pilot ([protocol and results](notebook/eqsat-r02-linux-pilot-20260930.md), [receipt](../tests/contracts/eqsat-r02-pilot-receipt-20260930.json)) | 576 / 576 result-checked executions; 138 certificates replayed, 0 rejections; 108 checked/unchecked twins; default search and certificate caps hit 0 times | The pipeline runs end to end on zlib, zstd and cJSON. Millisecond fresh-process timing was uninformative by construction. |
-| 2026-09-30 | Steady-state timing ([protocol](notebook/eqsat-r02-steady-protocol-20260930.md)) | A/A 10 / 10 admitted; A/B run once: 10 / 10 **INCONCLUSIVE** at a 5% floor; frozen, not rerun | No latency improvement, regression or equivalence is claimed. Latency is `NOT_MEASURABLE_ON_THIS_LANE`; size is the V1 objective. |
-| 2026-09-30 | Deterministic preflight ([adjudication](notebook/eqsat-r02-review-repair-20260930.md)) | 1,024 policy evaluations, 6,144 chains, 8,854 proofs replayed; 1,222 candidate rules attempted: 1,174 proved, 48 unknown, **0 installed** | Policy, rule and shortcut tracks are all **INCONCLUSIVE / NOT_ADMITTED**. No AI campaign is admitted; proving rules was never the bottleneck. |
-| 2026-10-01 | Object-level size ([S1–S4 ledger](notebook/eqsat-size-work-packages-20261001.md), [DCE control](../tests/contracts/eqsat-size-dce-20261001.json), [policy ranking](../tests/contracts/eqsat-size-policy-ranking-20261001.json)) | see table below; exhaustive best policy beats the default by at most 4 bytes | Verified rewrites shrink object `.text` by 0.8–2.4% on the changed subject TUs. The policy weight space is `FINITE_ENUMERATION_SUFFICIENT` for size. |
-| 2026-10-01 | Guard-folding ceiling ([result](../tests/contracts/eqsat-size-guards-result-20261001.json), [guard contract](eqsat-guard-folding-draft.md)) | Unverified diagnostic recovers 952 / 1,608 / 80 bytes (zlib / zstd / cJSON) from provably-true UB checks | A diagnostic ceiling for R02e, not a certified benefit. Nothing from the diagnostic is installed. |
-| 2026-10-01 | Certified guard first slice ([acceptance](notebook/eqsat-certified-guards-20261001.md)) | Seven g0 rules and seven new A2 rows are kernel-only; ten certificates replay; checked text saves 256 / 984 / 28 bytes in zlib / zstd / cJSON | First-slice acceptance on six original TUs. Maximum per-TU saving is 0.800%; unchecked sizes are unchanged. Diagnostic and P0 savings remain separate. |
+| 2026-09-29 | Shared verified chain ([R01a](archive/notebook/verified-eqsat-implementation-20260929.md), [requalification](archive/notebook/eqsat-review-closure-20260929.md)) | Driver and evaluator run one chain; 45 legal transaction states; checker pinned by SHA-256; full workspace 2,850 tests, 0 failures | Optimized output cannot be emitted without independent replay. Integration found and fixed two real producer defects. |
+| 2026-09-30 | Bounded Linux pilot ([protocol and results](archive/notebook/eqsat-r02-linux-pilot-20260930.md), [receipt](../tests/contracts/eqsat-r02-pilot-receipt-20260930.json)) | 576 / 576 result-checked executions; 138 certificates replayed, 0 rejections; 108 checked/unchecked twins; default search and certificate caps hit 0 times | The pipeline runs end to end on zlib, zstd and cJSON. Millisecond fresh-process timing was uninformative by construction. |
+| 2026-09-30 | Steady-state timing ([protocol](archive/notebook/eqsat-r02-steady-protocol-20260930.md)) | A/A 10 / 10 admitted; A/B run once: 10 / 10 **INCONCLUSIVE** at a 5% floor; frozen, not rerun | No latency improvement, regression or equivalence is claimed. Latency is `NOT_MEASURABLE_ON_THIS_LANE`; size is the V1 objective. |
+| 2026-09-30 | Deterministic preflight ([adjudication](archive/notebook/eqsat-r02-review-repair-20260930.md)) | 1,024 policy evaluations, 6,144 chains, 8,854 proofs replayed; 1,222 candidate rules attempted: 1,174 proved, 48 unknown, **0 installed** | Policy, rule and shortcut tracks are all **INCONCLUSIVE / NOT_ADMITTED**. No AI campaign is admitted; proving rules was never the bottleneck. |
+| 2026-10-01 | Object-level size ([S1–S4 ledger](archive/notebook/eqsat-size-work-packages-20261001.md), [DCE control](../tests/contracts/eqsat-size-dce-20261001.json), [policy ranking](../tests/contracts/eqsat-size-policy-ranking-20261001.json)) | see table below; exhaustive best policy beats the default by at most 4 bytes | Verified rewrites shrink object `.text` by 0.8–2.4% on the changed subject TUs. The policy weight space is `FINITE_ENUMERATION_SUFFICIENT` for size. |
+| 2026-10-01 | Guard-folding ceiling ([result](../tests/contracts/eqsat-size-guards-result-20261001.json), [guard contract](../spec/evoir.md#812-certified-total-integer-guard-folding), [archived draft](archive/eqsat-guard-folding-draft.md)) | Unverified diagnostic recovers 952 / 1,608 / 80 bytes (zlib / zstd / cJSON) from provably-true UB checks | A diagnostic ceiling for R02e, not a certified benefit. Nothing from the diagnostic is installed. |
+| 2026-10-01 | Certified guard first slice ([acceptance](archive/notebook/eqsat-certified-guards-20261001.md)) | Seven g0 rules and seven new A2 rows are kernel-only; ten certificates replay; checked text saves 256 / 984 / 28 bytes in zlib / zstd / cJSON | First-slice acceptance on six original TUs. Maximum per-TU saving is 0.800%; unchecked sizes are unchanged. Diagnostic and P0 savings remain separate. |
 
 The table below gives the effect of checked P0 EqSat on the subject translation units: checked
 profile, object `.text` bytes, with the common dead-code elimination on both sides (A: EqSat off,
@@ -259,7 +259,7 @@ small, because the domain is small. P0 cannot touch the checked UB guards (0.4�
 `.text` on these TUs, measured as checked minus unchecked), memory operations, inlining or control
 flow. The design response is to grow the checked domain one reviewed slice at a time, and to
 measure the ceiling before any proof. The first guard slice is now accepted. The
-[six-TU GCC/Clang size comparison](notebook/eqsat-size-references-20261001.md) is complete and
+[six-TU GCC/Clang size comparison](archive/notebook/eqsat-size-references-20261001.md) is complete and
 records larger EvoCC objects. G2 whole-kernel reproducibility, full Q2 acceptance and any Q3
 self-improvement claim stay **NOT_ACCEPTED**. None of these test populations is a substitute for
 the others.
@@ -377,8 +377,8 @@ the sealed image `evo-flight-lab:sealed` and the Apple Container runtime. Withou
 The [README](../README.md) gives the pipeline theorem, its three hypotheses and a short scope
 paragraph. This section keeps the details, qualifiers and limits that the README of commit
 `3b0f18fc` stated. The [verification contract](../spec/verification.md) is the theorem contract.
-The [verification plan](lean-plan.md#first-public-release-verification) keeps the plan and its
-history.
+The archived [verification plan](archive/lean-plan.md#first-public-release-verification) keeps the
+history of the plan.
 
 ### Proof scope
 
@@ -595,7 +595,7 @@ one. It refuses any difference outside the replaced roots, a deleted obligation 
 The registry decoder, the Rust checker, its parser and eligibility logic stay trusted. The rule
 proofs do not prove the front end, the memory model or the backend, and do not make code smaller or
 faster; the [measured effect](#checked-eqsat-measurements) is small. The
-[Q2/Q3 design](framing-draft.md) gates any AI search behind measured opportunity ceilings.
+[Q2/Q3 design](verified-optimization-design.md) gates any AI search behind measured opportunity ceilings.
 
 ### Model and backend notes
 
@@ -707,5 +707,5 @@ identity is reported separately from the proof replay. The standalone
 `target/frontend/release/evo-proofcheck before.evoir after.evoir proof.evp2` checks one scalar
 rewrite certificate. An optimization can remove work, but it cannot discard the original
 undefined-behavior obligations. See the
-[implementation receipt](notebook/verified-eqsat-implementation-20260929.md) for the tested scope.
+[implementation receipt](archive/notebook/verified-eqsat-implementation-20260929.md) for the tested scope.
 This does not close the whole-kernel G2 or the performance milestones.

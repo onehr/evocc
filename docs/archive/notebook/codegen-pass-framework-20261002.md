@@ -1,8 +1,8 @@
 # N02: bounded pass framework and identity validation
 
-Plan: [`917f8955`](../../tests/contracts/codegen-n02-20261002.json).
+Plan: [`917f8955`](../../../tests/contracts/codegen-n02-20261002.json).
 Implementation: `7680ae23`; bounded framework accepted. Resource plan: `4cbe9be9`.
-[Compact receipt](../../tests/contracts/codegen-n02-20261002-receipt.json).
+[Compact receipt](../../../tests/contracts/codegen-n02-20261002-receipt.json).
 
 | Evidence | Result |
 | --- | --- |
@@ -36,7 +36,7 @@ hashes while retaining admission and source-bridge status.
 **Observed legacy gap.** Unchanged `integer-mix.c` returns zero in both
 interpreters, but C-HIR emits 1,001 volatile events and EvoIR 1,002: the latter
 includes the local volatile initializer store. The minimal input is
-[`volatile-initializer-observation.c`](../../tests/fixtures/codegen/volatile-initializer-observation.c).
+[`volatile-initializer-observation.c`](../../../tests/fixtures/codegen/volatile-initializer-observation.c).
 C-HIR `store_initialized_value` passes `Qualifiers::default()`; EvoIR
 `lower_initializer_at` propagates the destination's volatile qualifier. This
 slice changes neither implementation and neither removes nor normalizes away

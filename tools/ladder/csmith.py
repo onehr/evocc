@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rung E0c of the evaluation ladder: Csmith differential testing.
 
-Csmith is pinned in docs/roadmap.md at git master 0cdc710315cf. Every program
+Csmith is pinned in docs/archive/roadmap.md at git master 0cdc710315cf. Every program
 is generated from a fixed seed so a campaign reproduces exactly. EvoCC emits
 AArch64 assembly on the host; inside the sealed container GCC-14 assembles and
 links that assembly, GCC-14 and Clang-19 compile the same source at -O0 and
@@ -541,7 +541,7 @@ def seal(summary: dict, out_dir: Path) -> dict:
     receipt = {
         "schemaVersion": 1,
         "rung": "E0c",
-        "authority": "docs/roadmap.md, milestone ladder",
+        "authority": "docs/archive/roadmap.md, milestone ladder",
         "latest": summary,
         "evidence": str(out_dir.relative_to(ROOT)),
     }

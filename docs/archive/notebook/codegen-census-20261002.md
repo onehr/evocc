@@ -1,8 +1,8 @@
 # N01: retained-object size attribution
 
-Plan: [six units](../../tests/contracts/codegen-n01-20261002.json),
-[historical ladder](../../tests/contracts/codegen-n01-ladder-20261002.json).
-The [compact receipt](../../tests/contracts/codegen-n01-20261002-receipt.json)
+Plan: [six units](../../../tests/contracts/codegen-n01-20261002.json),
+[historical ladder](../../../tests/contracts/codegen-n01-ladder-20261002.json).
+The [compact receipt](../../../tests/contracts/codegen-n01-20261002-receipt.json)
 contains all 13 categories for each compiler/profile. Implementation: `7680ae23`;
 the receipt's source baseline is not a clean-build claim.
 Focused census/S1 tests: 15 PASS, 0 FAIL. Full workspace: 377 suites,

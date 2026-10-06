@@ -1,7 +1,7 @@
 # S5 — frozen TU size comparison
 
 Implementation commit `f6b233ca`; contract
-[`tests/contracts/eqsat-size-references-20261001.json`](../../tests/contracts/eqsat-size-references-20261001.json).
+[`tests/contracts/eqsat-size-references-20261001.json`](../../../tests/contracts/eqsat-size-references-20261001.json).
 Full-workspace gate: **369 suites, 2,870 PASS / 0 FAIL / 4 ignored**;
 Clippy/fmt green (`.evidence/eqsat-size/full-workspace-S5.log`). S1's seven ELF
 contract tests pass. Capture `.evidence/eqsat-size/S5-jj9babiy/receipt.json`,

@@ -22,7 +22,7 @@ These decisions supersede the aspirational equality-native/AI narrative below;
 that narrative is not current implementation or release acceptance.
 
 **Q2/Q3 implementation design:** the maintained
-[verified optimization and performance architecture](framing-draft.md) refines
+[verified optimization and performance architecture](../verified-optimization-design.md) refines
 the research intentions below into existing-component interfaces, rule-proof
 admission, native measurement, AI/non-AI ablations and R01–R03 child tasks.
 Separate policy and rule/shortcut effect-ceiling preflights precede AI search;
@@ -35,8 +35,8 @@ floors before discovery claims. Shared verified
 chains, fixed-template/data-only proof admission and an explicit manual
 integration budget remain prerequisites. Correctness admission precedes
 performance. The design is not a measurement or
-permission to expand the current EqSat allowlist; [TODO.md](../TODO.md) remains
-the execution tracker and [status.md](status.md) remains receipt-backed.
+permission to expand the current EqSat allowlist; [TODO.md](../../TODO.md) remains
+the execution tracker and [status.md](../status.md) remains receipt-backed.
 
 ## Executive summary
 
@@ -729,7 +729,7 @@ The table below is the original architecture taxonomy, not an executable
 admission policy. For the current AI-discovery implementation plan, no model
 proposal becomes an axiom by review alone: new V1 AI rules require the fixed
 semantic proof and registry integration described in
-[rule admission](framing-draft.md#4-rule-soundness-and-admission). Existing
+[rule admission](../verified-optimization-design.md#4-rule-soundness-and-admission). Existing
 registry/analysis trust boundaries remain explicit and unchanged.
 
 | Trust class | Origin | Kernel-mode policy |
@@ -1859,7 +1859,7 @@ all connected by one proof history.
 A fourth is **agent-guided optimizer discovery**. Agents can mine:
 
 The bounded implementation is now specified in the
-[Q2/Q3 design](framing-draft.md#6-search-data-separation-and-promotion).
+[Q2/Q3 design](../verified-optimization-design.md#6-search-data-separation-and-promotion).
 The examples below are research possibilities, not permission to train on a
 protected acceptance corpus: kernel acceptance inputs and final hold-outs do
 not enter candidate prompts or fitness. Use admitted development workloads.
@@ -2005,15 +2005,15 @@ For the 30-day campaign, the discipline is equally important: **Mac-native execu
 
 ## Milestones, in order
 
-![Milestones](images/evocc-milestones.png)
+![Milestones](../images/evocc-milestones.png)
 
 ## The whole design in one picture
 
-![EvoCC: pipeline, checks, governance and current readings](images/evocc-overview.png)
+![EvoCC: pipeline, checks, governance and current readings](../images/evocc-overview.png)
 
 ## Milestone ladder for end-to-end evaluation (added 2026-09-06)
 
-![The evaluation ladder](images/evocc-ladder.png)
+![The evaluation ladder](../images/evocc-ladder.png)
 
 Latest application refresh: [2026-09-15 measurements and issue inventory](notebook/benchmark-evaluation-20260915.md).
 The September 27 refresh adds implemented non-trapping strict fenv, hosted
@@ -2041,10 +2041,10 @@ and the 6,765-target-C BPF/module composition. The complete 970-program kselftes
 pair and 1,504-case built-in KUnit pair have executed but have not passed as a
 whole; both kernels' 31 KUnit test modules pass 765/765 cases. Later filtered
 FORTIFY repairs reach 25/26 PASS, not a new full KUnit result. The
-[generated dashboard](status.md) and [evidence snapshot](evidence.md#status--2026-09-28)
+[generated dashboard](../status.md) and [evidence snapshot](../evidence.md#status--2026-09-28)
 separate current receipts, targeted follow-ups and open gates. The dated kernel
 journal below retains older failures; it is not the current status table.
-The Git-tracked [execution backlog](../TODO.md) maps the remaining concrete
+The Git-tracked [execution backlog](../../TODO.md) maps the remaining concrete
 issues and acceptance gates to stable task IDs, next actions and closure evidence.
 
 The kernel is the launch target, but "the kernel boots" is a single bit that
@@ -2107,12 +2107,12 @@ Rules that hold for every rung:
 | E11 | Lua | 5.5.1 (2026-07-24, lua.org/download.html) | ~35 TU | official test suite | FP |
 | E12 | SQLite | 3.53.4 (`sqlite-autoconf-3530400.tar.gz`, sqlite.org/download.html) | amalgamation + `testfixture` | TH3 or the public TCL suite | FP, varargs, the largest single C program on the ladder |
 | K5 | Linux `lib/` and `kernel/` | 6.18.44 as pinned by the flight lab | ~400 TU | mixed-link boot (the K1 lane) | every front-end construct |
-| K6 **CLOSED 2026-09-13** | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | full link, nonce-bound init and normal powerdown **PASS** on HVF-host | [Receipt](../tests/contracts/kernel-full-receipt.json): subsequent uniform EvoCC rebuild `read-only-storage-20260913`, zero reference target-C fallback; larger configurations are separate |
-| K7 **selected subset CLOSED 2026-09-13** | K6 plus kselftest in the initramfs | 6.18.44 | 9 programs / 125 subtests | **125/125 PASS** on the unchanged K6 Image and GCC reference; 0 fail / skip / timeout | [Receipt](../tests/contracts/kernel-selftest-receipt.json), run `20260913T144437Z`; full kselftest and expanded KUnit are separately measured and remain incomplete |
+| K6 **CLOSED 2026-09-13** | Linux full configuration, EvoCC alone | 6.18.44 | 2,799 TU | full link, nonce-bound init and normal powerdown **PASS** on HVF-host | [Receipt](../../tests/contracts/kernel-full-receipt.json): subsequent uniform EvoCC rebuild `read-only-storage-20260913`, zero reference target-C fallback; larger configurations are separate |
+| K7 **selected subset CLOSED 2026-09-13** | K6 plus kselftest in the initramfs | 6.18.44 | 9 programs / 125 subtests | **125/125 PASS** on the unchanged K6 Image and GCC reference; 0 fail / skip / timeout | [Receipt](../../tests/contracts/kernel-selftest-receipt.json), run `20260913T144437Z`; full kselftest and expanded KUnit are separately measured and remain incomplete |
 
 ### Historical kernel acceptance journal
 
-For the current configuration-specific results use [status.md](status.md) and
+For the current configuration-specific results use [status.md](../status.md) and
 the [K7 issue ledger](notebook/kernel-selftest-gaps-20260914.md). The following
 September 13–20 entries preserve the earlier sequence, including resolved
 BLOCKED/NOT_RUN states; they do not supersede the September 23 checkpoint.
@@ -2124,14 +2124,14 @@ receipt-backed counts in `docs/status.md`: assembled units and locally verified
 fixes do not close a boot milestone. The first complete all-EvoCC boot is
 `20260913T090822Z-incremental`; its receipt retains both compiler revisions and
 the authorized QEMU digest drift. Historical failures remain dated. K7's separate
-run `20260913T100557Z` executes the [declared nine-program subset](../tests/contracts/kernel-selftest-contract.json)
+run `20260913T100557Z` executes the [declared nine-program subset](../../tests/contracts/kernel-selftest-contract.json)
 with the same reference-built userspace payload on both kernels. All 125 subtests
 pass on each; this is runtime evidence beyond boot, not coverage of all kselftests
 or KUnit. Reproduce with `python3 tools/bench.py kernel-selftest --allow-qemu-drift`.
 
 The expanded `kernel-selftest-all` lane attempts all 128 upstream `TARGETS` and
 `TARGETS_HOTPLUG` collections with `SKIP_TARGETS` empty. Each run is recorded independently in the
-[full selftest receipt](../tests/contracts/kernel-selftest-full-receipt.json),
+[full selftest receipt](../../tests/contracts/kernel-selftest-full-receipt.json),
 which is checkpointed after each program. Build and installed program counts
 are measured, including collections with no runnable list under this arm64
 configuration/build environment. These include architecture restrictions and
@@ -2158,7 +2158,7 @@ unavailable BTF, and one exposing only a helper through `TEST_GEN_FILES`.
 The reference executes `acct:acct_syscall` (1 PASS; 934 NOT_RUN); the EvoCC
 Image panics with `kernel stack overflow` before starting that test (935
 NOT_RUN). The same failure repeats in a single VM. See
-[K-R07](notebook/benchmark-closure.md#all-collection-kernel-selftests-2026-09-13-blocked).
+[K-R07](notebook/benchmark-closure.md#all-collection-kernel-selftests-2026-09-13-historical-startup-failure).
 The two Images/configurations are unchanged, so this is a newly exposed
 runtime limitation beyond the smaller historical K6/K7 workload.
 
@@ -2206,7 +2206,7 @@ The runtime root-mount repair also restores the original statmount
 namespace test to 2/2 on both Images without changing the kernel test.
 See the dated runtime update in
 [the blocker ledger](notebook/benchmark-closure.md#runtime-prerequisite-and-compiler-repairs-2026-09-14)
-and the [KUnit receipt](../tests/contracts/kernel-kunit-receipt.json).
+and the [KUnit receipt](../../tests/contracts/kernel-kunit-receipt.json).
 
 September 20 checkpoint: the old NEON compiler gap is now repaired. All twenty
 original C inputs of XOR/RAID6's three modules compile/link; explicit native

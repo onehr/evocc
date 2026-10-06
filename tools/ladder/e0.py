@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rung E0 of the evaluation ladder: compiler test suites through EvoCC.
 
-Subjects (pinned in docs/roadmap.md):
+Subjects (pinned in docs/archive/roadmap.md):
   E0a  GCC C torture, gcc/testsuite/gcc.c-torture/execute, tag releases/gcc-16.2.0
   E0b  c-testsuite, tests/single-exec, commit 5c7275656d75
 
@@ -734,7 +734,7 @@ def main() -> int:
     receipt = {
         "schemaVersion": 1,
         "rung": "E0",
-        "authority": "docs/roadmap.md, milestone ladder",
+        "authority": "docs/archive/roadmap.md, milestone ladder",
         "latest": summary,
         "evidence": str(out_dir.relative_to(ROOT)),
     }

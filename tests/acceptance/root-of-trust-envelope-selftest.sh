@@ -72,7 +72,7 @@ for path in \
     '{path:$path,oid:$oid}' >>"$TREES"
 done
 
-for path in Cargo.toml Cargo.lock docs/roadmap.md \
+for path in Cargo.toml Cargo.lock docs/archive/roadmap.md \
   contracts/build-environment.json contracts/kernel-target.json; do
   "$JQ" -cn --arg path "$path" --arg sha256 "$(digest "$PROJECT_ROOT/$path")" \
     '{path:$path,sha256:$sha256}' >>"$FILES"

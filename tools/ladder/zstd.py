@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rung E2 of the evaluation ladder: zstd v1.5.7.
 
-Pinned in docs/roadmap.md to v1.5.7 (2025-02-19, github.com/facebook/zstd).
+Pinned in docs/archive/roadmap.md to v1.5.7 (2025-02-19, github.com/facebook/zstd).
 The oracle is the release's own ``make check``: it builds the command line
 tool and runs ``tests/playTests.sh``, which compresses and decompresses
 through every CLI path and compares the results byte for byte.

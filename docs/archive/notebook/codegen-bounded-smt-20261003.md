@@ -1,9 +1,9 @@
 # N07 E3: negative SMT qualification
 
 Implementation `98542c3f`; plan `81374b99`; RED `20671add`.
-[Plan](../../tests/contracts/codegen-n07-smt-20261003.json),
-[receipt](../../tests/contracts/codegen-n07-e3-20261003-receipt.json),
-[rule inventory](../../tests/contracts/codegen-n07-e3-verdicts-20261003.json).
+[Plan](../../../tests/contracts/codegen-n07-smt-20261003.json),
+[receipt](../../../tests/contracts/codegen-n07-e3-20261003-receipt.json),
+[rule inventory](../../../tests/contracts/codegen-n07-e3-verdicts-20261003.json).
 **Closed negative: no SMT proof admitted.** Neither compiler lowering nor the
 verbatim vendor model changed. All optimization defaults remain OFF.
 

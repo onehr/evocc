@@ -1,7 +1,7 @@
 # N03a step 1: generated register facts
 
-Implementation: `42a003d2`. [Plan](../../tests/contracts/codegen-n03a-20261002.json);
-[receipt](../../tests/contracts/codegen-n03a-regfile-20261002-receipt.json).
+Implementation: `42a003d2`. [Plan](../../../tests/contracts/codegen-n03a-20261002.json);
+[receipt](../../../tests/contracts/codegen-n03a-regfile-20261002-receipt.json).
 The canonical `targets/aarch64/regfile` now supplies register banks, views,
 ordered pools, reserved roles and assembly register primitives. Allocation
 policy, verifier bank admission, ABI/frame layout and interpreter semantics

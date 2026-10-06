@@ -352,7 +352,7 @@ checked scalar rewrites. The trusted base is the front end up to the typed sourc
 kernel and compiled checker, the file readers and assembly printer, the Lean semantics of Core C and
 of the AArch64 subset, the ABI entry assumption, and the assembler, linker, runtime and hardware.
 Ordinary compilations rely on tests. The limits are in the [evidence](docs/evidence.md#verification-details-and-limits)
-and the [verification plan](docs/lean-plan.md#first-public-release-verification).
+and the [verification contract](spec/verification.md).
 
 ### Testing
 
@@ -405,18 +405,19 @@ and the [verification plan](docs/lean-plan.md#first-public-release-verification)
 | `tests/acceptance/`, `tests/ui/check/` | Sealed-oracle and differential harnesses; expected `--check` diagnostics |
 | `tests/configs/`, `crates/*/tests/` | Linux configuration fragments; Rust integration tests |
 | `spec/` | The four pinned ground-truth documents: EvoIR, EvoMIR, target description and verification contract; index in `spec/README.md`, digests in `spec/pins.json` |
-| `docs/lean-plan.md`, `docs/checker.md` | Verification plan and history; `--check`, `--explain` and JSON diagnostics |
-| `docs/framing-draft.md`, `docs/eqsat-guard-folding-draft.md` | Verified optimization design and search contract; the `g0.ub.v1` guard slice |
-| `docs/codegen-quality-plan.md` | Backend quality plan |
-| `docs/evidence.md`, `docs/roadmap.md`, `docs/status.md` | Results, receipts and limits; roadmap; the rendered dashboard |
-| `docs/notebook/`, `docs/images/` | Dated lab notes; figures and showcase captures |
+| `docs/evidence.md`, `docs/status.md` | Results, receipts and limits; the rendered dashboard |
+| `docs/checker.md`, `docs/notebook/` | `--check`, `--explain` and JSON diagnostics; the notebook chapters that `web/` renders |
+| `docs/verified-optimization-design.md` | Verified optimization design: registries, certificates, size contract and search contract |
+| `docs/images/` | Figures and showcase captures |
+| `docs/archive/` | Superseded plans and dated lab notes; history, not maintained |
 
 ## Documentation
 
-- Specifications: [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md), [target description](spec/target.md), [verification contract](spec/verification.md)
-- Verification: [verification plan](docs/lean-plan.md), [C checker workflow](docs/checker.md)
-- Design: [verified optimization](docs/framing-draft.md), [codegen quality plan](docs/codegen-quality-plan.md)
-- Results and work: [evidence](docs/evidence.md), [roadmap](docs/roadmap.md), [TODO](TODO.md)
+- Specifications: [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md), [target description](spec/target.md), [verification contract](spec/verification.md); [index and pins](spec/README.md)
+- Guides: [C checker workflow](docs/checker.md), [implementation notebook](docs/notebook/README.md)
+- Design: [verified optimization](docs/verified-optimization-design.md)
+- Results and work: [evidence](docs/evidence.md), [status dashboard](docs/status.md), [TODO](TODO.md)
+- History: [`docs/archive/`](docs/archive/README.md)
 
 ## Development
 

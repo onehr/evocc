@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rung E1 of the evaluation ladder: zlib 1.3.2.
 
-Pinned in docs/roadmap.md to 1.3.2 (2026-02-17, zlib.net). The subject's own
+Pinned in docs/archive/roadmap.md to 1.3.2 (2026-02-17, zlib.net). The subject's own
 oracle is ``make test``: ``example`` exercises deflate, inflate, dictionaries
 and gzip streams and prints "zlib test OK", and ``minigzip`` round trips a
 file through the gzip format.

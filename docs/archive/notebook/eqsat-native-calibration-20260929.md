@@ -145,7 +145,7 @@ this infrastructure check into application performance evidence.
 ## Validation checkpoint
 
 The executable plan is
-[`eqsat-native-aa-20260929.json`](../../tests/contracts/eqsat-native-aa-20260929.json),
+[`eqsat-native-aa-20260929.json`](../../../tests/contracts/eqsat-native-aa-20260929.json),
 committed in `935eb09` before any timing. Its implementation checkpoint is
 `252c5152ae53b9dccc0f041df0f84e5f6dd4df53`. The read-only audit checked 13
 distinct artifact paths; the exact manifest SHA-256 is
@@ -197,7 +197,7 @@ or AI/model search has been launched.
 ## SDK-bound native observation
 
 The repaired plan,
-[`eqsat-native-aa-sdk-20260929.json`](../../tests/contracts/eqsat-native-aa-sdk-20260929.json),
+[`eqsat-native-aa-sdk-20260929.json`](../../../tests/contracts/eqsat-native-aa-sdk-20260929.json),
 was committed as `7210cac4` before execution. It names implementation
 `db5c4cc67bbec2a5459eb0e522754261f36b7f10`, preserves the original source,
 protocol and resource bounds, and adds explicit SDK/link-editor selection.

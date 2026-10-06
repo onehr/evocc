@@ -3,12 +3,12 @@
 Date: 2026-09-30. The registered measurement runner, three-track preflight and
 native UB-profile fan-out are implemented and qualified for this **bounded
 pilot**. This closes the stated implementation/pilot scope of R02a, R02b and
-R02d in [TODO.md](../../TODO.md), not their parent R02, final Q2, G2 or Q3.
+R02d in [TODO.md](../../../TODO.md), not their parent R02, final Q2, G2 or Q3.
 All three search-track verdicts and all twelve A/B latency comparisons are
 **INCONCLUSIVE**. No AI campaign is admitted. Negative measurements are results,
 not reasons to silently increase the frozen budget or weaken acceptance.
 
-The [compact tracked receipt](../../tests/contracts/eqsat-r02-pilot-receipt-20260930.json)
+The [compact tracked receipt](../../../tests/contracts/eqsat-r02-pilot-receipt-20260930.json)
 indexes the raw capture, hashes, gates and denominators. It is a checkpoint;
 replay the raw evidence to requalify it, rather than trusting its status label.
 
@@ -32,7 +32,7 @@ A/B plan). No R03 activity or latency acceptance inherits this capture.
 - Implementation: `b27e5e230eabd899459a429c7e172f4ba8077590`; manifest commit:
   `2d39a968`. Earlier regional-fuel and historical-fixture corrections are
   `3bb0666a` and `52ce286c` respectively.
-- [Frozen manifest](../../tests/contracts/eqsat-linux-pilot-20260930-scratch-fix.json):
+- [Frozen manifest](../../../tests/contracts/eqsat-linux-pilot-20260930-scratch-fix.json):
   SHA-256 `9d21b5838ed38129248bdd898b8bf70e327680349068fb8f13d66f9e84740cc2`.
   Compiler, checker, backend, census, collector, Lean/imports, source/header,
   spec and guest tool identities are frozen there.

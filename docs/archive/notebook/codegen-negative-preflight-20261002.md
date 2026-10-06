@@ -1,8 +1,8 @@
 # N03b/N03e: bounded negative preflight
 
 Implementation: `856dfcd3`; plans frozen in `7680ae23`.
-Receipts: [original](../../tests/contracts/codegen-n03-preflight-20261002-receipt.json),
-[closure](../../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json).
+Receipts: [original](../../../tests/contracts/codegen-n03-preflight-20261002-receipt.json),
+[closure](../../../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json).
 Disposition: **CLOSED_NEGATIVE_FIRST_SLICES / NO_ADMITTED_OPPORTUNITY**.
 
 The read-only census inspected the frozen 21,000 generated modules and fresh

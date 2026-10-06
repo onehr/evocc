@@ -116,7 +116,7 @@ audit needs no checker. The bounded generated-IR cap collector is also available
 through the existing bench entry point. Its first 32-program diagnostic observed
 no default cap hits; it is not the application preflight, native performance
 admission or an AI-track verdict. See the
-[scoped protocol and result](notebook/eqsat-cap-census-20260929.md).
+[scoped protocol and result](archive/notebook/eqsat-cap-census-20260929.md).
 
 R02a foundation checkpoint: policy report v3 separates producer, independent
 replay, checker identity and wrapper costs without changing chain/proof
@@ -126,10 +126,10 @@ checker replay or final identity validation. The bench CLI also has a read-only
 frozen-plan audit for checked native A/A calibration; its successful output
 explicitly remains EXECUTION_NOT_RUN. General effective-control validation,
 application artifact/result binding and the complete collector remain open. See
-[implementation boundaries and gates](notebook/eqsat-r02a-foundations-20260929.md);
+[implementation boundaries and gates](archive/notebook/eqsat-r02a-foundations-20260929.md);
 this does not change the reviewed experiment contract below.
 
-The subsequent [bounded native adapter](notebook/eqsat-native-calibration-20260929.md)
+The subsequent [bounded native adapter](archive/notebook/eqsat-native-calibration-20260929.md)
 implements exact-digest IR-to-MIR transport and registered Darwin P0 A/A capture,
 with per-execution result checks, balanced order, raw samples and failure
 retention. A frozen SDK-bound run completed 24 timed executions and four warmups
@@ -150,7 +150,7 @@ policy/rule/shortcut ceiling verdicts and all twelve A/B latency comparisons
 are INCONCLUSIVE; no AI campaign or final Q2/G2/Q3 gate is admitted. Scope,
 mixed links, complete negative evidence, two pilot failures and the repaired
 regional-fuel/collector bugs are recorded in the
-[qualification notebook](notebook/eqsat-r02-linux-pilot-20260930.md) and
+[qualification notebook](archive/notebook/eqsat-r02-linux-pilot-20260930.md) and
 [tracked receipt](../tests/contracts/eqsat-r02-pilot-receipt-20260930.json).
 This checkpoint supersedes the OPEN implementation statements above, not the
 reviewed experiment or trust-boundary contract below.
@@ -173,9 +173,9 @@ R02a1's steady A/A admits all ten comparisons and its single preregistered A/B
 completes 312 timed samples with **10/10 INCONCLUSIVE** outcomes at the unchanged
 5% gates. All typed execution checks pass, but no latency claim or AI campaign
 is admitted. The original millisecond pilot and failed auditors remain retained.
-The [formal three-track adjudication](notebook/eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision)
+The [formal three-track adjudication](archive/notebook/eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision)
 freezes policy/rule/shortcut uncertainty and caps further audit engineering;
-the [steady result](notebook/eqsat-r02-steady-protocol-20260930.md#frozen-single-ab-result)
+the [steady result](archive/notebook/eqsat-r02-steady-protocol-20260930.md#frozen-single-ab-result)
 records raw identities, actual intervals and the unchanged split-runtime audit.
 October 1 owner decision supersedes the open choices: V1 Q2's primary objective
 is **object code size**. Latency is **NOT_MEASURABLE_ON_THIS_LANE**; no further
@@ -187,7 +187,7 @@ a trust anchor for the rewrite domains requiring proof, not a claim about the
 whole optimizer or useful AI rule discovery. R02e guard-predicate folding is the
 only next semantic slice, conditional on its diagnostic size ceiling. Audit
 tooling is capped at observed failure modes. The sequential S1–S6 execution and
-claim boundaries are recorded in the [size work-package ledger](notebook/eqsat-size-work-packages-20261001.md).
+claim boundaries are recorded in the [size work-package ledger](archive/notebook/eqsat-size-work-packages-20261001.md).
 
 The current root census counts single-result `bits<1..64>` instructions in each
 transaction input, including constants and excluded instructions; block
@@ -798,7 +798,7 @@ preserve poison and all other uses, then separately specify any removal of a
 proven-true obligation in reconstruction/checking. It must not silently admit
 `ub.assume` as an ordinary pure e-node or drop C definedness obligations.
 S4 now has a significant measured diagnostic ceiling. The independent
-[R02e semantic-delta proposal](eqsat-guard-folding-draft.md) is not an active
+[R02e semantic-delta proposal](archive/eqsat-guard-folding-draft.md) is not an active
 registry or implementation acceptance; the current P0 domain is unchanged.
 
 ### 5.2 Mandatory opportunity and effect-ceiling preflight
@@ -1415,9 +1415,10 @@ infrastructure; no favorable threshold may be chosen after measurement.
 
 ## 10. References and claim ceiling
 
-- [Roadmap](roadmap.md): architecture intent; this document supplies the bounded
-  Q2/Q3 implementation path, not a whole-roadmap completion claim.
-- [Lean plan](lean-plan.md): fixed rule semantics, analysis and correspondence.
+- [Roadmap](archive/roadmap.md) (archived): architecture intent; this document supplies the
+  bounded Q2/Q3 implementation path, not a whole-roadmap completion claim.
+- [Lean plan](archive/lean-plan.md) (archived): the history of the fixed rule semantics, analysis
+  and correspondence. The contract is now [`spec/verification.md`](../spec/verification.md).
 - [Lean proof validation](https://lean-lang.org/doc/reference/latest/ValidatingProofs/):
   theorem meaning and proof replay; moving documentation does not qualify our pin.
 - [Ruler](https://homes.cs.washington.edu/~djg/papers/oopsla2021.pdf): automated

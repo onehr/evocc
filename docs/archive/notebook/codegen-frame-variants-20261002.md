@@ -2,8 +2,8 @@
 
 Implementation `a1b0d7f0`, tested checkpoint `af8687f1`; RED `0771b134` /
 `fb12b2d9`, protection amendment `718f155f`, EvoMIR 0.56.
-[Plan](../../tests/contracts/codegen-n03f-20261002.json);
-[receipt](../../tests/contracts/codegen-n03f-20261002-receipt.json).
+[Plan](../../../tests/contracts/codegen-n03f-20261002.json);
+[receipt](../../../tests/contracts/codegen-n03f-20261002-receipt.json).
 F1 pairs adjacent saves without moving slots; F2 shares the complete epilogue;
 F3 removes only eligible leaf frame records. All default OFF; kernel markers
 and explicit frame-pointer requests suppress all three.

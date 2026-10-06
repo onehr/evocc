@@ -13,9 +13,9 @@ This change adds an evaluation interface; it changes no compiler semantics.
 python3 tools/bench.py all --jobs 4 --programs 500 --budget 20 --allow-qemu-drift
 ```
 
-The [latest receipt](../../tests/contracts/bench-receipt.json) records each
+The [latest receipt](../../../tests/contracts/bench-receipt.json) records each
 command, duration, raw outcome counts, previous receipt and evidence location.
-The [status page](../status.md) is generated from those receipts. This review
+The [status page](../../status.md) is generated from those receipts. This review
 records interpretation, not a second acceptance authority.
 
 The musl correction is measured by a second invocation,

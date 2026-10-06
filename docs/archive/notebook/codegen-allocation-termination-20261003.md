@@ -1,8 +1,8 @@
 # N03c T1: bounded spill progress
 
 Implementation/clean subject `02d6bd54`; bounded RED `74473d62`; EvoMIR 0.59.
-[Plan](../../tests/contracts/codegen-n03c-termination-20261002.json),
-[receipt](../../tests/contracts/codegen-n03c-t1-20261003-receipt.json).
+[Plan](../../../tests/contracts/codegen-n03c-termination-20261002.json),
+[receipt](../../../tests/contracts/codegen-n03c-t1-20261003-receipt.json).
 Saturated call preparation stores already-evaluated stack arguments before
 occupying the whole register pool. Each spill retry consumes a previously
 unspilled pre-rewrite value or refuses; generated reload temporaries cannot

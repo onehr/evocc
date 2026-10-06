@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rung E3 of the evaluation ladder: cJSON v1.7.19.
 
-Pinned in docs/roadmap.md to v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON).
+Pinned in docs/archive/roadmap.md to v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON).
 
 The public Makefile test and five public-API controls link installed library
 objects. In addition, every program in the pinned CMake Unity selection is

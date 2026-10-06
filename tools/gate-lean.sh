@@ -1,7 +1,7 @@
 #!/bin/sh
 # The Lean proof layer's own gate. It is deliberately separate: nothing in the
-# ordinary kernel path, workspace gate or ladder depends on it. The V00-V06
-# first-public-release path in docs/lean-plan.md does require it; a successful
+# ordinary kernel path, workspace gate or ladder depends on it. The checked
+# compilation path of spec/verification.md does require it; a successful
 # ordinary compiler build alone does not satisfy that verification contract.
 #
 # Usage: tools/gate-lean.sh

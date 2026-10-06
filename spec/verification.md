@@ -11,7 +11,7 @@ definition or a theorem statement without its proof; if a copy and the source di
 decides and this document must be corrected. `crates/evocc/src/proof_required.rs` decides the
 command line, the exports and the record. The registry blocks, digests, certificate grammar and
 EvoIR text form are in [`spec/evoir.md`](evoir.md), the EvoMIR rules in
-[`spec/evomir.md`](evomir.md), and plans and status in `docs/lean-plan.md`, `docs/evidence.md` and
+[`spec/evomir.md`](evomir.md), and plans and status in `docs/archive/lean-plan.md`, `docs/evidence.md` and
 `TODO.md`. Lean names omit the prefix `EvoIR.`; Lean paths are relative to `lean/EvoIR/`.
 
 ## 1. The claim

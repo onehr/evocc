@@ -140,7 +140,7 @@ a requested decision, not a validator bypass. This replay uses the existing
 command projector and records its omitted flags (including function/data
 sections and excess-precision); it is not faithful full-build acceptance.
 
-The later [standard-excess-precision driver regression](../../tests/fixtures/floating-standard-evaluation.out)
+The later [standard-excess-precision driver regression](../../../tests/fixtures/floating-standard-evaluation.out)
 closes that particular omission under revision 1.9.112: FLT_EVAL_METHOD=0
 already uses semantic source precision for operations, assignments and casts.
 The explicit option now reaches the driver without changing numerical/rounding
@@ -428,7 +428,7 @@ math representatives now assemble and the four scalar-asm objects pass their
 native value/status matrix. A subsequent full campaign exposed ordinary
 register-output stack writebacks interfering with split LL/SC sequences. The
 shared lowering now retains eligible scalar locals in SSA; it does not inspect
-or combine opaque templates. [Reduction and validation](../../tests/fixtures/assembly-exclusive-window.out).
+or combine opaque templates. [Reduction and validation](../../../tests/fixtures/assembly-exclusive-window.out).
 
 Fresh final run `20260927T110110Z`, compiler
 `e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5`, attempts all

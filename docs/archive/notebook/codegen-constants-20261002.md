@@ -1,8 +1,8 @@
 # N03d C1: opt-in constant materialization
 
 Implementation `ebbf3839`; measurement subject `6eb0b585`; RED `0902b06c`;
-EvoMIR 0.57. [Plan](../../tests/contracts/codegen-n03d-constants-20261002.json),
-[receipt](../../tests/contracts/codegen-n03d-c1-20261002-receipt.json).
+EvoMIR 0.57. [Plan](../../../tests/contracts/codegen-n03d-constants-20261002.json),
+[receipt](../../../tests/contracts/codegen-n03d-c1-20261002-receipt.json).
 `--isel-opt=constants` selects strictly shorter MOVZ/MOVK, MOVN/MOVK or
 logical-immediate ORR sequences from generated target tables. Ties retain
 legacy spelling. Default OFF; kernel/frame-pointer protections unchanged.

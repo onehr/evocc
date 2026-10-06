@@ -1,8 +1,8 @@
 # N03d C2: adjacent emission idioms
 
 Implementation and clean measurement subject `b478bc7c`; RED `504e012a`;
-EvoMIR 0.58. [Plan](../../tests/contracts/codegen-n03d-local-20261002.json),
-[receipt](../../tests/contracts/codegen-n03d-c2-20261002-receipt.json).
+EvoMIR 0.58. [Plan](../../../tests/contracts/codegen-n03d-local-20261002.json),
+[receipt](../../../tests/contracts/codegen-n03d-c2-20261002-receipt.json).
 `--isel-opt=local` composes adjacent, single-use allocated shift/extension,
 multiply and indexed-memory sequences. No IR, allocation, interpreter, guard
 or proof semantics change. Default OFF; protected profiles unchanged.

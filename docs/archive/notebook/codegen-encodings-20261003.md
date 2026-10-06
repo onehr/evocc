@@ -1,8 +1,8 @@
 # N07 E1: encoding facts and object-preserving migration
 
 Implementation `4b945e9e`; RED `cdd3c01e`; plan `c9c37f5f`, completed-baseline
-binding `2b534efe`; EvoMIR 0.61. [Plan](../../tests/contracts/codegen-n07-encodings-20261003.json),
-[receipt](../../tests/contracts/codegen-n07-e1-20261003-receipt.json).
+binding `2b534efe`; EvoMIR 0.61. [Plan](../../../tests/contracts/codegen-n07-encodings-20261003.json),
+[receipt](../../../tests/contracts/codegen-n07-e1-20261003-receipt.json).
 Existing immediate, memory/pair offset, mov-wide, logical-mask, shift and
 TBZ/ADR reach facts now come from `targets/aarch64/encodings`. Public
 `BinaryImm` validation rejects malformed forms already excluded by lowering.

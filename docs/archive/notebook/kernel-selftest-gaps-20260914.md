@@ -182,7 +182,7 @@ The command and authorization channels subsequently recovered. Process checks
 found the old build stopped, despite its stale RUNNING record. Last prepared
 checkpoint: 1,920/7,008 at 07:42 UTC. The first resume refused 17 producer-replaced
 working objects; the shared recovery fix now keeps them explicitly uncredited
-until prepared validation and installation. The [65-object native regression](../../tests/fixtures/kernel-prepared-phase.out)
+until prepared validation and installation. The [65-object native regression](../../../tests/fixtures/kernel-prepared-phase.out)
 and 275 K1 tests pass. No stopped process is reported as running.
 
 Corrected common-bench recovery is K1 `20260928T075419Z`, wrapper PID 90753,
@@ -192,7 +192,7 @@ runtime disk. It recovered all 7,008 first-pass records and completed its first
 harness correctly invalidates old prepared-cache identities; no receipt was
 edited to force reuse. This is progress, not final link/boot acceptance.
 
-The [continuous-refill AIO diagnostic](../../tests/fixtures/ublk-aio-refill-order.out)
+The [continuous-refill AIO diagnostic](../../../tests/fixtures/ublk-aio-refill-order.out)
 has now executed: sealed GCC/Clang compilation passes, and the GCC probe passes
 4/4 cases with 65,536 exact completions on each retained old Image. Neither
 shows reordering, so the original fio/trace failure is still not reproduced.
@@ -211,14 +211,14 @@ which exits on SIGINT rather than after a finite case count; under the original
 45-second runner limit it still records TIMEOUT/FAIL with normal shutdown.
 No timeout or source is adjusted to turn that into PASS.
 
-The [bounded event control](../../tests/fixtures/connector-process-events.out)
+The [bounded event control](../../../tests/fixtures/connector-process-events.out)
 now passes 20/20 reference checks with sealed GCC/Clang builds. It verifies
 owned child fork/exit records, then separately runs the unchanged listener,
 proves it keeps waiting, and observes its normal exit after an owned SIGINT.
 The original 45-second TIMEOUT remains. This uses a 4.1 MiB payload and the
 existing scratch disk; paired acceptance still needs the current EvoCC Image.
 
-The [FPU worker protocol repair](../../tests/fixtures/fpu-worker-verdict.out)
+The [FPU worker protocol repair](../../../tests/fixtures/fpu-worker-verdict.out)
 exposes the standalone program's previously hidden zero-exit SKIP. Stress
 execution actually loads the matching signed module and reports all 4,000
 worker OKs on the GCC Image, with normal shutdown. A nonce-bound online-CPU
@@ -239,7 +239,7 @@ or full-campaign acceptance. The same fixture records hashes and commands.
 
 ### ublk stalled writeback captured — 2026-09-28
 
-The [bounded original observer](../../tests/fixtures/ublk-blocked-observer.out)
+The [bounded original observer](../../../tests/fixtures/ublk-blocked-observer.out)
 now captures GCC stress_04 blocked at 25/40 seconds and before shutdown:
 writeback workers for devices 259:5 / 259:8 wait in `blk_mq_get_tag`, and
 fio/io_uring readers wait on folios. Roughly 1.77 GiB remains available.
@@ -259,9 +259,9 @@ one eight-second device-deletion timeout after all clients exit; the same
 guest shuts down normally. This is not yet the original blocked-writeback
 path. EvoCC passes 3/3; adding bounded early observations yields 3/3 on each
 side without reproducing the timeout. All outcomes, including the initial
-failure and NOT_RUN cases, remain in [the C-control record](../../tests/fixtures/ublk-kill-cancel.out).
+failure and NOT_RUN cases, remain in [the C-control record](../../../tests/fixtures/ublk-kill-cancel.out).
 
-The [single-device cancellation reduction](../../tests/fixtures/ublk-kill-cancel.out)
+The [single-device cancellation reduction](../../../tests/fixtures/ublk-kill-cancel.out)
 adds 4 cold-null and 3 warm-loop checks per retained Image. Each final case
 establishes pending I/O; warm cases also establish actual prior completions
 and force buffered writeback. All 14 checks and four boot/shutdown predicates
@@ -271,7 +271,7 @@ recorded as diagnostic setup failures, with their logs and hashes preserved.
 
 ### ublk completion-order classification — 2026-09-28
 
-K04b's [independent trace controls](../../tests/fixtures/ublk-trace-order.out)
+K04b's [independent trace controls](../../../tests/fixtures/ublk-trace-order.out)
 now explain the shared order assertion: the installed kublk defaults to two
 queues. With the original fio parameters, all 131,072 requests issue in order,
 but completion events interleave across CPUs 0/2 on both kernels. Every sector
@@ -305,7 +305,7 @@ large test disk was created; reuse recovered about 5 GiB (kernel volume 20 GiB
 free). Seed record SHA-256:
 `577d373d4e3a37e33f50181ddc7b41e6c0971a324be63e81907995b98d28d926`.
 
-The [pinned compiler-health checkpoint](../../tests/fixtures/kernel-regression-identity.out)
+The [pinned compiler-health checkpoint](../../../tests/fixtures/kernel-regression-identity.out)
 passes 2,807 Rust tests, 589 Python tests, Clippy/fmt/Ruff, 128+22 layouts,
 54 grammar shapes and thirteen isolated offline replays. Four historical Rust
 ignores remain. It also fixes canonical paired-regression IDs without changing
@@ -314,7 +314,7 @@ its complete composition and new module/runtime acceptance are still required.
 
 ### Selected original pair completes; final config reference starts — 2026-09-28
 
-The [39-program paired replay](../../tests/fixtures/kernel-uniform-selected-runtime.out)
+The [39-program paired replay](../../../tests/fixtures/kernel-uniform-selected-runtime.out)
 finishes INCOMPLETE, exit 1: GCC **28 PASS / 2 FAIL / 9 TIMEOUT**, EvoCC
 **29 PASS / 1 FAIL / 9 TIMEOUT**. All selected programs start; 931/970 remain
 NOT_RUN on each Image. pidfd is 7 PASS / 1 SKIP on both; sched_ext is 23/23
@@ -325,7 +325,7 @@ stalls during shutdown; 77/78 boot/shutdown predicates pass. These are retained
 failures, not a full acceptance result or evidence of a compiler repair.
 
 The new ublk generic_01/02 completion-order failures have their own K04b.
-The [small batched AIO control](../../tests/fixtures/ublk-aio-completion-order.out)
+The [small batched AIO control](../../../tests/fixtures/ublk-aio-completion-order.out)
 passes on both kernels without reproducing reordering; it does not close K04b.
 
 After owner/worker 7006/7011 exit, reference build PID **87432** starts under
@@ -338,7 +338,7 @@ build, **not** final EvoCC composition, new module execution or K13/K14 PASS.
 
 ### Connector/FPU preflight and bounded cache retirement — 2026-09-28
 
-The [small configuration/original-unit preflight](../../tests/fixtures/kernel-connector-fpu-preflight.out)
+The [small configuration/original-unit preflight](../../../tests/fixtures/kernel-connector-fpu-preflight.out)
 solves exactly three values (CONNECTOR=y, PROC_EVENTS=y, TEST_FPU=m). All five
 new original C units compile/assemble with the current pinned compiler
 `ab2eeb7b…` and match GCC's externally defined symbols/kinds. The FPU implementation
@@ -361,7 +361,7 @@ sources, receipts and runtime pairs remain intact. This is not test acceptance.
 
 Common bench `20260927T135325.342339Z` exits zero; its K1 run
 `20260927T135325Z` completes at 21:43 UTC September 27 (September 28 local).
-The [current full receipt](../../tests/contracts/kernel-bpf-full-receipt.json)
+The [current full receipt](../../../tests/contracts/kernel-bpf-full-receipt.json)
 records 7,002/7,002 target-C objects from one frozen compiler, 7,002 fresh
 actual-generated-input compilations (zero resumed), a stable content fixed
 point, 848 recompiled modpost-generated sources, complete link and zero GCC
@@ -370,7 +370,7 @@ plus 36 verified cache rows. All 847 module links and BTF operations pass;
 module signing, installation and runtime are not implied.
 
 The exact Image `62c29ae4…` passes the nonce-bound boot and orderly poweroff
-on `hvf-host`, KUnit autorun disabled. The [producer fixture](../../tests/fixtures/kernel-late-generator.out)
+on `hvf-host`, KUnit autorun disabled. The [producer fixture](../../../tests/fixtures/kernel-late-generator.out)
 records full hashes. This closes T04d's real late-generator replay; the former
 13 replaced objects/eight bitmap assertions remain historical failures.
 The owner/worker have exited; running checkpoints below are historical.
@@ -382,7 +382,7 @@ authorization. Neither current-code pinned-host acceptance nor locked-QEMU
 acceptance is inferred. K13/K14 still require fresh runtime evidence, and T04
 retains the final-current-compiler integration requirement.
 
-The [four serial original KVM flights](../../tests/fixtures/kvm-uniform-original-replay.out)
+The [four serial original KVM flights](../../../tests/fixtures/kvm-uniform-original-replay.out)
 also finish: GCC completes all ten modes in both programs; EvoCC completes
 three, starts the fourth and reaches the original 120-second watchdog in both.
 The default 1 GiB workload, EL2/fixed-CPU lane and all ten modes are unchanged.
@@ -390,7 +390,7 @@ All four boot/shutdown checks pass and protected inputs hash identically after
 execution. This is a retained failure of the cumulative candidate, not K02/K03
 closure and not an improvement inferred from smaller generated objects.
 
-The [unchanged IOMMU pair](../../tests/fixtures/iopf-enabled-reference.out)
+The [unchanged IOMMU pair](../../../tests/fixtures/iopf-enabled-reference.out)
 now runs on that complete composition: **224 PASS / 0 FAIL / 5 SKIP** on each
 Image, the same 229-case population and 45-second limit. Boot, nonce, shutdown
 and preserved-input checks pass. All former six disabled-IOPF failures are
@@ -399,7 +399,7 @@ for the reviewed configuration; it is not full K13/K14 acceptance.
 
 ### BPF module hardening timeout isolated — 2026-09-28
 
-The [bounded original-module observer](../../tests/fixtures/bpf-module-harden-progress.out)
+The [bounded original-module observer](../../../tests/fixtures/bpf-module-harden-progress.out)
 localizes the shared timeout to exhaustive case 851. It generates 98,787 BPF
 instructions; harden=2 activates per-constant patching, array movement and two
 full branch scans above S16_MAX. Kprobe counters and advancing patch positions
@@ -415,7 +415,7 @@ and K13 remain open.
 
 ### New signed-module runtime pair — 2026-09-28
 
-The [matching runtime build and six-program replay](../../tests/fixtures/kernel-uniform-module-runtime.out)
+The [matching runtime build and six-program replay](../../../tests/fixtures/kernel-uniform-module-runtime.out)
 now complete: each side has all 847 signed kernel modules and 17 rebuilt
 original test-support modules. Installed kernel bodies, Image/config identities
 and all 4,393 original non-module test files are audited unchanged. The new
@@ -436,7 +436,7 @@ actually testing it remains K12f for the same next batch as connector K12e.
 
 ### Connector prerequisite omitted from fragment-only review — 2026-09-28
 
-The [small original-API probe](../../tests/fixtures/connector-configuration.out)
+The [small original-API probe](../../../tests/fixtures/connector-configuration.out)
 confirms that the new reference still lacks NETLINK_CONNECTOR: GCC and Clang
 controls pass all 12 absence checks while unchanged proc_filter fails with
 EPROTONOSUPPORT. Both live/new configs disable CONNECTOR. The frozen Kconfig
@@ -455,7 +455,7 @@ disk. An initial non-TAP output failure is preserved, not counted as PASS.
 
 The common runtime installer now restores the exact two peer tables and key
 omitted by the frozen net/ovpn Makefile. The new install test first fails;
-all **262 K1 tests** and Ruff pass after repair. The [bounded original replay](../../tests/fixtures/ovpn-base64-prefix.out)
+all **262 K1 tests** and Ruff pass after repair. The [bounded original replay](../../../tests/fixtures/ovpn-base64-prefix.out)
 uses the matching new GCC Image and signed modules, extracted original
 userspace files, two approximately 29 MiB initramfs payloads and the existing
 64 MiB snapshot-only disk. No active subject build or retained disk is changed.
@@ -477,7 +477,7 @@ The old pair's eight nci_dev failures all stop at the missing device node.
 The reviewed new config enables NFC_VIRTUAL_NCI as a module, but the common
 udev-free runtime still needs to preload it. The exact installed-module list
 now includes virtual_ncidev; its absent-module negative remains empty.
-On the matching new GCC Image, the [small before/after observer](../../tests/fixtures/nci-module-prerequisite.out)
+On the matching new GCC Image, the [small before/after observer](../../../tests/fixtures/nci-module-prerequisite.out)
 loads signed dependencies, reproduces **0/8** on the unchanged original, then
 loads the virtual driver and obtains **8/8 PASS** with the same executable and
 45-second limit. The node/ioctl and complete unload controls pass, as do all
@@ -488,7 +488,7 @@ The small initramfs reuses the 64 MiB scratch disk; no runtime disk copy.
 
 ### Cache-maintenance intervention and full sched_ext controls — 2026-09-28
 
-The [new private experiment](../../tests/fixtures/qemu-cache-maintenance.out)
+The [new private experiment](../../../tests/fixtures/qemu-cache-maintenance.out)
 reuses the existing QEMU build and disks; no installed emulator or active
 compiler/build is changed. All old store/decode/plugin modifications are removed.
 System-mode AArch64 IC IVAU now invalidates the corresponding physical RAM
@@ -517,7 +517,7 @@ root counts and unchanged inputs/disks. The retained EvoCC Image executes
 flights; GCC has that visitor inlined. This is whole-boot symbol attribution,
 not elapsed time or a claim that every outlined instruction can disappear.
 Boot-time page-free counts are not attributed to the workload. [Exact counts,
-inputs, commands and limits](../../tests/fixtures/kvm-instruction-count.out).
+inputs, commands and limits](../../../tests/fixtures/kvm-instruction-count.out).
 
 The bounded shared C-HIR repair now distinguishes a runtime call cycle from a
 finite substitution graph. It also repairs optional-inline declaration-chain
@@ -525,7 +525,7 @@ barriers. Nine CLI tests and six native controls pass; original `pgtable.o`
 assembles with identical exports and no visit definition/call. Its text changes
 33068 → 32964 bytes. The Image is not patched from this object; the repairs will
 be integrated using a single uniform compiler. K02/K03 remain OPEN until the
-original all-mode 120-second programs pass. [Fixture and boundaries](../../tests/fixtures/recursive-inline-visitor.out).
+original all-mode 120-second programs pass. [Fixture and boundaries](../../../tests/fixtures/recursive-inline-visitor.out).
 
 Run `20260927T131757Z` is **INTERRUPTED**, not live: its selected `evocc-asm-ssa`
 was a debug executable, not a release build. The first batch had not completed;
@@ -575,7 +575,7 @@ boot remain pending. Host/case-volume free space is 59/26 GiB; no new tree/disk.
 
 During this run, a separate real-container failure injection exposes K1's
 acceptance of OK lines before nonzero container exit. The
-[T05i candidate](../../tests/fixtures/kernel-assembly-verdict.out) passes 51
+[T05i candidate](../../../tests/fixtures/kernel-assembly-verdict.out) passes 51
 focused regressions and real container controls. It is staged as a patch, not
 applied to the live implementation, because its prepared phase fingerprints
 the on-disk file after code has already been loaded. Integrate at a safe boundary;
@@ -603,7 +603,7 @@ K12b's scalar compound-assignment reduction is GREEN in both interpreters and
 native EvoCC/GCC-14/Clang-19. A fresh exact-argv original-object replay still
 contains all eight references: bitmap pointer/array helper knowledge remains
 an optimization gap. The compiler patch must not be reported as a full fix for
-that object. [Small source](../../tests/fixtures/bitmap-constant-mutation.c).
+that object. [Small source](../../../tests/fixtures/bitmap-constant-mutation.c).
 Existing accepted Images and K6 history remain unchanged. K13/K14 are not run.
 
 T04d's implementation now materializes the original `vmlinux_o`/module producer
@@ -612,7 +612,7 @@ C/Make reduction proves the old late replacement and the repaired value 37
 with preserved object hash; all 251 K1 tests pass. The actual Kbuild preparation
 command also exits 0, but its already-regenerated tree is not original-failure
 closure. T04d remains RETEST for the next complete composition after K12b.
-[Commands and limits](../../tests/fixtures/kernel-late-generator.out).
+[Commands and limits](../../../tests/fixtures/kernel-late-generator.out).
 
 K12b's subsequent shared memory-fact repair now removes **all eight** assertion
 references from the exact original object; global symbol names/kinds still
@@ -626,9 +626,9 @@ cleanup, a fresh original replay has the identical assembly hash, preserving
 the executed module's code identity.
 This is a targeted module comparison, **not** a uniform new kernel or K13/K14.
 The payload is only 2.54 MiB and reuses the 64 MiB snapshot scratch disk.
-[Exact repair and module provenance](../../tests/fixtures/bitmap-constant-memory.out).
+[Exact repair and module provenance](../../../tests/fixtures/bitmap-constant-memory.out).
 
-The subsequent [whole-workspace checkpoint](../../tests/fixtures/compiler-health-20260927.out)
+The subsequent [whole-workspace checkpoint](../../../tests/fixtures/compiler-health-20260927.out)
 also passes: 2,718 tests, zero failures, four historical ignored; Clippy/fmt,
 504 Python tests, Ruff, 53 instruction shapes, 150 frozen layout observations
 and 13 isolated offline replays. No new source/workspace/runtime copy is made.
@@ -636,7 +636,7 @@ This health result is not a full-kernel composition or K7/KUnit result.
 
 ### Bounded ublk stalled-task observation — 2026-09-27
 
-The separate [ublk wait-loop observer](../../tests/fixtures/ublk-blocked-observer.out)
+The separate [ublk wait-loop observer](../../../tests/fixtures/ublk-blocked-observer.out)
 also completes a bounded six-pair retry on retained matching kernels: all 12
 original runs and shutdowns pass, no blocked final tasks. It neither reproduces
 nor explains K04. A first reference capture has printk interleaving in its
@@ -660,7 +660,7 @@ unchanged original hotplug/reload sequence passes both baseline and intervention
 this time, so its intermittent NULL fault remains unclosed. K01/K01b/K13 remain
 OPEN. No installed QEMU or contract was changed; the source/build adds 1.2 GiB
 and reuses existing Images/payloads/snapshot disks. [Patch, source mechanism,
-commands and identities](../../tests/fixtures/qemu-instruction-publication.out).
+commands and identities](../../../tests/fixtures/qemu-instruction-publication.out).
 
 ### Prepared-input recovery without repeating completed work — 2026-09-27
 
@@ -671,7 +671,7 @@ mutations and all **250** K1 Python regressions pass. Recovery binds the full
 input snapshot, compiler, both command classes, sealed assembler, preparation
 and retained object hashes; final input convergence/link/boot remain mandatory.
 This is a workflow repair, not new kernel runtime acceptance. Its fixture
-preparation deliberately stands in for Kbuild. [Exact tests and boundary](../../tests/fixtures/kernel-prepared-consumer.out).
+preparation deliberately stands in for Kbuild. [Exact tests and boundary](../../../tests/fixtures/kernel-prepared-consumer.out).
 
 At 2026-09-26 16:52 UTC, the original owner **93550** / worker **93553** remain
 alive, with two compiler children and approximately 3h20m elapsed; host free
@@ -695,7 +695,7 @@ kernel, source or tolerance changed: this is timing-model classification and
 fresh targeted execution, not a repair or a change to historical totals. It
 does not prove every timing fluctuation's physical cause or final K13 success.
 All four boots/shutdowns pass and disk hashes are unchanged; only a tiny
-initramfs was added. [Source and full record](../../tests/fixtures/seccomp-filter-chain.out).
+initramfs was added. [Source and full record](../../../tests/fixtures/seccomp-filter-chain.out).
 
 ### Interrupted uniform build recovered — 2026-09-26
 
@@ -729,7 +729,7 @@ The final gate is **1027 PASS / 0 FAIL / 4 historical ignored**, Clippy/fmt gree
 Both unchanged original KVM commands assemble with identical exported symbols:
 text **166792 → 166060** and **33748 → 33620** bytes. Objects are not installed;
 K02/K03 runtime acceptance stays OPEN. The frozen uniform compiler excludes this
-change. [Permanent test and exact record](../../tests/fixtures/constant-addend-selection.out).
+change. [Permanent test and exact record](../../../tests/fixtures/constant-addend-selection.out).
 
 ### Syscall-user-dispatch architecture boundary — 2026-09-26
 
@@ -743,7 +743,7 @@ The three unchanged originals (`sud_test`, `sud_benchmark`, `get_set_sud`)
 remain FAIL on both kernels; all six flights shut down within their original
 limits. Classification closes, not those original tests or full K7 acceptance.
 No source/config/timeout change or runtime disk copy.
-[Permanent C case and identity-bound results](../../tests/fixtures/syscall-dispatch-unavailable.out).
+[Permanent C case and identity-bound results](../../../tests/fixtures/syscall-dispatch-unavailable.out).
 
 ### Instruction-publication target observation — 2026-09-26
 
@@ -762,7 +762,7 @@ incomplete experiment; the new target-entry witness does not rely on them.
 This localizes the small runtime failure but does not establish the exact QEMU
 race or close sched_ext's original NULL fault. K01/K01b stay OPEN. All flights
 shut down; only a 1.5 MiB payload and tiny plugin were added, with no runtime
-disk copy. [Protocol, commands, source caveat and hashes](../../tests/fixtures/instruction-publication-observer.out).
+disk copy. [Protocol, commands, source caveat and hashes](../../../tests/fixtures/instruction-publication-observer.out).
 
 Live build checkpoint: **6400/7002** first-pass objects assembled, no failures;
 owner **13358**, worker **13361** remain active. A generated-input second pass,
@@ -781,7 +781,7 @@ ignored**, with Clippy/fmt green. Original KVM objects keep all export names/kin
 87/25 shifts become immediate, but text changes only **166792 → 166792** and
 **33804 → 33748** bytes. This is a bounded code-selection repair, not a KVM timeout
 fix. Nothing is installed and the running frozen full build excludes it.
-[C case, commands and hashes](../../tests/fixtures/constant-shift-selection.out).
+[C case, commands and hashes](../../../tests/fixtures/constant-shift-selection.out).
 
 Live build observation during this repair: owner **13358**, worker **13361**;
 first pass **6144/7002 assembled**, zero failures, two active compiler workers.
@@ -803,7 +803,7 @@ source mismatch discussed in the upstream
 [multi-memcg tolerance review](https://lists.openwall.net/linux-kernel/2026/04/15/721).
 Both diagnostic assertions and shutdowns pass. The original FAILs and frozen
 tolerance stay unchanged; no full-run numerator changes. This classifies the
-test bound, not every possible accounting defect. [Case and hashes](../../tests/fixtures/cgroup-stock-capacity.out).
+test bound, not every possible accounting defect. [Case and hashes](../../../tests/fixtures/cgroup-stock-capacity.out).
 
 **Follow-up: K11g classification closed.** A `css_release` stack trace now binds
 each delayed memcg to its last reference. All **5/5 reference and 8/8 subject**
@@ -840,7 +840,7 @@ The source has the pattern addressed by upstream
 but these controls do not establish that patch as the cause or remedy here.
 K11g stays OPEN for the final reference-drop path. No kernel, original timeout,
 test assertion or production runtime changes. Payloads total under 6 MiB and
-reuse the existing 64 MiB scratch disk. [Sources and hashes](../../tests/fixtures/cgroup-stock-displacement.out).
+reuse the existing 64 MiB scratch disk. [Sources and hashes](../../../tests/fixtures/cgroup-stock-displacement.out).
 
 ### Conditional fall-through selection — 2026-09-26
 
@@ -854,7 +854,7 @@ Clippy/fmt pass, with four historical tests still ignored. Original command
 replays retain exported symbols: text 171236 → 166792 and 34636 → 33804 bytes;
 1101/219 redundant adjacent branches become zero. Nothing is installed, and
 the ongoing full build still uses its frozen earlier compiler. This is not
-an original KVM runtime PASS. [Exact evidence](../../tests/fixtures/conditional-fallthrough.out).
+an original KVM runtime PASS. [Exact evidence](../../../tests/fixtures/conditional-fallthrough.out).
 
 ### Concurrent instruction publication outside the kernel probe — 2026-09-26
 
@@ -869,7 +869,7 @@ boot and shut down. These 72 program results add only a 2.3 MiB initramfs and
 reuse the scratch disk. There is no source-specific compiler workaround.
 The measured boundary is sharper, but the invalidation/retranslation hypothesis
 still needs instrumentation and the original sched_ext replay. K01 stays OPEN.
-[Corrected protocol, authority, counts and hashes](../../tests/fixtures/instruction-publish-alias.out).
+[Corrected protocol, authority, counts and hashes](../../../tests/fixtures/instruction-publish-alias.out).
 
 Historical first experiment (subject to the correction above):
 K01b now reproduces a narrower shared discrepancy in an ordinary userspace
@@ -885,7 +885,7 @@ all six flights boot and shut down normally. This removes several confounders,
 but does not identify a specific QEMU fix or close the original sched_ext fault.
 The tiny 2.3 MiB payload and existing scratch disk add no full runtime copy;
 acceptance lanes, original verdicts and budgets are unchanged.
-[Source, protocol, counts and hashes](../../tests/fixtures/instruction-publish-alias.out).
+[Source, protocol, counts and hashes](../../../tests/fixtures/instruction-publish-alias.out).
 
 ### Single-pass automatic representation zeroing — 2026-09-26
 
@@ -898,7 +898,7 @@ The debug compiler's first 60-second timeout remains recorded separately;
 the isolated optimized candidate completes both original commands within that
 unchanged limit. No objects are installed and no runtime improvement is claimed.
 The active uniform survey remains bound to its earlier release digest and
-does not inherit this change. [Source and evidence](../../tests/fixtures/automatic-zero-single-pass.out).
+does not inherit this change. [Source and evidence](../../../tests/fixtures/automatic-zero-single-pass.out).
 
 ### rseq registration-precondition control — 2026-09-26
 
@@ -920,7 +920,7 @@ its failed setup capture is retained separately, not counted as PASS.
 This closes **classification of an upstream direct-run precondition**, not a
 compiler repair, removal from the 970-program population, or new full-campaign
 acceptance. The 2 MiB initramfs reuses the 64 MiB scratch disk; originals use
-the already retained runtime disks. [Source, commands and hashes](../../tests/fixtures/rseq-registration-order.out).
+the already retained runtime disks. [Source, commands and hashes](../../../tests/fixtures/rseq-registration-order.out).
 
 ### Constant field-address instruction selection — 2026-09-26
 
@@ -939,7 +939,7 @@ from the subject tree and checked against their recorded hashes, avoiding the
 concurrently changing reference build. Exported names/kinds still agree; text
 is **187376 → 176264** and **37328 → 34996** bytes. Objects are **not installed**,
 runtime is NOT RUN, and full-run totals are unchanged. EvoMIR 0.40 records the
-bounded selection contract. [Reproducer and measurements](../../tests/fixtures/memory-address-selection.out).
+bounded selection contract. [Reproducer and measurements](../../../tests/fixtures/memory-address-selection.out).
 
 ### Runtime configuration build and artifact transition — 2026-09-26
 
@@ -967,10 +967,10 @@ runtime now passes: 224 PASS / 0 FAIL / 5 SKIP**, versus 218/6/5 previously,
 with the unchanged 45-second program limit and actual boot/shutdown. The five
 skips are explicit `no_viommu` branches in the frozen upstream source. This runs
 the unchanged ELF directly, not the complete campaign's outer wrapper, and is
-not yet an EvoCC runtime claim. [Complete reference record](../../tests/fixtures/iopf-enabled-reference.out).
+not yet an EvoCC runtime claim. [Complete reference record](../../../tests/fixtures/iopf-enabled-reference.out).
 
 The module-to-built-in transition also exposed stale generated `.mod.o.cmd`
-records surviving Kbuild. The [new inventory regression](../../tests/fixtures/kernel-stale-module-inventory.out)
+records surviving Kbuild. The [new inventory regression](../../../tests/fixtures/kernel-stale-module-inventory.out)
 rejects such records outside current `modules.order`; it does not silently
 decrease the denominator. All 243 K1 tests pass, and the prior composition still
 enumerates 6,765 records. After the new build completed, exactly one obsolete
@@ -1001,7 +1001,7 @@ plus Ruff. `roles.json` lists each original command/hash and verifies **7,002
 target-C + 37 HOSTCC**, with zero unreviewed target options and no artifact
 mutation. The earlier 7,039 count was mixed-role, not 37 compiler failures or
 test exclusions. The 847-module count is unchanged. No frame option was admitted
-or silently ignored. [Role regression](../../tests/fixtures/kernel-host-command-role.out).
+or silently ignored. [Role regression](../../../tests/fixtures/kernel-host-command-role.out).
 
 Corrected uniform run `20260926T080946.994870Z` is now executing: owner PID
 **13358**, worker **13361**, same compiler/config and two jobs. At the first
@@ -1028,7 +1028,7 @@ times out for each. All four boot/shutdown predicates pass. Thus K02/K03 remain
 OPEN: this compiler repair does not solve the whole-kernel timing gap. The
 4 MiB payload and 64 MiB snapshot scratch disk are reused. New module runtime
 is NOT RUN; do not pair this Image with an older module payload.
-[Exact commands, composition and outcomes](../../tests/fixtures/kvm-transport-replay.out).
+[Exact commands, composition and outcomes](../../../tests/fixtures/kvm-transport-replay.out).
 
 ### Assembly-aware value transport — 2026-09-26
 
@@ -1053,14 +1053,14 @@ text falls **238032 → 187376** and **41816 → 37328** bytes; this includes th
 preceding direct-edge repair and is not a causal timing measurement. At the
 compile checkpoint they were **not installed**; the subsequent integration above
 does not change any full-run total.
-[Fixture, binary identities and results](../../tests/fixtures/asm-value-transport.out).
+[Fixture, binary identities and results](../../../tests/fixtures/asm-value-transport.out).
 
 ### Original udmabuf HugeTLB workload — 2026-09-24
 
 TODO K11c now closes the two huge-page cases' environment prerequisite. The
 frozen source requests **1024 × 2 MiB = 2 GiB**, before kernel/userspace overhead;
 the ordinary 2 GiB guest and one-page pool cannot satisfy it. The
-[small C reduction](../../tests/fixtures/selftest-hugetlb-reservation.c) shows
+[small C reduction](../../../tests/fixtures/selftest-hugetlb-reservation.c) shows
 that a 4 GiB guest with one reserved hugepage still returns ENOMEM, while the
 same guest with 1024 pages maps, writes and reads the complete original-sized
 allocation on both kernels.
@@ -1071,7 +1071,7 @@ pair improves from **five cases then FAIL to 7/7 PASS each**, under the same
 45-second timeout; all guest shutdowns and disk-hash checks pass. The locked
 K6 machine is unchanged. 241 K1 tests, Ruff and shell syntax pass; only 5.2 MiB
 of diagnostic/initramfs artifacts are added, without disk copies.
-[Identities, controls and limits](../../tests/fixtures/selftest-hugetlb-reservation.out).
+[Identities, controls and limits](../../../tests/fixtures/selftest-hugetlb-reservation.out).
 This is a setup repair on retained Images, not a new full 970-program result.
 
 ### Disk-backed /tmp mountpoint repair — 2026-09-24
@@ -1079,7 +1079,7 @@ This is a setup repair on retained Images, not a new full 970-program result.
 TODO K11a closes a real setup defect rather than waiving openat2. Its unchanged
 `resolve_test.c:54` requests `MS_PRIVATE` on `/tmp`; the full-suite init kept
 ext4 backing but not a mountpoint. `fs/namespace.c:do_change_type` explicitly
-returns EINVAL for that shape. A [small C reduction](../../tests/fixtures/selftest-tmp-mount.c)
+returns EINVAL for that shape. A [small C reduction](../../../tests/fixtures/selftest-tmp-mount.c)
 on both retained Images reproduces the error and shows that self-binding the
 same directory fixes it while preserving inode, data, filesystem and permissions.
 
@@ -1089,7 +1089,7 @@ unchanged-original flights improve from **INVALID_OUTPUT, 0/88 executed to
 `mount_setattr_test` (34) also pass in both repaired environments: four programs,
 240 nested PASS per kernel, no FAIL/SKIP, eight orderly shutdowns. The original
 45-second limits and all test bytes are unchanged; 239 K1 tests and Ruff pass.
-The [record](../../tests/fixtures/selftest-tmp-mount.out) binds exact Images,
+The [record](../../../tests/fixtures/selftest-tmp-mount.out) binds exact Images,
 payloads, original binary and captures. It reuses disks through snapshots,
 creating only 6.1 MiB of small diagnostics, not a new runtime image.
 
@@ -1267,7 +1267,7 @@ The separate ublk diagnostic is
 (`67037a60878fa2dde64344b480d6ab5d9d6a5e7ec4496e0e76788f4d4b0853aa`).
 Neither changes the old 970-program totals or constitutes a new full campaign.
 
-The later [worker-verdict reduction](../../tests/fixtures/ublk-background-exit.out)
+The later [worker-verdict reduction](../../../tests/fixtures/ublk-background-exit.out)
 exposes a separate upstream shell property: each background worker has its own
 `ERR_CODE`, and `wait` with no operands does not forward its failed status.
 Fault-injected additions/removals in the unchanged original yield three child
@@ -2264,7 +2264,7 @@ expected individual behavior. In `kselftest_harness.h`, TEST_F constructors
 use priority 20000, while `__constructor_order_first` uses the default
 priority and sets the direction flag later. `__LIST_APPEND` prepends while
 that flag is false. The previously unexecuted probe is now measured (2026-09-24):
-[minimal C](../../tests/fixtures/selftest-constructor-order.c) reproduces that
+[minimal C](../../../tests/fixtures/selftest-constructor-order.c) reproduces that
 list on GCC14, Clang19 and EvoCC at O0/O2; moving only the detector to priority
 10000 fixes the source-order control in all six pairs. Both interpreters agree.
 Eighteen native observations include six expected REDs, not original passes.
@@ -2273,7 +2273,7 @@ Fresh unchanged-original replays still fail the same ordering-only diff on both
 retained kernels; both boot/shutdown predicates pass and disk hashes are intact.
 The 506-test affected gate, Clippy and fmt pass. This closes TODO K11b's
 **upstream harness-assumption classification**, without modifying the upstream
-test/expectation or changing full-run totals. [Exact identities and evidence](../../tests/fixtures/selftest-constructor-order.out).
+test/expectation or changing full-run totals. [Exact identities and evidence](../../../tests/fixtures/selftest-constructor-order.out).
 
 ## Configuration, architecture and implementation boundaries
 
@@ -2664,14 +2664,14 @@ selection, not new failures or passes. Summary SHA-256:
   an unmeasured PASS.
 
 The wait-cycle attribution is now directly measured (2026-09-24, TODO K11d),
-not just source reasoning. The [bounded C reduction](../../tests/fixtures/ptrace-exec-reap-cycle.c)
+not just source reasoning. The [bounded C reduction](../../../tests/fixtures/ptrace-exec-reap-cycle.c)
 captures `ptrace_attach` in the blocked tracer and `begin_new_exec` in the
 tracee on both retained kernels. A second tracer thread reaps the ptraced
 sibling; that releases the blocked attach, which returns 0 rather than EAGAIN.
 Stop/detach/kill/reap checks confirm no child remains. Fresh unchanged-original
 flights retain **1 PASS / 1 attach-timeout FAIL** on each kernel, both with
 normal shutdown. This closes causal classification, not test PASS or permission
-to modify the frozen kernel API. [Exact stacks and identities](../../tests/fixtures/ptrace-exec-reap-cycle.out).
+to modify the frozen kernel API. [Exact stacks and identities](../../../tests/fixtures/ptrace-exec-reap-cycle.out).
 
 Five additional unmodified BPF/tracing command records now emit and assemble
 with release `77faa6b3479296b0560e55f611254585146f5b0d443dcd72c3d6c82e48f27d8a`:
@@ -3652,7 +3652,7 @@ All flights reuse the **same 64 MiB snapshot disk** and the unchanged Images;
 only small signed diagnostic modules/initramfs payloads are built. Existing TAP
 parsing retains test FAIL even when boot/shutdown is PASS. Source, build, payload,
 counts and serial identities are in
-[the bounded record](../../tests/fixtures/sched-static-key-lifetime.out).
+[the bounded record](../../../tests/fixtures/sched-static-key-lifetime.out).
 This diagnosis exceeded its one-hour slice: retain the reduced failure and next
 read-side entry/retirement question, continue independent TODO work, and do not
 restart the full campaign or label K01 closed.
@@ -3676,7 +3676,7 @@ The original binary plus its exact two runtime dependencies, existing init and
 the diagnostic occupy a **4.1 MiB** payload on the same **64 MiB** scratch disk.
 Both diagnostic TAP results and nonce-bound shutdowns pass. Full commands,
 timings, negative setup result and artifact hashes are in
-[the bounded profile record](../../tests/fixtures/kvm-demand-fault-profile.out).
+[the bounded profile record](../../../tests/fixtures/kvm-demand-fault-profile.out).
 No new full runtime, kernel configuration or campaign has been created.
 
 The corresponding compiler reduction found `!x` lowered as two comparisons
@@ -3694,7 +3694,7 @@ larger size includes other fixes and is not used as this patch's delta.
 **1094 PASS, 0 FAIL, 3 historical ignores** across six affected crates, plus
 clippy and fmt, close this small optimization, not K02. No replacement object
 was installed and the accepted Images are unchanged. See
-[the replay record](../../tests/fixtures/negated-truth-branch.out).
+[the replay record](../../../tests/fixtures/negated-truth-branch.out).
 
 ### Bounded memslot invalidation/destruction profile — 2026-09-23
 
@@ -3712,7 +3712,7 @@ malformed init list and then a short-write diagnostic failure are recorded as
 failed setup attempts, not PASS. The existing fixture now handles ftrace's
 one-filter-per-write behavior and depth-one leaf rendering. The current payload
 is about 5 MiB and reuses the same 64 MiB scratch disk; historical deep logs are
-kept, not a second large runtime. [Full record](../../tests/fixtures/kvm-memslot-fault-profile.out).
+kept, not a second large runtime. [Full record](../../../tests/fixtures/kvm-memslot-fault-profile.out).
 The original all-mode 120-second timeout remains OPEN; next reduce the repeated
 page-table helpers and verify any compiler repair before rebuilding an Image.
 
@@ -3731,7 +3731,7 @@ Broader testing also reduced and repaired two existing explicit-inline E3101
 paths (floating operand SSA transport and integer-complex parameter/result
 initialization). Both interpreters and 18 GCC/Clang/EvoCC O0/O2 native runs pass.
 The affected gate is **1812 PASS / 0 FAIL / 3 historical ignored**, with Clippy
-and fmt green. [Commands, boundaries and identities](../../tests/fixtures/private-leaf-substitution.out).
+and fmt green. [Commands, boundaries and identities](../../../tests/fixtures/private-leaf-substitution.out).
 
 ### Complete BPF program replay and paired contract controls — 2026-09-23
 
@@ -3749,7 +3749,7 @@ cycle events return ENOENT while software events work, recursive locking returns
 EDEADLK, and all four IPv4/IPv6 x SOCKMAP/SOCKHASH bound/unbound controls pass.
 This extends existing reference/source evidence, not a new compiler repair.
 The original 11 failure groups, remaining configuration/runtime questions,
-commands and all identities are in [the record](../../tests/fixtures/bpf-complete-replay.out).
+commands and all identities are in [the record](../../../tests/fixtures/bpf-complete-replay.out).
 
 Eight parser/status RED assertions are corrected: incomplete or duplicated BPF
 summaries cannot be accepted behind an outer PASS, all four mixed-grain counters
@@ -3775,7 +3775,7 @@ The 4 MiB payload reuses the 64 MiB snapshot scratch disk and original binaries;
 no full runtime copy was created. Direct exit/mode observations do not replace
 K13's wrapper/nested verdicts. All four flights ended.
 
-[The record](../../tests/fixtures/kvm-hotpath-original-replay.out) binds commands,
+[The record](../../../tests/fixtures/kvm-hotpath-original-replay.out) binds commands,
 objects, generated inputs, Image, module link and serial captures. Parent
 Image/vmlinux are retained copy-on-write under
 `.build/floating-targeted/kvm-hotpath-20260923/before/`. New modules are not yet
@@ -3787,7 +3787,7 @@ still requires final uniform composition before new full claims.
 
 Two small real-API observers now close the **classification** of the remaining
 build-id/stream assumptions, not full BPF acceptance. The
-[source-bound record](../../tests/fixtures/bpf-runtime-ordering.out) preserves
+[source-bound record](../../../tests/fixtures/bpf-runtime-ordering.out) preserves
 commands, hashes, failed setup attempts, original results and claim limits.
 
 For `stacktrace_build_id`, both Images return seven build-id frames from the
@@ -3815,7 +3815,7 @@ K10 still needs complete execution within 300 seconds, plus K12 configuration.
 
 ### Static-key publication phase isolation — 2026-09-23
 
-The [phase-bounded signed module](../../tests/fixtures/sched-static-key-phases.out)
+The [phase-bounded signed module](../../../tests/fixtures/sched-static-key-phases.out)
 uses the same payload on GCC/EvoCC and three accelerator modes. Multi-thread
 TCG reports 753,386 / 549,995 missing pointers, and disabling reader preemption
 does not cure it; the release/acquire memory-gate controls pass. Nearly all
@@ -3846,7 +3846,7 @@ read-only variable controls confirm kexec's x86/ppc64le guard and the native-x86
 guards around prctl and the two Intel thermal collections. The prctl conclusion
 is deliberately about this frozen recipe, not every individual API/source.
 
-[The source-bound record](../../tests/fixtures/selftest-build-guards.out)
+[The source-bound record](../../../tests/fixtures/selftest-build-guards.out)
 contains Makefile identities, the exact control matrix and capture hash.
 No source guards, historical build exits, program population or PASS counts
 change. K12a closes classification; K12's new configuration still needs its
@@ -3861,7 +3861,7 @@ assertions pass. The unchanged upstream `short_splice_read.sh` and helper also
 exit zero under the original five-second limit. Its old paired FAIL explicitly
 reported the missing module, before trying the absent sysfs objects.
 
-[The small source-bound record](../../tests/fixtures/module-sysfs-splice.out)
+[The small source-bound record](../../../tests/fixtures/module-sysfs-splice.out)
 binds the module, Image, config, original inputs and serial. Only the GCC
 reference is executed here; the new uniform EvoCC composition is still building
 and must supply its own matching module. K12 and the old full-run totals remain
@@ -3870,7 +3870,7 @@ snapshot scratch disk; all its processes exited without a large runtime copy.
 
 ### PID namespace recycling boundary and bounded progress — 2026-09-26
 
-The [1024-cycle C reduction](../../tests/fixtures/pidfd-recycle-progress.out)
+The [1024-cycle C reduction](../../../tests/fixtures/pidfd-recycle-progress.out)
 passes in both root and fresh PID/mount namespaces on the retained pair. Root
 `pid_max` is 32768, but each new namespace is initialized to 4194304 by the
 frozen kernel. The original's 32768-bound search explicitly skips when it

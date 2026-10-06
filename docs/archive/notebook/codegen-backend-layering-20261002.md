@@ -3,8 +3,8 @@
 Implementation: `42a003d2` (register description), `cb65735d`, `a1717dc1`,
 `16cc9b2b` (instruction descriptors, SSA destruction, allocation and verifier),
 `efcf8c57` (ABI tables, argument cursor, frame driver; RED `cc02556e`).
-[Plan](../../tests/contracts/codegen-n03a-20261002.json);
-[receipt](../../tests/contracts/codegen-n03a-20261002-receipt.json); step records
+[Plan](../../../tests/contracts/codegen-n03a-20261002.json);
+[receipt](../../../tests/contracts/codegen-n03a-20261002-receipt.json); step records
 [1](codegen-n03a-regfile-20261002.md) and [2](codegen-n03a-machine-20261002.md).
 `targets/aarch64/{regfile,insts,abi-darwin,abi-linux,profile-kernel}` generate
 every migrated table; `src/generic/` holds SSA destruction, linear scan, spill

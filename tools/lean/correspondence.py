@@ -5,7 +5,7 @@ Runs the vector generator, the Lean evaluator and the three Rust runners over
 the same inputs, compares every file pairwise with tools/lean/diff.py's rules
 (an abstention is neither an agreement nor a difference) and writes
 tests/contracts/lean-correspondence-receipt.json. This is test evidence about
-assumption A7 of docs/lean-plan.md, never a proof: it says how many vectors
+assumption A7 of docs/archive/lean-plan.md, never a proof: it says how many vectors
 the producer's known-bits analysis, the checker's facts and the interpreter
 answered exactly as the Lean definitions the theorems are about.
 
@@ -117,7 +117,7 @@ def main() -> int:
     receipt = {
         "schemaVersion": 1,
         "segment": "C",
-        "authority": "docs/lean-plan.md, sections 2 and 6; assumption A7 of spec/evoir.md 11.7",
+        "authority": "docs/archive/lean-plan.md, sections 2 and 6; assumption A7 of spec/evoir.md 11.7",
         "meaning": "differential test evidence between the Rust implementations and the Lean model; not a proof",
         "run": dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "commit": head,

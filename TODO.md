@@ -96,7 +96,7 @@ build, runtime retirement or large disk is authorized by this exception.
 ## Execution order
 
 **October 4 priority:** the first public version now requires the
-[V00–V06 compilation verification path](docs/lean-plan.md#first-public-release-verification).
+[V00–V06 compilation verification path](docs/archive/lean-plan.md#first-public-release-verification).
 Start with V00; close baseline semantic preservation before integrating proved
 rewrites. These are OPEN implementation/proof tasks, not additional audit layers.
 They use the existing AUDIT/ACCEPTANCE scheduling buckets, without a new tracker.
@@ -1200,7 +1200,7 @@ complete K7/KUnit success; these configurations and their Images are distinct.
     strptime cases, two strtold rounding cases, two shell/wordexp cases, one powf
     exception case, two daemon timeouts and two fork/rlimit expectation failures.
     The exact observations and unproven root causes are recorded in the
-    [benchmark notebook](docs/notebook/benchmark-evaluation-20260915.md#2026-09-27-musl-reference-failure-ledger).
+    [benchmark notebook](docs/archive/notebook/benchmark-evaluation-20260915.md#2026-09-27-musl-reference-failure-ledger).
     Add a separate genuine shared-library/loader lane for DSO tests; do not
     relabel those static-lane failures as compiler passes. Diagnose the remaining
     common failures against pinned source and environment without weakening the
@@ -1938,7 +1938,7 @@ design branches, not newly enabled semantics or required speculative projects;
 record a justified not-needed disposition separately from implementation PASS.
 
 **Paused on 2026-10-01** by the owner decision recorded in the
-[codegen quality plan](docs/codegen-quality-plan.md): the latency half of R02,
+[codegen quality plan](docs/archive/codegen-quality-plan.md): the latency half of R02,
 any second slice of R02e, and R03 with R03a–R03h. They keep their `LATER`
 state and all retained evidence; nothing is relabeled. R01/G2 continues on the
 kernel track, `g0.ub.v1` stays shipped as opt-in and `p0.scalar.v4` is frozen.
@@ -1959,7 +1959,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     an isolated fresh-target package gate passed 560 tests. These are distinct,
     overlapping qualification scopes, not a unique-case sum. R02 application
     admission and the three effect-ceiling preflights remain open.
-    [Review closure and exact scope](docs/notebook/eqsat-review-closure-20260929.md).
+    [Review closure and exact scope](docs/archive/notebook/eqsat-review-closure-20260929.md).
     Implemented design P0: one driver/evaluator persistent chain runner with policy
     identity including transaction count, proof/report export and wrapper-owned
     verification. Separate transaction result, stop reason and root counts;
@@ -1984,7 +1984,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     full workspace gate has four ignored/NOT_RUN campaigns. The
     native smoke is not Linux-target or G2 acceptance. Integration also reduced
     and fixed fresh-definition binding and stale normalized-fact failures.
-    [Implementation and commands](docs/notebook/verified-eqsat-implementation-20260929.md);
+    [Implementation and commands](docs/archive/notebook/verified-eqsat-implementation-20260929.md);
     [sealed fixture](tests/fixtures/eqsat-chains/verified-chain/README.md).
 
 - [ ] **R02 — Q2 object code-size evaluation** — `LATER`, P3.
@@ -2005,7 +2005,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     with the real-capture skip executed separately (6/6 tests pass).
     Mixed-link coverage and host-debug compile costs
     are explicit: this is not a timed GCC comparison or whole-library PASS.
-    [Qualified protocol, failures and claim ceiling](docs/notebook/eqsat-r02-linux-pilot-20260930.md);
+    [Qualified protocol, failures and claim ceiling](docs/archive/notebook/eqsat-r02-linux-pilot-20260930.md);
     [tracked checkpoint](tests/contracts/eqsat-r02-pilot-receipt-20260930.json).
     Implemented requirements:
     Freeze effective UB-check/lowering profiles, shared chain identity, semantic
@@ -2032,8 +2032,8 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     retained with zero timing samples. This is not Linux/application performance
     acceptance or an EqSat speedup; R02a was OPEN at that checkpoint. The broader
     pilot requirements named there are now exercised within the registered scope above.
-    [Foundation scope and gates](docs/notebook/eqsat-r02a-foundations-20260929.md).
-    [Native pipeline and limits](docs/notebook/eqsat-native-calibration-20260929.md).
+    [Foundation scope and gates](docs/archive/notebook/eqsat-r02a-foundations-20260929.md).
+    [Native pipeline and limits](docs/archive/notebook/eqsat-native-calibration-20260929.md).
     September 29 checkpoint: the default-cap diagnostic collector reuses the
     bench entry point and lock, with committed bounded input manifests and
     scoped/unknown counters. Native performance manifests and runners were still
@@ -2041,7 +2041,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     EqSat-off export now records a zero-transaction identity chain over the
     exact codegen IR. Independent byte-identity audit reports zero EVP proof
     successes; checked/unchecked fan-out was still open then and is now closed by R02d.
-    [Scope and protocol](docs/notebook/eqsat-cap-census-20260929.md).
+    [Scope and protocol](docs/archive/notebook/eqsat-cap-census-20260929.md).
 
   - [x] **R02b — Opportunity/effect-ceiling preflight and A/A plus A/B pilot** — `DONE`, 2026-09-30, bounded pilot with negative/inconclusive outcomes.
     **Review correction:** DONE here describes the historical bounded implementation
@@ -2062,7 +2062,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     INCONCLUSIVE; no AI campaign is admitted. All 24 timing comparisons are
     complete: only 2/12 A/A are within the frozen effect floor and 12/12 A/B
     are inconclusive. Code-section reductions are real, not latency evidence.
-    [Results, resource stops and retained failures](docs/notebook/eqsat-r02-linux-pilot-20260930.md).
+    [Results, resource stops and retained failures](docs/archive/notebook/eqsat-r02-linux-pilot-20260930.md).
     Implemented preflight contract, with every unresolved measurement retained:
     After R01a/R02a, first report whether default transient and certificate caps
     actually bind, with separate EVP fuel and chain counts. Freeze inputs and
@@ -2102,7 +2102,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     leaves policy closure INCONCLUSIVE; rule/shortcut utility also remains
     INCONCLUSIVE. No AI or native timing claim follows. The original failed
     auditor, raw experiment and historical timing pilot are retained unchanged.
-    [Repair, versioned replay and cap table](docs/notebook/eqsat-r02-review-repair-20260930.md#independent-completion-acceptance).
+    [Repair, versioned replay and cap table](docs/archive/notebook/eqsat-r02-review-repair-20260930.md#independent-completion-acceptance).
     First close the four September 30 REDs: integrity/resource failures cannot
     become template UNKNOWN, zombie-only process groups cannot count as live,
     every UB diagnostic guard is counted independently, and inconsistent public
@@ -2123,11 +2123,11 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     latency outcomes are INCONCLUSIVE. The owned VM exited normally. The
     Python-version diagnostic rounding failure is retained; unchanged
     split-runtime replay verifies the original samples without a gate change.
-    [Frozen result and receipt identities](docs/notebook/eqsat-r02-steady-protocol-20260930.md#frozen-single-ab-result).
+    [Frozen result and receipt identities](docs/archive/notebook/eqsat-r02-steady-protocol-20260930.md#frozen-single-ab-result).
     No rerun or larger budget follows. Final R02/Q2/G2 is not accepted by this
     bounded task. Formal policy/rule/shortcut verdicts remain INCONCLUSIVE,
     with all R03 activities NOT_ADMITTED; audit tooling is capped.
-    [Adjudication and three owner decisions](docs/notebook/eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision).
+    [Adjudication and three owner decisions](docs/archive/notebook/eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision).
     Implemented protocol retained for reproducibility:
     After R02b1, make each measured process repeat internally for at least 1–2
     seconds with setup/startup excluded. Pin a guest CPU, keep host capture/hash
@@ -2145,7 +2145,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     secondary. No further VM A/B timing; latency NOT_MEASURABLE_ON_THIS_LANE.
     24 GCC/Clang object pairs are byte-identical; original A/B object pairs
     rechecked under S1. Full workspace 2,870 PASS / 0 FAIL / 4 ignored.
-    [Frozen size table and claim ceiling](docs/notebook/eqsat-size-references-20261001.md).
+    [Frozen size table and claim ceiling](docs/archive/notebook/eqsat-size-references-20261001.md).
     This is TU size evidence, not new full-application correctness or parity.
 
   - [x] **R02d — Implement and verify the stated native UB-check profiles** — `DONE`, 2026-09-30.
@@ -2157,7 +2157,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     96), each bound to the same canonical verified IR, chain and bundle, with
     a passing checked execution for that input before unchecked use. Profile
     identities stay separate; EqSat-off uses a zero-proof identity chain.
-    [Native evidence, exact boundaries and mutations](docs/notebook/eqsat-r02-linux-pilot-20260930.md).
+    [Native evidence, exact boundaries and mutations](docs/archive/notebook/eqsat-r02-linux-pilot-20260930.md).
     Implemented explicit effective-profile plumbing and receipt identity;
     no switch or source/IR obligation is invented/deleted by the harness.
     REDs: ignored flag, missing identity, checked traps,
@@ -2187,14 +2187,14 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     **952 / 1,608 / 80**. Maximum per-TU saving **0.800%**, below the expected
     1–3%; no relaxation follows. Unchecked sizes are unchanged. No second slice
     is authorized, designed or scheduled; no R03/timing/kernel run.
-    [Six-TU table, commits, gates and claim ceiling](docs/notebook/eqsat-certified-guards-20261001.md).
+    [Six-TU table, commits, gates and claim ceiling](docs/archive/notebook/eqsat-certified-guards-20261001.md).
 
 - [ ] **R03 — Q3 measured self-improvement** — `LATER`, P3.
   **OWNER_DECIDED:** current V1 is a completed, frozen negative-admission study;
   this unchecked parent is the unachieved positive improvement milestone.
   All three tracks are formally INCONCLUSIVE/NOT_ADMITTED; do not start R03a/b/c/d
   or expand the census/auditors to force an affirmative result. See the
-  [formal stop and decision record](docs/notebook/eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision).
+  [formal stop and decision record](docs/archive/notebook/eqsat-r02-review-repair-20260930.md#formal-three-track-adjudication-and-stop-decision).
   Freeze the baseline, candidate policy and evaluation protocol, then demonstrate
   validated improvement on the declared workloads without correctness regression.
   Close with measured results and independent checking; more rewrites or an
@@ -2302,7 +2302,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
 
 ## First public release verification
 
-Authority and exact envelope: [V1 verification plan](docs/lean-plan.md#first-public-release-verification).
+Authority and exact envelope: [V1 verification plan](docs/archive/lean-plan.md#first-public-release-verification).
 V00 to V06 are the seven release-blocking tasks. The first result must
 be a proved baseline path for a declared subset, then a proved optimized path;
 neither an allocation-only theorem nor existing rule proofs close the parent
@@ -3040,7 +3040,7 @@ builtins are outside `core-v1`.
 
 ## Codegen quality track — next quarter
 
-Authority: [codegen quality plan](docs/codegen-quality-plan.md) and the
+Authority: [codegen quality plan](docs/archive/codegen-quality-plan.md) and the
 [internal target description contract](spec/target.md). The frozen S5
 comparison puts unchecked EvoCC object text at 2.04–2.43× GCC-14 `-O2` by
 library family (not per TU; N01 records 1.986–2.668× for the five library TUs),
@@ -3101,7 +3101,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   preflight. This was the initial ordering; the bounded slices below are now
   dispositioned. Negative results are closure of this batch, not implementation
   of every general transform or achievement of the product target.
-  [Final bounded status and six-TU table](docs/codegen-quality-plan.md#11-status-and-order-of-work-2026-10-03):
+  [Final bounded status and six-TU table](docs/archive/codegen-quality-plan.md#11-status-and-order-of-work-2026-10-03):
   the admitted cumulative C3 configuration leaves five library ratios at
   1.642–2.478; the measured C5 configuration leaves 1.639–2.472 but misses
   three compile-cost bounds and is **not admitted**. Default output is unchanged.
@@ -3120,10 +3120,10 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     full workspace gate. No size change may ride along.
     [Frozen plan](tests/contracts/codegen-n03a-20261002.json);
     [receipt](tests/contracts/codegen-n03a-20261002-receipt.json);
-    [result](docs/notebook/codegen-backend-layering-20261002.md), with
-    [preparation](docs/notebook/codegen-n03-foundations-20261002.md),
-    [step-1](docs/notebook/codegen-n03a-regfile-20261002.md) and
-    [step-2](docs/notebook/codegen-n03a-machine-20261002.md) records.
+    [result](docs/archive/notebook/codegen-backend-layering-20261002.md), with
+    [preparation](docs/archive/notebook/codegen-n03-foundations-20261002.md),
+    [step-1](docs/archive/notebook/codegen-n03a-regfile-20261002.md) and
+    [step-2](docs/archive/notebook/codegen-n03a-machine-20261002.md) records.
     `targets/aarch64/{regfile,insts,abi-darwin,abi-linux,profile-kernel}`
     generate every migrated table; `src/generic` holds SSA destruction, linear
     scan, spill placement, slot compaction, the independent verifier, the
@@ -3145,7 +3145,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     read-only original-source/IR opportunity census. No transform is implemented
     before a nonzero source-permitted, structurally eligible, TV-admitted result.
     The bounded preflight is closed as `NO_ADMITTED_OPPORTUNITY`
-    ([record](docs/notebook/codegen-negative-preflight-20261002.md)); the
+    ([record](docs/archive/notebook/codegen-negative-preflight-20261002.md)); the
     full-workspace gate it was waiting for has since passed at `efcf8c57`.
     N01 still counts 3/1/85/24/23 TU-local bodies absent from the reference
     objects, so the negative result is about the frozen admission rules, not
@@ -3163,7 +3163,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     allocator's spill-retry loop did not converge. AArch64 is unaffected, but
     a target with few registers would be; give it a reduced reproducer and a
     bounded-termination fix in this slice.
-    [N03a note](docs/notebook/codegen-backend-layering-20261002.md).
+    [N03a note](docs/archive/notebook/codegen-backend-layering-20261002.md).
     T1 is frozen in the [bounded-progress plan](tests/contracts/codegen-n03c-termination-20261002.json):
     bounded synthetic RED, saturated call-preparation repair and refusal of
     recursive spill-temporary expansion. No copy preference or size claim;
@@ -3172,7 +3172,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     The repair now passes all 59 tests in the six focused allocator/ABI/SSA
     suites, including successful saturated scalar/wide/mixed call setup and
     finite refusal of impossible local pressure. T1 correctness is closed in
-    the [result](docs/notebook/codegen-allocation-termination-20261003.md) and
+    the [result](docs/archive/notebook/codegen-allocation-termination-20261003.md) and
     [receipt](tests/contracts/codegen-n03c-t1-20261003-receipt.json): full workspace
     3,020/0/5 ignored, both native corpora 384/384, all 768 corpus and 24
     six-TU hashes match C2 OFF. All 24 original harness executions pass.
@@ -3185,7 +3185,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     REDs. Same-class, already assigned locations are optional preferences
     behind `--regalloc-opt=copy-hints`, with unchanged interference checks,
     spill policy and independent verifier. T2 is now **closed opt-in** in the
-    [result](docs/notebook/codegen-copy-hints-20261003.md) and
+    [result](docs/archive/notebook/codegen-copy-hints-20261003.md) and
     [receipt](tests/contracts/codegen-n03c-t2-20261003-receipt.json): full workspace
     3,028/0/5 ignored; native ON/OFF each 384/384 on both OS lanes, all OFF
     hashes match T1; 72 original selected-TU harness executions pass with
@@ -3201,7 +3201,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     stores, edge uses and reserved expansion scratch block reuse. No live
     interval, assignment choice or independent verifier rule changes.
     T3 is now **closed opt-in** in the
-    [result](docs/notebook/codegen-reload-reuse-20261003.md) and
+    [result](docs/archive/notebook/codegen-reload-reuse-20261003.md) and
     [receipt](tests/contracts/codegen-n03c-t3-20261003-receipt.json): full workspace
     3,039/0/5 existing ignored; 73 focused and 4 public-driver tests PASS;
     native ON/OFF each 384/384 on both platforms, all OFF hashes unchanged.
@@ -3226,7 +3226,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     opt-in GPR constant materialization using MOVZ/MOVK, MOVN/MOVK or a logical
     immediate ORR, with generated pattern/cost descriptors. Default OFF;
     frozen RED, OFF identity, native, size and interaction gates required.
-    C1 opt-in is closed: [result](docs/notebook/codegen-constants-20261002.md),
+    C1 opt-in is closed: [result](docs/archive/notebook/codegen-constants-20261002.md),
     [receipt](tests/contracts/codegen-n03d-c1-20261002-receipt.json).
     Full workspace 3,005 PASS / 0 FAIL / 5 ignored; Darwin/Linux ON and OFF
     each agree on 384/384, with OFF byte identity. All six original TU captures
@@ -3243,7 +3243,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     implementation `b478bc7c` now has full-workspace 3,018/0/5 ignored and
     both 384-case native corpora ON/OFF green; all OFF historical hashes
     match and all six TU captures complete without proof/bundle failures.
-    [C2 result](docs/notebook/codegen-local-selection-20261002.md),
+    [C2 result](docs/archive/notebook/codegen-local-selection-20261002.md),
     [receipt](tests/contracts/codegen-n03d-c2-20261002-receipt.json):
     **CLOSED_WITH_COMPILE_BOUND_MISS**, not full admission. Local-only B
     checked zstd-compress is 1.7977x OFF versus the frozen 1.25x ceiling;
@@ -3255,7 +3255,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     remaining select/compare opportunities require their own measured scope.
 
     C3 is closed opt-in: [plan](tests/contracts/codegen-n03d-extensions-20261003.json),
-    [result](docs/notebook/codegen-extension-reuse-20261003.md),
+    [result](docs/archive/notebook/codegen-extension-reuse-20261003.md),
     [receipt](tests/contracts/codegen-n03d-c3-20261003-receipt.json), subject
     `93847196`. Exact local repeated Extend/Bfx/low-mask reuse; no opcode,
     interpreter, ABI, allocator or registry change. Full workspace
@@ -3271,7 +3271,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     Retired 792 idle intermediate objects; current baselines and records kept.
     Scoped disk net +325,369,856 bytes; about 32 GiB free at closure.
     C4 residual control preflight is closed positive:
-    [result](docs/notebook/codegen-control-preflight-20261003.md),
+    [result](docs/archive/notebook/codegen-control-preflight-20261003.md),
     [receipt](tests/contracts/codegen-n03d-c4-20261003-receipt.json).
     Subject `2ce2385c`; full workspace 3,051/0/5 existing ignored, 16 Python
     PASS. Forty-eight retained object rows reconcile with S1; current
@@ -3284,7 +3284,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     no object rebuild, full disassembly retention or new timing samples.
 
     C5 is closed with compile-cost misses: [plan](tests/contracts/codegen-n03d-controls-20261003.json),
-    [result](docs/notebook/codegen-control-selection-20261003.md),
+    [result](docs/archive/notebook/codegen-control-selection-20261003.md),
     [receipt](tests/contracts/codegen-n03d-c5-20261003-receipt.json).
     Implementation `d71b40c4`, measured clean subject `21edc5e8`; EvoMIR 0.64.
     Bounded adjacent private-use Boolean branches and inclusive imm12 intervals
@@ -3341,7 +3341,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
     both profiles. B unchecked frame savings are 0/3,100/1,208/18,372/7,080/
     4,660 bytes; five library ratios remain 1.717–2.546, above the 1.4 goal.
     [Receipt](tests/contracts/codegen-n03f-20261002-receipt.json) and
-    [one-page result](docs/notebook/codegen-frame-variants-20261002.md)
+    [one-page result](docs/archive/notebook/codegen-frame-variants-20261002.md)
     separate frame gains from P0, preserve the original failed Clippy run and
     source-bridge mismatch, and record the limited default-admission proposal.
     **Defaults stay off; no kernel or Darwin signed-unwind acceptance.**
@@ -3388,7 +3388,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   lowering rule. Lean statements for patterns start on RISC-V and only after
   those steps. No hand-written ISA specification, no full-ISA proofs.
   E1's [frozen plan](tests/contracts/codegen-n07-encodings-20261003.json)
-  is closed by [implementation `4b945e9e`](docs/notebook/codegen-encodings-20261003.md)
+  is closed by [implementation `4b945e9e`](docs/archive/notebook/codegen-encodings-20261003.md)
   and its [receipt](tests/contracts/codegen-n07-e1-20261003-receipt.json):
   full workspace 3,032 PASS / 0 FAIL / 5 ignored; 52 focused Rust and 45
   Python PASS. Both 384-case native corpora and 24 A/B/profile TU objects
@@ -3397,7 +3397,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   BinaryImm validator repair change no selection or defaults. Retired 24
   duplicate before-TU objects; keep 792 current objects as the sole open
   E2/E3 migration baselines. Scoped disk net +60,121,088 bytes; about 74 GiB free.
-  E2 is [closed for its bounded integer model](docs/notebook/codegen-vendor-model-20261003.md):
+  E2 is [closed for its bounded integer model](docs/archive/notebook/codegen-vendor-model-20261003.md):
   [receipt](tests/contracts/codegen-n07-e2-20261003-receipt.json), implementation
   `060f9065`; 2,600 exact cases per interpreter/model/native/QEMU lane, four
   boundary refusals, full workspace 3,032/0/5 ignored and 51 Python PASS.
@@ -3405,7 +3405,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   No-op generation preserves mtimes. Retired duplicate E1 TU objects and
   temporary model products; current E2 replacements plus native baselines
   remain for E3. Scoped disk net at most +164,175,872 bytes; about 67 GiB free.
-  E3 is [closed negative](docs/notebook/codegen-bounded-smt-20261003.md):
+  E3 is [closed negative](docs/archive/notebook/codegen-bounded-smt-20261003.md):
   implementation `98542c3f`; [inventory](tests/contracts/codegen-n07-e3-verdicts-20261003.json)
   covers 59 instruction families, 44 specification rows, nine patterns and
   28 specialized paths. The pinned SMT generator fails before the first
@@ -3459,14 +3459,14 @@ in the receipts/README so this index cannot independently drift.
   LARGE `lu` and `ludcmp` pass their recorded replays. Full LLVM remains B01/B10,
   and `floyd-warshall` remains B02. [Evidence][apps].
 
-[kernel]: docs/notebook/kernel-selftest-gaps-20260914.md
-[apps]: docs/notebook/benchmark-evaluation-20260915.md
-[semantics]: docs/notebook/remaining-semantics-research-brief-20260921.md
-[roadmap]: docs/roadmap.md
+[kernel]: docs/archive/notebook/kernel-selftest-gaps-20260914.md
+[apps]: docs/archive/notebook/benchmark-evaluation-20260915.md
+[semantics]: docs/archive/notebook/remaining-semantics-research-brief-20260921.md
+[roadmap]: docs/archive/roadmap.md
 [selftest-receipt]: tests/contracts/kernel-selftest-full-receipt.json
 [kunit-receipt]: tests/contracts/kernel-expanded-kunit-receipt.json
 [strlen]: tests/fixtures/fortify-nonliteral-strlen-ice.c
 [strlen-out]: tests/fixtures/fortify-nonliteral-strlen-ice.out
-[closure-batch]: docs/notebook/todo-closure-batch-20260927.md
-[complex-prompt]: docs/notebook/remaining-complex-research-prompt-20260927.md
-[eqsat-plan]: docs/framing-draft.md
+[closure-batch]: docs/archive/notebook/todo-closure-batch-20260927.md
+[complex-prompt]: docs/archive/notebook/remaining-complex-research-prompt-20260927.md
+[eqsat-plan]: docs/verified-optimization-design.md

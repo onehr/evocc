@@ -384,7 +384,7 @@ def main() -> int:
         "schemaVersion": 2,
         "rung": PIN["rung"],
         "subject": PIN["subject"],
-        "authority": "docs/roadmap.md, milestone ladder",
+        "authority": "docs/archive/roadmap.md, milestone ladder",
         "run": run_id,
         "pin": PIN,
         "driverSha256": mixed.sha256(arguments.evocc),

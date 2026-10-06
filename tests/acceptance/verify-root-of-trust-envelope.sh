@@ -53,7 +53,7 @@ crates/evocc-proof/tests
 crates/evocc/tests'
 REQUIRED_FILES='Cargo.toml
 Cargo.lock
-docs/roadmap.md
+docs/archive/roadmap.md
 contracts/build-environment.json
 contracts/kernel-target.json'
 REQUIRED_TOOLS='bash
@@ -105,7 +105,7 @@ if [ -n "$($GIT -C "$PROJECT_ROOT" status --porcelain=v1 --untracked-files=all -
     tests crates/evocc-common/tests crates/evocc-lex/tests \
     crates/evocc-parser/tests crates/evocc-egraph/tests \
     crates/evocc-proof/tests crates/evocc/tests Cargo.toml Cargo.lock \
-    docs/roadmap.md contracts/build-environment.json contracts/kernel-target.json)" ]; then
+    docs/archive/roadmap.md contracts/build-environment.json contracts/kernel-target.json)" ]; then
   printf 'a frozen path has uncommitted drift\n' >&2
   exit 1
 fi

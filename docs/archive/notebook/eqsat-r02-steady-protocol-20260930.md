@@ -173,7 +173,7 @@ CLI. It changes no audit logic and adds no audit tool or retry.
 - Original failed audit stderr SHA-256:
   `9436459220f7dbaffc92b6cc7605bb496e29c9434daa6b148e811193cd9f0213`.
 
-The separately committed [A/B plan](../../tests/contracts/eqsat-steady-ab-20260930.json)
+The separately committed [A/B plan](../../../tests/contracts/eqsat-steady-ab-20260930.json)
 has SHA-256 `84a5dc34affb06189e29c558b5a444600aaaef9ea8794fa30ce08585ab5b7713`.
 It pins 1,120 prerequisite artifacts and the same all-one eight-transaction
 control. Execute it once, with zero retries and no native-result selection.

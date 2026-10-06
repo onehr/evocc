@@ -7,7 +7,7 @@ traces, separate policy/rule/shortcut verdicts and native materialization.
 
 ## Frozen collector smoke
 
-[Manifest](../../tests/contracts/eqsat-cap-smoke-20260929.json): 32 **previously
+[Manifest](../../../tests/contracts/eqsat-cap-smoke-20260929.json): 32 **previously
 exposed regression** seeds, 9300 through 9331, argument seed 0, 200,000 interpreter
 steps, default instruction-count policy, current v4 registry. The four coupled
 limits remain search 100,000 bridge nodes / 1,024 rewrite events and admission
@@ -61,7 +61,7 @@ The result is **NO_HITS_IN_THIS_POPULATION**, not FINITE_ENUMERATION_SUFFICIENT
 or NO_OBSERVABLE_EFFECT. All three track preflight verdicts remain NOT_RUN.
 
 The complete raw report and collector receipt are retained in
-[the fixture directory](../../tests/fixtures/eqsat-chains/cap-census-20260929/).
+[the fixture directory](../../../tests/fixtures/eqsat-chains/cap-census-20260929/).
 All capture files together occupy 224,038 bytes. The collector/bench/chain/TODO
 Python gate passed 93 tests before this run. A new imported-CLI test initially
 exposed a module-path error; fixing package selection made both direct CLI and

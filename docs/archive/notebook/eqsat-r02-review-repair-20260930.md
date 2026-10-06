@@ -280,7 +280,7 @@ errors or skips (1,751.035 seconds). Its stdout SHA-256 is
 The exact successful report is published as the capture's `audit.json`, SHA-256
 `3a7f1ea800af56ce2e4d591a67fdb5cf38392c708fc00c8588720624fd97f77d`.
 It binds the original manifest and the committed
-[audit supplement](../../tests/contracts/eqsat-completion-reaudit-20260930.json).
+[audit supplement](../../../tests/contracts/eqsat-completion-reaudit-20260930.json).
 
 Independent replay confirms 1,024 suite evaluations, 6,144 policy chains,
 8,854 proof successes, 380 code classes and 966 backend objects. All 1,222
@@ -306,7 +306,7 @@ for the original signature vocabulary; no budget or grammar was expanded.
 
 R02b1's implementation and measurement task is closed with those negative
 research conclusions retained. R02a1 proceeds using the separately committed
-[steady build plan](../../tests/contracts/eqsat-steady-build-20260930.json),
+[steady build plan](../../../tests/contracts/eqsat-steady-build-20260930.json),
 which pins 236 actual inputs and fresh fixed-default B code. Native timing is
 still NOT RUN at this checkpoint; no historical millisecond observation is
 promoted to acceptance.

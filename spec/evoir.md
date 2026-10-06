@@ -7137,7 +7137,7 @@ publishes a new registry whose side conditions exclude the unproved
 instances, under a new digest that both sides interpret identically. No
 enabling condition is ever implied under an old digest, and an independent
 proof gate may fail without failing any build. The receipt is
-`tests/contracts/lean-p0-receipt.json`; the plan is `docs/lean-plan.md`.
+`tests/contracts/lean-p0-receipt.json`; the plan is `docs/archive/lean-plan.md`.
 
 ### 11.7 Trusted Base
 
@@ -7270,7 +7270,7 @@ their sections, and the revision history and the review transcript are
 removed. Prose that disagreed with the implementation is corrected (Sections
 1.7, 3.5, 3.7, 3.8, 5.2, 5.3, 6.3, 9.3, 11.1 to 11.4 and Appendix A). The
 review transcript is archived, not normative, in
-`docs/notebook/evoir-spec-review-20261001.md`. No registry byte changes.
+`docs/archive/notebook/evoir-spec-review-20261001.md`. No registry byte changes.
 
 The complete history is in git: `git log -- docs/evoir-spec.md spec/evoir.md`.
 

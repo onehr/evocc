@@ -1,8 +1,8 @@
 # N07 E2: bounded vendor-model execution
 
 Implementation `060f9065`; plan `542541a9`; RED `e961b1a8` / `cec6a473`;
-measurement plans `3105e33f`. [Plan](../../tests/contracts/codegen-n07-model-20261003.json),
-[receipt](../../tests/contracts/codegen-n07-e2-20261003-receipt.json).
+measurement plans `3105e33f`. [Plan](../../../tests/contracts/codegen-n07-model-20261003.json),
+[receipt](../../../tests/contracts/codegen-n07-e2-20261003-receipt.json).
 **Closed for the frozen integer slice.** The model is verbatim Arm 2023-03
 ASL translated to Sail, pinned at `sail-arm` `1bf2e557`; source spans, hashes
 and BSD-3-Clause-Clear license are retained. Sail 0.20.3 generates its runtime;

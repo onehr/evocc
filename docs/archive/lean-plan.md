@@ -48,11 +48,11 @@ gives no difference in 45,232 calls. Not covered: no pilot entry has a 32-bit
 parameter on the stack; vectors at the step limit have no source result; a
 test is not a proof. The assembler, the linker, the runtime and the hardware
 stay trusted: the native run tests them but does not prove them. Receipt:
-[core-v1-native-run.json](../tests/contracts/core-v1-native-run.json); repeat
+[core-v1-native-run.json](../../tests/contracts/core-v1-native-run.json); repeat
 with `python3 tools/proof-native/proof_native.py all WORK_DIR`.
-Execution is tracked only in [TODO.md](../TODO.md#first-public-release-verification).
+Execution is tracked only in [TODO.md](../../TODO.md#first-public-release-verification).
 
-The verification contract now lives in [spec/verification.md](../spec/verification.md); this plan keeps the history.
+The verification contract now lives in [spec/verification.md](../../spec/verification.md); this plan keeps the history.
 
 ### Release outcome and boundary
 
@@ -198,7 +198,7 @@ is the engineering reference, not a dependency on its implementation.
 
 `core-v1` is a selected typed-function closure, not an acceptance claim for its
 entire original translation unit. The pilot is frozen in
-[core-v1-pilot.json](../tests/contracts/core-v1-pilot.json). The Rust
+[core-v1-pilot.json](../../tests/contracts/core-v1-pilot.json). The Rust
 `evocc_chir::core_profile::inspect_core` inventory visits original nodes,
 including dead branches; it does not normalize them or certify compilation.
 Independent Lean input validation is implemented in `Core/WellFormed.lean`;
@@ -1040,7 +1040,7 @@ remain the P0 subset, rather than the combined receipt total.
 **September 29 integration note, revision 5 (design only).** The existing L0–L4 plan and its
 historical evidence below remain scoped to the reviewed scalar semantics,
 registry and analysis modules. The maintained
-[Q2/Q3 implementation architecture](framing-draft.md#4-rule-soundness-and-admission)
+[Q2/Q3 implementation architecture](../verified-optimization-design.md#4-rule-soundness-and-admission)
 adds a proposed consumer of this proof boundary: offline AI rule candidates.
 V1 accepts typed candidate data only, never AI tactic scripts or imports.
 Trusted fixed templates construct the exact `RuleCovered rule_<id>` statement,
@@ -1067,7 +1067,7 @@ R03f provides bounded manual integration and independent matching mutations;
 arbitrary proof scripts/export/rechecking are a separate V2 project, not a V1
 prerequisite. Optional shadow utility screening cannot emit trusted artifacts.
 No new proof, registry, toolchain upgrade or acceptance result is asserted by
-this note. Execution is tracked under R03b/R03c/R03f–R03h in [TODO.md](../TODO.md).
+this note. Execution is tracked under R03b/R03c/R03f–R03h in [TODO.md](../../TODO.md).
 
 Date: 2026-09-09. Status: the implementation version after two rounds of external review. The repository implements L0–L4 according to this document; L5 waits for the kernel milestone and is then decided by measurement.
 Basis: the team brief (`docs/notebook/lean-semantics-brief.md`), the two rounds of replies from the review panel on 2026-09-08, the local measurements of Section 0, and the independent exhaustive check by the review panel in Section 0b. Anything not marked "measured" is a plan, not a fact.

@@ -1,7 +1,7 @@
 # EvoCC Q4: codegen quality and compiler experience
 
 Plan revision 1 — 2026-10-01. **Work plan, not an acceptance receipt.** It
-supersedes the search-oriented part of the [Q2/Q3 design](framing-draft.md)
+supersedes the search-oriented part of the [Q2/Q3 design](../verified-optimization-design.md)
 (revision 7) for the next quarter. That design's verified chain, size contract
 and claim rules stay in force; its discovery tracks are paused, not cancelled.
 
@@ -27,7 +27,7 @@ N01 keeps disassembly summaries/category tables, never full disassembly dumps;
 N05 trend receipts contain only numbers and hashes. Keep raw captures out of Git.
 At slice end remove temporary outputs and record the disk net change. Preserve
 all contract manifests/receipts, sealed fixtures, open-task evidence and `.lake`;
-kernel runtime retirement follows [TODO's retention rule](../TODO.md#disk-discipline-owner-decision-2026-10-02).
+kernel runtime retirement follows [TODO's retention rule](../../TODO.md#disk-discipline-owner-decision-2026-10-02).
 
 The frozen S5 comparison ([record](notebook/eqsat-size-references-20261001.md))
 measured the same six translation units under EvoCC and the reference compilers.
@@ -65,7 +65,7 @@ measures everything it touches. This plan spends the quarter on those.
 ## 2. Authority and scope
 
 Inspected implementation: `5e7fb334` (certified guard first slice) and
-`963c5442` (figures). [EvoIR](../spec/evoir.md) and [EvoMIR](../spec/evomir.md)
+`963c5442` (figures). [EvoIR](../../spec/evoir.md) and [EvoMIR](../../spec/evomir.md)
 remain the semantic authorities; this plan changes no IR semantics, registry,
 proof format or trust policy. Backend changes that alter EvoMIR lowering rules
 need their own EvoMIR revision as today. Correctness admission (two interpreters,
@@ -141,7 +141,7 @@ already have certificates.
 ## 4a. Target extensibility: three layers, enforced
 
 The facts each layer may hold, and how they are generated and checked, are
-fixed by the [internal target description contract](../spec/target.md).
+fixed by the [internal target description contract](../../spec/target.md).
 
 Today `evocc-mir` is a single-ISA backend: `linscan.rs` refers to the AArch64
 instruction enum `MInst` 113 times and `regalloc.rs` 26 times, `Target` names
@@ -185,7 +185,7 @@ require a new design.
 - Lowering rules become data **incrementally**. Selection today is a
   hand-written `match` (`lower_inst`, about 790 lines and 50 arms, plus the
   fusion patterns in `lower_block`). N03a does not rewrite it. New rules from
-  N03d go through the pattern table of the [target description](../spec/target.md);
+  N03d go through the pattern table of the [target description](../../spec/target.md);
   existing arms migrate only when they are touched. A big-bang conversion is
   out of scope.
 - The two existing OS ABIs on AArch64 (Darwin arm64 and Linux AAPCS64) become
@@ -230,7 +230,7 @@ boxes are limits, not estimates; a package that overruns stops and reports.
 | **N04** | The C checker as a product | The one capability GCC cannot offer: precise, explainable UB detection from the interpreters | One command (`evocc --check`, name to be chosen) that runs the EvoIR interpreter with the existing E-codes; `--explain E3xxx` pages generated from spec section 6.3; `--error-format=json` for editors; `tests/ui/` with blessed `.stderr`; documentation and a short demo | ui tests; JSON schema test; every E-code has an explain page or an explicit TODO; no interpreter semantics change | 3 weeks, parallel |
 | **N05** | Measurement automation | Catch regressions on every change and bisect them without a human | On each push: S1 sizes for the six units, compile time, a ladder subset, interpreter steps; append-only trend receipts; `render-status` trend view; `tools/bisect.py` that walks commits using retained receipts and rebuilds only when needed | Inject a size regression on a branch: the run flags it and bisect names the commit | 2 weeks, parallel |
 | **N06** | EqSat memory and effect domain | The place where EqSat has real value (CSE, DCE, alias-aware forwarding) | **Not scheduled.** Reopen only after N03 lands and with a separate design: state/effect model, persistent equality database, proof design for memory facts | None this quarter | — |
-| **N07** | Target description and ISA-model oracles | One internal, machine-readable description per target, with the backend generated from and checked against it | Follow the [target description contract](../spec/target.md): migrate `regfile`, `insts` and the ABI tables as part of N03a; then `encodings` with the assembler round trip, a pinned slice of the vendor ISA model with its emulator as a differential lane, and bounded SMT verdicts for the existing lowering rules | Per migration step: byte-identical objects; generated files regenerate without difference; every existing lowering rule has a verdict | Steps 1–3 inside N03a; steps 4–6 in 2-week slices after N03d starts |
+| **N07** | Target description and ISA-model oracles | One internal, machine-readable description per target, with the backend generated from and checked against it | Follow the [target description contract](../../spec/target.md): migrate `regfile`, `insts` and the ABI tables as part of N03a; then `encodings` with the assembler round trip, a pinned slice of the vendor ISA model with its emulator as a differential lane, and bounded SMT verdicts for the existing lowering rules | Per migration step: byte-identical objects; generated files regenerate without difference; every existing lowering rule has a verdict | Steps 1–3 inside N03a; steps 4–6 in 2-week slices after N03d starts |
 
 What N01 must answer before N03 starts:
 
@@ -404,15 +404,15 @@ sections here retain the codegen contract and historical results.
 
 | Package | State | Evidence |
 | --- | --- | --- |
-| N01 census | Done | [note](notebook/codegen-census-20261002.md), [receipt](../tests/contracts/codegen-n01-20261002-receipt.json) |
+| N01 census | Done | [note](notebook/codegen-census-20261002.md), [receipt](../../tests/contracts/codegen-n01-20261002-receipt.json) |
 | N02 pass framework and validation | Done, bounded framework | [note](notebook/codegen-pass-framework-20261002.md) |
 | N03a backend layering | Done, independently rechecked | [note](notebook/codegen-backend-layering-20261002.md): every one of the 384 Darwin and 384 Linux corpus object hashes equals the pre-refactor baseline; `src/generic/` holds no ISA name; gate 2,986 passed, 0 failed, 4 ignored |
 | N04 C checker | Done | [note](notebook/codegen-checker-20261002.md) |
 | N05 measurement and bisect | Done | [note](notebook/codegen-measurement-20261002.md) |
-| N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
+| N03f frame and calls | Done, opt-in only; defaults OFF | [result](notebook/codegen-frame-variants-20261002.md), [receipt](../../tests/contracts/codegen-n03f-20261002-receipt.json): F1/F2/F3, full workspace 2,997/0/5 ignored, OFF byte identity and ON execution on both 384-case corpora, six-TU sizes. Darwin signed unwind stays NOT_VALIDATED. |
 | N03d | Bounded C1–C5 sequence closed; C2/C5 cost misses retained | [C1](notebook/codegen-constants-20261002.md), [C2](notebook/codegen-local-selection-20261002.md), [C3](notebook/codegen-extension-reuse-20261003.md), [C4](notebook/codegen-control-preflight-20261003.md), [C5](notebook/codegen-control-selection-20261003.md). C5 full workspace 3,065/0/5 existing ignored; both 384-case native corpora OFF/ON and 72 selected-TU executions PASS. All 48 size bounds pass, but three compile-cost comparisons miss 1.25x (maximum 1.627x); C5 is not admitted. C2's earlier 1.7977x miss is frozen. Both stay outside the admitted C3 cumulative configuration; defaults OFF. General CCMP/CFG if-conversion remains unimplemented. |
 | N03c | Bounded T1/T2/T3 work closed; broader spill-quality gap remains | [T1](notebook/codegen-allocation-termination-20261003.md) retains cost misses; [T2](notebook/codegen-copy-hints-20261003.md) copy hints and [T3](notebook/codegen-reload-reuse-20261003.md) local reload reuse are closed opt-in. T3 full workspace 3,039/0/5 ignored; both 384-case corpora ON/OFF and 72 selected-TU executions green, zero proof/bundle failures. Reload-only B unchecked saves 0/4/96/64/12/0 stack bytes; all 48 size/cost comparisons meet bounds, maximum cost ratio 1.232x. Defaults OFF; not a complete/global allocator. |
-| N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
+| N03b, N03e | First slices closed negative; broader transforms need redesign | [note](notebook/codegen-negative-preflight-20261002.md), [closure](../../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json) |
 | N07 steps 4–6 | Closed bounded; E3 qualification negative, no B1 proof acceptance | [E1 result](notebook/codegen-encodings-20261003.md), [E2 result](notebook/codegen-vendor-model-20261003.md), [E3 disposition](notebook/codegen-bounded-smt-20261003.md): E2 has 2,600 exact cases per interpreter/model/native/QEMU lane and unchanged native/TU objects. E3's pinned SMT generator rejects an unsupported undefined-bitvector dependency before its first query; zero proofs, explicit verdicts for 59 Inst families / 44 spec rows / nine patterns / 28 specialized paths. No model or trust-policy bypass; existing native baselines retained. |
 | N03 parent | Bounded batch closed with target miss | Every scheduled slice has implementation evidence or a frozen negative disposition. Five library TUs still exceed 1.4x. This closes the bounded work package, not the general optimizing compiler or the full roadmap. |
 | N06 | Not scheduled | |

@@ -29,7 +29,7 @@ record identities and the focused research assignment. It excludes compiler
 binaries, sysroots, kernel trees, VM disks and full historical evidence trees.
 The archive's `SHA256SUMS` covers its payload; its own hash is reported separately.
 
-The [measured fixture record](../../tests/fixtures/remaining-boundaries-20260927.out)
+The [measured fixture record](../../../tests/fixtures/remaining-boundaries-20260927.out)
 is tracked in Git. Raw-output inventory/hash data remains in the small archive.
 Archived original records are **historical replays**, not newly executed originals.
 Their source hashes are rechecked when assembling the packet. The musl rows

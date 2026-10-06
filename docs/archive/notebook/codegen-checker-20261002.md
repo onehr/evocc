@@ -1,8 +1,8 @@
 # N04: bounded C checker interface
 
 **Bounded interface accepted.** Plan frozen in `917f8955`:
-[contract](../../tests/contracts/codegen-n04-20261002.json).
-Implementation: `7680ae23`. [Compact receipt](../../tests/contracts/codegen-n04-20261002-receipt.json).
+[contract](../../../tests/contracts/codegen-n04-20261002.json).
+Implementation: `7680ae23`. [Compact receipt](../../../tests/contracts/codegen-n04-20261002-receipt.json).
 
 | Item | Evidence / status |
 | --- | --- |
@@ -18,7 +18,7 @@ main contract, lifecycle and 100,000-step limit. A completed path reports the
 integer returned by `main`; a nonzero program result is not a checker error.
 Existing E-codes remain unchanged. Fuel exhaustion, unresolved calls and other
 unsupported execution remain failures, never successful checks or automatically
-UB findings. [User workflow and JSON fields](../checker.md).
+UB findings. [User workflow and JSON fields](../../checker.md).
 
 The build generates explanations from EvoIR section 6.3; missing authority
 entries remain TODO rather than invented meanings. New JSON diagnostics report

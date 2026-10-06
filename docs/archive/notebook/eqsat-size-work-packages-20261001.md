@@ -12,9 +12,9 @@ bytes enter the verified-EqSat numerator. No cross-family averages.
 
 | Package | Contract / input | State and claim ceiling |
 | --- | --- | --- |
-| S1 | [framing revision 7 §5.5](../framing-draft.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `04fec0d7`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
-| S2 | [DCE attribution plan](../../tests/contracts/eqsat-size-dce-20261001.json), same A/B verified IR; common backend DCE | DONE. Implementation `e625b89c`; measurement closeout is this record's commit. Existing baseline confirmed, not newly credited to EqSat. Final allocated MIR retains the separately disclosed unused-parameter copies. |
-| S3 | [Existing-capture size ranking](../../tests/contracts/eqsat-size-policy-ranking-20261001.json), no new evaluation | DONE, this ranking record's commit. Size verdict only FINITE_ENUMERATION_SUFFICIENT or NO_OBSERVABLE_EFFECT; does not reopen R03a. |
+| S1 | [framing revision 7 §5.5](../../verified-optimization-design.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `04fec0d7`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
+| S2 | [DCE attribution plan](../../../tests/contracts/eqsat-size-dce-20261001.json), same A/B verified IR; common backend DCE | DONE. Implementation `e625b89c`; measurement closeout is this record's commit. Existing baseline confirmed, not newly credited to EqSat. Final allocated MIR retains the separately disclosed unused-parameter copies. |
+| S3 | [Existing-capture size ranking](../../../tests/contracts/eqsat-size-policy-ranking-20261001.json), no new evaluation | DONE, this ranking record's commit. Size verdict only FINITE_ENUMERATION_SUFFICIENT or NO_OBSERVABLE_EFFECT; does not reopen R03a. |
 | S4 | Existing guard forms / known bits, MIR diagnostic first | First slice DONE (`595272a2`); [certified result](eqsat-certified-guards-20261001.md). Diagnostic remains UNVERIFIED_DIAGNOSTIC and never PASS. No second slice is open. |
 | S5 | Owner-unlocked six original TUs, GCC14/Clang19 `-Os`/`-O2` | DONE, TU-only comparison; [frozen table](eqsat-size-references-20261001.md). No parity or latency claim. |
 | S6 | G2 vmlinux `.text` alongside R01's two builds | Pending R01; no separate kernel campaign is authorized by this package. |
@@ -63,7 +63,7 @@ for the missing control/counters fails to compile before implementation; the
 focused SSA suite now passes **12/12**, including three dead computations removed
 only by the ON arm and a dead-result nonvolatile load preserved in both arms.
 
-The committed [S2 plan](../../tests/contracts/eqsat-size-dce-20261001.json) binds
+The committed [S2 plan](../../../tests/contracts/eqsat-size-dce-20261001.json) binds
 the original six TUs, A/B chains, existing checker binaries, native tool and
 original correctness harnesses. It uses the existing bench lock/Capture/native
 pipeline, two complete backend/assembly builds per object and no timing workload.
@@ -118,7 +118,7 @@ not retired instructions, execution frequency or latency.
 | zstd_decompress.c | 106 / 395 | 984 / 1,371 | 0 / 0 | 0 / 0 |
 | cJSON.c | 246 / 399 | 1,613 / 1,838 | 0 / 0 | 0 / 0 |
 
-The [allocated-MIR supplement](../../tests/contracts/eqsat-size-dce-residue-20261001.json)
+The [allocated-MIR supplement](../../../tests/contracts/eqsat-size-dce-residue-20261001.json)
 records both profiles. Its 24 assemblies are byte-identical to the actual capture.
 The nonzero final counts are newly introduced ABI-entry `Mov` copies for unused
 parameters of `inflateUndermine`, `ZSTD_checkBufferStability`, and
@@ -226,7 +226,7 @@ The six added focused tests pass. Acceptance before measurement:
 `tools/gate-changed.sh --full-workspace --offline --locked -j1`, **369 Rust suites,
 2,870 PASS / 0 FAIL / 4 ignored**, Clippy with warnings denied and formatting PASS;
 log `.evidence/eqsat-size/full-workspace-S4-diagnostic.log`. Failed RED/build
-attempts are retained. The [committed S4 plan](../../tests/contracts/eqsat-size-guards-20261001.json)
+attempts are retained. The [committed S4 plan](../../../tests/contracts/eqsat-size-guards-20261001.json)
 binds the exact tools, B inputs and S2 controls. This acceptance establishes
 diagnostic plumbing and ordinary regression coverage only: S4 and R02e are not
 closed and no guard-folding byte is verified EqSat benefit.
@@ -235,7 +235,7 @@ closed and no guard-folding byte is verified EqSat benefit.
 
 Capture `.evidence/eqsat-size/S4-wmacfqy0/receipt.json`, SHA-256
 `aafaf5bfd1b03557a4f0ee253304e7f28425fa7ceda028b3816fc612e07b56f5`;
-[compact result](../../tests/contracts/eqsat-size-guards-result-20261001.json).
+[compact result](../../../tests/contracts/eqsat-size-guards-result-20261001.json).
 There are **6/6 byte-identical diagnostic object pairs**, 33 capture commands,
 and **zero diagnostic links, native executions or installations**. All six
 ordinary checked control assemblies are byte-identical to S2 B. The temporary

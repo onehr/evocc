@@ -1,7 +1,7 @@
 # R02a measurement foundations
 
 Date: 2026-09-29. This is a partial implementation checkpoint for
-[R02a](../../TODO.md), following the full-workspace
+[R02a](../../../TODO.md), following the full-workspace
 [R01a requalification](eqsat-review-closure-20260929.md). It does not close
 R02a, R02b, Q2/Q3 or any application acceptance gate. No application census,
 native A/A calibration, performance comparison or AI campaign was run here.
@@ -15,7 +15,7 @@ native A/A calibration, performance comparison or AI campaign was run here.
 | Redundant whole-chain state clone | Stage once and return the owned state without committing until final checker identity validation | Per-transaction rollback remains; any failure rejects the entire staged chain, not just the failing suffix |
 
 The regression fixture is
-[`identity-tail.evo`](../../tests/fixtures/eqsat-performance/identity-tail.evo).
+[`identity-tail.evo`](../../../tests/fixtures/eqsat-performance/identity-tail.evo).
 Unit tests count interpreter calls and proof attempts, inject an observation
 mismatch and verify that fuel-exhausted input never enters optimization.
 A checker-process negative test lets the real checker finish its replays, then
@@ -56,7 +56,7 @@ The census reader checks the disjoint sum and independently recomputes the
 aggregate. Negative cases cover missing/negative/overlapping counters, invented
 no-attempt costs and stale aggregates. Version 2 remains readable exactly as
 before; it does not acquire inferred checker costs. The historical
-[`cap-census-20260929`](../../tests/fixtures/eqsat-chains/cap-census-20260929)
+[`cap-census-20260929`](../../../tests/fixtures/eqsat-chains/cap-census-20260929)
 capture was not regenerated with this compiler.
 
 ## Frozen-plan audit: intentionally not a runner
@@ -69,7 +69,7 @@ python3 tools/bench.py --check-eqsat-manifest tests/contracts/NAME.json
 
 `NAME.json` is a plan that must be authored and committed before audit, not a
 provided runnable campaign. The schema implementation is
-[`eqsat_manifest.py`](../../tools/ladder/eqsat_manifest.py); the synthetic unit
+[`eqsat_manifest.py`](../../../tools/ladder/eqsat_manifest.py); the synthetic unit
 data in `test_eqsat_manifest.py` are not source or binary receipts.
 
 V1 is deliberately limited to declared native, checked, development-only A/A

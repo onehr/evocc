@@ -3,7 +3,7 @@
   "pins": {
     "spec/evoir.md": {
       "revision": "2.0.0",
-      "sha256": "28f17b16d982b45e542d7c2cbb99d90b3ebf7439dd2ca1040e4d520fd104755f"
+      "sha256": "6ceb63ab84d6b5c5ccf9c48ce93b03b49215a9363298eed461d62a044ee55c32"
     },
     "spec/evomir.md": {
       "revision": "1.0.0",
@@ -11,11 +11,11 @@
     },
     "spec/target.md": {
       "revision": "1.0.0",
-      "sha256": "62c323515aa07dd418e4fb3f898d91f97c77c456aacbbf0837fd31ad8150c1e8"
+      "sha256": "13e6cc6fe6d3d1080bf7e34a162b82096197053e6be78ede8bbda270c3456482"
     },
     "spec/verification.md": {
       "revision": "1.0.0",
-      "sha256": "7b8ef12a51cfae62d2e2819537acda9b931dcfa72a2215248444e686dc44ac81"
+      "sha256": "c6e43be04e60b9ad644f3e948764e270ddb23a7eb48ec31dc020b50200bd0899"
     }
   }
 }

@@ -45,10 +45,10 @@ A generator that writes into a document also changes its digest. After
 A specification states what must hold. It does not state what is done, planned or measured. These
 belong elsewhere:
 
-- plans and their history: `docs/lean-plan.md`, `docs/roadmap.md`, `docs/codegen-quality-plan.md`;
+- the design of verified optimization: `docs/verified-optimization-design.md`;
 - status, evidence and receipts: `docs/status.md`, `docs/evidence.md`, `tests/contracts/`;
-- dated notes and reviews: `docs/notebook/`;
-- open work and task codes: `TODO.md`.
+- open work and task codes: `TODO.md`;
+- superseded plans, dated notes and reviews (history, not maintained): `docs/archive/`.
 
 A new document belongs in `spec/` only if it is a contract that code, tests or proofs must obey, and
 it gets a pin at the next `--update`.

@@ -38,16 +38,16 @@ parser/runtime protocol; pinned dash's dollar-quoting gap also remains. Neither
 blindly allowing braces nor mapping every shell failure to BADVAL is acceptable.
 
 Tracked patches, original commands, identities and retained negative results:
-[numerics](../../tests/fixtures/musl-patched-numerics.out),
-[time](../../tests/fixtures/musl-patched-time.out),
-[wordexp](../../tests/fixtures/musl-patched-wordexp.out),
-[configuration APIs](../../tests/fixtures/musl-patched-conf.out).
+[numerics](../../../tests/fixtures/musl-patched-numerics.out),
+[time](../../../tests/fixtures/musl-patched-time.out),
+[wordexp](../../../tests/fixtures/musl-patched-wordexp.out),
+[configuration APIs](../../../tests/fixtures/musl-patched-conf.out).
 All 303 ladder regressions and targeted Ruff pass after this batch. These
 supplements do not change the historical receipt or the 1,271/1,339 denominator.
 
 ### September 28: reached call signatures and refusal classification
 
-[T01b](../../tests/fixtures/typed-call-requirements.out) repairs the independent
+[T01b](../../../tests/fixtures/typed-call-requirements.out) repairs the independent
 C-HIR execution-mode defect exposed by the storage-only half-pointer control:
 an unused pointer/FP parameter still requires typed call conversion/binding,
 even when the body only queries sizeof and the argument is an integer constant.
@@ -68,9 +68,9 @@ regressions (B08c) and finite strict-FP profile (L01) now close. The application
 lane remains **INCOMPLETE**: 68 floating-complex E3049 refusals (L04), 17 shared
 failures (B08d), a static-only loader scope and explicit option omissions (B08b).
 This is a mixed-library result, not all-EvoCC musl or all-tests PASS.
-[Repair and exact candidate identity](../../tests/fixtures/assembly-exclusive-window.out).
+[Repair and exact candidate identity](../../../tests/fixtures/assembly-exclusive-window.out).
 
-September 27's [approved scalar FP assembly extension](../../tests/fixtures/floating-assembly.out)
+September 27's [approved scalar FP assembly extension](../../../tests/fixtures/floating-assembly.out)
 closes B08a in EvoIR 1.9.114 / EvoMIR 0.50. It reuses the SIMD operand and
 allocation path for exact f32/f64 transport, without inventing an interpreter
 for opaque asm. Native tied/early-clobber/fixed-register/goto/spill and crossed
@@ -80,7 +80,7 @@ pass 56 checks with each of four reference callers, as do reference controls.
 This supersedes the four scalar-asm refusals in the older checkpoints below,
 not the full musl/libc-test receipt or its remaining option accounting.
 
-September 27's [per-symbol section regression](../../tests/fixtures/driver-symbol-sections.out)
+September 27's [per-symbol section regression](../../../tests/fixtures/driver-symbol-sections.out)
 closes a further musl option-projection gap: real function/data sections now
 preserve ELF storage/TLS types, relocations, alias identity, lifecycle roots and
 patch-entry link order. Twelve reference and twelve EvoCC objects pass all 48
@@ -97,7 +97,7 @@ immutable capability on local ext4. Runtime-only staging plus the single
 **0 PASS / 5 FAIL / 10 SKIP** to **13 PASS / 0 FAIL / 2 SKIP** on both unchanged,
 previously audited binaries. j/P conditional skips remain; full toybox and its
 two FP objects remain open. No fresh full-suite numerator is implied.
-[Source, commands, identities and 253-test gate](../../tests/fixtures/toybox-filesystem-mutation.out).
+[Source, commands, identities and 253-test gate](../../../tests/fixtures/toybox-filesystem-mutation.out).
 
 Current round (2026-09-20): the post-HFA-repair frozen release completed all
 15 application lanes serially. Torture has **zero compiler failures** in its
@@ -107,12 +107,12 @@ zstd **44/44 objects**. LLVM, TinyCC, musl and deferred language boundaries
 still prevent overall closure; their small reductions are the next repair batch.
 
 September 23 reference-limit closure (B04): the separate-TU
-[`hva-varargs-reference.c`](../../tests/fixtures/hva-varargs-reference.c) isolates
+[`hva-varargs-reference.c`](../../../tests/fixtures/hva-varargs-reference.c) isolates
 GCC 14 O2's omitted HVA register-save-area reads while stack arguments work.
 Eight usable EvoCC/reference ABI pairs and the unchanged original varargs
 fixture pass; the GCC O2 self-control and callee pairs remain oracle-unusable.
 The three original torture reference refusals also reproduce with their exact
-source hashes. [Measurements and limits](../../tests/fixtures/hva-varargs-reference.out)
+source hashes. [Measurements and limits](../../../tests/fixtures/hva-varargs-reference.out)
 close their accounting only; no full-campaign result or PASS numerator changes.
 
 September 23 toybox acceptance correction (B06a/T05c): the historical 201/203
@@ -129,7 +129,7 @@ preserves occurrence identities and force-replays the final bisection selection.
 Forcing the upstream build recipe was tested and rejected: its append-only
 `generated/build.sh` cache caused the installed subject object to be rebuilt.
 
-The [small filesystem probe](../../tests/fixtures/toybox-filesystem-flags.c)
+The [small filesystem probe](../../../tests/fixtures/toybox-filesystem-flags.c)
 records GETFLAGS failing with ENOTTY on the FUSE benchmark mount but succeeding
 on container-local ext4, identically for GCC14/Clang19 O0/O2 and EvoCC.
 The unchanged complete **chattr subset**, not the full suite, now runs on actual
@@ -137,7 +137,7 @@ reference/current-EvoCC applet relinks: both **0 PASS / 5 FAIL / 10 SKIP**;
 the subject object survives and its binary hash differs from the reference.
 This is an evidenced filesystem boundary, not a waived PASS. Two FP objects,
 complete toybox execution and any newly exposed applet failures remain B06/B10.
-[Measured identities and acceptance limits](../../tests/fixtures/toybox-filesystem-flags.out).
+[Measured identities and acceptance limits](../../../tests/fixtures/toybox-filesystem-flags.out).
 
 Kernel testing continues independently. The new EL2/GICv3 KVM reference run
 starts all 37 original programs: **24 PASS / 4 SKIP / 2 FAIL / 6 TIMEOUT /
@@ -360,7 +360,7 @@ and scaling within a block, with typed/signed keys and no cross-block reuse.
 Its C-HIR/EvoIR/MIR and sealed native controls pass, as does the changed gate
 (956 PASS, zero failures, four historical ignored, Clippy and fmt). The original
 LARGE `floyd-warshall` still reaches its unchanged 60-second limit; 167 → 166
-core instructions is not enough. [Fixture and bounded result](../../tests/fixtures/repeated-pointer-index.out)
+core instructions is not enough. [Fixture and bounded result](../../../tests/fixtures/repeated-pointer-index.out)
 retain identities; TODO B02 stays OPEN and no full-run numerator changes.
 
 The checked-add/sub result reduction then reuses the value already computed
@@ -368,7 +368,7 @@ by the overflow predicate, passing it explicitly across the existing guard.
 Both interpreters, MIR/native controls and the affected gate (964 PASS, zero
 failures, four historical ignored, Clippy/fmt) pass. The unchanged LARGE
 floyd-warshall still times out at 60 seconds; its core is now 160 instructions.
-[Targeted record](../../tests/fixtures/checked-arithmetic-result.out) separates
+[Targeted record](../../../tests/fixtures/checked-arithmetic-result.out) separates
 this verified code-generation improvement from the unresolved performance
 acceptance. No kernel Image or full-campaign result is updated by this change.
 
@@ -378,7 +378,7 @@ integer operands already read by a comparison. It uses a pure bit-vector mux,
 not speculative arm execution; all original checks and observable effects
 remain. Six tailored tests and six fixed ARM64 native controls pass. The original
 LARGE program still times out at 60 seconds (160 → 108 core instructions), so
-B02 remains OPEN. [Test and acceptance record](../../tests/fixtures/compared-value-selection.out)
+B02 remains OPEN. [Test and acceptance record](../../../tests/fixtures/compared-value-selection.out)
 distinguishes the targeted compiler improvement from the unresolved workload.
 
 The 2026-09-24 checked-flag selection (TODO B02d) removes only a single-use
@@ -387,11 +387,11 @@ volatile observations and continuation parameters remain. The affected gate
 passes **989 tests, zero failures, four historical ignored**, Clippy and fmt;
 six native positive controls and ten expected-trap negatives pass. Original
 LARGE still times out at 60 seconds (102 → 98 core instructions). The
-[source-bound record](../../tests/fixtures/checked-flag-branch.out) retains
+[source-bound record](../../../tests/fixtures/checked-flag-branch.out) retains
 that negative result; B02 and the full campaign stay OPEN. No kernel Image
 inherits this compiler-only improvement.
 
-**2026-09-24 B02 closure:** the [minimal loop transport case](../../tests/fixtures/loop-value-transport.c)
+**2026-09-24 B02 closure:** the [minimal loop transport case](../../../tests/fixtures/loop-value-transport.c)
 goes RED → GREEN by eliminating only trivial phi copies at SSA destruction.
 Distinct incoming values, counters, swapping cycles and computed-dispatch
 receiving slots retain their bindings; no loads, checks or effects are hoisted.
@@ -401,7 +401,7 @@ is **995 PASS, zero failures, four historical ignored**, Clippy/fmt green.
 The unchanged LARGE `floyd-warshall` now passes its original timeit, appended
 exit-status hash and comparison in **52.0360 s**, within the original **60 s**
 limit. Core size 98 → 57 is supporting evidence, not the PASS predicate.
-The [record](../../tests/fixtures/loop-value-transport.out) retains the first
+The [record](../../../tests/fixtures/loop-value-transport.out) retains the first
 wrapper's incorrect expected-file path as exit 2 and the subsequent complete
 PASS separately. B02 is closed; B10, K02/K03 and full-campaign numerators are
 unchanged. No kernel Image or large runtime artifact was rebuilt.
@@ -415,7 +415,7 @@ the LARGE `floyd-warshall` timeout (B02) and signed integer-vector `pr23135` (L1
 All 35 reviewed rows validate through the existing adapter against the unchanged
 source hash, original argv and evidence files. Eight obsolete scalar-FP reviews
 are removed; a regression test reproduces all eight stale entries before GREEN.
-The [44-case map](../../tests/fixtures/llvm-failure-reconciliation.out) preserves
+The [44-case map](../../../tests/fixtures/llvm-failure-reconciliation.out) preserves
 every original identity and distinguishes later compiler versions. This is an
 accounting closure, **not** a new 1,735-program campaign or increased PASS count.
 
@@ -1117,7 +1117,7 @@ python3 -u tools/bench.py mbedtls \
   --evocc target/frontend/release/evocc --jobs 2
 ```
 
-The [unified receipt](../../tests/contracts/bench-receipt.json) and each run's
+The [unified receipt](../../../tests/contracts/bench-receipt.json) and each run's
 capture are the measurements. This document interprets them; it does not
 replace their denominators or count oracle failures as passes.
 
@@ -2293,7 +2293,7 @@ The two fixtures plus a bounded private-leaf reduction pass both interpreters
 and 18 native GCC14/Clang19/EvoCC O0/O2 runs. All 1,812 affected tests, Clippy
 and fmt pass (three historical ignored). This closes those reproduced E3101
 subcases, not the entire historical T01 audit or a new application campaign.
-[Detailed record](../../tests/fixtures/private-leaf-substitution.out).
+[Detailed record](../../../tests/fixtures/private-leaf-substitution.out).
 
 ## Additional atomic demand inventory — 2026-09-23
 
@@ -2308,7 +2308,7 @@ Three bounded C controls pass GCC14/Clang19 at O0/O2 (12 native runs); EvoCC
 continues to refuse all three at their named boundaries, verified across three
 CLI modes. The existing scalar/legacy atomic controls remain green. Full scope,
 source locations and limitations are in
-[the inventory](../../tests/fixtures/atomic-scope-boundaries.out); L11a–L11c
+[the inventory](../../../tests/fixtures/atomic-scope-boundaries.out); L11a–L11c
 track the missing capability contracts. No benchmark numerator changes.
 
 ## Tooling changes and verification
@@ -2368,7 +2368,7 @@ items remain separately tracked in
 
 ## Historical issue reconciliation — 2026-09-23 (TODO T01)
 
-[The identity crosswalk](../../tests/fixtures/language-issue-reconciliation.out)
+[The identity crosswalk](../../../tests/fixtures/language-issue-reconciliation.out)
 joins all earlier named asm, GNU89/prototype, VLA, relative-label/representation,
 varargs, qualifier and E3101 cases to checked-in regressions, measured later
 originals or specific open tasks. It is not a new campaign or claim that the
@@ -2399,7 +2399,7 @@ L05, L07–L11 and B02/B10 rather than reopening already repaired families.
 
 ## Compared-value machine selection — 2026-09-23 (TODO B02c)
 
-The [minimal C/IR cases](../../tests/fixtures/compared-value-csel.out) close the
+The [minimal C/IR cases](../../../tests/fixtures/compared-value-csel.out) close the
 bounded CMP/CSEL selection repair. A single-use full-width bit mux over the
 comparison's already evaluated operands becomes an adjacent compare/select;
 all guards, effects and local SSA constraints remain. Ninety-six structure and
@@ -2489,7 +2489,7 @@ reference and subject complete **1,669 occurrences: 1,648 PASS / 1 FAIL /
 20 SKIP**. Generated applet-table `main.c` stays reference-built outside the
 frozen denominator; this is not an all-C-object replacement claim.
 
-The [small prerequisite and tar reductions](../../tests/fixtures/toybox-runtime-prerequisites.out)
+The [small prerequisite and tar reductions](../../../tests/fixtures/toybox-runtime-prerequisites.out)
 repair six shared environment failures: absent USER, missing disposable-runtime
 hostname/mount permissions, and an overlong loop backing filename. The shared
 runner keeps original tests/flags, binary/object hashes and full occurrence
@@ -2536,7 +2536,7 @@ The driver and application/Kbuild command projections now retain
 not a new type-based alias analysis. The positive `-fstrict-aliasing` option
 remains unsupported; provenance, lifetime, initializedness, bounds/alignment and
 read-only-object checks are unchanged. EvoIR 1.9.113 records this bounded rule.
-The [small aliased integer/FP accesses](../../tests/fixtures/no-strict-aliasing.out)
+The [small aliased integer/FP accesses](../../../tests/fixtures/no-strict-aliasing.out)
 pass both interpreters and **4 reference / 8 subject native combinations**;
 const-write negatives still produce E3014. All **530 affected Rust tests** pass,
 with no failures or ignores, plus Clippy/fmt. Eight original musl commands retain
@@ -2561,7 +2561,7 @@ Unity programs have **54 PASS**; all 21 upstream Unity programs have **161 PASS,
 zero FAIL, one upstream IGNORE**. Four disabled JSON-patch fixtures retain their
 skip notices, and Unity remains reference-built. This receipt predates the
 no-alias driver change above; identities are not conflated.
-[Regression and replay record](../../tests/fixtures/benchmark-relink-boundaries.out).
+[Regression and replay record](../../../tests/fixtures/benchmark-relink-boundaries.out).
 
 ## 2026-09-27: musl reference-failure ledger
 
@@ -2585,7 +2585,7 @@ defects. B08d tracks closure; no test source, assertion, or watchdog was changed
 
 ### Targeted environment and assembler repair (September 27)
 
-The [small native matrix](../../tests/fixtures/musl-reference-boundaries.out)
+The [small native matrix](../../../tests/fixtures/musl-reference-boundaries.out)
 contains 96 completed build/link/run records and 16 unchanged-program executions,
 not a new full campaign. It establishes root's RLIMIT_NPROC exemption as the
 atfork test failure's cause. The adapter now uses upstream RUN_WRAP to run just
@@ -2618,9 +2618,9 @@ Glibc-specific expectations are not requirements of the corresponding
 [POSIX strptime contract](https://pubs.opengroup.org/onlinepubs/9799919799/functions/strptime.html).
 The two original programs and separate API/header failure remain FAIL, not
 compiler passes; exact source hashes are in the
-[existing reduction record](../../tests/fixtures/musl-reference-boundaries.out).
+[existing reduction record](../../../tests/fixtures/musl-reference-boundaries.out).
 
-The [source-bound reduction](../../tests/fixtures/musl-powf-rounding-reduction.out)
+The [source-bound reduction](../../../tests/fixtures/musl-powf-rounding-reduction.out)
 compares the pinned log/exp stages with the actual library and an exact
 conversion control. Twelve native compiler/optimization/archive combinations
 have identical four-mode results. Upward's pre-narrowing polynomial value is
@@ -2633,7 +2633,7 @@ attribution, not a compiler change, modified benchmark or original PASS.
 
 ### Genuine shared-loader supplement (September 27)
 
-The [new supplement](../../tests/fixtures/musl-shared-loader.out) executes all
+The [new supplement](../../../tests/fixtures/musl-shared-loader.out) executes all
 five original DSO/TLS programs with actual musl PT_INTERP loaders: **5/5 reference
 and 5/5 candidate PASS**, repeated independently by the durable adapter. It
 reuses 1,268 verified EvoCC PIC objects and newly compiles the two loader TUs.
@@ -2649,7 +2649,7 @@ coverage gap, not the remaining reference-library failures or full musl.
 
 ### Binary128 strtold source reduction (September 27)
 
-The [hex-tail reduction](../../tests/fixtures/musl-hex-tail-reduction.out) now
+The [hex-tail reduction](../../../tests/fixtures/musl-hex-tail-reduction.out) now
 explains both strtold failures: the pinned `hexfloat` captures 29 hexadecimal
 digits for 113-bit long double, then substitutes half a final digit for every
 nonzero remaining tail. With a leading 1 this creates two artificial ties;
@@ -2661,7 +2661,7 @@ was patched; the original failures remain FAIL, not compiler regression or PASS.
 
 ### Descriptor-exhaustion timeout repair (September 27)
 
-The [small fork/dup/exit case](../../tests/fixtures/descriptor-exit-filesystem.out)
+The [small fork/dup/exit case](../../../tests/fixtures/descriptor-exit-filesystem.out)
 reproduces the original daemon timeout without calling daemon: stdout duplicated
 to the unchanged million-FD limit exits promptly on guest-local storage but
 waits in exit_group/filesystem requests on the host virtiofs mount. The same
@@ -2678,7 +2678,7 @@ run remains a 17-failure receipt until the fresh campaign actually executes.
 
 ### wordexp boundary reduction (September 27 UTC)
 
-The [fourteen-case reduction](../../tests/fixtures/musl-wordexp-boundaries.out)
+The [fourteen-case reduction](../../../tests/fixtures/musl-wordexp-boundaries.out)
 has identical stdout/stderr across GCC/Clang/EvoCC O0/O2 and both existing
 archives (168 completed observations, not correctness PASSes). The library
 never checks WRDE_UNDEF, its NOCMD scanner rejects valid parameter braces, and
@@ -2692,7 +2692,7 @@ adjudicated by this small matrix. No dependency, shell or acceptance rule change
 
 ### Semantic command projection and assembler verdicts — September 28
 
-[Two small reductions](../../tests/fixtures/command-projection-packed.out)
+[Two small reductions](../../../tests/fixtures/command-projection-packed.out)
 show that both application projectors discard `-fpack-struct=1` and thereby
 emit ordinary-layout code. Four projected native executions fail the packed
 size assertion; eight GCC/Clang controls establish the actual option boundary.
@@ -2730,7 +2730,7 @@ record-copy and full-width integer pointer contracts. The 123 targeted tests,
 80 explicit-Werror oracle controls, 12 native positive executions and ten
 unchanged musl object commands pass. All 1,339 original musl sources parse in
 a read-only sweep; that is not a new assembled/native population.
-[Exact scope and retained failed attempts](../../tests/fixtures/return-conversion-constraints.out).
+[Exact scope and retained failed attempts](../../../tests/fixtures/return-conversion-constraints.out).
 
 A separate three-file reduction also exposes wrong header selection when
 `-isystem` is rewritten to `-I`, or its joined spelling disappears. Three of
@@ -2738,14 +2738,14 @@ four projected native commands fail before repair; all four pass afterward,
 with eight sealed reference controls per round. Both adapters preserve the
 include search class and literal joined operands. The 314 ladder tests pass;
 unsupported quote/macro options still refuse instead of changing meaning.
-[Exact inputs and executions](../../tests/fixtures/include-projection.out).
+[Exact inputs and executions](../../../tests/fixtures/include-projection.out).
 Remaining warning-policy requests are explicitly
-[not closed](../../tests/fixtures/driver-diagnostic-policy.out); no historical
+[not closed](../../../tests/fixtures/driver-diagnostic-policy.out); no historical
 application/kernel receipt or installed object is overwritten by these checks.
 
 ### Diagnostic command projection — September 28
 
-The [two-case reduction](../../tests/fixtures/command-projection-diagnostics.out)
+The [two-case reduction](../../../tests/fixtures/command-projection-diagnostics.out)
 shows a second form of false acceptance: both projectors discard diagnostic
 options under which all eight fixed GCC/Clang controls reject. Eight projected
 EvoCC native executables run only because those requests disappeared. The
@@ -2786,5 +2786,5 @@ passes 551 tests, the Python ladder passes 323, and Clippy/fmt/Ruff pass.
 R06 closes only this pinned deterministic demo-prefix/render integration.
 Interactive window/input/audio, other maps and ports remain untested. The
 original 15-lane application campaign and other TODO items are unchanged.
-[Receipt](../../tests/contracts/ladder-doom-receipt.json),
-[exact scope and negative evidence](../../tests/fixtures/doom-headless.out).
+[Receipt](../../../tests/contracts/ladder-doom-receipt.json),
+[exact scope and negative evidence](../../../tests/fixtures/doom-headless.out).

@@ -1,7 +1,7 @@
 # Compilation-core pilot and source input — 2026-10-04
 
 Contract: [V00–V06](../lean-plan.md#first-public-release-verification).
-Population/commands: [core-v1-pilot.json](../../tests/contracts/core-v1-pilot.json).
+Population/commands: [core-v1-pilot.json](../../../tests/contracts/core-v1-pilot.json).
 **V00/V01 remain open. One original function has a source/IR theorem; there is
 no complete core-v1 or backend compilation theorem.**
 

@@ -58,7 +58,7 @@ working scalar baseline and pinned APFloat. Dynamic rounding, complete
 non-trapping fenv, fixed-RNE binary128 and strict binary128 remain distinct
 implementation/acceptance gates. No traps, Annex F, half, complex or floating
 vector support is inferred. Sections C/D's atomic and dialect questions are not
-adjudicated by this FP report. See the current [task ledger](../../TODO.md).
+adjudicated by this FP report. See the current [task ledger](../../../TODO.md).
 
 ### Original September 21 handoff
 

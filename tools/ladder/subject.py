@@ -1086,7 +1086,7 @@ def measure(subject: Subject, args: argparse.Namespace) -> dict:
         "schemaVersion": 1,
         "rung": subject.rung,
         "subject": subject.name,
-        "authority": "docs/roadmap.md, milestone ladder",
+        "authority": "docs/archive/roadmap.md, milestone ladder",
         "run": run_id,
         "pin": subject.pin,
         "url": subject.url,

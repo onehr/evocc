@@ -89,7 +89,7 @@ class ChangedGateTest(unittest.TestCase):
                 self.assertEqual(calls, [])
 
     def test_generated_target_facts_are_checked_even_without_a_cargo_change(self):
-        result, calls = self.run_gate(changed="docs/roadmap.md")
+        result, calls = self.run_gate(changed="docs/evidence.md")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("generated-target-checked", result.stdout)
         self.assertEqual(calls, [])
@@ -134,7 +134,7 @@ class ChangedGateTest(unittest.TestCase):
         self.assert_packages(calls, {"leaf", "consumer"})
 
     def test_non_cargo_change_does_not_invent_a_cargo_run(self):
-        result, calls = self.run_gate(changed="docs/roadmap.md", status=" M tools/bench.py")
+        result, calls = self.run_gate(changed="docs/evidence.md", status=" M tools/bench.py")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, [])
         self.assertNotIn("gate-changed: green", result.stdout)

@@ -1,6 +1,6 @@
 # Verified EqSat implementation — September 29, 2026
 
-Scope: [design revision 5](../framing-draft.md), starting with TODO R01a.
+Scope: [design revision 5](../../verified-optimization-design.md), starting with TODO R01a.
 This is not G2, R02 performance acceptance, an AI search result, or full
 implementation of the design. The starting checkout was `a4c5209`.
 
@@ -96,7 +96,7 @@ The retained two-transaction archive passed independent replay with two proof
 successes and zero rejection/malformed/unknown buckets. Its exact codegen output
 assembled, linked and exited 0 on Darwin ARM64 with Apple clang 21.0.0. The
 small text artifacts and hashes are also tracked in
-[the sealed fixture](../../tests/fixtures/eqsat-chains/verified-chain/README.md).
+[the sealed fixture](../../../tests/fixtures/eqsat-chains/verified-chain/README.md).
 Original compiler/checker binaries and native object/executable remain local;
 their hashes are in `native.json`. Replaying with a rebuilt checker is a new
 semantic check, not a rewrite of the historical native/compiler identity.

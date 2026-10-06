@@ -123,7 +123,7 @@ derived from encoding facts and are not widened to the architectural maximum.
 6. **Migration is behavior-preserving.** Moving a fact from code into a table
    must leave every emitted object byte-identical: the two-build identity on
    the six translation units of the codegen size comparison
-   (`docs/codegen-quality-plan.md`) and on both native corpora is the test.
+   (`docs/archive/codegen-quality-plan.md`) and on both native corpora is the test.
    Moving `encodings` also requires that the generated instances assemble;
    moving `isa-semantics`, that the emulator agrees with the native run and
    the interpreters on the corpus; moving `patterns`, that every existing rule

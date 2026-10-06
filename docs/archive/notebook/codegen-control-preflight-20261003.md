@@ -1,8 +1,8 @@
 # N03d C4: residual compare/control census
 
 Clean subject `2ce2385c`; plan `757c92ea`; RED `14007276`.
-[Plan](../../tests/contracts/codegen-n03d-control-20261003.json),
-[receipt](../../tests/contracts/codegen-n03d-c4-20261003-receipt.json).
+[Plan](../../../tests/contracts/codegen-n03d-control-20261003.json),
+[receipt](../../../tests/contracts/codegen-n03d-c4-20261003-receipt.json).
 Read-only N01/S1 analysis of 48 retained OFF/cumulative A/B object rows,
 checked and unchecked: 41 unique objects decoded, category totals reconcile.
 No object rebuild, whole disassembly retention or timing run.

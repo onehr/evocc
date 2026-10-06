@@ -1,8 +1,8 @@
 # N05: bounded measurement automation accepted
 
-Implementation `7680ae23`; [plan](../../tests/contracts/codegen-n05-20261002.json)
-frozen in `917f8955`, [live plan](../../tests/contracts/codegen-n05-live-20261002.json)
-frozen in `7680ae23`. [Compact receipt](../../tests/contracts/codegen-n05-20261002-receipt.json).
+Implementation `7680ae23`; [plan](../../../tests/contracts/codegen-n05-20261002.json)
+frozen in `917f8955`, [live plan](../../../tests/contracts/codegen-n05-live-20261002.json)
+frozen in `7680ae23`. [Compact receipt](../../../tests/contracts/codegen-n05-20261002-receipt.json).
 Full workspace: 377 suites, 2,915 PASS / 0 FAIL / 4 ignored; Clippy/fmt PASS.
 Shared Python: 135 PASS. No Lean or registry change.
 

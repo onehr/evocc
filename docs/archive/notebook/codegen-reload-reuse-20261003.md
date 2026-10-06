@@ -1,8 +1,8 @@
 # N03c T3: local resident spill reloads
 
 Clean subject `f79373da`; RED `e44ed429`; plan `22d8e3d1`; EvoMIR 0.62.
-[Plan](../../tests/contracts/codegen-n03c-reload-reuse-20261003.json),
-[receipt](../../tests/contracts/codegen-n03c-t3-20261003-receipt.json).
+[Plan](../../../tests/contracts/codegen-n03c-reload-reuse-20261003.json),
+[receipt](../../../tests/contracts/codegen-n03c-t3-20261003-receipt.json).
 `--regalloc-opt=reload-reuse` removes only a repeated logical-slot reload
 whose exact-class value is still in the same physical register. Unique
 definitions and local non-edge uses are required. Physical clobbers, stores,
