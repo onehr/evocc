@@ -137,7 +137,48 @@ EvoCC does not wrap, port or translate GCC or LLVM. It uses them as sealed oracl
 
 ```sh
 CARGO_TARGET_DIR=target/frontend cargo build --release --offline -j 2 -p evocc -p evocc-proofcheck
+export PATH="$PWD/target/frontend/release:$PATH"
 ```
+
+`evocc` is a drop-in `cc`. On macOS it makes code for `aarch64-apple-darwin` and links with the
+system toolchain (the Xcode Command Line Tools). On Linux it makes code for
+`aarch64-unknown-linux-gnu` and links with the system `gcc`.
+
+```c
+// hello.c
+#include <stdio.h>
+int main(void) {
+    printf("Hello, world!\n");
+    return 0;
+}
+```
+
+```sh
+evocc hello.c -o hello && ./hello                           # Hello, world!
+```
+
+Compile two files on their own and link the objects, as `make` does (`main.c` and `greet.c` are in
+[the book](book/src/hello.md#more-than-one-file)):
+
+```sh
+evocc -c main.c -o main.o
+evocc -c greet.c -o greet.o
+evocc main.o greet.o -o greet && ./greet                    # Hello, EvoCC!
+```
+
+Build a project with its own Makefile and run its tests. This builds cJSON 1.7.19 and runs its test
+program:
+
+```sh
+curl -LO https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz
+tar xzf v1.7.19.tar.gz
+make -C cJSON-1.7.19 CC=evocc test
+```
+
+The cJSON Makefile gives `-fstack-protector`. EvoCC does not support it, so it prints one warning and
+continues.
+
+The interpreters and the checker work on one file:
 
 ```c
 // demo.c
@@ -153,11 +194,10 @@ int main(void) {
 ```
 
 ```sh
-target/frontend/release/evocc --interpret-c-hir demo.c      # 13
-target/frontend/release/evocc --interpret-evoir demo.c      # 13
-target/frontend/release/evocc --check --error-format=json demo.c
-target/frontend/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm demo.c > demo.s
-gcc demo.s -o demo && ./demo; echo $?                       # on Linux AArch64: 13
+evocc --interpret-c-hir demo.c                              # 13
+evocc --interpret-evoir demo.c                              # 13
+evocc --check --error-format=json demo.c
+evocc demo.c -o demo && ./demo; echo $?                     # 13
 ```
 
 Two interpreters on two different IRs agree. `--check` reports undefined behavior on the executed
@@ -196,20 +236,28 @@ python3 tools/proof-native/proof_native.py all WORK_DIR \
 
 #### How to use
 
-`evocc` takes one C file and one action. GCC options such as `-I`, `-D`, `-std=gnu11` and `-fwrapv`
-keep their meaning.
+`evocc` takes the command line of `cc`: several inputs, one action and the usual GCC options. GCC
+options such as `-I`, `-D`, `-std=gnu11` and `-fwrapv` keep their meaning. The rows from
+`--parse-only` down are the options of EvoCC itself. Their actions take one C file.
 
 | Option | What it does |
 |---|---|
-| `-E` | Preprocess and print the result. |
+| `-E`, `-S`, `-c` | Stop after preprocessing, compiling (`NAME.s`) or assembling (`NAME.o`). Without one, `evocc` links an executable. |
+| `-o FILE` | Write the output to `FILE`. `-E` writes to standard output and a link writes `a.out` without it. |
+| `FILE...`, `-x LANG` | `.c` and `.i` are C, `.s` is assembly, `.S` is assembly with the preprocessor; `.o`, `.a`, `.so`, `.dylib` and `.tbd` go to the linker. `-x` sets the language of the next inputs. |
+| `-I`, `-D`, `-U`, `-include`, `-isystem` | Control the preprocessor, as in GCC. |
+| `-std=`, `-O*`, `-g` | `-std=c89` to `-std=gnu17`. `-O0` keeps the source control flow; `-O1` to `-O3` simplify integer flow and dead bodies. `-g` writes DWARF type information for the Linux target and has no effect for Darwin. |
+| `-M`, `-MM`, `-MD`, `-MMD`, `-MF`, `-MT`, `-MQ`, `-MP` | Write dependency rules for `make`, as in GCC. |
+| `-l`, `-L`, `-Wl,`, `-shared`, `-static` | Give libraries, library directories, linker arguments and the link mode to the platform linker. |
+| `--target=aarch64-apple-darwin`, `--target=aarch64-unknown-linux-gnu` | Select the target. The default is the host: Darwin on macOS, Linux on Linux. On macOS, the sealed container assembles and links for Linux, and `--sysroot=DIR` gives the Linux headers. The actions of EvoCC itself default to Linux. |
+| `--version`, `-dumpmachine`, `--help` | Print `evocc 0.1.0 (COMMIT DATE)` and the target; print the target; summarize the options. |
+| An unknown `-f` or `-m` option | Print one warning and continue. `-w` turns the warning off. |
 | `--parse-only` | Parse and check the translation unit. |
 | `--emit=c-hir`, `--emit=evoir`, `--emit=asm` | Print C-HIR, canonical EvoIR text or AArch64 assembly. |
 | `--interpret-c-hir`, `--interpret-evoir` | Run `main` in the C-HIR or the EvoIR interpreter. |
 | `--check` | Run the executed path and report undefined behavior as a diagnostic. |
 | `--error-format=text\|json` | Write diagnostics as text or as one JSON record per line. |
 | `--explain E3002` | Explain a diagnostic code. |
-| `--target=aarch64-unknown-linux-gnu` | Select the target; this is the default. |
-| `-O0`, `-O2` | `-O0` keeps the source control flow; `-O1` to `-O3` simplify integer flow and dead bodies. |
 | `-Oeq-scalar` | Run the verified EqSat optimizer on EvoIR. |
 | `--eq-checker-sha256=SHA256`, `--eq-checker=PATH` | Pin the checker digest (or set `EVOCC_CHECKER_SHA256`), which `-Oeq-scalar` needs; choose the checker binary. |
 | `--eq-proof-dir=NEW_DIR` | Keep each certificate bundle; `tools/bench.py --verify-eqsat-chain NEW_DIR --checker PATH` replays them. |
@@ -250,7 +298,7 @@ Each lane writes a receipt; `render-status.py` renders the [dashboard](docs/stat
 | `tools/proof-native/`, `tools/lean/` | Native run of proof-required output; registry generator, proof audit, Rust–Lean vectors |
 | `tests/contracts/`, `tests/fixtures/` | Receipts and pinned corpora; C, EvoIR and output fixtures (`verification/`: proof-required inputs) |
 | `tests/acceptance/`, `tests/ui/check/` | Sealed-oracle and differential harnesses; expected `--check` diagnostics |
-| `docs/` | Evidence, dashboard, checker guide, notebook, design, figures; `docs/archive/` keeps the history |
+| `book/`, `docs/` | The book; evidence, dashboard, checker guide, design, figures; `docs/archive/` keeps the history |
 
 #### Documentation
 
@@ -744,3 +792,9 @@ pointers, measure the compile cost of checking, and close the size gap under tra
 14. L. de Moura and S. Ullrich. The Lean 4 theorem prover and programming language. In *Automated Deduction – CADE 28*, LNCS, pp. 625–635, 2021.
 15. R. Kumar, M. O. Myreen, M. Norrish and S. Owens. CakeML: a verified implementation of ML. In *POPL 2014*, pp. 179–191, 2014.
 16. J.-H. Jourdan, F. Pottier and X. Leroy. Validating LR(1) parsers. In *ESOP 2012*, 2012.
+
+## License
+
+EvoCC is licensed under the [Apache License 2.0](LICENSE). Copyright 2026 Haoran Wang, NexRidge.
+[NOTICE](NOTICE) is the notice file of the license.
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists the third-party components and their licenses.
