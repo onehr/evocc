@@ -903,6 +903,15 @@ impl Preprocessor {
         self.source_paths.get(&file).map(String::as_str)
     }
 
+    /// Return every source file that this preprocessing run opened, in the
+    /// order of first use. The entry file comes first. Forced includes and
+    /// headers follow with their resolved paths.
+    pub fn opened_sources(&self) -> Vec<&str> {
+        let mut files: Vec<_> = self.source_paths.iter().collect();
+        files.sort_by_key(|(file, _)| file.raw());
+        files.into_iter().map(|(_, path)| path.as_str()).collect()
+    }
+
     pub fn define(&mut self, name: String, body: Vec<Token>) {
         self.builtin_feature_queries.remove(&name);
         self.macros.define(name, body, vec![]);
