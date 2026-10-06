@@ -2328,13 +2328,14 @@ Limits of the accepted result:
 1. The entry assumption is `AbiSourceEntry`. The caller obeys AAPCS64 for the
    low `w` bits of each argument of width `w` (its register or 8-byte stack
    slot) and gives sufficient stack. The upper bits are free. The pipeline
-   check refuses at stage `V02` a post-SSA entry that does not read each
+   check refuses at stage `lowering` a post-SSA entry that does not read each
    32-bit parameter through a 32-bit register (`entryViewsOk`).
-2. V03 refuses an allocation with edge bridge blocks. No pilot entry has one.
-3. V05 refuses the root-deletion (alias) certificate form. V05 refuses an
-   extraction with more than one instruction. V05 does not use facts through
-   add, sub, mul and comparison: the result for these facts is "unknown",
-   because their existing proofs use SAT reflection.
+2. The stage `allocation` refuses an allocation with edge bridge blocks. No
+   pilot entry has one.
+3. The stage `rewrite` refuses the root-deletion (alias) certificate form. It
+   refuses an extraction with more than one instruction. It does not use
+   facts through add, sub, mul and comparison: the result for these facts is
+   "unknown", because their existing proofs use SAT reflection.
 4. The mode supports only Linux AArch64 with the default code generation
    options, and only `-O0 -fno-builtin`. The one optional rewrite option is
    `-Oeq-scalar` with a pinned `--eq-checker-sha256`. Every function in the
