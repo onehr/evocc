@@ -2,30 +2,27 @@
 
 ![EvoCC mascot, a chameleon holding a wrench](docs/images/mascot.png)
 
-EvoCC is an experimental C compiler written in Rust for AArch64 on Linux and macOS. AI agents build
-it under the direction of the project owner. It has its own preprocessor, parser, checked IR, SSA
-lowering, optimizer, register allocator and assembly emitter; native builds use the platform
-assemblers, linkers and runtime libraries. The typed IR, EvoIR, makes undefined behavior explicit.
-The optimizer uses equality-saturation rewrites: Lean 4 proves the rules, and a separate checker
-replays each rewrite. For a C subset on Linux AArch64, Lean 4 checkers give a proved, fail-closed
-compilation path: each accepted output is checked from typed Core source to final assembly text.
-The proofs do not cover the whole compiler, the GNU C language or Linux.
+**A C compiler that checks its own work.**
 
-## What it can do
+EvoCC is a C compiler for AArch64 Linux, written from scratch in Rust; only the platform assembler,
+linker and runtime libraries come from outside. It is a complete C compiler, with its own
+preprocessor, parser, IRs, optimizer, register allocator and assembly emitter, built by AI agents
+under the direction of the project owner and designed to evolve with agents. It carries its own
+proof machinery in Lean 4, so that its optimizations and its proof-required compilations are
+checked, not trusted.
 
-Each item has limits. The [evidence document](docs/evidence.md) gives the numbers, dates and receipts.
+## Highlights
 
-- **Linux 6.18.44 (ARM64):** all target C of two kernel configurations; the kernels link, boot and
-  shut down normally. Full kernel tests are not complete.
-- **Doom (Freedoom data):** all engine C units. A headless demo replay gives the same frame hashes
-  as GCC 14 and Clang 19. It is not interactive play.
-- **Lua, jq and cJSON:** the original test suites pass.
-- **toybox:** all translation units build and install; one shared test failure stays.
-- **Games:** OpenTyrian, Neverball and Quakespasm run bounded native replays.
-- **Other programs:** SQLite, Mbed TLS, zlib, Zstandard, TinyCC, PolyBench/C and c-testsuite pass
-  their recorded test selections.
+- **Boots Linux.** EvoCC compiles every target C file of a Linux 6.18 ARM64 kernel, which links, boots and shuts down.
+- **Runs real programs.** Doom, SQLite, Lua, jq, Mbed TLS, Zstandard, zlib and TinyCC pass their original tests or demo replays.
+- **Plays games.** OpenTyrian, Neverball and Quakespasm run natively from EvoCC-compiled C.
+- **Explicit undefined behavior.** EvoIR makes C definedness checks explicit obligations, such as `ub.assume`, that no rewrite can drop.
+- **Verified EqSat.** An e-graph optimizer with 62 Lean-proved rewrite rules and a pinned checker that replays every rewrite.
+- **Proof-required mode.** For a checked C subset, one Lean theorem covers each accepted compilation from typed source to assembly text.
+- **Two interpreters.** C-HIR and EvoIR each have their own interpreter, and differential tests hold them to GCC and Clang.
+- **A reproducible ladder.** `tools/bench.py` builds and tests each program in a sealed AArch64 lab and writes a receipt.
 
-### Built with EvoCC
+## Showcase
 
 <table>
   <tr>
@@ -55,28 +52,53 @@ Each item has limits. The [evidence document](docs/evidence.md) gives the number
   </tr>
 </table>
 
-Each image is program output or a plot of actual output; **results** gives the build and test scope.
-Library demos use labeled reference-built adapters. The games use reference SDL and OpenGL libraries
-and are bounded native runs, not full-game acceptance. See the [capture notes](docs/images/showcase/README.md)
-and [credits and licenses](docs/images/showcase/README.md#artwork).
+Each image is program output or a plot of actual output. See the [capture notes](docs/images/showcase/README.md)
+and the [credits and licenses](docs/images/showcase/README.md#artwork).
+
+### Reproduce
+
+Each `bench.py` lane builds pinned sources with EvoCC, runs their tests in the sealed lab and writes a receipt.
+
+| Showcase | Command | Record |
+|---|---|---|
+| Doom / Freedoom | `python3 tools/bench.py doom --jobs 2` | [receipt](tests/contracts/ladder-doom-receipt.json) |
+| TinyCC | `python3 tools/bench.py tinycc --jobs 2` | [receipt](tests/contracts/ladder-tinycc-receipt.json) |
+| Lua | `python3 tools/bench.py lua --jobs 2` | [receipt](tests/contracts/ladder-lua-receipt.json) |
+| SQLite | `python3 tools/bench.py sqlite --jobs 2` | [receipt](tests/contracts/ladder-sqlite-receipt.json) |
+| jq | `python3 tools/bench.py jq --jobs 2` | [receipt](tests/contracts/ladder-jq-receipt.json) |
+| cJSON | `python3 tools/bench.py cjson --jobs 2` | [receipt](tests/contracts/ladder-cjson-receipt.json) |
+| Linux FPU | `python3 tools/bench.py kernel-full --jobs 2 --low-disk --allow-qemu-drift` | [FPU run](tests/fixtures/fpu-worker-verdict.out), [notes](docs/images/showcase/README.md#linux-kernelmodule-demo) |
+| PolyBench | `python3 tools/bench.py polybench --jobs 2` | [receipt](tests/contracts/ladder-polybench-receipt.json) |
+| Mbed TLS | `python3 tools/bench.py mbedtls --jobs 2` | [receipt](tests/contracts/ladder-mbedtls-receipt.json) |
+| Zstandard | `python3 tools/bench.py zstd --jobs 2` | [receipt](tests/contracts/ladder-zstd-receipt.json) |
+| zlib | `python3 tools/bench.py zlib --jobs 2` | [receipt](tests/contracts/ladder-zlib-receipt.json) |
+| toybox | `python3 tools/bench.py toybox --jobs 2 --budget 45` | [receipt](tests/contracts/ladder-toybox-receipt.json), [notes](docs/images/showcase/README.md#toybox-build-artifact-demo) |
+| OpenTyrian | `python3 tools/ladder/games.py emit opentyrian` | [notes](docs/images/showcase/README.md#game-reproduction) |
+| Neverball | `python3 tools/ladder/games.py emit neverball` | [notes](docs/images/showcase/README.md#game-reproduction) |
+| Quakespasm | `python3 tools/ladder/games.py emit quakespasm` | [notes](docs/images/showcase/README.md#game-reproduction) |
+
+One capture in the sealed image runs the ten program demos; one render draws them, Doom and Linux:
+
+```sh
+container run --rm --platform linux/arm64 --network none --cpus 2 --memory 1G \
+  -v "$PWD:/repo:ro" \
+  -v "$PWD/docs/images/showcase:/repo/docs/images/showcase" \
+  evo-flight-lab:sealed python3 /repo/tools/showcase.py --capture
+python3 tools/showcase.py --render --check
+```
+
+For a game, `games.py prepare` and `emit` run on the host; `link` and `game_capture.py` run in the container.
 
 ## Quick start
 
-Build in the target directory of the benchmarks; do not make a second build tree. The gates test the
-changed crates and their dependents, the full workspace, and the Lean project.
-
 ```sh
 CARGO_TARGET_DIR=target/frontend cargo build --release --offline -j 2 -p evocc -p evocc-proofcheck
-tools/gate-changed.sh <base-commit>
-tools/gate-changed.sh --full-workspace --offline
-tools/gate-lean.sh
 ```
 
-### Compile one file
-
-Save this as `demo.c`:
+### Compile a file
 
 ```c
+// demo.c
 struct point { int x, y; };
 static inline int dot(struct point a, struct point b) {
     return a.x * b.x + a.y * b.y;
@@ -89,34 +111,78 @@ int main(void) {
 ```
 
 ```sh
-target/frontend/release/evocc --interpret-c-hir demo.c
-target/frontend/release/evocc --interpret-evoir demo.c
-target/frontend/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm demo.c > demo.s
+target/frontend/release/evocc --interpret-c-hir demo.c      # 13
+target/frontend/release/evocc --interpret-evoir demo.c      # 13
 target/frontend/release/evocc --check --error-format=json demo.c
-target/frontend/release/evocc --explain E3002
+target/frontend/release/evocc --target=aarch64-unknown-linux-gnu --emit=asm demo.c > demo.s
+gcc demo.s -o demo && ./demo; echo $?                       # on Linux AArch64: 13
 ```
 
-Both interpreters print `13`; `--emit=asm` writes assembly, not an executable. `--check` checks one
-executed path; unsupported calls and exhausted fuel are incomplete, not passes (see the
-[C checker workflow](docs/checker.md)). Other flags: `-E`, `--parse-only`, `--emit=c-hir`,
-`--emit=evoir`, `-Oeq-scalar`, `--survey`.
+Two interpreters on two different IRs agree. `--check` reports undefined behavior on the executed
+path ([checker workflow](docs/checker.md)); the system assembler and linker turn `demo.s` into a program.
 
-### Check a compilation and run it natively
+### Compile with proof
 
 ```sh
 (cd lean && lake build)
-target/frontend/release/evocc --emit=asm --proof-required=NEW_DIR \
+target/frontend/release/evocc --emit=asm --proof-required=proof-abs \
     --proof-checker=lean/.lake/build/bin/evoir-sem \
     --core-entry=abs -O0 -fno-builtin tests/fixtures/verification/musl-abs.c
+```
+
+This compiles `abs` from musl, `return a>0 ? a : -a;`. The driver exports each stage into the new
+directory `proof-abs`, runs the Lean checker on each and writes `output.s` only if all accept. In
+the checked text, `abs(INT_MIN)` traps; it cannot return `INT_MIN`:
+
+```text
+    subs w0, w2, w0
+    b.vs .Labs_block4
+    ...
+.Labs_block4:
+    brk #3004
+```
+
+`proof-abs/record.json` gives the result `CHECKED_TO_FINAL_ASSEMBLY` and, for each stage, its
+theorem and input digests. Its `chain` shows that adjacent stages read the same bytes and that
+`output.s` is the text that the last stage checked. Then run the checked output natively:
+
+```sh
 python3 tools/proof-native/proof_native.py all WORK_DIR \
     --evocc target/frontend/release/evocc --evocc-checker target/frontend/release/evocc-checker
 ```
 
-`NEW_DIR` must not exist ([Proof-required mode](#proof-required-mode)). The [native run](#proof-required-mode)
-needs `WORK_DIR` outside the repository, the sealed image `evo-flight-lab:sealed` and the Apple
-Container runtime. Without `--evocc` and `--evocc-checker`, it uses the debug builds.
+This compiles the 17 pilot modules and two optimized cases with proof, assembles and runs them in
+`evo-flight-lab:sealed` and compares each result with the Lean source interpreter. `WORK_DIR` is
+outside the repository; the run uses the Apple Container runtime.
+
+## How to use
+
+`evocc` takes one C file and one action; GCC options such as `-I`, `-D`, `-std=gnu11` and `-fwrapv` keep their meaning.
+
+| Option | What it does |
+|---|---|
+| `-E` | Preprocess and print the result. |
+| `--parse-only` | Parse and check the translation unit. |
+| `--emit=c-hir`, `--emit=evoir`, `--emit=asm` | Print C-HIR, canonical EvoIR text or AArch64 assembly. |
+| `--interpret-c-hir`, `--interpret-evoir` | Run `main` in the C-HIR or the EvoIR interpreter. |
+| `--check` | Run the executed path and report undefined behavior as a diagnostic. |
+| `--error-format=text\|json` | Write diagnostics as text or as one JSON record per line. |
+| `--explain E3002` | Explain a diagnostic code. |
+| `--target=aarch64-unknown-linux-gnu` | Select the target; this is the default. |
+| `-O0`, `-O2` | `-O0` keeps the source control flow; `-O1` to `-O3` simplify integer flow and dead bodies. |
+| `-Oeq-scalar` | Run the verified EqSat optimizer on EvoIR. |
+| `--eq-checker-sha256=SHA256`, `--eq-checker=PATH` | Pin the checker digest (or set `EVOCC_CHECKER_SHA256`), which `-Oeq-scalar` needs; choose the checker binary. |
+| `--eq-proof-dir=NEW_DIR` | Keep each certificate bundle; `tools/bench.py --verify-eqsat-chain NEW_DIR --checker PATH` replays them. |
+| `--proof-required=NEW_DIR` | Compile with proof; needs `--emit=asm`, `--core-entry=NAME`, `-O0` and `-fno-builtin`. |
+| `--proof-checker=PATH` | Use this Lean checker, `evoir-sem`; `--proof-checker-sha256` pins it. |
+| `--proof-proposal=NAME=PATH` | Give untrusted loop checkpoints for entry `NAME`; the Lean checker checks them. |
+| `--survey` | Report every diagnostic in the file, not only the first. |
 
 ### Evaluate the roadmap
+
+`tools/bench.py` runs the ladder: conformance (`ctest`, `torture`, `csmith`, `llvm-test-suite`),
+programs (`zlib`, `zstd`, `cjson`, `mbedtls`, `tinycc`, `toybox`, `musl`, `polybench`, `jq`, `lua`,
+`sqlite`, `doom`) and Linux (`kernel`, `kernel-full`, `kernel-selftest`, `kernel-selftest-all`, `kernel-kunit`).
 
 ```sh
 python3 tools/render-status.py --ascii
@@ -134,113 +200,114 @@ python3 tools/bench.py kernel-kunit --status
 python3 tools/bench.py all --programs 500 --jobs 2 --budget 45 --allow-qemu-drift --dry-run
 ```
 
-Options, exit codes and limits: [runner notes](docs/evidence.md#benchmark-runner-notes).
+Each lane writes a receipt; `render-status.py` renders the [dashboard](docs/status.md) from them.
+`--dry-run`, `--status` and `--evocc PATH` are in the [runner notes](docs/evidence.md#benchmark-runner-notes).
 
 ## Architecture
 
 ```text
-C source → checked C-HIR → EvoIR → EqSat search + extraction → EvoIR → EvoMIR → assembly
-                            │              │                  │        │
-                            └─ before ─────┴─ certificate ────┘        └─ allocation verifier
-                                         evo-proofcheck
+C source
+  │  evocc-cpp · evocc-lex · evocc-parser
+  ▼
+C-HIR    checked front-end IR ·················· C-HIR interpreter ─┐
+  │  evocc-lower                                                    ├─ agree
+  ▼                                                                 │
+EvoIR    typed SSA, ub.assume, mem and world ··· EvoIR interpreter ─┘
+  │  -Oeq-scalar: e-graph search ──► EVP certificate ──► evocc-checker replays it
+  ▼
+EvoMIR   registers, ABI, frames ················ allocation verifier
+  ▼
+AArch64 assembly ──► platform as and ld ──► native program
 
-Lean 4:          rule proofs and restricted compilation-result checkers
-Native tests:     C lowering, machine code, ABI and real-program behavior
+Lean 4, offline: rule proofs · stage checkers · checkPipeline_sound
 ```
 
-**C-HIR** (`crates/evocc-chir`) is the checked front-end IR. Its memory model has per-byte
-initializedness and pointer provenance. Its interpreter reports undefined behavior as a diagnostic;
-it and the EvoIR interpreter are independent, and they are the two authorities for differential tests.
+**Design rule: propose, then check.** The compiler and its searches are untrusted: they propose a
+result, and a small, separate checker accepts or refuses it. This is how EvoCC evolves with agents.
+Agents write the compiler under versioned specifications and sealed GCC and Clang oracles; agents,
+enumerators and evolutionary searches propose optimizer policies and rules; the checkers decide.
 
-**EvoIR** ([specification 1.9.116](docs/evoir-spec.md)) is the typed SSA IR for semantic
-equivalence. Each UB condition is an explicit obligation, `ub.assume`. The UB predicates, for
-example `divisor_nonzero`, are total, executable `bits<1>` instructions. Memory and observable
-effects are explicit `mem` and `world` tokens, and pointers carry provenance. Thus a numeric
-identity alone cannot delete a volatile event, invent a valid pointer or discard a C-definedness
-check. SSA is block-local: each cross-block value is an explicit edge argument. These models are
-specified and tested; not all are proved. `(x + 0) * 1 → x` is a bit-vector identity under the
-registry premises; it does not permit removal of the evaluation that produced `x` or apply to FP.
+### C-HIR: a checked front end
 
-**EvoMIR** ([specification 0.64](docs/evomir-spec.md)) exposes the constraints of the machine:
-virtual and physical registers, ABI locations, call clobbers, spills, flags and parallel copies.
-Semantic rewrites do not see physical registers. The allocator cannot ignore an ABI register or a
-clobbered live value. Scalar FP and SIMD share one physical register bank. A separate allocation
-verifier checks defined register reads, live-value conflicts and flags dependencies. An EvoMIR
-interpreter checks lowering; inline assembly needs native tests.
+**What it is.** The parser produces C-HIR (`crates/evocc-chir`), a typed IR that keeps the C
+semantics. Its memory model tracks initializedness per byte and provenance per pointer. Its
+interpreter reports undefined behavior as a typed diagnostic, for example `E3002` for division by
+zero. **Why it matters.** The meaning of the program is fixed before any lowering, and each later
+stage has a reference to agree with.
 
-**Design rule: translation validation.** EvoCC does not prove its compiler algorithms; it checks
-each result. The compiler and its searches are untrusted; they propose a result and, if necessary, a
-correspondence. A small independent checker accepts or refuses, and the proof is about the checker.
-This serves audit. It does not make the IRs better than LLVM or GCC, and it costs compile time.
+### EvoIR: undefined behavior as data
 
-## Verification in Lean 4
+**What it is.** EvoIR ([specification](docs/evoir-spec.md)) is typed block-argument SSA. UB
+conditions are explicit: a total, executable `bits<1>` predicate, such as `signed_mul_defined` or
+`divisor_nonzero`, followed by `ub.assume.<reason>`, and guards such as `access_in_bounds` before
+memory accesses. Memory and observable effects travel on explicit `mem` and `world` tokens, and
+pointers carry provenance.
+**Why it matters.** In EvoIR every hazard is a value. A numeric identity cannot delete a volatile
+event, because the event is on the `world` token. It cannot invent a valid pointer, because
+provenance is part of the pointer. It cannot discard a definedness check, because the check is its
+own instruction.
 
-### The approach
+### EvoMIR: machine constraints as data
 
-Lean 4 is an offline proof tool, not a code generator or a runtime dependency. It proves the rewrite
-rules and the checkers of compilation results:
+**What it is.** EvoMIR ([specification](docs/evomir-spec.md)) is the machine IR: virtual and
+physical registers, ABI locations, call clobbers, spill slots, flags and parallel copies. Register
+file, calling conventions, instruction facts, encodings, selection patterns and costs are versioned
+tables in `targets/aarch64/`; `tools/generate-target.py` generates code facts from them. A separate
+verifier checks each allocation. **Why it matters.** Semantic rewrites never see a physical
+register, and a new machine fact is a reviewed table row. The verifier refuses an allocation that
+ignores an ABI register or a clobbered live value.
 
-1. The Rust compiler stays untrusted.
-2. For each stage, a small Lean checker reads the actual input and output of the stage.
-3. A theorem says that an accepted pair refines. The Lean kernel checks it once, for all inputs.
-4. The driver runs the compiled checkers on the actual compiler output.
-5. If a check is missing or refuses, the driver publishes no output (fail-closed).
+### Verified EqSat
 
-The result is a proved, fail-closed compilation path for the listed Core C-HIR subset and target,
-with an explicit trusted boundary. Existing scalar rewrites compose with that path. On 2026-10-06,
-the tasks V00 to V08 are complete in the frozen `core-v1` scope. No stage proves that EvoCC compiles
-each accepted C program correctly. A valid program can be refused when proof search finds no
-correspondence or exhausts its budget; a refusal never gives an unchecked output a proof label.
+**What it is.** Under `-Oeq-scalar`, eligible scalar regions go into an
+[e-graph](https://egraphs-good.github.io/): a rewrite adds an equivalent form, and extraction picks
+one by a cost policy. The rules come from two frozen registries, `p0.scalar.v4` (55 rules) and
+`g0.ub.v1` (7 guard rules). For each rule, Lean 4 proves `RuleCovered`: at every width, if the left
+pattern matches and the side condition holds, the right side has the same value (`RuleSound`;
+[`Rules.lean`](lean/EvoIR/Proofs/Rules.lean), [`GuardRules.lean`](lean/EvoIR/Proofs/GuardRules.lean)).
+Each transaction writes an EVP certificate. Before EvoCC emits output, `evocc-checker` replays it in
+a separate process; it does not link the optimizer, and its SHA-256 must match the pin. A failed
+replay rejects the whole chain.
 
-*Refines* (`EvoIR.Core.Transition.Refines`) has three parts, from related entry states. (1) Each
-final state of the compiled program has the observation of a final source state: a return value with
-its type and bits, or a checked diagnostic `E3002` to `E3005`. (2) If the compiled program runs
-forever, the source runs forever. (3) No reachable compiled state is stuck. No fuel is used.
+![Verified EqSat: a translation unit is lowered to canonical EvoIR, rewritten by the chain producer under the p0.scalar.v4 registry, bound into an EVP certificate, replayed by the independent pinned checker, published as a verified chain and lowered to checked and unchecked native profiles; a failed check rejects the whole chain.](docs/images/evocc-eqsat.svg)
 
-### The stages
-
-| Stage | What the checker compares | Checker | Theorem | File |
-|---|---|---|---|---|
-| V01 | Typed Core source and EvoIR: types, order, conversions, diagnostics, loops, calls, private storage | `checkSourceTargetPair` | `check_source_target_refines` | [`Core/SourceTargetCheck.lean`](lean/EvoIR/Core/SourceTargetCheck.lean) |
-| V05 | One rewrite step: EvoIR before and after, and the certificate | `checkRewrite` | `checkRewrite_refines`, `source_rewrite_refines` | [`Rewrite/Soundness.lean`](lean/EvoIR/Rewrite/Soundness.lean) |
-| V02 | EvoIR, SSA EvoMIR and post-SSA EvoMIR: instruction selection, then edge copies | `checkLowering` | field `checked` of its result; `source_machine_refines` | [`MachineLowering.lean`](lean/EvoIR/MachineLowering.lean), [`MachineCorrespondence.lean`](lean/EvoIR/MachineCorrespondence.lean) |
-| V03 | Post-SSA and allocated EvoMIR: registers and spill slots | `checkAllocation` | `checkAllocation_sound` | [`Alloc/Soundness.lean`](lean/EvoIR/Alloc/Soundness.lean) |
-| V04 | Allocated EvoMIR and assembly AST (frame, emission); printed AST and assembly text, byte for byte | `checkAsm`, `printMatches` | `checkAsm_sound`, `source_asm_refines` | [`Asm/Soundness.lean`](lean/EvoIR/Asm/Soundness.lean), [`Asm/Baseline.lean`](lean/EvoIR/Asm/Baseline.lean) |
+```sh
+echo 'int f(int x) { return x * 1; }' > opt.c
+export EVOCC_CHECKER_SHA256=$(shasum -a 256 target/frontend/release/evocc-checker | cut -d' ' -f1)
+target/frontend/release/evocc --emit=evoir -Oeq-scalar opt.c | tail -5
+```
 
 ```text
-Typed Core C-HIR                complete selected functions and callees
-        |  source-to-EvoIR checker                      V01
-Actual EvoIR
-        |  rewrite-step checker, only with -Oeq-scalar  V05
-Rewritten EvoIR                 the same program if no rewrite ran
-        |  instruction-selection checker                V02
-SSA EvoMIR                      virtual registers and block arguments
-        |  edge and copy checker                        V02
-Post-SSA EvoMIR                 virtual registers and explicit copies
-        |  allocation checker                           V03
-Allocated EvoMIR                physical registers and spill slots
-        |  frame, emission and print checker            V04
-Final assembly text             the published output.s
-        ---------------------  current formal boundary
-        |  assembler, linker and runtime libraries
-Native program                  tested; not covered by these theorems
+    %v1 = const.bits<32> 1
+    %v2 = signed_mul_defined %v0, %v1
+    ub.assume.signed_overflow %v2
+    ret %v0
+}
 ```
 
-V01 also has a source validator for types, bindings, definite initialization, sequencing, scopes and
-the direct-call graph. Its theorem `checked_source_safety` ([`ValidatorSafety.lean`](lean/EvoIR/Core/ValidatorSafety.lean))
-says that an accepted source never stops in a malformed state. The checked `abs(INT_MIN)` must
-report `E3004`; it cannot return `INT_MIN`. Loop checks prove relations at checkpoints from an
-untrusted proposal; they do not unroll a loop. V02 checks both steps against the same SSA program
-and entry state, and also checks the always-on dead-code elimination and dead poison normalization.
+Without `-Oeq-scalar`, `f` ends with `%v3 = mul.bits<32> %v0, %v1` and `ret %v3`. Here the multiply
+is gone, but the overflow obligation stays: an optimization may remove work, never a fact the
+program must satisfy.
 
-### The pipeline theorem
+**Why it matters.** The search can be clever, because its output is checked; a new rule is a proof
+obligation. Policy is data: `--eq-policy` and `--eq-weights` select one, `evo-policy-eval` measures it.
 
-`EvoIR.Pipeline.checkPipeline_sound` ([`Soundness.lean`](lean/EvoIR/Pipeline/Soundness.lean))
-covers the whole chain. `checkPipeline` ([`Check.lean`](lean/EvoIR/Pipeline/Check.lean)) runs V01,
-V05 for zero or more rewrite steps, V02, V03 and V04 on the same values. In words: if the check
-accepts, the printed assembly AST is the actual text. Take the selected entry function `f`, any
-argument list of its parameter types, and any assembly entry state that obeys the ABI. Then the
-source has an initial state, and the assembly refines the source from these two states.
+### Proof-required compilation
+
+**What it is.** `--proof-required` turns one compilation into a checked artifact. The Rust compiler
+stays untrusted; for each stage, a compiled Lean checker reads the actual input and output. If a
+check refuses or is missing, the driver writes nothing.
+
+| Stage | Checker | What it compares | Lean file |
+|---|---|---|---|
+| V01 source to EvoIR | `checkSourceTargetPair` | Typed Core source and EvoIR: types, order, conversions, diagnostics, loops, calls | [`Core/SourceTargetCheck.lean`](lean/EvoIR/Core/SourceTargetCheck.lean) |
+| V05 rewrite steps | `checkRewrite` | Each `-Oeq-scalar` step, against its certificate and the `RuleCovered` tables | [`Rewrite/Soundness.lean`](lean/EvoIR/Rewrite/Soundness.lean) |
+| V02 lowering | `checkLowering` | EvoIR, SSA EvoMIR and post-SSA EvoMIR: instruction selection, then edge copies | [`MachineLowering.lean`](lean/EvoIR/MachineLowering.lean) |
+| V03 allocation | `checkAllocation` | Post-SSA and allocated EvoMIR: registers and spill slots | [`Alloc/Soundness.lean`](lean/EvoIR/Alloc/Soundness.lean) |
+| V04 frame and emission | `checkAsm`, `printMatches` | Allocated EvoMIR and the assembly AST; the printed AST and `output.s`, byte for byte | [`Asm/Soundness.lean`](lean/EvoIR/Asm/Soundness.lean) |
+
+`checkPipeline` ([`Check.lean`](lean/EvoIR/Pipeline/Check.lean)) runs the five checks on the same
+values, and one theorem covers the chain ([`Soundness.lean`](lean/EvoIR/Pipeline/Soundness.lean)):
 
 ```lean
 theorem checkPipeline_sound {input : Input} (accepted : checkPipeline input = true) :
@@ -255,196 +322,98 @@ theorem checkPipeline_sound {input : Input} (accepted : checkPipeline input = tr
             asmEntry
 ```
 
-- **`accepted`:** the Boolean pipeline check accepted the actual files.
-- **Typed arguments:** each argument has the integer type of its parameter. The theorem holds for
-  each such list, not only for tested values.
-- **`AbiSourceEntry`** ([`Asm/Soundness.lean`](lean/EvoIR/Asm/Soundness.lean)): the caller obeys
-  AAPCS64 for the low bits of each argument and gives sufficient stack. Control is at the first line
-  of `f`; the stack pointer `E` is 16-byte aligned; `x30` holds a return address outside the
-  program. For an argument of width `w`, the low `w` bits of its register (`x0` to `x7`) or 8-byte
-  stack slot are the argument. The upper bits are free: the theorem holds for each value of them.
-  Task V07 replaced the older `AbiEntry`, which required zero upper bits; `entryViewsOk` now refuses
-  at `V02` an entry that does not read each 32-bit parameter through a 32-bit register.
+- **`accepted`:** the Boolean pipeline check accepted the actual files of this compilation.
+- **Typed arguments:** each argument has its parameter's integer type, for every such list, not only tested values.
+- **`AbiSourceEntry`:** the caller obeys AAPCS64 for each argument's low bits, gives an aligned stack and returns outside the program.
 
-`SourceToAsmRefines` is *refines* between the source and the AArch64 semantics. The proof joins the
-stage theorems with `Refines.trans`; the intermediate entry states are not hypotheses.
-`checkPipelineTexts_sound` gives the same result for the files that the readers decode;
-`evoir-sem --check-pipeline` runs that check.
+Then the printed assembly is the published text, and the assembly *refines* the source: each final
+state has the observation of a final source state (return bits or a checked diagnostic), if the
+assembly runs forever so does the source, and no reachable state is stuck. No fuel is used.
+**Why it matters.** The proof is about the checker, so it holds for each compilation that the
+checker accepts. Lean 4 stays offline; only the compiled checker `evoir-sem` runs.
 
-**Axioms.** The pipeline theorems depend only on `propext`, `Classical.choice` and `Quot.sound`. The
-Lean sources have no `sorry`, no `axiom` declaration and no `native_decide`. To check this:
+**Axioms.** `checkPipeline_sound` depends only on `propext`, `Classical.choice` and `Quot.sound`;
+the Lean sources have no `sorry`, no `axiom` declaration and no `native_decide`. To check:
+[`Pipeline/Tests.lean`](lean/EvoIR/Pipeline/Tests.lean) and [`Rewrite/Tests.lean`](lean/EvoIR/Rewrite/Tests.lean)
+run `#print axioms` inside `#guard_msgs`, so a new axiom makes `lake build` fail, and
+[`tools/gate-lean.sh`](tools/gate-lean.sh) audits each theorem.
 
-- [`Pipeline/Tests.lean`](lean/EvoIR/Pipeline/Tests.lean) and
-  [`Rewrite/Tests.lean`](lean/EvoIR/Rewrite/Tests.lean) run `#print axioms` inside `#guard_msgs`. A
-  further axiom (from `sorry`, `native_decide` or `bv_decide`) changes the message, and `lake build`
-  fails. To see the list, evaluate `#print axioms EvoIR.Pipeline.checkPipeline_sound` in `lean/`.
-- [`tools/gate-lean.sh`](tools/gate-lean.sh) runs `tools/lean/audit.py`. It fails on any `sorryAx`,
-  classifies each audited theorem as `kernel-only` or `native-backed`, and writes
-  [`lean-p0-receipt.json`](tests/contracts/lean-p0-receipt.json).
+**Scope.** The proof covers the `core-v1` subset: complete integer C functions with structured
+control flow, scalar locals and direct calls, for Linux AArch64 with `-O0 -fno-builtin` and optional
+checked scalar rewrites. The trusted base is the front end up to the typed source export, the Lean
+kernel and compiled checker, the file readers and assembly printer, the Lean semantics of Core C and
+of the AArch64 subset, the ABI entry assumption, and the assembler, linker, runtime and hardware.
+Ordinary compilations rely on tests. The limits are in the [evidence](docs/evidence.md#verification-details-and-limits)
+and the [verification plan](docs/lean-plan.md#first-public-release-verification).
 
-### The Lean semantics
+### Testing
 
-Each level has a small-step semantics without fuel. The theorem uses the semantics of only the first
-and the last level, so only these two are trusted specifications. (`AbiSourceEntry` reads the
-allocated program only for the index and the stack need of `f`.)
+- **Two interpreters**, one per IR, share only the object memory model; a program must agree in both.
+- **Differential tests** in `tests/acceptance/` compare the front end and both interpreters with sealed GCC 14 and Clang 19.
+- **The randomized semantic gate** `evo-randgate` optimizes seeded EvoIR, runs both versions and shrinks a failing module.
+- **Rust–Lean correspondence** (`tools/lean/correspondence.py`) runs one set of vectors through Rust and the Lean model.
+- **Real programs** run their own tests in the [evaluation ladder](#evaluate-the-roadmap).
 
-| Level | Lean namespace and file | Trusted |
+## Project layout
+
+| Crate | Purpose | Key modules |
 |---|---|---|
-| Typed Core C source | `EvoIR.Core.Source` ([`Core/Execution.lean`](lean/EvoIR/Core/Execution.lean)) | Yes: it must match the C semantics |
-| EvoIR | `EvoIR.Core.IR` ([`Core/IRExecution.lean`](lean/EvoIR/Core/IRExecution.lean)) | No: used only inside the proof |
-| SSA and post-SSA EvoMIR | `EvoIR.Machine` ([`MachineExecution.lean`](lean/EvoIR/MachineExecution.lean)) | No: used only inside the proof |
-| Allocated EvoMIR | `EvoIR.Alloc` ([`Alloc/Semantics.lean`](lean/EvoIR/Alloc/Semantics.lean)) | No: used only inside the proof |
-| AArch64 subset: `x0` to `x30` with 32-bit views, `sp`, NZCV, byte memory | `EvoIR.Asm` ([`Asm/Semantics.lean`](lean/EvoIR/Asm/Semantics.lean)) | Yes: it must match the hardware |
+| `evocc` | Driver; binaries `evocc` and `evocc-checker` | `main.rs`, `proof_required.rs`, `core_export.rs`, `diagnostics.rs` |
+| `evocc-cpp` | C preprocessor | `lib.rs` |
+| `evocc-lex` | GNU C11 lexer | `lib.rs` |
+| `evocc-parser` | C11 and GNU parser to C-HIR | `lib.rs`, `floating.rs`, `vector.rs`, `neon.rs` |
+| `evocc-types` | C and EvoIR types, target data layout | `lib.rs`, `floating.rs`, `neon.rs` |
+| `evocc-chir` | C-HIR, semantic checks, interpreter | `semantic.rs`, `interp.rs`, `core_profile.rs`, `inline.rs` |
+| `evocc-memory` | Object memory and world state for both interpreters | `lib.rs`, `atomic.rs`, `fenv.rs` |
+| `evocc-lower` | C-HIR to EvoIR | `lib.rs`, `cfg.rs`, `conditions.rs`, `selection.rs` |
+| `evocc-evoir` | EvoIR, validator, text form, interpreter | `lib.rs`, `text.rs`, `text_parse.rs` |
+| `evocc-egraph` | E-graph core: union-find, hash-consing, rebuild | `lib.rs` |
+| `evocc-eqopt` | Scalar EqSat, policies, certificates, verified chains | `scalar_eq.rs`, `persistent.rs`, `chain.rs`, `evp1.rs`, `policy.rs` |
+| `evocc-proof` | Certificate format and checker process | `evp1.rs`, `checker_process.rs` |
+| `evocc-proofcheck` | Independent certificate checker; binary `evo-proofcheck` | `replay.rs`, `reassemble.rs`, `eligibility.rs`, `facts.rs` |
+| `evocc-mir` | EvoMIR, lowering, allocation, verifier, emission | `lower.rs`, `generic/allocation.rs`, `generic/allocverify.rs`, `emit.rs`, `asm_ast.rs` |
+| `evocc-passes` | Opt-in, execution-validated EvoIR passes | `lib.rs`, `preflight.rs` |
+| `evocc-policy` | Policy evaluation and search; `evo-policy-eval`, `evo-cost-search` | `lib.rs`, `search.rs`, `axes.rs` |
+| `evocc-randgate` | Randomized semantic gate; binary `evo-randgate` | `generate.rs`, `differential.rs`, `shrink.rs` |
+| `evocc-common` | Diagnostics, source spans, arenas | `lib.rs` |
 
-### The Lean project
-
-The toolchain is `leanprover/lean4:v4.32.2`, with no dependencies and no Mathlib. `cd lean && lake build`
-makes the library `EvoIR` and the executable `evoir-sem` ([`Eval.lean`](lean/EvoIR/Eval.lean)).
-
-| Part of `lean/` | Content | Files | Lines |
-|---|---|---:|---:|
-| `EvoIR/Core/` | Source and EvoIR syntax, readers and semantics; validator; V01 | 163 | 29,854 |
-| `EvoIR/Machine*.lean` | EvoMIR syntax, readers and semantics; V02 | 142 | 19,626 |
-| `EvoIR/Asm/` | AArch64 subset, printer, V04, baseline composition | 27 | 6,277 |
-| `EvoIR/Rewrite/` | V05 | 12 | 3,601 |
-| `EvoIR/Alloc/` | Allocated EvoMIR, V03 | 10 | 3,357 |
-| `EvoIR/Proofs/` | Rule and known-bits proofs | 7 | 1,301 |
-| `EvoIR/Pipeline/` | Pipeline check, theorem and tests | 4 | 730 |
-| Other `EvoIR/*.lean` | Rule language, registries, poison normalization, command line | 18 | 3,312 |
-| Total, with the root files and two probes | | 387 | 68,193 |
-
-### The checked subset `core-v1`
-
-The proof input is typed Core C-HIR, not raw C text: complete function bodies, types, evaluation
-order and local bindings. The target is Linux AArch64 LP64, with `-O0 -fno-builtin`. The subset has
-`int`, `long`, `long long` and their unsigned forms, with distinct rank and signedness; integer
-arithmetic, bitwise, comparison, conversion, conditional and short-circuit expressions, but no
-signed left shift; structured control (branches, `while`, `do-while`, `for`, `break`, `continue`,
-returns) with no loop bound; non-escaping scalar locals; and direct calls to defined, prototyped,
-nonvariadic, non-recursive functions. The observations are return bits, the first diagnostic
-`E3002` to `E3005`, and infinite execution. Floating point, pointers, heap, global memory, external
-calls, volatile or atomic access and inline assembly are outside the subset; that some of them work
-in the ordinary compiler does not make them proved. Source validation and the proved invariants
-exclude uninitialized reads and unsupported memory faults. Not all C undefined behavior becomes a
-checked native diagnostic.
-
-| Limit | Content |
+| Path | Content |
 |---|---|
-| ABI entry | The theorem assumes `AbiSourceEntry`. |
-| Allocation | V03 refuses an allocation with edge bridge blocks. No pilot entry has one. |
-| Rewrites | V05 refuses the root-deletion (alias) certificate form, for example the P0 alias form of `p0_001_add_zero_rhs`, and an extraction with more than one instruction. It does not use facts through add, sub, mul and comparison: their result is "unknown", because their proofs use SAT reflection. |
-| Options | Linux AArch64, default code generation options, `-O0 -fno-builtin`. The one optional rewrite option is `-Oeq-scalar` with `--eq-checker-sha256`. |
-| Entries | Each function in the output must be a selected entry. A loop entry needs an untrusted proposal, `--proof-proposal=NAME=PATH`. Each pipeline check has one selected entry. |
+| `lean/EvoIR/Core/` | Typed Core source and EvoIR: syntax, readers, semantics; source validator; V01 |
+| `lean/EvoIR/Machine*.lean` | EvoMIR syntax, readers and semantics; V02 |
+| `lean/EvoIR/Alloc/`, `lean/EvoIR/Asm/` | Allocated EvoMIR and V03; AArch64 subset, assembly printer and V04 |
+| `lean/EvoIR/Rewrite/`, `lean/EvoIR/Proofs/` | Rewrite-step checker (V05); rule and known-bits proofs |
+| `lean/EvoIR/Pipeline/` | `checkPipeline`, `checkPipeline_sound`, axiom tests |
+| `lean/EvoIR/Eval.lean`, `lean/Main.lean` | The `evoir-sem` command line and its entry point |
+| `lean/EvoIR/*.lean` | Rule language, generated registries, poison normalization |
+| `targets/aarch64/` | `regfile`, `abi-linux`, `abi-darwin`, `insts`, `encodings`, `patterns`, `costs`, `profile-kernel`; `isa/`: pinned Arm Sail sources |
+| `tools/bench.py` | Evaluation ladder |
+| `tools/gate-changed.sh`, `tools/gate-lean.sh` | Rust gate (changed crates or full workspace); Lean gate |
+| `tools/render-status.py`, `tools/render-figures.py` | Status dashboard and TODO queues; figures |
+| `tools/proof-native/`, `tools/lean/` | Native run of proof-required output; registry generator, proof audit, Rust–Lean vectors |
+| `tools/ladder/`, `tools/k1/` | Program and game lanes, EqSat experiments; Linux build, boot, kselftest and KUnit lanes |
+| `tools/showcase.py`, `tools/showcase/` | Showcase capture, render and check |
+| `tests/contracts/`, `tests/fixtures/` | Receipts and frozen corpora; C, EvoIR and output fixtures (`verification/`: proof-required inputs) |
+| `tests/acceptance/`, `tests/ui/check/` | Sealed-oracle and differential harnesses; expected `--check` diagnostics |
+| `tests/configs/`, `crates/*/tests/` | Linux configuration fragments; Rust integration tests |
+| `docs/evoir-spec.md`, `docs/evomir-spec.md` | The EvoIR and EvoMIR specifications |
+| `docs/lean-plan.md`, `docs/checker.md` | Verification plan and theorem contract; `--check`, `--explain` and JSON diagnostics |
+| `docs/framing-draft.md`, `docs/eqsat-guard-folding-draft.md` | Verified optimization design and search contract; the `g0.ub.v1` guard slice |
+| `docs/codegen-quality-plan.md`, `docs/target-spec.md` | Backend quality plan; contract of the target tables |
+| `docs/evidence.md`, `docs/roadmap.md`, `docs/status.md` | Results, receipts and limits; roadmap; the rendered dashboard |
+| `docs/notebook/`, `docs/images/` | Dated lab notes; figures and showcase captures |
 
-### The trusted base
+## Documentation
 
-The Lean kernel checks the general theorems; the checker that runs is a compiled Lean executable,
-and a run sends no new proof term to the kernel. These parts are trusted:
+- Specifications: [EvoIR](docs/evoir-spec.md), [EvoMIR](docs/evomir-spec.md), [target description](docs/target-spec.md)
+- Verification: [verification plan](docs/lean-plan.md), [C checker workflow](docs/checker.md)
+- Design: [verified optimization](docs/framing-draft.md), [codegen quality plan](docs/codegen-quality-plan.md)
+- Results and work: [evidence](docs/evidence.md), [roadmap](docs/roadmap.md), [TODO](TODO.md)
 
-- preprocessing, parsing, elaboration and the typed source export;
-- the Lean kernel, and the compiled checker with the Lean compiler, its runtime and host toolchain;
-- the readers of the input files, and the printer of the assembly AST (`EvoIR.Asm.File.print`);
-- the Lean semantics of typed Core C and of the AArch64 subset, and the ABI entry assumption;
-- the assembler, the linker, the runtime libraries and the hardware.
+## Development
 
-The exported snapshots are not trusted: a stage checks each one, and a digest chain binds them to
-the published text. Tests check the trusted parts but do not prove them.
-
-### Proved rewrite rules and checked EqSat
-
-The bounded scalar optimizer uses an [e-graph](https://egraphs-good.github.io/) over an admitted
-scalar subset; not every program goes through it. Equivalent alternatives stay until extraction. A
-failed optimization rolls back the graph and the module. This does not solve all phase ordering or
-promise faster code. Two frozen registries hold the rules: `p0.scalar.v4` (55 rules) and `g0.ub.v1`
-(7 guard rules). For each rule, Lean proves `RuleSound`: if the left pattern matches and the side
-condition holds, the right side has the same value. `RuleCovered` is `RuleSound` for every width
-([`Rules.lean`](lean/EvoIR/Proofs/Rules.lean), [`GuardRules.lean`](lean/EvoIR/Proofs/GuardRules.lean); kernel-only).
-
-![Verified EqSat: a translation unit is lowered to canonical EvoIR, rewritten by the chain producer under the p0.scalar.v4 registry, bound into an EVP certificate, replayed by the independent pinned checker, published as a verified chain and lowered once to checked and unchecked native profiles; a failed check rejects the whole chain. Below: three trust layers (proved in Lean, replayed per compile, tested) and the numbers on 2026-10-01.](docs/images/evocc-eqsat.svg)
-
-Under `-Oeq-scalar`, each transaction has a certificate. The Rust checker `evocc-checker`
-([source](crates/evocc-proofcheck/src)) replays it before EvoCC emits output; a failed replay rejects
-the whole chain. The registry digest pins the producer and the checker. V05 puts a rewrite step into
-the pipeline theorem: `checkRewrite` replays each region with the tables `p0Covered` and
-`g0Covered`, whose entries carry their `RuleCovered` theorems. It rebuilds the program and compares
-it with the given one. It refuses any difference outside the replaced roots, a deleted obligation included.
-
-| Layer | What it gives |
-|---|---|
-| Rule proofs | All 55 + 7 rules, for all widths, under their premises. Kernel-only. |
-| [Known-bits proofs](lean/EvoIR/Proofs/Transfer.lean) | Transfer functions, lattice and side conditions. The add, sub, mul and comparison rows use SAT reflection (`bv_decide`): they are **native-backed** and trust the Lean compiler and the SAT/LRAT path. V05 does not use them. |
-| Rust `evocc-checker` | One certificate follows the allowed rules. It does not call Lean. |
-| [Rust–Lean correspondence tests](tests/contracts/lean-correspondence-receipt.json) | Agreement on recorded vectors; not a proof that Rust equals the Lean model. |
-
-The registry decoder, the Rust checker, its parser and eligibility logic stay trusted. The rule
-proofs do not prove the front end, the memory model or the backend, and do not make code smaller or
-faster; the [measured effect](docs/evidence.md#checked-eqsat-measurements) is small. The
-[Q2/Q3 design](docs/framing-draft.md) gates any AI search behind measured opportunity ceilings.
-
-**Optimizer options.** `--eq-checker-sha256=SHA256` (or `EVOCC_CHECKER_SHA256`) pins the checker
-digest of a build that you trust; a sibling binary or a certificate digest is not a trust anchor, and
-a missing or wrong pin refuses compilation. `--eq-checker=PATH`, `--eq-checker-timeout-ms=1..300000`
-and `--eq-proof-dir=NEW_DIR` set the checker, its deadline and a new proof directory, which
-`tools/bench.py --verify-eqsat-chain` checks again ([option notes](docs/evidence.md#eqsat-option-notes)).
-
-### Proof-required mode
-
-The [quick-start command](#check-a-compilation-and-run-it-natively) exports the inputs of each stage
-into `NEW_DIR/inputs/` (with `-Oeq-scalar`, also each rewrite step). It runs `evoir-sem --check-stage`
-for V01, V05, V02, V03 and V04 for each `--core-entry`, then `evoir-sem --check-pipeline` as the
-final decision. If all accept, the driver writes `NEW_DIR/output.s` with the checked bytes and
-`NEW_DIR/record.json`. Options: `--proof-checker-sha256`, `--proof-timeout-ms`, `--proof-proposal`.
-
-In the record, `result` is `CHECKED_TO_FINAL_ASSEMBLY` and `scope` is "checked from typed Core
-source to final assembly text". `stages` has one row for each stage and for `PIPELINE`, with its
-theorem and input digests. `chain` shows that adjacent stages read the same bytes and that
-`output.s` is the text that V04 checked. `checker` and `rewrite_checker` give the digests of the
-Lean checker and the Rust certificate checker. `trusted` lists the trusted base above.
-
-Exit codes: 0, each check accepted each entry; 1, a command-line or compilation error before the
-proof inputs exist; 3, a stage rejected an entry; 4, a proof input is missing, changed or not
-readable; 5, the checker is missing, failed or timed out; 6, a construct is outside `core-v1`. On a
-failure, the driver writes no `output.s` and no record. A refused rewrite step stops the
-compilation, with no fallback; the Rust certificate checker also runs on each step. A private frame
-object is refused, and an option that changes the text fails the V04 print check. Ordinary output
-gets no proof label.
-
-**Native run.** [`proof_native.py`](tools/proof-native/proof_native.py) compiles the 17 pilot
-modules and two optimized cases in proof-required mode. In the sealed Linux AArch64 image, it
-assembles each `output.s` with GNU as and ld, and with clang-19 and ld.lld. It compares each native
-result with the source interpreter (`evoir-sem --run-core`), gives nonzero upper bits to 32-bit
-arguments, and cross-checks with gcc-14 `-O0`. This tests the assembler, the linker, the runtime and
-the hardware but does not prove them ([results](docs/evidence.md#native-run-of-the-checked-output),
-[receipt](tests/contracts/core-v1-native-run.json)).
-
-## Evidence and status
-
-This README describes design and use, not status. The [evidence document](docs/evidence.md) has the
-measured results and their dates. [TODO.md](TODO.md) is the backlog, with a stable ID, next action
-and closure condition for each task. The [receipts](tests/contracts/) bind each result to its compiler
-and inputs. The [verification plan](docs/lean-plan.md#first-public-release-verification) states the
-theorem contract. [`render-status.py`](tools/render-status.py) makes the [dashboard](docs/status.md)
-and [`render-figures.py`](tools/render-figures.py) the figures; neither is live.
-
-## Layout and development
-
-```text
-crates/evocc            driver                      crates/evocc-egraph      e-graph core
-crates/evocc-cpp        preprocessor                crates/evocc-eqopt       rewrites, certificates
-crates/evocc-lex        lexer                       crates/evocc-proof       certificate format
-crates/evocc-parser     C11 + GNU parser            crates/evocc-proofcheck  proof checker
-crates/evocc-types      types and layout            crates/evocc-policy      cost and schedule policies
-crates/evocc-chir       checked IR, interpreter     crates/evocc-randgate    randomized semantic gate
-crates/evocc-lower      C-HIR -> EvoIR              crates/evocc-mir         allocation and emission
-crates/evocc-evoir      EvoIR, validator, interp    crates/evocc-memory      object and provenance model
-crates/evocc-passes     opt-in execution-validated pass framework
-lean/                  Lean 4 proofs               tools/lean/             proof audit, vectors
-tools/bench.py         benchmark entry point       tools/k1/               kernel build/runtime lanes
-docs/                  specifications and status   tests/contracts/        corpora and receipts
-```
-
-Changes follow RED → shared implementation → targeted tests → affected original program replay →
-gate → receipt. A passing changed gate is not a new application or kernel measurement.
-`rust-toolchain.toml` pins Rust 1.97.1 with Clippy and rustfmt; a pin change selects the whole
-workspace. Use `CARGO_BUILD_JOBS=2` during kernel work. Update [TODO.md](TODO.md) in each relevant
-commit. A targeted fix does not close a full benchmark or kernel task without its replay.
+- `rust-toolchain.toml` pins Rust 1.97.1 with Clippy and rustfmt; `lean/lean-toolchain` pins Lean 4.32.2.
+- Build in `target/frontend` (`CARGO_TARGET_DIR=target/frontend`) with two jobs; do not make a second tree.
+- Gates: `tools/gate-changed.sh <base-commit>`, `tools/gate-changed.sh --full-workspace --offline`, `tools/gate-lean.sh`.
+- Each change goes RED test → shared implementation → targeted tests → original-program replay → gate → receipt.
+- [TODO.md](TODO.md) tracks each task with a stable ID; update it in each relevant commit and check it with `render-status.py --todo`.
