@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-10-04**, initially audited against `a83d803`; current clauses are
-EvoIR **2.0.0** and EvoMIR **1.0.0** (pinned in `spec/`). This is the Git-tracked execution backlog,
+EvoIR **2.0.0** and EvoMIR **1.0.1** (pinned in `spec/`). This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -3027,16 +3027,23 @@ builtins are outside `core-v1`.
   test shows the platform placement, or the section documents the difference
   as intended and the test shows the even pair.
 
-- [ ] **D05 — Darwin profile: variadic rules** — `OPEN`, P2.
-  `lower_va_start` in `crates/evocc-mir/src/lower.rs` builds the AAPCS64
-  (Linux) `va_list` under both ABI profiles, and a call passes anonymous
-  arguments as named ones. The Darwin platform passes every anonymous
-  argument on the stack. `spec/evomir.md` sections 6.1 and 6.12 state that a
-  Darwin build is correct only between EvoCC-compiled functions. Next
-  action: write a test that compares a Darwin variadic call and `va_arg` with
-  the Darwin reference (Apple clang). Then fix the Darwin profile, or record
-  the difference as a decision in section 6.12. Exit: the test against the
-  Darwin reference, and a fix or a documented decision.
+- [ ] **D05 — Darwin profile: variadic rules** — `RETEST`, P2.
+  The backend option `CodegenOptions::anonymous_on_stack` (`a794cab5`)
+  implements the Apple arm64 convention: a call passes every anonymous
+  argument on the stack, and `va_list` is one pointer (`7c1fe668`). The C
+  driver enables it for `aarch64-apple-darwin` only (`c1985dd0`).
+  `spec/evomir.md` revision 1.0.1 specifies it in sections 6.1 and 6.12. On
+  a macOS host at `7b64cc1c`, `darwin_variadic_calls_agree_with_the_c_library`
+  in `crates/evocc/tests/driver_cc.rs` passes, and cJSON 1.7.19 and zlib
+  1.3.2 pass their own `make test` with `CC=evocc` (zlib: static and shared
+  library). No test compares each variadic case of section 6.12 with the
+  Apple reference. The driver test covers anonymous `int`, pointer, `long`
+  and `double` arguments, `va_copy` and a `va_list` that `vsnprintf` reads.
+  It does not cover `va_arg` of `double` in EvoCC code, 16-byte-aligned
+  values, HFA and HVA records, or records above 16 bytes. The backend tests
+  do not use the option. Next action: add a test against the Apple
+  reference for each variadic case in spec 6.12. Exit: that test passes on a
+  macOS host.
 
 ## Codegen quality track — next quarter
 
