@@ -7265,7 +7265,10 @@ to the signature spelling.
 **Revision 2.0.0, 2026-10-06.** This revision is the pinned ground truth of
 EvoIR. It specifies the same language as revision 1.9.116 of 2026-10-01, as
 one text: the development addenda are folded into the sections that they
-amend, and the revision history and the review transcript are removed. The
+amend, the rulings that only the review transcript stated are folded into
+their sections, and the revision history and the review transcript are
+removed. Prose that disagreed with the implementation is corrected (Sections
+1.7, 3.5, 3.7, 3.8, 5.2, 5.3, 6.3, 9.3, 11.1 to 11.4 and Appendix A). The
 review transcript is archived, not normative, in
 `docs/notebook/evoir-spec-review-20261001.md`. No registry byte changes.
 
