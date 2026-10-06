@@ -108,6 +108,38 @@ fn malformed_probe_honors_the_json_channel() {
 }
 
 #[test]
+fn missing_input_marks_its_argument_not_the_complete_invocation() {
+    for name in ["missing input.c", "missing\ninput.c", "missing-λ.c"] {
+        let input = std::env::temp_dir().join(format!("evocc-{}-{name}", std::process::id()));
+        assert!(!input.exists());
+        let input = input.to_str().unwrap();
+        let prefix = "--parse-only --error-format=json --color=never ";
+        let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+            .args(["--parse-only", "--error-format=json", "--color=never", input])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        let program = format!(
+            "{}\nimport sys\nr=json.load(sys.stdin)\nvalidate(r)\ns=r['spans'][0]\nassert r['code']=='E0003'\nassert s['file']=='<command-line>'\nassert s['column_start']==int(sys.argv[1]), s\nassert s['line_end']==int(sys.argv[2]), s\nassert s['column_end']==int(sys.argv[3]), s\n",
+            include_str!("../../../tests/ui/check/validate.py")
+        );
+        let line_end = input.bytes().filter(|byte| *byte == b'\n').count() + 1;
+        let column_end = match input.rsplit_once('\n') {
+            Some((_, tail)) => tail.len() + 1,
+            None => prefix.len() + input.len() + 1,
+        };
+        let mut validator = Command::new("python3")
+            .args(["-c", &program, &(prefix.len() + 1).to_string(),
+                   &line_end.to_string(), &column_end.to_string()])
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        validator.stdin.take().unwrap().write_all(&output.stderr).unwrap();
+        assert!(validator.wait().unwrap().success(), "{}", String::from_utf8_lossy(&output.stderr));
+    }
+}
+
+#[test]
 fn option_names_do_not_replace_the_header_sentence() {
     let args = [
         "--emit=asm",
