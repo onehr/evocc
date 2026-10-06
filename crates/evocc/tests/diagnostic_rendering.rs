@@ -115,7 +115,12 @@ fn missing_input_marks_its_argument_not_the_complete_invocation() {
         let input = input.to_str().unwrap();
         let prefix = "--parse-only --error-format=json --color=never ";
         let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
-            .args(["--parse-only", "--error-format=json", "--color=never", input])
+            .args([
+                "--parse-only",
+                "--error-format=json",
+                "--color=never",
+                input,
+            ])
             .output()
             .unwrap();
         assert_eq!(output.status.code(), Some(1));
@@ -129,13 +134,27 @@ fn missing_input_marks_its_argument_not_the_complete_invocation() {
             None => prefix.len() + input.len() + 1,
         };
         let mut validator = Command::new("python3")
-            .args(["-c", &program, &(prefix.len() + 1).to_string(),
-                   &line_end.to_string(), &column_end.to_string()])
+            .args([
+                "-c",
+                &program,
+                &(prefix.len() + 1).to_string(),
+                &line_end.to_string(),
+                &column_end.to_string(),
+            ])
             .stdin(Stdio::piped())
             .spawn()
             .unwrap();
-        validator.stdin.take().unwrap().write_all(&output.stderr).unwrap();
-        assert!(validator.wait().unwrap().success(), "{}", String::from_utf8_lossy(&output.stderr));
+        validator
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(&output.stderr)
+            .unwrap();
+        assert!(
+            validator.wait().unwrap().success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 

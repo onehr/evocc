@@ -139,8 +139,8 @@ or rewrite checkers. Preserve existing emitted IR and assembly bytes. Do not
 add dependencies, crates or configuration systems. Do not push.
 
 - [ ] **P01 — Render source diagnostics and freeze their format** — `OPEN`, P1.
-  Next: finish workspace message-style checks,
-  then run the full workspace exit gate.
+  Next: run the full workspace exit gate on the final command-span and message
+  inventory implementation; close only after that exact subject passes.
   Exit: at least 40 text/JSON UI snapshots, workspace message-style checks,
   the hand-written JSON validator and full workspace gate pass. Budget:
   900 production Rust lines and 300 specification lines. Runtime locations
@@ -174,6 +174,25 @@ add dependencies, crates or configuration systems. Do not push.
   warnings denied and workspace formatting pass. Conservative production Rust
   insertions, including blank lines, are 765 of 900. Workspace-wide message
   style and the full workspace exit remain open. No later package has started.
+  Fourth checkpoint: RED `e6aeead2` and implementation `6e297e35` cover header
+  style and disposable native-test paths. The focused presentation, product
+  and style suites pass 35 tests. Inventory checks cover 679 source headers,
+  43 snapshot headers and 823 error-detail templates; the period and redundant-prefix checks also
+  inspect details. RED `c9b5a4bb` fixes an inventory blind spot after test-only
+  items without excluding the later production code. RED `72d614cb` records
+  unreadable input files being labeled as the whole command, not the affected
+  argument; the correction covers spaces, newlines and UTF-8 byte columns.
+  The first full gate passes: 412 suites, 3,147 passed, zero failed, five
+  ignored; Clippy and formatting pass. It compiled tests before the final
+  span regression, so it does not close the package. The final focused replay
+  passes 36 tests, including 42 unchanged snapshot pairs. Its first attempt
+  caught an overbroad span change in the backend snapshot; only E0003 now uses
+  the input argument. No expectation was rewritten to hide that regression.
+  Current inserted/replaced production Rust is 782 of 900 lines, excluding
+  test modules. The final full gate remains required. No later package has
+  started. Build space is above the 25 GiB admission threshold; only the
+  unused, rebuildable target/frontend incremental cache was removed (5.8 GiB),
+  after process and open-handle checks. No protected artifact was removed.
 - [ ] **P02 — Explain every authoritative diagnostic** — `OPEN`, P1.
   Next: after P01 closes, write and test each diagnostic-table explanation.
   Exit: complete page/table coverage, triggering and fixed examples checked,

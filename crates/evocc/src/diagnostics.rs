@@ -162,13 +162,26 @@ impl Diagnostic {
 
     /// An argument span identifies an invocation error, not a C expression.
     pub fn command(code: &str, message: &str) -> Self {
-        let source = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
+        Self::argument(code, message, None)
+    }
+
+    /// The producer supplies the affected argument. Do not parse the message
+    /// to infer a filename. Without an argument, show the complete invocation.
+    pub fn argument(code: &str, message: &str, argument: Option<&str>) -> Self {
+        let args = std::env::args().skip(1).collect::<Vec<_>>();
+        let source = args.join(" ");
+        let selected = argument.and_then(|value| args.iter().rposition(|arg| arg == value));
+        let start = selected.map_or(0, |index| args[..index].iter().map(|s| s.len() + 1).sum());
+        let end = selected.map_or(source.len(), |index| start + args[index].len());
+        let prefix = &source[..start];
+        let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
+        let column = prefix.rsplit('\n').next().unwrap_or_default().len() + 1;
         let span = evocc_common::SourceSpan::new(
             evocc_common::FileId::DUMMY,
-            0,
-            source.len() as u32,
-            1,
-            1,
+            start as u32,
+            end as u32,
+            line as u32,
+            column as u32,
         );
         let header = if message.starts_with('-') {
             format!("option {message}")

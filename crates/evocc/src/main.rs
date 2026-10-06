@@ -258,7 +258,8 @@ impl DriverOptions {
                 message,
             );
         } else {
-            let mut diagnostic = diagnostics::Diagnostic::command(code, message);
+            let mut diagnostic =
+                diagnostics::Diagnostic::argument(code, message, (code == "E0003").then_some(file));
             diagnostic.notes.push(format!("input file: {file}"));
             eprint!(
                 "{}",

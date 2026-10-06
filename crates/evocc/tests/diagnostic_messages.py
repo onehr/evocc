@@ -70,10 +70,18 @@ def body_end(masked, start):
 
 
 def templates(source, path='crates/evocc/src/main.rs'):
-    # Production files put their unit-test module behind this attribute.
-    # UI and integration expectations are checked separately as records.
-    source = source.split('#[cfg(test)]')[0]
     values, masked = literals(source)
+    # Exclude the annotated item, not the rest of the file. Test-only fault
+    # hooks also occur inside production functions before other messages.
+    tests = []
+    for match in re.finditer(r'#\s*\[cfg\(test\)\]', masked):
+        delimiter = re.search(r'[;{]', masked[match.end():])
+        assert delimiter, 'test attribute without an item'
+        start = match.end() + delimiter.start()
+        end = start if masked[start] == ';' else body_end(masked, start)
+        tests.append((match.start(), end + 1))
+    values = [(begin, end, text) for begin, end, text in values
+              if not any(a <= begin < b for a, b in tests)]
     ranges, displays = [], []
     for match in re.finditer(r'\bfn\s+message\s*\([^;{]*\)[^{;]*\{', masked):
         ranges.append((match.end(), body_end(masked, match.end() - 1)))
