@@ -101,15 +101,15 @@ PASS is limited to the lane's recorded configuration, installed objects and orig
 | lua | matching official all.lua without soft skips; mixed-object ramp | `ff5f51e540ab` |
 | sqlite | public Tcl veryquick suite against installed fixture objects; mixed-object ramp | `ff5f51e540ab` |
 
-- Scalar f32/f64 execution, HFA and variadic ABI are implemented under the fixed-environment profile. Dynamic rounding and lexical non-trapping FENV_ACCESS have targeted source, interpreter and native checks plus the original musl mixed-build replay. Binary128 source/IR/native ABI has targeted checks; jq's complete original replay passes; full musl closure and floating complex/vector execution remain separate open work; see the [FP scope in the roadmap](roadmap.md#milestone-ladder-for-end-to-end-evaluation-added-2026-09-06).
-- PolyBench's current lane is MINI_DATASET correctness, not an optimization-speed result. LLVM's full-campaign count is not increased by later tailored repairs; see the [dated original-program and performance results](notebook/benchmark-evaluation-20260915.md).
+- Scalar f32/f64 execution, HFA and variadic ABI are implemented under the fixed-environment profile. Dynamic rounding and lexical non-trapping FENV_ACCESS have targeted source, interpreter and native checks plus the original musl mixed-build replay. Binary128 source/IR/native ABI has targeted checks; jq's complete original replay passes; full musl closure and floating complex/vector execution remain separate open work; see the [FP scope in the archived roadmap](archive/roadmap.md#milestone-ladder-for-end-to-end-evaluation-added-2026-09-06).
+- PolyBench's current lane is MINI_DATASET correctness, not an optimization-speed result. LLVM's full-campaign count is not increased by later tailored repairs; see the [dated original-program and performance results](archive/notebook/benchmark-evaluation-20260915.md).
 - F3/F4 surveys and the old mixed-kernel `kernel` bench row are historical measurements of different populations. They are not the current compiler's lowering ceiling. Current full compositions are reported separately above.
 - A Rust-built compiler is not C self-hosting. Kernel target-C coverage does not establish complete HOSTCC coverage.
 - Doom: PASS: 81/81 TU; 12 x 350 matching headless frames; wrap/video-init profile, not audio/window. See the [separate receipt](../tests/contracts/ladder-doom-receipt.json). This integration does not change the frozen 15-lane application denominator.
 
 ## Bounded EqSat measurement checkpoint
 
-R02a/b/d's registered Linux pilot is separate from final R02/Q2, G2 and Q3 acceptance. Its summary never promotes these gates. See the [tracked checkpoint receipt](../tests/contracts/eqsat-r02-pilot-receipt-20260930.json) and [protocol, negative results and reproduction](notebook/eqsat-r02-linux-pilot-20260930.md). The raw capture auditor, not this renderer, independently replays the proofs. Timing is collector telemetry, not execution attestation. Code-section reductions are not a latency claim; all three search-track verdicts remain separate.
+R02a/b/d's registered Linux pilot is separate from final R02/Q2, G2 and Q3 acceptance. Its summary never promotes these gates. See the [tracked checkpoint receipt](../tests/contracts/eqsat-r02-pilot-receipt-20260930.json) and [protocol, negative results and reproduction](archive/notebook/eqsat-r02-linux-pilot-20260930.md). The raw capture auditor, not this renderer, independently replays the proofs. Timing is collector telemetry, not execution attestation. Code-section reductions are not a latency claim; all three search-track verdicts remain separate.
 
 ## Kernel evidence and remaining work
 
@@ -121,4 +121,4 @@ Full kselftest counts are program-level outer verdicts, not nested assertion cou
 
 Sources: [benchmark receipt](../tests/contracts/bench-receipt.json), [locked K6](../tests/contracts/kernel-full-receipt.json), [BPF/module K6](../tests/contracts/kernel-bpf-full-receipt.json), [selected K7](../tests/contracts/kernel-selftest-receipt.json), [full K7 checkpoint](../tests/contracts/kernel-selftest-full-receipt.json), [expanded KUnit](../tests/contracts/kernel-expanded-kunit-receipt.json).
 
-Open gate definitions: [launch logic and G2](roadmap.md#launch-logic-re-plan-of-2026-08-25). Runtime diagnoses: [K7 issue ledger](notebook/kernel-selftest-gaps-20260914.md). Historical failures remain in their original receipts; rendering does not rewrite them.
+Open gate definitions: [launch logic and G2 in the archived roadmap](archive/roadmap.md#launch-logic-re-plan-of-2026-08-25). Runtime diagnoses: [K7 issue ledger](archive/notebook/kernel-selftest-gaps-20260914.md). Historical failures remain in their original receipts; rendering does not rewrite them.
