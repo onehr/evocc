@@ -1,0 +1,6 @@
+error[E0001]: invalid token
+  --> tests/ui/check/unterminated-string.c:2:14
+   |
+ 2 | char *text = "unfinished
+   |              ^^^^^^^^^^^ invalid token
+   |

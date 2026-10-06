@@ -1,0 +1,7 @@
+error[E3004]: signed-integer-overflow
+  --> tests/ui/check/negation-overflow.c:1:56
+   |
+ 1 | int main(void) { int minimum = -2147483647 - 1; return -minimum; }
+   |                                                        ^^^^^^^^ signed-integer-overflow
+   |
+   = note: this operation failed on the executed path

@@ -1,0 +1,6 @@
+error[E0105]: include-not-found: absent-diagnostic-header.h
+  --> tests/ui/check/missing-include.c:1:1
+   |
+ 1 | #include "absent-diagnostic-header.h"
+   | ^ include-not-found: absent-diagnostic-header.h
+   |

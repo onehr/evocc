@@ -1,0 +1,10 @@
+error[E3002]: integer-division-by-zero
+  --> tests/ui/check/multiline-operation.c:3:12
+   |
+ 3 |     return 12 /
+   |            ^^^^
+ 4 |         (divisor + 0);
+   | ^^^^^^^^^^^^^^^^^^^^^ integer-division-by-zero
+   |
+   = note: this operation failed on the executed path
+   = help: check the divisor before the division or remainder operation

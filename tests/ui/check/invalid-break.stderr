@@ -1,0 +1,6 @@
+error[E1201]: break-outside-loop-or-switch
+  --> tests/ui/check/invalid-break.c:2:18
+   |
+ 2 | int main(void) { break; return 0; }
+   |                  ^^^^^ break-outside-loop-or-switch
+   |

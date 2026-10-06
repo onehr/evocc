@@ -1,1 +1,7 @@
-tests/ui/check/uninitialized.c: error[E3001]: read-of-uninitialized-object
+error[E3001]: read-of-uninitialized-object
+  --> tests/ui/check/uninitialized.c:1:1
+   |
+ 1 | int main(void) { int value; return value; }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ read-of-uninitialized-object
+   |
+   = note: the executing function is shown; this instruction has no retained expression position

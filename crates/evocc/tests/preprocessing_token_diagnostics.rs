@@ -3,6 +3,7 @@ use std::process::{Command, Output, Stdio};
 
 fn parse(source: &str) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .arg("--error-format=short")
         .args([
             "--parse-only",
             "--target=aarch64-unknown-linux-gnu",

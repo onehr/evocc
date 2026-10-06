@@ -1,1 +1,6 @@
-tests/ui/check/parser.c:1:12: error[E2923]: invalid-array-bound
+error[E2923]: invalid-array-bound
+  --> tests/ui/check/parser.c:1:12
+   |
+ 1 | int values[-1];
+   |            ^^ invalid-array-bound
+   |

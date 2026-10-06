@@ -1,1 +1,8 @@
-tests/ui/check/division.c: error[E3002]: integer-division-by-zero
+error[E3002]: integer-division-by-zero
+  --> tests/ui/check/division.c:1:39
+   |
+ 1 | int main(void) { int zero = 0; return 1 / zero; }
+   |                                       ^^^^^^^^ integer-division-by-zero
+   |
+   = note: this operation failed on the executed path
+   = help: check the divisor before the division or remainder operation

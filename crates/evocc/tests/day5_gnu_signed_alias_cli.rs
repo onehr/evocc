@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 fn run_parse_only(source: &str) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .arg("--error-format=short")
         .args(["--parse-only", "/dev/stdin"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

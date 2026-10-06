@@ -1,0 +1,6 @@
+error[E2001]: undeclared-identifier: missing
+  --> tests/ui/check/tabbed-source.c:2:9
+   |
+ 2 |     return missing;
+   |            ^^^^^^^ undeclared-identifier: missing
+   |

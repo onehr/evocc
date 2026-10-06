@@ -1,0 +1,7 @@
+error[E3009]: null-pointer-access
+  --> tests/ui/check/null-load.c:1:43
+   |
+ 1 | int main(void) { int *pointer = 0; return *pointer; }
+   |                                           ^^^^^^^^ null-pointer-access
+   |
+   = note: this operation failed on the executed path

@@ -1,0 +1,11 @@
+error[E2002]: incompatible-redeclaration: value
+  --> tests/ui/check/redeclaration.c:3:8
+   |
+ 3 | double value;
+   |        ^^^^^ incompatible-redeclaration: value
+   |
+  ::: tests/ui/check/redeclaration.c:2:5
+   |
+ 2 | int value;
+   |     ----- previous declaration is here
+   |

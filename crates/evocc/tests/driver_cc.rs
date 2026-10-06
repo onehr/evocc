@@ -31,6 +31,7 @@ impl Work {
 
     fn run(&self, args: &[&str]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_evocc"))
+            .args((!args.is_empty()).then_some("--error-format=short"))
             .current_dir(&self.0)
             .args(args)
             .stdin(Stdio::null())

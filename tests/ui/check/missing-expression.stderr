@@ -1,0 +1,6 @@
+error[E1003]: expected-expression
+  --> tests/ui/check/missing-expression.c:2:26
+   |
+ 2 | int main(void) { return +; }
+   |                          ^ expected-expression
+   |

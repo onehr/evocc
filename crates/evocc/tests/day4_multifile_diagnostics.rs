@@ -40,6 +40,7 @@ impl Drop for TempTree {
 fn run_frontend(mode: &str, input: &Path) -> Output {
     support::warm_evocc();
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .arg("--error-format=short")
         .arg(mode)
         .arg(input)
         .stdin(Stdio::null())

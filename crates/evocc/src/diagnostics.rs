@@ -26,49 +26,44 @@ impl Format {
     pub fn for_usage(args: &[String]) -> Self {
         if args.iter().any(|arg| arg == "--error-format=json") {
             Self::Json
+        } else if args.iter().any(|arg| arg == "--error-format=short") {
+            Self::Short
         } else {
             Self::Text
         }
     }
 
     pub fn usage(self, message: &str) {
-        if self != Self::Json {
+        if self == Self::Short {
             eprintln!("evocc: {message}");
         } else {
-            eprintln!(
+            eprint!(
                 "{}",
-                render_json(None, None, None, message, "driver", "driver")
+                render(&Diagnostic::command("", message), self, command_color())
             );
-        }
-    }
-
-    pub fn error(
-        self,
-        file: &str,
-        location: Option<(u32, u32)>,
-        code: &str,
-        message: &str,
-        phase: &str,
-        category: &str,
-    ) {
-        if self == Self::Json {
-            eprintln!(
-                "{}",
-                render_json(Some(file), location, Some(code), message, phase, category)
-            );
-        } else if let Some((line, column)) = location {
-            eprintln!("{file}:{line}:{column}: error[{code}]: {message}");
-        } else {
-            eprintln!("{file}: error[{code}]: {message}");
         }
     }
 
     pub fn completion(self, result: i128) -> String {
         match self {
-            Self::Text | Self::Short => format!("check completed: main returned {result}; no finding on the executed path\n"),
-            Self::Json => format!("{{\"schema\":\"evocc.check.v1\",\"kind\":\"check\",\"status\":\"completed\",\"main_return\":\"{result}\",\"claim\":\"executed-path-only\"}}\n"),
+            Self::Text | Self::Short => format!(
+                "check completed: main returned {result}; no finding on the executed path\n"
+            ),
+            Self::Json => format!(
+                "{{\"schema\":\"evocc.check.v1\",\"kind\":\"check\",\"status\":\"completed\",\"main_return\":\"{result}\",\"claim\":\"executed-path-only\"}}\n"
+            ),
         }
     }
+}
+
+pub fn command_color() -> Color {
+    std::env::args()
+        .filter_map(|arg| {
+            arg.strip_prefix("--color=")
+                .and_then(|value| Color::parse(value).ok())
+        })
+        .next_back()
+        .unwrap_or_default()
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -137,6 +132,7 @@ impl Span {
 /// Presentation data only. A renderer must not infer source locations.
 pub struct Diagnostic {
     pub code: String,
+    pub level: &'static str,
     pub message: String,
     pub spans: Vec<Span>,
     pub notes: Vec<String>,
@@ -145,13 +141,40 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     pub fn new(code: &str, message: &str, span: Span) -> Self {
+        let note = match execution_category(code) {
+            "resource-limit" => Some(
+                "execution reached a resource limit; this is not a finding of undefined behavior",
+            ),
+            "unsupported-execution" => Some(
+                "execution is not supported for this operation; absence of undefined behavior is not established",
+            ),
+            _ => None,
+        };
         Self {
             code: code.into(),
+            level: "error",
             message: message.into(),
             spans: vec![span],
-            notes: Vec::new(),
+            notes: note.into_iter().map(str::to_owned).collect(),
             help: Vec::new(),
         }
+    }
+
+    /// An argument span identifies an invocation error, not a C expression.
+    pub fn command(code: &str, message: &str) -> Self {
+        let source = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
+        let span = evocc_common::SourceSpan::new(
+            evocc_common::FileId::DUMMY,
+            0,
+            source.len() as u32,
+            1,
+            1,
+        );
+        Self::new(
+            code,
+            message,
+            Span::source("<command-line>", source.as_bytes(), span, message),
+        )
     }
 }
 
@@ -212,14 +235,15 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
         assert!((span.line_end, span.column_end) >= (span.line_start, span.column_start));
     }
     let primary = primary[0];
+    let heading = if diagnostic.code.is_empty() {
+        diagnostic.level.to_owned()
+    } else {
+        format!("{}[{}]", diagnostic.level, diagnostic.code)
+    };
     if format == Format::Short {
         return format!(
-            "{}:{}:{}: error[{}]: {}\n",
-            primary.file,
-            primary.line_start,
-            primary.column_start,
-            diagnostic.code,
-            diagnostic.message
+            "{}:{}:{}: {}: {}\n",
+            primary.file, primary.line_start, primary.column_start, heading, diagnostic.message
         );
     }
     let paint = format != Format::Json
@@ -229,10 +253,7 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
     } else {
         ("", "")
     };
-    let mut out = format!(
-        "{red}error[{}]{reset}: {}\n",
-        diagnostic.code, diagnostic.message
-    );
+    let mut out = format!("{red}{heading}{reset}: {}\n", diagnostic.message);
     for span in &diagnostic.spans {
         let arrow = if span.primary { "-->" } else { ":::" };
         writeln!(
@@ -304,7 +325,19 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
             .collect::<Vec<_>>()
             .join(",")
     };
-    format!("{{\"code\":{},\"level\":\"error\",\"message\":{},\"spans\":[{spans}],\"notes\":[{}],\"help\":[{}],\"rendered\":{}}}\n", quoted(&diagnostic.code), quoted(&diagnostic.message), list(&diagnostic.notes), list(&diagnostic.help), quoted(&out))
+    let code = if diagnostic.code.is_empty() {
+        "null".into()
+    } else {
+        quoted(&diagnostic.code)
+    };
+    format!(
+        "{{\"code\":{code},\"level\":{},\"message\":{},\"spans\":[{spans}],\"notes\":[{}],\"help\":[{}],\"rendered\":{}}}\n",
+        quoted(diagnostic.level),
+        quoted(&diagnostic.message),
+        list(&diagnostic.notes),
+        list(&diagnostic.help),
+        quoted(&out)
+    )
 }
 
 struct Explanation {
@@ -328,20 +361,10 @@ pub fn explain(code: &str) -> Result<String, String> {
         (Some(message), Some(detected)) => format!(
             "{code}: {message}\nDetected: {detected}\nAuthority: spec/evoir.md, section 6.3 Diagnostic Authority.\n\nA runtime finding describes an executed path, not every possible input.\nResource limits and unsupported execution do not establish absence of UB.\n"
         ),
-        _ => format!("{code}\nTODO: explanation missing from EvoIR section 6.3.\nThis code is named in the specification or compiler source. Its absence from\nthe explanation table does not change the existing diagnostic's meaning.\n"),
+        _ => format!(
+            "{code}\nTODO: explanation missing from EvoIR section 6.3.\nThis code is named in the specification or compiler source. Its absence from\nthe explanation table does not change the existing diagnostic's meaning.\n"
+        ),
     })
-}
-
-pub fn phase(code: &str) -> &'static str {
-    match code {
-        "E0003" => "input",
-        "E0004" => "codegen",
-        "E0112" => "parsing",
-        _ if code.starts_with("E00") => "lexing",
-        _ if code.starts_with("E01") => "preprocessing",
-        _ if code.starts_with("E1") || code.starts_with("E2") => "parsing",
-        _ => "lowering",
-    }
 }
 
 /// Categories describe the existing finding; unknown codes fail conservatively.
@@ -375,28 +398,6 @@ fn quoted(text: &str) -> String {
     }
     out.push('"');
     out
-}
-
-fn render_json(
-    file: Option<&str>,
-    location: Option<(u32, u32)>,
-    code: Option<&str>,
-    message: &str,
-    phase: &str,
-    category: &str,
-) -> String {
-    let source = file.map_or_else(|| "null".into(), quoted);
-    let code_text = code.map_or_else(|| "null".into(), quoted);
-    let location = location.map_or_else(
-        || "null".into(),
-        |(line, column)| format!("{{\"line\":{line},\"column\":{column}}}"),
-    );
-    let availability = match code.and_then(explanation) {
-        Some(row) if row.message.is_some() => "available",
-        Some(_) => "todo",
-        None => "unavailable",
-    };
-    format!("{{\"schema\":\"evocc.diagnostic.v1\",\"kind\":\"diagnostic\",\"severity\":\"error\",\"code\":{code_text},\"message\":{},\"phase\":{},\"category\":{},\"source\":{source},\"location\":{location},\"explanation\":{}}}", quoted(message), quoted(phase), quoted(category), quoted(availability))
 }
 
 #[cfg(test)]

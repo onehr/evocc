@@ -1,0 +1,6 @@
+error[E2102]: invalid-projected-lvalue
+  --> tests/ui/check/unknown-member.c:3:53
+   |
+ 3 | int main(void) { struct record item = { 0 }; return item.missing; }
+   |                                                     ^^^^^^^^^^^^ invalid-projected-lvalue
+   |

@@ -1,0 +1,7 @@
+error[E3005]: invalid-shift-count
+  --> tests/ui/check/negative-shift.c:1:41
+   |
+ 1 | int main(void) { int count = -1; return 1u << count; }
+   |                                         ^^^^^^^^^^^ invalid-shift-count
+   |
+   = note: this operation failed on the executed path

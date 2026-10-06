@@ -1,0 +1,8 @@
+error[E0001]: invalid token
+  --> tests/ui/check/unterminated-comment.c:3:1
+   |
+ 3 | /* unfinished comment
+   | ^^^^^^^^^^^^^^^^^^^^^
+ 4 | 
+   | ^ invalid token
+   |

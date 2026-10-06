@@ -28,6 +28,7 @@ fn parse_only_stops_after_exact_first_error_before_large_valid_tail() {
     fs::write(&source_path, source).expect("write large parser input");
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .arg("--error-format=short")
         .arg("--parse-only")
         .arg(&source_path)
         .stdin(Stdio::null())

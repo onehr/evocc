@@ -86,6 +86,7 @@ impl Drop for TempSource {
 fn run(args: &[&str]) -> Output {
     support::warm_evocc();
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args((!args.contains(&"--probe")).then_some("--error-format=short"))
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -291,10 +292,8 @@ fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
                 "{stderr}"
             ),
             "runtime" => assert!(
-                // EvoIR retains typed block/value provenance, not a C source
-                // span. The driver therefore uses its stable input-level
-                // fallback while preserving the exact typed diagnostic.
-                stderr.ends_with(":1:1: error[E3002]: integer-division-by-zero\n"),
+                // Diagnostic-only origins identify the executed division.
+                stderr.ends_with(":1:53: error[E3002]: integer-division-by-zero\n"),
                 "{stderr}"
             ),
             "noncanonical-main" => assert!(

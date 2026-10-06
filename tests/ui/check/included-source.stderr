@@ -1,0 +1,8 @@
+error[E3002]: integer-division-by-zero
+  --> $ROOT/tests/ui/check/diagnostic-include.h:2:12
+   |
+ 2 |     return 12 / divisor;
+   |            ^^^^^^^^^^^^ integer-division-by-zero
+   |
+   = note: this operation failed on the executed path
+   = help: check the divisor before the division or remainder operation

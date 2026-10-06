@@ -1,0 +1,6 @@
+error[E2101]: expected-modifiable-lvalue
+  --> tests/ui/check/const-assignment.c:2:39
+   |
+ 2 | int main(void) { const int value = 0; value = 1; return value; }
+   |                                       ^^^^^ expected-modifiable-lvalue
+   |

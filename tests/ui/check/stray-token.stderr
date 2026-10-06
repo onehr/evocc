@@ -1,0 +1,6 @@
+error[E0112]: stray-token
+  --> tests/ui/check/stray-token.c:2:25
+   |
+ 2 | int main(void) { return @; }
+   |                         ^ stray-token
+   |

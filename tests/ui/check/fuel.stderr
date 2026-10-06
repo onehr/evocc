@@ -1,1 +1,8 @@
-tests/ui/check/fuel.c: error[E3008]: interpreter-fuel-exhausted
+error[E3008]: interpreter-fuel-exhausted
+  --> tests/ui/check/fuel.c:1:1
+   |
+ 1 | int main(void) { for (;;) {} }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ interpreter-fuel-exhausted
+   |
+   = note: execution reached a resource limit; this is not a finding of undefined behavior
+   = note: the executing function is shown; this instruction has no retained expression position

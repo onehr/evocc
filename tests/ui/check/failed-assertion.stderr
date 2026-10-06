@@ -1,0 +1,6 @@
+error[E2911]: static-assertion-failed
+  --> tests/ui/check/failed-assertion.c:2:1
+   |
+ 2 | _Static_assert(0, "layout does not match");
+   | ^^^^^^^^^^^^^^ static-assertion-failed
+   |

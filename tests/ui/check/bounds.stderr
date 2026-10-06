@@ -1,1 +1,7 @@
-tests/ui/check/bounds.c: error[E3011]: out-of-bounds-memory-access
+error[E3011]: out-of-bounds-memory-access
+  --> tests/ui/check/bounds.c:1:66
+   |
+ 1 | int main(void) { int values[2] = { 1, 2 }; int index = 2; return values[index]; }
+   |                                                                  ^^^^^^^^^^^^^ out-of-bounds-memory-access
+   |
+   = note: this operation failed on the executed path

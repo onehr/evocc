@@ -1,0 +1,12 @@
+error[E2923]: invalid-array-bound
+  --> tests/ui/check/two-diagnostics.c:2:11
+   |
+ 2 | int first[-1];
+   |           ^^ invalid-array-bound
+   |
+error[E2923]: invalid-array-bound
+  --> tests/ui/check/two-diagnostics.c:3:12
+   |
+ 3 | int second[-2];
+   |            ^^ invalid-array-bound
+   |

@@ -1,0 +1,7 @@
+error[E3001]: read-of-uninitialized-object
+  --> tests/ui/check/uninitialized-element.c:1:55
+   |
+ 1 | int main(void) { int values[2]; values[0] = 3; return values[1]; }
+   |                                                       ^^^^^^^^^ read-of-uninitialized-object
+   |
+   = note: this operation failed on the executed path

@@ -235,17 +235,36 @@ impl DriverOptions {
     }
 
     fn emit_error(&self, file: &str, line: u32, column: u32, code: &str, message: &str) {
-        let location = (line != 0 && column != 0)
-            .then_some((line, column))
-            .or_else(|| (self.error_format == diagnostics::Format::Text).then_some((1, 1)));
-        self.error_format.error(
-            file,
-            location,
-            code,
-            message,
-            diagnostics::phase(code),
-            "compilation",
-        );
+        if line != 0 && column != 0 {
+            let bytes = self.diagnostic_source(file);
+            let start = bytes
+                .split_inclusive(|b| *b == b'\n')
+                .take(line as usize - 1)
+                .map(<[u8]>::len)
+                .sum::<usize>()
+                + column as usize
+                - 1;
+            let end = (start + 1).min(bytes.len()).max(start);
+            self.emit_span(
+                file,
+                evocc_common::SourceSpan::new(
+                    FileId::DUMMY,
+                    start as u32,
+                    end as u32,
+                    line,
+                    column,
+                ),
+                code,
+                message,
+            );
+        } else {
+            let mut diagnostic = diagnostics::Diagnostic::command(code, message);
+            diagnostic.notes.push(format!("input file: {file}"));
+            eprint!(
+                "{}",
+                diagnostics::render(&diagnostic, self.error_format, self.color)
+            );
+        }
     }
 
     fn emit_execution_error(
@@ -255,18 +274,8 @@ impl DriverOptions {
         code: &str,
         message: &str,
     ) {
-        let location = location.or_else(|| {
-            (self.mode != DriverMode::Check && self.error_format == diagnostics::Format::Text)
-                .then_some((1, 1))
-        });
-        self.error_format.error(
-            file,
-            location,
-            code,
-            message,
-            "execution",
-            diagnostics::execution_category(code),
-        );
+        let (line, column) = location.unwrap_or((0, 0));
+        self.emit_error(file, line, column, code, message);
     }
 
     fn target_layout(&self) -> TargetDataLayout {
@@ -403,22 +412,32 @@ fn main() -> ExitCode {
         eprintln!("       evocc --parse-only [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-c-hir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --emit=evoir [--target={SUPPORTED_TARGET}] <file>");
-        eprintln!("       evocc --emit=core-c-hir --core-entry=NAME -O0 -fno-builtin <file> (source input only, not a proof)");
+        eprintln!(
+            "       evocc --emit=core-c-hir --core-entry=NAME -O0 -fno-builtin <file> (source input only, not a proof)"
+        );
         eprintln!("       evocc --emit=asm [--target={SUPPORTED_TARGET}] <file>");
-        eprintln!("       evocc --emit=asm --proof-required=NEW_DIR --core-entry=NAME -O0 -fno-builtin [--proof-checker=PATH --proof-checker-sha256=SHA256 --proof-timeout-ms=N --proof-proposal=NAME=PATH] [-Oeq-scalar --eq-checker-sha256=SHA256 ...] <file>");
+        eprintln!(
+            "       evocc --emit=asm --proof-required=NEW_DIR --core-entry=NAME -O0 -fno-builtin [--proof-checker=PATH --proof-checker-sha256=SHA256 --proof-timeout-ms=N --proof-proposal=NAME=PATH] [-Oeq-scalar --eq-checker-sha256=SHA256 ...] <file>"
+        );
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
-        eprintln!("       evocc --check [--error-format=text|json] <file>");
+        eprintln!(
+            "       evocc --check [--error-format=text|short|json] [--color=auto|always|never] <file>"
+        );
         eprintln!("       evocc --explain E3xxx");
         eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
         eprintln!("       --ub-checks=checked|unchecked (native only; default checked)");
-        eprintln!("       --frame-opt=paired-saves,shared-epilogue,leaf-frames (native only; default none)");
+        eprintln!(
+            "       --frame-opt=paired-saves,shared-epilogue,leaf-frames (native only; default none)"
+        );
         eprintln!(
             "       --isel-opt=constants,local,extensions,controls (native only; default none)"
         );
         eprintln!("       --regalloc-opt=copy-hints,reload-reuse (native only; default none)");
         eprintln!("       --opt-pass=identity [--pass-report NEW_JSON_PATH] (development TV)");
         eprintln!("       [--eq-max-nodes=N --eq-max-epochs=N --eq-max-transactions=N]");
-        eprintln!("       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]");
+        eprintln!(
+            "       --eq-checker-sha256=TRUSTED_SHA256 [--eq-checker=PATH --eq-checker-timeout-ms=N --eq-proof-dir=NEW_DIR]"
+        );
         eprintln!("evocc: unrecognized invocation is NOT_IMPLEMENTED");
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
@@ -1408,7 +1427,7 @@ fn decoded_tokens_in_mode(
         let text = match &token.text {
             evocc_lex::TokenText::Decoded(text) => text.clone(),
             evocc_lex::TokenText::RawBytes { .. } => {
-                return Err("invalid macro option encoding".into())
+                return Err("invalid macro option encoding".into());
             }
             evocc_lex::TokenText::Borrowed => source
                 .get(token.span.byte_start as usize..token.span.byte_end as usize)
@@ -1592,12 +1611,33 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         };
         if !reported.is_empty() {
             for diagnostic in reported {
-                options.emit_span(
-                    pp.source_path(diagnostic.span.file)
-                        .unwrap_or(options.input.as_str()),
-                    diagnostic.span,
+                let file = pp
+                    .source_path(diagnostic.span.file)
+                    .unwrap_or(&options.input);
+                let mut rendered = diagnostics::Diagnostic::new(
                     diagnostic.code,
                     &diagnostic.message,
+                    diagnostics::Span::source(
+                        file,
+                        &options.diagnostic_source(file),
+                        diagnostic.span,
+                        &diagnostic.message,
+                    ),
+                );
+                if let Some(span) = diagnostic.previous_declaration {
+                    let file = pp.source_path(span.file).unwrap_or(&options.input);
+                    let mut secondary = diagnostics::Span::source(
+                        file,
+                        &options.diagnostic_source(file),
+                        span,
+                        "previous declaration is here",
+                    );
+                    secondary.primary = false;
+                    rendered.spans.push(secondary);
+                }
+                eprint!(
+                    "{}",
+                    diagnostics::render(&rendered, options.error_format, options.color)
                 );
             }
         } else {
@@ -1721,15 +1761,16 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
             match lowered {
                 Ok(result) => result,
                 Err(error) => {
-                    let span = error.span();
-                    options.emit_error(
-                        span.and_then(|span| pp.source_path(span.file))
-                            .unwrap_or(options.input.as_str()),
-                        span.map_or(0, |span| span.line_start.max(1)),
-                        span.map_or(0, |span| span.column_start.max(1)),
-                        error.code(),
-                        &error.message(),
-                    );
+                    if let Some(span) = error.span() {
+                        options.emit_span(
+                            pp.source_path(span.file).unwrap_or(&options.input),
+                            span,
+                            error.code(),
+                            &error.message(),
+                        );
+                    } else {
+                        options.emit_error(&options.input, 0, 0, error.code(), &error.message());
+                    }
                     ExitCode::from(1)
                 }
             }
@@ -1839,14 +1880,16 @@ fn interpret_chir(
     ) {
         Ok(outcome) => outcome,
         Err(error) => {
-            let span = error.span();
-            options.emit_execution_error(
-                span.and_then(|span| pp.source_path(span.file))
-                    .unwrap_or(options.input.as_str()),
-                span.map(|span| (span.line_start.max(1), span.column_start.max(1))),
-                error.code(),
-                &error.message(),
-            );
+            if let Some(span) = error.span() {
+                options.emit_span(
+                    pp.source_path(span.file).unwrap_or(&options.input),
+                    span,
+                    error.code(),
+                    &error.message(),
+                );
+            } else {
+                options.emit_execution_error(&options.input, None, error.code(), &error.message());
+            }
             return ExitCode::from(1);
         }
     };

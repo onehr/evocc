@@ -1,0 +1,7 @@
+error[E3004]: signed-integer-overflow
+  --> tests/ui/check/multiplication-overflow.c:1:49
+   |
+ 1 | int main(void) { int value = 1073741824; return value * 2; }
+   |                                                 ^^^^^^^^^ signed-integer-overflow
+   |
+   = note: this operation failed on the executed path

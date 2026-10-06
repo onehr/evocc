@@ -1,0 +1,6 @@
+error[E1006]: invalid-character-literal
+  --> tests/ui/check/character-constant.c:2:13
+   |
+ 2 | int value = '';
+   |             ^^ invalid-character-literal
+   |

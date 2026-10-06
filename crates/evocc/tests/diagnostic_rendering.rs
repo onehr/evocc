@@ -192,14 +192,23 @@ fn resource_limits_are_not_reported_as_success_or_undefined_behavior() {
     assert!(output.stdout.is_empty());
     let text = String::from_utf8(output.stderr).unwrap();
     assert!(text.contains("error[E3008]"), "{text}");
-    assert!(text.contains("execution reached a resource limit"), "{text}");
+    assert!(
+        text.contains("execution reached a resource limit"),
+        "{text}"
+    );
 }
 
 #[test]
 fn unsupported_execution_does_not_establish_absence_of_undefined_behavior() {
-    let output = run(&["--check"], "extern int missing(void); int main(void) { return missing(); }");
+    let output = run(
+        &["--check"],
+        "extern int missing(void); int main(void) { return missing(); }",
+    );
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     let text = String::from_utf8(output.stderr).unwrap();
-    assert!(text.contains("execution is not supported for this operation"), "{text}");
+    assert!(
+        text.contains("execution is not supported for this operation"),
+        "{text}"
+    );
 }

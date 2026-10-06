@@ -1,0 +1,6 @@
+error[E0104]: error-directive: this configuration needs a target
+  --> tests/ui/check/directive-error.c:1:1
+   |
+ 1 | #error this configuration needs a target
+   | ^ error-directive: this configuration needs a target
+   |

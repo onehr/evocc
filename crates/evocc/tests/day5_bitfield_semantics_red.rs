@@ -7,6 +7,7 @@ const SOURCE: &str = "struct S { unsigned int x : 33; };\n";
 
 fn run_parse_only() -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .arg("--error-format=short")
         .args([
             "--target=aarch64-unknown-linux-gnu",
             "--parse-only",

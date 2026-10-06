@@ -8,6 +8,7 @@ fn evocc() -> &'static str {
 
 fn run_bounded(input: &[u8]) -> (ExitStatus, Vec<u8>, Vec<u8>) {
     let mut child = Command::new(evocc())
+        .arg("--error-format=short")
         .args(["-E", "/dev/stdin"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

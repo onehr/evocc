@@ -74,6 +74,7 @@ use evocc_types::{
 #[derive(Debug, Clone)]
 pub struct ParseDiagnostic {
     pub span: SourceSpan,
+    pub previous_declaration: Option<SourceSpan>,
     pub code: &'static str,
     pub message: String,
 }
@@ -421,6 +422,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             })
             .map(|token| ParseDiagnostic {
                 span: token.span,
+                previous_declaration: None,
                 code: if token.kind == TokenKind::EncodingError {
                     "E0002"
                 } else {
@@ -926,6 +928,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         {
             self.diagnostics.push(ParseDiagnostic {
                 span,
+                previous_declaration: None,
                 code,
                 message: message.into(),
             });
@@ -1457,11 +1460,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn report_redefinition(&mut self, name: &SpannedName) {
+        let previous = self
+            .symbols
+            .resolve(self.current_scope, &name.spelling)
+            .ok()
+            .flatten()
+            .and_then(|id| self.symbols.symbol(id).ok())
+            .map(|symbol| symbol.span())
+            .filter(|span| *span != name.span);
         self.report(
             "E2002",
             format!("incompatible-redeclaration: {}", name.spelling),
             name.span,
         );
+        self.diagnostics.last_mut().unwrap().previous_declaration = previous;
     }
 
     fn declaration_linkage(&self, data: SymbolData) -> EntityLinkage {
@@ -16338,15 +16350,15 @@ mod tests {
             assert_eq!(diagnostic.code, "E2002");
             assert_eq!(diagnostic_text(source, &diagnostic), offending);
             assert_eq!(
-                unit.symbols()
-                    .resolve(unit.symbols().file_scope(), "bad"),
+                unit.symbols().resolve(unit.symbols().file_scope(), "bad"),
                 Ok(None)
             );
-            assert!(unit
-                .symbols()
-                .resolve(unit.symbols().file_scope(), "after")
-                .unwrap()
-                .is_some());
+            assert!(
+                unit.symbols()
+                    .resolve(unit.symbols().file_scope(), "after")
+                    .unwrap()
+                    .is_some()
+            );
         }
 
         let arena = Arena::default();

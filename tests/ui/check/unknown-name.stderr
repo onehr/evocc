@@ -1,0 +1,6 @@
+error[E2001]: undeclared-identifier: missing
+  --> tests/ui/check/unknown-name.c:2:25
+   |
+ 2 | int main(void) { return missing; }
+   |                         ^^^^^^^ undeclared-identifier: missing
+   |

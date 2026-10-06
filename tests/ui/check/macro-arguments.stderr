@@ -1,0 +1,6 @@
+error[E2001]: undeclared-identifier: SUM
+  --> tests/ui/check/macro-arguments.c:2:25
+   |
+ 2 | int main(void) { return SUM(1); }
+   |                         ^^^ undeclared-identifier: SUM
+   |

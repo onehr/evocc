@@ -10,6 +10,7 @@ const WATCHDOG: Duration = Duration::from_secs(2);
 fn run_interpreter(source: &str) -> Output {
     support::warm_evocc();
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .arg("--error-format=short")
         .args([
             "--target=aarch64-unknown-linux-gnu",
             "--interpret-c-hir",

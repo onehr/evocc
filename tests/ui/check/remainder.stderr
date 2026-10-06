@@ -1,0 +1,8 @@
+error[E3003]: integer-remainder-by-zero
+  --> tests/ui/check/remainder.c:1:39
+   |
+ 1 | int main(void) { int zero = 0; return 9 % zero; }
+   |                                       ^^^^^^^^ integer-remainder-by-zero
+   |
+   = note: this operation failed on the executed path
+   = help: check the divisor before the division or remainder operation

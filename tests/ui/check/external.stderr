@@ -1,1 +1,8 @@
-tests/ui/check/external.c: error[E3039]: external-call-not-executable
+error[E3039]: external-call-not-executable
+  --> tests/ui/check/external.c:2:25
+   |
+ 2 | int main(void) { return unknown(); }
+   |                         ^^^^^^^^^ external-call-not-executable
+   |
+   = note: execution is not supported for this operation; absence of undefined behavior is not established
+   = note: this operation failed on the executed path

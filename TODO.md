@@ -139,8 +139,8 @@ or rewrite checkers. Preserve existing emitted IR and assembly bytes. Do not
 add dependencies, crates or configuration systems. Do not push.
 
 - [ ] **P01 — Render source diagnostics and freeze their format** — `OPEN`, P1.
-  Next: migrate the remaining diagnostic paths and old snapshots to the pinned
-  format, add the complete UI population and workspace message-style checks.
+  Next: finish workspace message-style checks and remaining invocation errors,
+  then run the full workspace exit gate.
   Exit: at least 40 text/JSON UI snapshots, workspace message-style checks,
   the hand-written JSON validator and full workspace gate pass. Budget:
   900 production Rust lines and 300 specification lines. Runtime locations
@@ -150,9 +150,23 @@ add dependencies, crates or configuration systems. Do not push.
   instruction through calls and SSA renumbering. Included source snippets use
   the bytes read during preprocessing. A paired lowering test checks identical
   IR and execution results with source capture on and off. The presentation
-  contract is pinned at revision 1.0.0 (126 lines). This is partial work:
-  legacy diagnostic paths, the 40-case corpus, style checks and the full
-  workspace exit remain open. P02 through P05 have not started.
+  contract is pinned at revision 1.0.0 (126 lines).
+  Second checkpoint: RED `74990d2e` records missing related declaration labels
+  and execution-limit notes. All 12 presentation tests now pass. The product
+  suite passes 11 tests, including byte-exact replay of 42 text/JSON pairs and
+  schema mutation controls. The 34-line JSON validator checks every snapshot;
+  the corpus covers E0--E4, related spans, multiline spans, notes, help, multiple
+  diagnostics and includes. Input errors use command-line source rather than
+  invented C positions. Runtime refusal and resource-limit notes keep their
+  meaning. Targeted Clippy passes with warnings denied. Conservative inserted
+  production Rust is 754 of 900 lines. The 13 legacy-format suites now request
+  `short` explicitly and pass on replay; their diagnostic codes, locations and
+  exits remain checked. Two native suites pass all eight tests after moving
+  disposable files outside retained evidence (`a294e3df`). The broad driver run
+  initially failed these 15 targets; all were replayed, but a new full workspace
+  gate has not run. This is partial work: workspace-wide
+  style checks, remaining invocation errors and the full workspace exit remain
+  open. P02 through P05 have not started.
 - [ ] **P02 — Explain every authoritative diagnostic** — `OPEN`, P1.
   Next: after P01 closes, write and test each diagnostic-table explanation.
   Exit: complete page/table coverage, triggering and fixed examples checked,

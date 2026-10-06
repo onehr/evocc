@@ -1,0 +1,6 @@
+error[E3051]: evoir-lowering-failed: malformed function takes_one: call arity disagrees with the canonical prototype
+  --> tests/ui/check/call-arity.c:3:25
+   |
+ 3 | int main(void) { return takes_one(1, 2); }
+   |                         ^^^^^^^^^^^^^^^ evoir-lowering-failed: malformed function takes_one: call arity disagrees with the canonical prototype
+   |

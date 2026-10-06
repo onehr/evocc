@@ -349,6 +349,7 @@ const G2_CASES: &[Case] = &[
 fn run_parse_only(source: &str) -> Observation {
     support::warm_evocc();
     let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .arg("--error-format=short")
         .args([
             "--parse-only",
             "--target=aarch64-unknown-linux-gnu",

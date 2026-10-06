@@ -1,0 +1,11 @@
+error[E2002]: incompatible-redeclaration: value
+  --> tests/ui/check/duplicate-parameter.c:2:30
+   |
+ 2 | int duplicate(int value, int value) { return value; }
+   |                              ^^^^^ incompatible-redeclaration: value
+   |
+  ::: tests/ui/check/duplicate-parameter.c:2:19
+   |
+ 2 | int duplicate(int value, int value) { return value; }
+   |                   ----- previous declaration is here
+   |

@@ -35,6 +35,7 @@ impl Drop for TempTree {
 
 fn run(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .arg("--error-format=short")
         .args(args)
         .output()
         .expect("run evocc")

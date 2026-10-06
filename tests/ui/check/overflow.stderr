@@ -1,1 +1,7 @@
-tests/ui/check/overflow.c: error[E3004]: signed-integer-overflow
+error[E3004]: signed-integer-overflow
+  --> tests/ui/check/overflow.c:1:49
+   |
+ 1 | int main(void) { int value = 2147483647; return value + 1; }
+   |                                                 ^^^^^^^^^ signed-integer-overflow
+   |
+   = note: this operation failed on the executed path

@@ -241,6 +241,7 @@ const DEVELOPMENT_PREFIXES: &[&str] = &[
     "--proof-",
     "--core-entry=",
     "--error-format=",
+    "--color=",
     "--opt-pass=",
     "--pass-report=",
 ];
@@ -567,7 +568,20 @@ impl Session {
 
     fn warn(&self, message: &str) {
         if !self.command.quiet {
-            eprintln!("evocc: warning: {message}");
+            if self.format == crate::diagnostics::Format::Short {
+                eprintln!("evocc: warning: {message}");
+                return;
+            }
+            let mut diagnostic = crate::diagnostics::Diagnostic::command("", message);
+            diagnostic.level = "warning";
+            eprint!(
+                "{}",
+                crate::diagnostics::render(
+                    &diagnostic,
+                    self.format,
+                    crate::diagnostics::command_color()
+                )
+            );
         }
     }
 

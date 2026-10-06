@@ -1,0 +1,6 @@
+error[E0104]: error-directive: "quoted" \ text
+  --> tests/ui/check/directive-quotes.c:1:1
+   |
+ 1 | #error "quoted" \text
+   | ^ error-directive: "quoted" \ text
+   |

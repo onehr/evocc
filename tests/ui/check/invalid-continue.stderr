@@ -1,0 +1,6 @@
+error[E1202]: continue-outside-loop
+  --> tests/ui/check/invalid-continue.c:2:18
+   |
+ 2 | int main(void) { continue; return 0; }
+   |                  ^^^^^^^^ continue-outside-loop
+   |
