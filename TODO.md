@@ -305,6 +305,12 @@ add dependencies, crates or configuration systems. Do not push.
 - [ ] **P04 — Add user-intent commands** — `OPEN`, P1.
   Next: after P03 closes, add the `evo` binary with run, check, explain, prove,
   build and version. Delegate to the existing driver; do not refactor it.
+  October 7 entry check: P03 is closed. The existing C-HIR command calls main
+  without arguments and rejects `main(int argc, char **argv)` with E3007.
+  It has no program-argument option. A thin command wrapper alone cannot meet
+  `evo run FILE.c -- ARGS`. Request approval for a bounded driver/interpreter
+  argument bridge before implementation; do not rewrite C source or drop ARGS.
+  Reproducer: `.evidence/diagnostics/20261007/evo-run-arguments-red.log`.
   Exit: verb tests, actual cJSON build receipt, tested book commands, release
   packaging and full workspace gate pass. Budget: 600 lines for the binary and
   100 lines for release-script and book changes.
