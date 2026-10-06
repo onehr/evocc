@@ -254,8 +254,9 @@ Each lane writes a receipt; `render-status.py` renders the [dashboard](docs/stat
 
 #### Documentation
 
+- Book: [The EvoCC Book](book/src/SUMMARY.md): installation, a first program, undefined behavior, compiling with proof, checked optimization, how EvoCC works and the evaluation
 - Specifications: [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md), [target description](spec/target.md), [verification contract](spec/verification.md); [index and pins](spec/README.md)
-- Guides: [C checker workflow](docs/checker.md), [implementation notebook](docs/notebook/README.md)
+- Guides: [C checker workflow](docs/checker.md)
 - Design: [verified optimization](docs/verified-optimization-design.md)
 - Results and work: [evidence](docs/evidence.md), [status dashboard](docs/status.md), [TODO](TODO.md)
 - History: [`docs/archive/`](docs/archive/README.md)
@@ -284,7 +285,7 @@ files. Five rules held the work together:
 4. **Fail-closed gates.** `tools/gate-changed.sh` tests the changed crates and their dependents;
    `tools/gate-lean.sh` rebuilds the proofs and audits every axiom. A missing result is a failure.
 5. **Receipts and a notebook.** Each claim links to a receipt that names its compiler, inputs and
-   limits. The [notebook](docs/notebook/README.md) keeps the wrong turns.
+   limits. The [notebook](docs/archive/notebook/) keeps the wrong turns.
 
 | Measure, on 2026-10-06 | Value |
 |---|---|

@@ -36,8 +36,8 @@ The first public version.
 ### Changed
 
 - The project license changed from the placeholder GPL-2.0-only to Apache-2.0.
-- The book replaces the implementation notebook in `docs/notebook/` and its web site in `web/`.
-  The dated lab notes stay in `docs/archive/notebook/`.
+- The book replaces the hand-written implementation notebook and its web site. The dated lab notes
+  stay in `docs/archive/notebook/`.
 
 ### Results at this version
 

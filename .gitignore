@@ -1,14 +1,12 @@
 # Design documents and research notes are internal working material. The
 # tracked exceptions are the current documents (evidence, generated status,
-# checker workflow, verified optimization design), the reader-facing notebook,
-# the figures and the archive of superseded plans and dated lab notes.
+# checker workflow, verified optimization design), the figures and the archive
+# of superseded plans and dated lab notes. The reader-facing book is in book/.
 docs/*
 !docs/checker.md
 !docs/evidence.md
 !docs/status.md
 !docs/verified-optimization-design.md
-!docs/notebook/
-!docs/notebook/**
 !docs/images/
 !docs/images/**
 !docs/archive/
@@ -56,3 +54,6 @@ output/
 
 # mdBook writes the rendered book here; the source is book/src/.
 book/book/
+# The notebook web site was removed with the notebook. A local checkout can
+# still hold its installed packages and build output.
+/web/
