@@ -66,7 +66,10 @@ fn main() {
         .expect("end of diagnostic authority")
         .0;
     let mut entries = BTreeSet::new();
-    for row in table.lines().filter(|line| line.starts_with("| `E")) {
+    for row in table
+        .lines()
+        .filter(|line| line.starts_with("| `E") || line.starts_with("| `W"))
+    {
         let fields: Vec<_> = row.split('|').map(str::trim).collect();
         assert_eq!(fields.len(), 5, "malformed diagnostic row: {row}");
         let code = fields[1].trim_matches('`');

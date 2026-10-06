@@ -249,11 +249,32 @@ add dependencies, crates or configuration systems. Do not push.
   build-cache baseline was not measured; no full-package disk delta is claimed.
   Available space is 30 GiB. No later package started before this gate passed.
 - [ ] **P03 — Add five front-end lints and level control** — `OPEN`, P1.
-  Next: after P02 closes, add only unused-variable, unused-parameter,
-  implicit-function-declaration, implicit-int and return-type diagnostics.
+  Next: run the full workspace gate after the focused lint and application checks.
   Exit: warning-level UI matrix, unchanged zlib/cJSON builds with recorded
   warnings and full workspace gate pass. Pin the revised authority table.
   Budget: 700 production Rust lines. No lint registry or new lint framework.
+  October 7 checkpoint: RED `147bb7af` records six failing public tests.
+  The implementation adds the five warnings, named and group levels, promotion,
+  suppression and caps. Symbol identities distinguish shadowed variables;
+  a source CFG checks reachable function ends without changing executable IR.
+  Prototypes, unused attributes, complete returns, loops, switches and gotos
+  have controls. A separate RED exposed unused file-local static objects and
+  now passes. Return-value type mismatches keep the existing E1207 error;
+  they are not the approved return-type lint. Focused results: 28 tests pass,
+  including all 62 C/text/JSON snapshots, all 122 explanation pages and 205
+  tagged examples. Only the old undeclared-call snapshot changes to W0003.
+  The five warning pages use explicit named deny flags for their trigger tests.
+  EvoIR revision 2.0.1 and its pin add the warning authority and level contract.
+  cJSON 1.7.19 `make all test CC=evocc` passes with its original `-Wall -Werror`:
+  zero W0001--W0005 messages and three existing unsupported-stack-protector
+  warnings. zlib 1.3.2 configure plus `make test` passes for static and shared
+  libraries, with zero warnings. That configure chose `-O`; a second clean
+  configure/build with `CFLAGS='-O -Wall -Wextra'` also passes, with zero
+  warnings. Source copies and logs occupy under 8 MiB in
+  `/tmp/evocc-lints.UWMB17`, with a 500 MiB retention cap. The existing source
+  trees were unchanged. Production inserted/replaced Rust is 413/700 lines
+  at this checkpoint. Full workspace, Clippy and final cleanup remain required;
+  this is not package closure. No later package has started.
 - [ ] **P04 — Add user-intent commands** — `OPEN`, P1.
   Next: after P03 closes, add the `evo` binary with run, check, explain, prove,
   build and version. Delegate to the existing driver; do not refactor it.

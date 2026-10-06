@@ -322,6 +322,9 @@ pub struct Parser<'src, 'arena> {
     target_layout: TargetDataLayout,
     standard_builtins: bool,
     legacy_declarations: bool,
+    lint_declarations: bool,
+    lint_uses: HashSet<SymbolId>,
+    lint_findings: Vec<evocc_chir::lints::Finding>,
     gnu_inline: bool,
     unprototyped_calls: Vec<(SymbolId, Vec<TypeId>, SourceSpan)>,
     standard_allocation_calls: Vec<(SymbolId, SourceSpan)>,
@@ -563,6 +566,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             error_limit: None,
             standard_builtins: true,
             legacy_declarations: false,
+            lint_declarations: false,
+            lint_uses: HashSet::new(),
+            lint_findings: Vec::new(),
             gnu_inline: false,
             rollback_error_count: usize::from(lexical_diagnostic.is_some()),
             diagnostics: lexical_diagnostic.into_iter().collect(),
@@ -634,6 +640,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// The default language keeps unknown calls and missing types diagnosed.
     pub fn set_legacy_declarations(&mut self, enabled: bool) {
         self.legacy_declarations = enabled;
+    }
+
+    /// Keep implicit declaration evidence for the driver's warning policy.
+    /// This does not enable old-style definitions in a modern language mode.
+    pub fn enable_lints(&mut self) {
+        self.lint_declarations = true;
+    }
+
+    pub fn lint_findings(&self) -> &[evocc_chir::lints::Finding] {
+        &self.lint_findings
     }
 
     pub fn set_gnu_inline(&mut self, enabled: bool) {
@@ -737,6 +753,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             std::mem::take(&mut self.symbols),
         );
         unit.set_gnu_inline(self.gnu_inline);
+        if self.lint_declarations {
+            self.lint_findings.extend(evocc_chir::lints::check(
+                &unit,
+                &self.lint_uses,
+                &self.target_layout,
+            ));
+            self.lint_findings
+                .sort_by_key(|f| (f.span.file.raw(), f.span.byte_start, f.lint));
+            self.lint_findings.dedup_by_key(|f| (f.span, f.lint));
+        }
         if let Err(error) = evocc_chir::function_definitions::FunctionDefinitions::derive(&unit) {
             self.report("E2002", "incompatible-redeclaration", error.duplicate);
         }
@@ -6152,12 +6178,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         if words.is_empty() {
             if allow_implicit_integer
-                && self.legacy_declarations
+                && (self.legacy_declarations || self.lint_declarations)
                 && matches!(
                     self.peek_kind(),
                     Some(TokenKind::Identifier | TokenKind::Star | TokenKind::LParen)
                 )
             {
+                self.lint_findings.push(evocc_chir::lints::Finding {
+                    lint: 3,
+                    span: self.span(),
+                });
                 let ty = self.intern(TypeKind::Int(IntRank::Int), qualifiers);
                 return Some(ParsedSpecifier {
                     surface: TypeSpecifier::Builtin { ty, span: start },
@@ -12415,10 +12445,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     .resolve_expression_symbol(resolved_spelling)
                     .or_else(|| self.resolve_neon_builtin(resolved_spelling, tok.span))
                     .or_else(|| {
-                        (self.legacy_declarations && self.peek_kind() == Some(TokenKind::LParen))
-                            .then(|| {
-                                self.declare_implicit_called_function(resolved_spelling, tok.span)
-                            })
+                        ((self.legacy_declarations || self.lint_declarations)
+                            && self.peek_kind() == Some(TokenKind::LParen))
+                        .then(|| self.declare_implicit_called_function(resolved_spelling, tok.span))
                     })
                 else {
                     self.report(
@@ -12442,6 +12471,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     );
                     return None;
                 }
+                self.lint_uses.insert(symbol);
                 let facts = self.facts_for_symbol(symbol);
                 CHirExpr::Ident {
                     symbol,
@@ -13686,6 +13716,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn declare_implicit_called_function(&mut self, spelling: &str, span: SourceSpan) -> SymbolId {
+        self.lint_findings
+            .push(evocc_chir::lints::Finding { lint: 2, span });
         let (return_ty, parameters) = if spelling == "alloca" && self.standard_builtins {
             let (_, return_type, types) = self
                 .builtin_library_prototype("__builtin_alloca", span)

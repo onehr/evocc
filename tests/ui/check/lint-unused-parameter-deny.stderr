@@ -1,0 +1,7 @@
+error[W0002]: unused parameter
+  --> tests/ui/check/lint-unused-parameter-deny.c:3:11
+   |
+ 3 | int f(int unused) { return 0; }
+   |           ^^^^^^ unused parameter
+   |
+   = help: use the parameter or mark it __attribute__((unused))

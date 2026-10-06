@@ -1,0 +1,7 @@
+error[W0003]: function has no declaration
+  --> tests/ui/check/lint-implicit-function-declaration-deny.c:3:22
+   |
+ 3 | int f(void) { return missing(); }
+   |                      ^^^^^^^ function has no declaration
+   |
+   = help: declare the function before its first call

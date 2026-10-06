@@ -124,6 +124,16 @@ int main(void) {}
 "#;
     expect(run(&["-Wall"], source), "W0001", "allow");
     expect(run(&["-Wall"], "int f(int x);"), "W0002", "allow");
+    expect(
+        run(&["-Wunused-variable"], "int visible; extern int imported;"),
+        "W0001",
+        "allow",
+    );
+    expect(
+        run(&["-Wunused-variable"], "static int private_value;"),
+        "W0001",
+        "warning",
+    );
 }
 
 #[test]
@@ -133,8 +143,19 @@ fn return_analysis_checks_paths_without_warning_on_complete_returns() {
         "int f(void) { for (;;) {} }",
         "void f(void) {}",
         "int main(void) {}",
+        "int f(int x) { switch(x) { case 1: return 2; default: return 3; } }",
+        "int f(void) { goto done; done: return 2; }",
+        "int f(void) { while ((unsigned __int128)-1) {} }",
+        "int f(void) { do { continue; } while (1); }",
     ] {
         expect(run(&["-Wreturn-type"], source), "W0005", "allow");
+    }
+    for source in [
+        "int f(int x) { switch(x) { case 1: return 2; } }",
+        "int f(void) { for (;;) { break; } }",
+        "int f(void) { goto end; return 1; end:; }",
+    ] {
+        expect(run(&["-Wreturn-type"], source), "W0005", "warning");
     }
 }
 

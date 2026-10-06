@@ -37,7 +37,7 @@ fn every_authoritative_page_has_tested_examples_and_exact_cli_text() {
         .0;
     let codes: BTreeSet<_> = table
         .lines()
-        .filter(|line| line.starts_with("| `E"))
+        .filter(|line| line.starts_with("| `E") || line.starts_with("| `W"))
         .map(|line| {
             line.split('|')
                 .nth(1)
@@ -90,7 +90,15 @@ fn every_authoritative_page_has_tested_examples_and_exact_cli_text() {
                 source.clear();
             } else if line == "```" {
                 let tag = block.take().expect("closing fence without example");
-                let output = run(&["--check", "--error-format=json", "/dev/stdin"], &source);
+                let mut flags = vec!["--check", "--error-format=json"];
+                flags.extend(
+                    page.lines()
+                        .find_map(|line| line.strip_prefix("Flags: "))
+                        .unwrap_or("")
+                        .split_whitespace(),
+                );
+                flags.push("/dev/stdin");
+                let output = run(&flags, &source);
                 let diagnostics = String::from_utf8(output.stderr).unwrap();
                 if tag == "fixed" {
                     fixed += 1;

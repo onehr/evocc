@@ -2172,3 +2172,100 @@ int main(void) { void *target = &&done; goto *target; done: return 0; }
 This example has no valid label target; the fix supplies one.
 Other lowering failures can be compiler defects rather than source errors.
 
+## W0xxx
+
+### W0001: unused variable
+
+A variable with no external linkage is declared but never referenced.
+The declaration can hide a missing operation or old code.
+
+C permits unused variables.
+EvoCC reports this warning only when it is enabled.
+
+Flags: -Werror=unused-variable
+
+```c
+int main(void) { int count = 3; return 0; }
+```
+
+```c
+int main(void) { int count = 3; return count; }
+```
+
+### W0002: unused parameter
+
+A function parameter is never referenced in its definition.
+Its caller still passes the argument.
+
+C permits unused parameters and unnamed prototype parameters.
+EvoCC checks definitions, not prototypes, when this warning is enabled.
+
+Flags: -Werror=unused-parameter
+
+```c
+int value(int count) { return 0; }
+int main(void) { return value(3); }
+```
+
+```c
+int value(int count) { return count; }
+int main(void) { return value(3); }
+```
+
+### W0003: function has no declaration
+
+A call names a function with no visible declaration.
+The compiler cannot check its intended interface.
+
+C99 and later require a declaration before the call.
+EvoCC denies this by default in these modes and warns in C89 modes.
+
+Flags: -Werror=implicit-function-declaration
+
+```c
+int main(void) { return value(); }
+```
+
+```c
+int value(void) { return 3; }
+int main(void) { return value(); }
+```
+
+### W0004: declaration has no type specifier
+
+A declaration omits its type specifier.
+The legacy interpretation supplies int, which might not be the intended type.
+
+C89 permitted implicit int in these declarations.
+Later C modes require an explicit type, and EvoCC reports the omission.
+
+Flags: -Werror=implicit-int
+
+```c
+main(void) { return 0; }
+```
+
+```c
+int main(void) { return 0; }
+```
+
+### W0005: function does not return the required value
+
+A non-void function can reach its end without a return value.
+A caller can receive an undefined result if it uses the missing value.
+
+C requires a value when the caller uses a non-void result.
+Reaching the end of main is a special case that returns zero.
+
+Flags: -Werror=return-type
+
+```c
+int value(int x) { if (x) return 3; }
+int main(void) { return value(0); }
+```
+
+```c
+int value(int x) { if (x) return 3; return 0; }
+int main(void) { return value(0); }
+```
+

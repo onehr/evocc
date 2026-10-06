@@ -39,6 +39,7 @@ mod darwin;
 mod deps;
 mod diagnostics;
 mod dwarf;
+mod lints;
 mod proof_required;
 mod toolchain;
 
@@ -147,6 +148,7 @@ impl LanguageMode {
 
 struct DriverOptions {
     mode: DriverMode,
+    lints: lints::Levels,
     error_format: diagnostics::Format,
     color: diagnostics::Color,
     source_bytes: std::cell::RefCell<Vec<u8>>,
@@ -514,6 +516,7 @@ fn run_options(options: &DriverOptions) -> ExitCode {
 /// driver does not know goes to `ignored_options` and is not an error.
 fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String> {
     let mut mode = None;
+    let mut lints = lints::Levels::default();
     let mut error_format = None;
     let mut color = diagnostics::Color::Auto;
     let mut target = None;
@@ -940,6 +943,9 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             _ if arg.starts_with("-std=") => {
                 return Err(format!("unsupported C language mode `{arg}`"));
             }
+            _ if arg.starts_with("-W") || arg == "-w" || arg.starts_with("--cap-lints=") => {
+                lints.option(arg)?
+            }
             _ if lenient && (arg.starts_with("-f") || arg.starts_with("-m")) => {
                 ignored_options.push(arg.clone());
             }
@@ -1058,6 +1064,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         error_format: error_format.unwrap_or_default(),
         color,
         source_bytes: std::cell::RefCell::new(Vec::new()),
+        lints,
         included_bytes: std::cell::RefCell::new(std::collections::BTreeMap::new()),
         target,
         input: input.ok_or_else(|| "an input file is required".to_string())?,
@@ -1587,6 +1594,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     parser.set_target_layout(options.target_layout());
     parser.set_standard_builtins(options.standard_builtins);
     parser.set_legacy_declarations(options.language.legacy_declarations());
+    parser.enable_lints();
     parser.use_language_keywords(
         options.language.iso_keywords(),
         options.language.legacy_declarations(),
@@ -1646,6 +1654,41 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         } else {
             options.emit_error(&options.input, 0, 0, "E1001", "expected-declaration");
         }
+        return ExitCode::from(1);
+    }
+
+    let mut denied = false;
+    for finding in parser.lint_findings() {
+        let level = options
+            .lints
+            .level(finding.lint, options.language.legacy_declarations());
+        if level == lints::Level::Allow {
+            continue;
+        }
+        let file = pp.source_path(finding.span.file).unwrap_or(&options.input);
+        let mut diagnostic = diagnostics::Diagnostic::new(
+            &format!("W{:04}", finding.lint + 1),
+            finding.message(),
+            diagnostics::Span::source(
+                file,
+                &options.diagnostic_source(file),
+                finding.span,
+                finding.message(),
+            ),
+        );
+        diagnostic.level = if level == lints::Level::Deny {
+            "error"
+        } else {
+            "warning"
+        };
+        diagnostic.help.push(finding.help().into());
+        eprint!(
+            "{}",
+            diagnostics::render(&diagnostic, options.error_format, options.color)
+        );
+        denied |= level == lints::Level::Deny;
+    }
+    if denied {
         return ExitCode::from(1);
     }
 

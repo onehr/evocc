@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.0.0** | **Pinned ground truth** | Stabilized from revision 1.9.116 on 2026-10-06
+**Revision 2.0.1** | **Pinned ground truth** | Added front-end warning levels on 2026-10-07
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2590,6 +2590,28 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E3061` | `alias-target-not-defined` | module validation |
 | `E3062` | `invalid-atomic-access` | validation / interpreter access contract |
 | `E3101` | `evoir-lowering-failed` | lowering |
+| `W0001` | `unused variable` | front-end lint |
+| `W0002` | `unused parameter` | front-end lint |
+| `W0003` | `function has no declaration` | front-end lint |
+| `W0004` | `declaration has no type specifier` | front-end lint |
+| `W0005` | `function does not return the required value` | front-end lint |
+
+The five warning names, in code order, are `unused-variable`, `unused-parameter`,
+`implicit-function-declaration`, `implicit-int` and `return-type`. The unused
+warnings default to allow; the other three default to warn, except an implicit
+function declaration defaults to deny in C99 and later modes. The driver keeps
+implicit declaration evidence before lowering. An allowed or warned implicit
+declaration uses the existing implicit `int` and unprototyped-function rules.
+This does not enable old-style definitions in a modern language mode.
+
+`-WNAME`, `-Wno-NAME` and `-Werror=NAME` set warn, allow and deny. The last
+setting of the same specificity wins. `-Wall` and `-Wextra` enable all five;
+an explicit named setting takes priority over either group. `-Werror` promotes
+enabled warnings to errors. `-w` suppresses all five. `--cap-lints=allow|warn|deny`
+limits the final severity; it never enables a lint. A denied lint returns exit
+1 before output publication. A warning does not change the exit status.
+Warning codes remain `Wxxxx` when promoted to errors. Their presentation uses
+`spec/diagnostics.md`. These diagnostics do not change executable IR.
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:

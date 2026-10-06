@@ -158,7 +158,7 @@ def accepts(rule, text):
     if rule == 'label':
         return bool(re.search('[a-zA-Z]', text)) and not re.fullmatch(r'[EW]\d{4}|error|here', text)
     action = text.split()[0] if text.split() else ''
-    actions = {'add', 'change', 'check', 'choose', 'declare', 'define', 'initialize', 'pass', 'remove', 'replace', 'run', 'set', 'use'}
+    actions = {'add', 'change', 'check', 'choose', 'declare', 'define', 'initialize', 'pass', 'remove', 'replace', 'return', 'run', 'set', 'use', 'write'}
     if rule == 'help':
         return action in actions
     if rule == 'note':
@@ -190,6 +190,8 @@ fn later() { #[cfg(test)] fault::check()?; Err("later production error"); }
                             ('note', 'the divisor is zero', 'check the divisor'),
                             ('help', 'check the divisor', 'the divisor is zero')]:
         assert accepts(rule, good) and not accepts(rule, bad), rule
+    assert accepts('help', 'write an explicit type specifier')
+    assert accepts('help', 'return a value on each path')
 
 
 if __name__ == '__main__':

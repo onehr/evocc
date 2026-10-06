@@ -1,0 +1,7 @@
+error[W0001]: unused variable
+  --> tests/ui/check/lint-unused-variable-deny.c:3:19
+   |
+ 3 | int f(void) { int unused = 2; return 0; }
+   |                   ^^^^^^ unused variable
+   |
+   = help: remove the variable or use it

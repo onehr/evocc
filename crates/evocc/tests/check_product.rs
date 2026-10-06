@@ -146,6 +146,10 @@ fn blessed_runtime_and_frontend_diagnostics() {
             .lines()
             .find_map(|line| line.strip_prefix("// flags: "))
             .unwrap_or("--check");
+        let expected_exit = source
+            .lines()
+            .find_map(|line| line.strip_prefix("// exit: "))
+            .map_or(1, |value| value.parse::<i32>().unwrap());
         let path = format!(
             "tests/ui/check/{}",
             case.file_name().unwrap().to_str().unwrap()
@@ -159,13 +163,13 @@ fn blessed_runtime_and_frontend_diagnostics() {
             let out = run(&args, None);
             assert_eq!(
                 out.status.code(),
-                Some(1),
+                Some(expected_exit),
                 "{}: {}",
                 case.display(),
                 String::from_utf8_lossy(&out.stderr)
             );
             assert!(out.stdout.is_empty(), "{}", case.display());
-            if extension == "json" {
+            if extension == "json" && !out.stderr.is_empty() {
                 json_assert(&out.stderr, "assert rows");
             }
             // Included files have canonical paths. Only the checkout prefix varies.

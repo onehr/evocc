@@ -1,0 +1,7 @@
+warning[W0005]: function does not return the required value
+  --> tests/ui/check/lint-return-type-warn.c:3:5
+   |
+ 3 | int f(int x) { if (x) return 1; }
+   |     ^ function does not return the required value
+   |
+   = help: return a value on each path or change the result type to void

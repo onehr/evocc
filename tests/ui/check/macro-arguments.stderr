@@ -1,6 +1,7 @@
-error[E2001]: undeclared-identifier: SUM
+error[W0003]: function has no declaration
   --> tests/ui/check/macro-arguments.c:2:25
    |
  2 | int main(void) { return SUM(1); }
-   |                         ^^^ undeclared-identifier: SUM
+   |                         ^^^ function has no declaration
    |
+   = help: declare the function before its first call

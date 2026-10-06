@@ -70,7 +70,8 @@ Compilation:
   -std=c89|c99|c11|c17|gnu89|gnu99|gnu11|gnu17  -O0 -O1 -O2 -O3 -Os -Og -g
   -f... -m...        The known options take effect. The driver ignores
                      the others with one warning.
-  -W...              Accepted. EvoCC reports errors, not warnings.
+  -Wall -Wextra      Enable the five supported warnings.
+  -Werror -Werror=NAME -Wno-NAME --cap-lints=allow|warn|deny
   -w                 Do not print warnings.
   --target=aarch64-apple-darwin|aarch64-unknown-linux-gnu
   --sysroot=DIR, -isysroot DIR   The root of the target's headers.
@@ -317,7 +318,10 @@ impl Command {
             "-o" => self.output = Some(take(args, index, arg)?.to_owned()),
             "-x" => *language = self::language(take(args, index, arg)?)?,
             "-v" => self.verbose = true,
-            "-w" => self.quiet = true,
+            "-w" => {
+                self.quiet = true;
+                self.compile.push(arg.to_owned());
+            }
             "--help" => self.query = Some(Query::Help),
             "-dumpmachine" => self.query = Some(Query::Machine),
             "-dumpversion" | "-dumpfullversion" => self.query = Some(Query::Version),
@@ -421,7 +425,9 @@ impl Command {
             _ if arg.starts_with("-Wl,") => self.link.push(LinkItem::Argument(arg.to_owned())),
             _ if arg.starts_with("-Wa,") => self.assembler_flags.push(arg.to_owned()),
             _ if arg.starts_with("-Wp,") => self.preprocessor_options(&arg[4..])?,
-            _ if arg.starts_with("-W") => {}
+            _ if arg.starts_with("-W") || arg.starts_with("--cap-lints=") => {
+                self.compile.push(arg.to_owned())
+            }
             _ if arg.starts_with("-I") || arg.starts_with("-D") || arg.starts_with("-U") => {
                 self.compile.push(arg.to_owned());
                 self.preprocessor.push(arg.to_owned());
