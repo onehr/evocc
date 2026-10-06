@@ -255,6 +255,9 @@ fn the_development_actions_keep_the_linux_default_and_the_cc_actions_follow_the_
     succeeded(&work.run(&[
         "-S",
         "--target=aarch64-unknown-linux-gnu",
+        // This target-format control has no system headers. Header discovery
+        // has separate tests and must not depend on an installed Linux SDK.
+        "-nostdinc",
         "main.c",
         "-o",
         "linux.s",

@@ -52,7 +52,10 @@ impl Work {
         assert!(output.status.success(), "{stderr}");
         assert!(String::from_utf8_lossy(&output.stdout).contains(&value.to_string()));
         assert!(
-            stderr.contains(&format!("Sysroot: {}", root.display())),
+            stderr.contains(&format!(
+                "Sysroot: {}",
+                root.canonicalize().unwrap().display()
+            )),
             "{stderr}"
         );
     }
@@ -141,6 +144,47 @@ fn no_standard_includes_needs_no_sysroot() {
 }
 
 #[test]
+fn resource_and_fixed_headers_precede_library_headers() {
+    let work = Work::new();
+    let root = work.headers(&format!("sysroot/{TARGET}"), 11);
+    for (directory, file, body) in [
+        (
+            "usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "stddef.h",
+            "#define RESOURCE 14\n",
+        ),
+        (
+            "usr/lib/gcc/aarch64-linux-gnu/14/include-fixed",
+            "fixed.h",
+            "#define FIXED 15\n",
+        ),
+        (
+            "usr/include/aarch64-linux-gnu",
+            "fixed.h",
+            "#error wrong header order\n",
+        ),
+    ] {
+        std::fs::create_dir_all(root.join(directory)).unwrap();
+        std::fs::write(root.join(directory).join(file), body).unwrap();
+    }
+    std::fs::write(
+        work.0.join("probe.c"),
+        "#include <stddef.h>\n#include <fixed.h>\nRESOURCE + FIXED\n",
+    )
+    .unwrap();
+    let output = work.command().args(["-E", "probe.c"]).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let tokens = String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .collect::<String>();
+    assert!(tokens.contains("14+15"), "{tokens}");
+}
+
+#[test]
 #[cfg(not(target_os = "linux"))]
 fn cross_link_requires_an_explicit_linker_before_selecting_tools() {
     let work = Work::new();
@@ -151,4 +195,38 @@ fn cross_link_requires_an_explicit_linker_before_selecting_tools() {
     assert!(stderr.contains("--linker="), "{stderr}");
     assert!(stderr.contains("-c"), "{stderr}");
     assert!(!work.0.join("a.out").exists());
+}
+
+#[test]
+#[cfg(unix)]
+fn preprocessed_assembly_receives_the_selected_header_root() {
+    use std::os::unix::fs::PermissionsExt;
+    let work = Work::new();
+    let root = work.headers(&format!("sysroot/{TARGET}"), 11);
+    std::fs::write(work.0.join("input.S"), "#include <stdio.h>\n").unwrap();
+    let assembler = work.0.join("record-assembler");
+    std::fs::write(
+        &assembler,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > assembler-args\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&assembler, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let output = work
+        .command()
+        .arg(format!("--assembler={}", assembler.display()))
+        .args(["-c", "input.S"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let arguments = std::fs::read_to_string(work.0.join("assembler-args")).unwrap();
+    assert!(
+        arguments.lines().any(|line| {
+            line == format!("--sysroot={}", root.canonicalize().unwrap().display())
+        }),
+        "{arguments}"
+    );
 }

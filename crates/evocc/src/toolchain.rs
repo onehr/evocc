@@ -14,6 +14,55 @@ const SEALED_IMAGE: &str = "evo-flight-lab:sealed";
 /// The multiarch directory of AArch64 Debian and Ubuntu systems.
 const LINUX_MULTIARCH: &str = "aarch64-linux-gnu";
 
+/// Select one header root. A named root must work; never hide a bad override
+/// by combining it with headers from another installation. Native Linux keeps
+/// its system root when no explicit or packaged root exists.
+pub(crate) fn linux_sysroot(explicit: Option<&str>) -> Result<String, String> {
+    let named = explicit
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("EVOCC_SYSROOT").map(PathBuf::from));
+    let valid = |root: &Path| root.join("usr/include/stdio.h").is_file();
+    let selected = if let Some(root) = named {
+        valid(&root).then_some(root)
+    } else {
+        let bundled = std::env::current_exe().ok().and_then(|exe| {
+            Some(
+                exe.parent()?
+                    .parent()?
+                    .join("sysroot/aarch64-unknown-linux-gnu"),
+            )
+        });
+        bundled.filter(|root| valid(root)).or_else(|| {
+            if cfg!(target_os = "linux") {
+                return valid(Path::new("/")).then(|| PathBuf::from("/"));
+            }
+            if !cfg!(target_os = "macos") || !on_path("container") {
+                return None;
+            }
+            // Reuse a previous sealed-image export. This lookup never starts
+            // a container, exports files or downloads headers.
+            std::env::var_os("EVOCC_BENCH_SYSROOT")
+                .map(PathBuf::from)
+                .filter(|root| valid(root))
+                .or_else(|| {
+                    let cwd = std::env::current_dir().ok()?;
+                    cwd.ancestors().find_map(|parent| {
+                        ["sysroot/aarch64-unknown-linux-gnu", ".build/ladder/sysroot"]
+                            .into_iter()
+                            .map(|name| parent.join(name))
+                            .find(|root| valid(root))
+                    })
+                })
+        })
+    };
+    selected
+        .and_then(|root| root.canonicalize().ok())
+        .and_then(|root| root.to_str().map(str::to_owned))
+        .ok_or_else(|| {
+            "Linux sysroot is missing or invalid; use --sysroot=DIR, set EVOCC_SYSROOT, or install sysroot/aarch64-unknown-linux-gnu beside the bin directory".to_owned()
+        })
+}
+
 /// The system header directories of the target, in search order, or `None`
 /// when the preprocessor keeps its built-in directories.
 ///
@@ -83,8 +132,11 @@ fn linux_directories(root: &Path) -> Vec<String> {
     existing(
         versions
             .pop()
-            .map(|(_, include)| include)
             .into_iter()
+            .flat_map(|(_, include)| {
+                let fixed = include.with_file_name("include-fixed");
+                [include, fixed]
+            })
             .chain([
                 root.join("usr/local/include"),
                 root.join("usr/include").join(LINUX_MULTIARCH),

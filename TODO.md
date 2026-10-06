@@ -362,6 +362,20 @@ add dependencies, crates or configuration systems. Do not push.
   sysroot cannot be unpacked faithfully on the repository volume. Owner decision
   requested: require a case-sensitive sysroot location for this release, or
   approve a separate storage/lookup change. Do not drop or rename headers.
+  Driver checkpoint: RED commit `a7003b21` has three expected failures and one
+  passing control. The implementation now passes all six sysroot tests and
+  all eleven cc-driver tests; focused Clippy with warnings denied passes.
+  Lookup is explicit, environment, bundled, then existing sealed exports on
+  macOS; native Linux retains its host root as the final native fallback.
+  A selected but invalid root fails without fallback. Header discovery does
+  not change linker library search. `.S` inputs receive the selected root.
+  Production driver changes use 96/250 inserted/replaced lines. Export,
+  packaging, contract, cross-build and full-workspace acceptance remain open.
+  The case collision decision blocks faithful release packaging, not these
+  driver tests. Retained capture is 16 KiB; test-owned temporary directories
+  are removed. Since the prior 04:47 target measurement, target/frontend grew
+  by 123,468 KiB before the final Clippy completion; this is a checkpoint,
+  not final package disk accounting. Available space remains 29 GiB.
   Exit: macOS produces ELF AArch64 objects and zlib without manual include
   flags, contract checks and full workspace gate pass. Add the cross-host CI
   link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,

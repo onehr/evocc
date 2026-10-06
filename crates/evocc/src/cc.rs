@@ -75,6 +75,8 @@ Compilation:
   -w                 Do not print warnings.
   --target=aarch64-apple-darwin|aarch64-unknown-linux-gnu
   --sysroot=DIR, -isysroot DIR   The root of the target's headers.
+  EVOCC_SYSROOT       Linux header root when --sysroot is absent.
+                     Otherwise use ../sysroot/TARGET beside the executable directory.
 
 Dependencies: -M -MM -MD -MMD -MF FILE -MT TARGET -MQ TARGET -MP
 
@@ -512,6 +514,9 @@ struct Compiled {
 struct Session {
     command: Command,
     target: DriverTarget,
+    /// Header discovery does not select a linker sysroot. Bundled headers
+    /// contain no libraries, startup objects or dynamic loader.
+    header_root: Option<String>,
     format: diagnostics::Format,
     scratch: Scratch,
     tools: Option<Tools>,
@@ -554,6 +559,7 @@ pub(crate) fn run(args: &[String]) -> ExitCode {
         return ExitCode::from(1);
     }
     let mut session = Session {
+        header_root: command.sysroot.clone(),
         command,
         target,
         format,
@@ -598,7 +604,7 @@ impl Session {
         if self.command.debug && !self.target.is_darwin() {
             arguments.push("-g".to_owned());
         }
-        if let Some(root) = &self.command.sysroot {
+        if let Some(root) = &self.header_root {
             arguments.push(format!("--sysroot={root}"));
         }
         arguments.push(format!("--target={}", self.target.triple()));
@@ -664,6 +670,32 @@ impl Session {
             return Err(self.fail("cannot specify -o with -c, -S or -E with multiple files"));
         }
         self.validate(&sources)?;
+
+        if !cfg!(target_os = "linux")
+            && self.target == DriverTarget::Aarch64UnknownLinuxGnu
+            && action == Action::Link
+            && self.command.linker.is_none()
+        {
+            return Err(self.fail(
+                "Linux linking on a non-Linux host requires --linker=COMMAND; use -c to produce objects",
+            ));
+        }
+        if self.target == DriverTarget::Aarch64UnknownLinuxGnu
+            && !self.command.compile.iter().any(|arg| arg == "-nostdinc")
+            && sources
+                .iter()
+                .any(|source| matches!(source.kind, Kind::C | Kind::AssemblyWithCpp))
+        {
+            self.header_root = Some(
+                toolchain::linux_sysroot(self.command.sysroot.as_deref())
+                    .map_err(|message| self.fail(&message))?,
+            );
+        }
+        if self.command.verbose {
+            if let Some(root) = &self.header_root {
+                eprintln!("Sysroot: {root}");
+            }
+        }
 
         let mut objects: Vec<Option<String>> = vec![None; sources.len()];
         let mut failed = false;
@@ -934,6 +966,11 @@ impl Session {
                 );
                 if cpp {
                     arguments.extend(preprocessor);
+                    if self.target == DriverTarget::Aarch64UnknownLinuxGnu {
+                        if let Some(root) = &self.header_root {
+                            arguments.push(format!("--sysroot={root}"));
+                        }
+                    }
                 }
                 arguments.extend(flags);
             }
@@ -961,6 +998,11 @@ impl Session {
         }
         if let Some(parent) = input.parent() {
             mounts.push(parent.to_owned());
+        }
+        if cpp && tool.sealed {
+            if let Some(root) = &self.header_root {
+                mounts.push(PathBuf::from(root));
+            }
         }
         toolchain::run(&tool, &arguments, &mounts, verbose)?;
         if tool.sealed {
