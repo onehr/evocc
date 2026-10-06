@@ -1,0 +1,21 @@
+{
+  "format": "evocc-spec-pins-v1",
+  "pins": {
+    "spec/evoir.md": {
+      "revision": "2.0.0",
+      "sha256": "28f17b16d982b45e542d7c2cbb99d90b3ebf7439dd2ca1040e4d520fd104755f"
+    },
+    "spec/evomir.md": {
+      "revision": "1.0.0",
+      "sha256": "6af9df48eebf5d3aefd7801c5860b26700da19e8ac9bb67ad1a68e28fcdc5938"
+    },
+    "spec/target.md": {
+      "revision": "2",
+      "sha256": "23d94a8b6c82de3b19e00e59dee92eb8d97c99479297d0baa614405808a8f576"
+    },
+    "spec/verification.md": {
+      "revision": "1.0.0",
+      "sha256": "af3e8cf6f563e6ace12790ee7139f632d450b0b4be098dd933c0b0e3d44ca8cf"
+    }
+  }
+}

@@ -20,6 +20,7 @@ set -eu
 BASE="${1:?base commit required}"; shift || true
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+python3 tools/check-spec-pins.py
 if [ "$BASE" = "--full-workspace" ]; then
     jobs_value=false
     for option in "$@"; do
