@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P04, P05, B08, B08b, B08d, B08d10 | P01 through P03 are complete. Complete P04 and P05 in order under the October 7 product contract. Verification work is paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P05, B08, B08b, B08d, B08d10 | P01 through P04 are complete. Complete P05 and the final product gates under the October 7 contract. Verification work is paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -302,8 +302,8 @@ add dependencies, crates or configuration systems. Do not push.
   1,251,676 KiB; retained logs add 716 KiB (net 1,252,392 KiB for those measured
   paths). This is not filesystem-wide accounting. Available disk is 26 GiB.
   Claim: five controlled front-end lints, not all GCC warning semantics.
-- [ ] **P04 — Add user-intent commands** — `OPEN`, P1.
-  Next: run the full workspace gate and validate release packaging. The six
+- [x] **P04 — Add user-intent commands** — `DONE`, P1.
+  Closed on October 7 after the full gate and packaged-command acceptance. The six
   verbs delegate to the existing driver; no driver library was introduced.
   RED: `9b1793f0`, seven failures because the binary did not exist. The focused
   suite now passes eleven tests, including the real cJSON build, writable
@@ -326,8 +326,31 @@ add dependencies, crates or configuration systems. Do not push.
   Exit: verb tests, actual cJSON build receipt, tested book commands, release
   packaging and full workspace gate pass. Budget: 600 lines for the binary and
   100 lines for release-script and book changes.
+  **October 7 closure:** implementation `d69cadc5` passes the clean offline
+  full workspace gate: 416 suites, 3,169 passed, zero failed and five existing
+  ignored campaigns. Clippy with warnings denied and formatting pass. Its log
+  SHA-256 is `ee3745b0e3ea99aec0256673a68632ace2e0813e1bcc801917f1a8cda2c4543b`.
+  The release build passes. The Darwin archive contains all four binaries;
+  all packaged file hashes match. Without EVOCC or EVOCC_PROOF_CHECKER,
+  the packaged verbs use their sibling binaries: run returns 55, check
+  completes, explain prints its page, and prove accepts abs with
+  CHECKED_TO_FINAL_ASSEMBLY. The packaged build command passes cJSON's
+  original `all test -j2`, records three source inputs and zero coded warnings.
+  Archive SHA-256: `5d457612abe158fb9071150dffa1023fac270d05ead862157d04b1aa76c4b4d4`.
+  The binary is 406 lines; bridge code adds 179 (585/600 total); tests are
+  300 lines. Book/release additions remain 91/100. The retained capture is
+  `.evidence/diagnostics/20261007/user-commands/` (412 KiB), including the
+  failed Clippy attempt, successful gate, build logs and packaged proof.
+  After process and handle checks, removed 4,666,884 KiB of rebuildable
+  incremental cache and about 152 MiB of owned temporary packages/application
+  products. Protected trees and original sources were not deleted. From the
+  measured 04:25 checkpoint, target/frontend plus retained evidence fell by
+  2,358,100 KiB; the full-package starting cache size was not measured.
+  Free space is 29 GiB. Claim: six delegated user commands, not external-libc
+  interpreter execution or new proof coverage. Linux archive execution is not
+  claimed by this Darwin packaging check. P05 may now start.
 - [ ] **P05 — Package the Linux header sysroot** — `OPEN`, P1.
-  Next: after P04 closes, export sealed headers and a per-file hash contract;
+  Next: P04 is closed. Export sealed headers and a per-file hash contract;
   add explicit/environment/bundled/fallback lookup without driver downloads.
   Exit: macOS produces ELF AArch64 objects and zlib without manual include
   flags, contract checks and full workspace gate pass. Add the cross-host CI
