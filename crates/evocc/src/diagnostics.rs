@@ -522,11 +522,11 @@ mod tests {
     }
 
     #[test]
-    fn catalogue_is_unique_and_missing_pages_stay_explicit() {
-        assert!(CATALOGUE.windows(2).all(|pair| pair[0].code < pair[1].code));
-        for row in CATALOGUE {
-            let text = explain(row.code).unwrap();
-            assert!(row.message.is_some() || text.contains("TODO: explanation missing"));
+    fn catalogue_is_unique_and_withdrawn_pages_stay_explicit() {
+        assert!(CATALOGUE.windows(2).all(|pair| pair[0].0 < pair[1].0));
+        for (code, _) in CATALOGUE {
+            let text = explain(code).unwrap();
+            assert!(text.starts_with(&format!("# {code}: ")));
         }
         assert!(explain("E3007").unwrap().contains("withdrawn"));
     }

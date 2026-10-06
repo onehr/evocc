@@ -215,7 +215,7 @@ add dependencies, crates or configuration systems. Do not push.
   first diagnostic checked or no diagnostic for the fixed example. The public
   explanation and check-product suites pass 14 tests, including all 117 exact
   CLI texts, table/page equality and generated-index freshness. mdBook 0.4.52
-  builds the chapter. Inserted/replaced Rust and Python total 224 lines,
+  builds the chapter. Inserted/replaced Rust and Python total 229 lines,
   including tests; the index generator has 38 lines. No compiler semantics,
   code numbers, proof path or Lean source changed.
   `Trigger: none` (20): E0109, E2902, E2918, E3006, E3007, E3017, E3018,
@@ -224,7 +224,9 @@ add dependencies, crates or configuration systems. Do not push.
   remain outside this slice: E0109 wraps without a diagnostic; the parser
   emits E1003 for the E2918 condition; the memory fault for E3018 maps to
   E3007. Nonzero return-address requests are rejected as E2913 before E3025.
-  The full gate is not yet run; no later package has started. Only text and
+  The first full gate stopped at test compilation: one catalogue unit test
+  still used the removed struct fields. Its assertions now use the page
+  catalogue; the full gate must be repeated. No later package has started. Only text and
   a temporary mdBook download/site were added; no protected artifacts were
   deleted. Final disk accounting follows the exit gate.
 - [ ] **P03 — Add five front-end lints and level control** — `OPEN`, P1.
