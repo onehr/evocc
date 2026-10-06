@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P03, P04, P05, B08, B08b, B08d, B08d10 | P01 and P02 are complete. Complete P03 through P05 in order under the October 7 product contract. Verification work is paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P04, P05, B08, B08b, B08d, B08d10 | P01 through P03 are complete. Complete P04 and P05 in order under the October 7 product contract. Verification work is paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -248,8 +248,8 @@ add dependencies, crates or configuration systems. Do not push.
   capture fell by 19,396 KiB before retained-log copies. The full-package
   build-cache baseline was not measured; no full-package disk delta is claimed.
   Available space is 30 GiB. No later package started before this gate passed.
-- [ ] **P03 — Add five front-end lints and level control** — `OPEN`, P1.
-  Next: run the full workspace gate after the focused lint and application checks.
+- [x] **P03 — Add five front-end lints and level control** — `DONE`, P1.
+  Closed on October 7 after the full workspace gate and final application replay.
   Exit: warning-level UI matrix, unchanged zlib/cJSON builds with recorded
   warnings and full workspace gate pass. Pin the revised authority table.
   Budget: 700 production Rust lines. No lint registry or new lint framework.
@@ -275,6 +275,33 @@ add dependencies, crates or configuration systems. Do not push.
   trees were unchanged. Production inserted/replaced Rust is 413/700 lines
   at this checkpoint. Full workspace, Clippy and final cleanup remain required;
   this is not package closure. No later package has started.
+  **October 7 closure:** implementation `f1faa2e9`; attribute RED `61eb8677`
+  and fix `08d8f8bf`; prior diagnostic controls updated in `16dfd8ad` and
+  `c2209111`. The first full gate has 3,154 passes and three failures: an empty
+  non-void definition now warns, and two undeclared-call controls now use
+  W0003 rather than E2001. All three inputs and their exit/no-output checks
+  remain. A separate RED reproduces false positives for `used` objects and
+  direct `noreturn` calls; the fix reads declaration attributes by symbol.
+  The affected replay passes 32 tests. On clean subject `c2209111`, the final
+  full workspace gate passes: 414 suites, 3,158 passed, zero failed, five
+  existing ignored campaigns; Clippy with warnings denied and formatting pass.
+  The final binary again passes cJSON `all test` with its own warning flags
+  and zlib static/shared tests with `-O -Wall -Wextra`. Both have zero lint
+  warnings; cJSON retains three unsupported-stack-protector warnings.
+  Production inserted/replaced Rust is 436/700 lines: CHIR export 1, CHIR
+  lints 262, parser 37, catalogue build 4, cc dispatch 9, lint levels 80,
+  driver 43. The public lint test has 209 lines. Five explanation pages have
+  17/19/18/17/19 lines. The 62 UI cases and 205 tagged examples pass.
+  Logs, including failed runs, are retained under
+  `.evidence/diagnostics/20261007/lints/` (716 KiB, below the 500 MiB cap).
+  The final full-gate log SHA-256 is
+  `d40d737b1b27fcc54edc89fddfa813d2e63721e82c945d8e4b6a06e406dd5e04`.
+  Removed the 8.3 MiB temporary source/build capture after handle checks and
+  log preservation; original application sources and protected evidence stay.
+  Since the recorded P02 closure checkpoint, target/frontend grew by
+  1,251,676 KiB; retained logs add 716 KiB (net 1,252,392 KiB for those measured
+  paths). This is not filesystem-wide accounting. Available disk is 26 GiB.
+  Claim: five controlled front-end lints, not all GCC warning semantics.
 - [ ] **P04 — Add user-intent commands** — `OPEN`, P1.
   Next: after P03 closes, add the `evo` binary with run, check, explain, prove,
   build and version. Delegate to the existing driver; do not refactor it.
