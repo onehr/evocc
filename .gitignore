@@ -1,22 +1,18 @@
 # Design documents and research notes are internal working material. The
-# normative roadmap, maintained Q2/Q3 implementation design, reader-facing
-# implementation notebook and README figures are deliberately tracked exceptions.
+# tracked exceptions are the current documents (evidence, generated status,
+# checker workflow, verified optimization design), the reader-facing notebook,
+# the figures and the archive of superseded plans and dated lab notes.
 docs/*
-!docs/roadmap.md
-!docs/evoir-spec.md
-!docs/evomir-spec.md
-!docs/lean-plan.md
-!docs/framing-draft.md
-!docs/codegen-quality-plan.md
-!docs/target-spec.md
 !docs/checker.md
-!docs/eqsat-guard-folding-draft.md
+!docs/evidence.md
 !docs/status.md
+!docs/framing-draft.md
 !docs/notebook/
 !docs/notebook/**
 !docs/images/
 !docs/images/**
-!docs/evidence.md
+!docs/archive/
+!docs/archive/**
 lessons.md
 
 # Runtime evidence is machine-generated output, not source.
