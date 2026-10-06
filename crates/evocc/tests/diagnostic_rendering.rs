@@ -51,6 +51,63 @@ fn short_keeps_the_single_line_channel() {
 }
 
 #[test]
+fn empty_invocation_has_a_primary_command_span() {
+    let output = Command::new(env!("CARGO_BIN_EXE_evocc")).output().unwrap();
+    assert_eq!(output.status.code(), Some(69));
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        text.contains("error: unrecognized invocation is NOT_IMPLEMENTED"),
+        "{text}"
+    );
+    assert!(text.contains("--> <command-line>:1:1"), "{text}");
+    assert!(text.contains('^'), "{text}");
+}
+
+#[test]
+fn unsupported_capability_uses_the_diagnostic_renderer() {
+    let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args(["codegen", "--probe"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(69));
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        text.starts_with("error: capability `codegen` is NOT_IMPLEMENTED"),
+        "{text}"
+    );
+    assert!(text.contains("--> <command-line>:1:1"), "{text}");
+}
+
+#[test]
+fn malformed_probe_honors_the_json_channel() {
+    let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args(["unknown", "--error-format=json", "--probe"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(69));
+    let program = format!(
+        "{}\nimport sys\nrows=[json.loads(line) for line in sys.stdin]\nassert len(rows)==1\nvalidate(rows[0])\nassert rows[0]['code'] is None\n",
+        include_str!("../../../tests/ui/check/validate.py")
+    );
+    let mut validator = Command::new("python3")
+        .args(["-c", &program])
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    validator
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&output.stderr)
+        .unwrap();
+    assert!(
+        validator.wait().unwrap().success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn explicit_color_does_not_depend_on_redirection() {
     let source = "int main(void) { return missing; }";
     let always = run(&["--parse-only", "--color=always"], source);
