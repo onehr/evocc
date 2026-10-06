@@ -236,7 +236,7 @@ stage has a reference to agree with.
 
 ### EvoIR: undefined behavior as data
 
-**What it is.** EvoIR ([specification](docs/evoir-spec.md)) is typed block-argument SSA. UB
+**What it is.** EvoIR ([specification](spec/evoir.md)) is typed block-argument SSA. UB
 conditions are explicit: a total, executable `bits<1>` predicate, such as `signed_mul_defined` or
 `divisor_nonzero`, followed by `ub.assume.<reason>`, and guards such as `access_in_bounds` before
 memory accesses. Memory and observable effects travel on explicit `mem` and `world` tokens, and
@@ -248,7 +248,7 @@ own instruction.
 
 ### EvoMIR: machine constraints as data
 
-**What it is.** EvoMIR ([specification](docs/evomir-spec.md)) is the machine IR: virtual and
+**What it is.** EvoMIR ([specification](spec/evomir.md)) is the machine IR: virtual and
 physical registers, ABI locations, call clobbers, spill slots, flags and parallel copies. Register
 file, calling conventions, instruction facts, encodings, selection patterns and costs are versioned
 tables in `targets/aarch64/`; `tools/generate-target.py` generates code facts from them. A separate
@@ -404,16 +404,16 @@ and the [verification plan](docs/lean-plan.md#first-public-release-verification)
 | `tests/contracts/`, `tests/fixtures/` | Receipts and pinned corpora; C, EvoIR and output fixtures (`verification/`: proof-required inputs) |
 | `tests/acceptance/`, `tests/ui/check/` | Sealed-oracle and differential harnesses; expected `--check` diagnostics |
 | `tests/configs/`, `crates/*/tests/` | Linux configuration fragments; Rust integration tests |
-| `docs/evoir-spec.md`, `docs/evomir-spec.md` | The EvoIR and EvoMIR specifications |
+| `spec/evoir.md`, `spec/evomir.md` | The EvoIR and EvoMIR specifications |
 | `docs/lean-plan.md`, `docs/checker.md` | Verification plan and theorem contract; `--check`, `--explain` and JSON diagnostics |
 | `docs/framing-draft.md`, `docs/eqsat-guard-folding-draft.md` | Verified optimization design and search contract; the `g0.ub.v1` guard slice |
-| `docs/codegen-quality-plan.md`, `docs/target-spec.md` | Backend quality plan; contract of the target tables |
+| `docs/codegen-quality-plan.md`, `spec/target.md` | Backend quality plan; contract of the target tables |
 | `docs/evidence.md`, `docs/roadmap.md`, `docs/status.md` | Results, receipts and limits; roadmap; the rendered dashboard |
 | `docs/notebook/`, `docs/images/` | Dated lab notes; figures and showcase captures |
 
 ## Documentation
 
-- Specifications: [EvoIR](docs/evoir-spec.md), [EvoMIR](docs/evomir-spec.md), [target description](docs/target-spec.md)
+- Specifications: [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md), [target description](spec/target.md)
 - Verification: [verification plan](docs/lean-plan.md), [C checker workflow](docs/checker.md)
 - Design: [verified optimization](docs/framing-draft.md), [codegen quality plan](docs/codegen-quality-plan.md)
 - Results and work: [evidence](docs/evidence.md), [roadmap](docs/roadmap.md), [TODO](TODO.md)

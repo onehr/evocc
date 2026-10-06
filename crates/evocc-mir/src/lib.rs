@@ -1,6 +1,6 @@
 //! EvoMIR: the machine-level intermediate representation of EvoCC.
 //!
-//! The authoritative contract is `docs/evomir-spec.md`. This crate contains
+//! The authoritative contract is `spec/evomir.md`. This crate contains
 //! the pre-allocation data model, canonical text, validation and executable
 //! semantics, as well as lowering from validated EvoIR.
 //!

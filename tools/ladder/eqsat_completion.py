@@ -38,7 +38,7 @@ BOUNDS = dict(signature_visits=1024, whole_suite_evaluations=1024, schedules=[1,
     retention='UNIQUE_INODE_FULL_SCAN_MINIMUM_COMPLETION_INTERVAL_1S_AND_FINAL_SCAN')
 FILES = (*COLLECTORS, 'tools/ladder/eqsat_completion.py',
     'tools/ladder/eqsat_completion_audit.py', *LEAN_SOURCES, *LEAN_IMPORTS,
-    'docs/evoir-spec.md', 'docs/evomir-spec.md',
+    'spec/evoir.md', 'spec/evomir.md',
     'tests/fixtures/eqsat-performance/zombie-only-group.py')
 
 

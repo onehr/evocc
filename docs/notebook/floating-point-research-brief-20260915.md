@@ -130,8 +130,8 @@ implementation tree**. HEAD alone does not identify the implementation below.
 Read the supplied files/diff; if no checkout is available, explicitly distinguish
 provided repository observations from independently verified ones.
 
-- `docs/evoir-spec.md`: revision **1.9.101**, including Appendix D.
-- `docs/evomir-spec.md`: revision **0.32**, including later corrections to its
+- `spec/evoir.md`: revision **1.9.101**, including Appendix D.
+- `spec/evomir.md`: revision **0.32**, including later corrections to its
   earlier scalar-only sections. Identify contradictory old paragraphs rather
   than treating their presence as an implementation requirement.
 - Target of this work: little-endian LP64 `aarch64-unknown-linux-gnu`, GNU11.

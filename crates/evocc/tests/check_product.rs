@@ -202,7 +202,7 @@ fn json_frontend_records_preserve_locations_and_survey_boundaries() {
 
 #[test]
 fn explain_uses_the_authoritative_table_and_records_missing_explanations() {
-    let spec = std::fs::read_to_string(root().join("docs/evoir-spec.md")).unwrap();
+    let spec = std::fs::read_to_string(root().join("spec/evoir.md")).unwrap();
     let table = spec
         .split("### 6.3 Diagnostic Authority")
         .nth(1)

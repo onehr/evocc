@@ -32,7 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RENDERER = ROOT / "crates/evocc-evoir/src/text.rs"
-SPEC = ROOT / "docs/evoir-spec.md"
+SPEC = ROOT / "spec/evoir.md"
 
 HOLE = "<>"
 PLACEHOLDER = re.compile(r"\{[^{}]*\}")

@@ -67,7 +67,7 @@ stdout protocol; JSON affects their diagnostics only.
 ## Explanation authority and UI fixtures
 
 The build derives `--explain` entries from
-[EvoIR section 6.3](evoir-spec.md#63-diagnostic-authority), preserving the
+[EvoIR section 6.3](../spec/evoir.md#63-diagnostic-authority), preserving the
 authoritative message and retired/withdrawn annotations. Named codes found
 elsewhere in the spec or compiler sources receive an explicit explanation
 TODO when the authority table has no row; an unknown code is rejected. The

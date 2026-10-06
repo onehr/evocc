@@ -23,7 +23,7 @@ gen = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = gen
 spec.loader.exec_module(gen)
 
-SPEC = (ROOT / "docs" / "evoir-spec.md").read_text(encoding="utf-8")
+SPEC = (ROOT / "spec" / "evoir.md").read_text(encoding="utf-8")
 
 
 class ExtractionTest(unittest.TestCase):
@@ -217,7 +217,7 @@ class GeneratedFileTest(unittest.TestCase):
         code = gen.main(
             [
                 "--spec",
-                str(ROOT / "docs" / "evoir-spec.md"),
+                str(ROOT / "spec" / "evoir.md"),
                 "--registry",
                 "p0.scalar.v4",
                 "--out",

@@ -1384,7 +1384,7 @@ May not write: verified C compiler; kernel compilation correctness is proved; th
 6. A theorem guarantees the evaluator's `capAmount`: accepted.
 7. The segment B target table of the audit is written by hand in `audit.py` (8.10 is prose, not a machine-readable block): accepted, listed under A6. The receipt is 674 KB because it records each of the 960 reflection axioms: accepted.
 
-## Appendix A: full text of `p0.scalar.v4` (from `docs/evoir-spec.md` 11.6)
+## Appendix A: full text of `p0.scalar.v4` (from `spec/evoir.md` 11.6)
 
 ```text
 p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true

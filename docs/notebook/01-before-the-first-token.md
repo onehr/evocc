@@ -88,7 +88,7 @@ what the source program means.
 **EvoIR** is optimization-facing. It uses block-argument SSA, explicit memory
 and world tokens, typed bit-vector operations, and explicit definedness
 obligations. The authoritative starting contract lives in
-[`docs/evoir-spec.md`](../evoir-spec.md).
+[`spec/evoir.md`](../../spec/evoir.md).
 
 ```evocc-sketch
 compiler-territory

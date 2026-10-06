@@ -9,7 +9,7 @@ from tools.ladder.eqsat_preflight_run import CONTRACT
 
 
 def plan(root):
-    files = set(COLLECTORS) | set(LEAN_SOURCES) | set(LEAN_IMPORTS) | {'docs/evoir-spec.md', 'docs/evomir-spec.md',
+    files = set(COLLECTORS) | set(LEAN_SOURCES) | set(LEAN_IMPORTS) | {'spec/evoir.md', 'spec/evomir.md',
         'tests/fixtures/eqsat-performance/integer-mix.c',
         'tests/fixtures/eqsat-performance/compression-workload.c',
         'tests/fixtures/eqsat-performance/cjson-workload.c'}

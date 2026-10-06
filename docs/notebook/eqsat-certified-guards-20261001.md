@@ -1,6 +1,6 @@
 # R02e — certified guard first slice
 
-Implementation **`595272a2`**, review repair **`7b385567`**; [normative contract](../evoir-spec.md#812-certified-total-integer-guard-folding),
+Implementation **`595272a2`**, review repair **`7b385567`**; [normative contract](../../spec/evoir.md#812-certified-total-integer-guard-folding),
 [frozen plan](../../tests/contracts/eqsat-size-certified-guards-20261001.json).
 Exact scope: seven total predicates, independent `g0.ub.v1`, existing known bits
 and all-edge seeds; no signed-shift, P0 expansion or second slice.

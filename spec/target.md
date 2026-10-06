@@ -7,7 +7,7 @@ consumers: register and operand facts, generic SSA destruction, allocation,
 its independent verifier, the argument cursor and the frame driver. Migration
 steps 1–3 are complete under N03a with byte-identical objects for the six S5
 units and both native corpora and a green full workspace gate
-([result](notebook/codegen-backend-layering-20261002.md)). N03d C1 adds the first
+([result](../docs/notebook/codegen-backend-layering-20261002.md)). N03d C1 adds the first
 bounded constant-materialization `patterns` and byte `costs`, with generated
 Rust and EvoMIR rows; C2 extends those tables to adjacent single-use emission
 idioms. C3 adds three exact block-local repeated-extension families behind
@@ -15,10 +15,10 @@ idioms. C3 adds three exact block-local repeated-extension families behind
 requirements and effect barriers. These are selection policies, not new machine
 instructions, range inference, or additions to an EqSat registry. Their finite
 validation is separate from N07's encoding/model/SMT steps.
-C3 is [closed opt-in with finite evidence](notebook/codegen-extension-reuse-20261003.md):
+C3 is [closed opt-in with finite evidence](../docs/notebook/codegen-extension-reuse-20261003.md):
 three new pattern verdicts are finite-tested, not SMT-proved; its six-TU
 increment is small and does not close the remaining compare/control scope.
-C4's [residual census](notebook/codegen-control-preflight-20261003.md) finds
+C4's [residual census](../docs/notebook/codegen-control-preflight-20261003.md) finds
 109 Boolean-branch and 25 constant-interval candidates. C5 adds two bounded
 existing-operation pattern rows behind `--isel-opt=controls`, after baseline
 DCE/SSA destruction and before allocation: terminal Boolean branches and
@@ -28,18 +28,18 @@ CFG if-conversion is admitted. [C5's frozen plan](../tests/contracts/codegen-n03
 is not acceptance; new pattern tests do not upgrade N07's negative SMT result.
 N07 E1's encoding-fact migration is closed under its
 [frozen plan](../tests/contracts/codegen-n07-encodings-20261003.json):
-[full workspace and byte-identity evidence](notebook/codegen-encodings-20261003.md)
+[full workspace and byte-identity evidence](../docs/notebook/codegen-encodings-20261003.md)
 cover all 24 A/B/profile TU objects and both 384-case native corpora.
-E2's [bounded vendor-model differential](notebook/codegen-vendor-model-20261003.md)
+E2's [bounded vendor-model differential](../docs/notebook/codegen-vendor-model-20261003.md)
 is closed for 81 integer op/width shapes and eight constant controls, with
 2,600 exact cases per interpreter/model/native/QEMU lane and unchanged objects.
 This is finite testing, not B1 proof or full-state validation. E3 is
-[closed with a negative qualification result](notebook/codegen-bounded-smt-20261003.md):
+[closed with a negative qualification result](../docs/notebook/codegen-bounded-smt-20261003.md):
 the pinned Sail SMT backend cannot generate the verbatim decoder's undefined
 bitvector dependency. The explicit existing-rule inventory admits zero proofs;
 N07's bounded work package is dispositioned, but B1 proof acceptance is unmet.
 No ISA semantics or trust boundary was changed to bypass that limitation.
-[EvoMIR](evomir-spec.md)
+[EvoMIR](evomir.md)
 stays the normative specification of the machine IR; until a fact has been
 migrated under this contract, the code that holds it today (Appendix A) remains
 its authority.

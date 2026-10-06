@@ -36,7 +36,7 @@ const PRINTED: [(&str, &str); 4] = [
 ];
 
 fn specification() -> String {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/evoir-spec.md");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../spec/evoir.md");
     std::fs::read_to_string(path).expect("the specification is the sole authority and is present")
 }
 

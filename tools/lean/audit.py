@@ -1890,7 +1890,7 @@ def git(repo: Path, *args: str) -> str:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".")
-    parser.add_argument("--spec", default="docs/evoir-spec.md")
+    parser.add_argument("--spec", default="spec/evoir.md")
     parser.add_argument("--registry", default="p0.scalar.v4")
     parser.add_argument("--prefix-registry", default="p0.scalar.v3")
     parser.add_argument("--out", default="tests/contracts/lean-p0-receipt.json")

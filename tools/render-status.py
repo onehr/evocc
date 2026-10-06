@@ -619,7 +619,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return 0
     receipts = load_receipts()
-    versions = {"evoir": revision(ROOT / "docs/evoir-spec.md"), "evomir": revision(ROOT / "docs/evomir-spec.md")}
+    versions = {"evoir": revision(ROOT / "spec/evoir.md"), "evomir": revision(ROOT / "spec/evomir.md")}
     if args.ascii:
         print(render_ascii(receipts, **versions), end="")
         return 0

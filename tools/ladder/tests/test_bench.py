@@ -221,8 +221,8 @@ class BenchmarkEntryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'docs').mkdir()
-            (root / 'docs/evoir-spec.md').write_text('**Revision 1.0.1**')
-            (root / 'docs/evomir-spec.md').write_text('**Revision 0.1**')
+            (root / 'spec/evoir.md').write_text('**Revision 1.0.1**')
+            (root / 'spec/evomir.md').write_text('**Revision 0.1**')
             contracts = root / 'tests/contracts'
             contracts.mkdir(parents=True)
             (contracts / 'kernel-full-receipt.json').write_text(json.dumps({'imageSha256': 'original'}))
@@ -898,8 +898,8 @@ class StatusAsciiTest(unittest.TestCase):
             with self.subTest(existing=existing), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 (root / "docs").mkdir()
-                (root / "docs/evoir-spec.md").write_text("**Revision 1.9.104**")
-                (root / "docs/evomir-spec.md").write_text("**Revision 0.34**")
+                (root / "spec/evoir.md").write_text("**Revision 1.9.104**")
+                (root / "spec/evomir.md").write_text("**Revision 0.34**")
                 contracts = root / "tests/contracts"
                 contracts.mkdir(parents=True)
                 receipt = contracts / "bench-receipt.json"
@@ -923,8 +923,8 @@ class StatusAsciiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "docs").mkdir()
-            (root / "docs/evoir-spec.md").write_text("**Revision 1.9.104**")
-            (root / "docs/evomir-spec.md").write_text("**Revision 0.34**")
+            (root / "spec/evoir.md").write_text("**Revision 1.9.104**")
+            (root / "spec/evomir.md").write_text("**Revision 0.34**")
             (root / "tests/contracts").mkdir(parents=True)
             output = root / "docs/status.md"
             with patch.object(self.renderer, "ROOT", root), patch.object(self.renderer, "OUT", output), \

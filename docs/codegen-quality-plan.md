@@ -65,7 +65,7 @@ measures everything it touches. This plan spends the quarter on those.
 ## 2. Authority and scope
 
 Inspected implementation: `5e7fb334` (certified guard first slice) and
-`963c5442` (figures). [EvoIR](evoir-spec.md) and [EvoMIR](evomir-spec.md)
+`963c5442` (figures). [EvoIR](../spec/evoir.md) and [EvoMIR](../spec/evomir.md)
 remain the semantic authorities; this plan changes no IR semantics, registry,
 proof format or trust policy. Backend changes that alter EvoMIR lowering rules
 need their own EvoMIR revision as today. Correctness admission (two interpreters,
@@ -141,7 +141,7 @@ already have certificates.
 ## 4a. Target extensibility: three layers, enforced
 
 The facts each layer may hold, and how they are generated and checked, are
-fixed by the [internal target description contract](target-spec.md).
+fixed by the [internal target description contract](../spec/target.md).
 
 Today `evocc-mir` is a single-ISA backend: `linscan.rs` refers to the AArch64
 instruction enum `MInst` 113 times and `regalloc.rs` 26 times, `Target` names
@@ -185,7 +185,7 @@ require a new design.
 - Lowering rules become data **incrementally**. Selection today is a
   hand-written `match` (`lower_inst`, about 790 lines and 50 arms, plus the
   fusion patterns in `lower_block`). N03a does not rewrite it. New rules from
-  N03d go through the pattern table of the [target description](target-spec.md);
+  N03d go through the pattern table of the [target description](../spec/target.md);
   existing arms migrate only when they are touched. A big-bang conversion is
   out of scope.
 - The two existing OS ABIs on AArch64 (Darwin arm64 and Linux AAPCS64) become
@@ -230,7 +230,7 @@ boxes are limits, not estimates; a package that overruns stops and reports.
 | **N04** | The C checker as a product | The one capability GCC cannot offer: precise, explainable UB detection from the interpreters | One command (`evocc --check`, name to be chosen) that runs the EvoIR interpreter with the existing E-codes; `--explain E3xxx` pages generated from spec section 6.3; `--error-format=json` for editors; `tests/ui/` with blessed `.stderr`; documentation and a short demo | ui tests; JSON schema test; every E-code has an explain page or an explicit TODO; no interpreter semantics change | 3 weeks, parallel |
 | **N05** | Measurement automation | Catch regressions on every change and bisect them without a human | On each push: S1 sizes for the six units, compile time, a ladder subset, interpreter steps; append-only trend receipts; `render-status` trend view; `tools/bisect.py` that walks commits using retained receipts and rebuilds only when needed | Inject a size regression on a branch: the run flags it and bisect names the commit | 2 weeks, parallel |
 | **N06** | EqSat memory and effect domain | The place where EqSat has real value (CSE, DCE, alias-aware forwarding) | **Not scheduled.** Reopen only after N03 lands and with a separate design: state/effect model, persistent equality database, proof design for memory facts | None this quarter | — |
-| **N07** | Target description and ISA-model oracles | One internal, machine-readable description per target, with the backend generated from and checked against it | Follow the [target description contract](target-spec.md): migrate `regfile`, `insts` and the ABI tables as part of N03a; then `encodings` with the assembler round trip, a pinned slice of the vendor ISA model with its emulator as a differential lane, and bounded SMT verdicts for the existing lowering rules | Per migration step: byte-identical objects; generated files regenerate without difference; every existing lowering rule has a verdict | Steps 1–3 inside N03a; steps 4–6 in 2-week slices after N03d starts |
+| **N07** | Target description and ISA-model oracles | One internal, machine-readable description per target, with the backend generated from and checked against it | Follow the [target description contract](../spec/target.md): migrate `regfile`, `insts` and the ABI tables as part of N03a; then `encodings` with the assembler round trip, a pinned slice of the vendor ISA model with its emulator as a differential lane, and bounded SMT verdicts for the existing lowering rules | Per migration step: byte-identical objects; generated files regenerate without difference; every existing lowering rule has a verdict | Steps 1–3 inside N03a; steps 4–6 in 2-week slices after N03d starts |
 
 What N01 must answer before N03 starts:
 

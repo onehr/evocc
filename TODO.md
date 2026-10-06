@@ -1613,7 +1613,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   and pointer differences; distinguish errata from new authority. Include operand
   traversal, effects, metadata mutation and independent proof reconstruction.
   Close discrepancies or assign specific child tasks, not a blanket “spec done”.
-  [EvoIR](docs/evoir-spec.md), [EvoMIR](docs/evomir-spec.md).
+  [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md).
 
   - [x] **T03a — Synchronize retired diagnostic boundaries**.
     Errata align E3033/E4003 with Appendix D's approved hosted 128-bit division,
@@ -2972,7 +2972,7 @@ Limits of the accepted result:
 ## Codegen quality track — next quarter
 
 Authority: [codegen quality plan](docs/codegen-quality-plan.md) and the
-[internal target description contract](docs/target-spec.md). The frozen S5
+[internal target description contract](spec/target.md). The frozen S5
 comparison puts unchecked EvoCC object text at 2.04–2.43× GCC-14 `-O2` by
 library family (not per TU; N01 records 1.986–2.668× for the five library TUs),
 while verified rewrites and the certified guard slice move

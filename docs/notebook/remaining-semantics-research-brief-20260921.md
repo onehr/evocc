@@ -268,7 +268,7 @@ Deliver:
 5. A finite list of unresolved decisions, if any. Do not reopen settled scalar FP,
    GNU inline, source-byte, lifecycle, integer-vector or TLS principles.
 
-Minimal input bundle only: current docs/evoir-spec.md, docs/evomir-spec.md,
+Minimal input bundle only: current spec/evoir.md, spec/evomir.md,
 floating-point research brief's current checkpoint, benchmark evaluation and
 applicability excerpts, relevant fixture .c/.out files, Cargo.lock and the FP
 adapter, plus exact failing original sources/argv for the questions above.

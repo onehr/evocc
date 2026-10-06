@@ -87,7 +87,7 @@ pub fn explain(code: &str) -> Result<String, String> {
     let row = explanation(code).ok_or_else(|| format!("unknown diagnostic code `{code}`"))?;
     Ok(match (row.message, row.detected) {
         (Some(message), Some(detected)) => format!(
-            "{code}: {message}\nDetected: {detected}\nAuthority: docs/evoir-spec.md, section 6.3 Diagnostic Authority.\n\nA runtime finding describes an executed path, not every possible input.\nResource limits and unsupported execution do not establish absence of UB.\n"
+            "{code}: {message}\nDetected: {detected}\nAuthority: spec/evoir.md, section 6.3 Diagnostic Authority.\n\nA runtime finding describes an executed path, not every possible input.\nResource limits and unsupported execution do not establish absence of UB.\n"
         ),
         _ => format!("{code}\nTODO: explanation missing from EvoIR section 6.3.\nThis code is named in the specification or compiler source. Its absence from\nthe explanation table does not change the existing diagnostic's meaning.\n"),
     })

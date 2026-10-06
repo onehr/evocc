@@ -204,7 +204,7 @@ class AdditionalAdapterTests(unittest.TestCase):
             rule = {'disposition': 'FP-deferred', 'sourceSha256': module.ladder.sha256_file(source),
                     'reason': 'source-specific reviewed requirement',
                     'deferredFeatures': ['binary16'],
-                    'evidence': ['docs/evoir-spec.md'],
+                    'evidence': ['spec/evoir.md'],
                     'originalArguments': row['originalArguments']}
             self.assertEqual(module.program_disposition(row, source, {}, 'baseline.json')['disposition'],
                              'compiler-failure', 'E3101 alone is not floating-point evidence')
@@ -253,7 +253,7 @@ class AdditionalAdapterTests(unittest.TestCase):
                    'reference': 'PASS', 'originalArguments': ['clang-19', '-std=gnu11', 'example.c']}
             key = 'llvm-test-suite:SingleSource/example.c'
             rule = {'disposition': 'not-applicable', 'sourceSha256': module.ladder.sha256_file(source),
-                    'reason': 'measured original-mode boundary', 'evidence': ['docs/evoir-spec.md'],
+                    'reason': 'measured original-mode boundary', 'evidence': ['spec/evoir.md'],
                     'originalArguments': row['originalArguments']}
             self.assertEqual(module.program_disposition(row, source, {key: rule}, 'baseline.json')['disposition'],
                              'not-applicable')

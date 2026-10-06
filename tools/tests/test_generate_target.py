@@ -59,7 +59,7 @@ class TargetGenerationWritesTest(unittest.TestCase):
             "--encodings-output": folder / "encodings.rs",
             "--pattern-docs": folder / "evomir-spec.md",
         }
-        self.outputs["--pattern-docs"].write_bytes((ROOT / "docs/evomir-spec.md").read_bytes())
+        self.outputs["--pattern-docs"].write_bytes((ROOT / "spec/evomir.md").read_bytes())
         self.generate()
         for path in self.outputs.values():
             os.utime(path, ns=(946684800000000000, 946684800000000000))

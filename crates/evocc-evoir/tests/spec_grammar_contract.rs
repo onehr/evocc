@@ -1,6 +1,6 @@
 //! Errata checks for already-approved forms, not a parser-completeness claim.
 
-const SPEC: &str = include_str!("../../../docs/evoir-spec.md");
+const SPEC: &str = include_str!("../../../spec/evoir.md");
 
 fn grammar() -> String {
     SPEC.split_once("### 9.3 Grammar\n")

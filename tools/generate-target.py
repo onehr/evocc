@@ -1577,7 +1577,7 @@ def main() -> int:
     parser.add_argument("--costs-output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/costs.rs")
     parser.add_argument("--encodings-input", type=Path, default=root / "targets/aarch64/encodings")
     parser.add_argument("--encodings-output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/encodings.rs")
-    parser.add_argument("--pattern-docs", type=Path, default=root / "docs/evomir-spec.md")
+    parser.add_argument("--pattern-docs", type=Path, default=root / "spec/evomir.md")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     abi_inputs = args.abi_input or [root / "targets/aarch64/abi-darwin", root / "targets/aarch64/abi-linux"]

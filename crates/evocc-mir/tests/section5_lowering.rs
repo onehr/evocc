@@ -59,7 +59,7 @@ fn dynamic_allocation_and_release_preserve_their_text_operands() {
 
 #[test]
 fn dynamic_stack_contract_is_present_in_the_machine_specification() {
-    let spec = include_str!("../../../docs/evomir-spec.md");
+    let spec = include_str!("../../../spec/evomir.md");
     assert!(
         spec.contains("| `stack.alloc "),
         "missing allocation pseudo-form"

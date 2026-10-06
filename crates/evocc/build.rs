@@ -33,7 +33,7 @@ fn source_codes(dir: &Path, found: &mut BTreeSet<String>) {
 
 fn main() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let authority = root.join("docs/evoir-spec.md");
+    let authority = root.join("spec/evoir.md");
     println!("cargo:rerun-if-changed={}", authority.display());
     let spec = std::fs::read_to_string(authority).unwrap();
     let table = spec

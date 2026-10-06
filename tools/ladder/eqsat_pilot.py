@@ -140,7 +140,7 @@ def validate_plan(m, root):
             and r['vm_cpus'] == 2 and r['vm_memory'] == '3G', 'unbounded resource controls')
     require(m['cases'] == recipes(root), 'pilot source/object coverage changed')
     require(m['preflight'] == PREFLIGHT_CONTRACT, 'preflight controls changed')
-    required = set(COLLECTORS) | set(LEAN_SOURCES) | set(LEAN_IMPORTS) | {'docs/evoir-spec.md', 'docs/evomir-spec.md',
+    required = set(COLLECTORS) | set(LEAN_SOURCES) | set(LEAN_IMPORTS) | {'spec/evoir.md', 'spec/evomir.md',
         'tests/fixtures/eqsat-performance/integer-mix.c',
         'tests/fixtures/eqsat-performance/compression-workload.c',
         'tests/fixtures/eqsat-performance/cjson-workload.c'}

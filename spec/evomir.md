@@ -253,7 +253,7 @@ enable/disable option wins. Native backtrace measurements are in
 `tests/fixtures/unwind-and-tiny.out`.
 
 EvoMIR is the machine-level intermediate representation of EvoCC. It sits
-between the extracted EvoIR of a function (`docs/evoir-spec.md`, the EvoIR
+between the extracted EvoIR of a function (`spec/evoir.md`, the EvoIR
 specification, which this document cites by section) and the assembly text
 handed to the platform assembler. Everything below the extraction boundary
 is governed here; everything above it is governed by the EvoIR
@@ -734,7 +734,7 @@ It does not authorize benchmark-side IR deletion or alter either interpreter.
 The flag is accepted by interpretation/IR-emission modes but has no semantic
 effect there: source obligations and interpreter failures are preserved.
 Performance admission additionally requires the matched checked execution in
-the [Q2/Q3 design](framing-draft.md#51-correctness-admission-and-workload-inventory).
+the [Q2/Q3 design](../docs/framing-draft.md#51-correctness-admission-and-workload-inventory).
 The native-profile switch operates only at MIR lowering: checked and
 unchecked twins must consume the same canonical verified EvoIR and immutable
 chain/proof bundle, with identical IR/chain digests in their receipts. Distinct

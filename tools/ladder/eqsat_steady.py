@@ -28,7 +28,7 @@ FILES = ('tools/bench.py', 'tools/ladder/eqsat_steady.py', 'tools/ladder/eqsat_s
     'tools/ladder/eqsat_chain.py', 'tools/ladder/eqsat_twins.py', 'tools/ladder/eqsat_pilot.py',
     'tools/ladder/eqsat_pilot_audit.py',
     'tools/ladder/eqsat_elf.py', 'tests/fixtures/eqsat-performance/steady-workload.c',
-    'docs/evoir-spec.md', 'docs/evomir-spec.md')
+    'spec/evoir.md', 'spec/evomir.md')
 RESOURCES = dict(jobs=1, timeout_seconds=300, output_bytes=16*1024**2,
     min_free_bytes=8*1024**3, max_retained_bytes=256*1024**2, campaign_seconds=7200,
     batch_timeout_seconds=7200, vm_cpus=2, vm_memory='3G')
