@@ -1,15 +1,14 @@
 # EvoCC
 
-![EvoCC mascot, a chameleon holding a wrench](docs/images/mascot.png)
+<p align="center"><img src="docs/images/mascot.png" alt="EvoCC mascot, a chameleon holding a wrench" width="200"></p>
 
 **A C compiler that checks its own work.**
 
-EvoCC is a C compiler for AArch64 Linux, written from scratch in Rust; only the platform assembler,
-linker and runtime libraries come from outside. It is a complete C compiler, with its own
-preprocessor, parser, IRs, optimizer, register allocator and assembly emitter, built by AI agents
-under the direction of the project owner and designed to evolve with agents. It carries its own
-proof machinery in Lean 4, so that its optimizations and its proof-required compilations are
-checked, not trusted.
+EvoCC is a C compiler for AArch64 Linux, written from scratch in Rust. It has its own preprocessor,
+parser, IRs, optimizer, register allocator and assembly emitter; only the platform assembler, linker
+and runtime libraries come from outside. AI agents build it under the direction of the project
+owner, and it is designed to evolve with agents. It carries its own proof machinery in Lean 4, so
+that its optimizations and its proof-required compilations are checked, not trusted.
 
 ## Highlights
 
@@ -77,7 +76,7 @@ Each `bench.py` lane builds pinned sources with EvoCC, runs their tests in the s
 | Neverball | `python3 tools/ladder/games.py emit neverball` | [notes](docs/images/showcase/README.md#game-reproduction) |
 | Quakespasm | `python3 tools/ladder/games.py emit quakespasm` | [notes](docs/images/showcase/README.md#game-reproduction) |
 
-One capture in the sealed image runs the ten program demos; one render draws them, Doom and Linux:
+One capture inside the sealed image runs the ten program demos. One render draws them, with Doom and Linux:
 
 ```sh
 container run --rm --platform linux/arm64 --network none --cpus 2 --memory 1G \
@@ -151,7 +150,7 @@ python3 tools/proof-native/proof_native.py all WORK_DIR \
     --evocc target/frontend/release/evocc --evocc-checker target/frontend/release/evocc-checker
 ```
 
-This compiles the 17 pilot modules and two optimized cases with proof, assembles and runs them in
+This compiles the 17 modules of `tests/fixtures/verification/` and two optimized cases with proof, assembles and runs them in
 `evo-flight-lab:sealed` and compares each result with the Lean source interpreter. `WORK_DIR` is
 outside the repository; the run uses the Apple Container runtime.
 
@@ -261,7 +260,7 @@ ignores an ABI register or a clobbered live value.
 
 **What it is.** Under `-Oeq-scalar`, eligible scalar regions go into an
 [e-graph](https://egraphs-good.github.io/): a rewrite adds an equivalent form, and extraction picks
-one by a cost policy. The rules come from two frozen registries, `p0.scalar.v4` (55 rules) and
+one by a cost policy. The rules come from two versioned registries, `p0.scalar.v4` (55 rules) and
 `g0.ub.v1` (7 guard rules). For each rule, Lean 4 proves `RuleCovered`: at every width, if the left
 pattern matches and the side condition holds, the right side has the same value (`RuleSound`;
 [`Rules.lean`](lean/EvoIR/Proofs/Rules.lean), [`GuardRules.lean`](lean/EvoIR/Proofs/GuardRules.lean)).
@@ -269,7 +268,16 @@ Each transaction writes an EVP certificate. Before EvoCC emits output, `evocc-ch
 a separate process; it does not link the optimizer, and its SHA-256 must match the pin. A failed
 replay rejects the whole chain.
 
-![Verified EqSat: a translation unit is lowered to canonical EvoIR, rewritten by the chain producer under the p0.scalar.v4 registry, bound into an EVP certificate, replayed by the independent pinned checker, published as a verified chain and lowered to checked and unchecked native profiles; a failed check rejects the whole chain.](docs/images/evocc-eqsat.svg)
+```text
+EvoIR ──► e-graph search ──► extraction ──► rewritten EvoIR + EVP certificate
+                                                      │
+                                   evocc-checker replays the certificate
+                                   against the Lean-proved rule tables
+                                                      │
+                                       accept: emit · refuse: reject the chain
+```
+
+A two-line function shows the effect:
 
 ```sh
 echo 'int f(int x) { return x * 1; }' > opt.c
@@ -300,11 +308,11 @@ check refuses or is missing, the driver writes nothing.
 
 | Stage | Checker | What it compares | Lean file |
 |---|---|---|---|
-| V01 source to EvoIR | `checkSourceTargetPair` | Typed Core source and EvoIR: types, order, conversions, diagnostics, loops, calls | [`Core/SourceTargetCheck.lean`](lean/EvoIR/Core/SourceTargetCheck.lean) |
-| V05 rewrite steps | `checkRewrite` | Each `-Oeq-scalar` step, against its certificate and the `RuleCovered` tables | [`Rewrite/Soundness.lean`](lean/EvoIR/Rewrite/Soundness.lean) |
-| V02 lowering | `checkLowering` | EvoIR, SSA EvoMIR and post-SSA EvoMIR: instruction selection, then edge copies | [`MachineLowering.lean`](lean/EvoIR/MachineLowering.lean) |
-| V03 allocation | `checkAllocation` | Post-SSA and allocated EvoMIR: registers and spill slots | [`Alloc/Soundness.lean`](lean/EvoIR/Alloc/Soundness.lean) |
-| V04 frame and emission | `checkAsm`, `printMatches` | Allocated EvoMIR and the assembly AST; the printed AST and `output.s`, byte for byte | [`Asm/Soundness.lean`](lean/EvoIR/Asm/Soundness.lean) |
+| Source to EvoIR | `checkSourceTargetPair` | Typed Core source and EvoIR: types, order, conversions, diagnostics, loops, calls | [`Core/SourceTargetCheck.lean`](lean/EvoIR/Core/SourceTargetCheck.lean) |
+| Rewrite steps | `checkRewrite` | Each `-Oeq-scalar` step, against its certificate and the `RuleCovered` tables | [`Rewrite/Soundness.lean`](lean/EvoIR/Rewrite/Soundness.lean) |
+| Lowering | `checkLowering` | EvoIR, SSA EvoMIR and post-SSA EvoMIR: instruction selection, then edge copies | [`MachineLowering.lean`](lean/EvoIR/MachineLowering.lean) |
+| Register allocation | `checkAllocation` | Post-SSA and allocated EvoMIR: registers and spill slots | [`Alloc/Soundness.lean`](lean/EvoIR/Alloc/Soundness.lean) |
+| Frame and emission | `checkAsm`, `printMatches` | Allocated EvoMIR and the assembly AST; the printed AST and `output.s`, byte for byte | [`Asm/Soundness.lean`](lean/EvoIR/Asm/Soundness.lean) |
 
 `checkPipeline` ([`Check.lean`](lean/EvoIR/Pipeline/Check.lean)) runs the five checks on the same
 values, and one theorem covers the chain ([`Soundness.lean`](lean/EvoIR/Pipeline/Soundness.lean)):
@@ -379,10 +387,10 @@ and the [verification plan](docs/lean-plan.md#first-public-release-verification)
 
 | Path | Content |
 |---|---|
-| `lean/EvoIR/Core/` | Typed Core source and EvoIR: syntax, readers, semantics; source validator; V01 |
-| `lean/EvoIR/Machine*.lean` | EvoMIR syntax, readers and semantics; V02 |
-| `lean/EvoIR/Alloc/`, `lean/EvoIR/Asm/` | Allocated EvoMIR and V03; AArch64 subset, assembly printer and V04 |
-| `lean/EvoIR/Rewrite/`, `lean/EvoIR/Proofs/` | Rewrite-step checker (V05); rule and known-bits proofs |
+| `lean/EvoIR/Core/` | Typed Core source and EvoIR: syntax, readers, semantics; source validator; the source-to-EvoIR checker |
+| `lean/EvoIR/Machine*.lean` | EvoMIR syntax, readers and semantics; the lowering checker |
+| `lean/EvoIR/Alloc/`, `lean/EvoIR/Asm/` | Allocated EvoMIR and the allocation checker; AArch64 subset, assembly printer and the frame and emission checker |
+| `lean/EvoIR/Rewrite/`, `lean/EvoIR/Proofs/` | The rewrite-step checker; rule and known-bits proofs |
 | `lean/EvoIR/Pipeline/` | `checkPipeline`, `checkPipeline_sound`, axiom tests |
 | `lean/EvoIR/Eval.lean`, `lean/Main.lean` | The `evoir-sem` command line and its entry point |
 | `lean/EvoIR/*.lean` | Rule language, generated registries, poison normalization |
@@ -393,7 +401,7 @@ and the [verification plan](docs/lean-plan.md#first-public-release-verification)
 | `tools/proof-native/`, `tools/lean/` | Native run of proof-required output; registry generator, proof audit, Rust–Lean vectors |
 | `tools/ladder/`, `tools/k1/` | Program and game lanes, EqSat experiments; Linux build, boot, kselftest and KUnit lanes |
 | `tools/showcase.py`, `tools/showcase/` | Showcase capture, render and check |
-| `tests/contracts/`, `tests/fixtures/` | Receipts and frozen corpora; C, EvoIR and output fixtures (`verification/`: proof-required inputs) |
+| `tests/contracts/`, `tests/fixtures/` | Receipts and pinned corpora; C, EvoIR and output fixtures (`verification/`: proof-required inputs) |
 | `tests/acceptance/`, `tests/ui/check/` | Sealed-oracle and differential harnesses; expected `--check` diagnostics |
 | `tests/configs/`, `crates/*/tests/` | Linux configuration fragments; Rust integration tests |
 | `docs/evoir-spec.md`, `docs/evomir-spec.md` | The EvoIR and EvoMIR specifications |
