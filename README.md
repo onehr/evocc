@@ -29,7 +29,7 @@ means three things here:
   output is checked from typed Core source to final assembly text.
 
 The first commit was on 2026-08-10. On 2026-09-13, 34 days later, Linux booted with all 2,799 target
-C files compiled by EvoCC. On 2026-10-06, 57 days after the first commit, the proved path reached
+C files compiled by EvoCC. On 2026-10-06, day 58, the proved path reached
 the final assembly text. The record is 1,986 commits on `main`.
 
 ### Not a copy of GCC or LLVM
@@ -42,7 +42,7 @@ EvoCC does not wrap, port or translate GCC or LLVM. It uses them as sealed oracl
    instruction: a rewrite can remove the multiply, never the obligation.
    ([EvoIR §6](spec/evoir.md#6-undefined-behavior))
 2. **Effects are values.** Memory and observable events travel on explicit `mem` and `world` SSA
-   tokens. The effect summary is part of each e-node's sort, so a pure expression and a volatile
+   tokens. Each e-node carries a sort and an effect class, so a pure expression and a volatile
    load can never be alternatives. ([EvoIR §4](spec/evoir.md#4-effect-model))
 3. **The front end has an executable C semantics.** C-HIR tracks provenance for each pointer and
    initializedness for each byte. Its interpreter reports undefined behavior as a numbered
