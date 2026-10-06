@@ -7,15 +7,15 @@
     },
     "spec/evomir.md": {
       "revision": "1.0.0",
-      "sha256": "6af9df48eebf5d3aefd7801c5860b26700da19e8ac9bb67ad1a68e28fcdc5938"
+      "sha256": "3aa700cff6f90256b92f54d296be229da8ee0f316f7e45c045fcd056256adb49"
     },
     "spec/target.md": {
-      "revision": "2",
-      "sha256": "23d94a8b6c82de3b19e00e59dee92eb8d97c99479297d0baa614405808a8f576"
+      "revision": "1.0.0",
+      "sha256": "62c323515aa07dd418e4fb3f898d91f97c77c456aacbbf0837fd31ad8150c1e8"
     },
     "spec/verification.md": {
       "revision": "1.0.0",
-      "sha256": "af3e8cf6f563e6ace12790ee7139f632d450b0b4be098dd933c0b0e3d44ca8cf"
+      "sha256": "7b8ef12a51cfae62d2e2819537acda9b931dcfa72a2215248444e686dc44ac81"
     }
   }
 }

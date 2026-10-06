@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
 Updated **2026-10-04**, initially audited against `a83d803`; current clauses are
-EvoIR **1.9.116** and EvoMIR **0.64**. This is the Git-tracked execution backlog,
+EvoIR **2.0.0** and EvoMIR **1.0.0** (pinned in `spec/`). This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their

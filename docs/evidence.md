@@ -599,7 +599,7 @@ faster; the [measured effect](#checked-eqsat-measurements) is small. The
 
 ### Model and backend notes
 
-EvoIR is specified in [revision 1.9.116](../spec/evoir.md) and EvoMIR in [revision 0.64](../spec/evomir.md).
+EvoIR is specified in [revision 2.0.0](../spec/evoir.md) and EvoMIR in [revision 1.0.0](../spec/evomir.md); both are pinned in `spec/pins.json`.
 The EvoIR models of UB, effects, memory and provenance are specified and tested; not all are
 proved. SSA is block-local: each cross-block value is an explicit edge argument. `(x + 0) * 1 → x`
 is a bit-vector identity under the registry premises; it does not permit removal of the evaluation
