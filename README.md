@@ -4,7 +4,7 @@
 
 **A C compiler that checks its own work.**
 
-EvoCC is a C compiler for AArch64 Linux, written from scratch in Rust, with proofs in Lean 4. AI
+EvoCC is a C compiler for AArch64 (Linux and macOS), written from scratch in Rust, with proofs in Lean 4. AI
 agents built it in 58 days, under the direction of the project owner.
 The [showcase](#showcase) shows what it builds and runs. [Part I](#part-i--the-experiment) tells
 the experiment: the question, what is new, how to use EvoCC and how it was built.
@@ -349,7 +349,7 @@ files. Five rules held the work together:
 ### Abstract
 
 A C compiler is trusted by every program that it builds. Verified compilers remove that trust, but
-proving compiler algorithms is costly. We present EvoCC, a C compiler for AArch64 Linux that AI
+proving compiler algorithms is costly. We present EvoCC, a C compiler for AArch64 Linux and macOS that AI
 agents built in 58 days under the direction of one expert. Its rule is that untrusted components
 propose and small checked components decide. Its IR, EvoIR, makes each C definedness condition an
 explicit obligation, threads memory and observable effects as SSA tokens and gives each pointer a
