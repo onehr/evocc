@@ -18,7 +18,7 @@ case "$EVOCC_TEST_ACTION" in
         rm -f "$inputs/ssa-evomir.json"
         ;;
     change-ir-after-acceptance)
-        if [ "$stage" = V02 ]; then
+        if [ "$stage" = lowering ]; then
             "$EVOCC_TEST_LEAN_CHECKER" "$@"
             status=$?
             echo "" >> "$ir"

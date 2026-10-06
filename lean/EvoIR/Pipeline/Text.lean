@@ -21,9 +21,10 @@ verdicts:
   profile of its reader.
 
 Two reader results are rejections, as in the stage commands. A certificate
-that the reader does not decode is a V05 rejection. An allocation export whose
-copy of the program before allocation is not the post-SSA input is a V03
-rejection. These two rejections occur before the stage checks run.
+that the reader does not decode is a rejection by the stage `rewrite`. An
+allocation export whose copy of the program before allocation is not the
+post-SSA input is a rejection by the stage `allocation`. These two rejections
+occur before the stage checks run.
 -/
 namespace EvoIR.Pipeline
 
@@ -33,7 +34,8 @@ open EvoIR.Core
 structure Texts where
   /-- The typed Core source export. It selects one entry. -/
   source : String
-  /-- The optional untrusted V01 proposal: cutpoints or call cutpoints. -/
+  /-- The optional untrusted proposal of the stage `source-to-evoir`:
+  cutpoints or call cutpoints. -/
   proposal : Option String := none
   /-- The EvoIR before the rewrites. -/
   ir : String
@@ -72,7 +74,7 @@ def readSteps : Nat → List (String × String) → Except ReadFailure (List Rew
     let .ok program := IR.Reader.readProgram after
       | throw (.unsupported s!"EvoIR input after rewrite step {k}")
     let .ok certificate := Rewrite.Reader.certificate cert
-      | throw (.rejected "V05" s!"certificate form of rewrite step {k} not supported")
+      | throw (.rejected "rewrite" s!"certificate form of rewrite step {k} not supported")
     return ⟨program, certificate⟩ :: (← readSteps (k + 1) rest)
 
 /-- Read the texts into the input of `checkPipeline`. -/
@@ -98,7 +100,8 @@ def readInput (texts : Texts) : Except ReadFailure Input := do
   let .ok (copy, allocated, allocHints) := Alloc.Reader.readPair texts.allocation
     | throw (.unsupported "allocation input")
   if copy != postSSA then
-    throw (.rejected "V03" "the program before allocation in the export is not the post-SSA input")
+    throw (.rejected "allocation"
+      "the program before allocation in the export is not the post-SSA input")
   let .ok (asm, frameHints) := Asm.Reader.readFile texts.ast
     | throw (.unsupported "assembly AST input")
   return { source, request, ir, rewrites, ssa, postSSA, allocated, allocHints, asm, frameHints,

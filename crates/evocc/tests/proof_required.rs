@@ -129,11 +129,22 @@ fn assert_refused(output: &Output, directory: &Path, code: i32, reason: &str) {
     assert!(stderr.contains(reason), "expected `{reason}` in: {stderr}");
 }
 
+/// The stage identifiers of the record, in pipeline order. They are the
+/// stage arguments of `evoir-sem --check-stage`, and `pipeline` is the row of
+/// `evoir-sem --check-pipeline`.
+const STAGES: [&str; 5] = [
+    "source-to-evoir",
+    "rewrite",
+    "lowering",
+    "allocation",
+    "frame-emission",
+];
+
 /// The text of one stage row of the record, up to the next stage row.
 fn row<'a>(record: &'a str, stage: &str) -> &'a str {
     let at = record.find(&format!("\"id\": \"{stage}\",")).unwrap();
     let end = record[at + 1..]
-        .find("\"id\": \"V")
+        .find("\"id\": \"")
         .map_or(record.len(), |next| at + 1 + next);
     &record[at..end]
 }
@@ -170,10 +181,16 @@ fn assert_record(record: &str, checked: &[&str]) {
         !record.contains("zero-extended argument values"),
         "the trusted list must not name the removed argument limit"
     );
-    let order = ["V01", "V05", "V02", "V03", "V04", "PIPELINE"]
-        .map(|stage| record.find(&format!("\"id\": \"{stage}\",")).unwrap());
+    let order = STAGES
+        .iter()
+        .chain(&["pipeline"])
+        .map(|stage| record.find(&format!("\"id\": \"{stage}\",")).unwrap())
+        .collect::<Vec<_>>();
     assert!(order.is_sorted(), "stage order {order:?}");
-    for stage in ["V01", "V05", "V02", "V03", "V04"] {
+    // The record has one identifier per row and no separate name.
+    assert_eq!(record.matches("\"id\": ").count(), STAGES.len() + 1);
+    assert!(!record.contains("\"name\": "), "{record}");
+    for stage in STAGES {
         let status = if checked.contains(&stage) {
             "CHECKED"
         } else {
@@ -182,31 +199,37 @@ fn assert_record(record: &str, checked: &[&str]) {
         let expected = format!("\"status\": \"{status}\"");
         assert!(row(record, stage).contains(&expected), "{stage}: {status}");
     }
-    assert!(row(record, "V03").contains("\"path\": \"inputs/post-ssa-evomir.json\""));
-    assert!(row(record, "V03").contains("\"path\": \"inputs/allocation.json\""));
-    assert!(row(record, "V03").contains("scope=post-ssa-mir-to-allocated-mir"));
+    let allocation = row(record, "allocation");
+    assert!(allocation.contains("\"path\": \"inputs/post-ssa-evomir.json\""));
+    assert!(allocation.contains("\"path\": \"inputs/allocation.json\""));
+    assert!(allocation.contains("STAGE_ACCEPTED stage=allocation entry="));
+    assert!(allocation.contains("scope=post-ssa-mir-to-allocated-mir"));
     for path in [
         "inputs/allocation.json",
         "inputs/asm-ast.json",
         "inputs/assembly.s",
     ] {
-        assert!(row(record, "V04").contains(&format!("\"path\": \"{path}\"")));
+        assert!(row(record, "frame-emission").contains(&format!("\"path\": \"{path}\"")));
     }
-    assert!(row(record, "V04").contains("scope=allocated-mir-to-assembly-text"));
+    assert!(row(record, "frame-emission").contains("scope=allocated-mir-to-assembly-text"));
     // The final decision: one pipeline check for each entry, after the stage
     // rows.
-    let pipeline = &record[record.find("\"id\": \"PIPELINE\",").unwrap()..];
+    let pipeline = &record[record.find("\"id\": \"pipeline\",").unwrap()..];
     assert!(pipeline.contains("\"status\": \"CHECKED\""));
     assert!(pipeline.contains("EvoIR.Pipeline.checkPipelineTexts_sound"));
     assert!(pipeline.contains("PIPELINE_ACCEPTED entry="));
     assert!(pipeline.contains("scope=source-to-assembly-text"));
+    assert!(record.contains(
+        "\"note\": \"frame-emission checked these bytes: the printed assembly AST is equal to them.\""
+    ));
 }
 
 /// The digest chain of the record: each pair of files names one link, in
 /// stage order. Both files of a pair must have the same digest. `links` are
 /// the links before the post-SSA file. The chain then has three fixed links:
-/// the post-SSA file of V02 and V03, the allocation export of V03 and V04, and
-/// the text that V04 checked and the published `output.s`.
+/// the post-SSA file of `lowering` and `allocation`, the allocation export of
+/// `allocation` and `frame-emission`, and the text that `frame-emission`
+/// checked and the published `output.s`.
 fn assert_chain(directory: &Path, record: &str, links: &[(&str, &str)]) {
     let mut pairs = links
         .iter()
@@ -227,6 +250,16 @@ fn assert_chain(directory: &Path, record: &str, links: &[(&str, &str)]) {
             + 1;
     }
     assert!(chain[at..].contains("\"stage\": \"publication\""));
+    // Each reader of a link is named by its stage identifier.
+    for stage in [
+        "source-to-evoir",
+        "lowering",
+        "allocation",
+        "frame-emission",
+    ] {
+        let reader = format!("\"stage\": \"{stage}\"");
+        assert!(chain.contains(&reader), "chain reader {stage}");
+    }
     assert_eq!(chain.matches("\"read_by\"").count(), pairs.len());
 }
 
@@ -249,10 +282,18 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
     assert!(!ordinary.contains("CHECKED") && !ordinary.to_lowercase().contains("verified"));
 
     let record = std::fs::read_to_string(directory.join("record.json")).unwrap();
-    assert_record(&record, &["V01", "V02", "V03", "V04"]);
-    // Without -Oeq-scalar, the V05 row says that no rewrite ran, and V01 and
-    // V02 read the same EvoIR file.
-    assert!(row(&record, "V05").contains("no rewrite ran"));
+    assert_record(
+        &record,
+        &[
+            "source-to-evoir",
+            "lowering",
+            "allocation",
+            "frame-emission",
+        ],
+    );
+    // Without -Oeq-scalar, the rewrite row says that no rewrite ran, and
+    // source-to-evoir and lowering read the same EvoIR file.
+    assert!(row(&record, "rewrite").contains("no rewrite ran"));
     assert!(!directory.join("inputs/rewrite-000.proof.evp").exists());
     assert!(!record.contains("rewrite_checker"));
     assert_chain(&directory, &record, &[("evoir.evo", "evoir.evo")]);
@@ -277,8 +318,8 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
 fn pilot_entries_are_checked_to_final_assembly_text() {
     let (directory, record) = accept(&fixture("musl-abs.c"), &["--core-entry=abs"]);
     assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 5);
-    // The allocation export, the AST and the text are the frozen V03 and V04
-    // fixtures of this module.
+    // The allocation export, the AST and the text are the frozen allocation
+    // and frame-emission fixtures of this module.
     for (exported, frozen) in [
         ("allocation.json", "lean/EvoIR/Alloc/Fixtures/musl-abs.json"),
         (
@@ -316,8 +357,8 @@ fn pilot_entries_are_checked_to_final_assembly_text() {
         &["--core-entry=pressure", "--core-entry=wide"],
     );
     assert!(record.contains("entry=pressure route=call"));
-    assert!(record.contains("stage=V03 entry=wide functions=2"));
-    assert!(record.contains("stage=V04 entry=wide functions=2"));
+    assert!(record.contains("stage=allocation entry=wide functions=2"));
+    assert!(record.contains("stage=frame-emission entry=wide functions=2"));
 }
 
 /// `-Oeq-scalar` with the pinned Rust certificate checker of this build.
@@ -333,7 +374,8 @@ fn rewrite_arguments(policy: Option<&str>) -> Vec<String> {
 }
 
 /// Accept an optimized compilation. Check the stage order, the assembly and
-/// the digest chain from V01 through each V05 step to V02 and V03.
+/// the digest chain from source-to-evoir through each rewrite step to lowering
+/// and allocation.
 fn accept_rewrites(source: &Path, entries: &[&str], rewrite: &[String]) -> (Scratch, String) {
     let directory = new_directory();
     let mut extra = entries.to_vec();
@@ -355,9 +397,11 @@ fn accept_rewrites(source: &Path, entries: &[&str], rewrite: &[String]) -> (Scra
     );
 
     let record = std::fs::read_to_string(directory.join("record.json")).unwrap();
-    assert_record(&record, &["V01", "V05", "V02", "V03", "V04"]);
-    assert!(row(&record, "V01").contains("\"path\": \"inputs/evoir.evo\""));
-    assert!(row(&record, "V02").contains("\"path\": \"inputs/evoir-rewritten.evo\""));
+    assert_record(&record, &STAGES);
+    assert!(row(&record, "source-to-evoir").contains("\"path\": \"inputs/evoir.evo\""));
+    assert!(row(&record, "lowering").contains("\"path\": \"inputs/evoir-rewritten.evo\""));
+    // The chain names each rewrite step with the stage identifier.
+    assert!(record.contains("\"stage\": \"rewrite step 0\""));
     // The record names the Rust certificate checker that accepted each step.
     let rust_checker = digest(Path::new(env!("CARGO_BIN_EXE_evocc-checker")));
     let at = record.find("\"rewrite_checker\"").unwrap();
@@ -423,10 +467,10 @@ fn rewrites_are_checked_between_v01_and_v02() {
     );
     same(&directory, "fixedmul-g0");
     assert!(record.contains(
-        "stage=V05 entry=FixedMul registry=g0.ub.v1 regions=FixedMul/entry/6 rules=g0_007_signed_count"
+        "stage=rewrite entry=FixedMul registry=g0.ub.v1 regions=FixedMul/entry/6 rules=g0_007_signed_count"
     ));
     let certificate = digest(&directory.join("inputs/rewrite-000.proof.evp"));
-    assert!(row(&record, "V05").contains(&certificate));
+    assert!(row(&record, "rewrite").contains(&certificate));
     drop(directory);
 
     // p0: the short_circuit comparison folds.
@@ -445,19 +489,25 @@ fn rewrites_are_checked_between_v01_and_v02() {
     );
     same(&directory, "control-p0");
     assert!(record.contains(
-        "stage=V05 entry=short_circuit registry=p0.scalar.v1 regions=short_circuit/b1/2,short_circuit/b7/2 rules=p0_107_fold_icmp_ne"
+        "stage=rewrite entry=short_circuit registry=p0.scalar.v1 regions=short_circuit/b1/2,short_circuit/b7/2 rules=p0_107_fold_icmp_ne"
     ));
     assert!(record.contains("entry=loop_join route=loop"));
 }
 
-/// A test checker. For each binding of a role in the space-separated list
-/// `EVOCC_TEST_ROLE`, it applies the sed program `EVOCC_TEST_SED` to the proof
-/// input. Then it runs the real Lean checker.
+/// A test checker. For each `ROLE=PATH` binding of a role in the
+/// space-separated list `EVOCC_TEST_ROLE`, it applies the sed program
+/// `EVOCC_TEST_SED` to the proof input. Then it runs the real Lean checker.
+/// The stage argument, for example `allocation`, is not a binding, also when
+/// it is equal to a role name.
 const CHANGING_ROLE_CHECKER: &str = r#"#!/bin/sh
 if [ -n "$EVOCC_TEST_COMMAND" ] && [ "$1" != "$EVOCC_TEST_COMMAND" ]; then
     exec "$EVOCC_TEST_LEAN_CHECKER" "$@"
 fi
 for binding in "$@"; do
+    case "$binding" in
+        *=*) ;;
+        *) continue ;;
+    esac
     role=${binding%%=*}
     case " $EVOCC_TEST_ROLE " in
         *" $role "*)
@@ -519,10 +569,16 @@ fn the_pipeline_check_is_the_final_decision() {
         "text",
         "s/cmp w0, #0/cmp w0, #1/",
     );
-    assert_refused(&output, &directory, REJECTED, "stage PIPELINE");
-    assert_refused(&output, &directory, REJECTED, "PIPELINE_REJECTED stage=V04");
-    let accepted = std::fs::read_to_string(directory.join("checks/V04-abs.out")).unwrap();
-    assert!(accepted.starts_with("STAGE_ACCEPTED stage=V04 entry=abs"));
+    assert_refused(&output, &directory, REJECTED, "stage pipeline");
+    assert_refused(
+        &output,
+        &directory,
+        REJECTED,
+        "PIPELINE_REJECTED stage=frame-emission",
+    );
+    let accepted =
+        std::fs::read_to_string(directory.join("checks/frame-emission-abs.out")).unwrap();
+    assert!(accepted.starts_with("STAGE_ACCEPTED stage=frame-emission entry=abs"));
 }
 
 #[test]
@@ -540,7 +596,7 @@ fn changed_allocation_exports_are_rejected() {
         "allocation",
         r#"s/\["gpr",2,"w"],\["gpr",0,"w"],"w"]/["gpr",0,"w"],["gpr",2,"w"],"w"]/"#,
     );
-    assert_refused(&output, &directory, REJECTED, "stage V03");
+    assert_refused(&output, &directory, REJECTED, "stage allocation for entry");
     assert_refused(&output, &directory, REJECTED, "allocation not confirmed");
     assert!(read(&directory).contains(r#"["flags"],["gpr",0,"w"],["gpr",2,"w"],"w"]"#));
     drop(directory);
@@ -554,7 +610,7 @@ fn changed_allocation_exports_are_rejected() {
         "allocation",
         r#"s/\["spill_reload",\["gpr",8,"x"],7]/["spill_reload",["gpr",8,"x"],0]/"#,
     );
-    assert_refused(&output, &directory, REJECTED, "stage V03");
+    assert_refused(&output, &directory, REJECTED, "stage allocation for entry");
     assert_refused(
         &output,
         &directory,
@@ -565,7 +621,7 @@ fn changed_allocation_exports_are_rejected() {
     drop(directory);
 
     // The program before allocation in the export is not the post-SSA file
-    // that V02 accepted: the comparison constant changes from 0 to 1.
+    // that lowering accepted: the comparison constant changes from 0 to 1.
     let directory = new_directory();
     let output = run_changed(
         &directory,
@@ -574,7 +630,7 @@ fn changed_allocation_exports_are_rejected() {
         "allocation",
         r#"s/\[0,"gpr32"],0,"w"]/[0,"gpr32"],1,"w"]/"#,
     );
-    assert_refused(&output, &directory, REJECTED, "stage V03");
+    assert_refused(&output, &directory, REJECTED, "stage allocation for entry");
     assert_refused(&output, &directory, REJECTED, "is not the post-SSA input");
     assert!(read(&directory).contains(r#"[0,"gpr32"],1,"w"]"#));
     let post_ssa = directory.join("inputs/post-ssa-evomir.json");
@@ -598,7 +654,12 @@ fn changed_assembly_inputs_are_rejected() {
         "text",
         "s/cmp w0, #0/cmp w0, #1/",
     );
-    assert_refused(&output, &directory, REJECTED, "stage V04");
+    assert_refused(
+        &output,
+        &directory,
+        REJECTED,
+        "stage frame-emission for entry",
+    );
     assert_refused(
         &output,
         &directory,
@@ -630,7 +691,12 @@ fn changed_assembly_inputs_are_rejected() {
             "asm text",
             sed,
         );
-        assert_refused(&output, &directory, REJECTED, "stage V04");
+        assert_refused(
+            &output,
+            &directory,
+            REJECTED,
+            "stage frame-emission for entry",
+        );
         assert_refused(
             &output,
             &directory,
@@ -659,7 +725,8 @@ fn private_frame_objects_are_refused() {
     assert!(!directory.exists());
     std::fs::remove_file(source).unwrap();
 
-    // V04 itself refuses the frozen private frame objects of `machine-private`:
+    // frame-emission itself refuses the frozen private frame objects of
+    // `machine-private`:
     // the printed AST is the text, but checkAsm does not accept the frame.
     let scratch = new_directory();
     std::fs::create_dir(&*scratch).unwrap();
@@ -679,7 +746,7 @@ fn private_frame_objects_are_refused() {
     let frozen = fixture("asm");
     let binding = |role: &str, path: &Path| format!("{role}={}", path.display());
     let output = Command::new(lean_checker())
-        .args(["--check-stage", "V04"])
+        .args(["--check-stage", "frame-emission"])
         .arg(binding("source", &entry))
         .arg(binding(
             "allocation",
@@ -691,7 +758,7 @@ fn private_frame_objects_are_refused() {
         .unwrap();
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     assert!(String::from_utf8_lossy(&output.stderr).contains(
-        "STAGE_REJECTED stage=V04 entry=private_word frame layout or emission not confirmed"
+        "STAGE_REJECTED stage=frame-emission entry=private_word frame layout or emission not confirmed"
     ));
 }
 
@@ -710,7 +777,7 @@ fn rejected_rewrites_give_no_output() {
         &fixture("pressure.c"),
         &[],
     );
-    assert_refused(&output, &directory, REJECTED, "stage V05");
+    assert_refused(&output, &directory, REJECTED, "stage rewrite for entry");
     assert_refused(
         &output,
         &directory,
@@ -732,7 +799,7 @@ fn rejected_rewrites_give_no_output() {
         "certificate",
         "s/premises c6:1:1/premises c6:1:0/",
     );
-    assert_refused(&output, &directory, REJECTED, "stage V05");
+    assert_refused(&output, &directory, REJECTED, "stage rewrite for entry");
     assert_refused(&output, &directory, REJECTED, "for entry `FixedMul` step 0");
     let changed = std::fs::read_to_string(directory.join("inputs/rewrite-000.proof.evp")).unwrap();
     assert!(
@@ -754,7 +821,12 @@ fn changed_evoir_is_rejected_by_the_lean_checker() {
             ("EVOCC_TEST_ACTION", Path::new("change-ir")),
         ],
     );
-    assert_refused(&output, &directory, REJECTED, "stage V01");
+    assert_refused(
+        &output,
+        &directory,
+        REJECTED,
+        "stage source-to-evoir for entry",
+    );
     let ir = std::fs::read_to_string(directory.join("inputs/evoir.evo")).unwrap();
     assert!(
         ir.contains("ret %v8"),
@@ -781,8 +853,8 @@ fn evoir_changed_after_acceptance_is_refused() {
         INPUT,
         "changed or is missing after the check",
     );
-    let accepted = std::fs::read_to_string(directory.join("checks/V02-abs.out")).unwrap();
-    assert!(accepted.starts_with("STAGE_ACCEPTED stage=V02 entry=abs"));
+    let accepted = std::fs::read_to_string(directory.join("checks/lowering-abs.out")).unwrap();
+    assert!(accepted.starts_with("STAGE_ACCEPTED stage=lowering entry=abs"));
 }
 
 #[test]
@@ -825,7 +897,12 @@ fn missing_proof_input_is_refused() {
         &fixture("control.c"),
         &[],
     );
-    assert_refused(&output, &directory, REJECTED, "stage V01");
+    assert_refused(
+        &output,
+        &directory,
+        REJECTED,
+        "stage source-to-evoir for entry",
+    );
 }
 
 #[test]
@@ -880,7 +957,7 @@ fn checker_time_out_is_refused() {
         &output,
         &directory,
         CHECKER,
-        "timed out after 300 ms in stage V01",
+        "timed out after 300 ms in stage source-to-evoir",
     );
     assert!(start.elapsed() < Duration::from_secs(25));
 }

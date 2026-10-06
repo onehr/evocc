@@ -326,8 +326,11 @@ def selfTest : IO UInt32 := do
 /-! ## Stage checks for proof-required compilation
 
 `evoir-sem --check-stage STAGE ROLE=PATH ...` runs one proved stage checker on
-files that the compiler exported. Each stage reads only the roles that its row
-names. The command gives one of three results:
+files that the compiler exported, for example
+`evoir-sem --check-stage source-to-evoir source=PATH ir=PATH`. `STAGE` is one of
+`source-to-evoir`, `rewrite`, `lowering`, `allocation` and `frame-emission`;
+`--list-stages` lists them. Each stage reads only the roles that its row names.
+The command gives one of three results:
 
 * exit 0 and `STAGE_ACCEPTED stage=ID entry=NAME ...` on standard output;
 * exit 1 and `STAGE_REJECTED` on standard error: the checker refused the pair;
@@ -345,9 +348,10 @@ inductive StageVerdict where
 /-- File text by role name, for example `("ir", text)`. -/
 abbrev StageInputs := List (String × String)
 
+/-- One row of the stage table. `id` is the stage identifier of the command
+line, of the output lines and of the driver record. -/
 structure Stage where
   id : String
-  name : String
   required : List String
   optional : List String := []
   check : StageInputs → StageVerdict
@@ -367,10 +371,10 @@ def stageIR (inputs : StageInputs) : Except String EvoIR.Core.IR.Program := do
   let .ok ir := EvoIR.Core.IR.Reader.readProgram text | throw "EvoIR input"
   return ir
 
-/-- V01: the independent source validator, then the source-to-EvoIR checker
-of `check_source_target_refines`. A proposal selects the cyclic or call-closure
-request. A proposal that does not decode is unsupported; it never falls back to
-the finite request. -/
+/-- Stage `source-to-evoir`: the independent source validator, then the
+source-to-EvoIR checker of `check_source_target_refines`. A proposal selects
+the cyclic or call-closure request. A proposal that does not decode is
+unsupported; it never falls back to the finite request. -/
 def checkSourceToIR (inputs : StageInputs) : StageVerdict := Id.run do
   let .ok (source, function) := stageEntry inputs | return .unsupported "source input"
   let .ok ir := stageIR inputs | return .unsupported "EvoIR input"
@@ -392,8 +396,9 @@ def checkSourceToIR (inputs : StageInputs) : StageVerdict := Id.run do
       | .leaf => "leaf" | .call => "call" | .loop => "loop" | .loopCall => "loop-call"
     .accepted s!"entry={accepted.sourceFunction.name} route={route} scope=source-to-evoir"
 
-/-- V02: instruction selection and SSA removal, `EvoIR.Machine.checkLowering`.
-The source export gives only the entry name and signature. -/
+/-- Stage `lowering`: instruction selection and SSA removal,
+`EvoIR.Machine.checkLowering`. The source export gives only the entry name and
+signature. -/
 def checkIRToPostSSA (inputs : StageInputs) : StageVerdict := Id.run do
   let .ok (_, function) := stageEntry inputs | return .unsupported "source input"
   let .ok ir := stageIR inputs | return .unsupported "EvoIR input"
@@ -418,9 +423,9 @@ def rewriteSummary (cert : EvoIR.Rewrite.Certificate) : String :=
     | _ => none
   s!"registry={cert.registry} regions={names regions} rules={names rules}"
 
-/-- V05: one rewrite step, `EvoIR.Rewrite.checkRewrite`, with the theorem
-`checkRewrite_refines`. The inputs are the EvoIR before the step, the EvoIR
-after the step and the `evp2` certificate. The source export gives only the
+/-- Stage `rewrite`: one rewrite step, `EvoIR.Rewrite.checkRewrite`, with the
+theorem `checkRewrite_refines`. The inputs are the EvoIR before the step, the
+EvoIR after the step and the `evp2` certificate. The source export gives only the
 entry name. A certificate that the reader does not decode is a rejection. The
 stage never falls back to the program before the step. -/
 def checkRewriteStep (inputs : StageInputs) : StageVerdict := Id.run do
@@ -439,11 +444,12 @@ def checkRewriteStep (inputs : StageInputs) : StageVerdict := Id.run do
     else
       .rejected s!"entry={function.name} rewrite not confirmed or form not supported: {rewriteSummary cert}"
 
-/-- V03: register allocation, `EvoIR.Alloc.checkAllocation`, with the theorem
-`checkAllocation_sound`. The program before allocation is the post-SSA file
-that V02 also reads. The allocation export gives the allocated program and the
-hints. The export also holds a copy of the program before allocation. If that
-copy is not equal to the post-SSA file, the stage rejects the export. -/
+/-- Stage `allocation`: register allocation, `EvoIR.Alloc.checkAllocation`,
+with the theorem `checkAllocation_sound`. The program before allocation is the
+post-SSA file that the stage `lowering` also reads. The allocation export gives
+the allocated program and the hints. The export also holds a copy of the
+program before allocation. If that copy is not equal to the post-SSA file, the
+stage rejects the export. -/
 def checkPostSSAToAllocated (inputs : StageInputs) : StageVerdict := Id.run do
   let .ok (_, function) := stageEntry inputs | return .unsupported "source input"
   let some postText := inputs.lookup "postssa" | return .unsupported "missing post-SSA EvoMIR input"
@@ -459,11 +465,12 @@ def checkPostSSAToAllocated (inputs : StageInputs) : StageVerdict := Id.run do
   let refused := (pre.functions.find? (!EvoIR.Alloc.checkFunction pre post hints ·)).map (·.name)
   .rejected s!"entry={function.name} allocation not confirmed in function {refused.getD "?"}"
 
-/-- V04: frame layout and emission, `EvoIR.Asm.Check.checkAsm`, with the theorem
-`checkAsm_sound`. The allocated program comes from the allocation export that V03
-also reads. The `asm` file gives the assembly AST and the frame hints. The `text`
-file is the assembly text that the driver publishes. The printed AST must be equal
-to that text, byte for byte. The result view of the entry is a premise of
+/-- Stage `frame-emission`: frame layout and emission,
+`EvoIR.Asm.Check.checkAsm`, with the theorem `checkAsm_sound`. The allocated
+program comes from the allocation export that the stage `allocation` also
+reads. The `asm` file gives the assembly AST and the frame hints. The `text`
+file is the assembly text that the driver publishes. The printed AST must be
+equal to that text, byte for byte. The result view of the entry is a premise of
 `source_asm_refines`; `EvoIR.Pipeline.resultView_of_ok` discharges it. -/
 def checkAllocatedToAsm (inputs : StageInputs) : StageVerdict := Id.run do
   let .ok (_, function) := stageEntry inputs | return .unsupported "source input"
@@ -485,18 +492,17 @@ def checkAllocatedToAsm (inputs : StageInputs) : StageVerdict := Id.run do
   .accepted s!"{entry} functions={file.functions.length} bytes={text.utf8ByteSize} scope=allocated-mir-to-assembly-text"
 
 /-- The table of integrated stages, in pipeline order. The compiler driver has a
-matching table. -/
+matching table, with the final row `pipeline` for `--check-pipeline`. -/
 def stages : List Stage :=
-  [ { id := "V01", name := "source-to-evoir", required := ["source", "ir"],
-      optional := ["proposal"], check := checkSourceToIR }
-  , { id := "V05", name := "evoir-rewrite",
-      required := ["source", "before", "after", "certificate"], check := checkRewriteStep }
-  , { id := "V02", name := "evoir-to-post-ssa-mir", required := ["source", "ir", "ssa", "postssa"],
-      check := checkIRToPostSSA }
-  , { id := "V03", name := "post-ssa-mir-to-allocated-mir",
-      required := ["source", "postssa", "allocation"], check := checkPostSSAToAllocated }
-  , { id := "V04", name := "allocated-mir-to-assembly-text",
-      required := ["source", "allocation", "asm", "text"], check := checkAllocatedToAsm } ]
+  [ { id := "source-to-evoir", required := ["source", "ir"], optional := ["proposal"],
+      check := checkSourceToIR }
+  , { id := "rewrite", required := ["source", "before", "after", "certificate"],
+      check := checkRewriteStep }
+  , { id := "lowering", required := ["source", "ir", "ssa", "postssa"], check := checkIRToPostSSA }
+  , { id := "allocation", required := ["source", "postssa", "allocation"],
+      check := checkPostSSAToAllocated }
+  , { id := "frame-emission", required := ["source", "allocation", "asm", "text"],
+      check := checkAllocatedToAsm } ]
 
 /-- Read each `ROLE=PATH` argument. A role outside the stage row, a duplicate
 role or a missing required role is a command error. -/
@@ -570,7 +576,7 @@ def run (args : List String) : IO UInt32 := do
   match args with
   | ["--list-stages"] => do
       for stage in stages do
-        IO.println s!"{stage.id} {stage.name} required={",".intercalate stage.required} optional={",".intercalate stage.optional}"
+        IO.println s!"{stage.id} required={",".intercalate stage.required} optional={",".intercalate stage.optional}"
       return 0
   | "--check-stage" :: id :: bindings => runStage id bindings
   | "--check-pipeline" :: bindings => runPipeline bindings

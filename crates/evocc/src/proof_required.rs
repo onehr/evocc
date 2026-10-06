@@ -10,19 +10,23 @@
 //!
 //! With `-Oeq-scalar`, the directory also holds each rewrite step of the same
 //! compilation: the EvoIR before the step, the EvoIR after the step and the
-//! certificate. V01 reads the EvoIR before the first step, V05 checks each
-//! step, and V02 reads the EvoIR after the last step. Adjacent stages must read
-//! the same bytes. A rejected step gives a failure and no output. There is no
+//! certificate. The stage `source-to-evoir` reads the EvoIR before the first
+//! step, the stage `rewrite` checks each step, and the stage `lowering` reads
+//! the EvoIR after the last step. Adjacent stages must read the same bytes. A rejected step gives a failure and no output. There is no
 //! fallback to the program without the rewrite.
 //!
-//! The directory also holds the allocation export of the post-SSA EvoMIR. V03
-//! reads the same post-SSA file as V02, and the allocated program and the
-//! hints from the export.
+//! The directory also holds the allocation export of the post-SSA EvoMIR. The
+//! stage `allocation` reads the same post-SSA file as `lowering`, and the
+//! allocated program and the hints from the export.
 //!
 //! The directory also holds the assembly AST with the frame hints, and the
-//! assembly text that the driver publishes. V04 reads the allocation export
-//! that V03 reads, the AST and this text. The driver publishes `output.s` only
-//! with the bytes that V04 checked.
+//! assembly text that the driver publishes. The stage `frame-emission` reads
+//! the allocation export that `allocation` reads, the AST and this text. The
+//! driver publishes `output.s` only with the bytes that `frame-emission`
+//! checked.
+//!
+//! The final row `pipeline` runs one check of all stages on the same files.
+//! Each stage identifier is also the argument of `evoir-sem --check-stage`.
 //!
 //! The compiled Lean checker is the one result-checking path. This module does
 //! not check a compilation result. It collects the inputs, runs the checker and
@@ -110,13 +114,15 @@ enum Place {
     /// The EvoIR after the last rewrite step.
     Last,
     /// All files of the compilation: the EvoIR before the first rewrite step
-    /// and every rewrite step, in step order.
+    /// and every rewrite step, in step order. Only the row `pipeline` has this
+    /// place; it runs `evoir-sem --check-pipeline`.
     Whole,
 }
 
 struct Stage {
+    /// The stage identifier: the argument of `evoir-sem --check-stage`, the
+    /// `stage=` word of the checker output and the `id` of the record row.
     id: &'static str,
-    name: &'static str,
     /// The last program of the stage. The record says "checked to" it.
     reaches: &'static str,
     place: Place,
@@ -131,40 +137,35 @@ struct Stage {
 /// the same row to the Lean table, and export each new role in `export`.
 const STAGES: &[Stage] = &[
     Stage {
-        id: "V01",
-        name: "typed Core C-HIR to EvoIR",
+        id: "source-to-evoir",
         reaches: "EvoIR",
         place: Place::First,
         roles: Some(&[Role::Source, Role::Ir, Role::Proposal]),
         theorem: "EvoIR.Core.Symbolic.check_source_target_refines",
     },
     Stage {
-        id: "V05",
-        name: "EvoIR rewrites",
+        id: "rewrite",
         reaches: "rewritten EvoIR",
         place: Place::EachStep,
         roles: Some(&[Role::Source, Role::Before, Role::After, Role::Certificate]),
         theorem: "EvoIR.Rewrite.checkRewrite_refines; composition EvoIR.Rewrite.check_source_rewrite_refines",
     },
     Stage {
-        id: "V02",
-        name: "EvoIR to SSA EvoMIR and post-SSA EvoMIR",
+        id: "lowering",
         reaches: "post-SSA EvoMIR",
         place: Place::Last,
         roles: Some(&[Role::Source, Role::Ir, Role::Ssa, Role::PostSsa]),
         theorem: "EvoIR.Machine.checkLowering; composition EvoIR.Machine.source_machine_refines",
     },
     Stage {
-        id: "V03",
-        name: "post-SSA EvoMIR to allocated EvoMIR",
+        id: "allocation",
         reaches: "allocated EvoMIR",
         place: Place::Last,
         roles: Some(&[Role::Source, Role::PostSsa, Role::Allocation]),
         theorem: "EvoIR.Alloc.checkAllocation_sound; composition EvoIR.Alloc.source_allocated_refines",
     },
     Stage {
-        id: "V04",
-        name: "allocated EvoMIR to final assembly text",
+        id: "frame-emission",
         reaches: "final assembly",
         place: Place::Last,
         roles: Some(&[Role::Source, Role::Allocation, Role::Asm, Role::Text]),
@@ -173,8 +174,7 @@ const STAGES: &[Stage] = &[
     // The final decision: one check of all stages on the same files, with one
     // theorem. The stage rows above are for diagnosis.
     Stage {
-        id: PIPELINE,
-        name: "typed Core source to final assembly text in one check",
+        id: "pipeline",
         reaches: "final assembly",
         place: Place::Whole,
         roles: Some(&[
@@ -193,15 +193,13 @@ const STAGES: &[Stage] = &[
     },
 ];
 
-/// The ID of the stage row that runs `evoir-sem --check-pipeline`.
-const PIPELINE: &str = "PIPELINE";
-
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 
 /// The scope of a result in which every stage is integrated.
 const COMPLETE_SCOPE: &str = "checked from typed Core source to final assembly text";
 
-const OUTPUT_NOTE: &str = "V04 checked these bytes: the printed assembly AST is equal to them.";
+const OUTPUT_NOTE: &str =
+    "frame-emission checked these bytes: the printed assembly AST is equal to them.";
 
 /// The trusted boundaries of every proof-required result. Each exported
 /// snapshot is an untrusted input that a stage checks. The chain binds the
@@ -247,7 +245,7 @@ pub(crate) struct Admission<'a> {
     /// No development pass or backend variant, checked guards, and no EqSat
     /// option without `-Oeq-scalar`.
     pub unchanged_backend: bool,
-    /// `-Oeq-scalar`: the rewrite steps go to stage V05.
+    /// `-Oeq-scalar`: the rewrite steps go to the stage `rewrite`.
     pub rewrites: bool,
     /// `--eq-checker-sha256` is on the command line.
     pub rewrite_checker_pinned: bool,
@@ -416,7 +414,7 @@ pub(crate) fn run(
         Ok(assembly) => assembly,
         Err(code) => return code,
     };
-    // V04 checks the text that the driver publishes.
+    // The stage `frame-emission` checks the text that the driver publishes.
     let path = "inputs/assembly.s".into();
     let bytes = assembly.clone().into_bytes();
     artifacts.push(Artifact::new(Role::Text, None, None, path, bytes));
@@ -497,9 +495,9 @@ fn export(
         )));
     }
 
-    // V01 reads the EvoIR before the first rewrite step. Each step is the
-    // triple that `--eq-proof-dir` also writes. V02 reads the EvoIR of the
-    // module that the backend compiles.
+    // The stage `source-to-evoir` reads the EvoIR before the first rewrite
+    // step. Each step is the triple that `--eq-proof-dir` also writes. The
+    // stage `lowering` reads the EvoIR of the module that the backend compiles.
     let (initial, steps) = rewrites.map_or((module, &[][..]), |r| (&r.initial, &r.steps));
     if rewrites.is_some() && steps.is_empty() {
         return Err((Failure::Input, "-Oeq-scalar gave no rewrite step".into()));
@@ -607,8 +605,8 @@ fn check_and_record(
         .iter()
         .filter(|a| a.role == Role::Certificate)
         .count();
-    // The published text. Its digest must be the digest of the text that V04
-    // checks; `chain` compares them.
+    // The published text. Its digest must be the digest of the text that
+    // `frame-emission` checks; `chain` compares them.
     let published = Artifact::new(
         Role::Text,
         None,
@@ -633,7 +631,6 @@ fn check_and_record(
             };
             stages.push(Json::Object(vec![
                 ("id", Json::text(stage.id)),
-                ("name", Json::text(stage.name)),
                 ("status", Json::text("NOT_CHECKED")),
                 ("reason", Json::text(reason)),
             ]));
@@ -688,7 +685,6 @@ fn check_and_record(
         }
         stages.push(Json::Object(vec![
             ("id", Json::text(stage.id)),
-            ("name", Json::text(stage.name)),
             ("status", Json::text("CHECKED")),
             ("theorem", Json::text(stage.theorem)),
             ("results", Json::List(results)),
@@ -778,13 +774,14 @@ fn check_and_record(
     Ok(format!("{result}: {scope}; record {}", record.display()))
 }
 
-/// The files that adjacent stages read, in stage order. V01 reads the EvoIR
-/// before step 0. Step K of V05 reads the EvoIR before step K and the EvoIR
-/// after step K. V02 reads the EvoIR after the last step and the post-SSA file.
-/// V03 reads the same post-SSA file and the allocation export. V04 reads the
-/// same allocation export and the assembly text. `published` is the text that
-/// the driver publishes as `output.s`; it must be the text that V04 reads. Two
-/// adjacent readers must read the same bytes. A different digest is a gap and
+/// The files that adjacent stages read, in stage order. `source-to-evoir`
+/// reads the EvoIR before step 0. Step K of `rewrite` reads the EvoIR before
+/// step K and the EvoIR after step K. `lowering` reads the EvoIR after the last
+/// step and the post-SSA file. `allocation` reads the same post-SSA file and
+/// the allocation export. `frame-emission` reads the same allocation export and
+/// the assembly text. `published` is the text that the driver publishes as
+/// `output.s`; it must be the text that `frame-emission` reads. Two adjacent
+/// readers must read the same bytes. A different digest is a gap and
 /// stops the compilation. The result is one link for each pair of readers.
 fn chain(artifacts: &[Artifact], steps: usize, published: &Artifact) -> Result<Json, Refusal> {
     let file = |role: Role, step: Option<usize>, reader: String| match artifacts
@@ -803,23 +800,23 @@ fn chain(artifacts: &[Artifact], steps: usize, published: &Artifact) -> Result<J
     let mut pairs = Vec::new();
     for step in 0..=steps {
         let left = if step == 0 {
-            file(Role::Ir, Some(0), "V01".into())?
+            file(Role::Ir, Some(0), "source-to-evoir".into())?
         } else {
-            let reader = format!("V05 step {}", step - 1);
+            let reader = format!("rewrite step {}", step - 1);
             file(Role::After, Some(step - 1), reader)?
         };
         let right = if step == steps {
-            file(Role::Ir, Some(steps), "V02".into())?
+            file(Role::Ir, Some(steps), "lowering".into())?
         } else {
-            file(Role::Before, Some(step), format!("V05 step {step}"))?
+            file(Role::Before, Some(step), format!("rewrite step {step}"))?
         };
         pairs.push((left, right));
     }
     let post_ssa = |reader: &str| file(Role::PostSsa, None, reader.into());
-    pairs.push((post_ssa("V02")?, post_ssa("V03")?));
+    pairs.push((post_ssa("lowering")?, post_ssa("allocation")?));
     let allocation = |reader: &str| file(Role::Allocation, None, reader.into());
-    pairs.push((allocation("V03")?, allocation("V04")?));
-    let checked = file(Role::Text, None, "V04".into())?;
+    pairs.push((allocation("allocation")?, allocation("frame-emission")?));
+    let checked = file(Role::Text, None, "frame-emission".into())?;
     pairs.push((checked, (published, "publication".into())));
     let mut links = Vec::new();
     for (left, right) in pairs {
@@ -908,8 +905,8 @@ fn create_new(path: &Path, bytes: &[u8]) -> Result<(), Refusal> {
         })
 }
 
-/// Run one stage for one entry, and for one rewrite step of V05, with the time
-/// limit. The result is the acceptance line of the checker.
+/// Run one stage for one entry, and for one rewrite step of `rewrite`, with
+/// the time limit. The result is the acceptance line of the checker.
 fn check(
     checker: &Path,
     proof: &ProofOptions,
@@ -934,7 +931,7 @@ fn check(
         })
     };
     let mut command = Command::new(checker);
-    if stage.id == PIPELINE {
+    if stage.place == Place::Whole {
         command.arg("--check-pipeline");
     } else {
         command.arg("--check-stage").arg(stage.id);
@@ -976,13 +973,10 @@ fn check(
     let stderr = fs::read_to_string(log("err")).unwrap_or_default();
     let reason = stderr.lines().next().unwrap_or("no reason").to_owned();
     let step_text = step.map_or_else(String::new, |step| format!(" step {step}"));
-    let what = format!(
-        "stage {} ({}) for entry `{entry}`{step_text}",
-        stage.id, stage.name
-    );
+    let what = format!("stage {} for entry `{entry}`{step_text}", stage.id);
     match status.code() {
         Some(0) => {
-            let expected = if stage.id == PIPELINE {
+            let expected = if stage.place == Place::Whole {
                 format!("PIPELINE_ACCEPTED entry={entry}")
             } else {
                 format!("STAGE_ACCEPTED stage={} entry={entry}", stage.id)

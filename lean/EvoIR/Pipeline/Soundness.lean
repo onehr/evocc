@@ -17,20 +17,23 @@ width `w` are equal to the argument. The other bits are arbitrary.
 The theorem has no hypothesis other than the accepted check, the typed
 argument list and the ABI entry state. The proof composes the stage theorems:
 
-* V01: `check_source_target_refines` gives the source and EvoIR entries.
-* V05: `source_rewrite_refines`, once for each step, keeps the EvoIR entry.
-* V02: the `checked` field of `checkLowering` gives the EvoIR and post-SSA
-  entries. The link checks of `refusal` make the two EvoIR entries equal.
-  The post-SSA entry has the zero-extended source arguments.
-* V03: `checkAllocation_sound_args`. The allocated entry has the machine
-  arguments of the assembly entry state (`abiArguments`), with all 64 bits.
+* `source-to-evoir`: `check_source_target_refines` gives the source and EvoIR
+  entries.
+* `rewrite`: `source_rewrite_refines`, once for each step, keeps the EvoIR
+  entry.
+* `lowering`: the `checked` field of `checkLowering` gives the EvoIR and
+  post-SSA entries. The link checks of `refusal` make the two EvoIR entries
+  equal. The post-SSA entry has the zero-extended source arguments.
+* `allocation`: `checkAllocation_sound_args`. The allocated entry has the
+  machine arguments of the assembly entry state (`abiArguments`), with all 64
+  bits.
   `entryViewsOk` makes the two argument lists agree at the entry
   (`EntryAgrees`): a 32-bit parameter has a 32-bit register, and the write
-  to this register keeps only the low 32 bits. The progress field of the V02
-  refinement discharges the progress hypothesis.
-* V04: `checkAsm_sound` with `AbiEntry` for the machine arguments of the
-  assembly entry state. `resultViewOk` gives `ResultView`, and the progress
-  field of the V03 refinement gives `Safe`.
+  to this register keeps only the low 32 bits. The progress field of the
+  `lowering` refinement discharges the progress hypothesis.
+* `frame-emission`: `checkAsm_sound` with `AbiEntry` for the machine
+  arguments of the assembly entry state. `resultViewOk` gives `ResultView`,
+  and the progress field of the `allocation` refinement gives `Safe`.
 -/
 namespace EvoIR.Pipeline
 
@@ -222,20 +225,22 @@ theorem checkPipeline_sound {input : Input} (accepted : checkPipeline input = tr
   intro args typed asmEntry E abi
   simp only [pairLinked, Bool.and_eq_true, beq_iff_eq] at linked
   obtain ⟨⟨⟨symbol, name⟩, parameters⟩, result⟩ := linked
-  -- V01 and V05: the source refines the EvoIR after the last step.
+  -- `source-to-evoir` and `rewrite`: the source refines the EvoIR after the
+  -- last step.
   obtain ⟨sourceEntry, irEntry, started, irStarted, front⟩ :=
     Symbolic.check_source_target_refines _ route pair hpair args (by rw [parameters]; exact typed)
   obtain ⟨lastStarted, front⟩ := rewriteChain_refines chain irStarted front
   rw [result] at front
-  -- V02: the same EvoIR entry state starts the lowering refinement.
+  -- `lowering`: the same EvoIR entry state starts the lowering refinement.
   obtain ⟨irEntry', postEntry, irStarted', postStarted, lowering⟩ := lowered.checked args typed
   have same : IR.initial last f.name (Machine.loweringArguments lowered.tokens args) =
       .ok irEntry := by
     rw [tokens, ← name]
     exact lastStarted
   cases (Except.ok.inj (irStarted'.symm.trans same))
-  -- V03 from the zero-extended arguments to the machine arguments of the
-  -- assembly entry state, then V04 with these machine arguments.
+  -- `allocation` from the zero-extended arguments to the machine arguments of
+  -- the assembly entry state, then `frame-emission` with these machine
+  -- arguments.
   obtain ⟨allocEntry, allocStarted, allocation⟩ := Alloc.checkAllocation_sound_args _ _ _ alloc
     f.returnType.type f.name _ _ _ postEntry postStarted (entryAgrees_of_ok views typed abi)
     lowering.progress

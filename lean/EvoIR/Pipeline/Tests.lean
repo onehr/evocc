@@ -78,38 +78,38 @@ def run : IO Unit := do
   expectAccepted "FixedMul without rewrite" fixedMul
   let fixedMulG0 ← load "fixedmul-g0" (steps := 2)
   expectAccepted "FixedMul with the g0 rewrite" fixedMulG0
-  /- A changed assembly text: the print check of V04 refuses. -/
-  expectRejected "abs, changed assembly text" "V04"
+  /- A changed assembly text: the print check of `frame-emission` refuses. -/
+  expectRejected "abs, changed assembly text" "frame-emission"
     {abs with asm := ← edit "text" abs.asm "cmp w0, #0" "cmp w0, #1"}
-  expectRejected "FixedMul g0, changed assembly text" "V04"
+  expectRejected "FixedMul g0, changed assembly text" "frame-emission"
     {fixedMulG0 with asm := ← edit "text" fixedMulG0.asm "asr x0, x0, #16" "asr x0, x0, #15"}
   /- A changed allocated program: the return moves `x2`, not `x1`, to `x0`. -/
   let allocation ← edit "allocation" abs.allocation
     "[3,[[\"mov\",[\"gpr\",0,\"w\"],[\"gpr\",1,\"w\"]]]" "[3,[[\"mov\",[\"gpr\",0,\"w\"],[\"gpr\",2,\"w\"]]]"
-  expectRejected "abs, changed allocated program" "V03" {abs with allocation}
+  expectRejected "abs, changed allocated program" "allocation" {abs with allocation}
   /- A changed copy of the program before allocation in the export. -/
-  expectRejected "abs, changed copy of the post-SSA program" "V03"
+  expectRejected "abs, changed copy of the post-SSA program" "allocation"
     {abs with allocation := ← edit "copy" abs.allocation "\"gt\",1,[],2,[]" "\"ge\",1,[],2,[]"}
   /- A changed EvoIR before the rewrites: the result is the argument, not
-  its absolute value. V01 refuses. -/
-  expectRejected "abs, changed EvoIR" "V01"
+  its absolute value. `source-to-evoir` refuses. -/
+  expectRejected "abs, changed EvoIR" "source-to-evoir"
     {abs with ir := ← edit "ir" abs.ir "ret %v9" "ret %v8"}
   /- A changed SSA EvoMIR: the return gives the first value of block 3. -/
   let ssa ← edit "ssa" abs.ssa "[\"ret\",[[12,\"gpr32\"]]]" "[\"ret\",[[11,\"gpr32\"]]]"
-  expectRejected "abs, changed SSA EvoMIR" "V02" {abs with ssa}
-  /- A changed EvoIR after rewrite step 0: V05 refuses step 0. -/
+  expectRejected "abs, changed SSA EvoMIR" "lowering" {abs with ssa}
+  /- A changed EvoIR after rewrite step 0: `rewrite` refuses step 0. -/
   let (after, cert) :: rest := fixedMulG0.rewrites | throw (IO.userError "FAIL: no rewrite step")
   let after ← edit "after" after "%v6 = const.bits<32> 16" "%v6 = const.bits<32> 17"
-  expectRejected "FixedMul g0, changed EvoIR after step 0" "V05"
+  expectRejected "FixedMul g0, changed EvoIR after step 0" "rewrite"
     {fixedMulG0 with rewrites := (after, cert) :: rest}
   /- The EvoIR before the rewrite, with the EvoMIR of the rewritten EvoIR and
-  no rewrite step. V02 is a semantic check: the shift count guard of the
-  constant 16 is always true, so V02 also accepts this pair. -/
+  no rewrite step. `lowering` is a semantic check: the shift count guard of
+  the constant 16 is always true, so `lowering` also accepts this pair. -/
   expectAccepted "FixedMul g0 EvoMIR, rewrite steps removed" {fixedMulG0 with rewrites := []}
   /- The same pair with a changed EvoIR: the shift count is 17, not 16. The
-  source refuses this EvoIR at V01. -/
+  source refuses this EvoIR at `source-to-evoir`. -/
   let ir ← edit "ir" fixedMulG0.ir "%v6 = const.bits<32> 16" "%v6 = const.bits<32> 17"
-  expectRejected "FixedMul, changed EvoIR" "V01" {fixedMulG0 with ir, rewrites := []}
+  expectRejected "FixedMul, changed EvoIR" "source-to-evoir" {fixedMulG0 with ir, rewrites := []}
   /- The entry view check accepts each pilot entry. It refuses a copy of the
   post-SSA program in which each block argument has a 64-bit register. -/
   for (label, texts) in [("abs", abs), ("FixedMul", fixedMul)] do
