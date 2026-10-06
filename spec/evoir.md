@@ -278,12 +278,50 @@ of the symbol plus the addend with that symbol's provenance (function
 provenance for a function or external function), and are initialized;
 `bytes=` for those positions are zero and `initialized=` bits there are one.
 The list is omitted when empty. `(void *)(unsigned long)&f`, `&arr[3]` and
-`&sv.l` are all symbol-plus-addend forms. A static initializer that is not a symbol plus an addend (a
-difference of two addresses, a pointer read through an integer that is not a
-whole-pointer round trip) stays `E3026` (`not-lowered: static-relocation`).
+`&sv.l` are all symbol-plus-addend forms. A pointer initialized from an integer constant holds that integer's target
+bits, after each intermediate cast's own width and signedness, and no
+relocation. Loading such a complete initialized pointer-sized representation
+decodes it as `ptr.from_int` does; known symbolic fragments keep their
+relocations. Storing the bits exposes no object or function, and runtime byte
+writes never create such a representation. A label difference (below) is a separate relocation form. Any other static
+initializer that is not a symbol plus an addend, such as a pointer read through
+an integer that is not a whole-pointer round trip, stays `E3026`
+(`not-lowered: static-relocation`).
 Top-level module execution starts from that deterministic declaration-order
 memory snapshot and an empty world trace; callers do not inject arbitrary
 initial memory or world states through the ABI-shaped entry token positions.
+
+**Exposing relocations.** A static numeric pointer offset keeps pointee
+scaling and every intermediate integer cast, and a pointer-width integer static
+initializer can hold a symbol plus a byte addend. When a symbolic initializer
+casts an address to an integer, including a later cast back to a pointer, its
+relocation carries the fourth field `exposed`, `(offset, @symbol, addend,
+exposed)`, which exposes the target (Section 3.7) at module initialization. The
+three-field form exposes nothing. `exposed` changes neither the stored bytes
+nor any access check. Raw numeric addresses expose nothing, and a dereference
+of an integer-derived pointer to an unexposed object is `E3013`.
+
+**Label differences.** The difference of two labels of one function is a
+static integer initializer, not an integer constant expression. Its relocation
+is `(offset, @f^bT, addend, diff=@f^bB, bits=W)` with `W` one of 8, 16, 32 and
+64. Unlike the eight-byte form, it covers `W/8` bytes, under the same sorting
+and nonoverlap rules, and holds the low `W` bits of the target address minus
+the base address plus the addend, initialized and without provenance. Both
+labels must name retained blocks of the same defined function, and both count
+as address-taken for `br.indirect` validation. A label difference cannot be
+`exposed`. The interpreters compute it from their code-address mapping. GNU
+`void *` byte arithmetic can carry an exposed object or code address, but it
+never makes a label dereferenceable.
+
+**Object placement.** A global object can carry ` section="name"` after its
+initialization bitmap and `readonly` mark and before `relocs`, in the
+quoted-string encoding. It is placement metadata: object identity, layout,
+initialization and relocations are unchanged. On the GNU/Linux target an
+explicit writable section is emitted as a named PROGBITS section even for zero
+bytes, except `.bss` and `.bss.*`, which are NOBITS and must hold no nonzero
+byte and no relocation. Without the field the ordinary data or BSS choice
+applies. An empty name, a control byte in the name, conflicting section
+requests and a nonzero initializer in a NOBITS section are `E2943`.
 
 **Load-instance metadata.** After the module assembly table, the module
 carries a TLS-symbol table and an ordered lifecycle-registration
@@ -651,7 +689,7 @@ are preserved. Requires `N <= W`; `N == W` is the identity conversion.
 | `%index` | `bits<N>` source index, interpreted by the mnemonic signedness. |
 | `scale=S` | Positive target-derived element size in bytes. |
 | `origin=O` | Stable nonnegative source-site ordinal used for cross-IR observations. |
-| `size=N` | Access or allocation size in `1..=i64::MAX` bytes. |
+| `size=N` | Access size in `1..=i64::MAX` bytes; `alloca` allocation size in `0..=i64::MAX` bytes. |
 | `align=A` | Positive power-of-two alignment representable by the target layout. |
 
 `ptr.null` constructs the unique pointer with null provenance and offset zero.
@@ -678,6 +716,15 @@ known non-base, static/string-literal, or foreign-frame operand. Runtime
 checking remains fail closed: null reports `E3009`, an unknown object reports
 `E3013`, an already-ended object reports `E3010`, and a live non-base,
 non-automatic, or foreign-frame object reports `E3018`.
+
+`(%p, %m1, %w1) = alloca.dynamic %m0, %w0, %size [origin=O, align=A]`
+allocates a fresh uninitialized automatic object of `%size` bytes, read as an
+unsigned `bits<64>`, at the nonzero power-of-two alignment `A`. Origin
+uniqueness, fresh `ObjectId`s, token threading and effects are those of
+`alloca`. The object lives until a `lifetime.end` on it or the function's
+return, and a later access is `E3010`. It lowers `__builtin_alloca` (10.1.14)
+and variable-length arrays (10.1.19), takes no part in pure equality regions,
+and guarantees nothing about stack overflow.
 
 `ptr.offset.<direction>.<signedness>` computes a pointer with the same object
 provenance as `%base`. Its operand type must be `ptr<AS>`; validation rejects a
@@ -758,7 +805,11 @@ with stack provenance of an object no load or store may touch (`E3013`).
 Both are pure, consume no tokens, are not in the Section 8.5 allowlist, and
 the interpreters give each activation a fresh value for each. They are the
 lowering of `__builtin_return_address(0)` and `__builtin_frame_address(0)`
-(10.1.17).
+(10.1.17). `%p = frame_address depth=N : ptr<generic>`, with `N` decimal 1 to
+65535 and no leading zero, yields the frame record reached by following `N`
+saved frame-pointer links; native code follows the `x29` chain. It has the
+effects of depth zero, and both interpreters report `E3031`
+(`not-executed: frame-address`) when they reach it.
 
 **Pointer and integer conversions.**
 
@@ -783,7 +834,12 @@ a call through it resolves at that moment to the function whose address
 the integer is (every function's address counts as exposed), and to no
 function otherwise (`E3016`). A C conversion between an object pointer and
 a function pointer, in either direction, is `ptr.to_int` followed by
-`ptr.from_int` of the target type. `ptr.from_int` from a narrower integer
+`ptr.from_int` of the target type. A cast between pointers to different
+function types is `ptr.to_int` followed by `ptr.from_int.fnptr<Sig>`: it keeps
+the function identity and changes only the static call interface, and casting
+back recovers the original interface, also after storage. A call through a
+mismatched interface reports `E3019` only when the call is reached, after its
+arguments are evaluated. `ptr.from_int` from a narrower integer
 does not exist: the front end extends first with `sext` or `zext` by the
 integer's signedness, so `(void *)(int)-1` is `0xffffffffffffffff` and
 `(void *)(unsigned)-1` is `0xffffffff`. A conversion to a narrower integer is
@@ -1099,8 +1155,14 @@ back by `va_arg`. A non-variadic signature admits no argument beyond its
 list. Anonymous arguments carry no `mem<_>`, `world` or `tuple`.
 An anonymous argument can also be an integer `vec<L, bits<N>>`, without lane
 promotion, or an integer homogeneous-vector record with explicit byval/HVA shape. Other
-records follow the separately admitted integer-record rules; unsupported
-aggregate shapes retain E3030 rather than becoming ordinary pointer arguments.
+records and unions of scalar members pass in the form of 10.1.3, a
+`ptr<generic>` to a caller-made copy, marked `%v byval(size, align)` with
+`size` possibly zero and `align` a nonzero power of two. Only anonymous
+operands carry this call-site mark, never fixed operands or tokens, and `sret`
+appears only in signatures. The machine passes such a record of at most 16
+bytes in its own AAPCS64 slots and a larger one as a pointer to a
+caller-owned copy. Other aggregate shapes retain E3030 rather than becoming
+ordinary pointer arguments.
 
 Every function has `cc = target_default`. Module validation rejects another
 calling-convention identifier. With one calling convention, the
@@ -1137,8 +1199,8 @@ the callee is not known statically.
 An `asm` instruction carries a template the assembler will read and the
 operands it substitutes into it. It is **opaque**: no rule reads the
 template, no analysis interprets it, and the equality database never merges
-it with anything. It exists so that the kernel's assembly can pass through
-the compiler without any part of the compiler pretending to understand it.
+it with anything. It lets assembly pass through the compiler without any part
+of the compiler interpreting it.
 
 ```text
 (%o1, ..., %ok, %m1, %w1) = asm[ volatile] "template" %m0, %w0 outputs [...] inputs [...] clobbers [...]
@@ -1227,6 +1289,8 @@ run of the EvoMIR specification's Section 9 and by nothing else.
 | `i` | an integer constant or a link-time symbol plus a signed byte addend |
 | `n` | an integer constant only |
 | `p` | an address |
+| `m`, `=m`, `+m` (source only) | a memory operand; lowering selects the address-only `Q`, `=Q` or `+Q` form |
+| `g` (source input), `=g`, `+g`, `=&g`, `+&g` (source only) | a general operand; lowering selects the corresponding `r` form, preserving read/write and early-clobber markers |
 | `w`, `=w`, `+w`, `=&w`, `+&w` | the SIMD register bank: 64-bit and 128-bit integer and polynomial vectors, and scalar `f32`/`f64` |
 
 **Scalar floating assembly.** The `w` family carries the
@@ -1288,6 +1352,25 @@ evaluates each input or output place once, selects `r`, and preserves `=`,
 unchanged. C-HIR retains the written constraint, while EvoIR contains only
 the selected constraint. This does not admit arbitrary memory constraints or
 wider register values.
+
+**Memory and general operands.** An `m` operand is evaluated once and causes no
+implicit load or writeback. A memory operand must designate an addressable
+object; a memory output can name an array but not a const subobject. Either
+violation is `E2914`. A matching input wider than its register output supplies
+the output's low bits through an explicit `trunc`, after `ptr.to_int` for a
+pointer input. A matching input narrower than its output is refused, and tied
+operands keep exactly equal EvoIR types.
+
+**Fixed local registers.** A block-scope `register T x asm("reg")` used as an
+operand keeps its binding as a canonical `@xN` suffix on that operand's quoted
+constraint; source `wN` and `rN` name the same `xN`. The suffix is lowered
+metadata, not a source constraint spelling. It applies only at the assembly
+boundary, including tied and read-write operands, and an output is bound on
+every outgoing `asm.goto` edge. `x30` can be bound; it stays out of general
+allocation, and every function saves and restores its incoming link register.
+A binding to a scratch, platform, frame, stack or other reserved register, or
+one that conflicts with a clobber or another operand, is `E3021`; a binding is
+never dropped.
 
 **Small aggregate operands.** A 4- or 8-byte record or union under a
 general-register constraint transfers its complete object representation as
@@ -1357,6 +1440,12 @@ stop, and the machine returns whatever the calling convention's procedure
 finds (EvoMIR Section 6). `va_end` ends the list; after it, and before a
 `va_start`, the list object holds no list, and a `va_arg` on it is the same
 undefined behaviour.
+
+`(%m1, %w1) = va_arg.byval %ap, %m0, %w0, %dst [size=N, align=A]` copies the
+next anonymous record (3.10) into the allocated `ptr<generic>` `%dst`,
+preserving initializedness and provenance, and advances the list as `va_arg`
+does. The interpreters check the recorded record shape, which differs from a
+scalar pointer argument, and report `E3038` on a mismatch or an invalid list.
 
 **The list object's bytes.** Between `va_start` and `va_end` the object
 representation of the list is unspecified. A `copy` (Section 3.8) of the
@@ -1458,8 +1547,13 @@ boundary (`E2208` where a static constant is required).
 
 HFA records of one to four equal f32/f64/f128 members carry `hfa=Cxf32/f64/f128` in
 byval/sret marks, distinct from `hva`; the same shape survives `va_arg.byval`
-attributes. Classification follows completed layout: size must equal member
-count times the base size; alignment-induced padding uses the composite ABI.
+attributes. Classification is recursive over completed layout: array elements
+count individually and a union counts its largest member; size must equal
+member count times the base size, and alignment-induced padding uses the
+composite ABI. A record with floating members that is not an HFA passes through
+the general-register composite ABI as an object representation, also as an
+anonymous argument: copying its floating or padding bytes is not floating
+arithmetic, initializes nothing and reads no scalar.
 Scalar FP and HFA arguments share AAPCS64's SIMD argument cursor,
 independent of GPRs, with one shared stack cursor and packed HFA stack objects;
 float anonymous arguments promote to double. No object-layout substitution or
@@ -1704,7 +1798,7 @@ EffectSummary {
 | `return_address`, `frame_address` | `{}` | `{}` | false | false | false | false | false | false |
 | `asm`, `asm.goto` | `{all}` | `{all}` | true | false | true | true | true | false |
 | `va_start`, `va_arg.*`, `va_end` | `{All}` | `{All}` | false | false | false | false | true | false |
-| `alloca`, `lifetime.end` | `{All}` | `{All}` | false | false | false | false | true | false |
+| `alloca`, `alloca.dynamic`, `lifetime.end` | `{All}` | `{All}` | false | false | false | false | true | false |
 | `pointer_valid`, `access_in_bounds` | `{All}` | `{}` | false | false | false | false | true | false |
 | `load` (normal) | `{All}` | `{}` | false | false | false | false | true | false |
 | `store` (normal) | `{}` | `{All}` | false | false | false | false | true | false |
@@ -1720,19 +1814,20 @@ EffectSummary {
 
 **Trap terminators.** `trap.<reason>` is the zero-operand terminator family.
 It takes no operands, produces no results, has no successors, and reaching it
-reports its reason's diagnostic and ends execution. Two reasons exist:
+reports its reason's diagnostic and ends execution. Three reasons exist:
 
 | Reason | Diagnostic | Emitted for |
 |---|---|---|
 | `scalar_function_fell_off_end` | `E3007` | nothing: the reachable end of a non-void function returns poison (10.1.3); the reason remains in the grammar, and a module can use it |
 | `unreachable_reached` | `E3024` | `__builtin_unreachable()` (10.1.17) |
+| `builtin_trap` | `E3047` | `__builtin_trap()` (10.1.17): an explicit termination, not a UB report |
 
 A trap terminator is a report, never a licence. No analysis may treat a block
 that ends in one as dead, and no rewrite may use its presence to conclude that
 a predecessor edge is not taken, delete a computation, or strengthen a fact
 elsewhere; the only optimistic transition this profile permits is one a proof
 certificate justifies. Its `may_trap` effect keeps it from being reordered or
-removed, exactly as for the other reason.
+removed, exactly as for the other reasons.
 
 Every memory effect uses region `All`. Region refinement is not active.
 The pointer guards inspect object metadata in the current snapshot and return
@@ -2145,8 +2240,12 @@ instance counter. C-HIR and EvoIR lowering preserve the same source-site
 ordinal even when unrelated scalar locals remain in SSA, so materializing or
 eliding such locals cannot perturb volatile-trace comparison.
 
-Every object has an exact target-derived size in `1..=i64::MAX` and a
-target-layout-representable power-of-two alignment.
+Every object has an exact target-derived size in `0..=i64::MAX` and a
+target-layout-representable power-of-two alignment. A zero-sized object has a
+live allocation identity and no bytes: initializing or copying it accesses
+nothing, a byte access reports `E3011`, and an access after its lifetime
+reports `E3010`. A zero-sized global has empty `bytes=` and `initialized=`
+fields. Distinct zero-sized objects need not have distinct addresses.
 Object bytes and one initialized bit per byte are distinct state. A store marks
 exactly its destination range initialized. A load of any range containing an
 uninitialized byte reports `E3001`; merely allocating, copying, passing, or
@@ -2362,10 +2461,15 @@ executed load does.
 
 ### 6.3 Diagnostic Authority
 
-Every diagnostic this specification names appears here with its exact message.
-A code introduced in one section and never listed here has no message, so two
-implementations would print different text for one condition; a code listed
-twice would let a reader think two conditions are the same finding.
+Every diagnostic this specification names must appear here with its exact
+message. A code introduced in one section and never listed here has no
+authoritative message, so two implementations could print different text for
+one condition; a code listed twice would let a reader think two conditions are
+the same finding. The following codes are named in this document but have no
+row yet, because the implementation uses several messages for each or none is
+fixed: `E0002`, `E1001`, `E1006`, `E1303`, `E2102`, `E3051`, `E3052`,
+`E3063`, `E3064` and `E3065`. `evocc --explain` reports a missing explanation
+for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 
 | Code | Message | Detected |
 |---|---|---|
@@ -2379,7 +2483,16 @@ twice would let a reader think two conditions are the same finding.
 | `E0110` | `invalid-token-paste` | preprocessor |
 | `E0111` | `conditional-operand-not-integer` | preprocessor |
 | `E0112` | `stray-token` | front end |
+| `E0113` | `directive-in-macro-argument` | preprocessor |
+| `E1003` | `expected-expression` | front end |
+| `E1005` | `invalid-declarator` | front end |
+| `E1207` | `invalid-return-value` | front end |
+| `E2001` | `undeclared-identifier` | front end |
 | `E2002` | `incompatible-redeclaration` | front end |
+| `E2202` | `invalid-initializer-type` | front end |
+| `E2203` | `variable-length-object` | front end |
+| `E2208` | `non-constant-static-initializer` | front end |
+| `E2702` | `atomic-update-unsupported` | front end |
 | `E2902` | `not-covered: compound-literal` | front end; withdrawn: compound literals are lowered (10.1.13) |
 | `E2903` | `malformed-attribute` | front end |
 | `E2904` | `not-covered: variably-modified-typeof` | front end |
@@ -2410,7 +2523,22 @@ twice would let a reader think two conditions are the same finding.
 | `E2930` | `use-with-incomplete-enumeration` | front end |
 | `E2931` | `unprototyped-call-mismatch` | front end |
 | `E2932` | `always-inline-cycle` | front end |
+| `E2933` | `unsupported-termination-builtin` | front end |
+| `E2934` | `function-specifier-on-non-function` | front end |
+| `E2935` | `unsupported-library-builtin` | front end |
+| `E2936` | `invalid-line-directive` | preprocessor |
+| `E2937` | `invalid-call-target` | front end |
+| `E2938` | `invalid-alignment-specifier` | front end |
+| `E2939` | `unsupported-wide-bit-field-promotion` | front end |
+| `E2940` | `unsupported-scalar-storage-order` | front end |
+| `E2941` | `unsupported-type-classification` | front end |
+| `E2942` | `incompatible-union-cast` | front end |
+| `E2943` | `invalid-or-conflicting-symbol-attribute` | front end |
+| `E2944` | `ordinary-builtin-binding-conflict` | front end |
+| `E2945` | `jump-into-variable-type-scope` | front end |
+| `E2946` | `builtin-local-binding-conflict` | front end |
 | `E2947` | `invalid-atomic-memory-order` | front end |
+| `E2948` | `integer-complex-division-oracle-conflict` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -2440,7 +2568,7 @@ twice would let a reader think two conditions are the same finding.
 | `E3027` | `overlapping-copy` | runtime |
 | `E3029` | `not-lowered: computed-goto` | lowering; withdrawn for the `br.indirect` form of 3.9; not a runtime target error |
 | `E3030` | `not-lowered: varargs` | lowering |
-| `E3031` | `not-lowered: frame-address` | lowering (levels above zero only since 1.9.72) |
+| `E3031` | `not-lowered: frame-address` | lowering; the interpreters report `not-executed: frame-address` on reaching a nonzero depth (3.7) |
 | `E3032` | `not-lowered: pointer-difference` | lowering; withdrawn |
 | `E3033` | `not-executed: wide-integer` | execution of an unsupported integer width; not raised for 128-bit division and remainder (10.1.3) |
 | `E3034` | `not-lowered: function-pointer-arithmetic` | lowering; withdrawn: function-pointer arithmetic uses exposed addresses (10.1.3) |
@@ -2454,10 +2582,14 @@ twice would let a reader think two conditions are the same finding.
 | `E3042` | `not-lowered: checked-arithmetic-width` | lowering; withdrawn |
 | `E3043` | `not-lowered: object-function-pointer-conversion` | lowering; withdrawn |
 | `E3045` | `not-lowered: ordered-pointer-comparison` | lowering; withdrawn |
+| `E3047` | `builtin-trap-reached` | runtime |
 | `E3048` | `invalid-indirect-branch-target` | runtime |
+| `E3049` | `not-lowered: floating-call-interface` | lowering |
+| `E3050` | `not-lowered: floating-value` | lowering |
 | `E3060` | `weak-internal-symbol` | module validation |
 | `E3061` | `alias-target-not-defined` | module validation |
 | `E3062` | `invalid-atomic-access` | validation / interpreter access contract |
+| `E3101` | `evoir-lowering-failed` | lowering |
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -2465,9 +2597,9 @@ a malformed call site and a program-selected incompatible target are different
 findings and are acted on differently.
 
 A withdrawn code keeps its row, so `evocc --explain` still answers it, and no
-new condition may reuse it. The codes `E3028`, `E3044` and `E3046` are retired
-without a row: no rule of this revision raises them, and no new condition may
-reuse them.
+new condition may reuse it. The codes `E2207`, `E2921`, `E3028`, `E3044` and `E3046` are
+retired without a row: no rule of this revision raises them, and no new
+condition may reuse them.
 
 ### 6.4 UB and Optimization
 
@@ -3366,7 +3498,7 @@ lifecycle       := ("init " | "fini ") symbol " priority=" integer newline
 global          := "global " symbol " origin=" integer
                    " kind=" global_kind " visibility=" visibility
                    [" linkage=weak"] " size=" integer " align=" integer
-                   " bytes=" hex_byte+ " initialized=" bit+
+                   " bytes=" hex_byte* " initialized=" bit*
                    [" readonly=true"] [" section=" quoted_string]
                    [" relocs=[" reloc (", " reloc)* "]"] newline
 reloc           := "(" integer ", " reloc_target ", " signed_integer
@@ -4037,16 +4169,32 @@ emits `ptr.offset` with scale 1, so the `pointer_valid` obligation and the
 runtime poison, lifetime and access checks still apply.
 
 **128-bit assignment.** `__int128` and `unsigned __int128` objects are
-assigned, loaded and stored exactly as any integer object; 10.1.19's closure
-of `__int128` value semantics applies to the checked-arithmetic builtins, not
-to plain assignment.
+assigned, loaded and stored exactly as any integer object, and the
+checked-arithmetic builtins of 10.1.15 accept them.
 
 **Character pointers of differing signedness.** A pointer to `char`, `signed
 char` or `unsigned char` (with or without qualifiers on the pointee) converts
 implicitly to a pointer to any other of the three in initialization,
 assignment, argument passing and return. This profile accepts it without a
 diagnostic. The three pointee types have identical size, alignment and
-representation, so no access changes meaning.
+representation, so no access changes meaning. In the same four contexts, a
+conversion between otherwise compatible non-atomic pointer types, or between
+these character pointers, can discard immediate `const` or `volatile` pointee
+qualification without a diagnostic. Nested-pointer and atomic qualification
+rules are unchanged, and no write through a const lvalue becomes valid.
+
+**Casts to record and union types.** A cast to the operand's own record or
+union type, ignoring top-level qualifiers, yields the operand's value. A GNU
+cast to a union type constructs a union value from an operand whose type, after
+array and function decay and ignoring top-level qualifiers, is compatible with
+a member type; a narrow bit-field member does not match, a full-width one does.
+In a static initializer the member value must be constant. In both forms the
+operand is evaluated once and the result is not an lvalue; lowering uses the
+existing aggregate allocation and copy forms and keeps volatile source
+accesses. A cast between distinct record tags is not admitted. A union cast
+with no compatible member, or one that would need an assignment conversion, a
+different tag or the loss of nested pointer qualifiers, is `E2942`
+(`incompatible-union-cast`).
 
 **Pointer difference.** `a - b` on two pointers to `T` has type `long`
 (`ptrdiff_t`); on two `void *` the scale is 1. Lowering: `ptr.to_int` of each operand,
@@ -4068,7 +4216,10 @@ execute in both interpreters, and hosted native lowering calls the ordinary
 pair-ABI runtime helpers `__divti3`, `__udivti3`, `__modti3` and `__umodti3`.
 Division by zero remains E3002, remainder by zero E3003, and signed MIN/-1
 E3004 for either operator. The native runtime dependency is explicit, not a
-freestanding-library guarantee. The register-pair convention for passing and
+freestanding-library guarantee. The machine interpreter models only these four
+helpers, with the same register-pair interface; when the module defines a
+function of that name it executes the definition instead, and it still refuses
+every other unresolved callee. The register-pair convention for passing and
 returning one is EvoMIR's (EvoMIR Section 6). Example values:
 `((u128)0xffffffffffffffff * 0xfffffffffffffffe) >> 64` is
 `0xfffffffffffffffd`; `((u128)0x123456789abcdef0 * 0xfedcba9876543210) >> 37`
@@ -4114,7 +4265,8 @@ the backend must be told which pointers are records: a record parameter is writt
 return destination `%argN: ptr<generic> sret(size, align)`, in the function
 header, in every `declare`, and in every `fnptr<Sig>` naming such a
 signature; the attribute is part of the signature for equality. `size` and
-`align` are the record type's. The machine maps these to the platform
+`align` are the record type's; a zero `size` conveys no bytes and uses no
+alignment-filler registers. The machine maps these to the platform
 convention (EvoMIR Section 6), which can keep a small record in registers.
 
 **Flexible array members.** A record whose last member is an array of unknown
@@ -4122,6 +4274,11 @@ bound may be initialized at file scope with elements for that member; the
 object's storage is the record size plus the elements, `sizeof` the type is
 unchanged. At block scope such an initializer reports
 `E2919` (`flexible-array-initializer-not-static`) at the initializer.
+The file-scope form applies only to the declared record's own final flexible
+member. A nonempty initializer for a flexible member reached through a nested
+record or union subobject is `E2202`; an empty list there is accepted and adds
+no storage. The direct member can be initialized from a narrow, wide or empty
+string literal, including its terminating zero, without changing `sizeof`.
 
 **Modifiable lvalues.** An lvalue is modifiable unless its own type is
 const-qualified, is an array type, or is a structure or union with a
@@ -4232,6 +4389,16 @@ Bitfields lower to load-modify-store sequences using bitwise operations:
 (%m4, %w2) = store %m3, %w1, %s_addr, %new               ; write back
 ```
 
+**Volatile bit-fields.** A read of a volatile bit-field accesses its declared
+allocation container. A write is a read-modify-write of that container that
+keeps the neighbouring bits, and a compound update also reads the field. Each
+underlying load and store is one volatile event that advances `world`; none is
+atomic. In a packed record the accesses use power-of-two units of at most 16
+bytes, in increasing byte order and never past the record, and a field that
+crosses units keeps its full value. C-HIR and EvoIR must produce identical
+value-and-access traces. Volatile record copies with bit-field members remain
+`E2922` (10.1.3).
+
 **Anonymous members.** A member of an anonymous structure or union is a member
 of the enclosing record for every purpose (C11 6.7.2.1p13): name lookup, `.` and
 `->`, a designator in an initializer, and `__builtin_offsetof`. A name is
@@ -4286,6 +4453,30 @@ or conversion on an integer-only lowering path is `E3050`
 resolved canonical interface is `E3051`, not `E3101`.
 These codes change no acceptance or execution rule, and other unsupported
 types, malformed C-HIR and IR validation failures never take them.
+
+**Return statements and fixed arguments.** In a void function, `return e;`
+with `e` of type void is valid: `e` is evaluated once and no value is returned.
+Discarded void conditional, comma and statement expressions keep their
+selected and sequenced effects and yield no scalar. A non-void value returned
+from a void function, and a bare `return;` in a non-void function, are `E1207`
+(`invalid-return-value`). The front end checks every written return, including
+an unreachable one, before inlining, execution or IR construction; falling off
+the end is not this check. A return expression and each fixed prototype
+argument, in direct and function-pointer calls alike, must satisfy the
+simple-assignment compatibility of 10.1.18, after transparent-union member
+selection (10.1.9) and before numeric conversion; an incompatible implicit
+pointer or aggregate conversion there is `E2202`. The check evaluates nothing.
+Unprototyped arguments and the anonymous variadic tail keep the default
+argument promotions. Signed and unsigned `__int128` count as integer types for
+null pointer constants, pointer arithmetic and conditional pointer typing, and
+a `__builtin_va_list` argument keeps the 32-byte record copy of 3.12.
+
+**Unprototyped function pointers.** A pointer to a function type with an
+unspecified parameter list keeps its address and provenance in storage; it is
+not a pointer to an empty prototype. A call through it applies the default
+argument promotions. Lowering carries the value as `ptr<generic>` and converts
+it at the call with `ptr.to_int` and `ptr.from_int.fnptr<Sig>`, where `Sig` is
+the promoted call's signature; the dynamic `E3019` check applies unchanged.
 
 #### 10.1.8 Loop and Branch Lowering
 
@@ -4409,8 +4600,12 @@ attributes, unknown models and a model on a non-TLS object are E2943. Instance
 identity, escaped addresses and lifetimes obey Section 3.8, not process-global
 substitution.
 
-**Other attributes.** Every attribute that this section does not give an
-effect is preserved and not applied. In particular
+**Scalar storage order.** `scalar_storage_order`, with or without surrounding
+underscores, is `E2940` (`unsupported-scalar-storage-order`); it is never
+preserved as an ignored attribute.
+
+**Other attributes.** Every attribute that this section neither refuses nor
+gives an effect is preserved and not applied. In particular
 `noreturn`, `unused`, `no_instrument_function`,
 `cold`, `pure` and `const` are preserved without effect here; they carry
 effect or backend semantics that belong to later stages, and applying
@@ -4508,6 +4703,25 @@ optional call remains a call; mandatory `always_inline` cycle handling is
 unchanged. No EvoIR instruction, EqSat rule or implicit cross-block state is
 introduced by this selection.
 
+**Bracketed attributes.** `[[gnu::name]]` and `[[__gnu__::__name__]]` have
+the meaning of the GNU attribute `name` at declaration, member and tag-keyword
+positions. An unscoped or other-namespace bracket attribute gets no GNU layout,
+linkage or inlining effect, and C-HIR keeps each spelling and namespace.
+Malformed placement is `E2903`, including a GNU `__attribute__` written before a
+bracket attribute in one specifier sequence and `aligned` on an array suffix or
+pointer layer. A bracket attribute on a function declarator suffix stays on the
+function type and does not raise the function's alignment.
+
+**`transparent_union`.** A parameter of a `transparent_union` type accepts an
+argument that matches one member, including through the ordinary pointer and
+null-pointer conversions; that member is constructed exactly once and the union
+is passed in the record-call form of 10.1.3. An argument already of the union
+type is passed unchanged, and an unannotated union gets no such conversion. The
+attribute applies only when every member is a general-register integer or
+pointer of equal size and alignment, passed as the first member's
+representation. An incompatible argument is `E2202`; any other member
+representation is `E2903`.
+
 **Diagnostics introduced.** Messages live in Section 6.3, the single authority;
 this table gives conditions only. `E2902` is withdrawn: Section 10.1.13 covers
 compound literals, and a front end must not emit it.
@@ -4515,7 +4729,7 @@ compound literals, and a front end must not emit it.
 | Code | Condition |
 |---|---|
 | `E2903` | argument list does not parse, position not in the table, or `aligned` argument not a representable power of two |
-| `E2904` | `typeof` of a variably modified type |
+| `E2904` | a `typeof` expression operand of variably modified type other than a variable-length array |
 | `E2905` | `({ ... })` at file scope or where a constant expression is required |
 | `E2906` | designator names a member the type lacks, a member ambiguous between two anonymous members, or an index at or beyond a fixed bound |
 | `E2907` | two `_Generic` associations name compatible types, or `default` appears twice |
@@ -4533,7 +4747,7 @@ compound literals, and a front end must not emit it.
 | `E2919` | initializer for a flexible array member outside file scope |
 | `E2920` | `goto` names a label no enclosing function scope declares |
 | `E2922` | a volatile union outside the exact-width/alignment rule, or a volatile record copy with bit-field members |
-| `E2923` | array bound folds to a negative value |
+| `E2923` | array bound folds to a negative value or is not of integer type |
 | `E2924` | an attribute specifier precedes a statement that is not a null statement |
 | `E2925` | `__builtin_object_size` mode is not a constant in `0..3` |
 | `E2926` | `va_start` in a non-variadic function, or naming a parameter other than the last named one |
@@ -4543,6 +4757,18 @@ compound literals, and a front end must not emit it.
 | `E2930` | a call or address-of names a function whose type contains an enumeration still incomplete at that point |
 | `E2931` | a function declared without a prototype and not defined in the unit is called with promoted argument types that differ from those of its first call |
 | `E2932` | a cycle of `always_inline` calls, which no substitution order can eliminate |
+| `E2933` | `__builtin_exit` or `__builtin__Exit` (10.1.14) |
+| `E2934` | `_Noreturn` on an object or a typedef (10.1.18) |
+| `E2935` | `__builtin_puts`, a library builtin this profile does not provide |
+| `E2937` | a called expression that is not of pointer-to-function type (10.1.18) |
+| `E2938` | an invalid `_Alignas` request or placement (10.1.18) |
+| `E2939` | a wide bit-field use that 10.1.16 does not admit |
+| `E2940` | `scalar_storage_order` in any spelling |
+| `E2941` | `__builtin_classify_type` of `_Bool` or of a target type with no class |
+| `E2942` | a cast to a union type with no compatible member |
+| `E2944` | a recognized ordinary `alloca` call whose name the unit defines or renames |
+| `E2945` | a jump into the scope of a variably modified declaration |
+| `E2946` | a nonliteral `__builtin_strcmp` with a visible same-named `static` function |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -4550,9 +4776,12 @@ compound literals, and a front end must not emit it.
 `__typeof` are the same construct. The result of `typeof(expression)` is the type of the expression
 before lvalue conversion: an array-typed lvalue yields the array type, not a
 pointer, and qualifiers are retained. The operand expression is not evaluated,
-so `typeof(i++)` names `int` and leaves `i` unchanged; the one case in which C
-would evaluate it, a variably modified type, is rejected with `E2904` because
-this profile has no variable-length objects.
+so `typeof(i++)` names `int` and leaves `i` unchanged. An expression operand of
+variable-length array type is the exception: it is evaluated once and keeps its
+operand-local declaration scope. An expression operand of another variably
+modified type, such as a pointer to a variable-length array, is `E2904`. In a
+`typeof` type name, variable bounds are captured once when the declaration
+executes (10.1.19).
 
 `typeof` produces a type and is fully resolved by the front end; nothing of it
 survives into EvoIR. A statement expression inside a `typeof` operand is a
@@ -4608,7 +4837,8 @@ A statement expression is permitted **anywhere inside a function definition**
 and nowhere outside one; outside, it is `E2905`
 (`statement-expression-outside-function`). That is the whole rule. In
 particular it is permitted inside `typeof`, `sizeof` and `_Alignof`, where the
-operand is unevaluated and only its type is taken, even when that operand sits
+operand is unevaluated (unless it has variable-length array type, 10.1.19) and
+only its type is taken, even when that operand sits
 inside a `_Static_assert` condition.
 
 This profile does not fold a statement expression with a constant result where
@@ -4666,6 +4896,16 @@ size the larger of the positional count and one more than the largest index
 any designator or range names, at any nesting depth of the same array. A
 later initializer for an element already initialized replaces it.
 
+**Obsolete GNU designators.** `member: value` means `.member = value`, and a
+single `[index]` or `[first ... last]` designator can omit `=`. These forms
+resolve subobjects, infer bounds and evaluate exactly as the standard
+spellings, and an unknown member or out-of-bounds index is `E2906`. A
+designation of more than one component must keep `=`.
+
+**Empty union initializers.** An empty initializer for a union initializes its
+first member only. The union's bytes beyond that member stay uninitialized, and
+a read of them is `E3001`.
+
 #### 10.1.13 Compound Literals
 
 `(type-name){ initializer-list }` denotes an object of that type, initialized
@@ -4686,6 +4926,9 @@ is (5.2), and a store through it reports `E3014`; an unqualified one is
 writable. A file-scope *pointer* initializer that takes a literal's address
 (`int *r = (int []){5, 6};`) is a relocation to the literal's global
 (Section 2.1).
+
+A static object initialized from a compound literal receives a copy of the
+literal's value.
 
 #### 10.1.14 Kernel builtins resolved by the front end
 
@@ -4727,7 +4970,8 @@ rule both document as permitted.
   type, or of the expression's type before lvalue conversion, as an integer
   constant expression of type `size_t`; the expression is not evaluated. It
   is the C11 `_Alignof` with an expression operand admitted, and the same
-  target layout answers both. `__alignof` is the same operator.
+  target layout answers both. `_Alignof(void)` and `__alignof__(void)` are
+  `1`; this does not make `void` an object type. `__alignof` is the same operator.
 
 **`packed` on an enumeration.** `packed` on an enum type selects the smallest
 integer type that represents every enumerator: by value range `0..255` one
@@ -4739,6 +4983,16 @@ the underlying type's signedness is observable (`(enum e5)-1 < 0` is 1). The
 attribute is accepted before the tag and after the closing brace alike.
 `packed` and `aligned(4)` together on an enum are refused (`E2903`), because
 the reference compilers give them different layouts.
+
+**Enumeration underlying types.** A non-packed enumeration whose values all
+lie in `0..UINT_MAX` has underlying type `unsigned int`, and one with a
+negative value whose range fits `int` has `int`, also as a bit-field base. Its
+constants keep type `int` when the whole range fits `int`. A complete
+enumeration type is compatible with its underlying type, including through
+pointers and function parameters. Separately declared enumeration tags are not
+compatible with each other, nested pointer qualifiers must still match, and a
+pointer conditional keeps the compatible pointee's signedness and the union of
+pointee qualifiers.
 
 **Enumerators outside `int`.** An enumerator whose value does not fit `int` is
 a GNU (and C23) extension: the enumeration's underlying type becomes the
@@ -4798,7 +5052,7 @@ never ordinary memory access or an undeclared external helper.
 (`memset` returns `void *`, `strlen` returns `size_t`); `__builtin_alloca(n)`
 returns `void *`; `__builtin_va_list`, `__builtin_va_start`,
 `__builtin_va_arg(ap, T)` (of type `T`) and `__builtin_va_end` are typed by the
-front end while their execution stays `E3030`. `__builtin_isdigit`,
+front end and lowered as 10.1.17 states. `__builtin_isdigit`,
 `__builtin_isalpha`, `__builtin_isspace`, `__builtin_toupper` and
 `__builtin_tolower` are GCC builtins, and `__has_builtin` answers for them as
 GCC does. They return `int` with C-locale semantics over the value of their
@@ -4810,13 +5064,61 @@ EvoIR intrinsic. A compatible visible `isdigit` definition does not replace
 this builtin operation; ordinary calls to `isdigit` retain the external-call
 contract. The other four ctype builtin spellings retain that call contract.
 
+**Hosted library builtins.** These are also library builtins in the builtin
+namespace of 10.1.3, with the prototypes of the functions they name:
+`__builtin_printf` (`int printf(const char *, ...)`), `__builtin_sprintf`,
+`__builtin_snprintf`, `__builtin_malloc` (`void *malloc(size_t)`),
+`__builtin_free` (`void free(void *)`), `__builtin_strcpy`
+(`char *strcpy(char *, const char *)`), `__builtin_strncpy` and
+`__builtin_strchr`. Anonymous formatting arguments take the default argument
+promotions, and each argument is evaluated once. No intrinsic or interpreter
+model is added: wrong arity is `E2909`, an incompatible argument `E2913`, an
+incompatible visible declaration `E2927`, and a reached external call `E3039`.
+`__builtin_puts` is `E2935` (`unsupported-library-builtin`); an ordinary
+declared `puts` is unaffected. The address argument of `__builtin_prefetch`
+accepts an object pointer with any pointee qualifiers and converts it to
+`const void *` without reading the object; the address expression is evaluated
+exactly once, and ordinary pointer conversions are not loosened.
+
+**Literal string comparison.** `__builtin_strcmp` of two narrow string literals
+folds to the `int` -1, 0 or 1 by unsigned code-unit order up to the first NUL,
+before any same-named declaration is consulted. Explicit `__builtin_` forms
+keep this folding, and that of `__builtin_strlen` (10.1.17), under
+`-fno-builtin`. A nonliteral `__builtin_strcmp` with a visible same-named
+`static` function is `E2946` (`builtin-local-binding-conflict`).
+
+**Dynamic stack allocation.** `__builtin_alloca(n)` converts `n` to `size_t`,
+evaluates it once and lowers to `alloca.dynamic` (3.7) at alignment 16. The
+storage is uninitialized and lives until the containing function returns, not
+until its block exits. With builtin recognition enabled, a call of an
+externally linked `alloca` with the compatible prototype `void *(size_t)` has
+the same meaning; GNU89 implicit-call mode supplies that prototype, and GNU11
+requires a declaration. `-fno-builtin` disables this recognition but not
+`__builtin_alloca`, and a same-named `static` function stays ordinary. A
+recognized call when the unit defines an external `alloca` or renames it by an
+assembly label is `E2944` (`ordinary-builtin-binding-conflict`), even when the
+definition follows the call.
+
+**Absolute-value, termination and prefetch builtins.** `__builtin_abs`,
+`__builtin_labs` and `__builtin_llabs` (`int(int)`, `long(long)`,
+`long long(long long)`) evaluate the converted operand once and return its
+absolute value; a minimum operand reports `E3004`, also in wrapping mode. They
+lower to shift, xor and subtract under that obligation and are never integer
+constant expressions. A compatible direct call of the external `abs`, `labs` or
+`llabs` is the same operation unless `-fno-builtin` is in effect (the last of
+`-fno-builtin` and `-fbuiltin` wins); internal, pointer and assembly-renamed
+calls stay ordinary calls. `__builtin_abort()` (`void (void)`) is an ordinary
+external call of `abort`; `__builtin_exit` and `__builtin__Exit` are `E2933`
+(`unsupported-termination-builtin`). `__builtin_prefetch` emits no access and
+no call but evaluates its address argument once.
+
 **Target types in otherwise unused declarations.** The
 GNU target-header profile admits the builtin type spellings `_Float16`,
 `_Float32`, `_Float64`, `_Float128`, `_Float32x`, `_Float64x`, `__fp16`,
 `__Float32x4_t`, `__Float64x2_t`, `__SVFloat32_t`, `__SVFloat64_t` and
 `__SVBool_t` in typedefs and prototypes. Each has its own canonical identity,
 preserves qualifiers, and is not a same-size alias of `float`, `double`,
-`long double`, or a GNU `vector_size` type. Their measured size/alignment
+`long double`, or a GNU `vector_size` type. Their size/alignment
 pairs are respectively 2/2, 4/4, 8/8, 16/16, 8/8, 16/16, 2/2, 16/16 and
 16/16; the last three are sizeless and never receive a fabricated object
 layout. Only the declaration/type-query capability is added: an unused
@@ -4931,50 +5233,43 @@ immediate is `E3052` naming the builtin; wrong arity or operand type is
 #### 10.1.15 Checked arithmetic builtins
 
 `__builtin_add_overflow(a, b, p)`, `__builtin_sub_overflow(a, b, p)` and
-`__builtin_mul_overflow(a, b, p)`: `a` and `b` have integer types, which may
-differ in width and signedness; `p` is a pointer to a non-`_Bool` integer type.
-The operation is computed in infinite precision, the result is converted to the
-pointee type as if by assignment (wrapping) and stored through `p`, and the call
-yields `_Bool` `1` when the infinite-precision result is not representable in the
-pointee type, else `0`. Both operands and `p` are evaluated exactly once, left to
-right. The call is never an integer constant expression. A `p` whose pointee is
-`const`-qualified is `E2913` at the third operand (both oracles reject it).
-`__int128` operands or pointee are `E2913` in this profile (both oracles accept
-them; the cohort never uses them there, and 10.1.19 keeps `__int128` value
-semantics closed), so the profile fails closed rather than half-implements them. `__builtin_*_overflow_p`
-is out of this profile (`ORACLE_CONFLICT`: Clang-19 does not provide it; the
-cohort does not use it). Measured in `.evidence/builtin-probes/20260825-2c23684c/`
-(`ovf.c`): `mul(70000, 70000) -> int` is `1` with the wrapped `605032704` stored,
-`-> long` is `0` with `4900000000`; `add(200, 100) -> unsigned char` is `1`
-with `44`; `sub(4000000000u, -1) -> long long` is `0`; `add(-1, 0) -> unsigned`
-is `1`.
+`__builtin_mul_overflow(a, b, p)`: `a` and `b` have integer types, including
+signed and unsigned `__int128`, which may differ in width and signedness; `p`
+is a pointer to a non-`_Bool` integer type. The operation is computed in
+infinite precision, the result is converted to the pointee type as if by
+assignment (wrapping) and stored through `p`, and the call yields `_Bool` `1`
+when the infinite-precision result is not representable in the pointee type,
+else `0`. Both operands and `p` are evaluated exactly once, left to right. The
+call is never an integer constant expression. A `p` whose pointee is
+`const`-qualified is `E2913` at the third operand. `__builtin_*_overflow_p` is
+outside this profile. Examples: `mul(70000, 70000) -> int` is `1` with
+`605032704` stored, and `-> long` is `0` with `4900000000`;
+`add(200, 100) -> unsigned char` is `1` with `44`;
+`sub(4000000000u, -1) -> long long` is `0`; `add(-1, 0) -> unsigned` is `1`.
 
-The front end type-checks the call and keeps it in C-HIR as a checked
-arithmetic node; the C-HIR interpreter implements the rule above. Lowering
-(revision 1.9.66) computes the mathematical result exactly and then asks
-whether it fits: the `bits<W>` arithmetic is **unsigned** when the
-operation is `mul` and both operands are unsigned, and **signed**
-otherwise (revision 1.9.67: the executor found that `unsigned long *
-unsigned long` needs 129 signed bits, `E3042` in 48 units; as an unsigned
-product it needs exactly 128). Let `W` be the smallest of 32, 64 and 128 in
-which every mathematical result of the operation on the operands' types is
-representable under that signedness (`add`/`sub`: one more than the wider
-operand, counting an unsigned operand as one bit wider; signed `mul`: the
-sum of the two widths so counted; unsigned `mul`: the sum of the two
-widths; every cohort use fits 128). Each operand is
-`sext` or `zext` to `bits<W>` by its own signedness, the operation is
-performed in `bits<W>`, the stored value is `trunc` to the result type
-`R`, and the builtin's value is `icmp.ne` between the `bits<W>` result and
-the `sext`/`zext` (by `R`'s signedness) of that truncation: 1 exactly when
-the mathematical result is not representable in `R`, which is the C rule
-above (with unsigned `bits<W>` arithmetic the comparison is against the
-`zext`/`sext` of the truncation read as a `W`-bit pattern, and a value at
-or above `2^(W-1)` compares unequal to any sign extension, which is the
-right answer because no signed `R` holds it). No predicate is involved,
-because the arithmetic in `bits<W>` cannot overflow by construction.
-`E3020` (`not-lowered: checked-arithmetic`) and `E3042`
-(`not-lowered: checked-arithmetic-width`, the executor's fail-closed name
-for the 129-bit case) are withdrawn.
+The front end keeps the call in C-HIR as a checked arithmetic node, and the
+C-HIR interpreter implements the rule above. Lowering computes the exact
+result and then asks whether it fits. The exact arithmetic is **unsigned**
+when the operation is `mul` and both operands are unsigned, and **signed**
+otherwise. The required width is one more than the wider operand for `add` and
+`sub`, and the sum of the two widths for `mul`, counting an unsigned operand
+of a signed operation as one bit wider. When it is at most 128, `W` is the
+smallest of 32, 64 and 128 that holds it. Each operand is `sext` or `zext` to
+`bits<W>` by its own signedness, the operation is performed in `bits<W>`, and
+the result is converted to the destination type `R` and stored. The builtin's
+value is `icmp.ne` between the `bits<W>` result and the conversion of the
+stored value back to `bits<W>`, with two corrections. A negative exact result
+always overflows an unsigned `R`, even when `R` is as wide as `W` or wider. An
+exact unsigned `bits<W>` result with its high bit set overflows a signed `R`
+only when `R` is no wider than `W`; a wider signed `R` holds it.
+
+When the required width exceeds 128, the exact result is an exact sign, a
+128-bit magnitude and a magnitude-overflow flag. It is tested against the range
+of `R` and stored modulo the width of `R`, and a zero result is nonnegative.
+For `mul` the magnitude overflows exactly when `a > UMAX / b`, with `b` taken
+as 1 when it is zero, so existing unsigned operations and the 128-bit division
+of 10.1.3 suffice. Neither path needs a predicate or an obligation: the
+arithmetic cannot overflow by construction, and no division by zero occurs.
 
 #### 10.1.16 GNU `asm` at the front-end boundary
 
@@ -4985,7 +5280,9 @@ Syntax accepted, in every position GNU C accepts it:
   clobbers, and (for `asm goto`) labels; each operand is `[symbolic-name]`
   optional, a constraint string, and a parenthesised expression;
 - qualifiers `volatile`, `inline`, `goto` in any order, each at most once;
-- `__asm__` and `__volatile__` spellings;
+- `__asm__`, `__asm` and `__volatile__` spellings; `__asm` is recognized after
+  preprocessing in every assembly position, and C-HIR keeps the written
+  spelling;
 - an `asm("name")` label after a declarator (`int x asm("sym");`), which
   renames the object or function for the assembler and is otherwise inert.
 
@@ -5031,45 +5328,62 @@ symbolic name, constraint text and expression, clobber strings in order, and
 label names. The keyword-alias and piece spellings are the only things the
 representation drops.
 
-**Wide bit-fields in arithmetic (revision 1.9.90).** For a bit-field whose
-declared type is wider than `int`, GCC-14 computes arithmetic in the
-field's own precision and Clang-19 in the declared type, so `x + 1`,
-`x << k`, `~x`, `-x`, `x * 3`, `++x` and compound assignment give different
-values for a field of width 33, 40, 52 or 58 at both `-O0` and `-O2`, while
-comparisons, truth tests, right shifts, conversions to a type at least as
-wide as the field, and binary arithmetic whose other operand already has a
-type at least as wide as the declared type (`maplen * 4096UL`) give the
-same value (`.evidence/builtin-probes/20260909-wide-bitfield-shapes/`,
-`results.txt`, 27 shapes). `E2939` is therefore raised only where the two
-disagree: a wide bit-field rvalue as the operand of unary `~` or `-`, of
-`++`/`--` or a compound assignment, or of a binary `+ - * / % << & | ^`
-whose other operand's promoted type is narrower than the field's declared
-type. The consensus contexts are admitted with the declared type as the
-operation type, which is what both oracles compute there. The measured
-kernel shape `desc->iommu_msi_iova << desc->iommu_msi_shift`
-(`include/linux/msi.h`, 150 units) is in the conflicting class. The later
-full-kernel adjudication below explicitly chooses declared-base precision for
-a direct bit-field read used as the left operand of a shift; the other
-disputed expression categories retain their existing refusal boundaries.
+**Wide bit-fields in arithmetic.** For a bit-field whose declared type is
+wider than `int`, the reference compilers disagree: GCC computes arithmetic in
+the field's own precision and Clang in the declared type. `E2939` marks the
+uses where the two give different values, as **Bit-field promotions** below
+states.
 
-**Unreferenced internal functions (revision 1.9.90).** A function with
+**Bit-field promotions.** Integer promotions use a bit-field's width, whatever
+its declared base, including `long` and `long long`: below 32 bits, or signed
+at 32 bits, it promotes to `int`; unsigned at 32 bits, to `unsigned int`.
+Layout is unchanged, and nothing is promoted outside arithmetic. A *wide
+field*, wider than 32 bits and narrower than its declared type, computes in
+the declared type in these uses: truth tests; right shifts; comparisons,
+except an unsigned field against a signed operand that is neither a
+nonnegative constant nor wider than the declared type; arithmetic whose other
+operand is not a wide field and is at least as wide as the declared type,
+except an unsigned field with a signed operand of that width; a conditional
+whose other arm fits the common field precision; compound assignment under
+these rules, and any unsigned `+=`, `-=`, `*=`, `&=`, `|=`, `^=`, `++` or
+`--`; and a direct, possibly parenthesized, read as the left operand of `<<`
+or `<<=`, where the storage width governs only the store and the GNU shift
+rule of 6.1 applies (the count keeps its full width, and an invalid count is
+`E3005`, never `E3006`).
+
+Every other arithmetic use of a wide field, such as unary `~` or `-` or a
+signed `++`, is `E2939` (`unsupported-wide-bit-field-promotion`). The result
+of unary `+`, a comma, a conditional, a right shift, an assignment or an
+update stays a wide-field value, and a wide shift count never widens a shifted
+value. A negative arm converted to an unsigned field-precision result is
+`E2939`, as is arithmetic or a conditional that mixes an unsigned field with
+a signed operand of the declared width. Two forms clear only their own
+operation's `E2939`, keeping its evaluation, side effects and other refusals:
+an add, subtract, multiply or bitwise result, unsigned in both precisions and
+not of that mixed form, compared with integer zero only for its sign; and a
+direct unsigned wide-field read ANDed with a nonnegative constant mask within
+the field's width, consumed by an explicit cast to a non-Boolean unsigned type
+no wider than the field. An uncast type query keeps `E2939`.
+
+**Unreferenced internal functions.** A function with
 internal linkage that nothing in the unit references by call, address,
 alias or module assembly is not lowered, and no lowering refusal
-(`E30xx`) or profile refusal recorded in Appendix D is raised for its
-body; the front end still parses and checks it. This generalises
-revision 1.9.75 from substituted `always_inline` bodies to every unused
-internal function, and matches the reference compilers, which emit no
-code for such a function. A unit is therefore refused only for
-constructs in code the reference build also contains. The drop is
-computed to a fixed point before lowering, exactly as EvoMIR 0.16 does
-after it.
+(`E30xx`) or deferred front-end profile refusal (such as `E2939`) is raised for its
+body; the front end still parses and checks it. This extends the
+`always_inline` rule of 10.1.9 to every unused internal function and matches
+the reference compilers, which emit no code for such a function. A unit is
+therefore refused only for constructs in code the reference build also
+contains. The drop is computed to a fixed point before lowering, as EvoMIR
+does after it.
 
-**Alignment of an incomplete array member (revision 1.9.90).** `__alignof__`
+**Alignment of an incomplete array member.** `__alignof__`
 and `_Alignof` of an expression or type whose type is an array, including
 a flexible array member, answer the element type's alignment raised by an
-`aligned` attribute on the member (`__alignof__(tfm->__crt_ctx)` in
-`include/linux/crypto.h`, 45 units); no layout of the incomplete array is
-needed, and `E3101` is not raised for the query.
+`aligned` attribute on the member (`__alignof__(tfm->__crt_ctx)`); no layout of the incomplete array is
+needed, and `E3101` is not raised for the query. The query
+answers an expression or a member; `_Alignof` of an incomplete array type name,
+such as `_Alignof(int[])`, is not admitted, and its requesting context refuses
+it.
 
 #### 10.1.17 Compile-time builtins, `__auto_type` and small GNU forms
 
@@ -5103,9 +5417,30 @@ needed, and `E3101` is not raised for the query.
   non-constant operands become a C-HIR intrinsic that lowers to the `ctlz`,
   `cttz`, `ctpop` and `bswap` instructions of Section 3.4 (the zero-operand
   obligation is `ub.assume.bit_builtin_zero_operand`).
+- `__builtin_clrsb`, `__builtin_clrsbl`, `__builtin_clrsbll`: the operand is
+  converted once to `int`, `long` or `long long`; the `int` result counts the
+  leading bits equal to the sign bit, excluding the sign bit, so `0` and `-1`
+  give the width minus one. `__builtin_parity`, `__builtin_parityl`,
+  `__builtin_parityll`: the operand is converted once to `unsigned int`,
+  `unsigned long` or `unsigned long long`; the `int` result is the population
+  count modulo 2. All six are total, fold constant operands, use the
+  diagnostics of the bit builtins above, and lower to `ctlz`, `ctpop` and
+  width-typed arithmetic with no zero-operand obligation.
 - `__builtin_unreachable()`: a statement-expression of type `void`; reaching
   it is undefined behaviour reported as `E3024` (`unreachable-reached`) by the
   interpreters and lowered to `trap.unreachable_reached` (Section 4.2).
+- `__builtin_trap()`: no arguments, type `void`, no constant value. It lowers
+  to `trap.builtin_trap` (Section 4.2), and reaching it is `E3047`
+  (`builtin-trap-reached`) in both interpreters, an explicit termination, not
+  a UB report. The AArch64 emitter uses `brk #1000`. An unevaluated or
+  unselected occurrence does not terminate.
+- `__builtin_classify_type(expr)`: an `int` integer constant expression; `expr`
+  is not evaluated. Integer and enumeration types give 1, pointers (including
+  decayed arrays and functions) 5, real floating types 8, complex types 9,
+  structures and `__builtin_va_list` 12, and unions 13. `_Bool` and target
+  types with no agreed class are `E2941` (`unsupported-type-classification`);
+  a `void` operand is `E2913`, zero or several arguments `E2909`, and a type
+  name `E1003`.
 - `__builtin_object_size(p, mode)`: `mode` is an integer constant expression in
   `0..3`; any other value, or a non-constant mode, is `E2925`
   (`builtin-mode-out-of-range`) at the mode operand.
@@ -5168,14 +5503,15 @@ needed, and `E3101` is not raised for the query.
   C, are `E2929` at the type), followed by
   the conversion to `T`; `__builtin_va_end(ap)` to `va_end`; and
   `__builtin_va_copy(dst, src)` to a 32-byte `copy` (Section 3.12). A
-  `va_arg` of a record or union type, and a record or union passed as an
-  anonymous argument, stay `E3030` (`not-lowered: varargs`); the cohort has
-  neither. `E3030` is no longer reported for a variadic declaration or call.
+  `va_arg` of a record or union type lowers to `va_arg.byval`, and such an
+  anonymous argument carries the call-site `byval` mark (3.10, 3.12); a shape
+  that 3.10 does not admit stays `E3030` (`not-lowered: varargs`). `E3030` is no longer reported for a variadic declaration or call.
 - **Empty records.** A struct or union whose member list declares no member
   (for instance one containing only a `_Static_assert`) is a GNU extension with
   `sizeof` 0 and alignment 1.
 - `__builtin_strlen(s)`: with a string-literal operand, an integer constant
-  expression of type `size_t` equal to the literal's length. With any other operand it is an ordinary call
+  expression of type `size_t` equal to the number of code units before the
+  literal's first NUL. With any other operand it is an ordinary call
   to the external function `strlen` with the prototype the builtin carries
   (10.1.14, `size_t (const char *)`), whether or not a declaration of
   `strlen` is visible; a visible declaration of `strlen` with an
@@ -5184,105 +5520,88 @@ needed, and `E3101` is not raised for the query.
   `__builtin_extract_return_addr` operations, the same
   holds for every library builtin of 10.1.14: the builtin's
   prototype is the call's type, and the call names the external function.
-  No intrinsic reaches EvoIR. Measured: with a user-defined `strlen` both
-  oracles call it for a non-literal operand. Revision 1.9.45 replaced the
-  earlier rule that required a visible declaration.
+  No intrinsic reaches EvoIR. A user-defined `strlen` is called for a
+  non-literal operand.
 - `__builtin_frame_address(n)`: type `void *`; `n` must be an integer
-  constant expression (both oracles reject a non-constant); accepted by the
-  front end for any constant `n` (both accept `1`). `(0)` lowers to
-  `frame_address` (Section 3.7, revision 1.9.72); a level above zero walks
-  the caller's frames and stays `E3031` (`not-lowered: frame-address`). The
-  cohort writes `(0)` in four lanes.
-- `__builtin_return_address(0)`: type `void *`; accepted by the front end;
-  lowers to `return_address` (Section 3.7, revision 1.9.72); `E3025`
-  (`not-lowered: return-address`) is withdrawn for level zero, and an
-  argument other than the constant `0` is `E2913`.
+  constant expression. `(0)` lowers to `frame_address` (Section 3.7); a depth
+  `n` from 1 to 65535 lowers to `frame_address depth=n` (Section 3.7). The
+  depth of both stack-address builtins is first converted to `unsigned int`,
+  and a wider constant that narrows to an admitted depth uses that depth. A
+  depth of 65536 or more, including a negative one, is `E2913`.
+- `__builtin_return_address(0)`: type `void *`; lowers to `return_address`
+  (Section 3.7). An argument other than the constant `0` is `E2913`.
 - `__builtin_extract_return_addr(p)`: evaluates `p` exactly once and returns
   the same address with the same provenance; it is not an external call.
 - `__auto_type`: exactly one declarator, which must be a plain identifier (no
   pointer, array or function declarator), and an initializer is required; the
   declared type is the initializer's type after lvalue conversion (qualifiers
-  dropped, arrays and functions decay: measured `const int` gives `int`,
-  `int[3]` gives `int *`). The declared object may not appear in its own
-  initializer. Violations are `E2915` (`auto-type-misuse`) at the declarator.
-  `ORACLE_CONFLICT` on a pointer declarator (`__auto_type *p = &l;`): GCC-14
-  refuses it, Clang-19 accepts it, so this profile refuses it; both refuse the
-  array form and the self-reference. Evidence
-  `.evidence/builtin-probes/20260826-2c23684c/gaps3.out`.
+  dropped, arrays and functions decay: `const int` gives `int`, `int[3]` gives
+  `int *`). The declared object may not appear in its own initializer.
+  Violations, including a pointer declarator (`__auto_type *p = &l;`), are
+  `E2915` (`auto-type-misuse`) at the declarator.
 - A stray `;` where an external declaration or a block item may appear is an
-  empty declaration and has no effect. Both oracles accept it silently and warn
-  only under `-pedantic`; the kernel writes one after every `static inline`
-  function that a macro expanded. It is not a diagnostic in this dialect.
+  empty declaration and has no effect. It is not a diagnostic in this dialect.
 - `a ?: b`: `a` is evaluated once; the result is `a` when nonzero, else `b`,
   with the usual conditional-operator typing.
+- `__extension__`: one or more prefixes on an expression leave its type,
+  value, constant-expression status and evaluation unchanged, including in a
+  `for` initializer expression. A prefixed declaration in a `for` initializer
+  is `E1003`.
 - `case a ... b`: inclusive range in a `switch` whose bounds are integer
   constant expressions. A non-constant bound, `a > b`, or a range overlapping
-  another case is `E2916` (`case-range-invalid`) (all three rejected by both
-  oracles).
+  another case is `E2916` (`case-range-invalid`).
 - `__label__ a, b;` at the start of a block declares each listed name as a
   distinct label in that block's scope; nested blocks do not share them. A
   `goto` naming a label that no enclosing function scope declares is `E2920`
-  (`undeclared-label`) at the label name (both oracles reject it).
+  (`undeclared-label`) at the label name.
 - Label addresses: `&&name` is the address of a label in the current function,
-  of type `void *`; it is an address constant (10.1.18 "Label addresses",
-  measured at revision 1.9.48 under both oracles), so a static initializer
+  of type `void *`; it is an address constant (10.1.18 "Label addresses"), so
+  a static initializer
   may use it, and `&&name` where no enclosing function scope declares that
   label reports `E2920`. `goto *expr` transfers control to such an address.
   Both forms are parsed, type-checked and carried in C-HIR. Label addresses
-  lower to `block_addr` (1.9.68), integer casts to `ptr.to_int`, and indirect
-  jumps to the complete edge-binding form of 3.9 (1.9.92). Static label tables
-  use 10.1.18 relocations; no cross-block SSA visibility exception is implied.
+  lower to `block_addr`, integer casts to `ptr.to_int`, and indirect jumps to
+  the complete edge-binding form of 3.9. Static label tables use relocations
+  (2.1); no cross-block SSA visibility exception is implied.
 
-**Function names.** Inside every function body the identifiers `__func__`
-and `__FUNCTION__` denote one implicitly declared object of type
+**Function names.** Inside every function body the identifiers `__func__`,
+`__FUNCTION__` and `__PRETTY_FUNCTION__` denote one implicitly declared object of type
 `static const char[N]` holding the function's name: `sizeof __func__` is N,
 `_Generic` sees `const char *` after decay, `&__func__` is
 `const char (*)[N]`, and its address is an address constant (`static const
 char *p = __func__;` is accepted). `__builtin_constant_p(__func__[0])`
-follows the constant rule of this section and answers 0, which makes the
-oracles' disagreement on it (GCC-14 0, Clang-19 1) moot. `__PRETTY_FUNCTION__`
-is `E2921` (`pretty-function-unsupported`): `ORACLE_CONFLICT`, GCC-14
-spells it `main`, Clang-19 `int main(void)` (evidence `p17.out`); the pinned
-configuration builds no unit that uses it. Measured defect at revision
-1.9.32: `__func__` was `E2001` in 508 units.
+follows the constant rule of this section and answers 0. `__PRETTY_FUNCTION__`
+holds the bare function name, as GCC spells it for C. `E2921`
+(`pretty-function-unsupported`) is withdrawn.
 
 **Labeled last statement.** The value and type of a statement expression whose
 last statement is a labeled statement are those of the statement the label
 prefixes, recursively; `__label__` declarations inside the statement
-expression do not change its type (evidence `p19.c`, `ll`, both oracles
-compile `r = ({ __label__ out; ...; out: q; })`). Measured defect at revision
-1.9.32: the kernel's `___wait_event` was `E2102` in 41 units.
+expression do not change its type (`r = ({ __label__ out; ...; out: q; })`
+is valid).
 
 #### 10.1.18 C11 declaration forms
 
-The front end accepts the complete C11 declaration grammar, not the subset the
-early milestones happened to exercise. Three forms the kernel cohort needs were
-absent and are named here so their acceptance is checkable:
+The front end accepts the complete C11 declaration grammar. The following
+forms are named so that their acceptance is checkable:
 
 - **Specifier order is free.** Type qualifiers, storage-class specifiers and
   function specifiers may appear before or after a type specifier, including
   after a record or enum specifier: `struct midr_range const *ranges` and
   `enum e const x` mean exactly what `const struct midr_range *ranges` and
-  `const enum e x` mean. This is 16 of the 28 remaining parse lanes, in 8 units.
+  `const enum e x` mean.
 - **A typedef may name a function type.** `typedef int fn(void);` then
   `extern fn f;` declares `f` a function, and `fn` may also be written
   parenthesised (`typedef int (fn)(void);`). Such a typedef may not be used to
   define a function body, and an object declared with it is a function
-  declaration, never an object. This is 10 lanes, in 5 units.
+  declaration, never an object.
 - **A declarator list may declare several functions.** `fn a, b;` with `fn`
   a typedef naming a function type, and `int f(void), g(void);`, each declare
-  every listed name a function; none of them may be a definition. Measured
-  defect at revision 1.9.29: the list form was refused with `E1002` as a
-  deliberate implementation restriction from the attribute window ("no
-  consumer in this profile"); the kernel's `fs_param_type fs_param_is_bool,
-  fs_param_is_u32, ...` is that consumer, six lanes in three units.
+  every listed name a function; none of them may be a definition.
 - **`typeof` of a dereferenced function pointer.** `*fp`, with `fp` a pointer
   to function, is a function designator, so `typeof(*fp)` is that function
   type and `extern typeof(*fp) h;` declares `h` a function exactly as
-  `extern typeof(g) h;` does (10.1.10). Measured defect at revision 1.9.29:
-  `typeof(g) h;` was accepted and `typeof(*fp) h;` refused while
-  `typeof(*fp) *q` was accepted; the kernel's static-call machinery writes the
-  refused form, four lanes in two units.
+  `extern typeof(g) h;` does (10.1.10).
 - **Redeclaration.** An identifier with linkage — a function, or an object
   declared `extern` — may be declared any number of times, in the same scope
   or in nested ones, provided every declaration's type is compatible with the
@@ -5290,138 +5609,142 @@ absent and are named here so their acceptance is checkable:
   Attributes on a redeclaration accumulate. Declaring it again with an
   incompatible type is `E2002` (`incompatible-redeclaration`) at the later
   declarator, as is a second definition of an object or function, or a second
-  declaration of an identifier without linkage in the same scope. Measured,
-  both oracles: repeated compatible block-scope `extern` declarations accepted,
-  `extern int g(int)` then `extern long g(int)` refused. Revision 1.9.30 had
-  used `E2002` without ever defining it.
+  declaration of an identifier without linkage in the same scope: repeated
+  compatible block-scope `extern` declarations are accepted, and
+  `extern int g(int)` then `extern long g(int)` is refused.
+- **Block-scope function declarations.** A function first declared in a
+  block names the same non-builtin symbol as a later file-scope definition
+  with that linkage; a definition inside the block stays invalid.
+- **Identifier lists and empty lists.** An identifier-list definition keeps
+  its parameters in that order with their adjusted declared types; its call
+  interface applies the default argument promotions unless a preceding
+  prototype gives types compatible with each declared type or its promotion.
+  In the default language mode each listed parameter has exactly one
+  declaration, without storage class or with `register`; a missing or extra
+  declaration, an initializer or an implicit `int` is `E1001`, and a duplicate
+  declaration or an incompatible preceding prototype is `E2002`. A definition
+  written with `()` has zero parameters and is still not a prototype.
+- **Call targets.** After the ordinary conversions the called expression must
+  have pointer-to-function type; a visible non-callable object is never
+  replaced by an implicit declaration, and the call is `E2937`
+  (`invalid-call-target`).
+- **`_Noreturn`.** It is accepted on function declarations and definitions
+  and kept as the `noreturn` attribute with its written spelling, giving no
+  control-flow licence; on an object or a typedef it is `E2934`
+  (`function-specifier-on-non-function`).
 - **Static assertions are member declarations.** `_Static_assert` may appear in
   a struct or union member list, including an anonymous one, where it declares
-  no member and contributes nothing to layout. This is 2 lanes, in 1 unit.
+  no member and contributes nothing to layout.
 
 **Array parameters.** A parameter declared with array type, whatever the
 bound and whatever qualifiers or `static` stand inside the brackets, has the
 adjusted pointer type in the function's type and at every use of the
 parameter name. The adjustment happens once, when the declarator is built,
-and no other code path sees the array type (evidence `p19.c`, `m1`). Measured
-defect at revision 1.9.32: an initializer taken from an array parameter was
-`E2202` in 64 units (`pm_opp.h`).
+and no other code path sees the array type.
+
+**Parameter adjustment and identity.** A parameter written with function type,
+directly or through a typedef, is adjusted to a pointer to that exact function
+type; an array typedef adjusts as an array does. Checks of the preserved
+written declarator against the canonical type undo only this outermost
+adjustment and compare everything inside it unadjusted. Top-level parameter
+qualifiers do not affect these checks or compatibility, but the parameter
+object keeps them.
 
 **Pointer sign in conversions.** In initialization, assignment, argument
-passing and `return`, a pointer to an integer type converts to a pointer to
+passing, `return`, `==` and `!=`, a pointer to an integer type converts to a pointer to
 the same type with the other signedness, or between `char`, `signed char`
-and `unsigned char`; the conversion is accepted without a diagnostic (both
-oracles warn under `-Wpointer-sign`, which the kernel disables; evidence
-`p21.out`). Pointers to otherwise incompatible types stay `E2202`, which is
-`ORACLE_CONFLICT` resolved toward the refusal: GCC-14 makes
-`-Wincompatible-pointer-types` an error, Clang-19 a warning (the probe's
-swapped struct order measured that case as well). Measured defect at revision
-1.9.32: `DEFINE_CLASS(_gpiochip_for_each_data, ...)`, whose constructor takes
-`int *i` for an `unsigned int *` member, was `E2202` in 20 units.
+and `unsigned char`; the conversion is accepted without a diagnostic.
+Pointers to otherwise incompatible types are `E2202`.
 
 **Function pointers and `void *`.** A pointer to function converts to and
 from `void *` in initialization, assignment, argument passing, `return`,
 casts and both arms of the conditional operator; `(fn_t)0` and `(void *)0`
 are null pointer constants there, and `cond ? impl : (void *)0` has the
 function pointer type. Arithmetic on a `void *` operand follows 10.1.3 and
-its result may be converted to a function pointer the same way (evidence
-`p23-function-pointers.c`, both oracles compile). Measured defect at revision
-1.9.33: `_OF_DECLARE`, `SIMPLE_DEV_PM_OPS`, `DEFINE_STATIC_CALL`, `bd_holder`
-and `__pa_symbol` assignments were `E2202`, `E2102` or `E1003` in about 60
-units.
+its result may be converted to a function pointer the same way.
 
 **Qualified `void *` and function pointers.** The conversion between a
 pointer to function and `void *` of 10.1.18 holds for `void *` with any
 qualifiers on the pointee (`const void *data` to `fn_t`, and back) at every
-site named there (evidence `p29-residue.c`, `cv`). Measured defect at
-revision 1.9.47: `cb = match->data` with `const void *data` was `E2102`,
-`E2202` or `E2001` in about nine units.
+site named there.
 
 **Conditional address constants.** A conditional expression is an address
 constant when its condition is an integer constant expression or an address
 constant (a function or object address, which is never null) and the arm
 selected is an address constant: `(impl == (fn_t)0) ? impl : impl`,
-`1 ? impl : (void *)0`, `impl ? impl : 0` (evidence `p29-residue.c`, both
-oracles warn `-Waddress` and compile). Measured defect at revision 1.9.47:
-`_OF_DECLARE` tables were `E2208` in nine units.
+`1 ? impl : (void *)0`, `impl ? impl : 0`.
 
 **Label addresses.** `&&label` is an address constant of type `void *`
 usable in static initializers, including range designators
 (`[0 ... 255] = &&dflt`); `goto *expr` is accepted by the front end with
-`expr` of pointer type. A used `&&label` lowers to `block_addr` of the
-label's block (Section 3.7, revision 1.9.68), and as a static initializer
-to a relocation against a local code symbol the backend emits for that
-block; `goto *expr` uses the explicit edges of 3.9 since 1.9.92 (the earlier
-address-constant evidence is `p29-residue.c`, `lab`). Measured defect at revision 1.9.47: the BPF
-interpreter's jump table was `E2208`, `E2001` and `E1003`.
+`expr` of pointer type. A label block that no direct or indirect (3.9)
+terminator edge reaches cannot satisfy 2.5: lowering reports `E3101` for it
+and never fabricates an edge. A used `&&label` lowers to `block_addr` of the
+label's block (Section 3.7), and as a static initializer to a relocation
+against a local code symbol the backend emits for that block (2.1);
+`goto *expr` uses the explicit edges of 3.9.
 
 **`_Pragma`, spellings and attribute placement.** `_Pragma("...")` is handled
 exactly where `#pragma` would be, including at file scope between
 declarations and inside a macro expansion; `__inline` and `__inline__` spell
-`inline`; `__restrict` and `__restrict__` spell `restrict`; an attribute may
+`inline`; `__restrict` and `__restrict__` spell `restrict`; `__const` and
+`__const__` spell `const`, `__volatile` and `__volatile__` spell `volatile`,
+and `__signed` and `__signed__` spell `signed`, under the ordinary type rules;
+one or more `__extension__` prefixes on a record member declaration, including
+a bit-field, an anonymous record or a declarator list, have no effect; an attribute may
 stand between any two declaration specifiers, as in `static const
-__attribute__((unused)) struct r` (evidence `p24-spellings.c`, both oracles
-compile). Measured defect at revision 1.9.33: `__bpf_kfunc_start_defs()`,
-`MEM_STATIC`, `__maybe_unused` between specifiers and `__restrict` parameters
-were `E1001` or `E1002` in 37 units.
+__attribute__((unused)) struct r`.
 
 **Global register variables.** A file-scope declaration
 `register T name asm("reg")` is a global register variable (GNU). It
 declares no object and supplies no storage: it has no allocation site, and
 the allocation-site manifest of 10.1.3 passes over it rather than failing to
-derive one. Its type is `T`, `sizeof` and `_Alignof` are `T`'s (measured 8
-and 8 for `unsigned long`), and `&name` is `E2928`. A read yields the
+derive one. Its type is `T`, `sizeof` and `_Alignof` are `T`'s, and `&name`
+is `E2928`. A read yields the
 current value of the named machine register and a write sets it. EvoIR has
 no machine-register value, and does not need one: a read lowers to the
 `asm` instruction of Section 3.11 with the template `mov %0, reg`, one
 `=r` output of `T`'s lowered type, no inputs and the `volatile` qualifier;
-a write lowers to `asm volatile "mov reg, %0"` with one `r` input (revision
-1.9.67, after the eighth survey put the read of `current_stack_pointer`
-first in 2,711 units). The asm is *implicit*: it is a lowering artefact, not
+a write lowers to `asm volatile "mov reg, %0"` with one `r` input. The asm is *implicit*: it is a lowering artefact, not
 source text, and it carries every property of Section 3.11, so the value
 is opaque to the equality database, ordered by the effect tokens, and
 executed only by the machine; both interpreters report `E3021` when they
-reach it, as for any assembly. `E3035`
-(`not-lowered: global-register-variable`) is withdrawn. The declaration
-alone was already accepted (evidence `p32-register-variables.out`, both
-oracles compile the reads and refuse the addresses). A block-scope
+reach it, as for any assembly. A block-scope
 `register T name asm("reg")` is an ordinary automatic object whose register
 binding matters only when it is an `asm` operand, where `E3021` already
-applies; its value behaves as any automatic object's (measured, both
-oracles). Measured defect at revision 1.9.56:
-`arch/arm64/include/asm/stack_pointer.h` declares
-`register unsigned long current_stack_pointer asm("sp")`, which nearly every
-arm64 translation unit includes and 20 of 2,798 use; the manifest's refusal
-to derive a site for it stopped 2,754 of 2,798 units at lowering, all with
-one generic message.
+applies; its value behaves as any automatic object's.
 
 **Lowering diagnostics name their class.** A lowering failure carries a code
 of its own, as a front-end diagnostic does; `E3101`
-(`evoir-lowering-failed`) is a wrapper for a class that has not been given
-one yet, never a resting place. A survey that ranks lowering stops ranks
-codes, so every class large enough to appear in a ranking is given a code
-before the next survey runs (revision 1.9.57, after one wrapper carried four
-distinct classes and 2,768 of 2,794 stops).
+(`evoir-lowering-failed`) is the wrapper for a failure that has no code of
+its own, such as the unreachable label block above. A recurring class of
+lowering failure must be given a code of its own.
 
 **Storage class `register`, va_list objects, 128-bit places.** `register` is
 accepted on parameters and block-scope objects and has no effect beyond
-forbidding `&` on the object, which is `E2928` (`address-of-register-object`) at the `&` (both oracles reject it). `__builtin_va_list` is an object type that may
+forbidding `&` on the object, which is `E2928` (`address-of-register-object`)
+at the `&`. `__builtin_va_list` is an object type that may
 be a member, an array element or a typedef target; on the target it occupies
-32 bytes at alignment 8 (evidence `p31-residue.c`: a structure holding one
-pointer and one `va_list` is 40 bytes at 8). An element of an array of
+32 bytes at alignment 8 (a structure holding one pointer and one `va_list` is
+40 bytes at 8). An element of an array of
 `__uint128_t` or `__int128_t` is a modifiable lvalue like any element, and
 `*__builtin_va_arg(ap, T *)` is a modifiable lvalue of type `T`; both
-execute since revision 1.9.61 (Section 3.12, 10.1.19). Measured defect at revision 1.9.52:
-`E1001`, `E1005`, `E2101` and `E2102` in six units.
+execute (Section 3.12, 10.1.3).
 
 **Parameter compatibility.** Top-level qualifiers on parameter types do not
 affect compatibility (C11 6.7.6.3p15): `int (*)(const clockid_t, struct ts *)`
-and `int (*)(clockid_t, struct ts *)` are compatible (evidence
-`p31-residue.c`, `o`). Function pointer arithmetic `p + n`, `p - n` and the
-compound forms scale by one (GNU; evidence `fnarith`). Under the approved full-kernel adjudication, these operations use the existing 3.7 exposed-address conversion path, not a nonzero Function-provenance offset; see Appendix D, "Function addresses and byte arithmetic". The former E3034 lowering refusal is superseded for these forms. Measured defect at
-revision 1.9.52: `E2202` in three units and `E2102` in one.
+and `int (*)(clockid_t, struct ts *)` are compatible. Function pointer
+arithmetic `p + n`, `p - n` and the compound forms scale by one (GNU). These
+operations, including the prefix and postfix forms, lower to
+`ptr.to_int`, 64-bit integer arithmetic at byte scale one and
+`ptr.from_int.fnptr<Sig>` (3.7): the lvalue and the integer operand are each
+evaluated once, and no interior address gains Function provenance. The
+difference of two function pointers is their byte-address difference, of type
+`long`; one that `long` cannot represent reports `E3004`. A call through a
+rebuilt pointer keeps the `E3015`, `E3016` and `E3019` checks, and `E3034` is
+not reported for these forms.
 
-**The `\e` escape.** `'\e'` is the GNU escape for 27 (evidence
-`p31-residue.c`, `esc`). Measured defect at revision 1.9.52: `E1006`.
+**The `\e` escape.** `'\e'` is the GNU escape for 27.
 
 **Qualified array pointees.** In initialization, assignment, argument passing
 and `return`, the non-atomic qualification conversion also reaches the element
@@ -5431,17 +5754,57 @@ known extents stay incompatible. The conversion stops at an intervening pointer,
 keeps atomic distinctions, and changes neither `__builtin_types_compatible_p`,
 mutability nor layout. The excluded forms are `E2202` (`E2102` in assignment).
 
+**Parameters.** A function definition can omit a parameter name; the
+parameter keeps its type and call-interface slot and its argument is evaluated
+and converted normally, but no identifier or parameter object is introduced.
+An outermost `[*]` in a prototype parameter, named or abstract and optionally
+bracket-qualified, adjusts to the corresponding pointer and has no bound to
+evaluate. `[*]` on an object, in a definition, with `static` or in an inner
+qualifier position is `E1005` (`invalid-declarator`).
+
+**Variable array parameters.** An outer array parameter with a nonconstant
+bound adjusts to a pointer like any array parameter. A prototype-style
+definition evaluates each variable dimension of its parameters once on entry,
+after binding the parameters and before the body, including inner dimensions
+kept through the adjustment and pointer-to-array declarators; the captures
+follow 10.1.19. Prototypes at file or block scope and nested callback
+prototypes never evaluate their bounds. Inlining does not reevaluate them, and
+the outer bound is not the adjusted parameter's `sizeof`. When array bounds
+compose, a constant size wins (two different constants are incompatible), then
+a specified capture wins over an unspecified variable or incomplete bound;
+element and qualifier compatibility are unchanged. A variable bound in an
+identifier-list definition is not admitted, and a noninteger bound is `E2923`.
+
+**Function pointer equality.** `==` and `!=` admit a function pointer against a
+pointer to qualified or unqualified `void`, in either order and including null
+values. Each operand is evaluated once and the function identity is compared
+through `ptr.to_int`; no ordering or dereference follows from this rule.
+
+**Alignment specifiers.** `_Alignas(type-name)` and
+`_Alignas(constant-expression)` among declaration specifiers set the alignment
+of the declared object or member without changing its type. Zero is ignored,
+and several nonzero specifiers take the largest. These are `E2938`
+(`invalid-alignment-specifier`): a request that is not a power of two, is not
+representable, is weaker than the natural alignment or exceeds 2^28; a weaker
+`_Alignas` together with GNU `aligned`; and any specifier on a parameter,
+function, typedef, `register` object, bit-field or type name. A request on an
+array of unknown bound is checked against the element type's alignment without
+a bound. A specifier on a standalone tag declaration is kept and does not
+change the type, and `__builtin_has_attribute(x, aligned)` answers 1 for a
+nonzero `_Alignas`. An explicitly aligned external declaration of an
+incomplete record stays valid when the later definition is weaker or stronger.
+
 #### 10.1.19 Integer constant expressions and array bounds
 
-The specification names an integer constant expression in a dozen places
-(`_Static_assert`, `case`, array bounds, bit-field widths, designator indexes,
-`aligned`, enumeration constants, the builtins of 10.1.14 and 10.1.17) without
-ever saying what one is. It is the C11 definition with this profile's
-extensions, and every one of those places uses the same evaluator:
+Every place that requires an integer constant expression (`_Static_assert`,
+`case`, array bounds, bit-field widths, designator indexes, `aligned`,
+enumeration constants, the builtins of 10.1.14 and 10.1.17) uses the C11
+definition with this profile's extensions, and the same evaluator:
 
 - integer, character and enumeration constants;
 - `sizeof` and `_Alignof` applied **to a type name or to an expression**; the
-  operand expression is not evaluated, only its type is taken, so
+  operand expression is not evaluated (except a `sizeof` operand of
+  variable-length array type, below), only its type is taken, so
   `sizeof(*(int *)8)` is `4` and `sizeof(i++)` leaves `i` alone;
 - `__builtin_offsetof`, `__builtin_types_compatible_p`, `__builtin_constant_p`,
   `__builtin_choose_expr` and the constant-operand bit builtins (10.1.14,
@@ -5451,44 +5814,42 @@ extensions, and every one of those places uses the same evaluator:
   the above.
 
 `sizeof(void)` is `1`, as is `sizeof` of a function type; both are GNU
-extensions the kernel relies on (measured, both oracles).
+extensions.
 
 **Signed arithmetic in a constant expression** is evaluated in the operand
-type's width with two's-complement wrap-around, as both oracles evaluate it,
-not in host arithmetic and not as a refusal: `1 << 31` is the `int` value
-`-2147483648`, `(1 << 31) < 0` holds in a static assertion, and an enumerator
-`X = 1 << 31` has type `int` in a 4-byte enumeration (measured). This is the
-constant evaluator's arithmetic rule. Runtime signed add/subtract/multiply
-retain their obligations; signed shifts instead follow the GNU truncation
-rule of 6.1 since 1.9.88, so executed `1 << 31` needs only a valid count.
-Legacy IR predicates and explicit E3006 obligations retain their meaning.
-Measured defect at revision 1.9.28:
-the enumerator was refused as not an integer constant expression.
+type's width with two's-complement wrap-around, not in host arithmetic and not
+as a refusal: `1 << 31` is the `int` value `-2147483648`, `(1 << 31) < 0`
+holds in a static assertion, and an enumerator `X = 1 << 31` has type `int` in
+a 4-byte enumeration. This is the
+constant evaluator's arithmetic rule, and it also applies outside contexts
+that require a constant: an add, subtract, multiply or negation of integer
+constant expressions wraps in its promoted type before any surrounding cast or
+runtime operation, and object values never become constant knowledge. Signed
+add/subtract/multiply of runtime values, division by zero and executed signed
+`MIN / -1` retain their obligations; signed shifts follow the GNU truncation
+rule of 6.1, so executed `1 << 31` needs only a valid count. IR modules that
+use `signed_shl_defined` and explicit E3006 obligations keep their meaning.
 
 `__int128_t` and `__uint128_t` are compiler-provided spellings of `__int128`
-and `unsigned __int128`, not distinct types: both oracles give them size 16 and
-`__builtin_types_compatible_p(__uint128_t, unsigned __int128)` is `1`. The
-cohort writes `__uint128_t` 102 times. They are type specifiers wherever the
+and `unsigned __int128`, not distinct types: they have size 16, and
+`__builtin_types_compatible_p(__uint128_t, unsigned __int128)` is `1`. They are type specifiers wherever the
 underlying spelling is one, and carry its value semantics unchanged.
 
 **Null pointer constants.** An integer constant expression with value zero, or
 such an expression cast to `void *`, is a null pointer constant (C11 6.3.2.3p3)
 and converts, in assignment, initialization, argument passing, return and
 comparison, to **any** pointer type — object pointers and function pointers
-alike. Measured defect at revision 1.9.23: `call->fn = ((void *)0);` was
-`E2102` for a function-pointer member while `= 0` was accepted; the kernel
-writes the cast form throughout. The resulting value has `Null` provenance.
+alike. The resulting value has `Null` provenance.
 
 **Address constants through integer casts.** An address constant cast to an
 integer type and back to a pointer type, `(void *)(uintptr_t)&f`, is an address
-constant (both oracles fold it; the kernel's `EXPORT_SYMBOL` writes exactly
-this). This admits the *form*; whether the initializer can be lowered is
-still Section 2.1's relocation question, counted as `E3026`.
+constant. This admits the *form*; whether the initializer can be lowered is
+Section 2.1's relocation question (`E3026` when it is not a relocation).
 
 **Conditional operator with a null pointer constant.** In `c ? a : b` where
 one of `a` and `b` is a null pointer constant and the other is a pointer, the
 result type is the *other* operand's pointer type, not a composite with `void *`
-(C11 6.5.15p6). This is load-bearing: the kernel writes
+(C11 6.5.15p6). Example: the Linux kernel writes
 
 ```c
 #define __is_constexpr(x) \
@@ -5498,34 +5859,56 @@ result type is the *other* operand's pointer type, not a composite with `void *`
 which reads `4 == 4` when `x` is an integer constant expression, because
 `(void *)((long)(x) * 0l)` is then a null pointer constant and the conditional
 has type `int *`, and reads `4 == 1` otherwise, because the conditional is then
-`void *` and `sizeof(void)` is `1`. Both oracles confirm all three values.
-Getting this rule wrong does not produce a diagnostic; it produces the opposite
-answer in every kernel size and overflow check that uses the macro.
+`void *` and `sizeof(void)` is `1`. A wrong rule produces no diagnostic; it
+produces the opposite answer in every size and overflow check that uses the
+macro.
 
 **Array bounds.** A bound is evaluated wherever it is written, not only when an
 initializer follows.
 
 A bound of **zero** is valid: a zero-length array is a GNU extension with size
 `0` that contributes no bytes and no alignment, may appear anywhere in a record
-including before other members, and does not make the record flexible.
-Measured, both oracles: `struct { int a; char d[0]; int b; }` is 8,
-`struct { int a; char d[0]; }` is 4, `char pad[20 - 2*sizeof(long) - sizeof(unsigned)]`
-is a valid empty member whose successor is at offset 0, and a file-scope
-`int g[0]` has `sizeof` 0. The kernel writes both the explicit form (`__u8
-data[0]`) and the computed form (`sysinfo._f`); evidence
-`.evidence/builtin-probes/20260826-2c23684c/zerobound.out`.
+including before other members, and does not make the record flexible:
+`struct { int a; char d[0]; int b; }` is 8, `struct { int a; char d[0]; }` is
+4, `char pad[20 - 2*sizeof(long) - sizeof(unsigned)]` is a valid empty member
+whose successor is at offset 0, and a file-scope `int g[0]` has `sizeof` 0.
 
-A bound that folds to a **negative** value is `E2923` (`invalid-array-bound`);
-both oracles reject it. A bound that is not an integer constant expression is
-`E2203` (`variable-length-object`) wherever it appears: at file scope and on a
-member both oracles reject it too, and inside a block they accept it as a C99
-variable-length array, which this profile does not have. `E2203` has one
-message, `variable-length-object`, at every site.
+A bound that folds to a **negative** value is `E2923` (`invalid-array-bound`). A bound that is not an integer constant expression makes the type variably
+modified. That is `E2203` (`variable-length-object`) at file scope, on a static
+or linked object, on any declaration with linkage, and on a record member whose
+canonical type is variably modified, including through a typedef or a pointer
+to a variable array. Dimensions inside a member's function-pointer parameter
+prototype do not make the member variably modified. A noninteger bound is
+`E2923`. `E2203` has one message, `variable-length-object`, at every site.
 
-Measured defect at revision 1.9.17: `int probe[-1];`, `struct s { int a[-1]; };`
-and a file-scope `int probe[n];` were all accepted silently, and only an
-initializer made the bound reachable, so no `sizeof` of such a type meant
-anything.
+**Variable-length arrays.** At block scope a variable bound is admitted. Each
+variable bound written in an executed declaration, typedef, pointer
+declarator, `typeof` type name or cast type name is evaluated once when that
+declaration or cast executes, before any initializer, into a distinct
+compiler-owned size object; an unselected expression evaluates none. Later
+`sizeof`, subscripts, pointer addition in either order, updates and pointer
+differences use the captured values, also through typedef chains, multiple
+declarators, recursion and separate inline expansions; inlining renames the
+captures in types and declarators. Captured sizes are not integer constant
+expressions, alignment is the element type's, a pointer to a variable array
+keeps a fixed size, and a variable bound alone does not make otherwise
+compatible array types incompatible. Checked pointer execution keeps the full
+scaled index and reports `E3011` for an unrepresentable delta or a zero or
+overflowing captured stride.
+
+A variable-length array object is allocated by `alloca.dynamic` (3.7) at its
+declaration and ended by `lifetime.end` when its scope is left, including by a
+backward jump to before the declaration; a later access is `E3010`.
+`-ftrivial-auto-var-init=zero` also zeroes it, padding included, with Null
+provenance for typed pointer subobjects. A `sizeof` operand of variable array
+type is executed before its captured extent is read, `sizeof(type-name)`
+evaluates only the bounds the queried extent needs, and a fixed-size operand,
+including a pointer, stays unevaluated. A block-scope `static` pointer to a
+variable array, or a fixed array of such pointers, is one object initialized
+once, while its pointed-to dimensions are captured on each execution of the
+declaration. Entering the scope of a variably modified declaration without
+passing it, by `goto`, `asm goto` or `switch`, is `E2945`
+(`jump-into-variable-type-scope`).
 
 **Address constants.** `&E` is an address constant when `E` designates an
 object of static storage duration or a function, or an element or member of
@@ -5534,18 +5917,14 @@ such an object reached through constant subscripts and member access
 decays, a string literal, and `__func__`. An address constant converted by a
 cast to any pointer type or to an integer type at least as wide as a pointer
 stays an address constant. This holds in every static initializer position,
-nested aggregate members included (evidence `p19.c`, `tt` and `pv`).
-Measured defect at revision 1.9.32: `(void *)&sysctl_vals[0]` (`SYSCTL_ZERO`)
-was `E2208` in 54 units.
+nested aggregate members included.
 
 **Integer constants as pointers; decay in static objects.** An integer
 constant expression converted by a cast to a pointer type is an address
-constant (`(void *) 2`, the kernel's `TIMER_ENTRY_STATIC`). The decay of any
+constant (`(void *) 2`). The decay of any
 array lvalue that designates part of an object with static storage duration
 is an address constant as well: `init_s.x`, `arr2[1]`,
-`init_files.close_on_exec_init` (evidence `p25-static-init.c`, both oracles
-compile). Measured defect at revision 1.9.33: `DEFINE_STATIC_SRCU`,
-`DEFINE_KFIFO` and array-member initializers were `E2208` in 21 units.
+`init_files.close_on_exec_init`.
 
 **More address constants.** `&"literal"` is an address constant (the address
 of the literal's array), so `(kernel_ulong_t)&"PARPORT_SERIAL"` is one under
@@ -5553,17 +5932,15 @@ the integer-cast rule. A comparison of an address constant with a null
 pointer constant is a constant expression (`impl == (fn_t)0` is 0,
 `impl != 0` is 1), so the `_OF_DECLARE` conditional
 `(fn == (fn_type)NULL) ? fn : fn` is an address constant under the
-conditional rule of 10.1.18 (evidence `p31-residue.c`, `ids` and `tbl`).
-Measured defect at revision 1.9.52: `E2208` in ten units.
+conditional rule of 10.1.18.
 
 **Initializer plans have no size cap.** A plan records the entries an
 initializer writes and the zero fill of the rest; its cost is bounded by the
 number of entries, never by the object's size: a range designator `[lo ... hi]` is one entry
 of the plan (its expansion to elements in 10.1.12 is a description of
 meaning, not of representation), and no diagnostic refuses an
-object for being large (`_printk_rb_static_infos[4096]` with two designated
-entries). `E2207` (`initializer-plan-too-large`), which the implementation
-emitted without a definition, is withdrawn at revision 1.9.53.
+object for being large (`infos[4096]` with two designated entries).
+`E2207` (`initializer-plan-too-large`) is withdrawn.
 
 **Numeric address constants.** In a static address initializer, `&*p` with
 `p` a numeric pointer constant is that numeric value, and `&p->m[i]` on such a
@@ -5586,7 +5963,7 @@ declaration removes the binding.
 
 #### 10.1.20 Source locations
 
-**Restricted raw source bytes (revision 1.9.102, reviewed authorization).**
+**Restricted raw source bytes.**
 Main input, stdin and included contents share a byte-preserving lexer.
 Invalid UTF-8 data bytes in unprefixed ordinary narrow literals retain their
 byte values; comments containing them follow the usual whitespace and line
@@ -5627,15 +6004,9 @@ whose end precedes its start. A span is a range in exactly one file; nothing
 indexes a file buffer with a span from another file, and the parser never
 obtains a token's text by slicing a source buffer: it uses the token's own
 spelling. Diagnostics report the expansion span (the use site) and may add the
-spelling span as a note.
-
-Measured defect at revision 1.9.31: the parser merged spelling spans and
-sliced the main file's buffer with spans that named headers. The
-full-configuration survey (run `20260902T023241Z-87371`) recorded 2,768 of
-2,832 units panicking at those two places, and the three-line file
-`#define TAG s` / `struct s { int x; };` / `struct TAG v;` reproduces the
-first. The sixteen cohort units had parsed clean only because their parse
-lanes consume oracle-preprocessed text, where every span lies in one file.
+spelling span as a note. Example: in the three-line file `#define TAG s` /
+`struct s { int x; };` / `struct TAG v;`, the tokens of `struct TAG v` have
+expansion spans in the main file and `s` has its spelling span in line 1.
 
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
@@ -5728,20 +6099,19 @@ mismatch count.
 
 ### 10.5 EvoCPP Target Profile
 
-EvoCPP presents itself to headers as the GNU C dialect of the layout oracle,
-GCC 14.2 for `aarch64-unknown-linux-gnu`, so that every `#if` a header takes
-is the branch the oracle takes. Nothing here changes what the front end
+EvoCPP presents itself to headers as the GNU C dialect of the reference
+compiler, GCC 14.2 for `aarch64-unknown-linux-gnu`, so that every `#if` a
+header takes is the branch that compiler takes. Nothing here changes what the front end
 accepts; it changes only which lines reach the front end.
 
-**Predefined macros.** The predefined set is the sealed list
-`.evidence/predefined-macros/20260826-2c23684c/gcc-14-aarch64-linux.h`
-(sha256 `74801974f845be4d`, 421 macros, captured with
-`gcc-14 -std=gnu11 -dM -E - </dev/null` in image `evo-flight-lab:sealed`),
-defined verbatim before any source token, in that order. `__STDC_VERSION__`
+**Predefined macros.** The predefined set is the list
+`crates/evocc-cpp/predefined/aarch64-unknown-linux-gnu.h` (421 macros, the
+output of `gcc-14 -std=gnu11 -dM -E - </dev/null`, SHA-256
+`74801974f845be4d198bbedc2f20130ddd98645550c05e3453d0294d47bc5a95`), defined
+verbatim before any source token, in that order. `__STDC_VERSION__`
 is `201112L` as in the list. The list matches `-O0`; the driver options below set the optimization macros. The
-driver's `-D`/`-U` apply after the list. The list is the authority; the
-implementation carries a copy and a test compares the copy to the sealed
-digest. `__CHAR_UNSIGNED__ 1` is in the default list and agrees with the type
+driver's `-D`/`-U` apply after the list. The list is the authority;
+`crates/evocc-cpp/tests/target_profile.rs` checks its digest. `__CHAR_UNSIGNED__ 1` is in the default list and agrees with the type
 profile (plain `char` is unsigned on this target by default). `-fsigned-char`
 and `-funsigned-char` (including their inverse spellings) select plain-char
 representation in written order, without making its C type identical to
@@ -5795,27 +6165,42 @@ actions, whatever their position:
   function header fields of Section 5.2. Options that GCC 14 reflects in
   predefined macros (`__SSP_STRONG__`, `__ARM_FEATURE_PAC_DEFAULT`) set them
   with GCC 14's values.
+- The last of `-fpic`, `-fPIC`, `-fpie`, `-fPIE` and their `-fno-` forms
+  selects position independence. A `-fno-` form selects direct page-relative
+  addresses for strong undefined symbols, keeps a nullable GOT address for weak
+  ones, and undefines `__PIC__`, `__pic__`, `__PIE__` and `__pie__`. Otherwise
+  `__PIC__`/`__pic__` (and, for a PIE option, `__PIE__`/`__pie__`) are 1 for the
+  lowercase and 2 for the uppercase spelling. Without such an option, EvoMIR's
+  PIE-safe addressing applies.
 - `-mcmodel=tiny` uses short PC-relative symbol addressing, nullable GOT
   references included. Requested unwind tables describe the actual frame, saved
   registers and return-address signing state.
 
 **Dynamic macros.** `__FILE__`, `__LINE__`, `__BASE_FILE__`, `__DATE__`,
 `__TIME__` as ISO C; `__COUNTER__` expands to `0`, `1`, `2`, ... per expansion
-in translation order (measured `0 1 2`); a translation unit that expands it
+in translation order; a translation unit that expands it
 2^32 times is `E0109` (`counter-overflow`).
+
+**Line control.** `#line` macro-expands its operands and sets the presumed
+decimal line number of the next physical line, and optionally the presumed
+filename, for `__LINE__` and `__FILE__`. Leading zeros are decimal and line
+zero is accepted. A number-only form keeps the presumed filename, each included
+file has its own line state, and an inactive `#line` has no effect. Physical
+source identity, include lookup and token byte offsets do not change. A
+malformed line number or filename, including a number above `4294967295`, is
+`E2936` (`invalid-line-directive`).
 
 **Token pasting.** The operands of `##` are concatenated and the result is
 re-lexed as one *preprocessing* token (C11 6.4, with pp-numbers per 6.4.8): an identifier, a
 punctuator, a string or character literal, or a pp-number, which is a digit
 followed by any sequence of digits, identifier characters, `.`, and `e`/`E`/`p`/`P`
 followed by a sign, and may begin with `.` followed by a digit (`.5foo` and
-`1.2.3e+x` are each one pp-number). `1_MODULE`, `1x` and `1.5` are therefore valid results
-(measured, both oracles: `CAT(1,_MODULE)` gives `1_MODULE`; the kernel's
-`IS_ENABLED(CONFIG_X)` expands `IS_MODULE(1)` to `1##_MODULE` and relies on
-it). A result that is not one preprocessing token is `E0110`
-(`invalid-token-paste`) at the `##` operator (both oracles reject
-`CAT(1,+)`). A header-name is never a paste result, and two non-empty operands
-never form an *other* token (both oracles reject `C(@,@)` and `C(\\,x)`); `$`
+`1.2.3e+x` are each one pp-number). `1_MODULE`, `1x` and `1.5` are therefore
+valid results: `CAT(1,_MODULE)` gives `1_MODULE`. A result that is not one
+preprocessing token, such as `CAT(1,+)`, is `E0110` (`invalid-token-paste`)
+at the `##` operator. A header-name is never a paste result, and two
+non-empty operands never form an *other* token (`C(@,@)` and `C(\\,x)` are
+refused); `$`
 is an identifier character in this dialect, so a lone `$` is an identifier,
 not a stray character. A pp-number that is not a valid integer constant is an error
 only where it is consumed: `E0111` (`conditional-operand-not-integer`) in a
@@ -5829,48 +6214,41 @@ operand.
 preprocessing token (`\\`, `@`, `` ` ``, `$` outside identifiers) is a single
 preprocessing token of its own (C11 6.4 *each non-white-space character that
 cannot be one of the above*). It passes through macro expansion and is kept by
-`#` stringification (measured, both oracles: `S(\\sreg)` is `"\\sreg"`, which
-the kernel's `sysreg.h` relies on to build assembler text). It is an error only
+`#` stringification (`S(\\sreg)` is `"\\sreg"`). It is an error only
 when it reaches the C lexer as a token: `E0112` (`stray-token`) at that token,
 the same code every preprocessing token that has no C token form reports at
-conversion (a pp-number that is not a C constant included). Measured defect at
-revision 1.9.11: `\\` inside a macro body was `E0001` at the `#define`, which
-stopped all 14 raw kernel lanes at `sysreg.h:1163`.
-
-Measured defect at revision
-1.9.10: the re-lexer rejected `1_MODULE`, which stopped all 14 raw kernel
-lanes at the `1` of `#define CONFIG_ARM64_PAN 1` (440 diagnostics per unit).
+conversion (a pp-number that is not a C constant included).
 
 **`#if` arithmetic.** Every pp-number in a controlling expression, including
 one produced by `##` or by macro expansion, is re-lexed as an integer constant:
 any of the suffixes `u`, `l`, `ul`, `ll`, `ull` in either case, decimal, octal
 and hexadecimal forms. Evaluation is in `intmax_t`/`uintmax_t` with the usual
 arithmetic conversions; an identifier that is not a macro is `0`; `defined`
-and the feature queries are evaluated before expansion. Measured defect at
-revision 1.9.7: suffixed literals were right (`#if 1UL == 1` true) but pasted
-pp-numbers were not (`#if CAT(300,) > 100` and `#if CAT(0x1,00) > 100` false),
-which is what made `ARM64_NCAPS >= BIT(15)` true in every raw kernel lane.
+and the feature queries are evaluated before expansion. A character
+constant has the value it has in a C expression, including wide prefixes,
+octal and hexadecimal escapes and `\e`; a malformed one is `E1006` before
+evaluation and never reads as zero. `#if CAT(300,) > 100` and
+`#if CAT(0x1,00) > 100` are true.
 
 **Feature queries.** All four are defined as macros, so `#ifdef __has_attribute`
-is true (measured for `__has_attribute`, `__has_builtin`, `__has_feature`,
-`__has_include`). Their arguments are one token or one header name; anything
+is true for each of `__has_attribute`, `__has_builtin`, `__has_feature` and
+`__has_include`. Their arguments are one token or one header name; anything
 else is `E0106` (`feature-query-malformed`).
 
 - `__has_attribute(name)`: `name` with a surrounding `__` pair stripped. The
-  answer is the measured GCC-14 answer for the names the kernel cohort and
-  headers use (`.evidence/predefined-macros/20260826-2c23684c/has.out`): `202311` for `fallthrough` and `noreturn`; `1`
+  answer is the GCC 14 answer, recorded in
+  `crates/evocc-cpp/predefined/has-attribute.tsv`: `202311` for `fallthrough` and `noreturn`; `1`
   for `aligned`, `alloc_size`, `always_inline`, `assume_aligned`, `cleanup`, `cold`, `const`, `copy`, `designated_init`, `error`, `externally_visible`, `format`, `gnu_inline`, `malloc`, `no_instrument_function`, `no_profile_instrument_function`, `no_sanitize_coverage`, `no_stack_protector`, `noclone`, `noinline`, `noipa`, `nonnull`, `nonstring`, `packed`, `pure`, `retain`, `section`, `uninitialized`, `unused`, `used`, `warn_unused_result`, `warning`, `weak`; `0` for `btf_type_tag`, `diagnose_as_builtin`, `disable_sanitizer_instrumentation`, `no_caller_saved_registers`, `overloadable`, `pass_dynamic_object_size`, `pass_object_size`, `preserve_most`;
-  `0` for any name not in that table. The table is data, not code: the
-  implementation reads it from the sealed file's copy and a test checks the
-  digest.
+  `0` for any name not in that table. The table is data, not code, and
+  `crates/evocc-cpp/tests/target_profile.rs` checks its digest.
 - `__has_builtin(name)`: `1` when the front end resolves `name` (10.1.14,
-  10.1.15, `__builtin_va_list` and the names 10.1.17 will add) or the measured
-  table says `1` (`__builtin_dynamic_object_size`, `__builtin_has_attribute`,
+  10.1.15, 10.1.17 and `__builtin_va_list`) or
+  `crates/evocc-cpp/predefined/has-builtin.txt` lists it
+  (`__builtin_dynamic_object_size`, `__builtin_has_attribute`,
   `__builtin_isdigit`); `0` otherwise (`__builtin_alloca_uninitialized`).
-- `__has_feature(name)`: `0` for every name (measured: GCC-14 answers `0` for
-  all seven sanitizer and shadow-call-stack names the kernel asks about).
+- `__has_feature(name)`: `0` for every name, as in GCC 14.
 - `__has_include(<h>)` and `__has_include("h")`: `1` when the include search
-  the directive would perform finds the file, else `0` (measured).
+  the directive would perform finds the file, else `0`.
 
 **Pragmas.** `_Pragma("text")` destringizes and is processed as `#pragma text`.
 `#pragma once` is honoured. `#pragma GCC diagnostic ...`, `#pragma GCC
@@ -5885,53 +6263,39 @@ visibility of the same symbol, takes precedence. The default is preserved as
 pragma-origin metadata and uses the existing hidden-symbol linkage path:
 strong hidden addresses are direct, weak hidden addresses retain the GOT.
 Malformed/unsupported values and unmatched `pop` are E2943; so is a conflicting
-later explicit visibility (the latter two are GCC-warning/Clang-error oracle
-conflicts, refused by this profile). The effective visibility follows the same
+later explicit visibility. The effective visibility follows the same
 hidden/default/protected and internal-to-hidden rules as for
-the explicit attribute. `-E` preserves these semantic directives for re-parsing.
-This correction was authorized on 2026-09-13 after the first complete EvoCC
-kernel link faulted before MMU setup; paired sealed probes are recorded beside
-`tests/fixtures/visibility-pragma.h`. `poison` is honoured, and
+the explicit attribute. `-E` preserves these semantic directives for
+re-parsing. `poison` is honoured, and
 `pack(N)` sets the maximum member alignment of every record defined while it
 is in effect to `N` (a power of two); `pack()` restores the default;
-`pack(push[, N])` and `pack(pop)` maintain a stack. Measured (both oracles):
-`pack(1)` on `{char; int}` gives size 5 alignment 1, `pack(2)` on
+`pack(push[, N])` and `pack(pop)` maintain a stack. Example: `pack(1)` on `{char; int}` gives size 5 alignment 1, `pack(2)` on
 `{char; int; long}` gives 14/2, `pack()` restores 8/4. The preprocessor turns
 the directive into a layout marker the parser applies as a record-level
 `max_align`: member alignment is `min(natural, N)`, and a member `aligned(M)`
-with `M > N` does **not** raise it while the pack is active (measured, both
-oracles, all three attribute placements: `pack(1)` with `int
-__attribute__((aligned(4)))` gives size 5 alignment 1;
-`.evidence/builtin-probes/20260826-2c23684c/pack-stack.out`, sha256
-`58033385db011629e6ebf9619876bb814d1fa6c563f85f66b0add88a46352ecf`; the
-push/pop stack there measures `5/1, 12/4, 5/1, 8/4`). `pack` directives are
-honoured at file scope and at block scope (measured: block-scope `pack(1)` gives
-5/1, then 8/4 after `pack()`, both oracles); a `pack` directive inside a
-record's member list is `E0107` (`ORACLE_CONFLICT`: GCC-14 applies it to the
-following members, 5/1, Clang-19 ignores it, 8/4; evidence
-`pack-gaps.out`). `pack(pop)` on an empty stack is ignored (both oracles warn
-and continue); the receipt counts it. `pack(show)` and any other
+with `M > N` does **not** raise it while the pack is active, in all three
+attribute placements (`pack(1)` with `int __attribute__((aligned(4)))` gives
+size 5 alignment 1). `pack` directives are honoured at file scope and at block
+scope; a `pack` directive inside a record's member list is `E0107`, because
+the reference compilers disagree on it. `pack(pop)` on an empty stack is
+ignored. `pack(show)` and any other
 argument form are `E0107` (`pragma-pack-unsupported`). A poisoned identifier
 used later is `E0108` (`poisoned-identifier-used`) at the use.
-**`push_macro` and `pop_macro` (revision 1.9.77).** `#pragma push_macro("NAME")`
+
+**`push_macro` and `pop_macro`.** `#pragma push_macro("NAME")`
 saves the current definition state of the macro `NAME` on a stack that belongs
 to that name: the definition, with its parameter list and replacement list, or
 the fact that `NAME` is not defined. `#pragma pop_macro("NAME")` removes the
 top state of that stack and makes it current, so a name that was pushed while
 undefined becomes undefined again, and a name pushed with a definition regains
 it, whatever `#define` and `#undef` happened in between. A pop on an empty
-stack changes nothing; the receipt counts it. The stacks are per name, nest,
+stack changes nothing. The stacks are per name, nest,
 and are independent of the `pack` stack. The `_Pragma` spelling is the same
-directive. Ignoring these two pragmas is not safe, which is why they leave the
-ignored-safe set. Both sealed oracles agree on every case above
-(`.evidence/builtin-probes/20260908-linkage-pragma/pushpop.c`: nested pushes,
-a push of an undefined name, a function-like macro, and an empty pop; both
-print `2 1 1 0 11` in `oracles.out`, Clang-19 warning on the empty pop and
-continuing). An argument that is not exactly one string literal is handled as
-any other unrecognized pragma content, ignored-safe and listed by name.
+directive. Ignoring these two pragmas is not safe, so they are not in the
+ignored-safe set. An argument that is not exactly one string literal is
+handled as any other unrecognized pragma content: ignored-safe.
 
-Any other pragma is ignored-safe; the acceptance receipt lists the ignored
-pragma names it met.
+Any other pragma is ignored-safe.
 
 **Whitespace flag and stringization.** Every pp-token carries one flag:
 preceded by white space. A token spelled in a file has the flag when white
@@ -5942,18 +6306,12 @@ of an expansion takes the flag of the macro name that began the invocation;
 when an expansion produces no tokens, the token that follows the invocation
 takes the flag if the macro name had it. Stringization (`#`) writes the
 spellings of the argument's tokens with exactly one space before each token
-whose flag is set, dropping leading and trailing white space. Measured
-(evidence `p15.out`, both oracles): with `A` = `a`, `B` = `b`, `E` empty and
+whose flag is set, dropping leading and trailing white space. Example: with `A` = `a`, `B` = `b`, `E` empty and
 `F(x)` = `x`, `__stringify(A/B)` is `"a/b"`, `__stringify(A / B)` is
 `"a / b"`, `__stringify(A E B)` is `"a b"`, `__stringify(A E/B)` is `"a /b"`,
-`__stringify(F(A)B)` is `"ab"`, `__stringify(F( A )/B)` is `"a/b"`, and the
-kernel's `define_trace.h` computed include
-`__stringify(TRACE_INCLUDE_PATH/system.h)` is `"./trace_arm.h"`. The same
-flag decides the spelling of `-E` output; that output is a convenience, not
-an acceptance surface, because the parser and the survey consume the token
-stream. Measured defect at revision 1.9.31: a space was written before every
-expanded token, so the computed include named `. / trace_arm .h` and 56
-units of the full configuration failed with `E0105`.
+`__stringify(F(A)B)` is `"ab"`, and `__stringify(F( A )/B)` is `"a/b"`. The
+same flag decides the spelling of `-E` output; that output is a convenience,
+not an acceptance surface, because the parser consumes the token stream.
 
 **The `_Pragma` operator.** `_Pragma ( string-literal )` is processed wherever
 it stands after macro expansion, including when the string literal was
@@ -5962,56 +6320,49 @@ produced by stringization inside an expansion: the literal is destringized
 under the pragma rules of this section (`pack` applied, others ignored-safe
 and counted). The operand must be exactly one string literal after
 expansion; anything else is `E0112` (`stray-token`). A `;` that follows the
-operator at file scope is an empty declaration and is accepted (both oracles
-compile it; evidence `p30-pragma-operator.out`, whose `F` line is a malformed
-probe of the architect's and is not evidence). Measured defect at revision
-1.9.47: `_Pragma` with an expanded operand was left in the token stream and
-`__bpf_kfunc_start_defs()` failed with `E1001` in 18 units.
+operator at file scope is an empty declaration and is accepted.
 
 **Whitespace of a substituted argument.** When an argument is substituted
 for a parameter in a replacement list, the first token of the argument takes
 the whitespace flag of that occurrence of the parameter, and the remaining
-tokens keep the flags of their spelling (evidence `p30-pragma-operator.out`:
-with `STR(GCC diagnostic s)`, `D(push)` is `"GCC diagnostic push"`, `E(x)`
-with `STR(a s b)` is `"a x b"`, and `G(name)` with `STR(s.h)` is `"name.h"`).
-Measured defect at revision 1.9.47: the flag was dropped and the pragma
-text read `GCC diagnosticpush`.
+tokens keep the flags of their spelling (with `STR(GCC diagnostic s)`,
+`D(push)` is `"GCC diagnostic push"`, `E(x)` with `STR(a s b)` is `"a x b"`,
+and `G(name)` with `STR(s.h)` is `"name.h"`).
 
 **One conditional stack.** Conditional directives form one stack whether they
 are met at directive level or while the arguments of a function-like macro
 are being collected: a branch opened before an invocation may close inside
 its arguments and the reverse, and the tokens of the branch not taken never
-reach the argument collector (evidence `p31-residue.c`, `cond`, the kernel's
-`#ifdef ... pr_warn( #else pr_err( #endif` shape, both oracles). Measured
-defect at revision 1.9.52: `E0102` in two units.
+reach the argument collector (for example
+`#ifdef ... pr_warn( #else pr_err( #endif`).
 
 **Empty operands of `##`.** When either operand of `##` is empty, the result
 is the other operand unchanged, whether that operand is a parameter or a
 token of the replacement list (`mod##SNMP_INC` with `mod` empty is
-`SNMP_INC`; evidence `p31-residue.c`, `paste`). Measured defect at revision
-1.9.52: `E0110` when the right operand was a literal token.
+`SNMP_INC`).
 
 **Comments across continued definition lines.** A block comment inside a
 `#define` whose lines continue with `\` is white space, including when the
-comment itself spans continued lines (evidence `p31-residue.c`, `RES_MAXSZ`
-is 20). Measured defect at revision 1.9.52: `E1001` in `callback_xdr.c`.
+comment itself spans continued lines.
 
 **`__VA_OPT__`.** `__VA_OPT__ ( tokens )` in a variadic replacement list
 expands to `tokens` when the variable arguments contain at least one token
-and to nothing otherwise (C23 6.10.4.1; both oracles accept it in gnu11;
-evidence `p31-residue.c`, `vaopt` is 4).
+and to nothing otherwise (C23 6.10.4.1; also in `gnu11`).
 
 **Parameter names.** A macro parameter is any identifier, keywords included
-(`register` in the kernel's `read_roothub`); the preprocessor knows no
-keywords (evidence `p31-residue.c`, `kw`). Measured defect at revision
-1.9.52: `E1003` in three units.
+(for example `register`); the preprocessor knows no keywords.
 
-**Wide strings under the profile.** The kernel's command line carries
-`-fshort-wchar`: `wchar_t` is `unsigned short`, `L"..."` has type
-`unsigned short[N]` counting a terminating zero, and a wide literal
-concatenated with a narrow one is wide (`L"" "abc"` is `unsigned short[4]`;
-evidence `p31-residue.c`, both 8 bytes). Measured defect at revision
-1.9.52: `E2205` in two units.
+**Wide strings under `-fshort-wchar`.** With `-fshort-wchar`, `wchar_t` is
+`unsigned short`, `L"..."` has type `unsigned short[N]` counting a terminating
+zero, and a wide literal concatenated with a narrow one is wide (`L"" "abc"` is
+`unsigned short[4]`, 8 bytes).
+
+**Wide characters.** The target layout fixes wide character values, wide
+string element types, decoding, initialization and the `wchar_t` predefined
+macros. By default `wchar_t` is `unsigned int` and a wide literal holds UTF-32
+units. `-fshort-wchar` selects `unsigned short` and UTF-16 units, with a code
+point above U+FFFF written as a surrogate pair; a wide character constant above
+U+FFFF is then `E1006`, never a truncated value.
 
 **Rescanning.** After a macro's replacement list has its arguments
 substituted, it is rescanned for further macro names together with the
@@ -6020,40 +6371,27 @@ source file, the rest of the enclosing replacement list, or the rest of the
 enclosing argument. A function-like macro name that ends an expansion is
 invoked when the next token of that outer sequence is `(`, across line
 breaks. The name of the macro being replaced is not expanded during its own
-rescan (C11 6.10.3.4). Measured (evidence `p16.out`, both oracles): with
+rescan (C11 6.10.3.4). Example: with
 `smp()` = `Z` and `G` = `smp`, `G()` is `Z`; `G` followed by `()` on the next
 line is `Z`; `H(1)()` with `H(x)` = `x smp` is `1 Z`; `K(G)()` with `K(x)` =
-`x` is `Z`. The kernel relies on this in `linux/atomic.h`, where
-`__atomic_acquire_fence` is defined as `smp_mb__after_atomic` and invoked as
-`__atomic_acquire_fence()`. Measured defect at revision 1.9.31: rescanning
-stopped at the end of the replacement list, leaving `smp_mb__after_atomic()`
-unexpanded in every unit that includes `linux/atomic.h`; the parse then
-reports `E2001`.
+`x` is `Z`.
 
 **Directives inside macro arguments.** A conditional directive (`#if`,
 `#ifdef`, `#ifndef`, `#elif`, `#else`, `#endif`) met while the arguments of a
 function-like macro are being collected is processed as a directive, and the
 tokens of the branch taken join the argument; `#define` and `#undef` there are
-processed as well (evidence `p19-p20.out`, both oracles: `p20`, `p20b`).
-`#pragma` inside an argument is `E0113` (`directive-in-macro-argument`):
-`ORACLE_CONFLICT`, GCC-14 processes it ahead of the expansion, Clang-19
-refuses (`p20c`). Any other directive there is `E0113` too. Measured defect
-at revision 1.9.32: the directive lines were emitted as ordinary tokens
-(`#ifdef 1`), so `struct_group` in `skbuff.h`, whose member list carries
-`#ifdef CONFIG_NET_CLS_ACT`, failed with `E1001` in 562 units of the full
-configuration.
+processed as well. `#pragma` inside an argument is `E0113`
+(`directive-in-macro-argument`), because the reference compilers disagree on
+it. Any other directive there is `E0113` too.
 
 **Empty arguments and variadic forwarding.** An argument may be empty. A
 named variadic parameter (`args...`) and `__VA_ARGS__` denote the exact
 sequence of the remaining arguments, empty ones and their separating commas
 included; when that sequence is substituted into a nested invocation and
 rescanned, the nested invocation's arguments are collected from the
-substituted tokens exactly as spelled. Measured (evidence `p18.out`, both
-oracles): `E(,)` is `[|]`, `V(,2)` is `[|2]`, `N()` is `[|]`, and
-`__MAP(3,__SC_ARGS,,r0,,r1,,r2)` through the kernel's `__MAP` chain yields
-`, r0 , r1 , r2`. Measured defect at revision 1.9.32: the chain dropped every
-argument after the first empty one (`h(,regs->regs[0],,,,)`), so
-`SYSCALL_DEFINEn` failed with `E1003` in about 50 units.
+substituted tokens exactly as spelled. Example: `E(,)` is `[|]`, `V(,2)` is
+`[|2]`, `N()` is `[|]`, and `__MAP(3,__SC_ARGS,,r0,,r1,,r2)` through a
+`__MAP` chain yields `, r0 , r1 , r2`.
 
 Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `unmatched-conditional`, `E0104` `error-directive`, `E0105`
