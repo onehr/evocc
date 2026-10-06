@@ -415,6 +415,25 @@ add dependencies, crates or configuration systems. Do not push.
   `d69cadc5` release binaries and is not a current-binary acceptance claim.
   Book cross-compilation commands were executed. The storage warning states
   a physical file limitation, not owner approval of a narrowed release goal.
+  Current-binary checkpoint: the release build at `f425e503` passes. Its
+  archive SHA-256 is
+  `6f9b5439bda84b9c926803fac7d2deae21dd6f5ee92fe4cb7c88ea7c64ed45e1`.
+  All five archive/contract checks pass. The packaged compiler produces the
+  same Linux hello object bytes as the earlier debug compiler. This checks
+  adjacent header discovery, not extraction onto a case-insensitive volume.
+  The first full workspace run completes 417 suites: 3,175 passed, one
+  failed and five ignored. The new cross-link error starts with "Linux",
+  which fails the diagnostic lowercase rule. Clippy and formatting did not
+  run after the test failure. The retained log SHA-256 is
+  `190cc1fa46367b8de12d09297c44c09a721be64d66cab20f0bb6b864952e48a0`.
+  Rewording the error passes all eight style tests and seven sysroot tests;
+  full-workspace acceptance still requires a new run. After checking open
+  handles, removed the owned 210,772 KiB cross-build temporary directory.
+  Source, small objects/archive, commands, hashes and logs remain in the
+  protected capture (3,924 KiB). Since the start-of-cleanup measurement,
+  target/frontend plus capture plus the temporary directory fell by
+  210,528 KiB. No protected file or shared header export was removed.
+  Header-transfer CI and the owner storage decision remain open.
   Exit: macOS produces ELF AArch64 objects and zlib without manual include
   flags, contract checks and full workspace gate pass. Add the cross-host CI
   link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,

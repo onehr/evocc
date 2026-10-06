@@ -677,7 +677,7 @@ impl Session {
             && self.command.linker.is_none()
         {
             return Err(self.fail(
-                "Linux linking on a non-Linux host requires --linker=COMMAND; use -c to produce objects",
+                "linking for Linux on a non-Linux host requires --linker=COMMAND; use -c to produce objects",
             ));
         }
         if self.target == DriverTarget::Aarch64UnknownLinuxGnu
