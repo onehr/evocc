@@ -1,8 +1,11 @@
 //! evocc: equality-native, self-contained C compiler.
 //!
-//! The driver supports preprocessing, C-HIR validation, both scalar Day-6
+//! The driver has two command lines. The cc command line (`cc.rs`) takes
+//! several inputs and the actions `-E`, `-S`, `-c` and link, and it runs the
+//! platform assembler and linker. The development command line takes one
+//! input and one action: preprocessing, C-HIR validation, both scalar Day-6
 //! interpreters, canonical EvoIR text emission, and AArch64 assembly emission
-//! through EvoMIR. Later stages remain NOT_IMPLEMENTED.
+//! through EvoMIR.
 //!
 //! The shell delegates real work to the crates built in Day 2-3:
 //!   -E           → evocc-lex → evocc-cpp → token text output
@@ -30,10 +33,14 @@ use evocc_mir::{compile_module_with_options, NativeStop, RelocationModel, Target
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
+mod cc;
 mod core_export;
+mod darwin;
+mod deps;
 mod diagnostics;
 mod dwarf;
 mod proof_required;
+mod toolchain;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DriverMode {
@@ -62,6 +69,30 @@ enum ParsedAction {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DriverTarget {
     Aarch64UnknownLinuxGnu,
+    Aarch64AppleDarwin,
+}
+
+impl DriverTarget {
+    fn triple(self) -> &'static str {
+        match self {
+            Self::Aarch64UnknownLinuxGnu => SUPPORTED_TARGET,
+            Self::Aarch64AppleDarwin => DARWIN_TARGET,
+        }
+    }
+
+    /// The target of the machine that runs the driver. The cc actions use it
+    /// when the command line names no target.
+    fn host() -> Self {
+        if cfg!(target_os = "macos") {
+            Self::Aarch64AppleDarwin
+        } else {
+            Self::Aarch64UnknownLinuxGnu
+        }
+    }
+
+    fn is_darwin(self) -> bool {
+        self == Self::Aarch64AppleDarwin
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -94,6 +125,7 @@ enum LanguageMode {
     Gnu89,
     C99,
     C11,
+    C17,
     Gnu99,
     Gnu11,
     Gnu17,
@@ -105,7 +137,7 @@ impl LanguageMode {
     }
 
     fn iso_keywords(self) -> bool {
-        matches!(self, Self::C89 | Self::C99 | Self::C11)
+        matches!(self, Self::C89 | Self::C99 | Self::C11 | Self::C17)
     }
 
     fn legacy_literal_prefixes(self) -> bool {
@@ -159,6 +191,18 @@ struct DriverOptions {
     /// code for what it requires wants the whole set, or it takes one build
     /// per unsupported construct to enumerate.
     survey: bool,
+    /// `--sysroot=DIR` or `-isysroot DIR`: the root of the target's headers.
+    system_root: Option<String>,
+    /// The cc command line runs this compilation. On a host of the same
+    /// target, a cc compilation searches the host's system headers.
+    cc_mode: bool,
+    /// The `-f` and `-m` options that the cc command line ignores.
+    ignored_options: Vec<String>,
+    /// The output of a cc compilation, which the cc command line writes to a
+    /// file. `None` sends the output to standard output.
+    captured: Option<std::cell::RefCell<Vec<u8>>>,
+    /// The source files that preprocessing opened, the input file first.
+    opened_files: std::cell::RefCell<Vec<String>>,
 }
 
 impl DriverOptions {
@@ -199,10 +243,29 @@ impl DriverOptions {
 
     fn target_layout(&self) -> TargetDataLayout {
         match self.target {
-            DriverTarget::Aarch64UnknownLinuxGnu => TargetDataLayout::aarch64_unknown_linux_gnu()
-                .with_short_wchar(self.short_wchar)
-                .with_signed_char(self.signed_char),
+            DriverTarget::Aarch64UnknownLinuxGnu => TargetDataLayout::aarch64_unknown_linux_gnu(),
+            DriverTarget::Aarch64AppleDarwin => TargetDataLayout::aarch64_apple_darwin(),
         }
+        .with_short_wchar(self.short_wchar)
+        .with_signed_char(self.signed_char)
+    }
+
+    /// Write the output of the selected action. A cc compilation keeps it for
+    /// a file; every other invocation writes it to standard output.
+    fn write_output(&self, bytes: &[u8]) -> bool {
+        match &self.captured {
+            Some(buffer) => {
+                buffer.borrow_mut().extend_from_slice(bytes);
+                true
+            }
+            None => std::io::stdout().lock().write_all(bytes).is_ok(),
+        }
+    }
+
+    /// Keep the list of source files that `pp` opened, for dependency rules.
+    fn record_opened_files(&self, pp: &Preprocessor) {
+        *self.opened_files.borrow_mut() =
+            pp.opened_sources().into_iter().map(str::to_owned).collect();
     }
 }
 
@@ -212,6 +275,7 @@ enum MacroAction {
 }
 
 const SUPPORTED_TARGET: &str = "aarch64-unknown-linux-gnu";
+const DARWIN_TARGET: &str = "aarch64-apple-darwin";
 
 const CAPABILITIES: &[&str] = &[
     "parse",
@@ -289,8 +353,15 @@ fn main() -> ExitCode {
         };
     }
 
+    if args.iter().any(|arg| arg == "--version") {
+        return cc::print_version(&args);
+    }
+
     if args.is_empty() {
-        eprintln!("usage: evocc <{}> --probe", CAPABILITIES.join("|"));
+        eprintln!(
+            "usage: evocc [-E|-S|-c] [-o OUTPUT] [OPTIONS] INPUT... (cc command line; see --help)"
+        );
+        eprintln!("       evocc <{}> --probe", CAPABILITIES.join("|"));
         eprintln!("       evocc -E [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --parse-only [--target={SUPPORTED_TARGET}] <file>");
         eprintln!("       evocc --interpret-c-hir [--target={SUPPORTED_TARGET}] <file>");
@@ -339,27 +410,50 @@ fn main() -> ExitCode {
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
 
-    let options = match parse_options(&args) {
+    if !is_development_invocation(&args) {
+        return cc::run(&args);
+    }
+
+    let options = match parse_options(&args, false) {
         Ok(options) => options,
         Err(message) => {
             error_format.usage(&message);
             return ExitCode::from(1);
         }
     };
+    run_options(&options)
+}
+
+/// The development actions keep the strict command line: one input, one
+/// action, every option known, and `aarch64-unknown-linux-gnu` as the default
+/// target. Every other invocation is a cc invocation.
+fn is_development_invocation(args: &[String]) -> bool {
+    args.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "--parse-only" | "--interpret-c-hir" | "--interpret-evoir" | "--check"
+        ) || arg.starts_with("--emit=")
+    })
+}
+
+/// Run the action that `options` selects.
+fn run_options(options: &DriverOptions) -> ExitCode {
     match options.mode {
-        DriverMode::Preprocess => run_preprocess(&options),
-        DriverMode::ParseOnly => run_parsed(&options, ParsedAction::Validate),
-        DriverMode::InterpretCHir => run_parsed(&options, ParsedAction::InterpretCHir),
-        DriverMode::EmitCHir => run_parsed(&options, ParsedAction::EmitCHir),
-        DriverMode::EmitCoreCHir => run_parsed(&options, ParsedAction::EmitCoreCHir),
-        DriverMode::EmitEvoIr => run_parsed(&options, ParsedAction::EmitEvoIr),
-        DriverMode::EmitAsm => run_parsed(&options, ParsedAction::EmitAsm),
-        DriverMode::InterpretEvoIr => run_parsed(&options, ParsedAction::InterpretEvoIr),
-        DriverMode::Check => run_parsed(&options, ParsedAction::InterpretEvoIr),
+        DriverMode::Preprocess => run_preprocess(options),
+        DriverMode::ParseOnly => run_parsed(options, ParsedAction::Validate),
+        DriverMode::InterpretCHir => run_parsed(options, ParsedAction::InterpretCHir),
+        DriverMode::EmitCHir => run_parsed(options, ParsedAction::EmitCHir),
+        DriverMode::EmitCoreCHir => run_parsed(options, ParsedAction::EmitCoreCHir),
+        DriverMode::EmitEvoIr => run_parsed(options, ParsedAction::EmitEvoIr),
+        DriverMode::EmitAsm => run_parsed(options, ParsedAction::EmitAsm),
+        DriverMode::InterpretEvoIr => run_parsed(options, ParsedAction::InterpretEvoIr),
+        DriverMode::Check => run_parsed(options, ParsedAction::InterpretEvoIr),
     }
 }
 
-fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
+/// Parse one compilation. With `lenient`, an `-f` or `-m` option that the
+/// driver does not know goes to `ignored_options` and is not an error.
+fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String> {
     let mut mode = None;
     let mut error_format = None;
     let mut target = None;
@@ -405,9 +499,12 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     let mut language = LanguageMode::Gnu11;
     let mut gnu_inline = None;
     let mut short_wchar = false;
-    let mut signed_char = false;
-    let mut position_independence = PositionIndependence::Pie(2);
+    // The target decides both defaults, and the target is known only at the end.
+    let mut signed_char = None;
+    let mut position_independence = None;
     let mut survey = false;
+    let mut system_root = None;
+    let mut ignored_options = Vec::new();
     let mut index = 0;
 
     while index < args.len() {
@@ -607,6 +704,11 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             "-fexcess-precision=standard" => {}
             "-frounding-math" => dynamic_rounding = true,
             "-fno-rounding-math" => dynamic_rounding = false,
+            // These options permit transforms that this compiler never makes,
+            // so the cc command line can ignore them without a wrong result.
+            "-ffast-math" | "-ffp-contract=fast" | "-ffp-contract=on" if lenient => {
+                ignored_options.push(arg.clone());
+            }
             "-ffast-math" | "-ffp-contract=fast" | "-ffp-contract=on" => {
                 return Err(format!("unsupported floating-point profile option `{arg}`"));
             }
@@ -681,14 +783,14 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
             }
             "-fshort-wchar" => short_wchar = true,
             "-fno-short-wchar" => short_wchar = false,
-            "-fsigned-char" | "-fno-unsigned-char" => signed_char = true,
-            "-funsigned-char" | "-fno-signed-char" => signed_char = false,
-            "-fpic" => position_independence = PositionIndependence::Pic(1),
-            "-fPIC" => position_independence = PositionIndependence::Pic(2),
-            "-fpie" => position_independence = PositionIndependence::Pie(1),
-            "-fPIE" => position_independence = PositionIndependence::Pie(2),
+            "-fsigned-char" | "-fno-unsigned-char" => signed_char = Some(true),
+            "-funsigned-char" | "-fno-signed-char" => signed_char = Some(false),
+            "-fpic" => position_independence = Some(PositionIndependence::Pic(1)),
+            "-fPIC" => position_independence = Some(PositionIndependence::Pic(2)),
+            "-fpie" => position_independence = Some(PositionIndependence::Pie(1)),
+            "-fPIE" => position_independence = Some(PositionIndependence::Pie(2)),
             "-fno-pic" | "-fno-PIC" | "-fno-pie" | "-fno-PIE" => {
-                position_independence = PositionIndependence::Disabled;
+                position_independence = Some(PositionIndependence::Disabled);
             }
             "--target" => {
                 index += 1;
@@ -702,6 +804,21 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 set_target(&mut target, parse_target(value)?)?;
             }
             "--survey" => survey = true,
+            "--sysroot" | "-isysroot" => {
+                index += 1;
+                let value = args
+                    .get(index)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| format!("{arg} requires an argument"))?;
+                system_root = Some(value.clone());
+            }
+            _ if arg.starts_with("--sysroot=") => {
+                let value = &arg["--sysroot=".len()..];
+                if value.is_empty() {
+                    return Err("--sysroot requires a directory".into());
+                }
+                system_root = Some(value.to_owned());
+            }
             "-P" | "-undef" => {}
             "-nostdinc" => standard_includes = false,
             "-I" | "-D" | "-U" | "-include" | "-isystem" => {
@@ -746,16 +863,22 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
                 macro_prefix_maps.push((old.to_owned(), new.to_owned()));
             }
             "-std=gnu11" => language = LanguageMode::Gnu11,
-            "-std=gnu99" => language = LanguageMode::Gnu99,
-            "-std=c89" | "-std=c90" | "-ansi" => language = LanguageMode::C89,
-            "-std=c99" | "-std=iso9899:1999" => language = LanguageMode::C99,
-            "-std=c11" => language = LanguageMode::C11,
-            "-std=gnu17" => language = LanguageMode::Gnu17,
-            "-std=gnu89" => language = LanguageMode::Gnu89,
+            "-std=gnu99" | "-std=gnu9x" => language = LanguageMode::Gnu99,
+            "-std=c89" | "-std=c90" | "-ansi" | "-std=iso9899:1990" => language = LanguageMode::C89,
+            "-std=c99" | "-std=c9x" | "-std=iso9899:1999" => language = LanguageMode::C99,
+            "-std=c11" | "-std=c1x" | "-std=iso9899:2011" => language = LanguageMode::C11,
+            "-std=c17" | "-std=c18" | "-std=iso9899:2017" | "-std=iso9899:2018" => {
+                language = LanguageMode::C17;
+            }
+            "-std=gnu17" | "-std=gnu18" => language = LanguageMode::Gnu17,
+            "-std=gnu89" | "-std=gnu90" => language = LanguageMode::Gnu89,
             "-fgnu89-inline" => gnu_inline = Some(true),
             "-fno-gnu89-inline" => gnu_inline = Some(false),
             _ if arg.starts_with("-std=") => {
                 return Err(format!("unsupported C language mode `{arg}`"));
+            }
+            _ if lenient && (arg.starts_with("-f") || arg.starts_with("-m")) => {
+                ignored_options.push(arg.clone());
             }
             _ if arg.starts_with('-') && arg != "/dev/stdin" => {
                 return Err(format!("unsupported option `{arg}`"));
@@ -863,10 +986,14 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
     if mode == DriverMode::Check && allocation_variants_selected {
         return Err("--regalloc-opt is native-only and has no meaning for --check".into());
     }
+    let target = target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu);
+    // Apple's arm64 convention passes every anonymous argument on the stack,
+    // and its `va_list` is one pointer.
+    codegen.anonymous_on_stack = target.is_darwin();
     Ok(DriverOptions {
         mode,
         error_format: error_format.unwrap_or_default(),
-        target: target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu),
+        target,
         input: input.ok_or_else(|| "an input file is required".to_string())?,
         include_paths,
         system_include_paths,
@@ -900,17 +1027,30 @@ fn parse_options(args: &[String]) -> Result<DriverOptions, String> {
         language,
         gnu_inline: gnu_inline.unwrap_or(language.legacy_declarations()),
         short_wchar,
-        signed_char,
-        position_independence,
+        // Plain char is signed on Darwin and unsigned on AArch64 Linux.
+        signed_char: signed_char.unwrap_or(target.is_darwin()),
+        // Darwin code is always position independent, and Apple's compiler
+        // defines the PIC macros but not the PIE macros.
+        position_independence: position_independence.unwrap_or(if target.is_darwin() {
+            PositionIndependence::Pic(2)
+        } else {
+            PositionIndependence::Pie(2)
+        }),
         survey,
+        system_root,
+        cc_mode: false,
+        ignored_options,
+        captured: None,
+        opened_files: std::cell::RefCell::new(Vec::new()),
     })
 }
 
 fn parse_target(value: &str) -> Result<DriverTarget, String> {
     match value {
         SUPPORTED_TARGET => Ok(DriverTarget::Aarch64UnknownLinuxGnu),
+        DARWIN_TARGET => Ok(DriverTarget::Aarch64AppleDarwin),
         _ => Err(format!(
-            "unsupported target `{value}`; supported target is `{SUPPORTED_TARGET}`"
+            "unsupported target `{value}`; supported targets are `{SUPPORTED_TARGET}` and `{DARWIN_TARGET}`"
         )),
     }
 }
@@ -946,6 +1086,7 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
         }
     };
     let result = pp.process_bytes(evocc_cpp::TokenStream::new(tokens), &src);
+    options.record_opened_files(&pp);
     if pp.has_errors() {
         for error in pp.errors() {
             options.emit_error(
@@ -967,8 +1108,7 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let mut stdout = std::io::stdout().lock();
-    if writeln!(stdout, "{rendered}").is_err() {
+    if !options.write_output(format!("{rendered}\n").as_bytes()) {
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS
@@ -1014,12 +1154,13 @@ fn read_and_lex(options: &DriverOptions) -> Result<(Vec<u8>, Vec<evocc_lex::Toke
 }
 
 fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, String> {
-    // Dispatch through the selected frontend target even though the Day-3
-    // preprocessor does not yet expose target-specific predefined macros.
-    // This is target selection for preprocessing/parsing, not a codegen claim.
-    let mut pp = match options.target {
-        DriverTarget::Aarch64UnknownLinuxGnu => Preprocessor::for_target(SUPPORTED_TARGET)?,
-    };
+    // The preprocessor crate has one target profile, AArch64 Linux. The
+    // Darwin profile is that profile with the differences that Apple's
+    // compiler predefines for arm64 macOS applied on top.
+    let mut pp = Preprocessor::for_target(SUPPORTED_TARGET)?;
+    if options.target.is_darwin() {
+        darwin::apply_predefined_profile(&mut pp)?;
+    }
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
     let (date, time) = predefined_timestamp();
@@ -1073,6 +1214,7 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
             "__ARM_FP16_ARGS",
             "__ARM_FP16_FORMAT_IEEE",
             "__ARM_NEON",
+            "__ARM_NEON__",
         ] {
             pp.undefine(name);
         }
@@ -1119,6 +1261,8 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     pp.set_legacy_literal_prefixes(options.language.legacy_literal_prefixes());
     if options.signed_char {
         pp.undefine("__CHAR_UNSIGNED__");
+    } else if options.target.is_darwin() {
+        pp.define("__CHAR_UNSIGNED__".to_owned(), decoded_tokens("1")?);
     }
     match options.language {
         LanguageMode::C89 | LanguageMode::Gnu89 => pp.undefine("__STDC_VERSION__"),
@@ -1126,7 +1270,7 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
             pp.define("__STDC_VERSION__".to_owned(), decoded_tokens("199901L")?);
         }
         LanguageMode::C11 | LanguageMode::Gnu11 => {}
-        LanguageMode::Gnu17 => {
+        LanguageMode::C17 | LanguageMode::Gnu17 => {
             pp.define("__STDC_VERSION__".to_owned(), decoded_tokens("201710L")?);
         }
     }
@@ -1158,6 +1302,14 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     }
     for include_path in &options.system_include_paths {
         pp.add_include_path(include_path.clone());
+    }
+    // The target's own system directories follow every directory that the
+    // command line names, as the platform compilers search them.
+    if let Some(directories) = toolchain::target_system_directories(options) {
+        pp.set_standard_includes_enabled(false);
+        for directory in directories {
+            pp.add_include_path(directory);
+        }
     }
     for forced_include in &options.forced_includes {
         pp.add_forced_include(forced_include.clone());
@@ -1350,6 +1502,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         }
     };
     let result = pp.process_bytes(evocc_cpp::TokenStream::new(tokens), &src);
+    options.record_opened_files(&pp);
     if pp.has_errors() {
         for error in pp.errors() {
             options.emit_error(
@@ -1443,6 +1596,9 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                 &target,
                 options.optimization != 0,
                 |resolved, mut module| {
+                    if options.target.is_darwin() {
+                        darwin::apply_assembler_labels(resolved, &mut module);
+                    }
                     for function in &mut module.functions {
                         if function.patchable_entry.is_none() {
                             function.patchable_entry = options.patchable_entry;
@@ -1689,8 +1845,7 @@ fn emit_asm(options: &DriverOptions, module: &Module, unit: &evocc_chir::CHirUni
         Ok(text) => text,
         Err(code) => return code,
     };
-    let mut stdout = std::io::stdout().lock();
-    if write!(stdout, "{text}").is_err() {
+    if !options.write_output(text.as_bytes()) {
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS
@@ -1702,14 +1857,20 @@ fn assemble(
     module: &Module,
     unit: &evocc_chir::CHirUnit<'_>,
 ) -> Result<String, ExitCode> {
-    let target = match options.target {
-        DriverTarget::Aarch64UnknownLinuxGnu => MirTarget::Linux,
+    let (target, relocation) = match options.target {
+        DriverTarget::Aarch64UnknownLinuxGnu => {
+            (MirTarget::Linux, options.position_independence.relocation())
+        }
+        // Mach-O on arm64 admits only position-independent code.
+        DriverTarget::Aarch64AppleDarwin => {
+            (MirTarget::Darwin, RelocationModel::PositionIndependent)
+        }
     };
     let mut text = match compile_module_with_options(
         target,
         module,
         &|_| true,
-        options.position_independence.relocation(),
+        relocation,
         &options.codegen,
     ) {
         Ok(text) => text,
@@ -1735,7 +1896,9 @@ fn assemble(
             return Err(ExitCode::from(1));
         }
     };
-    if options.debug_types {
+    // The debug type writer emits ELF sections. A Darwin object has no debug
+    // information.
+    if options.debug_types && !options.target.is_darwin() {
         match dwarf::type_information(unit, module, &options.target_layout(), &options.input) {
             Ok(debug) => text.push_str(&debug),
             Err(error) => {

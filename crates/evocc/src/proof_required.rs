@@ -425,8 +425,7 @@ pub(crate) fn run(
             if options.error_format == crate::diagnostics::Format::Text {
                 eprintln!("evocc: proof-required result: {record}");
             }
-            let mut stdout = std::io::stdout().lock();
-            if write!(stdout, "{assembly}").is_err() {
+            if !options.write_output(assembly.as_bytes()) {
                 return ExitCode::from(1);
             }
             ExitCode::SUCCESS
