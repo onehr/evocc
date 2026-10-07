@@ -94,6 +94,10 @@ The first public version.
 These results were recorded between 2026-09-13 and 2026-10-07. [docs/evidence.md](docs/evidence.md)
 keeps their limits.
 
+- The recorded agent repair loop reaches checked assembly in 12.41 seconds in the final
+  workspace gate. Its refusal demo returns the three required failures without publishing
+  assembly. Paired JSON/proof-record tests pass three consecutive runs and the final gate;
+  both the full offline workspace and Lean gates pass on clean commit `200b4e73`.
 - Linux 6.18.44 ARM64 boots with 2,799 of 2,799 target C objects compiled by EvoCC. A second
   configuration boots with 7,008 objects and 848 modules.
 - Ten of fifteen application lanes pass their recorded selection, among them zlib, zstd, cJSON,

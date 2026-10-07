@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P16, B08, B08b, B08d, B08d10 | P01 through P15 are accepted in their recorded scope. P16 follows the completed full gate, then both final gates run on a clean tree. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10 | P01 through P16 are accepted in their recorded scope. Both final gates pass on clean 200b4e73. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -832,9 +832,30 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   programs or external inputs. AGENTS.md and llms.txt are byte-identical.
   Capture is 1,212 KiB; this slice's target/frontend plus capture net increase
   is 5,420 KiB. Test-owned temporary sources and proof outputs are removed.
-- [ ] **P16 — Document a real agent connection** — `OPEN`, P1.
-  After P15, test the installed client configuration, publish its actual tool
-  list, add the bounded skill, then run both final gates on a clean tree.
+- [x] **P16 — Document a real agent connection** — `DONE`, P1.
+  `200b4e73` adds the 37/40-line connection section, the 65/80-line standalone
+  skill and `tools/demo/connect-agent.sh`. The skill validator passes. Claude
+  Code 2.1.292 accepts the scratch project configuration and reports pending
+  approval; the separate P13 session establishes its real connected use.
+  Codex 0.160.1 discovers exactly `check`, `explain`, `fix_plan`, `prove`, `run`
+  through its actual client catalog, without a model turn. Other servers are
+  disabled only in that child process; no persistent client configuration is
+  changed. The initial sandbox denial of Codex's state database is retained;
+  the authorized retry exits zero. Both final gates start on clean `200b4e73`.
+  Full offline workspace: 425 suites, 3,227 passed, zero failed, five existing
+  ignored; Clippy and formatting pass. The demo takes 12.41 seconds and the
+  paired-record test 24.35 seconds. Lean: all six steps pass, including 20
+  generator tests; the retained receipt remains byte-identical and clean.
+  Capture: `.evidence/diagnostics/20261007/agent-demo/`, cap 500 MiB.
+  `connection-full-workspace.log` SHA-256:
+  `2e90506147300d94c0fcc26ab4db5060cc436ab8f0042f6b0f8f8a303bb62bdb`.
+  `final-lean.log` SHA-256:
+  `7ee6f6d12d77d30ca2ee84738ef5c720b086cfb6adc15e24932f5b66c150f4c7`.
+  No proof profile, export, Lean checker, compiler behavior or global client
+  setting changes. D06 remains OPEN. Capture is 2,096 KiB; target/frontend plus
+  capture grows by 1,200 KiB from the P15 checkpoint. Scratch configuration and
+  test-owned outputs are removed; historical proof evidence remains. Host free
+  space is 164 GiB. The four demo packages are complete in this bounded scope.
 
 ### Remaining verification and application sequence
 
