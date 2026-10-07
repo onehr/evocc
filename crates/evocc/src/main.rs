@@ -1423,9 +1423,8 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
         pp.undefine("__GNUC_STDC_INLINE__");
         pp.define("__GNUC_GNU_INLINE__".to_owned(), decoded_tokens("1")?);
     }
-    if let Some(parent) = std::path::Path::new(&options.input).parent() {
-        pp.add_include_path(parent.to_string_lossy().to_string());
-    }
+    // Quoted includes search the active file's parent in the preprocessor.
+    // Do not add it to the angle search chain ahead of explicit -I roots.
     // System directories follow every -I directory regardless of option
     // order. A directory in both lists keeps only its system position, so
     // include_next sees the same ordered search chain as include/has_include.
