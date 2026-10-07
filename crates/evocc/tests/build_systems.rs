@@ -166,15 +166,15 @@ endif()
                 env!("CARGO_BIN_EXE_evocc")
             ));
         if linux {
+            let sysroot = self.0.join("linux headers");
+            std::os::unix::fs::symlink(root().join("sysroot/aarch64-unknown-linux-gnu"), &sysroot)
+                .unwrap();
             configure
                 .args([
                     "-DEVOCC_TARGET=aarch64-unknown-linux-gnu",
                     "-DEVOCC_TEST_OBJECT_ONLY=ON",
                 ])
-                .arg(format!(
-                    "-DCMAKE_SYSROOT={}",
-                    root().join("sysroot/aarch64-unknown-linux-gnu").display()
-                ));
+                .arg(format!("-DCMAKE_SYSROOT={}", sysroot.display()));
         }
         success(configure.output().unwrap());
         success(
@@ -251,4 +251,65 @@ fn make_rebuilds_after_a_header_changes_using_the_emitted_depfile() {
         std::fs::read_to_string(work.0.join("main.c")).unwrap(),
         source
     );
+}
+
+#[test]
+fn pkg_config_zlib_flags_build_a_native_round_trip() {
+    let work = Work::new();
+    std::fs::write(
+        work.0.join("roundtrip.c"),
+        r#"#include <zlib.h>
+#include <string.h>
+int main(void) {
+    const unsigned char input[] = "a build system passes library flags unchanged";
+    unsigned char compressed[256], restored[sizeof input];
+    uLongf size = sizeof compressed, restored_size = sizeof restored;
+    if (compress(compressed, &size, input, sizeof input) != Z_OK) return 1;
+    if (uncompress(restored, &restored_size, compressed, size) != Z_OK) return 2;
+    return restored_size != sizeof input || memcmp(input, restored, sizeof input);
+}
+"#,
+    )
+    .unwrap();
+    // The checked interpreter can refuse external library calls. Keep its result
+    // separate from the native ABI check; a refusal is not a source UB finding.
+    let _check = work
+        .command(env!("CARGO_BIN_EXE_evo"), false)
+        .args(["check", "roundtrip.c", "--json"])
+        .output()
+        .unwrap();
+    success(
+        work.command("python3", false)
+            .args([
+                "-c",
+                "import shlex, subprocess, sys; flags = shlex.split(subprocess.check_output(['pkg-config', '--cflags', '--libs', 'zlib'], text=True)); subprocess.run([sys.argv[1], 'roundtrip.c', '-o', 'roundtrip', *flags], check=True)",
+                env!("CARGO_BIN_EXE_evocc"),
+            ])
+            .output()
+            .unwrap(),
+    );
+    success(Command::new(work.0.join("roundtrip")).output().unwrap());
+}
+
+#[test]
+fn native_stack_protector_uses_the_host_object_format() {
+    let work = Work::new();
+    std::fs::write(
+        work.0.join("protected.c"),
+        "int main(void) { volatile char bytes[32]; bytes[0] = 7; bytes[31] = 9; return bytes[0] + bytes[31] - 16; }\n",
+    )
+    .unwrap();
+    success(
+        work.command(env!("CARGO_BIN_EXE_evo"), false)
+            .args(["check", "protected.c", "--json"])
+            .output()
+            .unwrap(),
+    );
+    success(
+        work.command(env!("CARGO_BIN_EXE_evocc"), false)
+            .args(["-fstack-protector-strong", "protected.c", "-o", "protected"])
+            .output()
+            .unwrap(),
+    );
+    success(Command::new(work.0.join("protected")).output().unwrap());
 }
