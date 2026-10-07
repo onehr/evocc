@@ -313,3 +313,29 @@ fn native_stack_protector_uses_the_host_object_format() {
     );
     success(Command::new(work.0.join("protected")).output().unwrap());
 }
+
+#[test]
+fn generated_angle_header_precedes_source_but_quoted_header_stays_local() {
+    let work = Work::new();
+    std::fs::create_dir(work.0.join("src")).unwrap();
+    std::fs::create_dir(work.0.join("generated")).unwrap();
+    std::fs::write(work.0.join("src/choice.h"), "#define CHOICE 11\n").unwrap();
+    std::fs::write(work.0.join("generated/choice.h"), "#define CHOICE 22\n").unwrap();
+    std::fs::write(work.0.join("src/source_only.h"), "/* local only */\n").unwrap();
+    std::fs::write(
+        work.0.join("src/main.c"),
+        "#include <choice.h>\nANGLE CHOICE\n#undef CHOICE\n#include \"choice.h\"\nQUOTED CHOICE\n#if __has_include(<source_only.h>)\n#error angle lookup must not add the source directory\n#endif\n",
+    )
+    .unwrap();
+    let output = success(
+        work.command(env!("CARGO_BIN_EXE_evocc"), false)
+            .args(["-E", "-nostdinc", "-Igenerated", "src/main.c"])
+            .output()
+            .unwrap(),
+    );
+    let tokens = String::from_utf8(output.stdout)
+        .unwrap()
+        .split_whitespace()
+        .collect::<String>();
+    assert_eq!(tokens, "ANGLE22QUOTED11");
+}
