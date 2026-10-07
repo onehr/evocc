@@ -1,11 +1,10 @@
-divide(int divisor, int unused)
+magnitude(int a)
 {
-    if (divisor < 0)
-        return 0;
-    return 12 / divisor;
+    int unused = 7;
+    return a < 0 ? -a : a;
 }
 
 int main(void)
 {
-    return divide(0, 7);
+    return magnitude(-2147483647 - 1);
 }

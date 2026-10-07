@@ -73,7 +73,7 @@ assert record['all_stages_checked'] is True and record['output']['checked'] is T
 assert record['checker_digest_pinned'] is True
 assert pathlib.Path(record['checker']['path']).resolve()==checker
 assert pathlib.Path(record['compiler']['path']).resolve()==compiler
-assert {entry['entry'] for entry in record['entries']}=={'divide','main'}
+assert {entry['entry'] for entry in record['entries']}=={'magnitude','main'}
 assert proof['stages']==[{k:stage[k] for k in ('id','status')} for stage in record['stages']]
 assert [stage['id'] for stage in record['stages']]==[
     'source-to-evoir','rewrite','lowering','allocation','frame-emission','pipeline']
