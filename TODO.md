@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P07, P08, P09, P10, P11, B08, B08b, B08d, B08d10 | Complete P07 through P11 in order under the second product contract. P01 through P06 are accepted. Verification work stays paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P08, P09, P10, P11, B08, B08b, B08d, B08d10 | Complete P08 through P11 in order under the second product contract. P01 through P07 are accepted. Restore the truncated package text before implementing missing requirements. Verification work stays paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -582,25 +582,43 @@ their complete text before implementing the missing requirements; P06 is clear.
   Capture is 660 KiB; free space is 205.72 GiB. Other host work is excluded
   from this accounting. Claim: command defects closed, not repair support.
   Capture cap: 500 MiB at `.evidence/diagnostics/20261007/command-fixes/`.
-- [ ] **P07 — Expose and apply diagnostic repairs** — `OPEN`, P1.
-  RED `2c00b3eb`: all 12 public-path tests fail as expected. The current
-  compiler has no repairs field and evo has no fix verb. The tests cover
+- [x] **P07 — Expose and apply diagnostic repairs** — `DONE`, P1.
+  RED `2c00b3eb`: all 12 public-path tests fail as expected. At that subject,
+  the compiler has no repairs field and evo has no fix verb. The tests cover
   the five repair records and byte-exact edits, safe/review separation,
   parse-error refusal, edit order, shared declarations and macro/volatile
   boundaries. Log: `.evidence/diagnostics/20261007/repairs/2c00b3eb-red.log`.
-  Implementation now has the five repair records, plan/apply and rollback.
+  Implementation `512cb75f` has the five repair records, plan/apply and rollback.
   All 17 repair tests pass, including adjacent declarations, volatile aggregate
   initialization, prototype types and equal-position insertion order. The five
   existing UI cases have repair JSON snapshots; all 55 existing records keep
   their old structural fields. Focused diagnostics/lint tests and Clippy pass.
   Production Rust: 500 inserted/replaced lines; specification: 49 lines.
-  Next: original cJSON/zlib replay, then a clean-tree full workspace gate.
+  The 52 focused diagnostics/lint tests pass, plus all 12 evo command tests.
+  On clean `512cb75f`, unchanged cJSON 1.7.19 passes its original Makefile's
+  all/test targets. zlib 1.3.2 passes both static and shared original tests;
+  all C objects use EvoCC, while the upstream shared link uses system cc.
+  These are Makefile replays, not a replacement Unity/ladder campaign.
+  The same clean subject passes the full offline workspace gate: 418 suites,
+  3,195 passed, zero failed, five existing ignored campaigns; Clippy with
+  warnings denied and formatting pass. Log: `512cb75f-full-workspace.log` in
+  the capture below; SHA-256:
+  `c5578df193c81bdc919f55fd4bad0fe524276657647e373b876df5cf2837c7aa`.
+  `512cb75f-commands.txt` records application commands, source and binary hashes.
+  Removed the owned 7,708 KiB temporary application tree after handle checks;
+  object hashes/sizes and logs remain. Target/frontend plus capture grows by
+  454,704 KiB from the recorded repair RED checkpoint; no host-wide attribution.
+  Capture is 444 KiB before this closure record; free space is 202.06 GiB.
+  An EMFILE failure prevented new shell queries during the gate, not the gate
+  itself. Its original handle completed normally; no restart or bypass was used.
+  Claim: the five supported source repairs and original build compatibility.
+  A syntax recheck is not a behavior proof; review edits still require a human.
   Exit: byte-exact apply tests, parse-error refusal, safe/review separation,
   cJSON and zlib replay, full gate. Budget: 500 production Rust lines and
   60 specification lines. Pin diagnostics revision 1.1.0.
   Capture cap: 500 MiB at `.evidence/diagnostics/20261007/repairs/`.
 - [ ] **P08 — Add machine-readable user commands** — `OPEN`, P1.
-  Next: after P07 closes, resolve the truncated JSON/MCP contract and add REDs.
+  Next: resolve the truncated JSON/MCP contract and add REDs; P07 is closed.
   Exit: verb JSON snapshots, five MCP tools over pipes, agent instructions,
   llms.txt, tested book session and full gate. No network server or dependencies.
   Known budget: 700 production Rust lines; AGENTS.md at most 120 lines.
