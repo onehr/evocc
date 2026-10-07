@@ -60,6 +60,11 @@ EvoCC makes code for the host by default: `aarch64-apple-darwin` on macOS and
 the next chapters, such as `--emit=asm` and the interpreters, use `aarch64-unknown-linux-gnu` when
 you do not give `--target`.
 
+`evo help`, `evo --help` and `evo VERB --help` print usage and exit 0.
+With no arguments, `evo` prints the same general usage and exits 64.
+Append `--json` to a help request for one JSON line with `usage` (string)
+and `exit_code` (integer). Help does not start the compiler.
+
 ## Cross-compile for Linux
 
 The Linux headers go in `sysroot/aarch64-unknown-linux-gnu/`, beside `bin/`.

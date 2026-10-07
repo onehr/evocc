@@ -352,9 +352,11 @@ fn execute() -> Result<i32> {
     }
     let verb = raw
         .first()
-        .and_then(|s| s.to_str())
-        .ok_or("usage: evo run|check|explain|prove|build|version")?;
+        .map_or(Ok("help"), |s| s.to_str().ok_or("command is not UTF-8"))?;
     let usage = match verb {
+        "help" | "--help" if raw.len() <= 1 || (raw.len() == 2 && raw[1] == "--json") => {
+            "evo run|check|explain|prove|build|version|help"
+        }
         "run" => "evo run FILE.c [-- ARGS]",
         "check" => "evo check FILE.c",
         "explain" => "evo explain CODE",
@@ -363,9 +365,17 @@ fn execute() -> Result<i32> {
         "version" => "evo version",
         _ => return Err(format!("unknown command: {verb}").into()),
     };
-    if raw.len() == 2 && raw[1] == "--help" {
-        println!("usage: {usage}");
-        return Ok(0);
+    if matches!(verb, "help" | "--help")
+        || ((raw.len() == 2 || (raw.len() == 3 && raw[2] == "--json")) && raw[1] == "--help")
+    {
+        let status = if raw.is_empty() { 64 } else { 0 };
+        let message = format!("usage: {usage}");
+        if raw.last().is_some_and(|a| a == "--json") {
+            println!("{{\"usage\":{},\"exit_code\":{status}}}", quote(&message));
+        } else {
+            println!("{message}");
+        }
+        return Ok(status);
     }
     let compiler = locate("evocc", "EVOCC")?;
     if verb == "run" {

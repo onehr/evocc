@@ -26,7 +26,8 @@ fn stdin_run(args: &[&str], input: &[u8]) -> Output {
         .spawn()
         .unwrap();
     use std::io::Write;
-    child.stdin.take().unwrap().write_all(input).unwrap();
+    // Argument rejection may close the pipe before the source is consumed.
+    let _ = child.stdin.take().unwrap().write_all(input);
     child.wait_with_output().unwrap()
 }
 
