@@ -295,3 +295,28 @@ fn removing_a_loop_declaration_keeps_the_separator() {
     );
     success(&source.check());
 }
+
+#[test]
+fn prototype_precedes_an_implicit_return_type_at_the_same_position() {
+    let source = Source::new("f(void) { return missing(); }\n");
+    success(&source.fix(&["--apply", "--review", "--json"]));
+    assert_eq!(
+        std::fs::read_to_string(&source.0).unwrap(),
+        "int missing(void);\nint f(void) { return missing(); }\n"
+    );
+    success(&source.check());
+}
+
+#[test]
+fn prototypes_use_promoted_scalars_and_pointer_declarators() {
+    for source in [
+        "int f(char a, float b) { return missing(a, b); }\n",
+        "int f(const int *a) { return missing(a); }\n",
+        "int f(double (*a)(float)) { return missing(a); }\n",
+        "int f(int (*a)[3]) { return missing(a); }\n",
+    ] {
+        let source = Source::new(source);
+        success(&source.fix(&["--apply", "--review", "--json"]));
+        success(&source.check());
+    }
+}
