@@ -583,10 +583,16 @@ their complete text before implementing the missing requirements; P06 is clear.
   from this accounting. Claim: command defects closed, not repair support.
   Capture cap: 500 MiB at `.evidence/diagnostics/20261007/command-fixes/`.
 - [ ] **P07 — Expose and apply diagnostic repairs** — `OPEN`, P1.
-  Next: after P06 closes, add REDs for the five approved repair kinds.
+  RED `2c00b3eb`: all 12 public-path tests fail as expected. The current
+  compiler has no repairs field and evo has no fix verb. The tests cover
+  the five repair records and byte-exact edits, safe/review separation,
+  parse-error refusal, edit order, shared declarations and macro/volatile
+  boundaries. Log: `.evidence/diagnostics/20261007/repairs/2c00b3eb-red.log`.
+  Next: add the additive record and source-derived repairs, then the fix verb.
   Exit: byte-exact apply tests, parse-error refusal, safe/review separation,
   cJSON and zlib replay, full gate. Budget: 500 production Rust lines and
   60 specification lines. Pin diagnostics revision 1.1.0.
+  Capture cap: 500 MiB at `.evidence/diagnostics/20261007/repairs/`.
 - [ ] **P08 — Add machine-readable user commands** — `OPEN`, P1.
   Next: after P07 closes, resolve the truncated JSON/MCP contract and add REDs.
   Exit: verb JSON snapshots, five MCP tools over pipes, agent instructions,
