@@ -159,7 +159,7 @@ impl Reader<'_> {
     }
     fn value(&mut self, depth: usize) -> Result<Json> {
         if depth > 128 {
-            return Err("JSON nesting exceeds 128 levels".into());
+            return Err("message nesting exceeds 128 levels".into());
         }
         self.space();
         let first = *self.bytes.get(self.at).ok_or("missing JSON value")?;

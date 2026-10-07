@@ -31,7 +31,7 @@ data. Non-UTF-8 program arguments remain byte-exact at the CLI boundary.
 Input and setup errors can return `{error: string, exit_code: integer}` instead.
 The build receipt keeps the first version line. `version` returns the full text,
 without outer whitespace. Diagnostic and repair fields are defined in
-[the diagnostic specification](../../spec/diagnostics.md).
+[the diagnostic specification](https://github.com/onehr/evocc/blob/main/spec/diagnostics.md).
 
 `run` returns main's low eight bits. The interpreter does not implement arbitrary
 external libc calls. A nonzero main return is not a check failure. `check` returns
@@ -72,7 +72,7 @@ The tool result has `structuredContent` equal to the command record, one text
 Protocol errors use JSON-RPC error codes: -32700 for malformed JSON, -32600 for
 invalid requests, -32601 for unknown methods, -32602 for bad tool arguments,
 -32603 for a command-interface failure, and -32002 before initialization.
-Messages are limited to 1 MiB and 128 nested values. Duplicate object keys and
+Frames, including their newline, are limited to 1 MiB and 128 nested values. Duplicate object keys and
 unpaired Unicode surrogates are rejected. Numeric request IDs retain all digits.
 
 ## Example session
@@ -94,5 +94,5 @@ The first response is:
 
 The notification has no response. Request 2 lists the five tools above. Request 3
 returns the E3002 explanation in `structuredContent` and in the text content.
-Use [AGENTS.md](../../AGENTS.md), also supplied as [llms.txt](../../llms.txt), for
+Use [AGENTS.md](https://github.com/onehr/evocc/blob/main/AGENTS.md), also supplied as [llms.txt](https://github.com/onehr/evocc/blob/main/llms.txt), for
 repository commands, reproduction rules and the human-review boundary.

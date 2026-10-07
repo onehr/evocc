@@ -153,7 +153,7 @@ pub fn serve() -> Result<i32> {
             if !bytes.ends_with(b"\n") {
                 input.skip_until(b'\n')?;
             }
-            Err("JSON message exceeds 1 MiB".into())
+            Err("message exceeds 1 MiB".into())
         } else {
             std::str::from_utf8(&bytes)
                 .map_err(Into::into)

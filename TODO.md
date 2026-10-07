@@ -630,6 +630,10 @@ their complete text before implementing the missing requirements; P06 is clear.
   All 26 focused tests pass, including the 12 existing command regressions;
   targeted Clippy with warnings denied passes. No Lean, checker, interpreter,
   emitted-code path, dependency, daemon or network service was changed.
+  First clean full gate on `cd0eefbc`: 420 suites, 3,208 passed, one style-test
+  failure, five existing ignored campaigns. Two new error messages started
+  with uppercase JSON; their wording is corrected without changing the rule.
+  Keep the failed log. Full-workspace acceptance remains pending.
   Implementation: 635 inserted/replaced production Rust lines, tests excluded.
   The JSON module is 247 lines and reuses the existing string quote function.
   AGENTS.md and llms.txt are identical, 53 lines each; the book chapter is 98.
