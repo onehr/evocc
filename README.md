@@ -2,13 +2,20 @@
 
 <p align="center"><img src="docs/images/mascot.png" alt="EvoCC mascot, a chameleon holding a wrench" width="200"></p>
 
-**The C compiler built for agents. It checks its own work.**
+**Built by agents. Built for agents. It checks its own work.**
 
-EvoCC is a C compiler for AArch64 (Linux and macOS), written from scratch in Rust, with proofs in Lean 4. AI
-agents built it in 58 days, under the direction of the project owner, and agents are its first-class
-users: every result is a numbered, explained, machine-readable record.
+EvoCC is a C compiler for AArch64 (Linux and macOS), written from scratch in Rust, with proofs in
+Lean 4. AI agents built it in 58 days under the direction of one person. Agents are also its first
+users: every result it produces is a numbered, explained, machine-readable record.
+
+| By agents | For agents |
+|---|---|
+| 1,986 commits in 58 days; one human set the questions and ruled on disputes | Every diagnostic has a stable code, a tested explanation page and a JSON record with a frozen schema |
+| Sealed GCC 14 and Clang 19 oracles, RED-first tests, fail-closed gates, receipts | `evo check` reports undefined behavior with evidence from the executed path |
+| 68,000 lines of Lean 4 proofs, checked by the kernel, no `sorry` | `evo prove` writes a certificate for each accepted compilation; a refused check writes nothing |
+
 The [showcase](#showcase) shows what it builds and runs. [Part I](#part-i--the-experiment) tells
-the experiment: the question, what is new, how to use EvoCC and how it was built.
+the experiment: the question, what is new, what agents get, how to use EvoCC and how it was built.
 [Part II](#part-ii--evocc-as-a-system) describes EvoCC as a system, as a short paper.
 
 ## Showcase
@@ -372,8 +379,9 @@ files. Five rules held the work together:
 
 A C compiler is trusted by every program that it builds. Verified compilers remove that trust, but
 proving compiler algorithms is costly. We present EvoCC, a C compiler for AArch64 Linux and macOS that AI
-agents built in 58 days under the direction of one expert. Its rule is that untrusted components
-propose and small checked components decide. Its IR, EvoIR, makes each C definedness condition an
+agents built in 58 days under the direction of one expert, and whose interface is made for agents:
+stable diagnostic codes with tested explanations, JSON records, certificates and receipts. Its rule
+is that untrusted components propose and small checked components decide. Its IR, EvoIR, makes each C definedness condition an
 explicit obligation, threads memory and observable effects as SSA tokens and gives each pointer a
 provenance. Its equality-saturation optimizer uses 62 rewrite rules that Lean 4 proves for all bit
 widths, and a separate, pinned checker replays each certificate. For the integer subset `core-v1`,
@@ -407,6 +415,9 @@ agents propose; sealed oracles, two interpreters and proved checkers decide. Our
    of the checked output, and code size against GCC 14 and Clang 19 (§7).
 5. **An auditable agent workflow:** pinned specifications, sealed oracles, RED-first commits,
    receipts and fail-closed gates over 1,986 commits (§6, [Part I](#how-it-was-built)).
+6. **An agent-facing interface:** numbered diagnostics with a frozen JSON schema and a tested
+   explanation for each code, one command per intent, and a certificate or receipt for each result
+   ([Part I](#built-for-agents)).
 
 ### 2 Design principles
 
