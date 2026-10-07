@@ -23,18 +23,21 @@
       "snapshotTimestamp": "20260810T022135Z",
       "transport": "http (debian:13-slim ships no CA bundle; apt authenticity is anchored in the InRelease GPG signature against debian-archive-keyring, not TLS)",
       "packageManifest": ".toolchain/records/sealed-package-manifest.tsv",
-      "packageManifestSha256": "6e197238bb8dd83cfbba1cccad055c1747fa9dc5bb28c5aee8c8df24e5fb3643",
-      "packageCount": 200,
+      "packageManifestSha256": "0d8d8cdf5795a96a5bd83ec560365bca570ad3d6020e52ef95f4434ccdda66ed",
+      "packageCount": 201,
       "amendments": [
-        "2026-08-10: added lld-19 after seal verification found ld.lld-19 missing; a Clang reference lane without the LLVM linker is not an LLVM lane. Image re-sealed and re-verified before any reference build."
+        "2026-08-10: added lld-19 after seal verification found ld.lld-19 missing; a Clang reference lane without the LLVM linker is not an LLVM lane. Image re-sealed and re-verified before any reference build.",
+        "2026-10-08: owner approved adding libclang-rt-19-dev 1:19.1.7-3+b1 for the agent repair experiment. The other 200 packages and both compiler binary hashes are unchanged. GCC and Clang UBSan probes both report signed overflow and exit 1. The old image remains at evo-flight-lab:sealed-20260810; historical receipts retain their original identity."
       ]
     },
     "postSealNetwork": "none",
-    "sealedImageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
-    "observedImageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
-    "executionReference": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "sealedImageId": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+    "observedImageId": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+    "executionReference": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+    "previousSealedImageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
+    "previousSealedImageTag": "evo-flight-lab:sealed-20260810",
     "sealedImageTag": "evo-flight-lab:sealed",
-    "dockerfileSha256": "1c4c2c19da110d6bb7ad10245aebcf15ac772784163324bee547ba76069983c6"
+    "dockerfileSha256": "ba64bc365c0bd96c4c684224131a8c7fcbcab2d75310603fe31510adefb67cc8"
   },
   "toolchain": {
     "gcc": {

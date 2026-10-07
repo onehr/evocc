@@ -1,0 +1,45 @@
+{
+  "schema": "agent-repair.protocol.v1",
+  "corpus_tag": "agent-repair-corpus-1",
+  "population": {"ub": 10, "frontend": 10, "logic": 10},
+  "models_file": "tools/experiment/models.txt",
+  "repetitions": 3,
+  "rounds": 3,
+  "temperature": 0,
+  "max_tokens": 4096,
+  "reported_cost_cap_usd": 5,
+  "cost_stop": "Do not start another request after cumulative reported cost reaches the cap. The last request can cross the cap. Missing or invalid usage cost stops the campaign; it is never treated as zero.",
+  "request_limit": 810,
+  "http_retries": "Retry only HTTP 429 and 5xx, at most three retries with 1, 2, and 4 second backoff. Other HTTP errors fail that repetition. A transport error with unknown cost stops the campaign.",
+  "conditions": {
+    "c1": "Sealed gcc-14 -Wall -Wextra -fsanitize=undefined -o prog program.c, then ./prog. Return compiler stderr, runtime stderr and their exit codes.",
+    "c2": "Sealed clang-19 -Weverything -fsanitize=undefined -o prog program.c, then ./prog. Return compiler stderr, runtime stderr and their exit codes.",
+    "c3": "Host evo check --json program.c; evo explain CODE --json for each distinct reported code; evo fix program.c --plan --json. Preserve the JSON lines."
+  },
+  "scoring": "Compile the replacement using sealed gcc-14 -O0 -Dmain=program_main -c, then link its object with reference_main.c using gcc-14 -O0. The hidden driver tests 7 to 9 function inputs plus the original program_main entry. Pass requires exit 0 and stdout exactly equal to expected.txt. Hidden source, expected output and score details are never model feedback.",
+  "round_stop": "Stop a repetition at the first hidden-test pass or after three model rounds. Failed repetitions are not rerun. Invalid candidates and nonretryable HTTP errors end that repetition and remain in the results.",
+  "ordering": "For each repetition, visit sorted item names, then the registered models. Rotate condition order by (item_index + repetition - 1) modulo the condition count.",
+  "prompt": "tools/experiment/prompt.txt, identical for every condition",
+  "candidate_profile": "One complete fenced c file, at most 65536 UTF-8 bytes, no I/O or dependencies. Reject #, %: and ??= markers after line-splice normalization in every condition. This prevents host preprocessing from reading credentials or hidden files. Rejections count as failed attempts, not compiler findings.",
+  "isolation": "Native commands run in fresh network-disabled ARM64 containers with no credential environment and only the current candidate mounted read-only. Compile and execute in guest temporary storage. Introduce the hidden reference only after candidate compilation and erase its source before execution.",
+  "limits": {
+    "native_cpus": 1,
+    "native_memory_mib": 512,
+    "guest_file_limit_bytes": 1048576,
+    "guest_cpu_limit_seconds": 30,
+    "guest_process_limit": 64,
+    "guest_command_timeout_seconds": 20,
+    "host_command_timeout_seconds": 100,
+    "http_timeout_seconds": 120,
+    "stream_limit_bytes": 131072,
+    "capture_limit_mib": 500,
+    "transcript_archive_limit_mib": 10
+  },
+  "metrics": {
+    "repair_rate": "Successful repetitions divided by all attempted repetitions, including recorded errors. Report unattempted cells separately; do not count them as failures or claim a completed population.",
+    "mean_rounds": "Arithmetic mean of rounds started over attempted repetitions. Also report mean rounds conditional on success; missing successful observations produce null, not zero.",
+    "range": "Minimum and maximum per-repetition repair rate and mean rounds, with attempted counts for each repetition. Incomplete repetitions remain labelled incomplete.",
+    "logic_control": "The logic items have no compiler or sanitizer findings. Differences here are not evidence that UB diagnostics caused improvement."
+  },
+  "retention": "Output stays outside the repository. Delete temporary object files and executables after scoring. Retain full machine transcripts, the receipt and a gzip tar archive smaller than 10 MiB. Check every result and transcript for sk-or- before committing."
+}

@@ -60,6 +60,7 @@ RUN set -eu; \
       libssl-dev \
       llvm-19 \
       clang-19 \
+      libclang-rt-19-dev \
       lld-19 \
       make \
       perl \

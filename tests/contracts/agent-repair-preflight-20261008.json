@@ -1,0 +1,18 @@
+{
+  "schema": "agent-repair.preflight.v1",
+  "date": "2026-10-08",
+  "claim": "Corpus eligibility and tool prerequisites only; no measured model requests.",
+  "population": {"ub": 10, "frontend": 10, "logic": 10},
+  "synthetic_items": 10,
+  "public_source_items": 20,
+  "checks": {"fixed_hidden_pass": 30, "buggy_hidden_fail": 30, "fixed_evo_check_pass": 30, "ub_evo_diagnosed": 10, "ub_gcc_diagnosed": 10, "ub_clang_diagnosed": 10, "logic_without_compiler_findings": 10},
+  "command": "EVOCC_REPAIR_CAPTURE=.evidence/diagnostics/20261007/agent-repair-preflight/corpus-final.json python3 -m unittest tools.experiment.tests.test_corpus tools.experiment.tests.test_repair tools.experiment.tests.test_report tools.experiment.tests.test_secrets -v",
+  "tests": {"passed": 31, "failed": 0, "skipped": 0, "corpus": 3, "mock_harness": 22, "report": 3, "secrets": 3},
+  "capture": ".evidence/diagnostics/20261007/agent-repair-preflight/corpus-final.json",
+  "capture_sha256": "7517867de26c33f3e154df5ab0fec906cdcafb82f80d836fee8690d65289a0bf",
+  "sealed_image": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+  "evo_sha256": "ab1c7d0b4a671aabce70b369e3102de926cedde95255f8c418f2c18fc2057e5a",
+  "evocc_sha256": "03b3b709b35aadf5b54acf8a36ec7c6531ba936b8d1e52fd00d123fab3f64e3d",
+  "pretag_changes": ["Replaced an undiagnosed negative-left-shift candidate with remainder by zero.", "Changed the zero-divisor fallback after the original zero fallback passed neutral AArch64 hidden scoring.", "Added the original main to every hidden driver after a candidate with main removed passed scoring. The regression now fails at link time; nonzero intended main results remain valid."],
+  "model_calls": 0
+}

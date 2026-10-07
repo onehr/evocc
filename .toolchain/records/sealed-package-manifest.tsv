@@ -63,6 +63,7 @@ libcap2	1:2.75-10+deb13u1+b1	arm64
 libcc1-0	14.2.0-19	arm64
 libclang-common-19-dev	1:19.1.7-3+b1	arm64
 libclang-cpp19	1:19.1.7-3+b1	arm64
+libclang-rt-19-dev	1:19.1.7-3+b1	arm64
 libclang1-19	1:19.1.7-3+b1	arm64
 libcom-err2	1.47.2-3+b11	arm64
 libcrypt-dev	1:4.4.38-1	arm64

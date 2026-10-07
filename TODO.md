@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17 | P01 through P16 are accepted in their recorded scope. Both final gates pass on clean 200b4e73. P17 awaits its sanitizer and protocol prerequisites before preregistration; no measured requests have run. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17 | P01 through P16 are accepted in their recorded scope. Both final gates pass on clean 200b4e73. P17's sanitizer and corpus preflight pass; preregistration, measured requests and reporting remain open. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -874,17 +874,26 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   space is 164 GiB. The four demo packages are complete in this bounded scope.
 
 - [ ] **P17 — Measure agent repairs with compiler feedback** — `OPEN`, P1.
-  Prerequisite probe on 2026-10-07: sealed GCC 14.2.0-19 compiles the UBSan
-  overflow probe and reports the defect (exit 1). Sealed Clang 19.1.7 fails to
-  link because `libclang_rt.ubsan_standalone.a` is absent at its selected path.
-  C2 has not run; no compiler, runtime or condition was substituted.
-  Log: `.evidence/diagnostics/20261007/agent-repair-preflight/ubsan.log`;
-  capture cap: 500 MiB. The public OpenRouter model list contains the exact
-  `deepseek/deepseek-v4.1-flash` ID, recorded in `tools/experiment/models.txt`.
-  `.env` is ignored; no key was read or sent. The supplied goal text truncates
-  the cost cap and several harness options. Confirm the cap and complete the
-  protocol before preregistration. Approval to supply the missing Clang
-  runtime is pending. No corpus tag, measured request, or result exists yet.
+  The owner approved the missing Clang runtime. The resealed image adds only
+  `libclang-rt-19-dev`; both compiler hashes and the other 200 packages remain
+  unchanged. Both UBSan probes pass. The old image stays at
+  `evo-flight-lab:sealed-20260810`; historical receipts are not rewritten.
+  The [corpus preflight](tests/contracts/agent-repair-preflight-20261008.json)
+  records 30/30 fixed hidden passes, 30/30 buggy hidden failures and 10/10 UB
+  findings in each tool. Twenty items derive from pinned public sources;
+  ten are explicitly synthetic. Two ineligible drafts were changed before
+  registration, with reasons retained. Each hidden driver also checks the
+  original entry point after a missing-main candidate exposed a scoring gap.
+  All 31 corpus, mock harness, reporting and secret tests pass. The actual c1/c2/c3 feedback
+  paths and neutral scorer also pass a model-free smoke check.
+  The exact model is `deepseek/deepseek-v4.1-flash`. The owner approved an
+  initial USD 5 budget and delegated temperature; the protocol fixes it at 0.
+  `tools/experiment/protocol.json` records round, cost and denominator rules.
+  `.env` stays ignored. No credential or measured model request has been used.
+  Preregister corpus, prompt, harness, conditions and model list with
+  `agent-repair-corpus-1` before the measured run. Final gates, the run, its
+  receipt/transcript archive, and the report remain open. Capture cap is
+  500 MiB at `.evidence/diagnostics/20261007/agent-repair-preflight/`.
 
 ### Remaining verification and application sequence
 
