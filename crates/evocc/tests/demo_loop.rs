@@ -23,10 +23,8 @@ fn agent_loop_reaches_checked_final_assembly_in_under_thirty_seconds() {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let work_path = std::env::temp_dir().join(format!(
-        "evocc-demo-loop-{}-{stamp}",
-        std::process::id()
-    ));
+    let work_path =
+        std::env::temp_dir().join(format!("evocc-demo-loop-{}-{stamp}", std::process::id()));
     std::fs::create_dir(&work_path).unwrap();
     let work = Scratch(work_path);
     let checker = repository.join("lean/.lake/build/bin/evoir-sem");

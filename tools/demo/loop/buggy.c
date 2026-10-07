@@ -1,8 +1,7 @@
-divide(int selector, int unused)
+divide(int divisor, int unused)
 {
-    int divisor = 0;
-    if (selector > 0)
-        divisor = selector;
+    if (divisor < 0)
+        return 0;
     return 12 / divisor;
 }
 
