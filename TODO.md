@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P10, P11, B08, B08b, B08d, B08d10 | Complete P10 through P11 in order under the second product contract. P01 through P09 are accepted; P09 has an owner-approved screenshot waiver. P10 retains the default zlib coverage requirement. Verification work stays paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P10, P11, B08, B08b, B08d, B08d10 | Complete P10 through P11 under the second product contract. P01 through P09 are accepted; P09 has an owner-approved screenshot waiver. The owner permits unsupported coverage-option warnings, not instrumentation. Keep the default zlib tests. Verification work stays paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -673,13 +673,15 @@ retain the original scope where one copy has a truncated sentence.
   pass: compiler identity, warning controls, native CMake, Linux object CMake
   with a space-containing sysroot, pkg-config, Make dependencies and native
   stack protection, plus generated angle-header precedence (`74b92076`).
-  Original cJSON 1.7.19 CMake utility tests pass 22/22. After the header fix,
-  the default zlib build reaches infcover.c and exits 2 on unsupported -coverage.
-  The default zlib 1.3.2 CMake tests require gcov instrumentation. On 2026-10-07
-  the owner retained that default-config requirement and rejected shared-only
-  substitution. Keep this package open until coverage support is implemented
-  and the original default tests pass. No coverage implementation is included
-  in this bounded integration change. The corrected Darwin snapshots and
+  Original cJSON 1.7.19 CMake utility tests pass 22/22. The original default
+  zlib build first failed on unsupported -coverage. The owner's later decision
+  permits a warning for four coverage options, with no instrumentation and no
+  test exclusions. RED b223419e and fix ff520ce0 close the option refusal in
+  five driver lines. The 20 focused driver/build tests pass. The default zlib
+  1.3.2 build and all 16 CTest commands now pass. Its infcover assertions pass;
+  Apple's gcov reports missing .gcno but exits 0. The coverage-summary command
+  is therefore not evidence of coverage support. No .gcno/.gcda is produced.
+  Final clean-tree gate for this change remains pending. The corrected Darwin snapshots and
   authorized Linux target replays pass 9/9. Clean `82c9543a` passes the full
   offline gate: 423 suites, 3,224 passed, zero failed, five existing ignored;
   Clippy and formatting pass, exit 0. Log SHA-256:
@@ -696,7 +698,14 @@ retain the original scope where one copy has a truncated sentence.
 - [ ] **P11 — Publish channel metadata and compatibility** — `OPEN`, P1.
   RED tests are prepared in `94a9fb29`: eight cases run, the positive packaging
   control passes, and missing matrix/nightly/changelog checks fail as expected.
-  Implementation has not started; resume after P10 closes.
+  Implementation follows the unchanged default zlib replay. The matrix uses
+  retained receipts only; channel CI does not imply a hosted release run.
+  All eight focused tests pass. The generator is 129/150 lines and includes
+  all 15 ladder receipts without changing their status or denominator. The
+  nightly caller is 21/60 lines and reuses the native/cross-host release smoke
+  checks; the packaging changelog guard adds 8/20 lines. act is absent, so YAML,
+  embedded shell and permission/channel paths were reviewed instead. No hosted
+  CI or publication was run. The final clean-tree full and Lean gates remain.
   Exit: every ladder receipt in the generated chapter, nightly dry run with
   act if present or careful review, changelog guard and full gate. Known
   budgets: 150 Python lines and 60 workflow lines. Do not publish a release.

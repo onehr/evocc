@@ -34,9 +34,23 @@ The first public version.
 - Five front-end warnings: unused variables, unused parameters, implicit function declarations,
   implicit int and missing return values. Named warning levels, `-Wall`, `-Wextra`, `-Werror`,
   `-w` and `--cap-lints` control them. This is not a full GCC warning implementation.
-- The `evo` command with six verbs: `run`, `check`, `explain`, `prove`, `build` and `version`.
-  It uses the existing compiler, interpreters and checkers. `evo build` runs configure and make
-  and writes a build receipt; it is not a new build system.
+- The `evo` command with help and JSON results for user commands. It uses the existing compiler,
+  interpreters and checkers. `evo build` runs configure and make and writes a build receipt;
+  it is not a new build system. Help exits 0; no arguments exits 64.
+- Five diagnostic repair forms, exposed by `evo fix --plan` and `--apply`. Safe repairs are
+  checked after editing. Review repairs require human approval; macro and volatile boundaries
+  are not silently crossed. A syntax recheck is not a proof of equivalent behavior.
+- `evo mcp`, a five-tool JSON-RPC server on standard input and output. Each tool uses the
+  matching JSON command. Root `AGENTS.md` and `llms.txt` give the same agent instructions.
+- `evo lsp`, with full-text synchronization, diagnostics from the compiler, compile database
+  flags and safe repair code actions. The book describes Zed, Neovim and the source-only
+  VS Code extension. The editor protocol tests pass; the owner waived the Zed screenshot.
+- A CMake toolchain file for both targets, compiler identification macros, and tests for
+  pkg-config linking and Make dependency rebuilds. Coverage options warn and have no effect;
+  EvoCC does not produce gcov instrumentation or data files.
+- A generated compatibility matrix from every retained ladder receipt, a single rolling
+  nightly prerelease workflow, and an exact-version changelog check before packaging.
+  The nightly workflow reuses the release build and smoke tests; it has not run on GitHub.
 - A bundled AArch64 Linux header sysroot. Releases find it beside `bin/` without `--sysroot`.
   The file-hash contract records 3,966 headers and eight unsupported netfilter headers that
   collide by case. The bundle supports the default macOS volume. It contains no linker, libc
@@ -65,6 +79,8 @@ The first public version.
 - The project license changed from the placeholder GPL-2.0-only to Apache-2.0.
 - The book replaces the hand-written implementation notebook and its web site. The dated lab notes
   stay in `docs/archive/notebook/`.
+- Darwin stack-protector lowering uses Mach-O symbols and relocations. Angle includes honor
+  supplied include paths; quoted includes still search the source file's directory first.
 
 ### Results at this version
 
@@ -84,6 +100,9 @@ keeps their limits.
   zlib 1.3.2 archive without a sysroot flag or manual include paths. Hello, the zlib example and
   a minigzip round trip pass in the sealed Linux environment. The cross-host release workflow
   is configured; these local results do not claim a hosted GitHub Actions run.
+- Original CMake builds on macOS pass cJSON 1.7.19's 22 tests and zlib 1.3.2's 16 default
+  CTest commands. The zlib coverage-summary command reports a missing .gcno file, but Apple's
+  gcov returns 0. Its passing exit does not establish coverage support. No test was excluded.
 - The final product gate passes 3,176 Rust tests with zero failures and five existing ignored
   campaigns. Clippy and formatting pass. The existing Lean gate passes all six steps against
   EvoIR 2.0.1; this check does not expand the verified language subset.

@@ -196,9 +196,9 @@ header bundle does not support an executable link by itself. A Linux link
 still needs target libraries and an explicit linker. The toolchain preserves
 user compilation flags and uses the supplied sysroot during compiler detection.
 
-The default zlib 1.3.2 CMake tests also require gcov coverage instrumentation.
-EvoCC does not yet support that instrumentation. These default tests are not
-accepted; the separate Make-based zlib result does not replace them.
+The default zlib 1.3.2 CMake build and all 16 CTest commands pass on this macOS
+host. EvoCC does not produce coverage data. Apple's `gcov` reports the missing
+`.gcno` file but exits 0, so the coverage-summary test does not prove coverage support.
 
 ## Run a program without compiling it
 

@@ -166,7 +166,12 @@ fn an_unknown_f_option_warns_once_and_the_build_continues() {
 #[test]
 fn coverage_options_warn_once_without_instrumentation() {
     let work = Work::new("coverage-options");
-    for option in ["-coverage", "--coverage", "-fprofile-arcs", "-ftest-coverage"] {
+    for option in [
+        "-coverage",
+        "--coverage",
+        "-fprofile-arcs",
+        "-ftest-coverage",
+    ] {
         let output = work.run(&["-c", option, "helper.c"]);
         succeeded(&output);
         nonempty(&work.file("helper.o"));
