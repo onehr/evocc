@@ -618,8 +618,8 @@ their complete text before implementing the missing requirements; P06 is clear.
   60 specification lines. Pin diagnostics revision 1.1.0.
   Capture cap: 500 MiB at `.evidence/diagnostics/20261007/repairs/`.
 - [ ] **P08 — Add machine-readable user commands** — `OPEN`, P1.
-  Next: run the clean-tree full workspace gate and confirm the truncated
-  JSON reader limit. Do not close this package against an invented limit.
+  Next: obtain the intact P08--P11 text and confirm the truncated JSON reader
+  limit. Implemented functional exits pass; do not invent the missing limits.
   RED `b0aeae9c`: seven command tests fail before JSON support. RED `73fe91ce`:
   both stdio/instruction tests fail before the server and agent files exist.
   RED `dfccc79e` also catches scalar `tools/list` params being accepted; the
@@ -633,13 +633,21 @@ their complete text before implementing the missing requirements; P06 is clear.
   First clean full gate on `cd0eefbc`: 420 suites, 3,208 passed, one style-test
   failure, five existing ignored campaigns. Two new error messages started
   with uppercase JSON; their wording is corrected without changing the rule.
-  Keep the failed log. Full-workspace acceptance remains pending.
+  The corrected full gate on clean `04605cd1` passes: 420 suites, 3,209 passed,
+  zero failed, five existing ignored campaigns; target generation, Clippy with
+  warnings denied and formatting pass. Keep the first failed log unchanged.
+  Final log: `corrected-full-workspace.log` in the capture below; SHA-256:
+  `73dbe5933db008aea9e64a66ced580a459df85a9360168c3abdb4742d8847cbd`.
   Implementation: 635 inserted/replaced production Rust lines, tests excluded.
   The JSON module is 247 lines and reuses the existing string quote function.
   AGENTS.md and llms.txt are identical, 53 lines each; the book chapter is 98.
   Capture cap: 500 MiB at `.evidence/diagnostics/20261007/agent-interface/`.
-  At the focused-test checkpoint, target/frontend plus capture grew by
-  33,600 KiB from entry. Test-owned sources and proof outputs were removed.
+  Final target/frontend plus capture delta from entry is +30,364 KiB;
+  capture is 692 KiB, free space 201.28 GiB. Test-owned source/build/proof
+  directories were removed. This is not a host-wide disk attribution.
+  Claim: the implemented CLI/stdio scope passes its full gate. P08 remains
+  OPEN only for the incomplete owner contract. P09--P11 are not started;
+  the end-of-stage Lean gate, changelog and six-package report are not due yet.
   Exit: verb JSON snapshots, five MCP tools over pipes, agent instructions,
   llms.txt, tested book session and full gate. No network server or dependencies.
   Known budget: 700 production Rust lines; AGENTS.md at most 120 lines.
