@@ -67,6 +67,7 @@ verb,work,fixture=sys.argv[1:]
 compiler=os.environ['TEST_EVOCOMPILER']
 if verb in ('version','build'):
     expected=subprocess.check_output([compiler,'--version']).decode().strip()
+    if verb=='build': expected=expected.splitlines()[0]
     assert r['version']==expected
     r['version']='<version>'
 if verb=='build':
