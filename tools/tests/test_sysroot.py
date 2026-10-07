@@ -20,6 +20,8 @@ def check_files(root, contract):
               for p in root.rglob("*") if p.is_file()}
     if actual != contract["files"]:
         raise AssertionError("the sysroot files differ from the contract")
+    if len(actual) != len({path.lower() for path in actual}):
+        raise AssertionError("the sysroot contains case-colliding paths")
 
 
 class HeaderExportTests(unittest.TestCase):
@@ -43,19 +45,15 @@ class HeaderExportTests(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 check_files(root, contract)
 
-    def test_case_insensitive_destination_is_refused_before_export(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            probe = root / "Header"
-            probe.touch()
-            if not (root / "header").exists():
-                self.skipTest("this volume is case-sensitive")
-            probe.unlink()
-            result = subprocess.run(["sh", str(SCRIPT), str(root)],
-                                    capture_output=True, text=True)
-            self.assertEqual(result.returncode, 1, result.stderr)
-            self.assertIn("case-sensitive", result.stderr)
-            self.assertEqual(list(root.iterdir()), [])
+    def test_excluded_collisions_are_sorted_and_not_shipped(self):
+        contract = json.loads(CONTRACT.read_text())
+        excluded = contract["excluded_case_collisions"]
+        self.assertEqual(excluded, sorted(set(excluded)))
+        self.assertTrue(excluded)
+        for path in excluded:
+            self.assertNotEqual(Path(path).name, Path(path).name.lower())
+            self.assertNotIn(path, contract["files"])
+            self.assertIn(path.lower(), contract["files"])
 
     def test_real_export_matches_the_tracked_contract_when_present(self):
         root = Path(os.environ.get("EVOCC_SYSROOT", ROOT / "sysroot/aarch64-unknown-linux-gnu"))
@@ -91,6 +89,7 @@ class HeaderExportTests(unittest.TestCase):
             headers = {name.removeprefix(header_prefix): digest for name, digest in listed.items()
                        if name.startswith(header_prefix)}
             self.assertEqual(headers, contract["files"])
+            self.assertEqual(len(headers), len({path.lower() for path in headers}))
 
 
 if __name__ == "__main__":
