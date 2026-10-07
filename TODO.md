@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P05, B08, B08b, B08d, B08d10 | P01 through P04 are complete. Complete P05 and the final product gates under the October 7 contract. Verification work is paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P05, B08, B08b, B08d, B08d10 | P05 export, packaging and original exit tests pass. Resolve the excluded-include diagnostic contract, then run the final product gates. Verification work is paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -350,7 +350,9 @@ add dependencies, crates or configuration systems. Do not push.
   interpreter execution or new proof coverage. Linux archive execution is not
   claimed by this Darwin packaging check. P05 may now start.
 - [ ] **P05 — Package the Linux header sysroot** — `OPEN`, P1.
-  Next: finish the filtered-sysroot release replay and full workspace gate.
+  Next: reconcile the excluded-include diagnostic requirement with unchanged
+  lookup on default macOS. The filtered export and all original P05 exit tests
+  pass; do not repeat them while awaiting this narrow contract clarification.
   The owner approved default macOS volume support by excluding uppercase
   case-colliding headers; no case-sensitive installation requirement remains.
   October 7 entry check: four isolated driver tests reproduce three missing
@@ -463,6 +465,30 @@ add dependencies, crates or configuration systems. Do not push.
   Keep the requested reader unchanged and report this result, not a false
   missing-header guarantee. Change budgets: exporter 24/40 lines (118 total),
   tests 16/20, book paragraph 8/10; workflow 36/40 for the whole package.
+  **Portable release acceptance:** clean implementation `c054a0fd` passes the
+  full workspace gate: 417 suites, 3,176 passed, zero failed, five existing
+  ignored campaigns; Clippy with warnings denied and formatting pass. Log:
+  `.evidence/diagnostics/20261007/sysroot/c054a0fd-full-workspace.log`, SHA-256
+  `0066d7726e57565325f7416f5107ca8ddf195cecfa798cfeefb9fe6e4bc8235f`.
+  The actual release archive and its extraction on the default macOS volume
+  each pass all six Python checks. The packaged compiler produces an ELF
+  AArch64 hello object with no sysroot override. Original zlib 1.3.2 builds
+  all 15 archive members without manual include flags; hello, the original
+  zlib example and minigzip round trip exit zero in sealed Linux. The explicit
+  test linker remains necessary for configure probes, not header discovery.
+  Archive SHA-256:
+  `f7c4ada71cdd1b9aaa94a83ba2cd9f962b779ce4040d50a194aa9838fd611c51`.
+  Contract SHA-256:
+  `48ed0e80c56a0ae114a27af9cef8dbb229d487bd2a9021a53786c606e293fed6`.
+  Hosted cross-job CI is configured, not executed. No driver header reader
+  changed. The only unfulfilled added expectation is file-not-found for an
+  excluded uppercase spelling on a case-insensitive filesystem. Keep that
+  explicit; this is not a case-sensitive installation restriction or a need
+  for a new storage mechanism. Final stage gates and changelog remain pending.
+  Removed 186,600 KiB of owned unpacked/build temporary files after checking
+  open handles. Since the pre-cleanup measurement, target/frontend plus this
+  capture plus those temporary files fell by 109,876 KiB. Capture is 5,008 KiB,
+  below 500 MiB; free space is 25.116 GiB. No protected evidence was removed.
   Exit: macOS produces ELF AArch64 objects and zlib without manual include
   flags, contract checks and full workspace gate pass. Add the cross-host CI
   link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,
