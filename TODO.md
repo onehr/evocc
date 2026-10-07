@@ -772,10 +772,16 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   which core-v1's integer-only expression grammar excludes (exit 6).
   A separate control without that cast exports successfully but its proof
   fails at lowering (exit 3). No checked artifact or model run is claimed.
+  Read-only Lean probes narrow that refusal: the real SSA transport passes;
+  selection fails. The signed-division guard's one-bit OR and the emitted
+  32-bit OR of zero-extended comparison results do not match in the current
+  canonicalizer. The isolated `checkWordUnder` probe rejects the same pair,
+  even after the nonzero guard. A proved width/bitwise conversion is missing;
+  no claim is made that it is the only remaining acceptance gap.
   Capture: `.evidence/diagnostics/20261007/agent-demo/loop-proof-red.log` and
   `division-lowering-refusal/`. Extending the frozen source grammar needs an
   explicit decision; do not drop the safe repair or erase an export node.
-  Capture is 108 KiB; free disk is 171 GiB. A before-build target size was not
+  Capture is 124 KiB; free disk is 171 GiB. A before-build target size was not
   recorded for this slice, so its total disk delta is not known. No raw capture
   is tracked. Full acceptance and the real model session have not run.
 - [ ] **P14 — Record rejected proposals** — `OPEN`, P1.
