@@ -986,7 +986,11 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             _ if arg.starts_with("-W") || arg == "-w" || arg.starts_with("--cap-lints=") => {
                 lints.option(arg)?
             }
-            _ if lenient && (arg.starts_with("-f") || arg.starts_with("-m")) => {
+            _ if lenient
+                && (arg.starts_with("-f")
+                    || arg.starts_with("-m")
+                    || matches!(arg.as_str(), "-coverage" | "--coverage")) =>
+            {
                 ignored_options.push(arg.clone());
             }
             _ if arg.starts_with('-') && arg != "/dev/stdin" => {
