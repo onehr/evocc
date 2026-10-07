@@ -9,6 +9,22 @@ use std::process::{Command, ExitCode, ExitStatus, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+#[path = "evo/json.rs"]
+mod json;
+#[path = "evo/mcp.rs"]
+mod mcp;
+
+fn json_requested() -> bool {
+    std::env::var_os("EVO_BUILD_TRACE").is_none()
+        && std::env::args_os()
+            .skip(1)
+            .take_while(|a| a != "--")
+            .any(|a| a == "--json")
+}
+
+fn json_error(error: &str, status: i32) {
+    println!("{{\"error\":{},\"exit_code\":{status}}}", quote(error));
+}
 
 fn code(status: ExitStatus) -> i32 {
     status
@@ -128,7 +144,7 @@ fn run(compiler: &Path, args: &[OsString]) -> Result<i32> {
     Ok((value as u8).into())
 }
 
-fn prove(compiler: &Path, args: &[String]) -> Result<i32> {
+fn prove(compiler: &Path, args: &[String], json: bool) -> Result<i32> {
     let input = args
         .first()
         .ok_or("usage: evo prove FILE.c -o OUT.s [--entry NAME ...]")?;
@@ -147,12 +163,13 @@ fn prove(compiler: &Path, args: &[String]) -> Result<i32> {
     }
     let out = out.ok_or("prove requires -o OUT.s")?;
     let root = temporary("evo-proof")?;
+    let mut errors = Vec::new();
     let result: Result<i32> = (|| {
         if entries.is_empty() {
             let listed = Command::new(compiler)
                 .args(["--list-defined-functions", input])
                 .output()?;
-            io::stderr().write_all(&listed.stderr)?;
+            errors.extend_from_slice(&listed.stderr);
             if !listed.status.success() {
                 return Ok(code(listed.status));
             }
@@ -180,21 +197,58 @@ fn prove(compiler: &Path, args: &[String]) -> Result<i32> {
             .arg(input)
             .output()?;
         if !output.status.success() {
-            io::stderr().write_all(&output.stderr)?;
+            errors.extend_from_slice(&output.stderr);
             return Ok(code(output.status));
         }
         for line in output.stderr.split_inclusive(|b| *b == b'\n') {
             if !line.starts_with(b"evocc: proof-required result:") {
-                io::stderr().write_all(line)?;
+                errors.extend_from_slice(line);
             }
         }
         fs::copy(proof.join("output.s"), out)?;
-        println!(
-            "checked from typed Core source to final assembly text: {}",
-            proof.join("record.json").display()
-        );
+        if !json {
+            println!(
+                "checked from typed Core source to final assembly text: {}",
+                proof.join("record.json").display()
+            );
+        }
         Ok(0)
     })();
+    if json {
+        let status = match &result {
+            Ok(status) => *status,
+            Err(error) => {
+                errors.extend_from_slice(error.to_string().as_bytes());
+                1
+            }
+        };
+        let record = root.join("checked/record.json");
+        let (label, stages, path) = if record.is_file() {
+            let record_data = json::parse(&fs::read_to_string(&record)?)?;
+            let stages = record_data
+                .get("stages")?
+                .array()?
+                .iter()
+                .map(|s| {
+                    Ok(format!(
+                        "{{\"id\":{},\"status\":{}}}",
+                        quote(s.get("id")?.string()?),
+                        quote(s.get("status")?.string()?)
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            (
+                quote(record_data.get("result")?.string()?),
+                stages.join(","),
+                quote(&record.to_string_lossy()),
+            )
+        } else {
+            ("null".into(), String::new(), "null".into())
+        };
+        println!("{{\"result\":{label},\"stages\":[{stages}],\"record_path\":{path},\"proof_directory\":{},\"exit_code\":{status},\"stderr\":{}}}", quote(&root.to_string_lossy()), quote(std::str::from_utf8(&errors)?));
+        return Ok(status);
+    }
+    io::stderr().write_all(&errors)?;
     if !matches!(result, Ok(0)) {
         eprintln!("evo: proof files kept at {}", root.display());
     }
@@ -277,7 +331,7 @@ fn warning_counts(text: &str) -> BTreeMap<String, usize> {
     counts
 }
 
-fn build(compiler: &Path, args: &[String]) -> Result<i32> {
+fn build(compiler: &Path, args: &[String], json: bool) -> Result<i32> {
     let split = args.iter().position(|a| a == "--").unwrap_or(args.len());
     if split > 1 {
         return Err("usage: evo build [DIR] [-- MAKE_ARGS]".into());
@@ -289,12 +343,20 @@ fn build(compiler: &Path, args: &[String]) -> Result<i32> {
     )?;
     let version = Command::new(compiler).arg("--version").output()?;
     if !version.status.success() {
-        forward(&version)?;
+        if json {
+            json_error(std::str::from_utf8(&version.stderr)?, code(version.status));
+        } else {
+            forward(&version)?;
+        }
         return Ok(code(version.status));
     }
     let target = Command::new(compiler).arg("-dumpmachine").output()?;
     if !target.status.success() {
-        forward(&target)?;
+        if json {
+            json_error(std::str::from_utf8(&target.stderr)?, code(target.status));
+        } else {
+            forward(&target)?;
+        }
         return Ok(code(target.status));
     }
     let mut target = String::from_utf8(target.stdout)?.trim().to_owned();
@@ -363,17 +425,21 @@ fn build(compiler: &Path, args: &[String]) -> Result<i32> {
         .join(",");
     let receipt = format!("{{\"version\":{},\"target\":{},\"sources\":[{}],\"warnings\":{{{warnings}}},\"failing_command\":{failure},\"exit_code\":{result}}}\n",
         quote(String::from_utf8_lossy(&version.stdout).lines().next().unwrap_or("")), quote(&target), sources.into_iter().collect::<Vec<_>>().join(","));
-    fs::write(directory.join("evo-build-receipt.json"), receipt)?;
+    fs::write(directory.join("evo-build-receipt.json"), &receipt)?;
     fs::remove_dir_all(trace)?;
-    println!(
-        "build exit {result}; log: {}",
-        directory.join("evo-build.log").display()
-    );
+    if json {
+        print!("{receipt}");
+    } else {
+        println!(
+            "build exit {result}; log: {}",
+            directory.join("evo-build.log").display()
+        );
+    }
     Ok(result)
 }
 
 fn execute() -> Result<i32> {
-    let raw: Vec<_> = std::env::args_os().skip(1).collect();
+    let mut raw: Vec<_> = std::env::args_os().skip(1).collect();
     if let Some(trace) = std::env::var_os("EVO_BUILD_TRACE") {
         let args = raw
             .into_iter()
@@ -384,12 +450,19 @@ fn execute() -> Result<i32> {
             .collect::<std::result::Result<Vec<_>, _>>()?;
         return compile_record(&args, Path::new(&trace));
     }
+    let json = json_requested();
+    let end = raw.iter().position(|a| a == "--").unwrap_or(raw.len());
+    for i in (0..end).rev() {
+        if raw[i] == "--json" {
+            raw.remove(i);
+        }
+    }
     let verb = raw
         .first()
         .map_or(Ok("help"), |s| s.to_str().ok_or("command is not UTF-8"))?;
     let usage = match verb {
         "help" | "--help" if raw.len() <= 1 || (raw.len() == 2 && raw[1] == "--json") => {
-            "evo run|check|explain|prove|build|fix|version|help"
+            "evo run|check|explain|prove|build|fix|mcp|version|help"
         }
         "run" => "evo run FILE.c [-- ARGS]",
         "check" => "evo check FILE.c",
@@ -397,6 +470,7 @@ fn execute() -> Result<i32> {
         "prove" => "evo prove FILE.c -o OUT.s [--entry NAME ...]",
         "build" => "evo build [DIR] [-- MAKE_ARGS]",
         "fix" => "evo fix FILE.c --plan|--apply [--review] [--json]",
+        "mcp" => "evo mcp",
         "version" => "evo version",
         _ => return Err(format!("unknown command: {verb}").into()),
     };
@@ -405,25 +479,47 @@ fn execute() -> Result<i32> {
     {
         let status = if raw.is_empty() { 64 } else { 0 };
         let message = format!("usage: {usage}");
-        if raw.last().is_some_and(|a| a == "--json") {
+        if json {
             println!("{{\"usage\":{},\"exit_code\":{status}}}", quote(&message));
         } else {
             println!("{message}");
         }
         return Ok(status);
     }
+    if verb == "mcp" {
+        if raw.len() != 1 {
+            return Err(format!("usage: {usage}").into());
+        }
+        return mcp::serve();
+    }
     let compiler = locate("evocc", "EVOCC")?;
     if verb == "run" {
+        if json {
+            raw.get(1).ok_or("run requires a C file")?;
+            let output = Command::new(std::env::current_exe()?).args(&raw).output()?;
+            let status = code(output.status);
+            println!(
+                "{{\"exit_code\":{status},\"stdout\":{},\"stderr\":{}}}",
+                quote(std::str::from_utf8(&output.stdout)?),
+                quote(std::str::from_utf8(&output.stderr)?)
+            );
+            return Ok(status);
+        }
         return run(&compiler, &raw[1..]);
     }
-    let args = raw[1..]
+    let mut args = raw[1..]
         .iter()
         .map(|s| s.to_str().map(str::to_owned).ok_or("argument is not UTF-8"))
         .collect::<std::result::Result<Vec<_>, _>>()?;
     match verb {
-        "prove" => prove(&compiler, &args),
-        "build" => build(&compiler, &args),
-        "fix" => fix(&compiler, &args),
+        "prove" => prove(&compiler, &args, json),
+        "build" => build(&compiler, &args, json),
+        "fix" => {
+            if json {
+                args.push("--json".into());
+            }
+            fix(&compiler, &args)
+        }
         "check" | "explain" | "version" => {
             if args.len() != usize::from(verb != "version") {
                 return Err(format!("usage: {usage}").into());
@@ -433,8 +529,51 @@ fn execute() -> Result<i32> {
                 "explain" => "--explain",
                 _ => "--version",
             };
-            let output = Command::new(compiler).arg(flag).args(args).output()?;
-            forward(&output)?;
+            let mut command = Command::new(compiler);
+            command.arg(flag).args(&args);
+            if json && verb == "check" {
+                command.arg("--error-format=json");
+            }
+            let output = command.output()?;
+            if !json {
+                forward(&output)?;
+            } else if verb == "check" {
+                let diagnostics = std::str::from_utf8(&output.stderr)?
+                    .lines()
+                    .map(json::parse)
+                    .collect::<Result<Vec<_>>>()?;
+                let completion = if output.stdout.is_empty() {
+                    json::Json::Null
+                } else {
+                    json::parse(std::str::from_utf8(&output.stdout)?)?
+                };
+                println!(
+                    "{{\"exit_code\":{},\"completion\":{},\"diagnostics\":{}}}",
+                    code(output.status),
+                    completion.render(),
+                    json::Json::Array(diagnostics).render()
+                );
+            } else if !output.status.success() {
+                json_error(std::str::from_utf8(&output.stderr)?, code(output.status));
+            } else {
+                let text = std::str::from_utf8(&output.stdout)?;
+                if verb == "version" {
+                    println!("{{\"version\":{},\"exit_code\":0}}", quote(text.trim()));
+                } else {
+                    let header = format!("# {}: ", args[0]);
+                    let title = text
+                        .lines()
+                        .next()
+                        .and_then(|s| s.strip_prefix(&header))
+                        .ok_or("invalid explanation heading")?;
+                    println!(
+                        "{{\"code\":{},\"title\":{},\"text\":{},\"exit_code\":0}}",
+                        quote(&args[0]),
+                        quote(title),
+                        quote(text)
+                    );
+                }
+            }
             Ok(code(output.status))
         }
         _ => unreachable!(),
@@ -445,7 +584,11 @@ fn main() -> ExitCode {
     match execute() {
         Ok(status) => ExitCode::from(status as u8),
         Err(error) => {
-            eprintln!("evo: {error}");
+            if json_requested() {
+                json_error(&error.to_string(), 1);
+            } else {
+                eprintln!("evo: {error}");
+            }
             ExitCode::FAILURE
         }
     }

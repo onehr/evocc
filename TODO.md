@@ -618,7 +618,24 @@ their complete text before implementing the missing requirements; P06 is clear.
   60 specification lines. Pin diagnostics revision 1.1.0.
   Capture cap: 500 MiB at `.evidence/diagnostics/20261007/repairs/`.
 - [ ] **P08 — Add machine-readable user commands** — `OPEN`, P1.
-  Next: resolve the truncated JSON/MCP contract and add REDs; P07 is closed.
+  Next: run the clean-tree full workspace gate and confirm the truncated
+  JSON reader limit. Do not close this package against an invented limit.
+  RED `b0aeae9c`: seven command tests fail before JSON support. RED `73fe91ce`:
+  both stdio/instruction tests fail before the server and agent files exist.
+  RED `dfccc79e` also catches scalar `tools/list` params being accepted; the
+  server now rejects them with -32602. The book's exact session is executed.
+  All command verbs have JSON output. The five stdio tools delegate to those
+  commands. Proof summaries come from the retained record, not English logs;
+  output-copy failure stays nonzero even when the proof record is checked.
+  All 26 focused tests pass, including the 12 existing command regressions;
+  targeted Clippy with warnings denied passes. No Lean, checker, interpreter,
+  emitted-code path, dependency, daemon or network service was changed.
+  Implementation: 635 inserted/replaced production Rust lines, tests excluded.
+  The JSON module is 247 lines and reuses the existing string quote function.
+  AGENTS.md and llms.txt are identical, 53 lines each; the book chapter is 98.
+  Capture cap: 500 MiB at `.evidence/diagnostics/20261007/agent-interface/`.
+  At the focused-test checkpoint, target/frontend plus capture grew by
+  33,600 KiB from entry. Test-owned sources and proof outputs were removed.
   Exit: verb JSON snapshots, five MCP tools over pipes, agent instructions,
   llms.txt, tested book session and full gate. No network server or dependencies.
   Known budget: 700 production Rust lines; AGENTS.md at most 120 lines.
