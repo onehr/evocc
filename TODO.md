@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P14, P15, P16, B08, B08b, B08d, B08d10 | P01 through P13 are accepted in their recorded scope. P14-P16 remain in order, each after the preceding full gate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | P15, P16, B08, B08b, B08d, B08d10 | P01 through P14 are accepted in their recorded scope. P15-P16 remain in order, each after the preceding full gate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -795,9 +795,24 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   proof-profile change. Capture is 544 KiB; measured target/frontend plus capture
   delta from the recorded pre-gate checkpoint is -164 KiB. Protected evidence
   and the small recorded model workspace remain. P14-P16 keep their order.
-- [ ] **P14 — Record rejected proposals** — `OPEN`, P1.
-  After P13, replay the three published refusal paths. No refused proposal may
-  publish output. Keep the script within 60 lines and run the full gate.
+- [x] **P14 — Record rejected proposals** — `DONE`, P1.
+  `66dd2f5c` adds the 60-line `tools/demo/no-fooling.sh` and the actual chapter
+  transcript. Its source is byte-identical to P13's repaired program. One
+  certificate byte changes: archive replay exits 1, `BUNDLE_MISMATCH`, before
+  semantic replay. One exported `ub.assume.signed_overflow` line is deleted,
+  once across all entry callbacks: both source checks accept, then the real
+  lowering check for `magnitude` rejects, exit 3. A wrong checker digest uses
+  the published raw-driver command and exits 5. No refused assembly or success
+  record is published; accepted assembly remains separate. No new driver flag,
+  checker rule, core-v1 or export change. The first repeat-mutation attempt is
+  retained separately; `refusal-transcript.txt` is the corrected final run.
+  Clean full offline gate: 424 suites, 3,226 passed, zero failed, five existing
+  ignored; Clippy and formatting pass. `refusal-full-workspace.log` SHA-256:
+  `eaa2939f19748840efc62675bfc11481fd84003de49e92416a2375afd461c26b`.
+  Capture: `.evidence/diagnostics/20261007/agent-demo/`, 872 KiB, cap 500 MiB.
+  This slice's measured target/frontend plus capture net change is +820 KiB;
+  retained demo inputs/proofs are small historical evidence. The log records
+  its own binary identities; it does not claim a later rebuilt checker replay.
 - [ ] **P15 — Test deterministic agent results** — `OPEN`, P1.
   After P14, compare two runs of each specified JSON output and proof record.
   Normalize temporary paths only. Require three consecutive runs and the gate.
