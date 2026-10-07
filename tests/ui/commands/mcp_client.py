@@ -107,11 +107,23 @@ try:
         assert error["id"] is None and error["error"]["code"] == -32700
     assert request("prompts/list")["error"]["code"] == -32601
     assert request("tools/list")["result"]["tools"] == tools
+    assert request("tools/list", params=7)["error"]["code"] == -32602
     send({"jsonrpc": "1.0", "id": [], "method": "tools/list"})
     assert receive()["error"]["code"] == -32600
     server.stdin.close()
     assert server.wait(timeout=10) == 0
     assert not server.stderr.read()
+    # Run the book's exact session, not a separately maintained approximation.
+    blocks = (root / "book/src/agents.md").read_text().split("```json\n")[1:]
+    transcript = subprocess.run([executable, "mcp"], input=blocks[0].split("```", 1)[0],
+                                text=True, capture_output=True, timeout=30)
+    assert transcript.returncode == 0 and not transcript.stderr
+    responses = [json.loads(line) for line in transcript.stdout.splitlines()]
+    assert len(responses) == 3
+    assert responses[0] == json.loads(blocks[1].split("```", 1)[0])
+    assert responses[1]["id"] == 2 and responses[1]["result"]["tools"] == tools
+    assert responses[2]["id"] == 3
+    assert responses[2]["result"]["structuredContent"]["code"] == "E3002"
 finally:
     if server.poll() is None:
         server.kill()

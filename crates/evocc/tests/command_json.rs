@@ -91,7 +91,7 @@ if verb=='prove':
     r['record_path']='<proof>/checked/record.json'
     r['proof_directory']='<proof>'
 def normalize(x):
-    if isinstance(x,str): return x.replace(work,'<work>')
+    if isinstance(x,str): return x.replace(str(pathlib.Path(work).resolve()),'<work>').replace(work,'<work>')
     if isinstance(x,list): return [normalize(y) for y in x]
     if isinstance(x,dict): return {k:normalize(v) for k,v in x.items()}
     return x
@@ -226,4 +226,47 @@ fn prove_json_summarizes_the_retained_record() {
     assert!(output.status.success(), "{:?}", output);
     assert!(assembly.is_file());
     snapshot("prove", &output, &work);
+}
+
+#[test]
+fn prove_json_does_not_turn_an_output_copy_failure_into_success() {
+    let work = Scratch::new();
+    let assembly = work.0.join("absent/out.s");
+    let output = evo()
+        .args([
+            "prove",
+            &work.file(),
+            "-o",
+            assembly.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(!assembly.exists());
+    assert_json(
+        &output,
+        r#"
+assert r['exit_code']==1 and r['stderr']
+assert r['result']=='CHECKED_TO_FINAL_ASSEMBLY'
+directory=pathlib.Path(r['proof_directory'])
+assert directory.name.startswith('evo-proof-')
+assert directory.parent.resolve()==pathlib.Path(tempfile.gettempdir()).resolve()
+assert pathlib.Path(r['record_path']).is_file()
+shutil.rmtree(directory)
+"#,
+        &[],
+    );
+}
+
+#[test]
+fn compiler_lookup_errors_stay_machine_readable() {
+    let work = Scratch::new();
+    let output = evo()
+        .args(["version", "--json"])
+        .env("EVOCC", work.0.join("absent"))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert_json(&output, "assert r['exit_code']==1 and r['error']", &[]);
 }
