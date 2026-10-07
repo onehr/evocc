@@ -5,3 +5,4 @@ error[W0002]: unused parameter
    |           ^^^^^^ unused parameter
    |
    = help: use the parameter or mark it __attribute__((unused))
+   = help: use the parameter or mark it __attribute__((unused)); replace with " (void)unused;"

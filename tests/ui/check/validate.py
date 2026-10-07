@@ -4,7 +4,7 @@ import json
 
 def validate(record):
     assert type(record) is dict
-    assert set(record) == {"code", "level", "message", "spans", "notes", "help", "rendered"}
+    assert set(record) == {"code", "level", "message", "spans", "notes", "help", "rendered", "repairs"}
     code = record["code"]
     assert code is None or (
         type(code) is str and len(code) == 5
@@ -20,7 +20,19 @@ def validate(record):
     spans = record["spans"]
     assert type(spans) is list and spans
     assert sum(span["primary"] is True for span in spans) == 1
-    for span in spans:
+    repairs = record["repairs"]
+    assert type(repairs) is list
+    for repair in repairs:
+        assert set(repair) == {"repair_id", "kind", "file", "span", "replacement", "title"}
+        assert repair["repair_id"] in {
+            "W0001.remove-declaration", "W0002.void-cast", "W0003.insert-prototype",
+            "W0004.insert-int", "W0005.return-zero",
+        }
+        assert repair["kind"] in {"safe", "review"}
+        assert repair["file"] == repair["span"]["file"]
+        assert type(repair["replacement"]) is str
+        assert type(repair["title"]) is str and repair["title"]
+    for span in spans + [repair["span"] for repair in repairs]:
         assert set(span) == {
             "file", "line_start", "column_start", "line_end", "column_end", "label", "primary"
         }

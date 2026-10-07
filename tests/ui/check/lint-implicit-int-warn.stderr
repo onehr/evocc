@@ -5,3 +5,4 @@ warning[W0004]: declaration has no type specifier
    | ^ declaration has no type specifier
    |
    = help: write an explicit type specifier
+   = help: write an explicit type specifier; replace with "int "

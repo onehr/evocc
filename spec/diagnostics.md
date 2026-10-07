@@ -1,6 +1,6 @@
 # Diagnostic Presentation
 
-**Revision 1.0.0** | **Pinned ground truth** | **2026-10-07**
+**Revision 1.1.0** | **Pinned ground truth** | **2026-10-07**
 
 ## 1. Scope
 
@@ -99,6 +99,7 @@ standard error. Each object has exactly these keys:
 | `notes` | Array of fact strings |
 | `help` | Array of action strings |
 | `rendered` | The same diagnostic in color-free text form, including its final newline |
+| `repairs` | Array of source repairs, empty when no supported edit is available |
 
 A span object has exactly `file`, `line_start`, `column_start`, `line_end`,
 `column_end`, `label`, and `primary`. The file and label are strings. The four
@@ -112,6 +113,53 @@ completion record. A completed path is not a whole-program safety proof.
 
 These field names, types and meanings are stable. An incompatible change
 requires a new major revision of this specification.
+
+### 5.1. Source repairs
+
+Each repair has exactly these fields. The 1.0.0 diagnostic fields keep their
+types and meanings. The text form adds a `help:` line for each safe repair,
+including its JSON-escaped replacement. Review repairs remain in the JSON.
+
+| Field | Type and meaning |
+|---|---|
+| `repair_id` | Stable string from the table below |
+| `kind` | `safe` or `review` |
+| `file` | Source file to edit; equal to `span.file` |
+| `span` | A span as defined in section 2; its end is exclusive |
+| `replacement` | String to put in place of the span; empty means deletion |
+| `title` | One action sentence |
+
+`safe` means the edit cannot change observable program behavior. All other
+edits require review. A constant initializer is not sufficient when removal
+would discard volatile access, a runtime bound, a cleanup, or an observable
+floating-environment effect. Macro expansion positions are not editable
+spelling. Do not invent an edit when source spelling or a type is unavailable.
+
+| ID | Edit | Normal kind |
+|---|---|---|
+| `W0001.remove-declaration` | Remove an unused variable with a constant initializer | safe; otherwise review |
+| `W0002.void-cast` | Insert `(void)NAME;` as the first statement | safe; volatile or atomic access requires review |
+| `W0003.insert-prototype` | Insert a prototype before the enclosing function, using promoted call argument types | review |
+| `W0004.insert-int` | Insert `int` at the missing type | safe |
+| `W0005.return-zero` | Insert `return 0;` before the closing brace | review |
+
+Retain other declarators and any shared type definition. Adjacent unused
+declarators can share one edit; it is safe only when every removed initializer
+is safe. Deduplicate identical edits. Reject overlapping edits before writing.
+
+`evo fix FILE.c --plan [--json]` only reports. `--apply` applies safe edits;
+`--apply --review` also applies review edits. Edit only FILE.c, in descending
+byte order. Reject parse errors before any write. Require unchanged input
+bytes. At the same span, the prototype precedes the implicit `int` insertion.
+Run the syntax check again. Restore the input if that check fails.
+This check does not execute the program or prove the proposed edit correct.
+
+JSON is one object on stdout with `file` (string), `repairs` (array),
+`diagnostics` (array), `applied` (integer), and `exit_code` (integer).
+Plan diagnostics describe the input; apply diagnostics describe the post-check
+when edits were attempted. Failed or rolled-back edits have `applied=0`.
+The compiler bridge is `--parse-only --repair=plan|safe|review`; its
+`--error-format=json` form uses the same result record.
 
 ## 6. Exit status and conformance
 

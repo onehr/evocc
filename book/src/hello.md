@@ -271,6 +271,38 @@ When all tests pass, its output includes these two lines:
 Some Makefiles set `CC` themselves. For those, give the variable on the command line:
 `make CC=evocc`.
 
+## Plan and apply repairs
+
+Use `evo fix input.c --plan` to inspect source repairs. Add `--json` for one
+JSON object on standard output. The object has `file`, `repairs`,
+`diagnostics`, `applied`, and `exit_code`. The repair fields and byte-column
+spans are defined in [`spec/diagnostics.md`](https://github.com/onehr/evocc/blob/main/spec/diagnostics.md).
+
+```console
+$ evo fix input.c --plan --json
+$ evo fix input.c --apply --json
+$ evo fix input.c --apply --review --json
+```
+
+`--apply` uses only safe repairs. `--review` also permits repairs that can change
+behavior. A human must inspect those repairs first. The five repairs remove an
+unused declaration, add a void cast for an unused parameter, add a missing
+function prototype, write an implicit `int`, or add `return 0;`.
+
+The command parses the file with warnings enabled. It does not run the program.
+It will not edit input that has a parse error. After applying edits, it runs the
+syntax check again. If that check fails, it restores the original bytes and
+exits 1. A successful plan or apply exits 0. A plan, or a file with no selected
+repairs, has `applied: 0`. Multiple diagnostics can share one declaration edit.
+The command does not edit included files or macro expansions. It leaves out
+repairs whose source spelling or required type cannot be expressed. Volatile
+accesses and other observable effects are not safe to remove.
+
+The compiler bridge is `evocc --parse-only --repair=plan|safe|review FILE.c`.
+Add `--error-format=json` for the same record. Other compiler options can set
+include paths and macros. A denied warning prevents this bridge from editing;
+the `evo fix` command uses `-Wall --cap-lints=warn` to collect repair candidates.
+
 ## Driver options
 
 `evocc` accepts the options of a usual C compiler:

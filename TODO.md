@@ -588,7 +588,13 @@ their complete text before implementing the missing requirements; P06 is clear.
   the five repair records and byte-exact edits, safe/review separation,
   parse-error refusal, edit order, shared declarations and macro/volatile
   boundaries. Log: `.evidence/diagnostics/20261007/repairs/2c00b3eb-red.log`.
-  Next: add the additive record and source-derived repairs, then the fix verb.
+  Implementation now has the five repair records, plan/apply and rollback.
+  All 17 repair tests pass, including adjacent declarations, volatile aggregate
+  initialization, prototype types and equal-position insertion order. The five
+  existing UI cases have repair JSON snapshots; all 55 existing records keep
+  their old structural fields. Focused diagnostics/lint tests and Clippy pass.
+  Production Rust: 500 inserted/replaced lines; specification: 49 lines.
+  Next: original cJSON/zlib replay, then a clean-tree full workspace gate.
   Exit: byte-exact apply tests, parse-error refusal, safe/review separation,
   cJSON and zlib replay, full gate. Budget: 500 production Rust lines and
   60 specification lines. Pin diagnostics revision 1.1.0.

@@ -68,6 +68,40 @@ fn forward(output: &Output) -> Result<()> {
     Ok(())
 }
 
+fn fix(compiler: &Path, args: &[String]) -> Result<i32> {
+    let file = args.first().ok_or("fix requires a C file")?;
+    let json = args[1..].iter().any(|s| s == "--json");
+    let mut flags: Vec<_> = args[1..]
+        .iter()
+        .map(String::as_str)
+        .filter(|s| *s != "--json")
+        .collect();
+    flags.sort_unstable();
+    let mode = match flags.as_slice() {
+        ["--plan"] => "plan",
+        ["--apply"] => "safe",
+        ["--apply", "--review"] => "review",
+        _ => return Err("fix requires --plan or --apply [--review], with optional --json".into()),
+    };
+    let format = if json { "json" } else { "text" };
+    let output = Command::new(compiler)
+        .args(["--parse-only", "-Wall", "--cap-lints=warn", "--color=never"])
+        .arg(format!("--repair={mode}"))
+        .arg(format!("--error-format={format}"))
+        .arg(file)
+        .output()?;
+    if json && output.stdout.is_empty() {
+        let rows = std::str::from_utf8(&output.stderr)?
+            .lines()
+            .collect::<Vec<_>>()
+            .join(",");
+        println!("{{\"file\":{},\"repairs\":[],\"diagnostics\":[{rows}],\"applied\":0,\"exit_code\":{}}}", quote(file), code(output.status));
+    } else {
+        forward(&output)?;
+    }
+    Ok(code(output.status))
+}
+
 fn run(compiler: &Path, args: &[OsString]) -> Result<i32> {
     let file = args.first().ok_or("usage: evo run FILE.c [-- ARGS]")?;
     if args.len() > 1 && args[1] != "--" {
@@ -355,13 +389,14 @@ fn execute() -> Result<i32> {
         .map_or(Ok("help"), |s| s.to_str().ok_or("command is not UTF-8"))?;
     let usage = match verb {
         "help" | "--help" if raw.len() <= 1 || (raw.len() == 2 && raw[1] == "--json") => {
-            "evo run|check|explain|prove|build|version|help"
+            "evo run|check|explain|prove|build|fix|version|help"
         }
         "run" => "evo run FILE.c [-- ARGS]",
         "check" => "evo check FILE.c",
         "explain" => "evo explain CODE",
         "prove" => "evo prove FILE.c -o OUT.s [--entry NAME ...]",
         "build" => "evo build [DIR] [-- MAKE_ARGS]",
+        "fix" => "evo fix FILE.c --plan|--apply [--review] [--json]",
         "version" => "evo version",
         _ => return Err(format!("unknown command: {verb}").into()),
     };
@@ -388,6 +423,7 @@ fn execute() -> Result<i32> {
     match verb {
         "prove" => prove(&compiler, &args),
         "build" => build(&compiler, &args),
+        "fix" => fix(&compiler, &args),
         "check" | "explain" | "version" => {
             if args.len() != usize::from(verb != "version") {
                 return Err(format!("usage: {usage}").into());

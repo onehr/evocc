@@ -215,7 +215,8 @@ fn runtime_json_has_an_actual_primary_span_and_stable_fields() {
 rows = [json.loads(line) for line in sys.stdin]
 assert len(rows) == 1
 r = rows[0]
-assert set(r) == {'code','level','message','spans','notes','help','rendered'}
+assert set(r) == {'code','level','message','spans','notes','help','rendered','repairs'}
+assert r['repairs'] == []
 assert r['code'] == 'E3002' and r['level'] == 'error'
 p = [s for s in r['spans'] if s['primary']]
 assert len(p) == 1

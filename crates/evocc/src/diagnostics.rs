@@ -137,6 +137,28 @@ pub struct Diagnostic {
     pub spans: Vec<Span>,
     pub notes: Vec<String>,
     pub help: Vec<String>,
+    pub repairs: Vec<Repair>,
+}
+
+pub struct Repair {
+    pub range: std::ops::Range<usize>,
+    pub repair_id: &'static str,
+    pub kind: &'static str,
+    pub span: Span,
+    pub replacement: String,
+    pub title: &'static str,
+}
+
+impl Repair {
+    pub fn json(&self) -> String {
+        format!("{{\"repair_id\":{},\"kind\":{},\"file\":{},\"span\":{},\"replacement\":{},\"title\":{}}}",
+            quoted(self.repair_id), quoted(self.kind), quoted(&self.span.file), span_json(&self.span), quoted(&self.replacement), quoted(self.title))
+    }
+}
+
+fn span_json(span: &Span) -> String {
+    format!("{{\"file\":{},\"line_start\":{},\"column_start\":{},\"line_end\":{},\"column_end\":{},\"label\":{},\"primary\":{}}}",
+        quoted(&span.file), span.line_start, span.column_start, span.line_end, span.column_end, quoted(&span.label), span.primary)
 }
 
 impl Diagnostic {
@@ -157,6 +179,7 @@ impl Diagnostic {
             spans: vec![span],
             notes: note.into_iter().map(str::to_owned).collect(),
             help: Vec::new(),
+            repairs: Vec::new(),
         }
     }
 
@@ -329,13 +352,16 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
     for help in &diagnostic.help {
         writeln!(out, "   = help: {help}").unwrap();
     }
+    for repair in diagnostic.repairs.iter().filter(|r| r.kind == "safe") {
+        let title = repair.title;
+        let replacement = quoted(&repair.replacement);
+        writeln!(out, "   = help: {title}; replace with {replacement}").unwrap();
+    }
     if format != Format::Json {
         return out;
     }
-    let spans = diagnostic.spans.iter().map(|span| format!(
-        "{{\"file\":{},\"line_start\":{},\"column_start\":{},\"line_end\":{},\"column_end\":{},\"label\":{},\"primary\":{}}}",
-        quoted(&span.file), span.line_start, span.column_start, span.line_end, span.column_end, quoted(&span.label), span.primary
-    )).collect::<Vec<_>>().join(",");
+    let spans: Vec<_> = diagnostic.spans.iter().map(span_json).collect();
+    let repairs: Vec<_> = diagnostic.repairs.iter().map(Repair::json).collect();
     let list = |items: &[String]| {
         items
             .iter()
@@ -349,12 +375,14 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
         quoted(&diagnostic.code)
     };
     format!(
-        "{{\"code\":{code},\"level\":{},\"message\":{},\"spans\":[{spans}],\"notes\":[{}],\"help\":[{}],\"rendered\":{}}}\n",
+        "{{\"code\":{code},\"level\":{},\"message\":{},\"spans\":[{}],\"notes\":[{}],\"help\":[{}],\"rendered\":{},\"repairs\":[{}]}}\n",
         quoted(diagnostic.level),
         quoted(&diagnostic.message),
+        spans.join(","),
         list(&diagnostic.notes),
         list(&diagnostic.help),
-        quoted(&out)
+        quoted(&out),
+        repairs.join(",")
     )
 }
 
@@ -386,7 +414,7 @@ pub fn execution_category(code: &str) -> &'static str {
     }
 }
 
-fn quoted(text: &str) -> String {
+pub(crate) fn quoted(text: &str) -> String {
     let mut out = String::from("\"");
     for ch in text.chars() {
         match ch {

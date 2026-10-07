@@ -41,6 +41,7 @@ mod diagnostics;
 mod dwarf;
 mod lints;
 mod proof_required;
+mod repairs;
 mod toolchain;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -149,6 +150,7 @@ impl LanguageMode {
 struct DriverOptions {
     mode: DriverMode,
     lints: lints::Levels,
+    repair_mode: Option<String>,
     error_format: diagnostics::Format,
     color: diagnostics::Color,
     source_bytes: std::cell::RefCell<Vec<u8>>,
@@ -523,6 +525,7 @@ fn run_options(options: &DriverOptions) -> ExitCode {
 fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String> {
     let mut mode = None;
     let mut lints = lints::Levels::default();
+    let mut repair_mode = None;
     let mut error_format = None;
     let mut color = diagnostics::Color::Auto;
     let mut target = None;
@@ -583,6 +586,14 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         match arg.as_str() {
             "-E" => set_mode(&mut mode, DriverMode::Preprocess)?,
             "--parse-only" => set_mode(&mut mode, DriverMode::ParseOnly)?,
+            _ if arg.starts_with("--repair=") => {
+                let value = &arg[9..];
+                if !matches!(value, "plan" | "safe" | "review")
+                    || repair_mode.replace(value.into()).is_some()
+                {
+                    return Err("--repair requires one of plan, safe or review, once".into());
+                }
+            }
             "--interpret-c-hir" => set_mode(&mut mode, DriverMode::InterpretCHir)?,
             "--list-defined-functions" => {
                 set_mode(&mut mode, DriverMode::ParseOnly)?;
@@ -995,6 +1006,9 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             "exactly one of -E, --parse-only, --interpret-c-hir, --emit=evoir, --emit=asm, or --interpret-evoir is required"
                 .to_string()
         })?;
+    if repair_mode.is_some() && mode != DriverMode::ParseOnly {
+        return Err("--repair requires --parse-only".into());
+    }
     let proof = proof_arguments.admit(proof_required::Admission {
         emit_asm: mode == DriverMode::EmitAsm,
         entries: &core_entries,
@@ -1094,6 +1108,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         color,
         source_bytes: std::cell::RefCell::new(Vec::new()),
         lints,
+        repair_mode,
         included_bytes: std::cell::RefCell::new(std::collections::BTreeMap::new()),
         target,
         input: input.ok_or_else(|| "an input file is required".to_string())?,
@@ -1619,6 +1634,11 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         return ExitCode::from(1);
     }
     let processed = result.into_vec();
+    let expanded: Vec<_> = processed
+        .iter()
+        .filter(|t| t.span != t.spelling_span)
+        .map(|t| t.span)
+        .collect();
 
     let arena = Arena::default();
     let mut parser = Parser::from_tokens(processed, FileId::new(1));
@@ -1689,6 +1709,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     }
 
     let mut denied = false;
+    let mut repair_diagnostics = Vec::new();
     for finding in parser.lint_findings() {
         let level = options
             .lints
@@ -1713,11 +1734,29 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
             "warning"
         };
         diagnostic.help.push(finding.help().into());
+        diagnostic.repairs.extend(repairs::suggest(
+            *finding,
+            parser.lint_findings(),
+            &unit,
+            &diagnostic.spans[0],
+            &expanded,
+            &options.target_layout(),
+        ));
+        repair_diagnostics.push(diagnostic);
+        denied |= level == lints::Level::Deny;
+    }
+    if options.repair_mode.is_some() && !denied {
+        return repairs::finish(options, &repair_diagnostics).unwrap_or_else(|error| {
+            let message = format!("cannot apply repairs: {error}");
+            options.emit_error(&options.input, 0, 0, "E0004", &message);
+            ExitCode::from(1)
+        });
+    }
+    for diagnostic in repair_diagnostics {
         eprint!(
             "{}",
             diagnostics::render(&diagnostic, options.error_format, options.color)
         );
-        denied |= level == lints::Level::Deny;
     }
     if denied {
         return ExitCode::from(1);
