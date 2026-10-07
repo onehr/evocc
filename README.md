@@ -164,6 +164,16 @@ agent gets:
 - **One command per intent.** `evo run`, `evo check`, `evo explain`, `evo prove`, `evo build`: each
   has one meaning and one exit code rule, so a loop of agent calls needs no parsing of prose.
 
+Run `sh tools/demo/agent-loop.sh`; see the [recorded loop and real MCP session](book/src/agent-loop.md).
+
+```text
+Evidence: W0004, E3004
+Safe repairs applied: 2
+Guard inserted: if (a == -2147483647 - 1) return 2147483647;
+Check: completed with exit 0.
+CHECKED_TO_FINAL_ASSEMBLY record=/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-97776-1791375941979707000/checked/record.json
+```
+
 ### Using EvoCC
 
 #### Quick start

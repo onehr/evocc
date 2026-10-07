@@ -4,6 +4,7 @@
 - [Installation](install.md)
 - [Hello, World!](hello.md)
 - [Agent Interfaces](agents.md)
+- [An Agent Repair Loop](agent-loop.md)
 - [Editor Diagnostics](editors.md)
 - [Undefined Behavior](undefined-behavior.md)
 - [Error Index](error-index.md)

@@ -41,23 +41,25 @@ for attempt in range(5):
             sys.exit(status)
         print("Safe repairs applied: " + str(applied["applied"]), flush=True)
         continue  # Repair edits can move the diagnostic span. Obtain a fresh one.
-    divisions = [d for d in diagnostics if d["code"] == "E3002"]
-    if len(divisions) != 1:
-        sys.exit("The fixed rule requires exactly one E3002 diagnostic.")
-    span, = [s for s in divisions[0]["spans"] if s["primary"]]
-    lines = source.read_text().splitlines(keepends=True)
+    overflows = [d for d in diagnostics if d["code"] == "E3004"]
+    if len(overflows) != 1:
+        sys.exit("The fixed rule requires exactly one E3004 diagnostic.")
+    span, = [s for s in overflows[0]["spans"] if s["primary"]]
+    text = source.read_text()
+    lines = text.splitlines(keepends=True)
     if pathlib.Path(span["file"]).resolve() != source or span["line_start"] != span["line_end"]:
         sys.exit("The fixed rule requires a single-line statement in this source.")
     index = span["line_start"] - 1
     line = lines[index]
     expression = line[span["column_start"]-1:span["column_end"]-1]
-    match = re.fullmatch(r"\s*\d+\s*/\s*([A-Za-z_]\w*)\s*", expression)
-    statement = re.fullmatch(r"(\s*)return\s+" + re.escape(expression) + r";\s*", line)
-    if not match or not statement:
-        sys.exit("The fixed rule supports only return INTEGER / IDENTIFIER;")
-    guard = statement[1] + "if (" + match[1] + " == 0) return 0;\n"
-    lines.insert(index, guard)
-    source.write_text("".join(lines))
+    offset = sum(map(len, lines[:index])) + span["column_start"] - 1
+    functions = re.finditer(r"^int \w+\(int (\w+)\)\n\{\n([^{}]*)^\}", text, re.M)
+    enclosing = [f for f in functions if f.start(2) <= offset < f.end(2)]
+    if not text.isascii() or len(enclosing) != 1 or expression != "-" + enclosing[0][1]:
+        sys.exit("The fixed rule requires unary minus of an int parameter in a flat function.")
+    function = enclosing[0]
+    guard = "    if (" + function[1] + " == -2147483647 - 1) return 2147483647;\n"
+    source.write_text(text[:function.start(2)] + guard + text[function.start(2):])
     print("Guard inserted: " + guard.strip(), flush=True)
 else:
     sys.exit("No successful check within five rounds.")

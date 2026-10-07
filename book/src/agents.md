@@ -11,6 +11,8 @@ evo explain E3002 --json
 
 ## Command records
 
+See [An agent repair loop](agent-loop.md) for the scripted run and a real model session.
+
 Place `--json` before the `--` separator. After `--`, it is a program or Make
 argument. Each command writes one JSON object and a newline to standard output.
 The process exit status is unchanged. JSON results do not use terminal colors.

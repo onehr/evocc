@@ -55,6 +55,12 @@ fn agent_loop_reaches_checked_final_assembly_in_under_thirty_seconds() {
             r#"import hashlib,json,pathlib,sys
 lines=sys.stdin.read().splitlines()
 assert len(lines)>=2,lines
+assert lines[0]=='Scripted agent (no model).'
+records=[json.loads(line) for line in lines if line.startswith('{')]
+assert any(d['code']=='E3004' for r in records for d in r.get('diagnostics',[]))
+assert any({p['repair_id'] for p in r.get('repairs',[])}==
+           {'W0004.insert-int','W0001.remove-declaration'} for r in records)
+assert any(r.get('applied')==2 for r in records)
 proof=json.loads(lines[-2])
 assert set(proof)=={'result','stages','record_path','proof_directory','exit_code','stderr'},proof
 assert proof['result']=='CHECKED_TO_FINAL_ASSEMBLY' and proof['exit_code']==0,proof
