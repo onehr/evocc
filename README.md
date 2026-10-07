@@ -174,6 +174,13 @@ Check: completed with exit 0.
 CHECKED_TO_FINAL_ASSEMBLY record=/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-97776-1791375941979707000/checked/record.json
 ```
 
+Run `sh tools/demo/no-fooling.sh` for the [three recorded refusals](book/src/agent-loop.md#a-wrong-proposal-is-refused):
+```text
+Refusal: BUNDLE_MISMATCH exit=1; no assembly published.
+Refusal: STAGE_REJECTED exit=3; no assembly published.
+Refusal: CHECKER_IDENTITY_MISMATCH exit=5; no assembly published.
+```
+
 ### Using EvoCC
 
 #### Quick start

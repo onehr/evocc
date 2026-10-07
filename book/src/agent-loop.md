@@ -90,3 +90,70 @@ lines are unchanged; a new model run need not choose the same call order.
 The final `run` returned 255, the low eight bits of `2147483647`. Its MCP
 `isError` flag follows the nonzero process status; the successful `check` and
 proof records are separate results. No review repair was authorized or applied.
+
+## A wrong proposal is refused
+
+Run `sh tools/demo/no-fooling.sh` from a source checkout with EvoCC and both
+checkers on `PATH`. The script applies the same safe repairs and saturation
+guard as the preceding loop. It keeps the accepted assembly separate from the
+three refusal destinations.
+
+The archive replay detects one changed certificate byte before semantic replay:
+`BUNDLE_MISMATCH` is a bundle failure, not a completed proof rejection. For the
+second case a temporary checker wrapper deletes one exported `ub.assume` line,
+once, inside the driver's proof directory, then runs the real Lean checker.
+This run refuses at lowering. The third case uses the raw driver command from
+[Compiling with Proof](proof.md#pin-the-checker): `evo prove` pins its own checker
+and does not expose a digest override. No new option or checker rule is needed.
+
+Recorded on October 7, 2026. The exit after each command is the actual subprocess
+status. `ls` shows retained evidence, not a published output.
+
+```text
+$ /Users/onehrxn/dev/30days/c30/target/frontend/debug/evo fix /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c --apply --json
+{"file":"/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c","repairs":[{"repair_id":"W0004.insert-int","kind":"safe","file":"/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c","span":{"file":"/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c","line_start":1,"column_start":1,"line_end":1,"column_end":1,"label":"write an explicit type specifier","primary":true},"replacement":"int ","title":"write an explicit type specifier"},{"repair_id":"W0001.remove-declaration","kind":"safe","file":"/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c","span":{"file":"/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c","line_start":3,"column_start":5,"line_end":3,"column_end":20,"label":"remove the variable or use it","primary":true},"replacement":"","title":"remove the variable or use it"}],"diagnostics":[],"applied":2,"exit_code":0}
+exit status 0
+$ /Users/onehrxn/dev/30days/c30/target/frontend/debug/evo check /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c --json
+{"exit_code":0,"completion":{"claim":"executed-path-only","kind":"check","main_return":"2147483647","schema":"evocc.check.v1","status":"completed"},"diagnostics":[]}
+exit status 0
+$ /Users/onehrxn/dev/30days/c30/target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu --emit=asm -Oeq-scalar --eq-checker=/Users/onehrxn/dev/30days/c30/target/frontend/debug/evocc-checker --eq-checker-sha256=7b6d923c21e1391f22b34cbf691fef15a6403a16164946936ccdbd9859ad32e2 --eq-proof-dir=/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/certs /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c > /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/accepted.s
+exit status 0
+$ /Applications/Xcode.app/Contents/Developer/usr/bin/python3 /Users/onehrxn/dev/30days/c30/tools/bench.py --verify-eqsat-chain /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/bad-certs --checker /Users/onehrxn/dev/30days/c30/target/frontend/debug/evocc-checker
+{"accepted": false, "chain_record_digest": "bade29204c879a99a50efc6af3910219637fc23c5413eacb30e0eea9937c86da", "measurement_counters": "PRODUCER_TELEMETRY_NOT_PROVED", "proof_counts": {"bundle_obligation_failures": 1, "completed_proof_rejections": 0, "not_checked": 0, "proof_successes": 0, "unknown_proof_outcomes": 0}, "replay": [{"index": 0, "rejection_reason": "BUNDLE_MISMATCH", "verification": "REJECTED"}], "schema": "evocc-chain-audit-v1", "verified_ir_digest": "b0b67a725ec7a7faa0f6ef58ed0647b9ba14fca0f2c2f1bc49a6b5907e2d307a"}
+exit status 1
+$ ls /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/bad-certs
+000.after.evo
+000.before.evo
+000.policy.json
+000.proof.evp
+001.after.evo
+001.before.evo
+001.policy.json
+001.proof.evp
+chain.json
+input.evo
+output.evo
+resources.json
+exit status 0
+Refusal: BUNDLE_MISMATCH exit=1; no assembly published.
+$ /Users/onehrxn/dev/30days/c30/target/frontend/debug/evo prove /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c -o /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/output.s --json
+{"result":null,"stages":[],"record_path":null,"proof_directory":"/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-52961-1791377320693015000","exit_code":3,"stderr":"error: proof-required compilation refused: stage lowering for entry `magnitude` rejected: STAGE_REJECTED stage=lowering entry=magnitude no checked selection or SSA transport; no output was written\u000a  --> <command-line>:1:1\u000a   |\u000a 1 | --emit=asm --target=aarch64-unknown-linux-gnu -O0 -fno-builtin --color=never --proof-required=/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-52961-1791377320693015000/checked --proof-checker=/Users/onehrxn/dev/30days/c30/tools/demo/no-fooling.sh --proof-checker-sha256=8e780c687cc029408537c9815e0e2ff685d5e82be2f03e0ac5c4f8243772b38c --core-entry=magnitude --core-entry=main /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c\u000a   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ proof-required compilation refused: stage lowering for entry `magnitude` rejected: STAGE_REJECTED stage=lowering entry=magnitude no checked selection or SSA transport; no output was written\u000a   |\u000a"}
+exit status 3
+$ ls /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-52961-1791377320693015000/checked
+checks
+inputs
+exit status 0
+Refusal: STAGE_REJECTED exit=3; no assembly published.
+$ /Users/onehrxn/dev/30days/c30/target/frontend/debug/evocc --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/wrong-digest --proof-checker=/Users/onehrxn/dev/30days/c30/lean/.lake/build/bin/evoir-sem --proof-checker-sha256=0000000000000000000000000000000000000000000000000000000000000000 --core-entry=magnitude --core-entry=main -O0 -fno-builtin /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c
+error: proof-required compilation refused: checker digest 7cd984fd9c304c4efc4989adb17eedcd632bc15a4487edb474ade70924e74240 is not the pinned digest 0000000000000000000000000000000000000000000000000000000000000000; no output was written
+  --> <command-line>:1:1
+   |
+ 1 | --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/wrong-digest --proof-checker=/Users/onehrxn/dev/30days/c30/lean/.lake/build/bin/evoir-sem --proof-checker-sha256=0000000000000000000000000000000000000000000000000000000000000000 --core-entry=magnitude --core-entry=main -O0 -fno-builtin /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/fixed.c
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ proof-required compilation refused: checker digest 7cd984fd9c304c4efc4989adb17eedcd632bc15a4487edb474ade70924e74240 is not the pinned digest 0000000000000000000000000000000000000000000000000000000000000000; no output was written
+   |
+exit status 5
+$ ls /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/wrong-digest
+ls: /private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evocc-refusals-tw0ir3m2/wrong-digest: No such file or directory
+exit status 1
+Refusal: CHECKER_IDENTITY_MISMATCH exit=5; no assembly published.
+```
