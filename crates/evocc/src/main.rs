@@ -1297,6 +1297,12 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     if options.target.is_darwin() {
         darwin::apply_predefined_profile(&mut pp)?;
     }
+    // Keep GNU header compatibility while exposing the actual compiler identity.
+    pp.define("__EVOCC__".into(), decoded_tokens("1")?);
+    pp.define(
+        "__EVOCC_VERSION__".into(),
+        decoded_tokens(concat!("\"", env!("CARGO_PKG_VERSION"), "\""))?,
+    );
     pp.current_file = options.input.clone();
     pp.set_standard_includes_enabled(options.standard_includes);
     let (date, time) = predefined_timestamp();

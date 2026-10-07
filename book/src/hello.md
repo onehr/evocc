@@ -148,6 +148,58 @@ main.o: main.c greet.h
 
 Both ways make the same program.
 
+## CMake
+
+Use the toolchain file from an EvoCC source checkout. Use absolute paths for
+the toolchain file and compiler. CMake uses its standard GNU-compatible
+compiler identification; no compiler-ID module or wrapper is needed.
+`__EVOCC__` is `1`, and `__EVOCC_VERSION__` is the compiler version string.
+`__GNUC__` remains available for compatible headers.
+
+For example, build cJSON 1.7.19 with its utility tests:
+
+```sh
+cmake -S /path/to/cJSON-1.7.19 -B build/cjson \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/evocc/cmake/evocc.cmake \
+  -DCMAKE_C_COMPILER=/path/to/evocc/bin/evocc \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DENABLE_CJSON_UTILS=ON
+cmake --build build/cjson --parallel 2
+ctest --test-dir build/cjson --output-on-failure
+```
+
+The policy option lets CMake 4 use this older upstream project. It does not
+change cJSON's sources. The default target is the host. Set `EVOCC_TARGET`
+to choose `aarch64-apple-darwin` or `aarch64-unknown-linux-gnu` explicitly.
+
+For a Linux object build on macOS, use a project with an `OBJECT` library:
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+project(HelloObject LANGUAGES C)
+add_library(hello OBJECT hello.c)
+```
+
+Configure and build with the bundled Linux headers:
+
+```sh
+export EVOCC_AS='clang --target=aarch64-linux-gnu'
+cmake -S . -B build/linux \
+  -DCMAKE_TOOLCHAIN_FILE=/path/to/evocc/cmake/evocc.cmake \
+  -DCMAKE_C_COMPILER=/path/to/evocc/bin/evocc \
+  -DEVOCC_TARGET=aarch64-unknown-linux-gnu \
+  -DCMAKE_SYSROOT=/path/to/evocc/sysroot/aarch64-unknown-linux-gnu
+cmake --build build/linux --parallel 2
+```
+
+Cross-target configuration compiles and archives its compiler probes. The
+header bundle does not support an executable link by itself. A Linux link
+still needs target libraries and an explicit linker. The toolchain preserves
+user compilation flags and uses the supplied sysroot during compiler detection.
+
+The default zlib 1.3.2 CMake tests also require gcov coverage instrumentation.
+EvoCC does not yet support that instrumentation. These default tests are not
+accepted; the separate Make-based zlib result does not replace them.
+
 ## Run a program without compiling it
 
 `evo run` runs `main` in the C-HIR interpreter, without assembly or a linker.

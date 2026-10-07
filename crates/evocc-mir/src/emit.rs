@@ -1388,7 +1388,7 @@ fn emit_function(
     for _ in before..total {
         text.push_str("    nop\n");
     }
-    emit_prologue(text, &frame, abi);
+    emit_prologue(text, target, &frame, abi);
 
     // Appendix A's width suffix, not the operand's declared class, decides how
     // an operand of a two-width form is spelled: the assembler admits only one
@@ -1616,7 +1616,7 @@ fn emit_blocks(
     }
 }
 
-fn emit_prologue(text: &mut String, frame: &Frame, abi: &Aarch64Abi) {
+fn emit_prologue(text: &mut String, target: Target, frame: &Frame, abi: &Aarch64Abi) {
     if frame.sign_returns {
         let _ = writeln!(text, "    paciasp");
         if frame.unwind_tables {
@@ -1675,7 +1675,7 @@ fn emit_prologue(text: &mut String, frame: &Frame, abi: &Aarch64Abi) {
         emit_single_saves(text, frame);
     }
     if let Some((offset, guard)) = &frame.stack_guard {
-        emit_guard_load(text, guard);
+        emit_guard_load(text, target, guard);
         let _ = writeln!(text, "    mov {SCRATCH_UNIT_X}, {SCRATCH_X}");
         emit_frame_access(text, "str", SCRATCH_UNIT_X, *offset, frame);
     }
@@ -1938,10 +1938,15 @@ fn emit_saved_register_cfi(text: &mut String, register: u8, offset: u64, frame: 
     text.push('\n');
 }
 
-fn emit_guard_load(text: &mut String, guard: &StackGuard) {
+fn emit_guard_load(text: &mut String, target: Target, guard: &StackGuard) {
     match guard {
         StackGuard::Global => {
-            let _ = writeln!(text, "    adrp {SCRATCH_X}, :got:__stack_chk_guard\n    ldr {SCRATCH_X}, [{SCRATCH_X}, :got_lo12:__stack_chk_guard]\n    ldr {SCRATCH_X}, [{SCRATCH_X}]");
+            let symbol = format!("{}__stack_chk_guard", target.symbol_prefix());
+            let (page, offset) = match target {
+                Target::Darwin => (format!("{symbol}@GOTPAGE"), format!("{symbol}@GOTPAGEOFF")),
+                Target::Linux => (format!(":got:{symbol}"), format!(":got_lo12:{symbol}")),
+            };
+            let _ = writeln!(text, "    adrp {SCRATCH_X}, {page}\n    ldr {SCRATCH_X}, [{SCRATCH_X}, {offset}]\n    ldr {SCRATCH_X}, [{SCRATCH_X}]");
         }
         StackGuard::SystemRegister { register, offset } => {
             let _ = writeln!(text, "    mrs {SCRATCH_X}, {register}");
@@ -3383,12 +3388,13 @@ fn emit_term(
             }
             if let Some((offset, guard)) = &frame.stack_guard {
                 emit_frame_access(text, "ldr", SCRATCH_UNIT_X, *offset, frame);
-                emit_guard_load(text, guard);
+                emit_guard_load(text, target, guard);
                 let ok = format!("{}{function}_guard{}", target.label_prefix(), *relaxations);
                 *relaxations += 1;
                 let _ = writeln!(
                     text,
-                    "    cmp {SCRATCH_X}, {SCRATCH_UNIT_X}\n    b.eq {ok}\n    bl __stack_chk_fail\n    brk #0\n{ok}:"
+                    "    cmp {SCRATCH_X}, {SCRATCH_UNIT_X}\n    b.eq {ok}\n    bl {}__stack_chk_fail\n    brk #0\n{ok}:",
+                    target.symbol_prefix()
                 );
             }
             emit_epilogue(text, frame);

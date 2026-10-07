@@ -653,7 +653,7 @@ retain the original scope where one copy has a truncated sentence.
   llms.txt, tested book session and full gate. No network server or dependencies.
   Budget: 700 production Rust lines; JSON reader/writer at most 250 lines;
   AGENTS.md at most 120 lines.
-- [ ] **P09 — Add editor diagnostics and repair actions** — `OPEN`, P1.
+- [x] **P09 — Add editor diagnostics and repair actions** — `DONE`, P1.
   Implemented full-text stdio LSP, 300 ms debounce, compilation-database flags,
   unsaved-source identity, UTF-16 positions and safe versioned edits. The latest
   focused gate passes 44 tests, including the independent pipe client and 13
@@ -662,21 +662,30 @@ retain the original scope where one copy has a truncated sentence.
   Clean-tree full gate on `430fa7c0`: 422 suites, 3,216 passed, zero failed,
   five existing ignored campaigns; Clippy and formatting pass. The gate exited
   zero. Log SHA-256: `3dc5fae0695c17261f75a60b0de200f1c591b267403e4647f33f6727bf150513`.
-  Next: retain the native-editor screenshot. The owner
-  selected Zed instead of VS Code for the native UI exit; keep the VS Code
-  extension and its tests. Zed launched evo lsp and displayed an error marker,
-  but the UI connector lost the window before the detailed capture. This is
-  not a completed UI acceptance. Logs: `.evidence/diagnostics/20261007/editor-interface/`.
+  The owner selected Zed for the native UI exit, then waived the screenshot
+  on 2026-10-07. Zed launched evo lsp and displayed an error marker; the UI
+  connector returned cgWindowNotFound before capture. No screenshot PASS is
+  claimed. Keep the VS Code extension and its tests.
+  Logs: `.evidence/diagnostics/20261007/editor-interface/`.
 - [ ] **P10 — Integrate existing build systems** — `OPEN`, P1.
-  Next: CMake/compiler-identification REDs after the green editor implementation
-  gate; the editor's separate UI capture remains open. The zlib 1.3.2 source
-  requires unsupported gcov instrumentation in its default static CMake tests.
-  Shared-only CMake acceptance was proposed to the owner, not silently substituted.
+  CMake/compiler-identification REDs are committed in `ca0f7a2a`; library and
+  native stack-protector regressions are in `94a9fb29`. Seven focused checks
+  pass: compiler identity, warning controls, native CMake, Linux object CMake
+  with a space-containing sysroot, pkg-config, Make dependencies and native
+  stack protection. Original cJSON 1.7.19 CMake utility tests pass 22/22.
+  The default zlib 1.3.2 CMake tests require gcov instrumentation. On 2026-10-07
+  the owner retained that default-config requirement and rejected shared-only
+  substitution. Keep this package open until coverage support is implemented
+  and the original default tests pass. No coverage implementation is included
+  in this bounded integration change. Full workspace validation is next.
+  Evidence: `.evidence/diagnostics/20261007/build-systems/`.
   Exit: original cJSON/zlib CMake tests, Linux object build, pkg-config and
   dependency-file replay, book commands and full gate. Budgets: 200 Rust,
   80 CMake lines. No custom CMake compiler-id module or package manager.
 - [ ] **P11 — Publish channel metadata and compatibility** — `OPEN`, P1.
-  Next: after P10 closes, add nightly/release and matrix REDs.
+  RED tests are prepared in `94a9fb29`: eight cases run, the positive packaging
+  control passes, and missing matrix/nightly/changelog checks fail as expected.
+  Implementation has not started; resume after P10 closes.
   Exit: every ladder receipt in the generated chapter, nightly dry run with
   act if present or careful review, changelog guard and full gate. Known
   budgets: 150 Python lines and 60 workflow lines. Do not publish a release.

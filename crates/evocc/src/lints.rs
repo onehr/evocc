@@ -33,6 +33,7 @@ impl Levels {
         match flag {
             "-Wall" | "-Wextra" => self.all = true,
             "-Werror" => self.errors = true,
+            "-Wno-error" => self.errors = false,
             "-w" => self.quiet = true,
             _ if flag.starts_with("--cap-lints=") => {
                 self.cap = match &flag[12..] {
