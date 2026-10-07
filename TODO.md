@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P15, P16, B08, B08b, B08d, B08d10 | P01 through P14 are accepted in their recorded scope. P15-P16 remain in order, each after the preceding full gate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | P16, B08, B08b, B08d, B08d10 | P01 through P15 are accepted in their recorded scope. P16 follows the completed full gate, then both final gates run on a clean tree. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -813,7 +813,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   This slice's measured target/frontend plus capture net change is +820 KiB;
   retained demo inputs/proofs are small historical evidence. The log records
   its own binary identities; it does not claim a later rebuilt checker replay.
-- [ ] **P15 — Test deterministic agent results** — `OPEN`, P1.
+- [x] **P15 — Test deterministic agent results** — `DONE`, P1.
   After P14, compare two runs of each specified JSON output and proof record.
   Normalize temporary paths only. Require three consecutive runs and the gate.
   The 134-line `crates/evocc/tests/determinism.rs` adds one test: failed check,
@@ -823,7 +823,15 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   stage order, JSON bytes and assembly remain checked. `SOURCE_DATE_EPOCH=0`
   is explicit preprocessing context, not output normalization. No timestamp
   field is removed. Capture: `agent-demo/determinism-{red,1,2,3}.log` under the
-  same October 7 evidence directory. Full-workspace acceptance remains pending.
+  same October 7 evidence directory. Implementation: `95a883d5`. Its clean full
+  offline gate passes: 425 suites, 3,227 passed, zero failed, five existing
+  ignored; Clippy and formatting pass. `determinism-full-workspace.log` SHA-256:
+  `16b3c3761e01b004451d5f37ab3e7777bce159349a2c8210a36dc156a02dabdf`.
+  The paired-record test also passes in that gate, in 24.23 seconds. The claim
+  covers the fixed fixture matrix and context, not arbitrary clock-dependent
+  programs or external inputs. AGENTS.md and llms.txt are byte-identical.
+  Capture is 1,212 KiB; this slice's target/frontend plus capture net increase
+  is 5,420 KiB. Test-owned temporary sources and proof outputs are removed.
 - [ ] **P16 — Document a real agent connection** — `OPEN`, P1.
   After P15, test the installed client configuration, publish its actual tool
   list, add the bounded skill, then run both final gates on a clean tree.
