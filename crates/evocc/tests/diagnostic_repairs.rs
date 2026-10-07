@@ -216,6 +216,8 @@ fn side_effecting_initializer_and_volatile_access_are_not_safe_edits() {
         "int g(void); int f(void) { int unused = g(); return 0; }\n",
         "int f(void) { volatile int unused = 1; return 0; }\n",
         "int f(volatile int unused) { return 0; }\n",
+        "int f(void) { volatile char unused[] = \"x\"; return 0; }\n",
+        "int f(void) { int unused = 1e99; return 0; }\n",
     ] {
         let source = Source::new(before);
         let output = source.fix(&["--apply", "--json"]);
@@ -253,4 +255,36 @@ fn macro_expansion_is_not_a_writable_declaration() {
     let source = Source::new(before);
     success(&source.fix(&["--apply", "--json"]));
     assert_eq!(std::fs::read_to_string(&source.0).unwrap(), before);
+}
+
+#[test]
+fn all_unused_declarators_can_be_removed_together() {
+    let source = Source::new("int f(void) { int a = 1, b = 2; return 0; }\n");
+    success(&source.fix(&["--apply"]));
+    success(&source.check());
+}
+
+#[test]
+fn adjacent_unused_declarators_keep_shared_syntax() {
+    for declaration in [
+        "int used = 3, a = 1, b = 2;",
+        "int a = 1, b = 2, used = 3;",
+        "int used = 3, a = 1, b = 2, other = 4;",
+    ] {
+        let result = if declaration.contains("other") { "used + other" } else { "used" };
+        let source = Source::new(&format!("int f(void) {{ {declaration} return {result}; }}\n"));
+        success(&source.fix(&["--apply", "--json"]));
+        success(&source.check());
+    }
+}
+
+#[test]
+fn removing_a_loop_declaration_keeps_the_separator() {
+    let source = Source::new("int f(void) { for (int unused = 2; 1;) break; return 0; }\n");
+    success(&source.fix(&["--apply"]));
+    assert_eq!(
+        std::fs::read_to_string(&source.0).unwrap(),
+        "int f(void) { for (; 1;) break; return 0; }\n"
+    );
+    success(&source.check());
 }
