@@ -1,4 +1,4 @@
-//! N03a step 3: current Darwin and Linux placement snapshots.
+//! Stable Darwin and Linux ABI placement snapshots.
 //!
 //! Each C shape is lowered once by the unchanged frontend and then compiled by
 //! the backend for both AArch64 profiles. Every entry is the SHA-256 of the
@@ -360,17 +360,20 @@ const RECORDED: &[(&str, &str, &str)] = &[
     ),
     (
         "stack_guard_global",
-        "asm 4ddbc2b474e689151b31de36f6c5aebfdb7eb81720fa4cd4973000cc4c0f9927",
+        // Darwin uses Mach-O GOT relocations and its C symbol prefix. These
+        // three guard records replace the invalid ELF-spelled Darwin output;
+        // every Linux record and every other Darwin record stays unchanged.
+        "asm 28d707b4e0546c8ac09dc214cf469e08c215406de9e426b3421a8f5cea97cdb1",
         "asm e4d48e05c513bd2b28d2c43cd4ea4e21b7edc417b472bbc4fa2acdda369149f8",
     ),
     (
         "stack_guard_system_register",
-        "asm ddc7bf59700426ff34aa4589077fec6e82e771dfbff8f1df90c901d2dca6619c",
+        "asm 12e5b64e2956e64632ca6d7dcac726db100a83718e963ed7d646d06f07371591",
         "asm 2f53622df5ad502a3756e43bbb5dd2a28000e348b8fd5554d8e8e3978fdc67ed",
     ),
     (
         "stack_guard_far_system_register",
-        "asm 84a348b69ae6134990eb68aeb684b471298ae7087ab764cb94d07430026b5298",
+        "asm 1dcdbd90709bd8aa443857226aa389e12a2361a2525cb2249572ec1d0fbbdd8d",
         "asm 40c558dbb3d796aa64a0dc8518f946d7a5161501594999c4f71e14a0b4b5d7e1",
     ),
     (
@@ -441,7 +444,7 @@ fn outcome(target: Target, shape: &Shape, ir: &str) -> String {
 }
 
 #[test]
-fn darwin_and_linux_placement_matches_the_pre_extraction_snapshot() {
+fn darwin_and_linux_placement_matches_recorded_output() {
     let mut actual = Vec::new();
     for shape in SHAPES {
         let ir = evoir(shape);

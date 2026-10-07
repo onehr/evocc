@@ -669,15 +669,20 @@ retain the original scope where one copy has a truncated sentence.
   Logs: `.evidence/diagnostics/20261007/editor-interface/`.
 - [ ] **P10 — Integrate existing build systems** — `OPEN`, P1.
   CMake/compiler-identification REDs are committed in `ca0f7a2a`; library and
-  native stack-protector regressions are in `94a9fb29`. Seven focused checks
+  native stack-protector regressions are in `94a9fb29`. Eight focused checks
   pass: compiler identity, warning controls, native CMake, Linux object CMake
   with a space-containing sysroot, pkg-config, Make dependencies and native
-  stack protection. Original cJSON 1.7.19 CMake utility tests pass 22/22.
+  stack protection, plus generated angle-header precedence (`74b92076`).
+  Original cJSON 1.7.19 CMake utility tests pass 22/22. After the header fix,
+  the default zlib build reaches infcover.c and exits 2 on unsupported -coverage.
   The default zlib 1.3.2 CMake tests require gcov instrumentation. On 2026-10-07
   the owner retained that default-config requirement and rejected shared-only
   substitution. Keep this package open until coverage support is implemented
   and the original default tests pass. No coverage implementation is included
-  in this bounded integration change. Full workspace validation is next.
+  in this bounded integration change. The full workspace run found three
+  expected Darwin guard snapshot changes and two container permission failures.
+  The corrected snapshots and privileged target replays pass 9/9; a clean
+  full workspace run with container access is next. Interrupted logs remain.
   Evidence: `.evidence/diagnostics/20261007/build-systems/`.
   Exit: original cJSON/zlib CMake tests, Linux object build, pkg-config and
   dependency-file replay, book commands and full gate. Budgets: 200 Rust,
