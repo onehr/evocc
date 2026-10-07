@@ -181,6 +181,8 @@ Refusal: STAGE_REJECTED exit=3; no assembly published.
 Refusal: CHECKER_IDENTITY_MISMATCH exit=5; no assembly published.
 ```
 
+Connect Claude Code or Codex: `claude mcp add evo -- evo mcp`; see the [connection guide](book/src/agents.md#connect-an-agent) and the skill in [skills/evocc/](skills/evocc/).
+
 ### Using EvoCC
 
 #### Quick start

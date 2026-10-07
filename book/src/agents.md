@@ -9,6 +9,43 @@ evo fix demo.c --plan --json
 evo explain E3002 --json
 ```
 
+## Connect an agent
+
+Put `evo` on the client's `PATH`. For Claude Code, run:
+
+```sh
+claude mcp add evo -- evo mcp
+```
+
+For Codex, add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.evo]
+command = "evo"
+args = ["mcp"]
+```
+
+Restart the client after a configuration change. Approve the local server when
+the client asks. Use it only in a workspace where source and output access is allowed.
+The [EvoCC skill](https://github.com/onehr/evocc/blob/main/skills/evocc/SKILL.md)
+gives the check, repair and proof rules. A review repair still needs a human.
+
+Both clients were installed on October 7, 2026. Claude Code 2.1.292 connected
+and used all five tools in the [recorded model session](agent-loop.md#real-model-session).
+The separate configuration test used `--scope project`; a fresh project correctly
+reported pending approval. That state alone does not establish a connection.
+Run `sh tools/demo/connect-agent.sh` from the repository to test temporary
+client configuration and discovery without a model turn. Its Codex client used
+the same command and arguments through process-local overrides, with other
+servers disabled. This is the actual client-side discovery output:
+
+```text
+codex-cli 0.160.1
+Codex: only evo enabled in temporary command-line configuration.
+Codex tools: ["check", "explain", "fix_plan", "prove", "run"]
+No model turn or persistent client configuration was created.
+```
+
 ## Command records
 
 See [An agent repair loop](agent-loop.md) for the scripted run and a real model session.

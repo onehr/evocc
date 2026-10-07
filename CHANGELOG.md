@@ -42,6 +42,13 @@ The first public version.
   are not silently crossed. A syntax recheck is not a proof of equivalent behavior.
 - `evo mcp`, a five-tool JSON-RPC server on standard input and output. Each tool uses the
   matching JSON command. Root `AGENTS.md` and `llms.txt` give the same agent instructions.
+- A recorded repair loop, from an executed-path overflow finding through two safe repairs
+  and an owner-selected guard to checked assembly. The book includes one real MCP model
+  session and three refusals: changed certificate, deleted obligation and wrong checker hash.
+  The scripts retain actual output; they do not extend the proved C subset.
+- Paired-run tests for byte-identical agent JSON and proof records with fixed inputs and
+  compiler context. Only temporary directory paths are normalized. The book gives tested
+  Claude Code and Codex connection settings, and `skills/evocc/` gives bounded repair rules.
 - `evo lsp`, with full-text synchronization, diagnostics from the compiler, compile database
   flags and safe repair code actions. The book describes Zed, Neovim and the source-only
   VS Code extension. The editor protocol tests pass; the owner waived the Zed screenshot.
