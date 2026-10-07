@@ -25,6 +25,12 @@ def check_files(root, contract):
 
 
 class HeaderExportTests(unittest.TestCase):
+    def test_release_workflow_exports_headers_and_runs_the_cross_object(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        for command in ("tools/export-sysroot.sh", "linux-headers.tar.gz",
+                        "cross-hello.o", 'test "$(./cross-hello)"'):
+            self.assertIn(command, workflow)
+
     def test_script_exists_and_documents_its_destination(self):
         result = subprocess.run(["sh", str(SCRIPT), "--help"], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
