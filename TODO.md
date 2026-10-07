@@ -659,13 +659,19 @@ retain the original scope where one copy has a truncated sentence.
   focused gate passes 44 tests, including the independent pipe client and 13
   VS Code client checks. Shared-header diagnostics remain until all includers
   clear them. Production budget: 698/700 Rust and 73/80 TypeScript lines.
-  Next: clean-tree full gate and retained native-editor screenshot. The owner
+  Clean-tree full gate on `430fa7c0`: 422 suites, 3,216 passed, zero failed,
+  five existing ignored campaigns; Clippy and formatting pass. The gate exited
+  zero. Log SHA-256: `3dc5fae0695c17261f75a60b0de200f1c591b267403e4647f33f6727bf150513`.
+  Next: retain the native-editor screenshot. The owner
   selected Zed instead of VS Code for the native UI exit; keep the VS Code
   extension and its tests. Zed launched evo lsp and displayed an error marker,
   but the UI connector lost the window before the detailed capture. This is
   not a completed UI acceptance. Logs: `.evidence/diagnostics/20261007/editor-interface/`.
 - [ ] **P10 — Integrate existing build systems** — `OPEN`, P1.
-  Next: after P09 closes, add CMake/compiler-identification REDs.
+  Next: CMake/compiler-identification REDs after the green editor implementation
+  gate; the editor's separate UI capture remains open. The zlib 1.3.2 source
+  requires unsupported gcov instrumentation in its default static CMake tests.
+  Shared-only CMake acceptance was proposed to the owner, not silently substituted.
   Exit: original cJSON/zlib CMake tests, Linux object build, pkg-config and
   dependency-file replay, book commands and full gate. Budgets: 200 Rust,
   80 CMake lines. No custom CMake compiler-id module or package manager.
