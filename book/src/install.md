@@ -58,6 +58,22 @@ the build. The second line gives the target that `evocc` makes code for by defau
 The `export` line lasts until you close the shell. To keep it, add the line to your shell profile,
 for example `~/.zshrc`, with the full path of the directory.
 
+## Nightly builds
+
+The [rolling nightly prerelease](https://github.com/onehr/evocc/releases/tag/nightly)
+is the download location for daily and manual builds of `main`. The workflow uses
+the same packaging, native smoke checks and cross-host object check as stable
+releases. A successful run replaces two archives named
+`evocc-nightly-<target>.tar.gz` and their `SHA256SUMS`; it does not create a new
+release each day. The directory inside each archive still names the compiler's
+version. Verify its checksum before unpacking, as for a stable release.
+
+Nightly is not a stable release. Its release notes identify the source commit,
+and `evocc --version` retains the version and commit built into the compiler.
+Stable releases keep `vX.Y.Z` tags. The current package version policy is
+`0.y.z`; packaging requires an exact matching `## [0.y.z]` heading in
+`CHANGELOG.md` before it writes an archive.
+
 ## Build from source
 
 To build EvoCC from source, you need:

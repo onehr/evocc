@@ -11,4 +11,5 @@
 - [Checked Optimization](optimization.md)
 - [How EvoCC Works](how-it-works.md)
 - [Evaluating EvoCC](evaluate.md)
+- [Retained Compatibility](compatibility.md)
 - [Contributing](contributing.md)

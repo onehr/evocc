@@ -1,10 +1,14 @@
-# Release: on a v* tag, build one archive per host, smoke test it, and
-# publish the archives and SHA256SUMS as release assets.
+# Stable tags and the rolling nightly reuse the same build and smoke checks.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      channel:
+        type: string
+        default: stable
 
 permissions:
   contents: read
@@ -13,9 +17,11 @@ env:
   CARGO_TARGET_DIR: target/frontend
   CARGO_BUILD_JOBS: "2"
   CARGO_TERM_COLOR: always
+  RELEASE_CHANNEL: ${{ inputs.channel || 'stable' }}
 
 jobs:
   headers:
+    if: inputs.channel != 'nightly' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     steps:
@@ -63,15 +69,28 @@ jobs:
       # A clean build without caches: Cargo builds evocc, Lake builds evoir-sem.
       - name: Build and package
         run: tools/release.sh --target "$TARGET" --out dist --with-lean
-      - name: The tag names the packaged version
+      - name: Resolve the archive and check the stable version
         run: |
-          want="dist/evocc-${GITHUB_REF_NAME#v}-$TARGET.tar.gz"
-          test -f "$want" || { echo "::error::no $want; evocc --version disagrees with the tag"; ls dist; exit 1; }
+          case "$RELEASE_CHANNEL" in
+            stable)
+              echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+              package="evocc-${GITHUB_REF_NAME#v}-$TARGET"
+              ;;
+            nightly)
+              test "$GITHUB_REF" = refs/heads/main
+              set -- dist/evocc-*-$TARGET.tar.gz
+              test "$#" -eq 1 && test -f "$1"
+              package="${1#dist/}"; package="${package%.tar.gz}"
+              ;;
+            *) echo "::error::unsupported release channel"; exit 1 ;;
+          esac
+          test -f "dist/$package.tar.gz" || { echo "::error::archive version disagrees with the tag"; ls dist; exit 1; }
+          echo "PACKAGE_NAME=$package" >> "$GITHUB_ENV"
       - name: Smoke test the archive
         run: |
           mkdir smoke
-          tar -xzf "dist/evocc-${GITHUB_REF_NAME#v}-$TARGET.tar.gz" -C smoke
-          cd "smoke/evocc-${GITHUB_REF_NAME#v}-$TARGET"
+          tar -xzf "dist/$PACKAGE_NAME.tar.gz" -C smoke
+          cd "smoke/$PACKAGE_NAME"
           if command -v sha256sum >/dev/null; then sha256sum -c SHA256SUMS; else shasum -a 256 -c SHA256SUMS; fi
           ./bin/evocc --version
           if [ "$TARGET" = aarch64-apple-darwin ]; then
@@ -93,6 +112,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: matrix.target == 'aarch64-apple-darwin'
         with: {name: cross-hello, path: cross-hello.o, if-no-files-found: error}
+      - name: Give nightly assets stable download names
+        if: inputs.channel == 'nightly'
+        run: mv "dist/$PACKAGE_NAME.tar.gz" "dist/evocc-nightly-$TARGET.tar.gz"
       - uses: actions/upload-artifact@v4
         with:
           name: evocc-${{ matrix.target }}
@@ -121,9 +143,32 @@ jobs:
         working-directory: dist
         run: sha256sum evocc-*.tar.gz | tee SHA256SUMS
       - name: Create the release
+        if: env.RELEASE_CHANNEL == 'stable'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
             --title "EvoCC $GITHUB_REF_NAME"
+      - name: Replace the rolling nightly assets
+        if: env.RELEASE_CHANNEL == 'nightly'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test -f dist/evocc-nightly-aarch64-apple-darwin.tar.gz
+          test -f dist/evocc-nightly-aarch64-unknown-linux-gnu.tar.gz
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/nightly" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" -f sha="$GITHUB_SHA" -F force=true
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/tags/nightly -f sha="$GITHUB_SHA"
+          fi
+          notes="Built from main commit $GITHUB_SHA. Replaces the previous nightly; not a stable release."
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release upload nightly dist/*.tar.gz dist/SHA256SUMS --clobber
+            gh release edit nightly --prerelease --latest=false --title "EvoCC nightly" --notes "$notes"
+          else
+            gh release create nightly dist/*.tar.gz dist/SHA256SUMS --verify-tag \
+              --prerelease --latest=false --title "EvoCC nightly" --notes "$notes"
+          fi

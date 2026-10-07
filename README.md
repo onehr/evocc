@@ -56,6 +56,10 @@ second configuration boots with 7,008 objects and 848 modules. Ten of fifteen ap
 pass. Two Doom demos give the same framebuffer hash for each of 350 frames in all 12 runs under
 EvoCC, GCC 14 and Clang 19. [Part II §7](#7-evaluation) gives the full numbers and their limits.
 
+The generated [compatibility matrix](book/src/compatibility.md) links every retained ladder
+receipt with its measured input, result, denominator and date. These are historical measurements,
+not a revalidation of the current compiler; partial results and test-scope limits remain visible.
+
 ### Reproduce
 
 Each `bench.py` lane builds pinned sources with EvoCC, runs their tests in the sealed lab and writes a receipt.

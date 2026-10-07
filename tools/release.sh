@@ -133,6 +133,14 @@ if [ -z "$version" ]; then
     warn "evocc --version gave no version; using $version from crates/evocc/Cargo.toml"
 fi
 
+# A package version must follow the current release policy and be documented.
+printf '%s\n' "$version" | grep -Eq '^0\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
+    || die "version must use 0.y.z: $version"
+[ -f CHANGELOG.md ] || die "changelog is missing: CHANGELOG.md"
+awk -v version="$version" 'index($0, "## [") == 1 && $2 == "[" version "]" { found = 1 }
+    END { exit !found }' CHANGELOG.md \
+    || die "changelog has no heading for version $version"
+
 name="evocc-$version-$target"
 mtime="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct 2>/dev/null || echo 0)}"
 mkdir -p "$out"
