@@ -15,7 +15,7 @@
 //! and answers NOT_IMPLEMENTED for stages beyond the current capability.
 
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::num::NonZeroUsize;
 use std::process::ExitCode;
 
@@ -157,6 +157,7 @@ struct DriverOptions {
     included_bytes: std::cell::RefCell<std::collections::BTreeMap<String, Vec<u8>>>,
     target: DriverTarget,
     input: String,
+    source_from_stdin: bool,
     include_paths: Vec<String>,
     system_include_paths: Vec<String>,
     forced_includes: Vec<String>,
@@ -530,6 +531,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     let mut color = diagnostics::Color::Auto;
     let mut target = None;
     let mut input = None;
+    let mut source_from_stdin = false;
     let mut include_paths = Vec::new();
     let mut system_include_paths = Vec::new();
     let mut forced_includes = Vec::new();
@@ -586,6 +588,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         match arg.as_str() {
             "-E" => set_mode(&mut mode, DriverMode::Preprocess)?,
             "--parse-only" => set_mode(&mut mode, DriverMode::ParseOnly)?,
+            "--source-from-stdin" => source_from_stdin = true,
             _ if arg.starts_with("--repair=") => {
                 let value = &arg[9..];
                 if !matches!(value, "plan" | "safe" | "review")
@@ -1009,6 +1012,9 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     if repair_mode.is_some() && mode != DriverMode::ParseOnly {
         return Err("--repair requires --parse-only".into());
     }
+    if source_from_stdin && (!lenient || mode != DriverMode::ParseOnly || repair_mode.is_some()) {
+        return Err("--source-from-stdin requires -fsyntax-only without --repair".into());
+    }
     let proof = proof_arguments.admit(proof_required::Admission {
         emit_asm: mode == DriverMode::EmitAsm,
         entries: &core_entries,
@@ -1112,6 +1118,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         included_bytes: std::cell::RefCell::new(std::collections::BTreeMap::new()),
         target,
         input: input.ok_or_else(|| "an input file is required".to_string())?,
+        source_from_stdin,
         include_paths,
         system_include_paths,
         forced_includes,
@@ -1235,7 +1242,18 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
 fn read_and_lex(options: &DriverOptions) -> Result<(Vec<u8>, Vec<evocc_lex::Token>), ExitCode> {
     let file = options.input.as_str();
     let language = options.language;
-    let bytes = match fs::read(file) {
+    // Keep the physical filename for includes and diagnostics; only the main
+    // source bytes come from the editor snapshot.
+    let read = if options.source_from_stdin {
+        let mut bytes = Vec::new();
+        std::io::stdin()
+            .lock()
+            .read_to_end(&mut bytes)
+            .map(|_| bytes)
+    } else {
+        fs::read(file)
+    };
+    let bytes = match read {
         Ok(s) => s,
         Err(e) => {
             options.emit_error(file, 0, 0, "E0003", &format!("cannot read source: {e}"));

@@ -59,6 +59,8 @@ Actions (the default action links an executable):
   -S                 Compile to assembly, NAME.s.
   -c                 Compile and assemble to an object, NAME.o.
   -fsyntax-only      Check the input and write nothing.
+  --source-from-stdin Read one named C input's bytes from stdin; syntax-only,
+                      without output, dependency or repair options.
   -o FILE            Write the output to FILE. The default executable is a.out.
 
 Inputs: .c and .i are C, .s is assembly, .S is assembly with the C
@@ -651,6 +653,22 @@ impl Session {
     fn execute(&mut self) -> Result<(), ExitCode> {
         let sources = self.classify()?;
         let action = self.command.action;
+        if self
+            .command
+            .compile
+            .iter()
+            .any(|arg| arg == "--source-from-stdin")
+            && (action != Action::SyntaxOnly
+                || sources.len() != 1
+                || sources[0].kind != Kind::C
+                || self.command.output.is_some()
+                || self.command.deps.headers().is_some()
+                || self.command.deps.file.is_some()
+                || !self.command.deps.targets.is_empty()
+                || self.command.deps.phony)
+        {
+            return Err(self.fail("--source-from-stdin requires one C input and -fsyntax-only without output or dependency options"));
+        }
         let per_file = sources
             .iter()
             .filter(|source| match action {

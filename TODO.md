@@ -654,10 +654,16 @@ retain the original scope where one copy has a truncated sentence.
   Budget: 700 production Rust lines; JSON reader/writer at most 250 lines;
   AGENTS.md at most 120 lines.
 - [ ] **P09 — Add editor diagnostics and repair actions** — `OPEN`, P1.
-  Next: add REDs for the restored editor contract, including didSave, full-text
-  synchronization, the 300 ms debounce and compile_commands.json flags.
-  Exit: scripted LSP diagnostic/change/action test, actual VS Code diagnostic
-  screenshot, book setup and full gate. Budget: 700 Rust and 80 TypeScript lines.
+  Implemented full-text stdio LSP, 300 ms debounce, compilation-database flags,
+  unsaved-source identity, UTF-16 positions and safe versioned edits. The latest
+  focused gate passes 44 tests, including the independent pipe client and 13
+  VS Code client checks. Shared-header diagnostics remain until all includers
+  clear them. Production budget: 698/700 Rust and 73/80 TypeScript lines.
+  Next: clean-tree full gate and retained native-editor screenshot. The owner
+  selected Zed instead of VS Code for the native UI exit; keep the VS Code
+  extension and its tests. Zed launched evo lsp and displayed an error marker,
+  but the UI connector lost the window before the detailed capture. This is
+  not a completed UI acceptance. Logs: `.evidence/diagnostics/20261007/editor-interface/`.
 - [ ] **P10 — Integrate existing build systems** — `OPEN`, P1.
   Next: after P09 closes, add CMake/compiler-identification REDs.
   Exit: original cJSON/zlib CMake tests, Linux object build, pkg-config and

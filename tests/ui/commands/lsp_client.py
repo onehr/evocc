@@ -265,15 +265,18 @@ with tempfile.TemporaryDirectory(prefix="evocc-lsp-client-") as temporary:
                     "-MF 'other output.d' -c 'other space.c' -o 'other output.o'"},
         {"directory": str(work), "file": source.name,
          "arguments": ["evocc", "-I", str(include.relative_to(work)), "-DEDITOR_VALUE=1",
+                       "-Wp,-MMD,mixed.d,-DKEEP=1",
                        "-MMD", "-MF", "input.d", "-c", source.name, "-o", "input.o"]}]))
     snapshot = {path: path.read_bytes() for path in work.rglob("*") if path.is_file()}
     client = Client(work, "--json")
     try:
         client.initialize(work)
+        # Removing dependency output from a mixed -Wp option must retain its define.
         client.open(source, '#include "config.h"\n'
-                    'enum { value = HEADER_VALUE / EDITOR_VALUE };\n'
+                    'enum { value = HEADER_VALUE / (EDITOR_VALUE * (KEEP == 1)) };\n'
                     'int main(void) { return value; }\n')
         assert client.diagnostics(source.as_uri()) == []
+        assert not (work / "mixed.d").exists()
         client.close(source)
         client.open(other, '#include "config.h"\n'
                     'enum { value = HEADER_VALUE / (EDITOR_VALUE - 1) };\n'

@@ -20,6 +20,7 @@ Use `--json` before `--` for one JSON object per line on standard output.
 | `evo fix FILE.c --apply [--review]` | Applies selected repairs and checks the edited source; errors are nonzero |
 | `evo version` | 0 and the compiler version |
 | `evo mcp` | Newline JSON-RPC on stdio; closes on input EOF |
+| `evo lsp` | Framed LSP on stdio; shutdown then exit returns 0; early exit returns 1 |
 
 The command JSON fields are in `book/src/agents.md`. Diagnostic and repair
 records are in `spec/diagnostics.md`. Read the exit code as well as the record.

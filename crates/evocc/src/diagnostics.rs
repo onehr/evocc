@@ -101,13 +101,27 @@ pub struct Span {
 
 impl Span {
     pub fn source(file: &str, source: &[u8], span: evocc_common::SourceSpan, label: &str) -> Self {
+        // Lexer columns count characters. The external diagnostic contract
+        // counts bytes, so normalize from the preserved physical offsets.
+        let (line_start, column_start) = source
+            .get(..span.byte_start as usize)
+            .map(|prefix| {
+                prefix.iter().fold((1, 1), |(line, column), b| {
+                    if *b == b'\n' {
+                        (line + 1, 1)
+                    } else {
+                        (line, column + 1)
+                    }
+                })
+            })
+            .unwrap_or((span.line_start, span.column_start));
         let length = span.byte_end.saturating_sub(span.byte_start) as usize;
         let bytes = source
             .get(span.byte_start as usize..)
             .and_then(|tail| tail.get(..length))
             .unwrap_or_default();
-        let mut line_end = span.line_start;
-        let mut column_end = span.column_start;
+        let mut line_end = line_start;
+        let mut column_end = column_start;
         for byte in bytes {
             if *byte == b'\n' {
                 line_end += 1;
@@ -118,8 +132,8 @@ impl Span {
         }
         Self {
             file: file.into(),
-            line_start: span.line_start,
-            column_start: span.column_start,
+            line_start,
+            column_start,
             line_end,
             column_end,
             label: label.into(),

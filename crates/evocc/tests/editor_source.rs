@@ -59,7 +59,10 @@ fn stdin_snapshot_keeps_filename_local_headers_and_original_bytes() {
     assert!(stderr.contains("\"code\":\"W0002\""), "{stderr}");
     assert!(stderr.contains("\"file\":\"src/editor.c\""), "{stderr}");
     assert!(stderr.contains("\"repair_id\":\"W0002.void-cast\""));
-    assert_eq!(std::fs::read(work.0.join("src/editor.c")).unwrap(), original);
+    assert_eq!(
+        std::fs::read(work.0.join("src/editor.c")).unwrap(),
+        original
+    );
     assert!(!work.0.join("editor.o").exists());
     assert!(!work.0.join("editor.d").exists());
 }
@@ -89,13 +92,22 @@ fn snapshot_input_refuses_output_modes_multiple_inputs_and_repair_application() 
         vec!["-fsyntax-only", "src/editor.c", "src/other.c"],
         vec!["-fsyntax-only", "-Wall", "--repair=safe", "src/editor.c"],
         vec!["-fsyntax-only", "-Wall", "--repair=review", "src/editor.c"],
-        vec!["-fsyntax-only", "-MMD", "-MF", "forbidden.d", "src/editor.c"],
+        vec![
+            "-fsyntax-only",
+            "-MMD",
+            "-MF",
+            "forbidden.d",
+            "src/editor.c",
+        ],
     ] {
         let mut command = vec!["--source-from-stdin"];
         command.extend(args);
         let output = work.run(&command, "int f(int unused) { return 1; }\n");
         assert_eq!(output.status.code(), Some(1), "{command:?}");
-        assert_eq!(std::fs::read(work.0.join("src/editor.c")).unwrap(), original);
+        assert_eq!(
+            std::fs::read(work.0.join("src/editor.c")).unwrap(),
+            original
+        );
     }
     for name in ["forbidden.o", "forbidden.s", "forbidden.i", "forbidden.d"] {
         assert!(!work.0.join(name).exists(), "{name} was written");

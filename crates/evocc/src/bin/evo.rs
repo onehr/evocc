@@ -11,6 +11,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[path = "evo/json.rs"]
 mod json;
+#[path = "evo/lsp.rs"]
+mod lsp;
 #[path = "evo/mcp.rs"]
 mod mcp;
 
@@ -462,7 +464,7 @@ fn execute() -> Result<i32> {
         .map_or(Ok("help"), |s| s.to_str().ok_or("command is not UTF-8"))?;
     let usage = match verb {
         "help" | "--help" if raw.len() <= 1 || (raw.len() == 2 && raw[1] == "--json") => {
-            "evo run|check|explain|prove|build|fix|mcp|version|help"
+            "evo run|check|explain|prove|build|fix|mcp|lsp|version|help"
         }
         "run" => "evo run FILE.c [-- ARGS]",
         "check" => "evo check FILE.c",
@@ -471,6 +473,7 @@ fn execute() -> Result<i32> {
         "build" => "evo build [DIR] [-- MAKE_ARGS]",
         "fix" => "evo fix FILE.c --plan|--apply [--review] [--json]",
         "mcp" => "evo mcp",
+        "lsp" => "evo lsp",
         "version" => "evo version",
         _ => return Err(format!("unknown command: {verb}").into()),
     };
@@ -486,11 +489,15 @@ fn execute() -> Result<i32> {
         }
         return Ok(status);
     }
-    if verb == "mcp" {
+    if matches!(verb, "mcp" | "lsp") {
         if raw.len() != 1 {
             return Err(format!("usage: {usage}").into());
         }
-        return mcp::serve();
+        return if verb == "mcp" {
+            mcp::serve()
+        } else {
+            lsp::serve()
+        };
     }
     let compiler = locate("evocc", "EVOCC")?;
     if verb == "run" {

@@ -17,6 +17,17 @@ fn framed_client_checks_diagnostics_changes_and_safe_workspace_edits() {
 }
 
 #[test]
+fn vscode_client_adapter_preserves_editor_protocol_boundaries() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let result = Command::new("node")
+        .arg(root.join("tests/ui/commands/vscode_client.cjs"))
+        .current_dir(&root)
+        .status()
+        .expect("Node.js must be available for the VS Code adapter regression");
+    assert!(result.success());
+}
+
+#[test]
 fn lsp_help_is_available_in_text_and_command_json() {
     let executable = Path::new(env!("CARGO_BIN_EXE_evocc")).with_file_name("evo");
     let help = Command::new(&executable)

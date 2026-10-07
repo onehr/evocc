@@ -1,0 +1,33 @@
+{
+  "name": "evo-c",
+  "displayName": "EvoCC C Diagnostics",
+  "description": "Syntax diagnostics and safe source repairs through evo lsp.",
+  "version": "0.1.0",
+  "publisher": "evocc",
+  "license": "Apache-2.0",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Linters"],
+  "activationEvents": ["onLanguage:c"],
+  "main": "./output/extension.js",
+  "extensionKind": ["workspace"],
+  "capabilities": {
+    "untrustedWorkspaces": { "supported": false },
+    "virtualWorkspaces": { "supported": false }
+  },
+  "scripts": {
+    "build": "node -e \"const fs=require('node:fs');new Function(fs.readFileSync('extension.ts','utf8'));fs.mkdirSync('output',{recursive:true});fs.copyFileSync('extension.ts','output/extension.js')\""
+  },
+  "contributes": {
+    "configuration": {
+      "title": "EvoCC",
+      "properties": {
+        "evo.path": {
+          "type": "string",
+          "default": "evo",
+          "scope": "machine-overridable",
+          "description": "Path to the evo executable. Reload the window after changing it."
+        }
+      }
+    }
+  }
+}
