@@ -218,6 +218,7 @@ fn side_effecting_initializer_and_volatile_access_are_not_safe_edits() {
         "int f(volatile int unused) { return 0; }\n",
         "int f(void) { volatile char unused[] = \"x\"; return 0; }\n",
         "int f(void) { int unused = 1e99; return 0; }\n",
+        "struct S { volatile int x; }; int f(void) { struct S unused = {}; return 0; }\n",
     ] {
         let source = Source::new(before);
         let output = source.fix(&["--apply", "--json"]);
@@ -271,8 +272,14 @@ fn adjacent_unused_declarators_keep_shared_syntax() {
         "int a = 1, b = 2, used = 3;",
         "int used = 3, a = 1, b = 2, other = 4;",
     ] {
-        let result = if declaration.contains("other") { "used + other" } else { "used" };
-        let source = Source::new(&format!("int f(void) {{ {declaration} return {result}; }}\n"));
+        let result = if declaration.contains("other") {
+            "used + other"
+        } else {
+            "used"
+        };
+        let source = Source::new(&format!(
+            "int f(void) {{ {declaration} return {result}; }}\n"
+        ));
         success(&source.fix(&["--apply", "--json"]));
         success(&source.check());
     }
