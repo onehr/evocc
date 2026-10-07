@@ -55,6 +55,17 @@ fn locate(name: &str, variable: &str) -> Result<PathBuf> {
         .unwrap_or_else(|| {
             if sibling.is_file() {
                 sibling
+            } else if name == "evoir-sem" {
+                sibling
+                    .parent()
+                    .and_then(|dir| {
+                        dir.ancestors().find(|root| {
+                            root.join("Cargo.toml").is_file() && root.join("lean").is_dir()
+                        })
+                    })
+                    .map(|root| root.join("lean/.lake/build/bin/evoir-sem"))
+                    .filter(|path| path.is_file())
+                    .unwrap_or_else(|| PathBuf::from(name))
             } else {
                 PathBuf::from(name)
             }
@@ -166,6 +177,7 @@ fn prove(compiler: &Path, args: &[String], json: bool) -> Result<i32> {
     let out = out.ok_or("prove requires -o OUT.s")?;
     let root = temporary("evo-proof")?;
     let mut errors = Vec::new();
+    let mut checker_path = "null".to_owned();
     let result: Result<i32> = (|| {
         if entries.is_empty() {
             let listed = Command::new(compiler)
@@ -182,6 +194,7 @@ fn prove(compiler: &Path, args: &[String], json: bool) -> Result<i32> {
             );
         }
         let checker = locate("evoir-sem", "EVOCC_PROOF_CHECKER")?;
+        checker_path = quote(&checker.to_string_lossy());
         let digest = evocc_proof::sha256_hex(&fs::read(&checker)?);
         let proof = root.join("checked");
         let output = Command::new(compiler)
@@ -247,7 +260,7 @@ fn prove(compiler: &Path, args: &[String], json: bool) -> Result<i32> {
         } else {
             ("null".into(), String::new(), "null".into())
         };
-        println!("{{\"result\":{label},\"stages\":[{stages}],\"record_path\":{path},\"proof_directory\":{},\"exit_code\":{status},\"stderr\":{}}}", quote(&root.to_string_lossy()), quote(std::str::from_utf8(&errors)?));
+        println!("{{\"result\":{label},\"stages\":[{stages}],\"record_path\":{path},\"proof_directory\":{},\"checker\":{checker_path},\"exit_code\":{status},\"stderr\":{}}}", quote(&root.to_string_lossy()), quote(std::str::from_utf8(&errors)?));
         return Ok(status);
     }
     io::stderr().write_all(&errors)?;

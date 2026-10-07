@@ -82,6 +82,8 @@ if verb=='prove':
     path=pathlib.Path(r['record_path'])
     record=json.loads(path.read_text())
     assert r['result']==record['result']
+    assert r['checker']==record['checker']['path']
+    r['checker']='<checker>'
     assert r['stages']==[{k:s[k] for k in ('id','status')} for s in record['stages']]
     directory=pathlib.Path(r['proof_directory'])
     assert directory.name.startswith('evo-proof-')
@@ -207,6 +209,22 @@ fn build_json_is_the_written_receipt() {
     let receipt = std::fs::read(work.0.join("evo-build-receipt.json")).unwrap();
     assert_eq!(output.stdout, receipt);
     snapshot("build", &output, &work);
+}
+
+#[test]
+fn prove_finds_the_checkout_checker_without_an_override() {
+    let work = Scratch::new();
+    let output = evo()
+        .env_remove("EVOCC_PROOF_CHECKER")
+        .env("PATH", "/usr/bin:/bin")
+        .env("TMPDIR", &work.0)
+        .current_dir(&work.0)
+        .args(["prove", &work.file(), "--json", "-o"])
+        .arg(work.0.join("out.s"))
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_json(&output, "assert r['checker'].endswith('/lean/.lake/build/bin/evoir-sem')\nassert r['checker']==json.loads(pathlib.Path(r['record_path']).read_text())['checker']['path']", &[]);
 }
 
 #[test]

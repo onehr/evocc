@@ -83,6 +83,8 @@ The first public version.
 
 ### Changed
 
+- `evo prove` can find the Lean checker from a source checkout without an override.
+  Its JSON record names the chosen checker; demo scripts use the same discovery path.
 - The project license changed from the placeholder GPL-2.0-only to Apache-2.0.
 - The book replaces the hand-written implementation notebook and its web site. The dated lab notes
   stay in `docs/archive/notebook/`.

@@ -15,8 +15,7 @@ if len(sys.argv) > 2:
 evo = os.environ.get("EVO") or shutil.which("evo")
 cc = os.environ.get("EVOCC") or shutil.which("evocc")
 checker = shutil.which("evocc-checker")
-lean = os.environ.get("EVOCC_PROOF_CHECKER") or shutil.which("evoir-sem")
-assert all((evo, cc, checker, lean)), "put EvoCC and both checkers on PATH"
+assert all((evo, cc, checker)), "put EvoCC and evocc-checker on PATH"
 work = pathlib.Path(tempfile.mkdtemp(prefix="evocc-refusals-")).resolve()
 source = work / "fixed.c"
 shutil.copyfile(repo / "tools/demo/loop/buggy.c", source)
@@ -35,6 +34,7 @@ def command(args, expected=0, output=None, env=None):
 command([evo, "fix", source, "--apply", "--json"])
 source.write_text(source.read_text().replace("{\n", "{\n    if (a == -2147483647 - 1) return 2147483647;\n", 1))
 command([evo, "check", source, "--json"])
+lean = json.loads(command([evo, "prove", source, "-o", work / "accepted-proof.s", "--json"]))["checker"]
 certs, bad = work / "certs", work / "bad-certs"
 digest = hashlib.sha256(pathlib.Path(checker).read_bytes()).hexdigest()
 command([cc, "--target=aarch64-unknown-linux-gnu", "--emit=asm", "-Oeq-scalar", f"--eq-checker={checker}", f"--eq-checker-sha256={digest}", f"--eq-proof-dir={certs}", source], output=work / "accepted.s")

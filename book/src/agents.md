@@ -62,7 +62,7 @@ data. Non-UTF-8 program arguments remain byte-exact at the CLI boundary.
 | `run` | `exit_code`: integer; `stdout`, `stderr`: captured command output strings |
 | `check` | `exit_code`: integer; `completion`: the compiler completion object or null; `diagnostics`: array of diagnostic records |
 | `explain` | `code`, `title`, `text`: strings; `exit_code`: integer |
-| `prove` | `result`: record result string or null; `stages`: array of `{id,status}` strings; `record_path`: string or null; `proof_directory`: string; `exit_code`: integer; `stderr`: string |
+| `prove` | `result`: record result string or null; `stages`: array of `{id,status}` strings; `record_path`: string or null; `proof_directory`: string; `checker`: chosen absolute path or null; `exit_code`: integer; `stderr`: string |
 | `build` | The same object as `evo-build-receipt.json`: `version`, `target`: strings; `sources`: string array; `warnings`: code-to-count object; `failing_command`: string array or null; `exit_code`: integer |
 | `fix --plan` or `fix --apply` | `file`: string; `repairs`, `diagnostics`: arrays; `applied`, `exit_code`: integers |
 | `version` | `version`: the full compiler version string; `exit_code`: integer |
@@ -82,6 +82,9 @@ Its stage summary preserves `NOT_CHECKED` rows. When no record exists, `result`
 and `record_path` are null. A checked record with a nonzero exit can mean that
 copying the output failed. Do not treat that case as a published output.
 The full record retains the proof scope and trusted boundaries.
+Checker lookup uses `EVOCC_PROOF_CHECKER`, then a sibling executable, then
+`lean/.lake/build/bin/evoir-sem` under the nearest executable ancestor with
+`Cargo.toml` and `lean/`, then PATH. `checker` is null if no checker was selected.
 
 ## Stdio tools
 

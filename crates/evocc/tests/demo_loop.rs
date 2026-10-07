@@ -62,7 +62,7 @@ assert any({p['repair_id'] for p in r.get('repairs',[])}==
            {'W0004.insert-int','W0001.remove-declaration'} for r in records)
 assert any(r.get('applied')==2 for r in records)
 proof=json.loads(lines[-2])
-assert set(proof)=={'result','stages','record_path','proof_directory','exit_code','stderr'},proof
+assert set(proof)=={'result','stages','record_path','proof_directory','checker','exit_code','stderr'},proof
 assert proof['result']=='CHECKED_TO_FINAL_ASSEMBLY' and proof['exit_code']==0,proof
 assert lines[-1]==proof['result']+' record='+proof['record_path'],lines[-1]
 work=pathlib.Path(sys.argv[1]).resolve()
@@ -78,6 +78,7 @@ assert record['result']==proof['result'] and record['profile']=='core-v1'
 assert record['all_stages_checked'] is True and record['output']['checked'] is True
 assert record['checker_digest_pinned'] is True
 assert pathlib.Path(record['checker']['path']).resolve()==checker
+assert pathlib.Path(proof['checker']).resolve()==checker
 assert pathlib.Path(record['compiler']['path']).resolve()==compiler
 assert {entry['entry'] for entry in record['entries']}=={'magnitude','main'}
 assert proof['stages']==[{k:stage[k] for k in ('id','status')} for stage in record['stages']]
