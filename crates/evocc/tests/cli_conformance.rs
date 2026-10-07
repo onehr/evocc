@@ -31,6 +31,16 @@ fn stdin_run(args: &[&str], input: &[u8]) -> Output {
 }
 
 #[test]
+fn invalid_target_may_exit_without_reading_standard_input() {
+    let output = stdin_run(
+        &["--target=invalid", "-E", "/dev/stdin"],
+        &vec![b' '; 1024 * 1024],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("target"));
+}
+
+#[test]
 fn neverball_macro_reduction_does_not_weaken_float_conversion_checks() {
     let source = include_bytes!("../../../tests/fixtures/neverball-material-conversion.c");
     for mode in ["--interpret-c-hir", "--interpret-evoir"] {

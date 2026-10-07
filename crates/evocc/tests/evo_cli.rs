@@ -49,11 +49,34 @@ fn success(output: &Output) {
 }
 
 #[test]
+fn global_help_and_missing_command_share_usage_with_distinct_statuses() {
+    let missing = evo(&[]);
+    assert_eq!(missing.status.code(), Some(64));
+    for flag in ["help", "--help"] {
+        let output = evo(&[flag]);
+        success(&output);
+        assert_eq!(output.stdout, missing.stdout);
+        assert!(output.stderr.is_empty());
+        help_json(&[flag, "--json"], &output.stdout);
+    }
+}
+
+fn help_json(args: &[&str], usage: &[u8]) {
+    let output = evo(args);
+    success(&output);
+    let usage = String::from_utf8_lossy(usage);
+    let expected = format!("{{\"usage\":\"{}\",\"exit_code\":0}}\n", usage.trim());
+    assert_eq!(output.stdout, expected.as_bytes());
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
 fn each_public_verb_has_help() {
     for verb in ["run", "check", "explain", "prove", "build", "version"] {
         let output = evo(&[verb, "--help"]);
         success(&output);
         assert!(String::from_utf8_lossy(&output.stdout).contains(&format!("evo {verb}")));
+        help_json(&[verb, "--help", "--json"], &output.stdout);
     }
     assert!(!evo(&["unknown"]).status.success());
 }

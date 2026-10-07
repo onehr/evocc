@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10 | P01 through P05 and the final clean-tree product gates are complete. Verification work stays paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P06, P07, P08, P09, P10, P11, B08, B08b, B08d, B08d10 | Complete P06 through P11 in order under the second product contract. P01 through P05 are accepted. Verification work stays paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -544,6 +544,53 @@ to this slice. Capture is 5,844 KiB, below its 500 MiB cap. Free space after the
 gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
 
 ### Working sequence and release gates
+
+## Repair, agent and integration work
+
+Owner contract: October 7, second product stage. Keep the existing scope,
+line budgets, RED-first commits, serial offline builds and per-package full
+workspace gate. New result-producing commands/options have a JSON form.
+The owner removed the retired kernel runtime; disk admission is available
+again (100.2 GiB at entry). Check exact free bytes before every build.
+Retain at most 500 MiB per capture. Do not reopen the verification track.
+The replacement attachment still has truncated P08--P11 sentences. Request
+their complete text before implementing the missing requirements; P06 is clear.
+
+- [ ] **P06 — Correct help and early stdin rejection** — `OPEN`, P1.
+  Next: commit REDs for top-level help/status, JSON help and early pipe closure;
+  then repair the existing code. Budget: 60 lines.
+  Exit: three consecutive complete evocc-crate runs and the full workspace
+  gate pass. Account for the prior report's limits in one-line notes.
+  Capture cap: 500 MiB at `.evidence/diagnostics/20261007/command-fixes/`.
+- [ ] **P07 — Expose and apply diagnostic repairs** — `OPEN`, P1.
+  Next: after P06 closes, add REDs for the five approved repair kinds.
+  Exit: byte-exact apply tests, parse-error refusal, safe/review separation,
+  cJSON and zlib replay, full gate. Budget: 500 production Rust lines and
+  60 specification lines. Pin diagnostics revision 1.1.0.
+- [ ] **P08 — Add machine-readable user commands** — `OPEN`, P1.
+  Next: after P07 closes, resolve the truncated JSON/MCP contract and add REDs.
+  Exit: verb JSON snapshots, five MCP tools over pipes, agent instructions,
+  llms.txt, tested book session and full gate. No network server or dependencies.
+  Known budget: 700 production Rust lines; AGENTS.md at most 120 lines.
+- [ ] **P09 — Add editor diagnostics and repair actions** — `OPEN`, P1.
+  Next: after P08 closes, confirm the truncated editor contract and add REDs.
+  Exit: scripted LSP diagnostic/change/action test, actual VS Code diagnostic
+  screenshot, book setup and full gate. Budget: 700 Rust and 80 TypeScript lines.
+- [ ] **P10 — Integrate existing build systems** — `OPEN`, P1.
+  Next: after P09 closes, confirm the truncated CMake contract and add REDs.
+  Exit: original cJSON/zlib CMake tests, Linux object build, pkg-config and
+  dependency-file replay, book commands and full gate. Budgets: 200 Rust,
+  80 CMake lines. No custom CMake compiler-id module or package manager.
+- [ ] **P11 — Publish channel metadata and compatibility** — `OPEN`, P1.
+  Next: after P10 closes, confirm the truncated nightly/release contract.
+  Exit: every ladder receipt in the generated chapter, nightly dry run with
+  act if present or careful review, changelog guard and full gate. Known
+  budgets: 150 Python lines and 60 workflow lines. Do not publish a release.
+
+Close the stage only after all six packages and final clean-tree workspace
+and Lean gates pass. Update CHANGELOG 0.1.0 and report each package separately.
+
+### Remaining verification and application sequence
 
 The V00–V06 release dependency above takes priority over starting another codegen
 slice. The following table retains the separate runtime-closure sequence; it is
