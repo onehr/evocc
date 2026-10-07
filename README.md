@@ -2,10 +2,11 @@
 
 <p align="center"><img src="docs/images/mascot.png" alt="EvoCC mascot, a chameleon holding a wrench" width="200"></p>
 
-**A C compiler that checks its own work.**
+**The C compiler built for agents. It checks its own work.**
 
 EvoCC is a C compiler for AArch64 (Linux and macOS), written from scratch in Rust, with proofs in Lean 4. AI
-agents built it in 58 days, under the direction of the project owner.
+agents built it in 58 days, under the direction of the project owner, and agents are its first-class
+users: every result is a numbered, explained, machine-readable record.
 The [showcase](#showcase) shows what it builds and runs. [Part I](#part-i--the-experiment) tells
 the experiment: the question, what is new, how to use EvoCC and how it was built.
 [Part II](#part-ii--evocc-as-a-system) describes EvoCC as a system, as a short paper.
@@ -130,6 +131,27 @@ EvoCC does not wrap, port or translate GCC or LLVM. It uses them as sealed oracl
 7. **The process is part of the compiler.** Each specification is pinned by SHA-256. Each change
    starts with a failing test and ends with a gate and a receipt that binds the result to its
    compiler and inputs. A gate that cannot find its evidence fails. ([evidence](docs/evidence.md))
+
+### Built for agents
+
+Vercel Labs' Zero makes one bet: the first reader of a compiler's output is now an agent, so the
+compiler must speak in stable codes and structured data. EvoCC makes the same bet for C, the language
+that agents already write and that the existing code is in. No new language, no new syntax. The
+agent gets:
+
+- **A numbered, explained, machine-readable diagnostic.** Every diagnostic has a code, a tested
+  explanation page (`evo explain E3002`; 122 pages, each example checked against the compiler), and
+  a JSON record with a frozen schema ([`spec/diagnostics.md`](spec/diagnostics.md)). Lint levels
+  follow GCC's flags.
+- **Evidence instead of a warning.** `evo check` runs the program on its executable semantics and
+  reports undefined behavior on the executed path, with the location and the values that caused it.
+- **A certificate instead of trust.** `evo prove` compiles with the checked pipeline and writes a
+  record that names each stage, its theorem and the digests of what it checked. A refused check
+  gives no output, so an agent cannot ship an unchecked result by mistake.
+- **A receipt for every build.** `evo build` runs a project's own build and writes what was compiled,
+  which warnings appeared and where it failed.
+- **One command per intent.** `evo run`, `evo check`, `evo explain`, `evo prove`, `evo build`: each
+  has one meaning and one exit code rule, so a loop of agent calls needs no parsing of prose.
 
 ### Using EvoCC
 
