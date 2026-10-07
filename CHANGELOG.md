@@ -84,3 +84,6 @@ keeps their limits.
   zlib 1.3.2 archive without a sysroot flag or manual include paths. Hello, the zlib example and
   a minigzip round trip pass in the sealed Linux environment. The cross-host release workflow
   is configured; these local results do not claim a hosted GitHub Actions run.
+- The final product gate passes 3,176 Rust tests with zero failures and five existing ignored
+  campaigns. Clippy and formatting pass. The existing Lean gate passes all six steps against
+  EvoIR 2.0.1; this check does not expand the verified language subset.

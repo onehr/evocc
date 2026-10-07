@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10 | P01 through P05 are complete. Run the final clean-tree product gates and record their results. Verification work is paused. Existing application tasks keep their separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10 | P01 through P05 and the final clean-tree product gates are complete. Verification work stays paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -492,7 +492,8 @@ add dependencies, crates or configuration systems. Do not push.
   changed. The only unfulfilled added expectation is file-not-found for an
   excluded uppercase spelling on a case-insensitive filesystem. Keep that
   explicit; this is not a case-sensitive installation restriction or a need
-  for a new storage mechanism. Final stage gates and changelog remain pending.
+  for a new storage mechanism. The owner wording and final stage closure below
+  supersede this checkpoint's remaining contract clarification.
   Removed 186,600 KiB of owned unpacked/build temporary files after checking
   open handles. Since the pre-cleanup measurement, target/frontend plus this
   capture plus those temporary files fell by 109,876 KiB. Capture is 5,008 KiB,
@@ -502,12 +503,45 @@ add dependencies, crates or configuration systems. Do not push.
   link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,
   120 export-script lines, 60 release-script lines and 40 workflow lines.
 
-Final acceptance also requires at least 60 UI cases, tested explanations,
-six verbs, bundled-header cross compilation, clean-tree full workspace and
-Lean gates, and the 0.1.0 changelog entry. The final Lean gate checks existing
-work; it does not reopen the paused verification track. Capture retention is
-at most 500 MiB per package. Only use `target/frontend` and two Cargo jobs.
-Never delete `.build/`, `.evidence/`, contracts, fixtures or `lean/.lake`.
+**Final product acceptance — complete, October 7:** P01 through P05 are closed.
+The owner-approved wording is identical in the book, contract description and
+exporter. The final collision change uses 25/40 exporter lines (119/120 total),
+16/20 test lines and 10/10 book lines. No include-reader change was added.
+Contract SHA-256 after the description-only update:
+`e522f1bea58a120f72020fb6d3865d3aa19e1f3d60371a24321fd173cbda0f80`.
+
+Both final gates started on clean commit `d3d583fb`, with exact disk preflights
+of 25.052 GiB and 25.543 GiB respectively. Cargo ran serially with two jobs and
+the existing target directory. The full workspace gate exits zero: 417 suites,
+3,176 passed, zero failed, five existing ignored campaigns; Clippy with warnings
+denied and formatting pass. Log:
+`.evidence/diagnostics/20261007/sysroot/d3d583fb-final-workspace.log`, SHA-256
+`68de4bc280eb18978b46e26f2f94727f4677e20d64c8251c202969d1cd7a32f6`.
+The Lean gate exits zero: all six steps pass, including 20 generator tests,
+the pinned build, evaluator self-tests, 1,246,159 Lean-side vectors and the
+existing theorem/axiom audit. Its log is
+`.evidence/diagnostics/20261007/sysroot/d3d583fb-final-lean.log`, SHA-256
+`b3f9b3adc710db05df0ee4c174da8363711ea3efe4729713c6c9b29cf1e71759`.
+The regenerated receipt binds EvoIR 2.0.1 and a clean Lean tree. This is not a
+new Rust/Lean differential campaign or expanded proof scope; Lean sources and
+the paused verification pipeline are unchanged. Existing Lean lint warnings
+remain visible in the log.
+
+The final tree has 62 UI snapshot triples, 122 explanation pages (2,131 lines,
+at most 27 each), 205 tagged examples and six user verbs. Twenty pages retain
+their documented Trigger: none exceptions. Original application and packaged
+cross-build exits remain bound to their package subjects above. CHANGELOG 0.1.0
+records these features and limits. Hosted release CI is configured, not run;
+no push or release publication occurred.
+
+After the final Cargo gate and open-handle checks, removed 259 obsolete test
+executables, the unused incremental/example caches and 240,620 link-intermediate
+object files. Current test executables and release binaries remain. Protected
+evidence, contracts, fixtures and the Lean cache remain intact. From the prior
+pre-stage checkpoint, target/frontend plus this capture fell by 8,294,540 KiB
+(about 7.91 GiB); concurrent work prevents attributing filesystem-wide changes
+to this slice. Capture is 5,844 KiB, below its 500 MiB cap. Free space after the
+gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
 
 ### Working sequence and release gates
 
