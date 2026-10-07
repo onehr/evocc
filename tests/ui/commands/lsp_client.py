@@ -61,11 +61,10 @@ class Client:
             assert message.get("method") == "textDocument/publishDiagnostics", message
             self.pending.append(message)
 
-    def diagnostics(self, uri):
+    def publication(self):
         message = self.pending.pop(0) if self.pending else self.receive()
         assert message["method"] == "textDocument/publishDiagnostics", message
         params = message["params"]
-        assert params["uri"] == uri, params
         assert isinstance(params["diagnostics"], list), params
         for diagnostic in params["diagnostics"]:
             assert diagnostic["message"] and diagnostic["code"], diagnostic
@@ -73,7 +72,17 @@ class Client:
             for end in ("start", "end"):
                 assert diagnostic["range"][end]["line"] >= 0, diagnostic
                 assert diagnostic["range"][end]["character"] >= 0, diagnostic
+        return params
+
+    def diagnostics(self, uri):
+        params = self.publication()
+        assert params["uri"] == uri, params
         return params["diagnostics"]
+
+    def publications(self, *paths):
+        messages = [self.publication() for _ in paths]
+        assert {m["uri"] for m in messages} == {p.as_uri() for p in paths}, messages
+        return {m["uri"]: m["diagnostics"] for m in messages}
 
     def quiet(self, duration):
         assert not self.pending, self.pending
@@ -209,12 +218,30 @@ with tempfile.TemporaryDirectory(prefix="evocc-lsp-client-") as temporary:
         client.change(source, edited, 7)
         assert client.diagnostics(source.as_uri()) == []
 
-        # A P07 repair marked review is not an automatic editor action.
-        client.change(source, "int f(void) { }\n", 8)
+        # An action requested during debounce must use the replacement buffer.
+        pending_warning = "/* \U0001f600 */ int f(int fresh) { return 0; }\n"
+        client.change(source, pending_warning, 8)
+        pending_actions = client.actions(source, unused)
+        assert len(pending_actions) == 1, pending_actions
+        latest = apply_workspace_edit(pending_warning, source.as_uri(), pending_actions[0]["edit"])
+        assert latest == "/* \U0001f600 */ int f(int fresh) { (void)fresh; return 0; }\n", latest
+        assert any(d["code"] == "W0002" for d in client.diagnostics(source.as_uri()))
+
+        # A repair marked review is not an automatic editor action.
+        client.change(source, "int f(void) { }\n", 9)
         review = next(d for d in client.diagnostics(source.as_uri()) if d["code"] == "W0005")
         assert client.actions(source, review) == []
         assert source.read_text() == disk_text
         client.close(source)
+
+        # A named editor buffer need not have been saved to disk yet.
+        missing = work / "never saved.c"
+        client.open(missing, bad)
+        assert any(d["code"] == "E1303" for d in client.diagnostics(missing.as_uri()))
+        client.change(missing, good, 2)
+        assert client.diagnostics(missing.as_uri()) == []
+        client.close(missing)
+        assert not missing.exists()
         assert client.request("unsupported/request")["error"]["code"] == -32601
         client.stop()
         assert set(work.iterdir()) == {source}, list(work.iterdir())
@@ -227,24 +254,62 @@ with tempfile.TemporaryDirectory(prefix="evocc-lsp-client-") as temporary:
     include.mkdir()
     header = include / "config.h"
     header.write_text("#define HEADER_VALUE 7\n")
-    other = work / "other.c"
+    broken_header = include / "bad header.h"
+    broken_header.write_text("enum { broken = 1 / 0 };\n")
+    other = work / "other space.c"
     other.write_text(disk_text)
     database = work / "compile_commands.json"
     database.write_text(json.dumps([
         {"directory": str(work), "file": other.name,
-         "arguments": ["evocc", "-DP09_VALUE=0", "-c", other.name, "-o", "other.o"]},
+         "command": "evocc -I 'include space' -DEDITOR_VALUE=2 -MMD "
+                    "-MF 'other output.d' -c 'other space.c' -o 'other output.o'"},
         {"directory": str(work), "file": source.name,
-         "arguments": ["evocc", "-I", str(include.relative_to(work)), "-DP09_VALUE=1",
-                       "-c", source.name, "-o", "input.o"]}]))
+         "arguments": ["evocc", "-I", str(include.relative_to(work)), "-DEDITOR_VALUE=1",
+                       "-MMD", "-MF", "input.d", "-c", source.name, "-o", "input.o"]}]))
     snapshot = {path: path.read_bytes() for path in work.rglob("*") if path.is_file()}
     client = Client(work, "--json")
     try:
         client.initialize(work)
         client.open(source, '#include "config.h"\n'
-                    'enum { value = HEADER_VALUE / P09_VALUE };\n'
+                    'enum { value = HEADER_VALUE / EDITOR_VALUE };\n'
                     'int main(void) { return value; }\n')
         assert client.diagnostics(source.as_uri()) == []
         client.close(source)
+        client.open(other, '#include "config.h"\n'
+                    'enum { value = HEADER_VALUE / (EDITOR_VALUE - 1) };\n'
+                    'int main(void) { return value; }\n')
+        assert client.diagnostics(other.as_uri()) == []
+        client.close(other)
+
+        # Included-file errors retain the header URI, not the editor buffer URI.
+        client.open(source, '#include "bad header.h"\nint main(void) { return 0; }\n')
+        published = client.publications(source, broken_header)
+        assert published[source.as_uri()] == []
+        errors = published[broken_header.as_uri()]
+        assert len(errors) == 1 and errors[0]["code"] == "E1303", errors
+        assert errors[0]["range"] == {
+            "start": {"line": 0, "character": 16}, "end": {"line": 0, "character": 21}}
+
+        # Closing one translation unit must not erase another's header error.
+        client.open(other, '#include "bad header.h"\nint main(void) { return 0; }\n')
+        shared = client.publications(other, broken_header)
+        assert shared[other.as_uri()] == []
+        assert shared[broken_header.as_uri()]
+        assert all(d["code"] == "E1303" for d in shared[broken_header.as_uri()])
+        client.send("textDocument/didClose", {"textDocument": {"uri": source.as_uri()}})
+        remaining = client.publications(source, broken_header)
+        assert remaining[source.as_uri()] == []
+        assert remaining[broken_header.as_uri()]
+        assert all(d["code"] == "E1303" for d in remaining[broken_header.as_uri()])
+        client.change(other, disk_text, 2)
+        assert all(not d for d in client.publications(other, broken_header).values())
+        client.send("textDocument/didClose", {"textDocument": {"uri": other.as_uri()}})
+        # A request is an ordering barrier; redundant empty header clears are allowed.
+        assert client.request("unsupported/request")["error"]["code"] == -32601
+        closed = [client.publication() for _ in range(len(client.pending))]
+        assert any(m["uri"] == other.as_uri() for m in closed), closed
+        assert all(m["uri"] in (other.as_uri(), broken_header.as_uri())
+                   and not m["diagnostics"] for m in closed), closed
         client.stop()
         assert {path: path.read_bytes() for path in work.rglob("*") if path.is_file()} == snapshot
     finally:
