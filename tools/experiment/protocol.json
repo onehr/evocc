@@ -1,6 +1,6 @@
 {
   "schema": "agent-repair.protocol.v1",
-  "corpus_tag": "agent-repair-corpus-1",
+  "corpus_tag": "agent-repair-corpus-2",
   "population": {"ub": 10, "frontend": 10, "logic": 10},
   "models_file": "tools/experiment/models.txt",
   "repetitions": 3,

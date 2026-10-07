@@ -232,6 +232,35 @@ class RepairTests(unittest.TestCase):
         with patch.object(repair, "run", side_effect=mocked_run), self.assertRaisesRegex(repair.Failure, "protocol_parameter_mismatch"):
             repair.preflight(args, [], models, plan)
 
+    def test_preflight_queries_only_registered_paths(self):
+        protocol = json.loads((repair.HERE / "protocol.json").read_text())
+        models = (repair.HERE / "models.txt").read_text().split()
+        args = SimpleNamespace(corpus_tag=protocol["corpus_tag"], items=repair.ROOT / "tests/fixtures/agent-repair")
+        plan = dict(reps=protocol["repetitions"], rounds=protocol["rounds"], temperature=protocol["temperature"], cost_cap=protocol["reported_cost_cap_usd"], max_tokens=protocol["max_tokens"], class_counts=protocol["population"], conditions=list(protocol["conditions"]), models=models, max_requests=protocol["request_limit"])
+        image = json.loads((repair.ROOT / "contracts/build-environment.json").read_text())["buildImage"]["executionReference"]
+        queried = []
+        def mocked_run(argv, **kwargs):
+            if argv[:2] == ["git", "ls-files"]:
+                if len(argv) == 2:
+                    raise repair.Stop("capture_limit")
+                self.assertEqual(argv[2], "--")
+                queried.extend(argv[3:])
+                output = "\n".join(argv[3:])
+            elif argv[:2] == ["git", "rev-parse"]:
+                output = "fixture-commit"
+            elif argv[0] == repair.CONTAINER:
+                output = json.dumps([{"configuration": {"descriptor": {"digest": image}}}])
+            else:
+                output = ""
+            return {"exit_code": 0, "stdout": output, "stderr": ""}
+        item = args.items / "logic-square"
+        with patch.object(repair, "run", side_effect=mocked_run):
+            result = repair.preflight(args, [item], models, plan)
+        self.assertEqual(result["commit"], "fixture-commit")
+        self.assertEqual(len(queried), 11)
+        self.assertIn("tests/fixtures/agent-repair/logic-square/program.c", queried)
+        self.assertNotIn("README.md", queried)
+
     def test_spliced_preprocessor_marker_is_rejected(self):
         answer = "```c\n%\\\n:include x\n```"
         with self.assertRaisesRegex(repair.Failure, "preprocessor_or_size"):

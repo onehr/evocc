@@ -187,7 +187,7 @@ def preflight(args, items, models, plan):
     paths = [HERE / name for name in ("repair.py", "prompt.txt", "models.txt", "protocol.json")] + [ROOT / "contracts/build-environment.json"]
     paths += [item / name for item in items for name in ("program.c", "fixed.c", "reference_main.c", "expected.txt", "origin.md", "class")]
     if any(path.is_symlink() or not path.resolve().is_relative_to(ROOT) for path in paths): raise Failure("unregistered_input_path")
-    tracked = set(git("ls-files").splitlines())
+    tracked = set(git("ls-files", "--", *(str(path.relative_to(ROOT)) for path in paths)).splitlines())
     if any(str(path.relative_to(ROOT)) not in tracked for path in paths): raise Failure("untracked_input")
     if run(["git", "check-ignore", ".env"])["exit_code"]: raise Failure("env_not_ignored")
     image = run([CONTAINER, "image", "inspect", IMAGE])
@@ -203,7 +203,7 @@ def main(argv=None):
     parser.add_argument("--reps", type=int, default=3); parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--items", type=Path, default=ROOT / "tests/fixtures/agent-repair"); parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--temperature", type=float, default=0); parser.add_argument("--cost-cap", type=float, default=5)
-    parser.add_argument("--corpus-tag", default="agent-repair-corpus-1"); parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--corpus-tag", default="agent-repair-corpus-2"); parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     if min(args.reps, args.rounds) < 1 or not math.isfinite(args.cost_cap) or args.cost_cap <= 0 or not math.isfinite(args.temperature): parser.error("invalid numeric limits")
     items = sorted(path.parent for path in args.items.resolve().glob("*/program.c"))

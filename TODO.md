@@ -891,7 +891,9 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   `tools/experiment/protocol.json` records round, cost and denominator rules.
   `.env` stays ignored. No credential or measured model request has been used.
   Preregister corpus, prompt, harness, conditions and model list with
-  `agent-repair-corpus-1` before the measured run. Final gates, the run, its
+  `agent-repair-corpus-1` is retained with zero model calls: its full-repository
+  file query exceeded the capture cap. Query only registered paths, then use
+  `agent-repair-corpus-2` for the measured run. Final gates, the run, its
   receipt/transcript archive, and the report remain open. Capture cap is
   500 MiB at `.evidence/diagnostics/20261007/agent-repair-preflight/`.
 
