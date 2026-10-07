@@ -679,10 +679,16 @@ retain the original scope where one copy has a truncated sentence.
   the owner retained that default-config requirement and rejected shared-only
   substitution. Keep this package open until coverage support is implemented
   and the original default tests pass. No coverage implementation is included
-  in this bounded integration change. The full workspace run found three
-  expected Darwin guard snapshot changes and two container permission failures.
-  The corrected snapshots and privileged target replays pass 9/9; a clean
-  full workspace run with container access is next. Interrupted logs remain.
+  in this bounded integration change. The corrected Darwin snapshots and
+  authorized Linux target replays pass 9/9. Clean `82c9543a` passes the full
+  offline gate: 423 suites, 3,224 passed, zero failed, five existing ignored;
+  Clippy and formatting pass, exit 0. Log SHA-256:
+  `438891e78717057388cfbf24fd42af5c230e2b9c45085b643d80b0b6a05dcbea`.
+  The original interrupted and failed logs remain. Production budget used:
+  22/200 added or replaced Rust lines and 43/80 CMake lines. Removed the owned
+  CMake source/build tree after hashes and open-handle checks (15,464 KiB).
+  Measured target/frontend plus capture net change: +960,244 KiB; capture
+  556 KiB, host free 190.59 GiB. This is not a host-wide disk attribution.
   Evidence: `.evidence/diagnostics/20261007/build-systems/`.
   Exit: original cJSON/zlib CMake tests, Linux object build, pkg-config and
   dependency-file replay, book commands and full gate. Budgets: 200 Rust,
