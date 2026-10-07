@@ -795,6 +795,22 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   proof-profile change. Capture is 544 KiB; measured target/frontend plus capture
   delta from the recorded pre-gate checkpoint is -164 KiB. Protected evidence
   and the small recorded model workspace remain. P14-P16 keep their order.
+  Source-checkout follow-up: `c5d23f8d` adds 14 driver lines for nearest-ancestor
+  checker discovery and its JSON path. One regression runs with no checker
+  override, a restricted PATH and an unrelated working directory. All four
+  demo scripts are executable; the refusal script reads the chosen path from
+  `evo`, without a second lookup. Both release scripts exit zero under `env -i`
+  with only `target/frontend/release` prepended to the original PATH; no EVO
+  overrides are set and `evoir-sem` is absent from PATH. The three deliberate
+  refusals remain exits 1/3/5. Capture: `discovery-{loop,refusal}-green.txt`.
+  The clean full offline gate passes: 425 suites, 3,228 passed, zero failed,
+  five existing ignored; Clippy and formatting pass. `discovery-full-workspace.log`
+  SHA-256: `1f45bad061ef64a8c78ec6c1b2069015f2da15a091a51c9b7648580529b86509`.
+  Focused tests pass 26/26. No core-v1, exporter or Lean change; no new Lean
+  gate claim. Capture is 2,424 KiB; measured target/frontend plus capture net
+  change is -9,984 KiB from the follow-up's first pre-build measurement.
+  Test-owned temporary files are removed; recorded demo proofs remain. Free
+  space is 157 GiB. D06 stays OPEN.
 - [x] **P14 — Record rejected proposals** — `DONE`, P1.
   `66dd2f5c` adds the 60-line `tools/demo/no-fooling.sh` and the actual chapter
   transcript. Its source is byte-identical to P13's repaired program. One

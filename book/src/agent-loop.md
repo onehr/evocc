@@ -6,10 +6,13 @@ The proof record covers the admitted typed Core source through final assembly te
 
 ## Scripted run
 
-Put `evo`, `evocc` and `evoir-sem` on `PATH`, or set `EVO`, `EVOCC` and
-`EVOCC_PROOF_CHECKER` to their executable paths. From the repository root, run
+Build the release binaries and Lean checker, then prepend `target/frontend/release`
+to `PATH`. No checker override is needed. From the repository root, run
 `sh tools/demo/agent-loop.sh`. The source fixture stays unchanged; the fixed
 source and proof remain in the printed temporary directories.
+
+The captures below retain their original output. Current `prove --json` also
+reports the chosen `checker`; source-checkout discovery was added afterward.
 
 Recorded on 2026-10-07. The following output is copied from the command without
 path substitution. The diff comes from the same run. The test completed in
@@ -93,10 +96,10 @@ proof records are separate results. No review repair was authorized or applied.
 
 ## A wrong proposal is refused
 
-Run `sh tools/demo/no-fooling.sh` from a source checkout with EvoCC and both
-checkers on `PATH`. The script applies the same safe repairs and saturation
-guard as the preceding loop. It keeps the accepted assembly separate from the
-three refusal destinations.
+Run `sh tools/demo/no-fooling.sh` with the same release PATH setup. The script
+applies the same safe repairs and saturation guard as the preceding loop, then
+reads the checker path from `evo prove --json`. It keeps the accepted assembly
+separate from the three refusal destinations.
 
 The archive replay detects one changed certificate byte before semantic replay:
 `BUNDLE_MISMATCH` is a bundle failure, not a completed proof rejection. For the
