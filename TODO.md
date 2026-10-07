@@ -2362,7 +2362,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   `arch/arm64/crypto/sha3-ce.ko`, rather than booting mismatched artifacts.
   **Real K14 execution after T04 remains required** to close T02.
   [Adapter record](tests/fixtures/kernel-kunit-adapter.out),
-  [current usage](README.md#run-the-evaluation-ladder).
+  [current usage](book/src/evaluate.md#the-ladder).
 
 - [ ] **T03 — Spec/implementation/acceptance consistency audit** — `OPEN`, P1.
   Map current clauses to positive/negative tests and original evidence. Start with

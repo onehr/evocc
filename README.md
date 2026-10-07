@@ -4,19 +4,40 @@
 
 **Built by agents. Built for agents. It checks its own work.**
 
-EvoCC is a C compiler for AArch64 (Linux and macOS), written from scratch in Rust, with proofs in
-Lean 4. AI agents built it in 58 days under the direction of one person. Agents are also its first
-users: every result it produces is a numbered, explained, machine-readable record.
+EvoCC is a C compiler for AArch64 Linux and macOS, written from scratch in Rust, with proofs in
+Lean 4. AI agents wrote it under the direction of one person. Agents are also its first users:
+every result is a numbered, explained, machine-readable record.
 
 | By agents | For agents |
 |---|---|
-| 1,986 commits in 58 days; one human set the questions and ruled on disputes | Every diagnostic has a stable code, a tested explanation page and a JSON record with a frozen schema |
-| Sealed GCC 14 and Clang 19 oracles, RED-first tests, fail-closed gates, receipts | `evo check` reports undefined behavior with evidence from the executed path |
-| 68,000 lines of Lean 4 proofs, checked by the kernel, no `sorry` | `evo prove` records each accepted compilation in its checked subset; refusal publishes no assembly; [a test](crates/evocc/tests/determinism.rs) checks byte-identical agent results for fixed inputs and compiler, apart from temporary paths |
+| 1,986 commits in 58 days | Stable diagnostic codes, tested explanations, JSON records |
+| Sealed GCC and Clang oracles, RED-first tests, receipts | `evo check` finds undefined behavior on the executed path |
+| 68,000 lines of Lean 4 proofs, kernel-checked, no `sorry` | `evo prove` writes checked assembly or nothing |
 
-The [showcase](#showcase) shows what it builds and runs. [Part I](#part-i--the-experiment) tells
-the experiment: the question, what is new, what agents get, how to use EvoCC and how it was built.
-[Part II](#part-ii--evocc-as-a-system) describes EvoCC as a system, as a short paper.
+## EvoCC in sixty seconds
+
+Download the release for your host, check a program and compile it with a proof:
+
+```console
+$ curl -LO https://github.com/onehr/evocc/releases/download/v0.1.0/evocc-0.1.0-aarch64-apple-darwin.tar.gz
+$ tar xzf evocc-0.1.0-aarch64-apple-darwin.tar.gz
+$ export PATH="$PWD/evocc-0.1.0-aarch64-apple-darwin/bin:$PATH"
+$ cat clamp.c
+int clamp(int x, int lo, int hi) {
+    return x < lo ? lo : x > hi ? hi : x;
+}
+int main(void) { return clamp(300, 0, 255); }
+$ evo check clamp.c
+check completed: main returned 255; no finding on the executed path
+$ evo prove clamp.c -o clamp.s
+checked from typed Core source to final assembly text: <proof-dir>/checked/record.json
+```
+
+`evo check` runs `main` on the C semantics of EvoCC and finds no undefined behavior on that path.
+`evo prove` writes `clamp.s` only when Lean checkers accept every stage of the compilation. On
+Linux, the archive name ends in `aarch64-unknown-linux-gnu`; [Installation](book/src/install.md)
+also checks the digest. Each output in this README is from a real run, with long paths shortened
+to names such as `<proof-dir>`.
 
 ## Showcase
 
@@ -51,14 +72,10 @@ the experiment: the question, what is new, what agents get, how to use EvoCC and
 Each image is program output or a plot of actual output. See the [capture notes](docs/images/showcase/README.md)
 and the [credits and licenses](docs/images/showcase/README.md#artwork).
 
-Behind the gallery: Linux 6.18.44 boots with 2,799 of 2,799 target C objects from EvoCC, and a
-second configuration boots with 7,008 objects and 848 modules. Ten of fifteen application lanes
-pass. Two Doom demos give the same framebuffer hash for each of 350 frames in all 12 runs under
-EvoCC, GCC 14 and Clang 19. [Part II §7](#7-evaluation) gives the full numbers and their limits.
-
-The generated [compatibility matrix](book/src/compatibility.md) links every retained ladder
-receipt with its measured input, result, denominator and date. These are historical measurements,
-not a revalidation of the current compiler; partial results and test-scope limits remain visible.
+Behind the gallery, a Linux 6.18 kernel boots with every target C object compiled by EvoCC, and
+Doom gives the same framebuffer hash for every frame under EvoCC, GCC 14 and Clang 19. Each row of
+the [compatibility matrix](book/src/compatibility.md) links to its receipt, and
+[Part II §7](#7-evaluation) gives the numbers.
 
 ### Reproduce
 
@@ -111,9 +128,8 @@ means three things here:
   output. For a C subset, Lean 4 checkers give a proved, fail-closed compilation path: each accepted
   output is checked from typed Core source to final assembly text.
 
-The first commit was on 2026-08-10. On 2026-09-13, 34 days later, Linux booted with all 2,799 target
-C files compiled by EvoCC. On 2026-10-06, day 58, the proved path reached
-the final assembly text. The record is 1,986 commits on `main`.
+The first commit landed on 2026-08-10, Linux booted from EvoCC objects on 2026-09-13, and the proved
+path reached the final assembly text on 2026-10-06.
 
 ### Not a copy of GCC or LLVM
 
@@ -151,223 +167,174 @@ that agents already write and that the existing code is in. No new language, no 
 agent gets:
 
 - **A numbered, explained, machine-readable diagnostic.** Every diagnostic has a code, a tested
-  explanation page (`evo explain E3002`; 122 pages, each example checked against the compiler), and
-  a JSON record with a frozen schema ([`spec/diagnostics.md`](spec/diagnostics.md)). Lint levels
-  follow GCC's flags.
+  explanation page (`evo explain E3002`; each example is checked against the compiler), and a JSON
+  record with a frozen schema ([`spec/diagnostics.md`](spec/diagnostics.md)). Lint levels follow
+  GCC's flags.
 - **Evidence instead of a warning.** `evo check` runs the program on its executable semantics and
-  reports undefined behavior on the executed path, with the location and the values that caused it.
+  reports undefined behavior on the executed path, with the location of the operation that failed.
 - **A certificate instead of trust.** `evo prove` compiles with the checked pipeline and writes a
   record that names each stage, its theorem and the digests of what it checked. A refused check
   gives no output, so an agent cannot ship an unchecked result by mistake.
 - **A receipt for every build.** `evo build` runs a project's own build and writes what was compiled,
   which warnings appeared and where it failed.
-- **One command per intent.** `evo run`, `evo check`, `evo explain`, `evo prove`, `evo build`: each
-  has one meaning and one exit code rule, so a loop of agent calls needs no parsing of prose.
+- **One command per intent.** `evo run`, `evo check`, `evo explain`, `evo fix`, `evo prove`,
+  `evo build`: each has one meaning and one exit code rule, so a loop of agent calls needs no
+  parsing of prose.
 
-Run `sh tools/demo/agent-loop.sh`; see the [recorded loop and real MCP session](book/src/agent-loop.md).
+### The tour
 
-```text
-Evidence: W0004, E3004
-Safe repairs applied: 2
-Guard inserted: if (a == -2147483647 - 1) return 2147483647;
-Check: completed with exit 0.
-CHECKED_TO_FINAL_ASSEMBLY record=/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-97776-1791375941979707000/checked/record.json
+The tour runs at the root of a source checkout, with `evo`, `evocc` and `evoir-sem` on `PATH` from
+the release or from [a build](book/src/install.md#build-from-source).
+
+**1. A drop-in `cc`.**
+
+```console
+$ curl -sL https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz | tar xz
+$ printf '#include <stdio.h>\nint main(void) { puts("Hello, world!"); return 0; }\n' > hello.c
+$ evocc hello.c -o hello && ./hello
+Hello, world!
+$ make -C cJSON-1.7.19 CC=evocc test 2>&1 | grep -E '^(warning|\./cJSON_test|Version)'
+warning: option `-fstack-protector` is not supported and has no effect
+./cJSON_test
+Version: 1.7.19
 ```
 
-Run `sh tools/demo/no-fooling.sh` for the [three recorded refusals](book/src/agent-loop.md#a-wrong-proposal-is-refused):
-```text
+`evocc` takes the command line of `cc`, so a project's own Makefile builds it and runs its tests
+unchanged ([Hello, World!](book/src/hello.md)).
+
+**2. Undefined behavior with evidence, not a warning.**
+
+```console
+$ cat overflow.c
+int main(void) {
+    int big = 2147483647;
+    return big + 1;
+}
+$ evo check overflow.c
+error[E3004]: signed-integer-overflow
+  --> overflow.c:3:12
+   |
+ 3 |     return big + 1;
+   |            ^^^^^^^ signed-integer-overflow
+   |
+   = note: this operation failed on the executed path
+$ evo check overflow.c --json | jq -c '.diagnostics[0] | {code, message, line: .spans[0].line_start, notes}'
+{"code":"E3004","message":"signed-integer-overflow","line":3,"notes":["this operation failed on the executed path"]}
+```
+
+A usual compiler may assume that the overflow never happens; `evo check` runs the program and names
+the operation that fails, as text for a person and as a record for an agent
+([Undefined Behavior](book/src/undefined-behavior.md)).
+
+**3. Every code is explained, and the explanation is tested.**
+
+```console
+$ evo explain E3004 | head -n 7
+# E3004: signed-integer-overflow
+
+An executed signed integer operation has a result outside its permitted range.
+Negating the minimum value and dividing it by minus one can also cause overflow.
+
+The checked profile reports overflow instead of assuming signed arithmetic wraps.
+Check the range before the operation, or use a suitable wider arithmetic type.
+```
+
+A test runs the examples of each page through the checker and requires the page's own code, so an
+explanation cannot drift from the compiler ([Error Index](book/src/error-index.md)).
+
+**4. Repairs are data.**
+
+```console
+$ cp tools/demo/loop/buggy.c magnitude.c
+$ evo fix magnitude.c --plan --json | jq -c '.repairs[] | {repair_id, kind, line: .span.line_start, replacement}'
+{"repair_id":"W0004.insert-int","kind":"safe","line":1,"replacement":"int "}
+{"repair_id":"W0001.remove-declaration","kind":"safe","line":3,"replacement":""}
+$ evo fix magnitude.c --apply
+W0004.insert-int [safe]: write an explicit type specifier "int "
+W0001.remove-declaration [safe]: remove the variable or use it ""
+applied 2 repairs; syntax check exit 0
+$ diff -U0 tools/demo/loop/buggy.c magnitude.c | tail -n +3
+@@ -1 +1 @@
+-magnitude(int a)
++int magnitude(int a)
+@@ -3 +3 @@
+-    int unused = 7;
++    
+```
+
+Each repair is an exact edit with a stable ID; `--apply` makes only the safe ones and checks the
+syntax again ([Plan and apply repairs](book/src/hello.md#plan-and-apply-repairs)).
+
+**5. The loop, end to end.**
+
+```console
+$ sh tools/demo/agent-loop.sh | grep -E '^(Evidence|Safe|Guard|Check|CHECKED)'
+Evidence: W0004, E3004
+Safe repairs applied: 2
+Evidence: E3004
+Guard inserted: if (a == -2147483647 - 1) return 2147483647;
+Check: completed with exit 0.
+CHECKED_TO_FINAL_ASSEMBLY record=<proof-dir>/checked/record.json
+```
+
+A scripted agent with no model reads only JSON records: it applies the safe repairs, guards the
+overflow, checks again and proves the result ([An Agent Repair Loop](book/src/agent-loop.md)).
+
+**6. A certificate, not trust.**
+
+```console
+$ evo prove tests/fixtures/verification/musl-abs.c -o abs.s
+checked from typed Core source to final assembly text: <proof-dir>/checked/record.json
+$ jq -c '.result, .scope, [.stages[].id]' <proof-dir>/checked/record.json
+"CHECKED_TO_FINAL_ASSEMBLY"
+"checked from typed Core source to final assembly text"
+["source-to-evoir","rewrite","lowering","allocation","frame-emission","pipeline"]
+$ sed -n '18,19p;26,27p' abs.s
+    subs w0, w2, w0
+    b.vs .Labs_block4
+.Labs_block4:
+    brk #3004
+```
+
+This is `abs` from musl: the record names each stage, one kernel-checked theorem covers the chain,
+and the checked text traps on `abs(INT_MIN)` instead of returning `INT_MIN`
+([Compiling with Proof](book/src/proof.md)).
+
+**7. A wrong proposal is refused.**
+
+```console
+$ sh tools/demo/no-fooling.sh | grep '^Refusal'
 Refusal: BUNDLE_MISMATCH exit=1; no assembly published.
 Refusal: STAGE_REJECTED exit=3; no assembly published.
 Refusal: CHECKER_IDENTITY_MISMATCH exit=5; no assembly published.
 ```
 
-Connect Claude Code or Codex: `claude mcp add evo -- evo mcp`; see the [connection guide](book/src/agents.md#connect-an-agent) and the skill in [skills/evocc/](skills/evocc/).
+The script changes one byte of a certificate, deletes one obligation from the IR and pins a wrong
+checker digest; each check refuses, and no assembly appears
+([A wrong proposal is refused](book/src/agent-loop.md#a-wrong-proposal-is-refused)).
 
-### Using EvoCC
+**8. Connect an agent, cross-compile, use any build system.**
 
-#### Quick start
-
-```sh
-CARGO_TARGET_DIR=target/frontend cargo build --release --offline -j 2 -p evocc -p evocc-proofcheck
-export PATH="$PWD/target/frontend/release:$PATH"
+```console
+$ claude mcp add evo -- evo mcp
+Added stdio MCP server evo with command: evo mcp to local config
+File modified: <config-dir>/.claude.json [project: <dir>]
+$ evocc --target=aarch64-unknown-linux-gnu --sysroot=sysroot/aarch64-unknown-linux-gnu \
+    -c hello.c -o hello.o && file hello.o
+hello.o: ELF 64-bit LSB relocatable, ARM aarch64, version 1 (SYSV), not stripped
+$ cmake -S cJSON-1.7.19 -B build -Wno-deprecated -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+    -DCMAKE_TOOLCHAIN_FILE=$PWD/cmake/evocc.cmake -DENABLE_CJSON_UTILS=ON > /dev/null
+$ cmake --build build > /dev/null && ctest --test-dir build | grep 'tests passed'
+100% tests passed out of 22
 ```
 
-`evocc` is a drop-in `cc`. On macOS it makes code for `aarch64-apple-darwin` and links with the
-system toolchain (the Xcode Command Line Tools). On Linux it makes code for
-`aarch64-unknown-linux-gnu` and links with the system `gcc`.
+An agent gets five tools (`run`, `check`, `explain`, `fix_plan`, `prove`), one `evocc` makes code
+for macOS and Linux, and a toolchain file lets stock CMake use it
+([agents](book/src/agents.md#connect-an-agent), [targets](book/src/hello.md#cross-compile-for-linux),
+[CMake](book/src/hello.md#cmake)).
 
-```c
-// hello.c
-#include <stdio.h>
-int main(void) {
-    printf("Hello, world!\n");
-    return 0;
-}
-```
-
-```sh
-evocc hello.c -o hello && ./hello                           # Hello, world!
-```
-
-Compile two files on their own and link the objects, as `make` does (`main.c` and `greet.c` are in
-[the book](book/src/hello.md#more-than-one-file)):
-
-```sh
-evocc -c main.c -o main.o
-evocc -c greet.c -o greet.o
-evocc main.o greet.o -o greet && ./greet                    # Hello, EvoCC!
-```
-
-Build a project with its own Makefile and run its tests. This builds cJSON 1.7.19 and runs its test
-program:
-
-```sh
-curl -LO https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz
-tar xzf v1.7.19.tar.gz
-make -C cJSON-1.7.19 CC=evocc test
-```
-
-The cJSON Makefile gives `-fstack-protector`. EvoCC does not support it, so it prints one warning and
-continues.
-
-The interpreters and the checker work on one file:
-
-```c
-// demo.c
-struct point { int x, y; };
-static inline int dot(struct point a, struct point b) {
-    return a.x * b.x + a.y * b.y;
-}
-int main(void) {
-    struct point p = { .x = 3, .y = 4 };
-    int n = ({ int t = dot(p, p); t + 1; });
-    return __builtin_choose_expr(__builtin_constant_p(1), n / 2, 0);
-}
-```
-
-```sh
-evocc --interpret-c-hir demo.c                              # 13
-evocc --interpret-evoir demo.c                              # 13
-evocc --check --error-format=json demo.c
-evocc demo.c -o demo && ./demo; echo $?                     # 13
-```
-
-Two interpreters on two different IRs agree. `--check` reports undefined behavior on the executed
-path ([checker workflow](docs/checker.md)). To see the obligation of Part II §3, set
-`EVOCC_CHECKER_SHA256` to the SHA-256 of `evocc-checker` and run `--emit=evoir -Oeq-scalar`.
-
-#### Compile with proof
-
-```sh
-(cd lean && lake build)
-target/frontend/release/evocc --emit=asm --proof-required=proof-abs \
-    --proof-checker=lean/.lake/build/bin/evoir-sem \
-    --core-entry=abs -O0 -fno-builtin tests/fixtures/verification/musl-abs.c
-```
-
-This compiles `abs` from musl, `return a>0 ? a : -a;`. The driver exports each stage into the new
-directory `proof-abs`, runs the Lean checker on each and writes `output.s` only if all accept. In
-the checked text, `abs(INT_MIN)` traps; it cannot return `INT_MIN`:
-
-```text
-    subs w0, w2, w0
-    b.vs .Labs_block4
-    ...
-.Labs_block4:
-    brk #3004
-```
-
-`proof-abs/record.json` gives the result `CHECKED_TO_FINAL_ASSEMBLY` and the digests of each stage.
-This runs the checked output of the 17 pilot modules natively in `evo-flight-lab:sealed` (`WORK_DIR`
-outside the repository):
-
-```sh
-python3 tools/proof-native/proof_native.py all WORK_DIR \
-    --evocc target/frontend/release/evocc --evocc-checker target/frontend/release/evocc-checker
-```
-
-#### How to use
-
-`evocc` takes the command line of `cc`: several inputs, one action and the usual GCC options. GCC
-options such as `-I`, `-D`, `-std=gnu11` and `-fwrapv` keep their meaning. The rows from
-`--parse-only` down are the options of EvoCC itself. Their actions take one C file.
-
-| Option | What it does |
-|---|---|
-| `-E`, `-S`, `-c` | Stop after preprocessing, compiling (`NAME.s`) or assembling (`NAME.o`). Without one, `evocc` links an executable. |
-| `-o FILE` | Write the output to `FILE`. `-E` writes to standard output and a link writes `a.out` without it. |
-| `FILE...`, `-x LANG` | `.c` and `.i` are C, `.s` is assembly, `.S` is assembly with the preprocessor; `.o`, `.a`, `.so`, `.dylib` and `.tbd` go to the linker. `-x` sets the language of the next inputs. |
-| `-I`, `-D`, `-U`, `-include`, `-isystem` | Control the preprocessor, as in GCC. |
-| `-std=`, `-O*`, `-g` | `-std=c89` to `-std=gnu17`. `-O0` keeps the source control flow; `-O1` to `-O3` simplify integer flow and dead bodies. `-g` writes DWARF type information for the Linux target and has no effect for Darwin. |
-| `-M`, `-MM`, `-MD`, `-MMD`, `-MF`, `-MT`, `-MQ`, `-MP` | Write dependency rules for `make`, as in GCC. |
-| `-l`, `-L`, `-Wl,`, `-shared`, `-static` | Give libraries, library directories, linker arguments and the link mode to the platform linker. |
-| `--target=aarch64-apple-darwin`, `--target=aarch64-unknown-linux-gnu` | Select the target. The default is the host: Darwin on macOS, Linux on Linux. On macOS, the sealed container assembles and links for Linux, and `--sysroot=DIR` gives the Linux headers. The actions of EvoCC itself default to Linux. |
-| `--version`, `-dumpmachine`, `--help` | Print `evocc 0.1.0 (COMMIT DATE)` and the target; print the target; summarize the options. |
-| An unknown `-f` or `-m` option | Print one warning and continue. `-w` turns the warning off. |
-| `--parse-only` | Parse and check the translation unit. |
-| `--emit=c-hir`, `--emit=evoir`, `--emit=asm` | Print C-HIR, canonical EvoIR text or AArch64 assembly. |
-| `--interpret-c-hir`, `--interpret-evoir` | Run `main` in the C-HIR or the EvoIR interpreter. |
-| `--check` | Run the executed path and report undefined behavior as a diagnostic. |
-| `--error-format=text\|json` | Write diagnostics as text or as one JSON record per line. |
-| `--explain E3002` | Explain a diagnostic code. |
-| `-Oeq-scalar` | Run the verified EqSat optimizer on EvoIR. |
-| `--eq-checker-sha256=SHA256`, `--eq-checker=PATH` | Pin the checker digest (or set `EVOCC_CHECKER_SHA256`), which `-Oeq-scalar` needs; choose the checker binary. |
-| `--eq-proof-dir=NEW_DIR` | Keep each certificate bundle; `tools/bench.py --verify-eqsat-chain NEW_DIR --checker PATH` replays them. |
-| `--proof-required=NEW_DIR` | Compile with proof; needs `--emit=asm`, `--core-entry=NAME`, `-O0` and `-fno-builtin`. |
-| `--proof-checker=PATH` | Use this Lean checker, `evoir-sem`; `--proof-checker-sha256` pins it. |
-| `--proof-proposal=NAME=PATH` | Give untrusted loop checkpoints for entry `NAME`; the Lean checker checks them. |
-| `--survey` | Report every diagnostic in the file, not only the first. |
-
-#### Run the evaluation ladder
-
-`tools/bench.py` runs the ladder: conformance (`ctest`, `torture`, `csmith`, `llvm-test-suite`),
-programs (`zlib`, `zstd`, `cjson`, `mbedtls`, `tinycc`, `toybox`, `musl`, `polybench`, `jq`, `lua`,
-`sqlite`, `doom`) and Linux (`kernel`, `kernel-full`, `kernel-selftest`, `kernel-selftest-all`,
-`kernel-kunit`).
-
-```sh
-python3 tools/bench.py --list
-python3 tools/bench.py csmith cjson
-python3 tools/bench.py llvm-test-suite jq lua sqlite --jobs 2
-python3 tools/bench.py kernel-full --jobs 2 --low-disk --allow-qemu-drift
-python3 tools/bench.py kernel-selftest --allow-qemu-drift
-python3 tools/bench.py all --programs 500 --jobs 2 --budget 45 --allow-qemu-drift --dry-run
-```
-
-Each lane writes a receipt; `render-status.py` renders the [dashboard](docs/status.md) from them.
-`--dry-run`, `--status` and `--evocc PATH` are in the
-[runner notes](docs/evidence.md#benchmark-runner-notes).
-
-#### Project layout
-
-[Table 1](#6-implementation) of Part II lists the 18 crates in `crates/`. The other main paths:
-
-| Path | Content |
-|---|---|
-| `lean/EvoIR/`, `targets/aarch64/`, `spec/` | Proofs and checkers; machine tables; the four pinned specifications |
-| `tools/bench.py`, `tools/ladder/`, `tools/k1/` | Evaluation ladder; program, game and EqSat lanes; Linux build, boot, kselftest and KUnit lanes |
-| `tools/gate-changed.sh`, `tools/gate-lean.sh` | Rust gate (changed crates or full workspace); Lean gate |
-| `tools/proof-native/`, `tools/lean/` | Native run of proof-required output; registry generator, proof audit, Rust–Lean vectors |
-| `tests/contracts/`, `tests/fixtures/` | Receipts and pinned corpora; C, EvoIR and output fixtures (`verification/`: proof-required inputs) |
-| `tests/acceptance/`, `tests/ui/check/` | Sealed-oracle and differential harnesses; expected `--check` diagnostics |
-| `book/`, `docs/` | The book; evidence, dashboard, checker guide, design, figures; `docs/archive/` keeps the history |
-
-#### Documentation
-
-- Book: [The EvoCC Book](book/src/SUMMARY.md): installation, a first program, undefined behavior, compiling with proof, checked optimization, how EvoCC works and the evaluation
-- Specifications: [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md), [target description](spec/target.md), [verification contract](spec/verification.md); [index and pins](spec/README.md)
-- Guides: [C checker workflow](docs/checker.md)
-- Design: [verified optimization](docs/verified-optimization-design.md)
-- Results and work: [evidence](docs/evidence.md), [status dashboard](docs/status.md), [TODO](TODO.md)
-- History: [`docs/archive/`](docs/archive/README.md)
-
-#### Development
-
-- `rust-toolchain.toml` pins Rust 1.97.1 with Clippy and rustfmt; `lean/lean-toolchain` pins Lean 4.32.2.
-- Build in `target/frontend` (`CARGO_TARGET_DIR=target/frontend`) with two jobs; do not make a second tree.
-- Gates: `tools/gate-changed.sh <base-commit>`, `tools/gate-changed.sh --full-workspace --offline`, `tools/gate-lean.sh`.
-- Each change goes RED test → shared implementation → targeted tests → original-program replay → gate → receipt.
-- [TODO.md](TODO.md) tracks each task with a stable ID; update it in each relevant commit and check it with `render-status.py --todo`.
+The book has the [option table](book/src/hello.md#driver-options), the
+[ladder](book/src/evaluate.md#the-ladder) and the [proofs](book/src/proof.md).
 
 ### How it was built
 
@@ -387,12 +354,8 @@ files. Five rules held the work together:
 5. **Receipts and a notebook.** Each claim links to a receipt that names its compiler, inputs and
    limits. The [notebook](docs/archive/notebook/) keeps the wrong turns.
 
-| Measure, on 2026-10-06 | Value |
-|---|---|
-| Calendar span | 2026-08-10 to 2026-10-06: 58 days, with commits on 44 of them |
-| Commits on `main` | 1,986; the busiest day, 2026-09-09, has 167 |
-| Tracked lines: Rust; Lean 4 | 298,423 in 600 files (18 crates); 68,216 in 387 files |
-| Tracked lines: Python; C fixtures; Markdown | 66,288; 21,819; 42,403 (before this README) |
+Besides the Lean proofs, the repository holds over 300,000 lines of Rust and about 67,000 lines of
+Python.
 
 ## Part II — EvoCC as a system
 
@@ -400,20 +363,19 @@ files. Five rules held the work together:
 
 ### Abstract
 
-A C compiler is trusted by every program that it builds. Verified compilers remove that trust, but
-proving compiler algorithms is costly. We present EvoCC, a C compiler for AArch64 Linux and macOS that AI
-agents built in 58 days under the direction of one expert, and whose interface is made for agents:
-stable diagnostic codes with tested explanations, JSON records, certificates and receipts. Its rule
-is that untrusted components propose and small checked components decide. Its IR, EvoIR, makes each C definedness condition an
+Every program trusts the compiler that builds it. Verified compilers remove that trust, but proving
+compiler algorithms is costly. We present EvoCC, a C compiler for AArch64 Linux and macOS that AI
+agents built under the direction of one expert. Its interface is made for agents: stable diagnostic
+codes with tested explanations, JSON records, certificates and receipts. Untrusted components
+propose; small checked components decide. Its IR, EvoIR, makes each C definedness condition an
 explicit obligation, threads memory and observable effects as SSA tokens and gives each pointer a
 provenance. Its equality-saturation optimizer uses 62 rewrite rules that Lean 4 proves for all bit
-widths, and a separate, pinned checker replays each certificate. For the integer subset `core-v1`,
-five compiled Lean checkers inspect each stage of an actual compilation, and one kernel-checked
-theorem states that an accepted output refines its typed Core source down to the final assembly
-text. EvoCC compiles all 2,799 target C files of a Linux 6.18 kernel that boots, and ten of fifteen
-application lanes pass. It checked 107 of 107 pilot entries to final assembly text, with no
-difference in 14,194 native comparisons. On five library translation units, its code is 2.0 to 2.7
-times the size of GCC 14 `-O2` output.
+widths, and a pinned checker replays each certificate. For the integer subset `core-v1`, five
+compiled Lean checkers inspect each stage of an actual compilation, and one kernel-checked theorem
+states that an accepted output refines its typed Core source to the final assembly text. EvoCC
+compiles every target C file of a Linux 6.18 kernel that boots, and ten of fifteen application lanes
+pass. It checked 107 of 107 pilot entries, with no difference in 14,194 native comparisons. On five
+library units, its code is 2.0 to 2.7 times the size of GCC 14 `-O2` output.
 
 ### 1 Introduction
 
@@ -849,7 +811,40 @@ pointers, measure the compile cost of checking, and close the size gap under tra
 15. R. Kumar, M. O. Myreen, M. Norrish and S. Owens. CakeML: a verified implementation of ML. In *POPL 2014*, pp. 179–191, 2014.
 16. J.-H. Jourdan, F. Pottier and X. Leroy. Validating LR(1) parsers. In *ESOP 2012*, 2012.
 
-## License
+## Repository
+
+[Table 1](#6-implementation) of Part II lists the 18 crates in `crates/`. The other main paths:
+
+| Path | Content |
+|---|---|
+| `lean/EvoIR/` | Lean 4 semantics, rule proofs, stage checkers and the pipeline theorem |
+| `spec/`, `targets/aarch64/` | The four pinned specifications; the machine tables |
+| `tools/bench.py`, `tools/ladder/`, `tools/k1/` | The evaluation ladder: program, game, EqSat and Linux lanes |
+| `tools/gate-changed.sh`, `tools/gate-lean.sh` | The Rust gate; the Lean gate |
+| `tools/proof-native/`, `tools/lean/` | Native run of checked output; registry generator, proof audit, Rust–Lean vectors |
+| `tools/demo/`, `skills/evocc/`, `cmake/` | The tour scripts; the agent skill; the CMake toolchain file |
+| `tests/contracts/`, `tests/fixtures/`, `tests/acceptance/` | Receipts and pinned corpora; fixtures; sealed-oracle and differential harnesses |
+| `book/`, `docs/` | The book; evidence, dashboard, checker guide and design; `docs/archive/` keeps the history |
+
+### Documentation
+
+- [The EvoCC Book](book/src/SUMMARY.md): installation, a first program, agents, undefined behavior, proof, optimization, evaluation
+- Specifications: [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md), [target description](spec/target.md), [verification contract](spec/verification.md); [index and pins](spec/README.md)
+- Guides and design: [C checker workflow](docs/checker.md), [verified optimization](docs/verified-optimization-design.md)
+- Results and work: [evidence](docs/evidence.md), [status dashboard](docs/status.md), [compatibility matrix](book/src/compatibility.md), [TODO](TODO.md)
+- History: [`docs/archive/`](docs/archive/README.md)
+
+### Development
+
+- `rust-toolchain.toml` pins Rust 1.97.1 with Clippy and rustfmt; `lean/lean-toolchain` pins Lean 4.32.2.
+- Build in `target/frontend` (`CARGO_TARGET_DIR=target/frontend`) with two jobs; run `lake` only inside `lean/`.
+- Gates: `tools/gate-changed.sh <base-commit>`, `tools/gate-changed.sh --full-workspace --offline`, `tools/gate-lean.sh`.
+- Each change goes RED test → shared implementation → targeted tests → original-program replay → gate → receipt, under a task ID in [TODO.md](TODO.md).
+
+## Contributing and license
+
+[CONTRIBUTING.md](CONTRIBUTING.md) explains the build and the change workflow, and
+[SECURITY.md](SECURITY.md) explains how to report wrong code or a checker defect.
 
 EvoCC is licensed under the [Apache License 2.0](LICENSE). Copyright 2026 Haoran Wang, NexRidge.
 [NOTICE](NOTICE) is the notice file of the license.
