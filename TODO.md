@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P08, P09, P10, P11, B08, B08b, B08d, B08d10 | Complete P08 through P11 in order under the second product contract. P01 through P07 are accepted. Restore the truncated package text before implementing missing requirements. Verification work stays paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P09, P10, P11, B08, B08b, B08d, B08d10 | Complete P09 through P11 in order under the second product contract. P01 through P08 are accepted. Verification work stays paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -553,8 +553,9 @@ workspace gate. New result-producing commands/options have a JSON form.
 The owner removed the retired kernel runtime; disk admission is available
 again (100.2 GiB at entry). Check exact free bytes before every build.
 Retain at most 500 MiB per capture. Do not reopen the verification track.
-The replacement attachment still has truncated P08--P11 sentences. Request
-their complete text before implementing the missing requirements; P06 is clear.
+The October 7 owner reply restores the P08--P10 clauses, including the 250-line
+JSON limit and didSave. Read its P11 clauses together with the original attachment;
+retain the original scope where one copy has a truncated sentence.
 
 - [x] **P06 — Correct help and early stdin rejection** — `DONE`, P1.
   RED `ad291c6e` reproduces help/status, JSON help and EPIPE failures; fix
@@ -617,9 +618,9 @@ their complete text before implementing the missing requirements; P06 is clear.
   cJSON and zlib replay, full gate. Budget: 500 production Rust lines and
   60 specification lines. Pin diagnostics revision 1.1.0.
   Capture cap: 500 MiB at `.evidence/diagnostics/20261007/repairs/`.
-- [ ] **P08 — Add machine-readable user commands** — `OPEN`, P1.
-  Next: obtain the intact P08--P11 text and confirm the truncated JSON reader
-  limit. Implemented functional exits pass; do not invent the missing limits.
+- [x] **P08 — Add machine-readable user commands** — `DONE`, P1.
+  The owner confirms the independent JSON reader/writer limit is 250 lines.
+  The 247-line implementation and the existing green functional exits meet it.
   RED `b0aeae9c`: seven command tests fail before JSON support. RED `73fe91ce`:
   both stdio/instruction tests fail before the server and agent files exist.
   RED `dfccc79e` also catches scalar `tools/list` params being accepted; the
@@ -645,23 +646,25 @@ their complete text before implementing the missing requirements; P06 is clear.
   Final target/frontend plus capture delta from entry is +30,364 KiB;
   capture is 692 KiB, free space 201.28 GiB. Test-owned source/build/proof
   directories were removed. This is not a host-wide disk attribution.
-  Claim: the implemented CLI/stdio scope passes its full gate. P08 remains
-  OPEN only for the incomplete owner contract. P09--P11 are not started;
-  the end-of-stage Lean gate, changelog and six-package report are not due yet.
+  Claim: the CLI/stdio package meets the restored contract. No new gate is needed
+  for a clarified limit; the implementation is unchanged from tested 04605cd1.
+  The end-of-stage Lean gate, changelog and six-package report remain pending.
   Exit: verb JSON snapshots, five MCP tools over pipes, agent instructions,
   llms.txt, tested book session and full gate. No network server or dependencies.
-  Known budget: 700 production Rust lines; AGENTS.md at most 120 lines.
+  Budget: 700 production Rust lines; JSON reader/writer at most 250 lines;
+  AGENTS.md at most 120 lines.
 - [ ] **P09 — Add editor diagnostics and repair actions** — `OPEN`, P1.
-  Next: after P08 closes, confirm the truncated editor contract and add REDs.
+  Next: add REDs for the restored editor contract, including didSave, full-text
+  synchronization, the 300 ms debounce and compile_commands.json flags.
   Exit: scripted LSP diagnostic/change/action test, actual VS Code diagnostic
   screenshot, book setup and full gate. Budget: 700 Rust and 80 TypeScript lines.
 - [ ] **P10 — Integrate existing build systems** — `OPEN`, P1.
-  Next: after P09 closes, confirm the truncated CMake contract and add REDs.
+  Next: after P09 closes, add CMake/compiler-identification REDs.
   Exit: original cJSON/zlib CMake tests, Linux object build, pkg-config and
   dependency-file replay, book commands and full gate. Budgets: 200 Rust,
   80 CMake lines. No custom CMake compiler-id module or package manager.
 - [ ] **P11 — Publish channel metadata and compatibility** — `OPEN`, P1.
-  Next: after P10 closes, confirm the truncated nightly/release contract.
+  Next: after P10 closes, add nightly/release and matrix REDs.
   Exit: every ladder receipt in the generated chapter, nightly dry run with
   act if present or careful review, changelog guard and full gate. Known
   budgets: 150 Python lines and 60 workflow lines. Do not publish a release.
