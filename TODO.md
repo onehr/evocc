@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10 | P01 through P11 are accepted in their recorded scope; P09 has an owner-approved screenshot waiver. Coverage options warn but do not instrument. Default zlib CMake tests remain unchanged. Verification work stays paused. Existing application tasks keep their separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P12 | P01 through P11 are accepted in their recorded scope; P09 has an owner-approved screenshot waiver. P12's five consecutive driver runs pass; replay the full gate with container access when the terminal service recovers. Coverage options warn but do not instrument. Default zlib CMake tests remain unchanged. Verification work stays paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -731,6 +731,31 @@ six vector groups answered. This does not expand the verified language subset.
 Final capture is 1,536 KiB, below its 500 MiB cap. Since this follow-up's entry,
 target/frontend plus the capture grew by 2,276 KiB; owned replay intermediates
 are gone. This is not host-wide disk attribution. Last free-space check: 188.95 GiB.
+
+- [ ] **P12 — Preserve compiler errors when stdin closes early** — `RETEST`, P1.
+  Implemented in `f3fd04ee`: 45 compiler stdin writes in 45 files now discard
+  write errors and retain the existing output assertions. The inventory is
+  57 write sites in 53 files: three file writes, six Python-validator writes,
+  three already-safe compiler writes and 45 affected compiler writes. No helper
+  refactor, compiler change, test filter or assertion change was made.
+  Five consecutive `cargo test --offline -p evocc --no-fail-fast` runs each pass
+  87 suites: 758 passed, zero failed, one existing ignored. The reported
+  bounded GCC tuning test passes 5/5; no failing child stderr was produced.
+  The clean-tree full gate completes tests with 3,223 passed, two failed and
+  five existing ignored. Both failures are `container run` reporting
+  `Operation not permitted` in the control/extension Linux tests; they are not
+  stdin-write panics. The gate exits 101 before Clippy and formatting.
+  The authorized replay could not start because the terminal service reports
+  `Too many open files`. Preserve this failure; full acceptance is pending.
+  Separate offline workspace Clippy (warnings denied), formatting, TODO queue
+  and status-render checks pass. Full-gate log SHA-256:
+  `b5477b00b5882fc4886fe85ae148d4c361473201fd4c668871da557e5809a966`.
+  Capture: `.evidence/diagnostics/20261007/stdin-race/`, cap 500 MiB.
+  Capture is 772 KiB; target/frontend grew by 7,648 KiB. Combined delta from
+  the recorded entry is +8,416 KiB; host free space is 181.59 GiB. Retain the
+  two small failed Linux test inputs for the pending replay, not new build trees.
+  Next: run `tools/gate-changed.sh --full-workspace --offline` with container
+  access after terminal recovery, without changing code or test selection.
 
 ### Remaining verification and application sequence
 
