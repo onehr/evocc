@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P06, P07, P08, P09, P10, P11, B08, B08b, B08d, B08d10 | Complete P06 through P11 in order under the second product contract. P01 through P05 are accepted. Verification work stays paused. Existing application tasks keep their separate exits. |
+| APPLICATION | P07, P08, P09, P10, P11, B08, B08b, B08d, B08d10 | Complete P07 through P11 in order under the second product contract. P01 through P06 are accepted. Verification work stays paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -556,11 +556,31 @@ Retain at most 500 MiB per capture. Do not reopen the verification track.
 The replacement attachment still has truncated P08--P11 sentences. Request
 their complete text before implementing the missing requirements; P06 is clear.
 
-- [ ] **P06 — Correct help and early stdin rejection** — `OPEN`, P1.
-  Next: commit REDs for top-level help/status, JSON help and early pipe closure;
-  then repair the existing code. Budget: 60 lines.
-  Exit: three consecutive complete evocc-crate runs and the full workspace
-  gate pass. Account for the prior report's limits in one-line notes.
+- [x] **P06 — Correct help and early stdin rejection** — `DONE`, P1.
+  RED `ad291c6e` reproduces help/status, JSON help and EPIPE failures; fix
+  `bca14544` passes all 23 focused tests. Inserted/replaced code, tests and
+  book text total 55/60 lines. Help exits 0; no arguments gives the same
+  usage and exits 64. The stdin helper tolerates early argument rejection.
+  Three consecutive complete evocc-crate runs on clean `bca14544` each pass:
+  81 suites, 711 passed, zero failed, one existing ignored test.
+  The full offline workspace gate on that same clean subject passes:
+  417 suites, 3,178 passed, zero failed, five existing ignored campaigns;
+  Clippy with warnings denied and formatting also pass. The gate log hash is
+  `f9381460ec277d45eafb12c0ad00676bd985c213e860936f3553cce9a7f428bf`.
+  Logs: `bca14544-service-restored-{1,2,3}.log` and
+  `bca14544-full-workspace.log` in the capture below. Preserve the interrupted
+  run and the first failed complete run (709 passed, two container-service
+  failures). After starting the existing service, the sealed GCC/Clang probe
+  and all subsequent native tests pass; the consecutive count starts anew.
+  Prior-stage limits remain explicit: 20 Trigger: none pages; five separate
+  ignored campaigns; hosted release CI configured but not run; no guarantee
+  for excluded netfilter names; cross-linking needs an explicit linker;
+  the interpreter does not implement arbitrary external libc calls.
+  Removed 40 KiB of owned failed-test temporary output after handle checks;
+  failed logs remain. From this turn's measured target/capture checkpoint,
+  those paths grow by 391,284 KiB; cleanup makes the measured net 391,244 KiB.
+  Capture is 660 KiB; free space is 205.72 GiB. Other host work is excluded
+  from this accounting. Claim: command defects closed, not repair support.
   Capture cap: 500 MiB at `.evidence/diagnostics/20261007/command-fixes/`.
 - [ ] **P07 — Expose and apply diagnostic repairs** — `OPEN`, P1.
   Next: after P06 closes, add REDs for the five approved repair kinds.
