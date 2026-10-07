@@ -375,7 +375,8 @@ compiled Lean checkers inspect each stage of an actual compilation, and one kern
 states that an accepted output refines its typed Core source to the final assembly text. EvoCC
 compiles every target C file of a Linux 6.18 kernel that boots, and ten of fifteen application lanes
 pass. It checked 107 of 107 pilot entries, with no difference in 14,194 native comparisons. On five
-library units, its code is 2.0 to 2.7 times the size of GCC 14 `-O2` output.
+library units, its code is 2.0 to 2.7 times the size of GCC 14 `-O2` output. A registered
+30-program agent repair study found no overall advantage over both conventional baselines.
 
 ### 1 Introduction
 
@@ -605,11 +606,12 @@ Container runtime; kernels run in QEMU. The driver emits only the Linux target.
 
 ### 7 Evaluation
 
-We asked five questions. **RQ1:** which real programs does EvoCC build, and do they pass their own
+We asked six questions. **RQ1:** which real programs does EvoCC build, and do they pass their own
 tests? **RQ2:** what supports ordinary compilations, which carry no proof? **RQ3:** what does the
 proof cover, and does checked output behave on hardware as the theorem says? **RQ4:** what do
 verification and the backend cost or buy in code size? **RQ5:** what does checking cost at compile
-time? References are GCC 14.2 and Clang 19.1; the kernel is Linux 6.18.44 ARM64. Each result has a
+time? **RQ6:** does structured feedback help an agent repair programs? References are GCC 14.2
+and Clang 19.1; the kernel is Linux 6.18.44 ARM64. Each result has a
 receipt in [`tests/contracts/`](tests/contracts/) or a dated ledger;
 [`docs/evidence.md`](docs/evidence.md) keeps every qualifier.
 
@@ -737,6 +739,27 @@ compared the checked and unchecked UB profiles on the six units of Table 7: the 
 `integer-mix.c` (20.57 against 18.94 ms)
 ([receipt](tests/contracts/codegen-n05-20261002-receipt.json)). The receipt calls this a baseline,
 not a bound. *Answer.* Open; it is the first missing measurement.
+
+#### RQ6: Agent repairs
+
+A preregistered experiment used DeepSeek V4.1 Flash through OpenRouter on 30 small C
+programs, with three repetitions and at most three repair rounds. The model received the
+same prompt and initial source but different tool feedback. Sealed GCC 14 `-O0` scored every
+replacement against the same hidden inputs.
+
+| Feedback | Passed / attempted | Repair rate | Mean rounds | Mean rounds on success |
+|---|---:|---:|---:|---:|
+| GCC 14 warnings + UBSan | 88/90 | 97.8% | 1.011 | 1.000 |
+| Clang 19 warnings + UBSan | 82/90 | 91.1% | 1.011 | 1.000 |
+| EvoCC check + explain + repair-plan JSON | 87/90 | 96.7% | 1.000 | 1.000 |
+
+All 270 repetitions finished; 13 response errors remain in the denominator. All successful
+repairs passed on their first response. *Answer.* This run did not show an overall repair-rate
+or successful-round advantage over both baselines. Ten items were written for this corpus,
+and provider routing and a 4,096-token output budget limit the result. This compares feedback
+bundles, not JSON formatting alone. See the [method, class tables and limits](book/src/evaluation-agents.md),
+[receipt](tests/contracts/agent-repair-20261008.json), and
+[full transcripts](tests/contracts/agent-repair-transcripts-20261008.tar.gz).
 
 ### 8 Related work
 

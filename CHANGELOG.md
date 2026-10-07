@@ -9,6 +9,11 @@ The first public version.
 
 ### Added
 
+- A preregistered 30-program agent repair experiment with one model, three feedback
+  conditions and three repetitions. All 270 outcomes and full transcripts are retained,
+  including response failures. EvoCC feedback passed 87/90 attempts, GCC plus UBSan
+  88/90, and Clang plus UBSan 82/90; all successful repairs took one round. The report
+  makes no general repair advantage claim.
 - A C compiler for AArch64, written in Rust: its own preprocessor, parser, three intermediate
   representations (C-HIR, EvoIR and EvoMIR), optimizer, register allocator and assembly emitter.
   The platform assembler and linker build the final program.

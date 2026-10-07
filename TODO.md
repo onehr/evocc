@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17 | P01 through P16 are accepted in their recorded scope. Both final gates pass on clean 200b4e73. P17's sanitizer and corpus preflight pass; preregistration, measured requests and reporting remain open. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a | P01 through P17 are complete in their recorded scope. P17 records a completed negative comparison, not a general agent-repair advantage. Its response-budget and E3004 follow-up is P17a; no new run is started. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -873,7 +873,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   test-owned outputs are removed; historical proof evidence remains. Host free
   space is 164 GiB. The four demo packages are complete in this bounded scope.
 
-- [ ] **P17 — Measure agent repairs with compiler feedback** — `OPEN`, P1.
+- [x] **P17 — Measure agent repairs with compiler feedback** — `DONE`.
   The owner approved the missing Clang runtime. The resealed image adds only
   `libclang-rt-19-dev`; both compiler hashes and the other 200 packages remain
   unchanged. Both UBSan probes pass. The old image stays at
@@ -884,18 +884,41 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   ten are explicitly synthetic. Two ineligible drafts were changed before
   registration, with reasons retained. Each hidden driver also checks the
   original entry point after a missing-main candidate exposed a scoring gap.
-  All 31 corpus, mock harness, reporting and secret tests pass. The actual c1/c2/c3 feedback
-  paths and neutral scorer also pass a model-free smoke check.
+  The actual c1/c2/c3 feedback paths and neutral scorer pass a model-free smoke
+  check. Final Python checks pass 40/40: 32 experiment and eight tracker tests.
   The exact model is `deepseek/deepseek-v4.1-flash`. The owner approved an
   initial USD 5 budget and delegated temperature; the protocol fixes it at 0.
   `tools/experiment/protocol.json` records round, cost and denominator rules.
-  `.env` stays ignored. No credential or measured model request has been used.
-  Preregister corpus, prompt, harness, conditions and model list with
-  `agent-repair-corpus-1` is retained with zero model calls: its full-repository
-  file query exceeded the capture cap. Query only registered paths, then use
-  `agent-repair-corpus-2` for the measured run. Final gates, the run, its
-  receipt/transcript archive, and the report remain open. Capture cap is
-  500 MiB at `.evidence/diagnostics/20261007/agent-repair-preflight/`.
+  `.env` stays ignored; the final receipt and nested transcript payloads pass
+  the credential-prefix scan. `agent-repair-corpus-1` is retained with zero model calls: its full-repository
+  file query exceeded the capture cap. The bounded query and regression test
+  were committed before `agent-repair-corpus-2` at `7eed5eac` and the first request.
+  The [final receipt](tests/contracts/agent-repair-20261008.json) records 270/270
+  repetitions, 272 requests and USD 0.1982890478. GCC feedback passes 88/90,
+  Clang 82/90 and EvoCC 87/90. All successful repairs pass in round one.
+  Thirteen output-limit errors remain in the denominator; no failed sample
+  was rerun. `stop_reason=completed` and `acceptance=false` are both preserved:
+  the study finished, but the harness requires zero trial errors for acceptance.
+  The [transcript archive](tests/contracts/agent-repair-transcripts-20261008.tar.gz)
+  is 802,549 bytes; the [report](book/src/evaluation-agents.md) includes all
+  class and item tables. There is no overall advantage over both baselines.
+  The authorized full workspace gate passes 425 suites: 3,228 passed,
+  zero failed and five existing ignored; Clippy and formatting pass. It began
+  on clean `8f09f06c`; the later registration-query fix changes no Rust or spec.
+  The earlier two sandbox container-access failures remain in the log.
+  No Lean source changed and no new proof claim is made. Capture cap is 500 MiB
+  at `.evidence/diagnostics/20261007/agent-repair-preflight/`.
+
+- [ ] **P17a — Separate response limits from overflow-feedback value** — `OPEN`, P2.
+  The frozen run's three EvoCC failures all received E3004 and exhausted the
+  output budget. It establishes no missing diagnostic or safe repair.
+  First examine those retained traces. A later experiment can test concise
+  E3004 guidance and an intent-specific, human-reviewed overflow repair plan,
+  with a registered response budget and provider policy. Saturation changes
+  behavior and must not become a generic safe repair. Report output delivery
+  separately from hidden-test correctness. Any new model requests need a new
+  registration; do not tune or rerun failed cells of P17. This is an untested
+  improvement proposal, not an observed compiler defect or an active campaign.
 
 ### Remaining verification and application sequence
 

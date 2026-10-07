@@ -12,5 +12,6 @@
 - [Checked Optimization](optimization.md)
 - [How EvoCC Works](how-it-works.md)
 - [Evaluating EvoCC](evaluate.md)
+- [Agent Repair Experiment](evaluation-agents.md)
 - [Retained Compatibility](compatibility.md)
 - [Contributing](contributing.md)
