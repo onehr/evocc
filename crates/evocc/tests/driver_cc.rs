@@ -164,6 +164,30 @@ fn an_unknown_f_option_warns_once_and_the_build_continues() {
 }
 
 #[test]
+fn coverage_options_warn_once_without_instrumentation() {
+    let work = Work::new("coverage-options");
+    for option in ["-coverage", "--coverage", "-fprofile-arcs", "-ftest-coverage"] {
+        let output = work.run(&["-c", option, "helper.c"]);
+        succeeded(&output);
+        nonempty(&work.file("helper.o"));
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            format!("evocc: warning: option `{option}` is not supported and has no effect\n")
+        );
+        let quiet = work.run(&["-c", "-w", option, "helper.c"]);
+        succeeded(&quiet);
+        assert!(quiet.stderr.is_empty());
+    }
+    for entry in std::fs::read_dir(&work.0).unwrap() {
+        let path = entry.unwrap().path();
+        assert!(!matches!(
+            path.extension().and_then(|extension| extension.to_str()),
+            Some("gcno" | "gcda")
+        ));
+    }
+}
+
+#[test]
 fn the_version_line_names_the_release_the_commit_and_the_target() {
     let work = Work::new("version");
     let output = work.run(&["--version"]);
