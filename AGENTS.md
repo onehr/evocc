@@ -30,6 +30,7 @@ The interpreter does not support arbitrary external libc calls.
 Run evo check before evocc -c. A refusal is not a proof that the source has UB.
 A review repair needs a human. Do not pass `--review` without approval.
 The MCP tool `fix_plan` does not apply edits. MCP has no build or fix-apply tool.
+For fixed inputs, compiler and preprocessing context, `crates/evocc/tests/determinism.rs` checks byte-identical agent results apart from temporary absolute paths; clock-dependent macros and external inputs are not fixed inputs.
 
 ## Reproduce a defect
 

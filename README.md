@@ -12,7 +12,7 @@ users: every result it produces is a numbered, explained, machine-readable recor
 |---|---|
 | 1,986 commits in 58 days; one human set the questions and ruled on disputes | Every diagnostic has a stable code, a tested explanation page and a JSON record with a frozen schema |
 | Sealed GCC 14 and Clang 19 oracles, RED-first tests, fail-closed gates, receipts | `evo check` reports undefined behavior with evidence from the executed path |
-| 68,000 lines of Lean 4 proofs, checked by the kernel, no `sorry` | `evo prove` writes a certificate for each accepted compilation; a refused check writes nothing |
+| 68,000 lines of Lean 4 proofs, checked by the kernel, no `sorry` | `evo prove` records each accepted compilation in its checked subset; refusal publishes no assembly; [a test](crates/evocc/tests/determinism.rs) checks byte-identical agent results for fixed inputs and compiler, apart from temporary paths |
 
 The [showcase](#showcase) shows what it builds and runs. [Part I](#part-i--the-experiment) tells
 the experiment: the question, what is new, what agents get, how to use EvoCC and how it was built.

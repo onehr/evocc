@@ -816,6 +816,14 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
 - [ ] **P15 — Test deterministic agent results** — `OPEN`, P1.
   After P14, compare two runs of each specified JSON output and proof record.
   Normalize temporary paths only. Require three consecutive runs and the gate.
+  The 134-line `crates/evocc/tests/determinism.rs` adds one test: failed check,
+  safe repair plan, explanation, successful check/run and a real musl-abs proof
+  record, each twice. Three consecutive focused runs pass unchanged in 25.13,
+  25.30 and 24.60 seconds; formatting passes. Source/checker/compiler hashes,
+  stage order, JSON bytes and assembly remain checked. `SOURCE_DATE_EPOCH=0`
+  is explicit preprocessing context, not output normalization. No timestamp
+  field is removed. Capture: `agent-demo/determinism-{red,1,2,3}.log` under the
+  same October 7 evidence directory. Full-workspace acceptance remains pending.
 - [ ] **P16 — Document a real agent connection** — `OPEN`, P1.
   After P15, test the installed client configuration, publish its actual tool
   list, add the bounded skill, then run both final gates on a clean tree.
