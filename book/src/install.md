@@ -23,10 +23,6 @@ archive for each host. The name of the archive is `evocc-<version>-<target>.tar.
 
 These commands download version 0.1.0 for macOS, check the archive and unpack it:
 
-If the archive includes Linux headers, unpack it on a case-sensitive volume.
-Some header names differ only in letter case. A case-insensitive volume cannot
-keep both files. Header-free archives do not have this restriction.
-
 ```console
 $ curl -LO https://github.com/onehr/evocc/releases/download/v0.1.0/evocc-0.1.0-aarch64-apple-darwin.tar.gz
 $ curl -LO https://github.com/onehr/evocc/releases/download/v0.1.0/SHA256SUMS

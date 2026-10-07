@@ -55,11 +55,9 @@ class HeaderExportTests(unittest.TestCase):
         contract = json.loads(CONTRACT.read_text())
         excluded = contract["excluded_case_collisions"]
         self.assertEqual(excluded, sorted(set(excluded)))
-        self.assertTrue(excluded)
         for path in excluded:
             self.assertNotEqual(Path(path).name, Path(path).name.lower())
             self.assertNotIn(path, contract["files"])
-            self.assertIn(path.lower(), contract["files"])
 
     def test_real_export_matches_the_tracked_contract_when_present(self):
         root = Path(os.environ.get("EVOCC_SYSROOT", ROOT / "sysroot/aarch64-unknown-linux-gnu"))

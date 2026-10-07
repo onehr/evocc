@@ -71,8 +71,14 @@ $ file hello.o
 hello.o: ELF 64-bit LSB relocatable, ARM aarch64, version 1 (SYSV), not stripped
 ```
 
-The header tree needs a case-sensitive volume. Do not copy it to a volume
-that merges names which differ only in letter case. See [installation](install.md).
+The bundled sysroot omits eight case-colliding netfilter headers under `usr/include/`:
+`linux/netfilter/xt_CONNMARK.h`, `linux/netfilter/xt_DSCP.h`,
+`linux/netfilter/xt_MARK.h`, `linux/netfilter/xt_RATEEST.h`,
+`linux/netfilter/xt_TCPMSS.h`, `linux/netfilter_ipv4/ipt_ECN.h`,
+`linux/netfilter_ipv4/ipt_TTL.h`, and `linux/netfilter_ipv6/ip6t_HL.h`.
+The sorted `excluded_case_collisions` field in
+`contracts/sysroot-aarch64-unknown-linux-gnu.json` records these omissions.
+
 To use another root, give `--sysroot=DIR` or set `EVOCC_SYSROOT`. The explicit
 option takes priority. `-v` prints the selected root.
 

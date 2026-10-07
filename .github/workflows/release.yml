@@ -15,7 +15,20 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  headers:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - name: Export sealed Linux headers
+        run: |
+          docker build --platform linux/arm64 -t evo-flight-lab:sealed -f .toolchain/Dockerfile.flight-lab .toolchain
+          tools/export-sysroot.sh
+          tar -czf linux-headers.tar.gz sysroot contracts/sysroot-aarch64-unknown-linux-gnu.json
+      - uses: actions/upload-artifact@v4
+        with: {name: linux-headers, path: linux-headers.tar.gz, if-no-files-found: error}
   build:
+    needs: headers
     name: build (${{ matrix.target }})
     strategy:
       fail-fast: false
@@ -31,6 +44,9 @@ jobs:
       TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with: {name: linux-headers}
+      - run: tar -xzf linux-headers.tar.gz
       # On Linux, tools/release.sh links evocc statically against musl.
       - name: Install the pinned Rust toolchain
         run: |
@@ -38,6 +54,7 @@ jobs:
           if [ "$TARGET" = aarch64-unknown-linux-gnu ]; then
             rustup target add aarch64-unknown-linux-musl
           fi
+          cargo fetch --locked
       - name: Install elan
         run: |
           curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.1.2/elan-init.sh \
@@ -57,6 +74,10 @@ jobs:
           cd "smoke/evocc-${GITHUB_REF_NAME#v}-$TARGET"
           if command -v sha256sum >/dev/null; then sha256sum -c SHA256SUMS; else shasum -a 256 -c SHA256SUMS; fi
           ./bin/evocc --version
+          if [ "$TARGET" = aarch64-apple-darwin ]; then
+            printf '#include <stdio.h>\nint main(void) { puts("hello from EvoCC on Linux"); return 0; }\n' > cross.c
+            ./bin/evocc --target=aarch64-unknown-linux-gnu --assembler='clang --target=aarch64-linux-gnu' -c cross.c -o "$GITHUB_WORKSPACE/cross-hello.o"
+          fi
           cat > hello.c <<'C'
           static const char greeting[] = "hello, world";
           int main(void) { int n = 0; while (greeting[n] != '\0') n++; return n; }
@@ -70,6 +91,9 @@ jobs:
             file bin/evocc bin/evocc-checker | grep -Eq 'static(-pie)? linked|statically linked'
           fi
       - uses: actions/upload-artifact@v4
+        if: matrix.target == 'aarch64-apple-darwin'
+        with: {name: cross-hello, path: cross-hello.o, if-no-files-found: error}
+      - uses: actions/upload-artifact@v4
         with:
           name: evocc-${{ matrix.target }}
           path: dist/*.tar.gz
@@ -77,11 +101,17 @@ jobs:
 
   publish:
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
+      - uses: actions/download-artifact@v4
+        with: {name: cross-hello}
+      - name: Link and run the macOS-produced object
+        run: |
+          gcc cross-hello.o -o cross-hello
+          test "$(./cross-hello)" = 'hello from EvoCC on Linux'
       - uses: actions/download-artifact@v4
         with:
           path: dist

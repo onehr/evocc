@@ -350,9 +350,9 @@ add dependencies, crates or configuration systems. Do not push.
   interpreter execution or new proof coverage. Linux archive execution is not
   claimed by this Darwin packaging check. P05 may now start.
 - [ ] **P05 — Package the Linux header sysroot** — `OPEN`, P1.
-  Next: obtain the owner decision on macOS header storage, then complete the
-  Linux export and macOS-to-Linux object transfer in the release workflow.
-  Keep the full header set. Do not infer approval of an installation limit.
+  Next: finish the filtered-sysroot release replay and full workspace gate.
+  The owner approved default macOS volume support by excluding uppercase
+  case-colliding headers; no case-sensitive installation requirement remains.
   October 7 entry check: four isolated driver tests reproduce three missing
   behaviors: bundled/environment lookup, selected-root errors and the explicit
   cross-linker requirement. The `-nostdinc` control already passes. Capture cap:
@@ -448,6 +448,21 @@ add dependencies, crates or configuration systems. Do not push.
   while waiting. Header CI, final clean-tree gates and the changelog remain.
   Since the post-cleanup checkpoint, target/frontend plus this capture grew
   by 265,796 KiB. Capture is 4,228 KiB, below 500 MiB; free space is 28 GiB.
+  **Owner decision and implementation:** the earlier storage blocker is
+  superseded. RED `bdd14b03` detects the missing exclusion field and case
+  collisions; RED `321e6d30` detects the absent CI handoff. The exporter
+  copies inside the existing Linux container, drops eight uppercase entries,
+  then copies 3,966 files to the default macOS volume. The contract records
+  the sorted list. No driver lookup, mapping or disk image was added. Five
+  local checks pass; the archive check awaits the release replay. The macOS
+  Clang-assembled object links and prints the expected text in sealed Linux.
+  The workflow now exports on Linux, supplies both archive jobs and checks
+  the macOS object on an ARM64 Linux runner; hosted execution is not claimed.
+  The excluded-include probe exposes a host-filesystem limit: xt_MARK.h
+  resolves to retained xt_mark.h on default macOS, rather than file-not-found.
+  Keep the requested reader unchanged and report this result, not a false
+  missing-header guarantee. Change budgets: exporter 24/40 lines (118 total),
+  tests 16/20, book paragraph 8/10; workflow 36/40 for the whole package.
   Exit: macOS produces ELF AArch64 objects and zlib without manual include
   flags, contract checks and full workspace gate pass. Add the cross-host CI
   link/run check; do not bundle a linker or runtime. Budget: 250 driver lines,
