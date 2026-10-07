@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P05, B08, B08b, B08d, B08d10 | P05 export, packaging and original exit tests pass. Resolve the excluded-include diagnostic contract, then run the final product gates. Verification work is paused. Existing application tasks keep their separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10 | P01 through P05 are complete. Run the final clean-tree product gates and record their results. Verification work is paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -139,7 +139,7 @@ or rewrite checkers. Preserve existing emitted IR and assembly bytes. Do not
 add dependencies, crates or configuration systems. Do not push.
 
 - [x] **P01 — Render source diagnostics and freeze their format** — `DONE`, P1.
-  Next: retain the format and snapshots while implementing explanation pages.
+  Final review: retain the stable format and all 62 current snapshot triples.
   Exit: at least 40 text/JSON UI snapshots, workspace message-style checks,
   the hand-written JSON validator and full workspace gate pass. Budget:
   900 production Rust lines and 300 specification lines. Runtime locations
@@ -205,7 +205,8 @@ add dependencies, crates or configuration systems. Do not push.
   bytes, executed origins, related labels and output stability. This changes
   presentation only: no new lint, diagnostic code or semantic acceptance.
 - [x] **P02 — Explain every authoritative diagnostic** — `DONE`, P1.
-  Next: retain the tested pages and index while adding the five approved lints.
+  Final review: 122 pages now cover the authority table, including five warnings;
+  205 tagged examples are tested. The 20 explicit Trigger: none exceptions remain.
   Exit: complete page/table coverage, triggering and fixed examples checked,
   `--explain`, generated book index and full workspace gate pass. Report every
   `Trigger: none` exception. Budget: 300 Rust/Python lines excluding pages;
@@ -249,6 +250,8 @@ add dependencies, crates or configuration systems. Do not push.
   build-cache baseline was not measured; no full-package disk delta is claimed.
   Available space is 30 GiB. No later package started before this gate passed.
 - [x] **P03 — Add five front-end lints and level control** — `DONE`, P1.
+  Final review: all five warnings and their level controls retain their original
+  application acceptance. No additional warning or GCC-compatibility claim is added.
   Closed on October 7 after the full workspace gate and final application replay.
   Exit: warning-level UI matrix, unchanged zlib/cJSON builds with recorded
   warnings and full workspace gate pass. Pin the revised authority table.
@@ -303,6 +306,8 @@ add dependencies, crates or configuration systems. Do not push.
   paths). This is not filesystem-wide accounting. Available disk is 26 GiB.
   Claim: five controlled front-end lints, not all GCC warning semantics.
 - [x] **P04 — Add user-intent commands** — `DONE`, P1.
+  Final review: all six verbs, packaged sibling lookup and the cJSON build receipt
+  retain their recorded acceptance. No build system or interpreter libc was added.
   Closed on October 7 after the full gate and packaged-command acceptance. The six
   verbs delegate to the existing driver; no driver library was introduced.
   RED: `9b1793f0`, seven failures because the binary did not exist. The focused
@@ -349,10 +354,13 @@ add dependencies, crates or configuration systems. Do not push.
   Free space is 29 GiB. Claim: six delegated user commands, not external-libc
   interpreter execution or new proof coverage. Linux archive execution is not
   claimed by this Darwin packaging check. P05 may now start.
-- [ ] **P05 — Package the Linux header sysroot** — `OPEN`, P1.
-  Next: reconcile the excluded-include diagnostic requirement with unchanged
-  lookup on default macOS. The filtered export and all original P05 exit tests
-  pass; do not repeat them while awaiting this narrow contract clarification.
+- [x] **P05 — Package the Linux header sysroot** — `DONE`, P1.
+  Closed after the owner approved the excluded-include wording. The default
+  macOS volume is supported. The book and generated contract state that the
+  eight excluded headers are unsupported and promise neither lookup result.
+  Include lookup stays unchanged; no new diagnostic or installation restriction
+  is added. All original exit checks pass as recorded below. Earlier requests
+  for a storage decision or file-not-found guarantee are superseded.
   The owner approved default macOS volume support by excluding uppercase
   case-colliding headers; no case-sensitive installation requirement remains.
   October 7 entry check: four isolated driver tests reproduce three missing

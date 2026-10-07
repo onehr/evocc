@@ -80,6 +80,7 @@ if args[:1] == ["--inside"]:
     print(json.dumps({"target": target, "image": image, "image_digest": digest,
         "gcc_version": query("gcc", "--version").splitlines()[0],
         "directories": [str(p) for p in includes], "absent": absent,
+        "description": "The bundled sysroot does not support these eight netfilter headers. On a case-insensitive volume an include of one of them resolves to the lowercase file of the same name; on a case-sensitive volume it is not found. EvoCC makes no promise about either result. The contract field excluded_case_collisions lists them.",
         "excluded_case_collisions": excluded,
         "files": dict(sorted(files.items()))}, indent=2) + "\n", end="")
     sys.exit(0)

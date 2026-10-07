@@ -20,13 +20,27 @@ The first public version.
 - The target `aarch64-apple-darwin`, the default on macOS. It emits Mach-O assembly and uses the
   Apple variadic convention: every anonymous argument goes on the stack, and `va_list` is one
   pointer. `aarch64-unknown-linux-gnu` is the default on Linux. On macOS, the sealed container
-  assembles and links for Linux.
+  can assemble Linux objects. Cross-linking requires an explicit `--linker=COMMAND`.
 - `--version`, which prints the version, the commit and the date of the build, and the target.
   `-dumpmachine`, `-dumpversion` and `--help` are also available.
 - Two interpreters, one for C-HIR and one for EvoIR, that stop at undefined behavior with a
   numbered diagnostic (`--interpret-c-hir`, `--interpret-evoir`).
-- `--check`, which runs the executed path and reports undefined behavior; `--explain` for each
-  diagnostic code; `--error-format=json` for editors and tools.
+- Source diagnostics with primary and secondary labels, notes and help. Text, short and stable
+  JSON formats share the same locations. Color can be automatic, always on or always off.
+  The tests cover 62 source/text/JSON snapshot triples.
+- `--check`, which runs the executed path and reports undefined behavior. `--explain` prints
+  one of 122 tested diagnostic pages. The book includes the generated error index. Twenty
+  pages explicitly state that their diagnostic has no C-source trigger.
+- Five front-end warnings: unused variables, unused parameters, implicit function declarations,
+  implicit int and missing return values. Named warning levels, `-Wall`, `-Wextra`, `-Werror`,
+  `-w` and `--cap-lints` control them. This is not a full GCC warning implementation.
+- The `evo` command with six verbs: `run`, `check`, `explain`, `prove`, `build` and `version`.
+  It uses the existing compiler, interpreters and checkers. `evo build` runs configure and make
+  and writes a build receipt; it is not a new build system.
+- A bundled AArch64 Linux header sysroot. Releases find it beside `bin/` without `--sysroot`.
+  The file-hash contract records 3,966 headers and eight unsupported netfilter headers that
+  collide by case. The bundle supports the default macOS volume. It contains no linker, libc
+  or C runtime. The driver does not change include lookup for excluded names.
 - Undefined behavior as data in EvoIR: each definedness condition is an explicit
   `ub.assume.<reason>` obligation, and EvoMIR lowers it to a checked trap.
 - Verified equality saturation (`-Oeq-scalar`): 62 rewrite rules (55 in `p0.scalar.v4`, 7 in
@@ -36,8 +50,8 @@ The first public version.
   checkers in `evoir-sem` check each stage of the actual compilation, and the theorem
   `checkPipeline_sound` covers the chain from typed Core source to the final assembly text. A
   refusal writes no output.
-- Four pinned specifications in `spec/`: EvoIR 2.0.0, EvoMIR 1.0.1, the target description 1.0.0
-  and the verification contract 1.0.0.
+- Five pinned specifications in `spec/`: EvoIR 2.0.1, EvoMIR 1.0.1, the target description 1.0.0,
+  the verification contract 1.0.0 and the diagnostic format 1.0.0.
 - The evaluation ladder, `tools/bench.py`: conformance suites, fifteen application lanes and Linux
   build, boot, kselftest and KUnit lanes. Each lane writes a receipt.
 - The EvoCC Book in `book/`: installation, a first program, undefined behavior, compiling with
@@ -54,7 +68,7 @@ The first public version.
 
 ### Results at this version
 
-These results were recorded between 2026-09-13 and 2026-10-06. [docs/evidence.md](docs/evidence.md)
+These results were recorded between 2026-09-13 and 2026-10-07. [docs/evidence.md](docs/evidence.md)
 keeps their limits.
 
 - Linux 6.18.44 ARM64 boots with 2,799 of 2,799 target C objects compiled by EvoCC. A second
@@ -66,3 +80,7 @@ keeps their limits.
   run compared 14,194 vectors with the Lean source interpreter and found no difference.
 - On five library translation units, the code is 2.0 to 2.7 times the size of GCC 14 `-O2`
   output.
+- A release unpacked on the default macOS volume compiles a Linux hello object and the original
+  zlib 1.3.2 archive without a sysroot flag or manual include paths. Hello, the zlib example and
+  a minigzip round trip pass in the sealed Linux environment. The cross-host release workflow
+  is configured; these local results do not claim a hosted GitHub Actions run.
