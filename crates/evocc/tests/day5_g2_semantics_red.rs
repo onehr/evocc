@@ -362,7 +362,7 @@ fn run_parse_only(source: &str) -> Observation {
         .expect("spawn evocc");
 
     let mut stdin = child.stdin.take().expect("child stdin");
-    stdin.write_all(source.as_bytes()).expect("write source");
+    let _ = stdin.write_all(source.as_bytes());
     drop(stdin);
 
     let deadline = Instant::now() + WATCHDOG;

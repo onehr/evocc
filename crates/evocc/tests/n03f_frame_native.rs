@@ -128,12 +128,7 @@ fn assembly(linux: bool, variant: Option<&str>, signed: bool) -> Vec<u8> {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(SUBJECT.as_bytes())
-        .unwrap();
+    let _ = child.stdin.take().unwrap().write_all(SUBJECT.as_bytes());
     let ir = success(child.wait_with_output().unwrap());
     let module = evocc_evoir::parse_section9_module(&ir).unwrap();
     evocc_mir::compile_module_with_options(

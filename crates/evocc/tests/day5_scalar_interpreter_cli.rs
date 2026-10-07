@@ -22,12 +22,11 @@ fn run_interpreter(source: &str) -> Output {
         .spawn()
         .expect("spawn evocc");
 
-    child
+    let _ = child
         .stdin
         .take()
         .expect("child stdin")
-        .write_all(source.as_bytes())
-        .expect("write source");
+        .write_all(source.as_bytes());
     let deadline = Instant::now() + WATCHDOG;
     loop {
         match child.try_wait().expect("poll evocc") {

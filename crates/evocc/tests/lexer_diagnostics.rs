@@ -15,7 +15,7 @@ fn run_bounded(input: &[u8]) -> (ExitStatus, Vec<u8>, Vec<u8>) {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child.stdin.take().unwrap().write_all(input).unwrap();
+    let _ = child.stdin.take().unwrap().write_all(input);
     let deadline = Instant::now() + Duration::from_secs(2);
     let status = loop {
         if let Some(status) = child.try_wait().unwrap() {

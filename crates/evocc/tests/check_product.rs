@@ -18,12 +18,7 @@ fn run(args: &[&str], source: Option<&str>) -> Output {
         .spawn()
         .unwrap();
     if let Some(source) = source {
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(source.as_bytes())
-            .unwrap();
+        let _ = child.stdin.take().unwrap().write_all(source.as_bytes());
     }
     drop(child.stdin.take());
     child.wait_with_output().unwrap()

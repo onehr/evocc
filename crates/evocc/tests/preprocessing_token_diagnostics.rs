@@ -14,12 +14,11 @@ fn parse(source: &str) -> Output {
         .stderr(Stdio::piped())
         .spawn()
         .expect("run evocc");
-    child
+    let _ = child
         .stdin
         .take()
         .expect("child stdin")
-        .write_all(source.as_bytes())
-        .expect("write source");
+        .write_all(source.as_bytes());
     child.wait_with_output().expect("wait for evocc")
 }
 

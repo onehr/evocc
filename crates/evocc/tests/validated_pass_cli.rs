@@ -13,12 +13,7 @@ fn run(flags: &[&str], source: &str) -> Output {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(source.as_bytes())
-        .unwrap();
+    let _ = child.stdin.take().unwrap().write_all(source.as_bytes());
     child.wait_with_output().unwrap()
 }
 

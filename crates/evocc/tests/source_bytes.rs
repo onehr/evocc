@@ -29,7 +29,7 @@ fn run(source: &[u8], mode: &str, route: usize, flags: &[&str]) -> Output {
     }
     let mut child = command.spawn().unwrap();
     if route == 0 {
-        child.stdin.take().unwrap().write_all(source).unwrap();
+        let _ = child.stdin.take().unwrap().write_all(source);
     }
     let output = child.wait_with_output().unwrap();
     std::fs::remove_dir_all(dir).unwrap();

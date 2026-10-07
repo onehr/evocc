@@ -9,12 +9,11 @@ fn run(args: &[&str], input: &str) -> Output {
         .stderr(Stdio::piped())
         .spawn()
         .expect("run evocc");
-    child
+    let _ = child
         .stdin
         .take()
         .expect("child stdin")
-        .write_all(input.as_bytes())
-        .expect("write source");
+        .write_all(input.as_bytes());
     child.wait_with_output().expect("wait for evocc")
 }
 

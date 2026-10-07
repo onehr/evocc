@@ -14,14 +14,9 @@ fn run(level: &str, mode: &str) -> std::process::Output {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(include_bytes!(
-            "../../../tests/fixtures/asm-value-transport.c"
-        ))
-        .unwrap();
+    let _ = child.stdin.take().unwrap().write_all(include_bytes!(
+        "../../../tests/fixtures/asm-value-transport.c"
+    ));
     child.wait_with_output().unwrap()
 }
 

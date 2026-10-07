@@ -413,12 +413,11 @@ fn evoir(shape: &Shape) -> String {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child
+    let _ = child
         .stdin
         .take()
         .unwrap()
-        .write_all(shape.source.as_bytes())
-        .unwrap();
+        .write_all(shape.source.as_bytes());
     let output = child.wait_with_output().unwrap();
     assert!(
         output.status.success(),

@@ -75,12 +75,7 @@ fn negation_does_not_erase_poison_or_operand_obligations() {
                 .stderr(Stdio::piped())
                 .spawn()
                 .unwrap();
-            child
-                .stdin
-                .take()
-                .unwrap()
-                .write_all(source.as_bytes())
-                .unwrap();
+            let _ = child.stdin.take().unwrap().write_all(source.as_bytes());
             let output = child.wait_with_output().unwrap();
             assert_eq!(output.status.code(), Some(1), "{mode} {source}");
             assert!(

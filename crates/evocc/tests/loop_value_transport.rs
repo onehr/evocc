@@ -23,12 +23,7 @@ fn loop_transport_preserves_values_accesses_and_guards() {
                 .stderr(Stdio::piped())
                 .spawn()
                 .unwrap();
-            child
-                .stdin
-                .take()
-                .unwrap()
-                .write_all(source.as_bytes())
-                .unwrap();
+            let _ = child.stdin.take().unwrap().write_all(source.as_bytes());
             let out = child.wait_with_output().unwrap();
             assert!(
                 out.status.success(),

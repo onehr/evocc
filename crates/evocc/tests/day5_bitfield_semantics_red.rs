@@ -19,12 +19,11 @@ fn run_parse_only() -> Output {
         .spawn()
         .expect("spawn evocc");
 
-    child
+    let _ = child
         .stdin
         .take()
         .expect("child stdin")
-        .write_all(SOURCE.as_bytes())
-        .expect("write source");
+        .write_all(SOURCE.as_bytes());
 
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
