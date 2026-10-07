@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | P10, P11, B08, B08b, B08d, B08d10 | Complete P10 through P11 under the second product contract. P01 through P09 are accepted; P09 has an owner-approved screenshot waiver. The owner permits unsupported coverage-option warnings, not instrumentation. Keep the default zlib tests. Verification work stays paused. Existing application tasks keep their separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10 | P01 through P11 are accepted in their recorded scope; P09 has an owner-approved screenshot waiver. Coverage options warn but do not instrument. Default zlib CMake tests remain unchanged. Verification work stays paused. Existing application tasks keep their separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Resolve K07/L10 and L04 first; use the existing bounded decision packet, not new broad FP research. |
 | AUDIT | T03, D01, D02, D03, D04, D05 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review: fix each one, or record a decision with a test. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -667,7 +667,7 @@ retain the original scope where one copy has a truncated sentence.
   connector returned cgWindowNotFound before capture. No screenshot PASS is
   claimed. Keep the VS Code extension and its tests.
   Logs: `.evidence/diagnostics/20261007/editor-interface/`.
-- [ ] **P10 — Integrate existing build systems** — `OPEN`, P1.
+- [x] **P10 — Integrate existing build systems** — `DONE`, P1.
   CMake/compiler-identification REDs are committed in `ca0f7a2a`; library and
   native stack-protector regressions are in `94a9fb29`. Eight focused checks
   pass: compiler identity, warning controls, native CMake, Linux object CMake
@@ -681,21 +681,28 @@ retain the original scope where one copy has a truncated sentence.
   1.3.2 build and all 16 CTest commands now pass. Its infcover assertions pass;
   Apple's gcov reports missing .gcno but exits 0. The coverage-summary command
   is therefore not evidence of coverage support. No .gcno/.gcda is produced.
-  Final clean-tree gate for this change remains pending. The corrected Darwin snapshots and
-  authorized Linux target replays pass 9/9. Clean `82c9543a` passes the full
+  The final clean-tree gate on 95466ea0 passes 423 suites: 3,225 passed,
+  zero failed, five existing ignored; Clippy and formatting pass. The corrected
+  Darwin snapshots and authorized Linux target replays pass 9/9. Clean `82c9543a` passes the full
   offline gate: 423 suites, 3,224 passed, zero failed, five existing ignored;
   Clippy and formatting pass, exit 0. Log SHA-256:
   `438891e78717057388cfbf24fd42af5c230e2b9c45085b643d80b0b6a05dcbea`.
-  The original interrupted and failed logs remain. Production budget used:
+  The original interrupted and failed logs remain. Budget at that checkpoint:
   22/200 added or replaced Rust lines and 43/80 CMake lines. Removed the owned
   CMake source/build tree after hashes and open-handle checks (15,464 KiB).
   Measured target/frontend plus capture net change: +960,244 KiB; capture
   556 KiB, host free 190.59 GiB. This is not a host-wide disk attribution.
   Evidence: `.evidence/diagnostics/20261007/build-systems/`.
+  Final replay: cJSON 22/22 and default zlib 16/16, no filters. The independent
+  check confirms all 254 regular zlib source files match the pinned archive.
+  `zlib-coverage-options-last-test.log` retains the missing-coverage diagnostic.
+  Removed this replay's owned 20,008 KiB source/build tree after hashes and
+  no-open-handle checks. The coverage compatibility follow-up changes five
+  driver lines within its 20-line budget; total integration Rust is 27/200.
   Exit: original cJSON/zlib CMake tests, Linux object build, pkg-config and
   dependency-file replay, book commands and full gate. Budgets: 200 Rust,
   80 CMake lines. No custom CMake compiler-id module or package manager.
-- [ ] **P11 — Publish channel metadata and compatibility** — `OPEN`, P1.
+- [x] **P11 — Publish channel metadata and compatibility** — `DONE`, P1.
   RED tests are prepared in `94a9fb29`: eight cases run, the positive packaging
   control passes, and missing matrix/nightly/changelog checks fail as expected.
   Implementation follows the unchanged default zlib replay. The matrix uses
@@ -705,13 +712,25 @@ retain the original scope where one copy has a truncated sentence.
   nightly caller is 21/60 lines and reuses the native/cross-host release smoke
   checks; the packaging changelog guard adds 8/20 lines. act is absent, so YAML,
   embedded shell and permission/channel paths were reviewed instead. No hosted
-  CI or publication was run. The final clean-tree full and Lean gates remain.
+  CI or publication was run. Implementation is c8a9be0f. The final clean-tree
+  full workspace gate on 95466ea0 passes 3,225 tests with zero failures and
+  five existing ignored. All six Lean gate steps also pass on that clean tree.
   Exit: every ladder receipt in the generated chapter, nightly dry run with
   act if present or careful review, changelog guard and full gate. Known
   budgets: 150 Python lines and 60 workflow lines. Do not publish a release.
 
-Close the stage only after all six packages and final clean-tree workspace
-and Lean gates pass. Update CHANGELOG 0.1.0 and report each package separately.
+The six packages are accepted with the stated limits. Both final gates started
+on clean 95466ea0; no source changed between them. CHANGELOG 0.1.0 is updated.
+Logs in `.evidence/diagnostics/20261007/build-systems/`:
+`product-final-full-workspace.log` SHA-256
+`d8bbb9a704961a4370a3f40e83bc302cd09adf809d5966476465240655971d5c`;
+`product-final-lean.log` SHA-256
+`85dc3c3bb00025ade7f5cb023dcb8a5f5db7bf15650eaa81bd74f00fe3d29181`.
+The Lean receipt remains byte-identical and records a clean Lean tree with all
+six vector groups answered. This does not expand the verified language subset.
+Final capture is 1,536 KiB, below its 500 MiB cap. Since this follow-up's entry,
+target/frontend plus the capture grew by 2,276 KiB; owned replay intermediates
+are gone. This is not host-wide disk attribution. Last free-space check: 188.95 GiB.
 
 ### Remaining verification and application sequence
 

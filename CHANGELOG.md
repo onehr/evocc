@@ -103,6 +103,6 @@ keeps their limits.
 - Original CMake builds on macOS pass cJSON 1.7.19's 22 tests and zlib 1.3.2's 16 default
   CTest commands. The zlib coverage-summary command reports a missing .gcno file, but Apple's
   gcov returns 0. Its passing exit does not establish coverage support. No test was excluded.
-- The final product gate passes 3,176 Rust tests with zero failures and five existing ignored
-  campaigns. Clippy and formatting pass. The existing Lean gate passes all six steps against
-  EvoIR 2.0.1; this check does not expand the verified language subset.
+- The final product gate on clean `95466ea0` passes 3,225 Rust tests with zero failures and
+  five existing ignored campaigns. Clippy and formatting pass. The existing Lean gate passes
+  all six steps against EvoIR 2.0.1; this check does not expand the verified language subset.
