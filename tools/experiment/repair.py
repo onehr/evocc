@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Preregistered repair experiment; reported-cost stopping is not an absolute spend guarantee."""
-import argparse, datetime, gzip, hashlib, http.client, json, math, os, re, shutil, signal, subprocess, tempfile, time, urllib.error, urllib.request, uuid
+import argparse, datetime, gzip, hashlib, http.client, json, math, os, re, shutil, signal, subprocess, tempfile, threading, time, urllib.error, urllib.request, uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -109,6 +109,7 @@ def request(payload, key, events, attempts=4):
                 try: cost, *_ = usage(json.loads(raw))
                 except ValueError: raise Stop("cost_unknown:http_error") from None
                 raise Stop("http_error_usage", cost)
+            if attempts == 1 and error.code in (401, 402): raise Stop("provider_refused_key:http_" + str(error.code)) from None
             if attempt == attempts - 1 or not (error.code == 429 or 500 <= error.code < 600): raise Failure("http_" + str(error.code)) from None
             events[-1]["retry_after_seconds"] = 2 ** attempt
             time.sleep(2 ** attempt)
@@ -117,6 +118,21 @@ def request(payload, key, events, attempts=4):
             cause = getattr(error, "reason", None)
             events.append(dict(transport_error=dict(kind=type(error).__name__, cause=type(cause).__name__ if cause is not None else None, errno=getattr(cause or error, "errno", None))))
             raise Stop("cost_unknown:transport_error") from None
+
+def bounded(payload, key, events, seconds):
+    # urllib's timeout limits each socket read. OpenRouter sends keep-alive whitespace while a
+    # model generates, so one response could last 14 minutes; this is the total deadline.
+    box, captured = {}, []
+    def call():
+        try: box["response"] = request(payload, key, captured, attempts=1)
+        except BaseException as error: box["error"] = error
+    worker = threading.Thread(target=call, daemon=True); worker.start(); worker.join(seconds)
+    events.extend(list(captured))
+    if worker.is_alive():
+        events.append(dict(transport_error=dict(kind="DeadlineExceeded", cause=None, errno=None), deadline_seconds=seconds))
+        raise Stop("cost_unknown:timeout")
+    if "error" in box: raise box["error"]
+    return box["response"]
 
 def usage(response):
     try:
@@ -178,8 +194,9 @@ def prepare(condition, source, row):
 
 def qualify(receipt, items, models, hashes):
     if receipt.get("schema") != "agent-repair.v2" or receipt.get("plan", {}).get("phase") != "preflight" or receipt.get("stop_reason") != "completed": raise Failure("invalid_preflight_receipt")
-    if any(receipt.get("provenance", {}).get("hashes", {}).get(path) != value for path, value in hashes.items()): raise Failure("preflight_input_mismatch")
-    runs = receipt.get("runs", [])
+    # The population decision is written to predictions-2.md after preflight and frozen by the tag.
+    if any(receipt.get("provenance", {}).get("hashes", {}).get(path) != value for path, value in hashes.items() if not path.endswith("predictions-2.md")): raise Failure("preflight_input_mismatch")
+    runs, hard = receipt.get("runs", []), {model: [] for model in models}
     if len(runs) != len(items) * len(models) * 3: raise Failure("incomplete_preflight")
     for item in items:
         for model in models:
@@ -187,7 +204,8 @@ def qualify(receipt, items, models, hashes):
             # Delivery errors occupy a trial but cannot establish a failed repair.
             outcomes = {("passed", 1, True), ("failed", 1, False), ("response_error", 0, False)}
             if len(rows) != 3 or {r.get("repetition") for r in rows} != {1, 2, 3} or any(r.get("condition") != "c0" or r.get("rounds") != 1 or (r.get("status"), r.get("rounds_scored"), r.get("passed")) not in outcomes for r in rows): raise Failure("incomplete_preflight")
-            if sum(r["status"] == "failed" for r in rows) < 2: raise Failure("preflight_item_too_easy")
+            if sum(r["status"] == "failed" for r in rows) >= 2: hard[model].append(item.name)
+    return hard
 
 def native(mode, source, reference=None):
     name = "agent-repair-" + uuid.uuid4().hex
@@ -251,7 +269,7 @@ def preflight(args, items, models, plan):
     if v2 and not is_preflight: paths.append(ROOT / protocol["preflight_receipt"])
     if any(path.is_symlink() or not path.resolve().is_relative_to(ROOT) for path in paths): raise Failure("unregistered_input_path")
     if v2 and not is_preflight:
-        qualify(json.loads(paths[-1].read_text()), items, models, {str(p.relative_to(ROOT)): digest(p) for p in paths[:-1]})
+        hard = qualify(json.loads(paths[-1].read_text()), items, models, {str(p.relative_to(ROOT)): digest(p) for p in paths[:-1]})
     tracked = set(git("ls-files", "--", *(str(path.relative_to(ROOT)) for path in paths)).splitlines())
     if any(str(path.relative_to(ROOT)) not in tracked for path in paths): raise Failure("untracked_input")
     if run(["git", "check-ignore", ".env"])["exit_code"]: raise Failure("env_not_ignored")
@@ -260,7 +278,9 @@ def preflight(args, items, models, plan):
     try: observed = json.loads(image["stdout"])[0]["configuration"]["descriptor"]["digest"]
     except (ValueError, KeyError, IndexError, TypeError): raise Failure("sealed_image_invalid_inspect") from None
     if observed != json.loads((ROOT / "contracts/build-environment.json").read_text())["buildImage"]["executionReference"]: raise Failure("sealed_image_digest_mismatch")
-    return dict(commit=commit, corpus_tag=args.corpus_tag, hashes={str(p.relative_to(ROOT)): digest(p) for p in paths}, evo_sha256=digest(EVO), evocc_sha256=digest(EVO.with_name("evocc")), version=run([EVO, "version"])["stdout"], image=IMAGE, image_inspect=image["stdout"])
+    result = dict(commit=commit, corpus_tag=args.corpus_tag, hashes={str(p.relative_to(ROOT)): digest(p) for p in paths}, evo_sha256=digest(EVO), evocc_sha256=digest(EVO.with_name("evocc")), version=run([EVO, "version"])["stdout"], image=IMAGE, image_inspect=image["stdout"])
+    if v2 and not is_preflight: result["preflight_hard"] = hard
+    return result
 
 def resume_prefix(previous, output, receipt, order, key):
     old = json.loads((previous / "receipt.json").read_text())
@@ -295,7 +315,7 @@ def main(argv=None):
     parser.add_argument("--temperature", type=float); parser.add_argument("--cost-cap", "--max-cost-usd", type=float)
     parser.add_argument("--corpus-tag"); parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--protocol", type=Path, default=HERE / "protocol.json"); parser.add_argument("--preflight", action="store_true")
-    parser.add_argument("--resume-from", type=Path)
+    parser.add_argument("--resume-from", type=Path); parser.add_argument("--parallel", type=int, default=1)
     args = parser.parse_args(argv)
     args.protocol = args.protocol.resolve()
     protocol = json.loads(args.protocol.read_text()); v2 = protocol["schema"] == "agent-repair.protocol.v2"
@@ -307,7 +327,7 @@ def main(argv=None):
     if not v2 and (args.preflight or any(c in ("c0", "c4") for c in args.condition or [])): parser.error("v2 protocol required")
     if args.resume_from and not (v2 and args.preflight): parser.error("resume is only for unattempted preflight slots")
     args.items = args.items or ROOT / protocol.get("items", "tests/fixtures/agent-repair")
-    if min(args.reps, args.rounds) < 1 or not math.isfinite(args.cost_cap) or args.cost_cap <= 0 or not math.isfinite(args.temperature): parser.error("invalid numeric limits")
+    if min(args.reps, args.rounds) < 1 or not math.isfinite(args.cost_cap) or args.cost_cap <= 0 or not math.isfinite(args.temperature) or args.parallel < 1: parser.error("invalid numeric limits")
     items = sorted(path.parent for path in args.items.resolve().glob("*/program.c"))
     models, conditions = args.model or protocol.get("models") or (ROOT / protocol["models_file"]).read_text().split(), args.condition or list(protocol["conditions"])
     if not items or not models or len(set(models)) != len(models) or len(set(conditions)) != len(conditions): parser.error("empty items/models or duplicate options")
@@ -328,16 +348,30 @@ def main(argv=None):
         prompt, marker, c0 = prompt.partition("\n--- C0 ONLY ---\n")
         if not marker or not c0.strip(): raise Failure("invalid_c0_prompt")
     args.out.mkdir(mode=0o700, parents=True)
-    receipt = dict(schema="agent-repair.v2" if v2 else "agent-repair.v1", date=datetime.datetime.now(datetime.timezone.utc).isoformat(), provenance=provenance, plan=plan, runs=[], total_cost=0.0, stop_reason=None, acceptance=False)
+    receipt = dict(schema="agent-repair.v2" if v2 else "agent-repair.v1", date=datetime.datetime.now(datetime.timezone.utc).isoformat(), provenance=provenance, plan=plan, runs=[], total_cost=0.0, stop_reason=None, acceptance=False, parallel=args.parallel)
     order = [dict(item=item.name, model=model, repetition=rep, condition=condition) for item, model, rep, condition in trials]
     archive_bytes, raw_bytes = resume_prefix(args.resume_from, args.out, receipt, order, key) if args.resume_from else (0, 0)
+    lock, state, failures = threading.RLock(), dict(next=len(receipt["runs"]), archive=archive_bytes, raw=raw_bytes), []
+    reserve, timeout = protocol.get("unknown_cost_reserve_usd"), protocol.get("limits", {}).get("http_timeout_seconds", 120)
+    if v2 and reserve is not None: receipt.update(unknown_cost_attempts=0, unknown_cost_reserve=0.0)
+    def spent(): return receipt["total_cost"] + receipt.get("unknown_cost_reserve", 0)
+    def halt(reason):
+        with lock: receipt["stop_reason"] = receipt["stop_reason"] or reason
+        return reason
+    def charge(row, amount):
+        with lock: row["cost"] += amount; receipt["total_cost"] += amount
+    def unknown(reason):
+        # Per-call cost stays null. A registered reserve replaces the old stop and counts against the cap.
+        if not v2 or reserve is None: return halt(reason)
+        with lock: receipt["unknown_cost_attempts"] += 1; receipt["unknown_cost_reserve"] += reserve
     (args.out / "plan.json").write_text(encode(dict(plan=plan, provenance=provenance, order=order), key))
     (args.out / "receipt.json").write_text(encode(receipt, key))
-    for index, (item, model, rep, condition) in enumerate(trials[len(receipt["runs"]):], start=len(receipt["runs"])):
-        if receipt["total_cost"] >= args.cost_cap: receipt["stop_reason"] = "reported_cost_cap"; break
+    def run_slot(index, item, model, rep, condition):
+        started = time.monotonic()
         row = dict(item=item.name, **{"class": (item / "class").read_text().strip()}, condition=condition, model_sent=model, repetition=rep, rounds=0, rounds_scored=0, passed=False, status="failed", error=None, tokens_in=0, tokens_out=0, cost=0.0, calls=[])
         row["synthetic"] = "written for this corpus" in (item / "origin.md").read_text().lower()
         if v2: row["auto_applied"] = 0
+        row.update(start_order=index, started_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
         events = []
         source = original = ""
         try:
@@ -350,20 +384,21 @@ def main(argv=None):
                 if row["passed"]: row["status"] = "passed"
             for number in range(1, args.rounds + 1):
                 if row["passed"]: break
-                if receipt["total_cost"] >= args.cost_cap: raise Stop("reported_cost_cap")
+                if spent() >= args.cost_cap: raise Stop("reported_cost_cap")
+                if receipt["stop_reason"]: raise Stop(receipt["stop_reason"])
                 if shutil.disk_usage(ROOT).free < 15 * 1024 ** 3: raise Stop("disk_below_15_GiB")
                 row["rounds"] = number
                 payload = dict(model=model, temperature=args.temperature, max_tokens=plan["max_tokens"], messages=messages(prompt + ("\n" + c0 if condition == "c0" else ""), source, current))
                 for attempt in range(1, 3 if v2 else 2):
-                    if receipt["total_cost"] >= args.cost_cap: raise Stop("reported_cost_cap")
+                    if spent() >= args.cost_cap: raise Stop("reported_cost_cap")
                     event = dict(round=number, request=payload, http=[]); events.append(event)
                     call = dict(round=number, model_sent=model, reported_model=None, provider=None, cost=None, tokens_in=None, tokens_out=None, score_passed=None)
                     if v2: call.update(attempt=attempt, response_error=None); row["calls"].append(call)
-                    response = None
+                    response, clock = None, time.monotonic()
                     try:
-                        response = request(payload, key, event["http"], **({"attempts": 1} if v2 else {}))
+                        response = bounded(payload, key, event["http"], timeout) if v2 else request(payload, key, event["http"])
                         cost, token_in, token_out = usage(response)
-                        row["cost"] += cost; receipt["total_cost"] += cost
+                        charge(row, cost)
                         row["tokens_in"] += token_in; row["tokens_out"] += token_out
                         call.update(cost=cost, tokens_in=token_in, tokens_out=token_out)
                         encode(response, key)
@@ -379,9 +414,9 @@ def main(argv=None):
                     except Failure as error:
                         if not v2 or (isinstance(error, Stop) and not str(error).startswith(("cost_unknown:", "invalid_usage_tokens"))): raise
                         call["response_error"] = str(error)
-                        if str(error).startswith("cost_unknown:"): receipt["stop_reason"] = str(error)
-                        elif isinstance(error, Stop): call["cost"] = error.cost; row["cost"] += error.cost; receipt["total_cost"] += error.cost
-                        elif call["cost"] is None: receipt["stop_reason"] = "cost_unknown:" + str(error)
+                        if str(error).startswith("cost_unknown:"): unknown(str(error))
+                        elif isinstance(error, Stop): call["cost"] = error.cost; charge(row, error.cost)
+                        elif call["cost"] is None: unknown("cost_unknown:" + str(error))
                         for field, name in (("tokens_in", "prompt_tokens"), ("tokens_out", "completion_tokens")):
                             value = response["usage"].get(name) if isinstance(response, dict) and isinstance(response.get("usage"), dict) else None
                             if call[field] is None and type(value) is int and value >= 0: call[field] = value; row[field] += value
@@ -389,6 +424,7 @@ def main(argv=None):
                             encode(response, key)
                             call.update(reported_model=response.get("model"), provider=response.get("provider"))
                         if attempt == 2: raise Failure("response_error") from None
+                    finally: call["seconds"] = round(time.monotonic() - clock, 3)
                 if v2: source, current, tools = prepare(condition, source, row)
                 else: current, tools = feedback(condition, source)
                 event.update(source_sha256=hashlib.sha256(source.encode()).hexdigest(), feedback=current, tools=tools)
@@ -396,40 +432,57 @@ def main(argv=None):
                 row["rounds_scored"] += 1
                 event["score_passed"] = row["calls"][-1]["score_passed"] = row["passed"]
                 if row["passed"]: row["status"] = "passed"; break
-                if receipt["stop_reason"]: break
         except Stop as error:
-            row["cost"] += error.cost; receipt["total_cost"] += error.cost
+            charge(row, error.cost)
             row["status"] = "stopped"
-            row["error"] = receipt["stop_reason"] = str(error)
+            row["error"] = halt(str(error))
         except (Failure, OSError) as error:
             row["status"] = "response_error" if v2 and str(error) == "response_error" else "error"
             row["error"] = str(error) if isinstance(error, Failure) else type(error).__name__
             if getattr(error, "evidence", None) is not None: events.append(dict(error=row["error"], tools=error.evidence))
         except KeyboardInterrupt:
-            row["status"] = "stopped"; row["error"] = receipt["stop_reason"] = "interrupted_cost_may_be_unknown"
+            row["status"] = "stopped"; row["error"] = halt("interrupted_cost_may_be_unknown")
         if v2:
             try:
                 metrics, delta = measure(original, source, json.loads((item / "fix-spans.json").read_text())["spans"])
                 row.update(metrics); events.append(dict(phase="final", diff=delta))
-            except (Failure, OSError, ValueError, KeyError, TypeError): row["error"] = receipt["stop_reason"] = "final_metrics_failed"
+            except (Failure, OSError, ValueError, KeyError, TypeError): row["error"] = halt("final_metrics_failed")
         try:
-            serialized = encode(events, key).encode(); raw_bytes += len(serialized)
+            serialized = encode(events, key).encode()
             packed = gzip.compress(serialized, mtime=0)
         except Stop:
-            row["error"] = receipt["stop_reason"] = "secret_capture_refused"; packed = gzip.compress(b'[]', mtime=0)
-        archive_bytes += len(packed)
+            row["error"] = halt("secret_capture_refused"); serialized, packed = b"", gzip.compress(b'[]', mtime=0)
         name = str(index).zfill(4) + ".json.gz"
-        (args.out / name).write_bytes(packed); row["transcript"] = name
-        receipt["runs"].append(row)
-        if not v2 and archive_bytes >= 9 * 1024 ** 2: receipt["stop_reason"] = "transcript_budget"
-        if raw_bytes >= 400 * 1024 ** 2: receipt["stop_reason"] = "capture_budget"
-        receipt["unattempted"] = len(trials) - len(receipt["runs"])
-        (args.out / "receipt.json").write_text(encode(receipt, key))
-        if receipt["stop_reason"]: break
+        (args.out / name).write_bytes(packed); row.update(transcript=name, seconds=round(time.monotonic() - started, 3))
+        with lock:
+            state["archive"] += len(packed); state["raw"] += len(serialized)
+            receipt["runs"].append(row); receipt["runs"].sort(key=lambda r: r.get("start_order", -1))
+            if not v2 and state["archive"] >= 9 * 1024 ** 2: receipt["stop_reason"] = "transcript_budget"
+            if state["raw"] >= 400 * 1024 ** 2: receipt["stop_reason"] = "capture_budget"
+            receipt["unattempted"] = len(trials) - len(receipt["runs"])
+            (args.out / "receipt.json").write_text(encode(receipt, key))
+    def worker():
+        # Slots start in registered order under the lock, so the attempted slots stay a prefix.
+        while True:
+            with lock:
+                if receipt["stop_reason"] or state["next"] >= len(trials): return
+                if spent() >= args.cost_cap: receipt["stop_reason"] = "reported_cost_cap"; return
+                index = state["next"]; state["next"] += 1
+            try: run_slot(index, *trials[index])
+            except BaseException as error: failures.append(error); halt("harness_" + type(error).__name__); return
+    threads = [threading.Thread(target=worker, daemon=True) for _ in range(args.parallel)]
+    for thread in threads: thread.start()
+    try:
+        for thread in threads:
+            while thread.is_alive(): thread.join(1)
+    except KeyboardInterrupt:
+        halt("interrupted_cost_may_be_unknown")
+        for thread in threads: thread.join()
     if receipt["stop_reason"] is None: receipt["stop_reason"] = "completed" if len(receipt["runs"]) == len(trials) else "reported_cost_cap"
     receipt["unattempted"] = len(trials) - len(receipt["runs"])
     receipt["acceptance"] = receipt["stop_reason"] in ("completed", "reported_cost_cap") and all(row["error"] in (None, "reported_cost_cap") or (v2 and not args.preflight and row["status"] == "response_error") for row in receipt["runs"])
     (args.out / "receipt.json").write_text(encode(receipt, key))
+    if failures: raise failures[0]
     print(encode(dict(runs=len(receipt["runs"]), total_cost=receipt["total_cost"], stop_reason=receipt["stop_reason"])))
     return 0 if receipt["stop_reason"] in ("completed", "reported_cost_cap") else 1
 

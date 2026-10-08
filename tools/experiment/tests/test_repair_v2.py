@@ -195,6 +195,140 @@ class V2Tests(unittest.TestCase):
         self.assertEqual(opener.open.call_count, 1)
         sleep.assert_not_called()
 
+    def test_v2_request_stops_on_refused_key_or_credit(self):
+        for code in (401, 402):
+            opener = Mock()
+            opener.open.side_effect = urllib.error.HTTPError(repair.URL, code, "refused", {}, io.BytesIO(b'{"error":{}}'))
+            with self.subTest(code=code), patch.object(repair.urllib.request, "build_opener", return_value=opener):
+                with self.assertRaisesRegex(repair.Stop, "^provider_refused_key:http_" + str(code) + "$"):
+                    repair.request({}, "unit-secret-key", [], attempts=1)
+
+    def test_bounded_request_has_a_total_deadline(self):
+        release = repair.threading.Event()
+        def stalled(payload, key, events, **kwargs):
+            events.append(dict(http_status=200, response="\n   "))
+            release.wait(30)
+            return self.response()
+        events = []
+        with patch.object(repair, "request", side_effect=stalled):
+            start = repair.time.monotonic()
+            with self.assertRaisesRegex(repair.Stop, "^cost_unknown:timeout$"):
+                repair.bounded({}, "unit-secret-key", events, 0.2)
+            elapsed = repair.time.monotonic() - start
+        release.set()
+        self.assertLess(elapsed, 2)
+        self.assertEqual(events[-1], dict(transport_error=dict(kind="DeadlineExceeded", cause=None, errno=None), deadline_seconds=0.2))
+        with patch.object(repair, "request", return_value=self.response()):
+            self.assertEqual(repair.bounded({}, "unit-secret-key", [], 5)["provider"], "actual-provider")
+        with patch.object(repair, "request", side_effect=repair.Failure("http_503")), self.assertRaisesRegex(repair.Failure, "http_503"):
+            repair.bounded({}, "unit-secret-key", [], 5)
+
+    def run_many(self, count, request, parallel=1, cap=5, extra=None, score=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            protocol, items = self.fixture(root, count)
+            for index in range(count):
+                (items / str(index) / "program.c").write_text("/* item " + str(index) + " */\n" + SOURCE)
+            for index in range(count):
+                (items / str(index)).rename(items / ("item-%02d" % index))
+            configured = json.loads(protocol.read_text())
+            configured.update(extra or {})
+            protocol.write_text(json.dumps(configured))
+            metric = dict(diff_added=1, diff_removed=1, changed_inside_spans=2, spans_touched=[True])
+            with patch.object(repair, "preflight", return_value={"commit": "fixture"}), \
+                 patch.object(repair, "load_key", return_value="unit-secret-key"), \
+                 patch.object(repair, "request", side_effect=request), \
+                 patch.object(repair, "score", side_effect=score or (lambda source, item: (False, []))), \
+                 patch.object(repair, "measure", return_value=(metric, "DIFF")), \
+                 patch("sys.stdout", new_callable=io.StringIO):
+                result = repair.main(["--protocol", str(protocol), "--out", str(root / "out"), "--condition", "c0",
+                                      "--reps", "1", "--rounds", "1", "--max-cost-usd", str(cap), "--parallel", str(parallel)])
+            receipt = json.loads((root / "out/receipt.json").read_text())
+            names = sorted(path.name for path in (root / "out").glob("*.json.gz"))
+            return result, receipt, names
+
+    def test_stalled_response_is_response_error_and_the_run_continues(self):
+        release = repair.threading.Event()
+        def request(payload, key, events, **kwargs):
+            if "item 0 " in payload["messages"][1]["content"]:
+                release.wait(30)
+            events.append(dict(http_status=200, response="{}"))
+            return self.response()
+        extra = dict(limits=dict(http_timeout_seconds=0.2), unknown_cost_reserve_usd=0.05)
+        try:
+            result, receipt, names = self.run_many(2, request, extra=extra)
+        finally:
+            release.set()
+        stalled, later = receipt["runs"]
+        self.assertEqual((result, receipt["stop_reason"], receipt["unattempted"]), (0, "completed", 0))
+        self.assertEqual((stalled["status"], stalled["rounds_scored"]), ("response_error", 0))
+        self.assertEqual([c["response_error"] for c in stalled["calls"]], ["cost_unknown:timeout"] * 2)
+        self.assertEqual([c["cost"] for c in stalled["calls"]], [None, None])
+        self.assertLess(stalled["seconds"], 2 * 0.2 + 1.5)
+        self.assertEqual((later["status"], later["cost"]), ("failed", 0.25))
+        self.assertEqual((receipt["unknown_cost_attempts"], receipt["total_cost"]), (2, 0.25))
+        self.assertAlmostEqual(receipt["unknown_cost_reserve"], 0.1)
+        self.assertEqual(names, ["0000.json.gz", "0001.json.gz"])
+
+    def test_scoring_timeout_is_recorded_and_the_run_continues(self):
+        def score(source, item):
+            if item.name == "item-00": raise repair.Failure("infrastructure_timeout", [dict(argv=["container"], exit_code=None)])
+            return True, []
+        def request(payload, key, events, **kwargs):
+            events.append(dict(http_status=200, response="{}"))
+            return self.response()
+        result, receipt, _ = self.run_many(2, request, parallel=2, score=score)
+        self.assertEqual((result, receipt["stop_reason"]), (0, "completed"))
+        self.assertEqual([(r["status"], r["error"]) for r in receipt["runs"]], [("error", "infrastructure_timeout"), ("passed", None)])
+
+    def test_unknown_cost_reserve_counts_against_the_cap(self):
+        def request(payload, key, events, **kwargs):
+            raise repair.Stop("cost_unknown:transport_error")
+        _, receipt, _ = self.run_many(3, request, cap=0.15, extra=dict(unknown_cost_reserve_usd=0.05))
+        self.assertEqual(receipt["stop_reason"], "reported_cost_cap")
+        self.assertEqual([r["status"] for r in receipt["runs"]], ["response_error", "stopped"])
+        self.assertEqual((receipt["unknown_cost_attempts"], receipt["unattempted"]), (3, 1))
+
+    def test_parallel_slots_run_concurrently_in_registered_order(self):
+        lock, active, peak, started = repair.threading.Lock(), [0], [0], []
+        def request(payload, key, events, **kwargs):
+            with lock:
+                active[0] += 1; peak[0] = max(peak[0], active[0])
+                started.append(payload["messages"][1]["content"].split("```c\n")[1].split("*/")[0])
+            repair.time.sleep(0.1)
+            with lock: active[0] -= 1
+            events.append(dict(http_status=200, response="{}"))
+            return self.response()
+        result, receipt, names = self.run_many(8, request, parallel=4)
+        self.assertEqual((result, receipt["stop_reason"], receipt["parallel"]), (0, "completed", 4))
+        self.assertGreater(peak[0], 1)
+        self.assertLessEqual(peak[0], 4)
+        self.assertEqual([r["start_order"] for r in receipt["runs"]], list(range(8)))
+        self.assertEqual([r["item"] for r in receipt["runs"]], ["item-%02d" % n for n in range(8)])
+        self.assertEqual([r["transcript"] for r in receipt["runs"]], names)
+        self.assertEqual(receipt["total_cost"], 8 * 0.25)
+        self.assertEqual(sorted(started), ["/* item %d " % n for n in range(8)])
+
+    def test_parallel_cost_stop_keeps_an_attempted_prefix(self):
+        def request(payload, key, events, **kwargs):
+            repair.time.sleep(0.05)
+            events.append(dict(http_status=200, response="{}"))
+            return self.response(cost=0.5)
+        result, receipt, names = self.run_many(12, request, parallel=3, cap=2)
+        attempted = len(receipt["runs"])
+        self.assertEqual((result, receipt["stop_reason"]), (0, "reported_cost_cap"))
+        self.assertLess(attempted, 12)
+        self.assertEqual([r["start_order"] for r in receipt["runs"]], list(range(attempted)))
+        self.assertEqual(receipt["unattempted"], 12 - attempted)
+        self.assertLessEqual(receipt["total_cost"], 2 + 3 * 0.5)
+        self.assertEqual(names, ["%04d.json.gz" % n for n in range(attempted)])
+
+    def test_worker_exception_stops_and_is_raised(self):
+        def request(payload, key, events, **kwargs):
+            raise AssertionError("unexpected harness failure")
+        with self.assertRaisesRegex(AssertionError, "unexpected harness failure"):
+            self.run_many(3, request, parallel=2)
+
     def test_transport_error_records_only_exception_classes_and_errno(self):
         secret = "unit-secret-key sk-or-fixture-transport-detail"
         variants = [
@@ -227,7 +361,7 @@ class V2Tests(unittest.TestCase):
     def test_eligibility_requires_three_first_response_slots_for_each_model(self):
         items, models, hashes = [Path("item")], ["first", "second"], {"program.c": "fixture-hash"}
         good = self.eligibility(items, models, hashes)
-        repair.qualify(good, items, models, hashes)
+        self.assertEqual(repair.qualify(good, items, models, hashes), {"first": ["item"], "second": ["item"]})
         variants = []
         missing = copy.deepcopy(good)
         missing["runs"].pop()
@@ -238,7 +372,12 @@ class V2Tests(unittest.TestCase):
             variants.append((failed_delivery, "incomplete_preflight"))
         too_easy = copy.deepcopy(good)
         too_easy["runs"][-1].update(status="passed", passed=True)
-        variants.append((too_easy, "preflight_item_too_easy"))
+        # Easy items stay in the corpus; the population rule in predictions-2.md decides their use.
+        self.assertEqual(repair.qualify(too_easy, items, models, hashes), {"first": ["item"], "second": []})
+        decided = copy.deepcopy(good)
+        current = dict(hashes, **{"tools/experiment/predictions-2.md": "population-decision"})
+        decided["provenance"]["hashes"]["tools/experiment/predictions-2.md"] = "draft"
+        self.assertEqual(repair.qualify(decided, items, models, current), {"first": ["item"], "second": ["item"]})
         late = copy.deepcopy(good)
         late["runs"][-1]["rounds"] = 2
         variants.append((late, "incomplete_preflight"))
@@ -258,7 +397,7 @@ class V2Tests(unittest.TestCase):
         receipt["runs"][0].update(status="response_error", rounds_scored=0,
                                   passed=False, error="response_error")
         original = copy.deepcopy(receipt)
-        repair.qualify(receipt, items, models, hashes)
+        self.assertEqual(repair.qualify(receipt, items, models, hashes), {"first": ["item"], "second": ["item"]})
         self.assertEqual(receipt, original)
 
     def test_eligibility_response_errors_never_count_as_scored_failures(self):
@@ -268,8 +407,8 @@ class V2Tests(unittest.TestCase):
             for rep in error_repetitions:
                 receipt["runs"][rep - 1].update(status="response_error", rounds_scored=0,
                                                passed=False, error="response_error")
-            with self.subTest(error_repetitions=error_repetitions), self.assertRaises(repair.Failure):
-                repair.qualify(receipt, items, models, hashes)
+            with self.subTest(error_repetitions=error_repetitions):
+                self.assertEqual(repair.qualify(receipt, items, models, hashes), {"first": [], "second": ["item"]})
 
     def test_preflight_clean_source_then_measurement_checks_receipt_and_hashes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -312,6 +451,9 @@ class V2Tests(unittest.TestCase):
                 plan.update(rounds=3, conditions=list(protocol["conditions"]), max_requests=90, cost_cap=5)
                 measured = repair.preflight(args, population, models, plan)
                 self.assertIn("eligibility.json", measured["hashes"])
+                self.assertEqual(measured["preflight_hard"], {"first": ["0"], "second": ["0"]})
+                (here / "predictions-2.md").write_text("PREDICTIONS AND POPULATION DECISION")
+                self.assertEqual(repair.preflight(args, population, models, plan)["preflight_hard"], measured["preflight_hard"])
                 for target in (population[0] / "program.c", population[0] / "fix-spans.json", root / "prompt.txt", here / "repair.py"):
                     original = target.read_text()
                     target.write_text(original + "changed")
@@ -571,10 +713,11 @@ class V2Tests(unittest.TestCase):
                  patch.object(repair.shutil, "disk_usage", return_value=SimpleNamespace(free=30 * 1024 ** 3)), \
                  patch("sys.stdout", new_callable=io.StringIO):
                 result = repair.main(["--protocol", str(protocol), "--preflight", "--resume-from",
-                                      str(previous), "--out", str(output)])
+                                      str(previous), "--out", str(output), "--parallel", "3"])
             receipt = json.loads((output / "receipt.json").read_text())
             self.assertEqual(result, 0)
-            self.assertEqual(sent, [(slot["item"], slot["model"]) for slot in order[4:]])
+            self.assertEqual(sorted(sent), sorted((slot["item"], slot["model"]) for slot in order[4:]))
+            self.assertEqual([r["start_order"] for r in receipt["runs"][4:]], list(range(4, len(order))))
             self.assertEqual(receipt["runs"][:4], prior["runs"])
             self.assertEqual(len(receipt["runs"]), len(order))
             self.assertEqual(receipt["total_cost"], prior["total_cost"] + len(sent) * 0.25)
