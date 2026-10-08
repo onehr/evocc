@@ -1,6 +1,8 @@
 # Agent repair experiment
 
 The registered run is complete. It does not show an overall advantage for EvoCC.
+The second experiment, below, stopped at the provider key limit after 444 of
+900 repetitions. None of its five predictions held for either model.
 
 ## Question and corpus
 
@@ -274,3 +276,316 @@ including its request limit and new tag. Commit and tag before any request.
 Run the full campaign with `--corpus-tag NEW_TAG`. Repeat `--model` for every
 registered ID, in list order. Unregistered IDs are rejected. Do not rerun only
 failed cases or change the frozen prompt, corpus, or conditions in place.
+
+## Experiment 2
+
+The first run reached a ceiling: every success came on the first response.
+The second experiment uses harder programs and more measures. It asks what
+the feedback costs and where the repairs go, not only whether they pass.
+
+### Predictions
+
+The predictions were written before any measured request. They are in
+[`predictions-2.md`](https://github.com/onehr/evocc/blob/main/tools/experiment/predictions-2.md),
+frozen by the tag `agent-repair-experiment-2`. Each comparison is strict and
+separate for each model. Tokens, rounds, diff size and span overlap use only
+successful repetitions.
+
+1. **Token cost.** C3 has a lower median of total model tokens per successful
+   repair than C1 and C2.
+2. **Repair size.** C3 has a lower median of added plus removed lines than C1
+   and C2. The diff is against the original program.
+3. **Repair location.** C3 has a higher share of successes that touch every
+   minimal-fix span than C1 and C2.
+4. **Safe automation.** C4 has fewer median rounds and fewer median tokens per
+   successful repair than C3.
+5. **No-feedback control.** C0 is worse than every other condition on all five
+   measures: tokens, rounds, diff size, all-span share and inside-span ratio.
+
+A tie, an incomplete population, unknown token usage or no measured success
+cannot establish a prediction. There is no prediction for repair rate.
+
+### Corpus
+
+The corpus has 30 programs of 153 to 283 lines, in three classes of ten:
+JSON and text processing, integer and checksum code, and binary codecs.
+Twenty programs adapt functions from pinned zlib 1.3.2, zstd 1.5.7 and cJSON 1.7.19
+sources; ten were written for this corpus. Each program has two injected
+defects: a runtime fault on one input path and a logic defect. Fixing only
+one defect still fails the hidden test.
+
+Each item has a hidden driver with at least ten input sets plus the original
+entry point, the exact expected output, a minimal fix and the fix spans in
+original line numbers. The [tool qualification receipt](https://github.com/onehr/evocc/blob/main/tests/contracts/agent-repair-2-tool-preflight-20261008.json)
+records 30 original hidden failures, 30 fixed passes and 60 failures with one
+of the two repairs. EvoCC, GCC UBSan and Clang UBSan each diagnose all 30
+runtime faults. The original `crc-polynomial-combine` times out after its
+sanitizer report; this counts as a failure.
+
+### Conditions and harness
+
+All five conditions use the same system prompt and a 16,384-token response
+limit at temperature 0. The models are DeepSeek V4.1 Flash
+(`deepseek/deepseek-v4.1-flash`) and Qwen3.5 9B (`qwen/qwen3.5-9b`) through
+OpenRouter. Provider selection and default reasoning are not controlled.
+
+- C0 gets the program and two extra sentences: "This program has defects.
+  Return the complete corrected file." It gets no tool output.
+- C1 and C2 are the GCC and Clang UBSan feedback of the first experiment.
+- C3 is the EvoCC check, explain and repair-plan JSON of the first experiment.
+- C4 applies `evo fix --apply` safe repairs to a copy before each model call.
+  The model gets the edited source, the applied diff and C3 feedback. A
+  changed source is scored before the model call, so a pass can use no tokens.
+
+There are three repetitions and at most three rounds. Each round has at most
+two HTTP attempts with the same payload. Two failed responses end the
+repetition as a response error. Response errors leave the repair-rate
+denominator; the completion rate keeps them.
+
+The harness was changed before the tag. One preflight request had waited
+about 14 minutes, although the HTTP timeout was 120 s. That timeout limits
+each socket read. OpenRouter sends whitespace while the model generates, so
+the read never timed out. Each attempt now has a total deadline of 300 s.
+A timed-out attempt is a response error with unknown usage. Unknown usage no
+longer stops the run; each such attempt adds USD 0.05 to the amount compared
+with the cost cap. Slots run six at a time and start in the registered order.
+
+### Preflight and population
+
+Before the tag, each model gave three C0 first responses for each item.
+An item is hard for a model when at least two scored responses fail the
+hidden test. Response errors do not count as failures. Every other item is
+easy for that model. The rule is the owner's; an earlier draft required
+three valid responses, and that extra restriction was removed.
+
+Three earlier preflight campaigns stopped early. One found a visible-contract
+gap in an item, one stopped on unknown transport cost, and one stalled for
+14 minutes. Their receipts are kept. The fresh preflight did not reuse them.
+
+The fresh preflight ran all 180 slots in 2 hours 16 minutes, six at a time.
+Reported cost was USD 2.2509958723. Another 78 attempts had unknown usage;
+the key's aggregate usage grew by USD 2.386516 over the same period.
+
+| Model | Hard | Easy | Easy with at least two passes | Response-error slots | HTTP attempts | Budget exhausted | Deadline reached | Reported cost |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| DeepSeek V4.1 Flash | 1 | 29 | 11 | 50/90 | 153 | 109 | 4 | USD 2.082123 |
+| Qwen3.5 9B | 8 | 22 | 1 | 54/90 | 158 | 46 | 74 | USD 0.168873 |
+
+DeepSeek passed 35 of its 40 scored responses. Most of its errors were
+reasoning that used all 16,384 tokens without a final answer. Qwen failed 31
+of its 36 scored responses. Most of its errors reached the 300 s deadline.
+Its finished attempts took at most 253 s, and nine in ten took at most 172 s.
+
+More than six items were easy for the stronger model. The registered
+decision was therefore to keep the corpus and not to replace items. For
+each model, the five predictions use only the items that the preflight marked
+hard for that model. Easy items are reported but not used for predictions.
+DeepSeek's prediction population is one item, `rolling-window-moments`.
+Qwen's is eight items. These populations are too small for a general claim.
+
+### Measured run
+
+The tag `agent-repair-experiment-2` is commit `0701fea5`. It holds the corpus,
+prompt, predictions, protocol, harness and preflight receipt. The run started
+at 2026-10-08T16:17:48Z from a clean checkout of the tag. It used six parallel
+slots and the protocol's USD 160 reported-cost cap.
+
+The provider key has its own USD 10 spending limit. The run reached it at
+about 22:41Z. From then on, OpenRouter refused every request with HTTP 403 and
+the message "Key limit exceeded". The protocol stops a campaign when the
+provider refuses the key, but the tagged harness checked only HTTP 401 and
+402. It recorded each 403 as a response error and kept starting slots. The
+raw receipt therefore shows 900 repetitions and `stop_reason=completed`;
+914 of its 1,992 HTTP attempts are refusals.
+
+The report applies the registered stop. Slots are repetitions, numbered from 0
+in the registered order. The campaign ends at slot 443, the
+first slot whose first request was refused. Slot 437 also met a refusal in
+its third round and counts as stopped. Slots 444 to 899 are unattempted.
+No model response, score or token count changes. All 914 refusals carry the
+key-limit message in the transcripts.
+
+| Measure | Value |
+| --- | ---: |
+| Attempted repetitions | 444 of 900 |
+| Complete repetitions of the population | 1 of 3 (repetition 2 has 144 of 300 slots) |
+| HTTP attempts | 1,080 (693 first attempts, 387 retries, 3 refused) |
+| Passed / failed / response error / stopped | 144 / 23 / 275 / 2 |
+| Attempts that exhausted 16,384 tokens | 458 (DeepSeek 252, Qwen 206) |
+| Attempts that reached the 300 s deadline | 188 (DeepSeek 5, Qwen 183) |
+| Reported cost | USD 5.8110284793 |
+| Attempts with unknown usage | 188 |
+| Known input / output tokens | 2,375,656 / 10,287,627 |
+| C4 safe repairs applied | 14, in 6 repetitions; no pass before a model call |
+
+The key's aggregate usage rose by USD 7.736067 during the run. The
+difference from the reported cost, USD 1.925038, is not itemized; the
+attempts with unknown usage are its likely source. The run used the whole
+key limit. The protocol's USD 160 cap was not reached.
+
+DeepSeek passed 119 repetitions, ended 104 as response errors and had one
+stop. It returned 31 candidates that failed the hidden test, but each of
+those repetitions later passed or ended as a response error. Qwen passed 25
+repetitions, failed 23 and ended 171 as response errors. In 137 of those
+171, Qwen had already returned at least one failing candidate.
+
+### Results
+
+The tables come from `tools/experiment/report.py` on the
+[raw receipt](https://github.com/onehr/evocc/blob/main/tests/contracts/agent-repair-2-20261009.json).
+Rates are fractions from 0 to 1. Repair rate leaves response errors out of the
+denominator; completion rate counts every attempted repetition. Tokens,
+rounds, diff and span measures use successful repetitions only. The groups
+contain different items and repetitions because the run stopped in
+repetition 2. Read them as descriptions of what ran, not as estimates.
+The transcripts are in two archives,
+[part 1](https://github.com/onehr/evocc/raw/refs/heads/main/tests/contracts/agent-repair-2-transcripts-20261009-part1.tar.gz)
+and [part 2](https://github.com/onehr/evocc/raw/refs/heads/main/tests/contracts/agent-repair-2-transcripts-20261009-part2.tar.gz).
+
+#### All items
+
+| Model | Condition | Pass / attempted | Repair rate | Completion rate | Response errors | Other errors/stops | Mean rounds | Success rounds median | Tokens per success median (range; n) | Unknown success usage | Diff median | All-span share | Inside-span median | Auto repairs / auto-only passes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| deepseek/deepseek-v4.1-flash | c0 | 17/45 | 1 | 0.378 | 28 | 0 | 1 | 1 | 26272 ([7440, 33925]; n=17) | 0 | 6 | 0.824 | 0.667 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c1 | 25/45 | 1 | 0.556 | 20 | 0 | 1.089 | 1 | 16669 ([8331, 53109]; n=25) | 0 | 4 | 0.8 | 1 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c2 | 28/45 | 1 | 0.622 | 17 | 0 | 1.067 | 1 | 17726 ([5121, 41643]; n=28) | 0 | 6.5 | 0.857 | 0.722 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c3 | 27/45 | 0.964 | 0.6 | 17 | 1 | 1.289 | 1 | 18701 ([4960, 44347]; n=27) | 0 | 6 | 0.741 | 0.5 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c4 | 22/44 | 1 | 0.5 | 22 | 0 | 1.25 | 1 | 15460 ([3794, 38219]; n=22) | 0 | 8 | 0.682 | 0.5 | 7/0 |
+| qwen/qwen3.5-9b | c0 | 1/44 | 0.5 | 0.023 | 42 | 0 | 1.432 | 2 | 34873 ([34873, 34873]; n=1) | 0 | 10 | 1 | 0.4 | 0/0 |
+| qwen/qwen3.5-9b | c1 | 6/44 | 0.6 | 0.136 | 34 | 1 | 2 | 2 | 24120.5 ([4557, 36355]; n=4) | 2 | 4.5 | 0.667 | 0.75 | 0/0 |
+| qwen/qwen3.5-9b | c2 | 2/44 | 0.133 | 0.045 | 29 | 0 | 2.25 | 2 | 19101 ([10187, 28015]; n=2) | 0 | 27.5 | 1 | 0.49 | 0/0 |
+| qwen/qwen3.5-9b | c3 | 10/44 | 0.833 | 0.227 | 32 | 0 | 2.136 | 2 | 14691.5 ([5671, 35581]; n=8) | 2 | 6 | 0.6 | 0.45 | 0/0 |
+| qwen/qwen3.5-9b | c4 | 6/44 | 0.6 | 0.136 | 34 | 0 | 2.136 | 2 | 23965 ([4718, 30714]; n=6) | 0 | 4 | 0.833 | 1 | 7/0 |
+
+#### Class binary_codecs
+
+| Model | Condition | Pass / attempted | Repair rate | Completion rate | Response errors | Other errors/stops | Mean rounds | Success rounds median | Tokens per success median (range; n) | Unknown success usage | Diff median | All-span share | Inside-span median | Auto repairs / auto-only passes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| deepseek/deepseek-v4.1-flash | c0 | 5/18 | 1 | 0.278 | 13 | 0 | 1 | 1 | 16113 ([14273, 32262]; n=5) | 0 | 8 | 0.4 | 0.364 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c1 | 6/18 | 1 | 0.333 | 12 | 0 | 1.111 | 1 | 26055 ([13176, 36986]; n=6) | 0 | 6 | 0.5 | 0.486 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c2 | 6/18 | 1 | 0.333 | 12 | 0 | 1.111 | 1 | 18524.5 ([15086, 41643]; n=6) | 0 | 8 | 0.667 | 0.417 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c3 | 7/18 | 1 | 0.389 | 11 | 0 | 1.444 | 1 | 16131 ([7157, 36662]; n=7) | 0 | 8 | 0.286 | 0.25 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c4 | 5/18 | 1 | 0.278 | 13 | 0 | 1.389 | 1 | 11040 ([7166, 38219]; n=5) | 0 | 8 | 0.2 | 0.25 | 6/0 |
+| qwen/qwen3.5-9b | c0 | 0/18 | 0 | 0 | 17 | 0 | 1.444 | NOT OBSERVED | NOT OBSERVED (NOT OBSERVED; n=0) | 0 | NOT OBSERVED | NOT OBSERVED | NOT OBSERVED | 0/0 |
+| qwen/qwen3.5-9b | c1 | 2/18 | 1 | 0.111 | 16 | 0 | 1.778 | 1.5 | 36355 ([36355, 36355]; n=1) | 1 | 5 | 0 | 0.4 | 0/0 |
+| qwen/qwen3.5-9b | c2 | 0/18 | 0 | 0 | 13 | 0 | 2.222 | NOT OBSERVED | NOT OBSERVED (NOT OBSERVED; n=0) | 0 | NOT OBSERVED | NOT OBSERVED | NOT OBSERVED | 0/0 |
+| qwen/qwen3.5-9b | c3 | 3/18 | 0.75 | 0.167 | 14 | 0 | 1.944 | 2 | 20626 ([5671, 35581]; n=2) | 1 | 9 | 0 | 0.222 | 0/0 |
+| qwen/qwen3.5-9b | c4 | 0/18 | 0 | 0 | 17 | 0 | 2.056 | NOT OBSERVED | NOT OBSERVED (NOT OBSERVED; n=0) | 0 | NOT OBSERVED | NOT OBSERVED | NOT OBSERVED | 6/0 |
+
+#### Class integer_and_checksum
+
+| Model | Condition | Pass / attempted | Repair rate | Completion rate | Response errors | Other errors/stops | Mean rounds | Success rounds median | Tokens per success median (range; n) | Unknown success usage | Diff median | All-span share | Inside-span median | Auto repairs / auto-only passes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| deepseek/deepseek-v4.1-flash | c0 | 9/14 | 1 | 0.643 | 5 | 0 | 1 | 1 | 27751 ([7440, 33017]; n=9) | 0 | 4 | 1 | 1 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c1 | 12/14 | 1 | 0.857 | 2 | 0 | 1.143 | 1 | 15585 ([8331, 53109]; n=12) | 0 | 4 | 1 | 1 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c2 | 13/14 | 1 | 0.929 | 1 | 0 | 1.071 | 1 | 14989 ([5121, 30826]; n=13) | 0 | 4 | 1 | 1 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c3 | 11/14 | 1 | 0.786 | 3 | 0 | 1.286 | 1 | 20931 ([4960, 44347]; n=11) | 0 | 4 | 1 | 1 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c4 | 10/14 | 1 | 0.714 | 4 | 0 | 1.214 | 1 | 15777 ([3794, 37914]; n=10) | 0 | 4 | 1 | 1 | 1/0 |
+| qwen/qwen3.5-9b | c0 | 0/14 | NOT OBSERVED | 0 | 14 | 0 | 1.429 | NOT OBSERVED | NOT OBSERVED (NOT OBSERVED; n=0) | 0 | NOT OBSERVED | NOT OBSERVED | NOT OBSERVED | 0/0 |
+| qwen/qwen3.5-9b | c1 | 4/14 | 0.8 | 0.286 | 9 | 0 | 2.143 | 2 | 15917 ([4557, 32324]; n=3) | 1 | 4 | 1 | 1 | 0/0 |
+| qwen/qwen3.5-9b | c2 | 1/14 | 0.2 | 0.071 | 9 | 0 | 2.357 | 2 | 10187 ([10187, 10187]; n=1) | 0 | 5 | 1 | 0.8 | 0/0 |
+| qwen/qwen3.5-9b | c3 | 5/14 | 0.833 | 0.357 | 8 | 0 | 2.286 | 2 | 12708 ([8545, 33270]; n=5) | 0 | 4 | 1 | 1 | 0/0 |
+| qwen/qwen3.5-9b | c4 | 4/14 | 0.667 | 0.286 | 8 | 0 | 2.357 | 2 | 14248 ([4718, 28922]; n=4) | 0 | 4 | 1 | 1 | 1/0 |
+
+#### Class json_and_text
+
+| Model | Condition | Pass / attempted | Repair rate | Completion rate | Response errors | Other errors/stops | Mean rounds | Success rounds median | Tokens per success median (range; n) | Unknown success usage | Diff median | All-span share | Inside-span median | Auto repairs / auto-only passes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| deepseek/deepseek-v4.1-flash | c0 | 3/13 | 1 | 0.231 | 10 | 0 | 1 | 1 | 33820 ([26076, 33925]; n=3) | 0 | 9 | 1 | 0.444 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c1 | 7/13 | 1 | 0.538 | 6 | 0 | 1 | 1 | 16776 ([10568, 34544]; n=7) | 0 | 4 | 0.714 | 1 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c2 | 9/13 | 1 | 0.692 | 4 | 0 | 1 | 1 | 17753 ([16262, 33153]; n=9) | 0 | 6 | 0.778 | 1 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c3 | 9/13 | 0.9 | 0.692 | 3 | 1 | 1.077 | 1 | 21170 ([6586, 36259]; n=9) | 0 | 6 | 0.778 | 0.333 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c4 | 7/12 | 1 | 0.583 | 5 | 0 | 1.083 | 1 | 18595 ([7299, 36300]; n=7) | 0 | 8 | 0.571 | 0.333 | 0/0 |
+| qwen/qwen3.5-9b | c0 | 1/12 | 1 | 0.083 | 11 | 0 | 1.417 | 2 | 34873 ([34873, 34873]; n=1) | 0 | 10 | 1 | 0.4 | 0/0 |
+| qwen/qwen3.5-9b | c1 | 0/12 | 0 | 0 | 9 | 1 | 2.167 | NOT OBSERVED | NOT OBSERVED (NOT OBSERVED; n=0) | 0 | NOT OBSERVED | NOT OBSERVED | NOT OBSERVED | 0/0 |
+| qwen/qwen3.5-9b | c2 | 1/12 | 0.2 | 0.083 | 7 | 0 | 2.167 | 2 | 28015 ([28015, 28015]; n=1) | 0 | 50 | 1 | 0.18 | 0/0 |
+| qwen/qwen3.5-9b | c3 | 2/12 | 1 | 0.167 | 10 | 0 | 2.25 | 2 | 35029 ([35029, 35029]; n=1) | 1 | 9.5 | 0.5 | 0.341 | 0/0 |
+| qwen/qwen3.5-9b | c4 | 2/12 | 0.667 | 0.167 | 9 | 0 | 2 | 2 | 29988 ([29262, 30714]; n=2) | 0 | 12 | 0.5 | 0.55 | 0/0 |
+
+#### Items hard for that model in preflight (prediction population)
+
+| Model | Condition | Pass / attempted | Repair rate | Completion rate | Response errors | Other errors/stops | Mean rounds | Success rounds median | Tokens per success median (range; n) | Unknown success usage | Diff median | All-span share | Inside-span median | Auto repairs / auto-only passes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| deepseek/deepseek-v4.1-flash | c0 | 1/1 | 1 | 1 | 0 | 0 | 1 | 1 | 27751 ([27751, 27751]; n=1) | 0 | 4 | 1 | 1 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c1 | 1/1 | 1 | 1 | 0 | 0 | 1 | 1 | 13592 ([13592, 13592]; n=1) | 0 | 7 | 1 | 0.429 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c2 | 1/1 | 1 | 1 | 0 | 0 | 1 | 1 | 13770 ([13770, 13770]; n=1) | 0 | 7 | 1 | 0.429 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c3 | 1/1 | 1 | 1 | 0 | 0 | 1 | 1 | 12401 ([12401, 12401]; n=1) | 0 | 4 | 1 | 1 | 0/0 |
+| deepseek/deepseek-v4.1-flash | c4 | 1/1 | 1 | 1 | 0 | 0 | 1 | 1 | 14442 ([14442, 14442]; n=1) | 0 | 4 | 1 | 1 | 0/0 |
+| qwen/qwen3.5-9b | c0 | 0/12 | 0 | 0 | 11 | 0 | 1.667 | NOT OBSERVED | NOT OBSERVED (NOT OBSERVED; n=0) | 0 | NOT OBSERVED | NOT OBSERVED | NOT OBSERVED | 0/0 |
+| qwen/qwen3.5-9b | c1 | 0/12 | 0 | 0 | 10 | 0 | 2.333 | NOT OBSERVED | NOT OBSERVED (NOT OBSERVED; n=0) | 0 | NOT OBSERVED | NOT OBSERVED | NOT OBSERVED | 0/0 |
+| qwen/qwen3.5-9b | c2 | 1/12 | 0.143 | 0.083 | 5 | 0 | 2.333 | 2 | 28015 ([28015, 28015]; n=1) | 0 | 50 | 1 | 0.18 | 0/0 |
+| qwen/qwen3.5-9b | c3 | 1/12 | 0.5 | 0.083 | 10 | 0 | 1.833 | 2 | 35029 ([35029, 35029]; n=1) | 0 | 11 | 0 | 0.182 | 0/0 |
+| qwen/qwen3.5-9b | c4 | 1/12 | 0.333 | 0.083 | 9 | 0 | 2.083 | 2 | 30714 ([30714, 30714]; n=1) | 0 | 20 | 0 | 0.1 | 6/0 |
+
+### Prediction results
+
+Each model's predictions use only its preflight-hard items. For DeepSeek
+that is one item, `rolling-window-moments`, which ran once per condition in
+repetition 1. For Qwen it is eight items, with twelve attempted repetitions
+per condition. The run stopped before either population was complete, so no
+prediction can hold. The table also gives each observed comparison. `n` is
+the number of successful repetitions behind a median or share.
+
+| Model | Prediction | Result | Observed on the hard items | Reasons |
+| --- | --- | --- | --- | --- |
+| DeepSeek V4.1 Flash | P1 token cost | did not hold | C3 12,401 tokens; C1 13,592; C2 13,770 (n=1 each) | incomplete population |
+| DeepSeek V4.1 Flash | P2 repair size | did not hold | C3 4 lines; C1 7; C2 7 (n=1 each) | incomplete population |
+| DeepSeek V4.1 Flash | P3 repair location | did not hold | all-span share 1 in C3, C1 and C2 | incomplete population; tie |
+| DeepSeek V4.1 Flash | P4 safe automation | did not hold | rounds C4 1, C3 1; tokens C4 14,442, C3 12,401 | incomplete population; tie in rounds; C4 used more tokens |
+| DeepSeek V4.1 Flash | P5 no-feedback control | did not hold | C0 passed in one round with 27,751 tokens, a 4-line diff, every span touched and inside-span ratio 1 | incomplete population; ties in rounds and spans; C0 diff and inside-span ratio better than C1 and C2 |
+| Qwen3.5 9B | P1 token cost | did not hold | C3 35,029 tokens; C2 28,015 (n=1 each); C1 no success | incomplete population; no C1 success; C3 used more tokens than C2 |
+| Qwen3.5 9B | P2 repair size | did not hold | C3 11 lines; C2 50 (n=1 each); C1 no success | incomplete population; no C1 success |
+| Qwen3.5 9B | P3 repair location | did not hold | all-span share C3 0, C2 1 (n=1 each); C1 no success | incomplete population; no C1 success; C3 lower than C2 |
+| Qwen3.5 9B | P4 safe automation | did not hold | rounds C4 2, C3 2; tokens C4 30,714, C3 35,029 (n=1 each) | incomplete population; tie in rounds |
+| Qwen3.5 9B | P5 no-feedback control | did not hold | no success in C0 or C1; one each in C2, C3 and C4 | incomplete population; no C0 or C1 success |
+
+The proposed general feedback advantage did not hold on this corpus. That
+statement follows the registered rule for P5. It is not evidence that the
+conditions are equal: most comparisons rest on one success or none.
+
+Over all items, the conditions with tool feedback completed more DeepSeek
+repetitions than C0: 0.500 to 0.622 against 0.378. For Qwen, C3 had the
+highest completion rate, 0.227, against 0.023 for C0. These are descriptive.
+There is no registered prediction for repair or completion rate, the run
+stopped in repetition 2, and the groups contain different items.
+
+### Limits
+
+- **One run, stopped early.** The provider key limit ended the run after 444
+  of 900 repetitions. Repetition 1 is complete; repetition 2 is partial and
+  repetition 3 did not start. The protocol does not permit a continuation.
+- **The stop was applied after the run.** The tagged harness did not stop on
+  the HTTP 403 key refusal. The report applies the registered stop; the raw
+  receipt keeps the 914 refused attempts.
+- **Two models.** DeepSeek V4.1 Flash and Qwen3.5 9B, through OpenRouter.
+  Provider routing and default reasoning were not controlled.
+- **Our corpus.** The 30 programs are adaptations and constructions with
+  injected defects, ten of them written for this corpus. They are not
+  observed upstream bugs.
+- **Response delivery dominates.** Most failures are reasoning that used the
+  16,384-token budget, or Qwen attempts that reached the 300 s deadline.
+  These are delivery limits, not wrong repairs. One finished Qwen attempt
+  took 299.7 s, so the deadline probably also cut some slow responses.
+- **Small prediction populations.** The hard-item rule left one DeepSeek item
+  and eight Qwen items. Response errors made most items easy by rule, not
+  because the model repaired them.
+- **Conditional measures.** Tokens, rounds, diff size and span overlap use
+  successful repetitions. Different success sets can drive a difference.
+- **Few safe repairs.** `evo fix --apply` changed 6 of the attempted C4
+  repetitions, and none passed before a model call. C4 was mostly C3 with an
+  empty applied diff.
+
+### Reproduce
+
+Use a clean checkout of the tag, the release `evo` and `evocc` binaries, the
+sealed image and a provider key with enough limit for the full plan.
+
+```sh
+git checkout agent-repair-experiment-2
+python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --dry-run --out /private/tmp/repair-2-replay
+python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --corpus-tag agent-repair-experiment-2 --parallel 6 --out /private/tmp/repair-2-replay
+python3 tools/experiment/report.py /private/tmp/repair-2-replay/receipt.json
+```
+
+The tagged harness does not stop on an HTTP 403 key refusal. Watch the key
+limit. The report applies the registered stop when it reads the receipt.

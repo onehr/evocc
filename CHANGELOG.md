@@ -14,6 +14,11 @@ The first public version.
   including response failures. EvoCC feedback passed 87/90 attempts, GCC plus UBSan
   88/90, and Clang plus UBSan 82/90; all successful repairs took one round. The report
   makes no general repair advantage claim.
+- A second preregistered repair experiment with 30 two-defect programs, five feedback
+  conditions (C0 to C4), two models and new cost, diff-size and fix-span measures. The
+  provider key limit stopped it after 444 of 900 repetitions; all outcomes, refused attempts
+  and transcripts are retained. None of the five predictions held for either model, and the
+  report states the reason for each. The harness gained a total HTTP deadline and `--parallel`.
 - A C compiler for AArch64, written in Rust: its own preprocessor, parser, three intermediate
   representations (C-HIR, EvoIR and EvoMIR), optimizer, register allocator and assembly emitter.
   The platform assembler and linker build the final program.

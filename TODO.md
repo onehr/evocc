@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a, P18 | P01 through P17 and P19 are complete in their recorded scope. P18's tool qualification passes. The current model preflight stopped after four of 180 slots: two scored and two response errors. Both stopped receipts are retained; model difficulty, registration and formal measurement remain incomplete. P17 and its proposed P17a follow-up remain separate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a | P01 through P19 are complete in their recorded scope. P18's registered run stopped at the provider key limit after 444 of 900 repetitions; none of its five predictions held. P17 and its proposed P17a follow-up remain separate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -939,7 +939,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   Capture cap: 500 MiB at
   `.evidence/diagnostics/20261008/repair-experiment-prerequisites/`.
 
-- [ ] **P18 — Measure repair cost, edit precision and safe automation** — `OPEN`, P2.
+- [x] **P18 — Measure repair cost, edit precision and safe automation** — `DONE`.
   Extend the existing experiment, not its frozen result: 30 composed C items
   of 150–400 lines, each with interacting UB and another defect, at least ten
   hidden inputs, minimal fixes and original-coordinate fix spans. Qualify
@@ -1011,6 +1011,34 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   prediction outcomes, report, changelog and full gate. Budgets: +150 harness
   lines (owner-approved continuation exception) and +80 report lines.
   This is not a completion or repair-benefit claim.
+  Run record (2026-10-09). Commit `55214a6e` fixes the 14-minute stall:
+  urllib's 120 s timeout limits each socket read, and OpenRouter's keep-alive
+  whitespace kept the read alive. Each HTTP attempt now has a 300 s total
+  deadline. Unknown usage adds a USD 0.05 reserve instead of stopping.
+  `--parallel N` starts slots in registered order under one lock. The harness
+  change is +87/-34 lines and the report change +76/-30; 78 harness, report
+  and secret tests pass. The fresh preflight ran 180/180 slots for USD
+  2.2509958723 reported, with 78 unknown-usage attempts. DeepSeek has 1 hard
+  and 29 easy items; Qwen has 8 hard and 22 easy. More than six items are easy
+  for the stronger model, so the corpus stays unchanged and the predictions
+  use each model's hard items
+  ([preflight receipt](tests/contracts/agent-repair-2-preflight.json)).
+  The tag `agent-repair-experiment-2` is `0701fea5`. The measured run started at
+  2026-10-08T16:17:48Z with six parallel slots and the USD 160 cap. The key's
+  own USD 10 limit stopped it at slot 443: OpenRouter answered HTTP 403 "Key
+  limit exceeded". The tagged harness stops only on 401 and 402, so the raw
+  [receipt](tests/contracts/agent-repair-2-20261009.json) shows 900 rows,
+  914 refused attempts and `stop_reason=completed`. The report applies the
+  registered key-refusal stop: 444 repetitions attempted and 456 unattempted,
+  1,080 HTTP attempts, USD 5.8110284793 reported and 188 unknown-usage
+  attempts. Outcomes: 144 passed, 23 failed, 275 response errors, 2 stopped.
+  For both models, all five predictions did not hold: the population is
+  incomplete, with further ties and missing C0/C1 successes. Two transcript
+  archives are below 10 MiB; the secret scans pass. The
+  [report](book/src/evaluation-agents.md#experiment-2), README RQ6 and the
+  changelog record the result. Not done: the harness does not stop on the
+  HTTP 403 key refusal, and the unattempted repetitions cannot be continued
+  under this registration.
 
 ### Remaining verification and application sequence
 

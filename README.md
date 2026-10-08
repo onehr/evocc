@@ -763,6 +763,13 @@ bundles, not JSON formatting alone. See the [method, class tables and limits](bo
 
 Every successful repair came on the first response, so this corpus did not separate the conditions: the result is a ceiling effect, not evidence that the conditions are equal.
 
+A second registered experiment (30 harder programs, five conditions, two models) stopped at the
+provider key limit after 444 of 900 repetitions ([receipt](tests/contracts/agent-repair-2-20261009.json)).
+DeepSeek V4.1 Flash, on its one preflight-hard item: P1 to P5 did not hold. The population is
+incomplete; P3 to P5 also tie. Qwen3.5 9B, on its eight hard items: P1 to P5 did not hold. The
+population is incomplete; C1 has no success (P1 to P3), P4 ties on rounds, and C0 has no success
+(P5). See [Experiment 2](book/src/evaluation-agents.md#experiment-2).
+
 ### 8 Related work
 
 **Verified compilers.** CompCert [1] proves its passes correct in Coq, from Clight [2], a large C
