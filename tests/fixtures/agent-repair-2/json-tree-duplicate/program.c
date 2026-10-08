@@ -1,4 +1,10 @@
 /* Altered cJSON source; MIT notice retained in ../LICENSE.cjson. */
+/* Duplicate into a caller-owned pool of at most sixteen nodes. Copies own
+ * their fields; recursive mode creates independent children, while
+ * nonrecursive mode omits children. Missing input or pool exhaustion returns
+ * null and preserves the pool checkpoint. Only evaluate seeds 0..11 are
+ * supported.
+ */
 typedef struct Node Node;
 struct Node
 {

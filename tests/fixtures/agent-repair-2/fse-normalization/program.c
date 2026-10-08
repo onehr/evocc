@@ -2,6 +2,9 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * BSD license selected; see origin.md and ../LICENSE.zstd.
  */
+/* Empty histograms are supported adapter inputs and report UINT_MAX without
+ * producing a normalization table. Only evaluate seeds 0..11 are supported.
+ */
 typedef unsigned char BYTE;
 typedef unsigned U32;
 typedef unsigned short U16;

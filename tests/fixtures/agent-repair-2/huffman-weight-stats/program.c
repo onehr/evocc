@@ -2,6 +2,10 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * BSD license selected; see origin.md and ../LICENSE.zstd.
  */
+/* Only uncompressed-nibble weight headers are supported; FSE-compressed
+ * headers are refused. Weight corruption returns (size_t)-1; an excessive
+ * derived table log returns (size_t)-2. Only evaluate seeds 0..11 are supported.
+ */
 typedef unsigned char BYTE;
 typedef unsigned U32;
 typedef unsigned short U16;

@@ -1,4 +1,8 @@
 /* Altered zlib source; license retained in ../LICENSE.zlib. */
+/* Null data means checksum initialization (value 1) for every length.
+ * Negative second-stream combination lengths return 0xffffffffU.
+ * Only evaluate seeds 0..11 are supported.
+ */
 static unsigned adler_update(unsigned adler, const unsigned char *buf,
                               unsigned length)
 {

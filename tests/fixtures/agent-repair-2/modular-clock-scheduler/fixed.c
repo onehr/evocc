@@ -1,4 +1,13 @@
 /* Written for this corpus; see origin.md for the algorithm contract. */
+/* Periodic scheduler for eight distinct IDs over modulo-2^32 unsigned ticks.
+ * Delay/advance are 0..1000000 and periods are 1..1000000; active deadlines
+ * stay within half the tick ring. Each advance counts every elapsed period
+ * and leaves active deadlines strictly in the future.
+ * Add rejects duplicate IDs/full storage; add/restart reject invalid bounds.
+ * Cancellation retains firing history; a null optional scheduler is a no-op.
+ * Firing counts/digests are unsigned 64-bit. Only evaluate seeds 0..11 are
+ * supported.
+ */
 typedef struct {
     unsigned id;
     unsigned deadline;

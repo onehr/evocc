@@ -1,4 +1,8 @@
 /* Altered cJSON source; MIT notice retained in ../LICENSE.cjson. */
+/* Null text prints an empty JSON string. The bounded inline buffer cannot
+ * grow; insufficient capacity returns zero.
+ * Only evaluate seeds 0..11 are supported.
+ */
 typedef struct
 {
     unsigned char data[128];

@@ -1,4 +1,8 @@
 /* Altered cJSON source; MIT notice retained in ../LICENSE.cjson. */
+/* Identical nodes with supported types compare equal; otherwise missing text
+ * in a string node makes the comparison unequal. Null nodes compare unequal.
+ * Only evaluate seeds 0..11 are supported.
+ */
 typedef struct Node Node;
 struct Node
 {

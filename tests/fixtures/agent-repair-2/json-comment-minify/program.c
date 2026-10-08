@@ -1,4 +1,7 @@
 /* Altered cJSON source; MIT notice retained in ../LICENSE.cjson. */
+/* Null documents are refused and report produced length zero.
+ * Only evaluate seeds 0..11 are supported.
+ */
 static unsigned text_length(const char *text)
 {
     unsigned n = 0;

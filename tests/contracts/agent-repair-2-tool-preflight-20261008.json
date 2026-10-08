@@ -1,17 +1,17 @@
 {
   "schema": "agent-repair.preflight.v1",
   "date": "2026-10-08",
-  "claim": "Tool qualification only. Model difficulty preflight and registration have not run. This is not full corpus eligibility or repair-benefit evidence.",
+  "claim": "Tool qualification only, repeated after model-visible behavior comments were clarified. Model preflight stopped before any score; registration remains pending. This is not full corpus eligibility or repair-benefit evidence.",
   "population": {"json_and_text": 10, "integer_and_checksum": 10, "binary_codecs": 10},
   "synthetic_items": 10,
   "public_source_items": 20,
   "checks": {"fixed_hidden_pass": 30, "buggy_hidden_fail": 30, "single_repair_hidden_fail": 60, "fixed_evo_check_pass": 30, "ub_evo_diagnosed": 30, "ub_gcc_diagnosed": 30, "ub_clang_diagnosed": 30, "fixed_sanitizer_clean_per_compiler": 30},
   "evo_ub_codes": {"E3002": 1, "E3004": 5, "E3005": 5, "E3009": 11, "E3011": 8},
-  "command": "EVOCC_REPAIR_CAPTURE=.evidence/diagnostics/20261008/repair-experiment-prerequisites/corpus-v2-qualification-revised.json python3 -m unittest tools.experiment.tests.test_corpus_v2",
+  "command": "EVOCC_REPAIR_CAPTURE=.evidence/diagnostics/20261008/repair-experiment-prerequisites/corpus-v2-contracts-qualification.json python3 -m unittest tools.experiment.tests.test_corpus_v2",
   "tests": {"passed": 2, "failed": 0, "skipped": 0, "host_checks": 60, "native_variants": 120},
-  "capture": ".evidence/diagnostics/20261008/repair-experiment-prerequisites/corpus-v2-qualification-revised.json",
-  "capture_sha256": "d982e1a979848f66b3dbdeccb329089199732569e83510ebf4fe82925482001e",
-  "capture_bytes": 545866,
+  "capture": ".evidence/diagnostics/20261008/repair-experiment-prerequisites/corpus-v2-contracts-qualification.json",
+  "capture_sha256": "e69a2483d205cce674fafd8cbe1aad257439e067957f3ceef84b07321417c44c",
+  "capture_bytes": 545909,
   "sealed_image": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
   "evo_sha256": "075508aaf8562c1e7d6e893933fc34ae70f8ca5633314e98d7690a95bad6b19f",
   "evocc_sha256": "6164c791586569c1e3d4928e0f9e07702eaf23c84c598a4768aa58630c0fab89",
@@ -21,7 +21,10 @@
     "Replace UB mutations that still matched neutral scoring after the other defect was fixed. Undefined execution alone does not guarantee an observable failure.",
     "Replace array-member-overflow drafts that only UBSan diagnosed, and adjust one buffer layout that default GCC UBSan did not diagnose.",
     "Reduce only the unregistered original-main workload where interpreter fuel was exhausted. Keep all twelve hidden input sets and original-main checks.",
-    "Require fixed main's expected low-byte return value rather than zero. A completed execution can return a nonzero result."
+    "Require fixed main's expected low-byte return value rather than zero. A completed execution can return a nonzero result.",
+    "Add short model-visible behavior/domain comments to 17 items, including stable ordering, catch-up policy and null/error conventions. All 34 original/fixed algorithm suffixes remain byte-identical to a03a4f50. Hidden inputs and expected outputs do not change.",
+    "Recompute the sorting insertion span from actual diff output: repeated braces changed its selected anchor after leading comments were added. All minimal changes again fall within the registered spans."
   ],
-  "model_calls": 0
+  "model_calls_in_tool_qualification": 0,
+  "interrupted_model_preflight": "tests/contracts/agent-repair-2-preflight-interrupted-20261008.json"
 }

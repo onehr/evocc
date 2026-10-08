@@ -1,4 +1,8 @@
 /* Altered cJSON source; MIT notice retained in ../LICENSE.cjson. */
+/* Token storage is 32 data bytes including the zero terminator. An encoding
+ * that cannot fit is refused with return zero, without writing past the data.
+ * Only evaluate seeds 0..11 are supported.
+ */
 typedef struct
 {
     unsigned length;

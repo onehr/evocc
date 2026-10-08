@@ -1,4 +1,10 @@
 /* Written for this corpus; see origin.md for the algorithm contract. */
+/* Segment tree over 0..64 byte values (0..255). Hashes are the ordered fold
+ * h = h * 2 + byte modulo 2^32; concatenation preserves byte order.
+ * Queries use half-open bounds 0 <= first <= last <= count; empty ranges and
+ * invalid bounds return the empty segment. Updates need an existing index
+ * and a byte value. Only evaluate seeds 0..11 are supported.
+ */
 typedef struct {
     unsigned hash;
     unsigned length;

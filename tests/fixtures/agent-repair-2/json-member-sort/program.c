@@ -1,4 +1,9 @@
 /* Altered cJSON source; MIT notice retained in ../LICENSE.cjson. */
+/* Sort caller-owned member lists by ASCII name, case-sensitively or with
+ * ASCII case folding. Missing names sort last; equal keys keep insertion order.
+ * Preserve each member's value and coherent forward/backward links.
+ * Only evaluate seeds 0..11 are supported.
+ */
 typedef struct Member Member;
 struct Member
 {

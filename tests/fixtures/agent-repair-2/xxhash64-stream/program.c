@@ -3,6 +3,9 @@
  * xxHash portions: Copyright (c) Yann Collet - Meta Platforms, Inc.
  * BSD license selected; see origin.md and ../LICENSE.zstd.
  */
+/* A null-input update is a successful no-op, regardless of the byte count.
+ * Portable rotations accept zero. Only evaluate seeds 0..11 are supported.
+ */
 typedef unsigned char xxh_u8;
 typedef unsigned xxh_u32;
 typedef unsigned long long xxh_u64;

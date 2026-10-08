@@ -1,4 +1,9 @@
 /* Altered cJSON source; MIT notice retained in ../LICENSE.cjson. */
+/* Array members are caller-owned and remain live during edits.
+ * The first child's prev link stores the tail. Detaching a missing/null item
+ * returns null without changing the array. Only evaluate seeds 0..11 are
+ * supported.
+ */
 typedef struct Item Item;
 struct Item
 {

@@ -1,4 +1,8 @@
 /* Altered cJSON source; MIT notice retained in ../LICENSE.cjson. */
+/* Missing keys/array members, including paths continuing after a missing
+ * value, return null. Lookup uses caller-owned nodes.
+ * Only evaluate seeds 0..11 are supported.
+ */
 typedef struct Node Node;
 struct Node
 {

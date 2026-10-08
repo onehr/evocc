@@ -1,4 +1,8 @@
 /* Altered cJSON source; MIT notice retained in ../LICENSE.cjson. */
+/* Hexadecimal fragments contain four characters; invalid or null fragments
+ * return 0xffffffffU, distinct from valid U+0000. String scanning uses bounded
+ * input/output buffers. Only evaluate seeds 0..11 are supported.
+ */
 static unsigned parse_hex4(const unsigned char *input)
 {
     unsigned h = 0;

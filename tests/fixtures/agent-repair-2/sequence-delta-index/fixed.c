@@ -1,4 +1,10 @@
 /* Written for this corpus; see origin.md for the algorithm contract. */
+/* Delta index for 0..32 signed 32-bit values, with a zero initial baseline.
+ * Deltas and range sums use signed 64-bit values. Get/sum/find require an
+ * unmodified successful build. Get needs index < count; sums use half-open
+ * valid ranges. Find returns the first value at least the threshold, or count.
+ * Malformed varints are rejected. Only evaluate seeds 0..11 are supported.
+ */
 typedef struct {
     unsigned char bytes[192];
     unsigned offsets[8];

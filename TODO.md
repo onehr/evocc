@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a, P18 | P01 through P17 and P19 are complete in their recorded scope. P18's 30-item corpus passes tool qualification and its harness is implemented; model difficulty preflight and registration remain pending. P17 and its proposed P17a follow-up remain separate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a, P18 | P01 through P17 and P19 are complete in their recorded scope. P18's model-visible behavior contracts are clarified and tool qualification passes again; the initial model preflight stopped before any score. Its receipt is retained, and model difficulty plus registration remain pending. P17 and its proposed P17a follow-up remain separate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -945,7 +945,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   hidden inputs, minimal fixes and original-coordinate fix spans. Qualify
   originals, fixes, UB findings and three C0 preflight responses before a new
   registration. Compare C0–C4 with DeepSeek V4.1 Flash and the delegated small
-  model choice, `qwen/qwen3.5-9b`; no paid call has been made. Freeze five
+  model choice, `qwen/qwen3.5-9b`. Freeze five
   predictions, common prompts, retry/cost rules and the 16,384-token response
   limit before measurement. Report response errors separately, token cost,
   diff size, span overlap and safe auto-repairs; publish negative results too.
@@ -961,6 +961,22 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   The corpus has 20 public-source adaptations and ten marked synthetic items.
   Commit `1e98993f` adds 115 harness lines and 58 report lines; 56 mock harness
   and report tests pass. None of these results establishes model difficulty.
+  The first C0 preflight at `a03a4f50` was stopped after source review found
+  that the sorting item's hidden stable-order requirement was absent from the
+  model-visible program. No score completed. The first response had no final
+  C file and exhausted 16,384 tokens (reported cost USD 0.00309618); the
+  interrupted identical retry has unknown per-request usage. Preserve the
+  [receipt](tests/contracts/agent-repair-2-preflight-interrupted-20261008.json)
+  and [transcript](tests/contracts/agent-repair-2-preflight-interrupted-20261008.tar.gz).
+  This is neither model difficulty evidence nor a measured repair result.
+  Model-visible contracts are clarified in 17 items without changing any
+  algorithm suffix, hidden input or expected output. Both tool-qualification
+  tests pass again (60 host checks, 120 native variants); 59 harness/report/
+  secret tests pass. No compiler or proof semantics change.
+  The provider's read-only key-usage query at 2026-10-08T10:56:04Z reports
+  USD 0.005037825 for the day (USD 0.203326857 lifetime); these aggregates do
+  not identify the retry's exact charge. Reserve USD 1 of the total preflight
+  allowance for this attempt; a new draft's cap is at most USD 11, not USD 12.
   Specify the span coordinates, mixed-defect classes, preflight eligibility,
   prediction comparisons and dry-run cost cap before the new tag.
   The required P17 ceiling-effect sentence is added to README RQ6 and the book
