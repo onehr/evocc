@@ -4,6 +4,8 @@
 //! the backend for both AArch64 profiles. Every entry is the SHA-256 of the
 //! complete assembly, or the exact refusal, recorded before the argument,
 //! result, variadic, frame and profile facts moved into target descriptions.
+//! The comparison restores only the historical Linux producer version; the
+//! driver tests separately require the emitted version to match this release.
 //! Extraction must reproduce every entry; this is not an ABI oracle.
 
 use std::io::Write;
@@ -437,7 +439,32 @@ fn outcome(target: Target, shape: &Shape, ir: &str) -> String {
         RelocationModel::PositionIndependent,
         &(shape.options)(),
     ) {
-        Ok(text) => format!("asm {}", evocc_proof::sha256_hex(text.as_bytes())),
+        Ok(text) => {
+            let text = if target == Target::Linux {
+                let producer = format!(
+                    ".ident \"EvoCC {} aarch64-unknown-linux-gnu\"\n",
+                    env!("CARGO_PKG_VERSION")
+                );
+                assert_eq!(text.matches(&producer).count(), 1, "{}", shape.name);
+                assert_eq!(
+                    text.lines()
+                        .filter(|line| line.starts_with(".ident "))
+                        .count(),
+                    1,
+                    "{}",
+                    shape.name
+                );
+                // Compare the unchanged historical hashes in memory. Never
+                // rewrite emitted artifacts or relax any instruction bytes.
+                text.replace(
+                    &producer,
+                    ".ident \"EvoCC 0.0.0 aarch64-unknown-linux-gnu\"\n",
+                )
+            } else {
+                text
+            };
+            format!("asm {}", evocc_proof::sha256_hex(text.as_bytes()))
+        }
         Err(stop) => format!("stop {} {}", stop.component(), stop.detail()),
     }
 }
