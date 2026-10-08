@@ -162,22 +162,27 @@ fn run(compiler: &Path, args: &[OsString]) -> Result<i32> {
 }
 
 fn prove(compiler: &Path, args: &[String], json: bool) -> Result<i32> {
-    let input = args
-        .first()
-        .ok_or("usage: evo prove FILE.c -o OUT.s [--entry NAME ...]")?;
+    let mut input = None;
     let mut out = None;
     let mut entries = BTreeSet::new();
-    let mut rest = args[1..].iter();
-    while let Some(flag) = rest.next() {
-        let value = rest.next().ok_or("missing output path or entry name")?;
-        match flag.as_str() {
-            "-o" if out.is_none() => out = Some(value),
+    let mut rest = args.iter();
+    while let Some(argument) = rest.next() {
+        match argument.as_str() {
+            "-o" if out.is_none() => {
+                out = Some(rest.next().ok_or("missing output path or entry name")?);
+            }
             "--entry" => {
+                let value = rest.next().ok_or("missing output path or entry name")?;
                 entries.insert(value.clone());
             }
-            _ => return Err(format!("unknown prove option: {flag}").into()),
+            flag if flag.starts_with('-') => {
+                return Err(format!("unknown prove option: {flag}").into());
+            }
+            _ if input.is_none() => input = Some(argument),
+            _ => return Err("prove requires exactly one C file".into()),
         }
     }
+    let input = input.ok_or("usage: evo prove FILE.c -o OUT.s [--entry NAME ...]")?;
     let out = out.ok_or("prove requires -o OUT.s")?;
     let root = temporary("evo-proof")?;
     let mut errors = Vec::new();

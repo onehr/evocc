@@ -98,6 +98,8 @@ The first public version.
 
 ### Fixed
 
+- `evo prove` accepts the input file before, between or after its output and
+  entry options. All file-bearing command JSON tests cover both option orders.
 - `evo fix` accepts its file before or after options. Removing an unused declaration also
   removes its otherwise empty line, without removing adjacent comments or code.
 - Linux assembly and checked assembly records use the same release version as `evocc --version`.

@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a | P01 through P17 are complete in their recorded scope. P17 records a completed negative comparison, not a general agent-repair advantage. Its response-budget and E3004 follow-up is P17a; no new run is started. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a, P18, P19 | P01 through P17 are complete in their recorded scope. P19 closes the command-order prerequisite for P18. P18 uses the approved new tag and two-model request budget; no model requests or registration yet. P17 and its proposed P17a follow-up remain separate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -919,6 +919,41 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   separately from hidden-test correctness. Any new model requests need a new
   registration; do not tune or rerun failed cells of P17. This is an untested
   improvement proposal, not an observed compiler defect or an active campaign.
+
+- [ ] **P19 — Consistent options and checkout defaults** — `RETEST`, P1.
+  D07 supplies the four fixes and its retained full-workspace acceptance.
+  The broader option-order requirement also exposed `evo prove -o OUT.s FILE.c`:
+  the public regression failed with `unknown prove option: .../out.s` before
+  implementation. The parser now accepts one file before, between or after
+  its existing option pairs. Twelve JSON command tests pass, including six
+  prove permutations, ten invalid-argument controls, and both JSON orders for
+  run/check/explain/build. No proof pipeline or sysroot semantics changed.
+  The complete workspace gate on the new parser is still required.
+  Capture cap: 500 MiB at
+  `.evidence/diagnostics/20261008/repair-experiment-prerequisites/`.
+
+- [ ] **P18 — Measure repair cost, edit precision and safe automation** — `OPEN`, P2.
+  Extend the existing experiment, not its frozen result: 30 composed C items
+  of 150–400 lines, each with interacting UB and another defect, at least ten
+  hidden inputs, minimal fixes and original-coordinate fix spans. Qualify
+  originals, fixes, UB findings and three C0 preflight responses before a new
+  registration. Compare C0–C4 with DeepSeek V4.1 Flash and the delegated small
+  model choice, `qwen/qwen3.5-9b`; no paid call has been made. Freeze five
+  predictions, common prompts, retry/cost rules and the 16,384-token response
+  limit before measurement. Report response errors separately, token cost,
+  diff size, span overlap and safe auto-repairs; publish negative results too.
+  The owner approved `agent-repair-experiment-2`: the old
+  `agent-repair-corpus-2` remains at P17's `7eed5eac`. The owner also confirmed
+  30 items × five conditions × two models × three repetitions × three rounds:
+  at most 2,700 normal requests, with one retry charged separately. Report
+  repair rate excluding response errors and completion rate over all attempts.
+  Specify the span coordinates, mixed-defect classes, preflight eligibility,
+  prediction comparisons and dry-run cost cap before the new tag.
+  The required P17 ceiling-effect sentence is added to README RQ6 and the book
+  without changing any previous result. Exit still requires the qualified
+  corpus, tagged run or cost stop, secret-checked receipt/transcripts, all five
+  prediction outcomes, report, changelog and full gate. Budgets: +120 harness
+  lines and +80 report lines. This is not a completion or repair-benefit claim.
 
 ### Remaining verification and application sequence
 

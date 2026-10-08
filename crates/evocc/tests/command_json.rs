@@ -110,18 +110,22 @@ assert normalize(r)==json.loads(pathlib.Path(fixture).read_text()),r
 #[test]
 fn run_and_check_have_distinct_json_statuses() {
     let work = Scratch::new();
-    let run = evo()
-        .args(["run", &work.file(), "--json"])
-        .output()
-        .unwrap();
-    assert_eq!(run.status.code(), Some(7));
-    snapshot("run", &run, &work);
-    let check = evo()
-        .args(["check", "--json", &work.file()])
-        .output()
-        .unwrap();
-    assert!(check.status.success());
-    snapshot("check", &check, &work);
+    for verb in ["run", "check"] {
+        for json_first in [true, false] {
+            let file = work.file();
+            let args = if json_first {
+                [verb, "--json", &file]
+            } else {
+                [verb, &file, "--json"]
+            };
+            let output = evo().args(args).output().unwrap();
+            assert_eq!(
+                output.status.code(),
+                Some(if verb == "run" { 7 } else { 0 })
+            );
+            snapshot(verb, &output, &work);
+        }
+    }
 }
 
 #[test]
@@ -129,6 +133,7 @@ fn explain_version_help_and_fix_have_json_snapshots() {
     let work = Scratch::new();
     for (verb, args) in [
         ("explain", vec!["explain", "E3002", "--json"]),
+        ("explain", vec!["explain", "--json", "E3002"]),
         ("version", vec!["version", "--json"]),
         ("help", vec!["help", "--json"]),
         ("fix", vec!["fix", &work.file(), "--plan", "--json"]),
@@ -201,14 +206,102 @@ fn build_json_is_the_written_receipt() {
         "all:\n\t$(CC) -c input.c -o input.o\n",
     )
     .unwrap();
-    let output = evo()
-        .args(["build", work.0.to_str().unwrap(), "--json"])
-        .output()
-        .unwrap();
-    assert!(output.status.success(), "{:?}", output);
-    let receipt = std::fs::read(work.0.join("evo-build-receipt.json")).unwrap();
-    assert_eq!(output.stdout, receipt);
-    snapshot("build", &output, &work);
+    for args in [
+        ["build", work.0.to_str().unwrap(), "--json"],
+        ["build", "--json", work.0.to_str().unwrap()],
+    ] {
+        let output = evo().args(args).output().unwrap();
+        assert!(output.status.success(), "{:?}", output);
+        let receipt = std::fs::read(work.0.join("evo-build-receipt.json")).unwrap();
+        assert_eq!(output.stdout, receipt);
+        snapshot("build", &output, &work);
+    }
+}
+
+#[test]
+fn prove_accepts_file_before_between_or_after_options() {
+    let work = Scratch::new();
+    let assembly = work.0.join("out.s");
+    for output_first in [true, false] {
+        for position in [0, 2, 4] {
+            let output_option = ["-o".to_owned(), assembly.to_str().unwrap().to_owned()];
+            let entry_option = ["--entry".to_owned(), "main".to_owned()];
+            let mut args = if output_first {
+                [output_option, entry_option].concat()
+            } else {
+                [entry_option, output_option].concat()
+            };
+            args.insert(position, work.file());
+            let output = evo()
+                .env("TMPDIR", &work.0)
+                .args(["prove", "--json"])
+                .args(&args)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{args:?}: {output:?}");
+            assert_json(
+                &output,
+                "assert r['exit_code']==0 and r['result']=='CHECKED_TO_FINAL_ASSEMBLY'",
+                &[],
+            );
+            assert!(std::fs::metadata(&assembly).unwrap().len() > 0);
+            std::fs::remove_file(&assembly).unwrap();
+        }
+    }
+}
+
+#[test]
+fn prove_rejects_invalid_arguments_without_writing_output() {
+    let work = Scratch::new();
+    let file = work.file();
+    let assembly = work.0.join("out.s");
+    let out = assembly.to_str().unwrap();
+    for (args, expected) in [
+        (
+            vec![file.as_str(), "-o"],
+            "missing output path or entry name",
+        ),
+        (vec!["-o"], "missing output path or entry name"),
+        (
+            vec![file.as_str(), "--entry"],
+            "missing output path or entry name",
+        ),
+        (vec!["--entry"], "missing output path or entry name"),
+        (
+            vec![file.as_str(), "-o", out, "-o", out],
+            "unknown prove option: -o",
+        ),
+        (
+            vec!["-o", out, file.as_str(), "extra.c"],
+            "prove requires exactly one C file",
+        ),
+        (
+            vec![file.as_str(), "--unknown", "value"],
+            "unknown prove option: --unknown",
+        ),
+        (
+            vec!["--unknown", file.as_str(), "-o", out],
+            "unknown prove option: --unknown",
+        ),
+        (vec!["--"], "unknown prove option: --"),
+        (
+            vec![file.as_str(), "-o", out, "--"],
+            "unknown prove option: --",
+        ),
+    ] {
+        let output = evo()
+            .args(["prove", "--json"])
+            .args(&args)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1), "{args:?}: {output:?}");
+        assert_json(
+            &output,
+            "assert r['exit_code']==1 and r['error']==sys.argv[1]",
+            &[expected],
+        );
+        assert!(!assembly.exists());
+    }
 }
 
 #[test]

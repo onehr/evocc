@@ -77,6 +77,8 @@ C3 passed 87/90 (96.7%), compared with 88/90 (97.8%) for C1 and 82/90
 This run did not show an overall repair-rate or successful-round advantage
 for EvoCC over both conventional baselines.
 
+Every successful repair came on the first response, so this corpus did not separate the conditions: the result is a ceiling effect, not evidence that the conditions are equal.
+
 The [receipt](https://github.com/onehr/evocc/blob/main/tests/contracts/agent-repair-20261008.json) preserves the
 per-repetition results. The [full transcript archive](https://github.com/onehr/evocc/raw/refs/heads/main/tests/contracts/agent-repair-transcripts-20261008.tar.gz)
 contains all 270 transcripts, the original receipt, the plan and source licenses.

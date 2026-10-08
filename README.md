@@ -761,6 +761,8 @@ bundles, not JSON formatting alone. See the [method, class tables and limits](bo
 [receipt](tests/contracts/agent-repair-20261008.json), and
 [full transcripts](tests/contracts/agent-repair-transcripts-20261008.tar.gz).
 
+Every successful repair came on the first response, so this corpus did not separate the conditions: the result is a ceiling effect, not evidence that the conditions are equal.
+
 ### 8 Related work
 
 **Verified compilers.** CompCert [1] proves its passes correct in Coq, from Clight [2], a large C
