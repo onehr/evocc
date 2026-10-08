@@ -28,7 +28,7 @@ def statistics_for(rows, version=1):
         result.update(response_errors=response_errors, completion_rate=result["repair_rate"],
                       repair_rate=len(passed) / eligible if eligible else None,
                       success_tokens=median(tokens), success_token_range=[min(tokens), max(tokens)] if tokens else None,
-                      unknown_success_usage=len(passed) - len(known), success_rounds=median([r["rounds"] for r in passed]),
+                      unknown_success_usage=len(passed) - len(known), success_samples=len(known), success_rounds=median([r["rounds"] for r in passed]),
                       unknown_success_metrics=len(passed) - len(measured), success_diff=median(diffs),
                       all_spans_share=sum(all(r["spans_touched"]) for r in measured) / len(measured) if measured else None,
                       inside_span_ratio=median([r["changed_inside_spans"] / n for r, n in zip(measured, diffs) if n]),
@@ -41,6 +41,7 @@ def summarize(receipt):
         raise ValueError("unsupported receipt schema")
     version = 2 if receipt["schema"] == "agent-repair.v2" else 1
     plan, runs = receipt["plan"], receipt["runs"]
+    hard = receipt.get("provenance", {}).get("preflight_hard")
     keys = [(r["item"], r["condition"], r["model_sent"], r["repetition"]) for r in runs]
     if len(set(keys)) != len(keys):
         raise ValueError("duplicate repetition")
@@ -50,13 +51,13 @@ def summarize(receipt):
     result = []
     for model in plan["models"]:
         for condition in plan["conditions"]:
-            for kind in ("all", *plan["class_counts"]) if version == 2 else ("all", "ub", "frontend", "logic"):
+            for kind in ("all", *plan["class_counts"], *(("hard",) if hard else ())) if version == 2 else ("all", "ub", "frontend", "logic"):
                 group = [r for r in runs if r["model_sent"] == model and r["condition"] == condition
-                         and (kind == "all" or r["class"] == kind)]
+                         and (kind == "all" or r["class"] == kind or (kind == "hard" and r["item"] in hard[model]))]
                 stats = statistics_for(group, version)
                 reps = [dict(repetition=n, **statistics_for([r for r in group if r["repetition"] == n], version))
                         for n in range(1, plan["reps"] + 1)]
-                planned = plan["items"] if kind == "all" else plan["class_counts"][kind]
+                planned = plan["items"] if kind == "all" else len(hard[model]) if kind == "hard" else plan["class_counts"][kind]
                 for rep in reps:
                     rep.update(planned=planned, complete=rep["attempted"] == planned)
                 bounds = {}
@@ -68,41 +69,58 @@ def summarize(receipt):
     return result
 
 
+# Each prediction is a list of strict comparisons (better, worse, measure); predictions-2.md fixes them.
+PLAN = [[("c3", c, "success_tokens") for c in ("c1", "c2")], [("c3", c, "success_diff") for c in ("c1", "c2")],
+        [("c3", c, "all_spans_share") for c in ("c1", "c2")], [("c4", "c3", f) for f in ("success_rounds", "success_tokens")],
+        [(c, "c0", f) for c in ("c1", "c2", "c3", "c4") for f in ("success_tokens", "success_rounds", "success_diff", "all_spans_share", "inside_span_ratio")]]
+MISSING = {"success_tokens": "unknown_success_usage", "success_diff": "unknown_success_metrics", "all_spans_share": "unknown_success_metrics", "inside_span_ratio": "unknown_success_metrics"}
+
+
 def predictions(receipt):
     rows, results = summarize(receipt), []
+    population = "hard" if receipt.get("provenance", {}).get("preflight_hard") else "all"
     for model in receipt["plan"]["models"]:
-        groups = {r["condition"]: r for r in rows if r["model"] == model and r["group"] == "all"}
+        groups = {r["condition"]: r for r in rows if r["model"] == model and r["group"] == population}
         complete = receipt["stop_reason"] == "completed" and receipt["unattempted"] == 0 and all(all(p["complete"] for p in r["repetitions"]) for r in groups.values())
-        def better(a, b, field, higher=False):
-            x, y = groups.get(a, {}).get(field), groups.get(b, {}).get(field)
-            known = field != "success_tokens" or not any(groups.get(c, {}).get("unknown_success_usage", 0) for c in (a, b))
-            if field in ("success_diff", "all_spans_share", "inside_span_ratio"):
-                known = not any(groups.get(c, {}).get("unknown_success_metrics", 0) for c in (a, b))
-            return complete and known and x is not None and y is not None and (x > y if higher else x < y)
-        comparisons = [all(better("c3", c, "success_tokens") for c in ("c1", "c2")),
-                       all(better("c3", c, "success_diff") for c in ("c1", "c2")),
-                       all(better("c3", c, "all_spans_share", True) for c in ("c1", "c2")),
-                       all(better("c4", "c3", f) for f in ("success_rounds", "success_tokens")),
-                       all(better(c, "c0", f, higher) for c in ("c1", "c2", "c3", "c4") for f, higher in (("success_tokens", False), ("success_rounds", False), ("success_diff", False), ("all_spans_share", True), ("inside_span_ratio", True)))]
-        evidence = {c: {f: r[f] for f in ("success_tokens", "success_rounds", "success_diff", "all_spans_share", "inside_span_ratio", "unknown_success_usage", "unknown_success_metrics")} for c, r in groups.items()}
-        status = ("complete" if complete else "incomplete") + ("; missing data excludes affected comparisons" if any(r["unknown_success_usage"] or r["unknown_success_metrics"] for r in groups.values()) else "")
-        results.extend(dict(model=model, prediction=n, held=bool(held), evidence=status + ": " + json.dumps(evidence, sort_keys=True)) for n, held in enumerate(comparisons, 1))
+        def sample(condition, field):
+            group = groups.get(condition, {})
+            return group.get("success_samples") if field == "success_tokens" else group.get("passed", 0) - (group.get("unknown_success_metrics", 0) if field in MISSING else 0)
+        for number, comparisons in enumerate(PLAN, 1):
+            reasons, observed = [], []
+            for better, worse, field in comparisons:
+                x, y = groups.get(better, {}).get(field), groups.get(worse, {}).get(field)
+                shown = lambda value: "none" if value is None else round(value, 3)
+                observed.append(f"{field} {better}={shown(x)} (n={sample(better, field)}) vs {worse}={shown(y)} (n={sample(worse, field)})")
+                if field in MISSING and any(groups.get(c, {}).get(MISSING[field]) for c in (better, worse)): reasons.append("missing data: " + MISSING[field])
+                elif x is None or y is None: reasons.append("no measured success in " + (better if x is None else worse))
+                elif x == y: reasons.append("tie in " + field)
+                elif (x < y) != (field in ("all_spans_share", "inside_span_ratio")): continue
+                else: reasons.append("opposite direction in " + field)
+            reasons = ([] if complete else ["incomplete population"]) + list(dict.fromkeys(reasons))
+            evidence = ("complete" if complete else "incomplete") + f" ({population} items): " + "; ".join(observed) + (". Reasons: " + ", ".join(reasons) if reasons else "")
+            results.append(dict(model=model, prediction=number, held=not reasons, reasons=reasons, evidence=evidence))
     return results
 
 
 def render_v2(receipt):
-    fmt = lambda value: "NOT OBSERVED" if value is None else json.dumps(value)
-    lines = ["| Model | Condition | Class | Pass / attempted | Repair rate | Completion rate | Response errors | Other errors/stops | Tokens median (range) | Unknown success usage | Rounds median | Diff median | All spans share | Inside spans median | Auto repairs / auto-only passes |",
-             "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |"]
-    for row in summarize(receipt):
-        values = [row["model"], row["condition"], row["group"], f'{row["passed"]}/{row["attempted"]}', fmt(row["repair_rate"]), fmt(row["completion_rate"]), str(row["response_errors"]), str(row["errors"]), f'{fmt(row["success_tokens"])} ({fmt(row["success_token_range"])})', str(row["unknown_success_usage"])]
-        values += [fmt(row[f]) for f in ("success_rounds", "success_diff", "all_spans_share", "inside_span_ratio")]
-        lines.append("| " + " | ".join(values + [f'{row["auto_applied"]}/{row["auto_only"]}']) + " |")
-    lines += ["", "Measures of tokens, rounds, diff and overlap condition on success. Token aggregates exclude unknown usage; diff and overlap aggregates exclude missing final records. Neither absence is zero. Empty diffs have no inside-span ratio. Response errors leave only the repair-rate denominator; completion rate includes every attempt.",
-              "Missing successful diff records: " + json.dumps({r["model"] + "/" + r["condition"]: r["unknown_success_metrics"] for r in summarize(receipt) if r["group"] == "all"}, sort_keys=True)]
+    fmt = lambda value: "NOT OBSERVED" if value is None else f"{value:.3f}".rstrip("0").rstrip(".") if isinstance(value, float) else json.dumps(value)
+    rows, lines = summarize(receipt), []
+    titles = {"all": "All items", "hard": "Items hard for that model in preflight (prediction population)"}
+    for group in dict.fromkeys(r["group"] for r in rows):
+        lines += [f"### {titles.get(group, 'Class ' + group)}", "",
+                  "| Model | Condition | Pass / attempted | Repair rate | Completion rate | Response errors | Other errors/stops | Mean rounds | Success rounds median | Tokens per success median (range; n) | Unknown success usage | Diff median | All-span share | Inside-span median | Auto repairs / auto-only passes |",
+                  "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |"]
+        for row in (r for r in rows if r["group"] == group):
+            tokens = f'{fmt(row["success_tokens"])} ({fmt(row["success_token_range"])}; n={row["success_samples"]})'
+            values = [row["model"], row["condition"], f'{row["passed"]}/{row["attempted"]}', *(fmt(row[f]) for f in ("repair_rate", "completion_rate", "response_errors", "errors", "mean_rounds", "success_rounds")), tokens, str(row["unknown_success_usage"])]
+            values += [fmt(row[f]) for f in ("success_diff", "all_spans_share", "inside_span_ratio")] + [f'{row["auto_applied"]}/{row["auto_only"]}']
+            lines.append("| " + " | ".join(values) + " |")
+        lines.append("")
+    lines += ["Repair rate excludes response errors from the denominator; completion rate counts every attempt. Tokens, rounds, diff and overlap are conditional on success. Token aggregates exclude unknown usage; diff and overlap aggregates exclude missing final records. Neither absence is zero. Empty diffs have no inside-span ratio.",
+              "Missing successful diff records: " + json.dumps({r["model"] + "/" + r["condition"]: r["unknown_success_metrics"] for r in rows if r["group"] == "all"}, sort_keys=True), ""]
     for result in predictions(receipt):
-        lines.append(f'\n{result["model"]} P{result["prediction"]}: {"held" if result["held"] else "did not hold"}. {result["evidence"]}')
-    lines += ["", f'Stop: {receipt["stop_reason"]}. Unattempted repetitions: {receipt["unattempted"]}. Reported cost: USD {receipt["total_cost"]:.6f}.',
+        lines.append(f'- {result["model"]} P{result["prediction"]}: {"held" if result["held"] else "did not hold"}. {result["evidence"]}')
+    lines += ["", f'Stop: {receipt["stop_reason"]}. Unattempted repetitions: {receipt["unattempted"]}. Reported cost: USD {receipt["total_cost"]:.6f}. Unknown-usage attempts: {receipt.get("unknown_cost_attempts", "not recorded")}.',
               "Incomplete populations or missing measures do not establish a prediction. A tie is not a strict improvement. C0 preflight selects a C0-hard population; these results do not establish a general benefit of feedback."]
     return "\n".join(lines) + "\n"
 

@@ -58,8 +58,11 @@ class ReportV2Tests(unittest.TestCase):
         self.assertIsNone(row["success_tokens"])
         self.assertIsNone(row["success_token_range"])
         self.assertEqual(row["unknown_success_usage"], 1)
-        self.assertIn("missing data", report.predictions(data)[0]["evidence"])
-        self.assertIn('"unknown_success_usage": 1', report.predictions(data)[0]["evidence"])
+        # The unknown C0 usage affects only the comparison that uses C0 tokens.
+        results = report.predictions(data)
+        self.assertTrue(results[0]["held"])
+        self.assertIn("missing data: unknown_success_usage", results[4]["evidence"])
+        self.assertIn("success_tokens c1=520 (n=1) vs c0=none (n=0)", results[4]["evidence"])
 
     def test_zero_call_success_and_zero_diff(self):
         data = receipt()
@@ -92,11 +95,30 @@ class ReportV2Tests(unittest.TestCase):
 
     def test_render_has_numbers_and_all_five_predictions(self):
         text = report.render(receipt())
-        for field in ("Completion rate", "Response errors", "Tokens", "Diff",
-                      "All spans", "Inside spans", "Auto repairs", "P5"):
+        for field in ("Completion rate", "Response errors", "Tokens", "Diff", "Mean rounds",
+                      "All-span share", "Inside-span", "Auto repairs", "P5", "Class binary_codecs"):
             self.assertIn(field, text)
         self.assertIn("320", text)
         self.assertIn("did not hold", text)
+
+    def test_hard_population_from_preflight_decides_predictions(self):
+        data = receipt()
+        for condition in ("c0", "c1", "c2", "c3", "c4"):
+            spent = 5000 if condition == "c3" else 5
+            data["runs"].append(dict(copy.deepcopy(next(r for r in data["runs"] if r["condition"] == condition)), item="easy",
+                                     tokens_in=spent, calls=[dict(tokens_in=spent, tokens_out=20)]))
+        data["plan"]["items"] = 2
+        data["plan"]["class_counts"] = {"binary_codecs": 2}
+        self.assertFalse(report.predictions(data)[0]["held"])
+        data["provenance"] = {"preflight_hard": {"model": ["x"]}}
+        rows = report.summarize(data)
+        hard = next(r for r in rows if r["group"] == "hard" and r["condition"] == "c3")
+        self.assertEqual((hard["attempted"], hard["success_tokens"], hard["repetitions"][0]["planned"]), (1, 320, 1))
+        results = report.predictions(data)
+        self.assertEqual([r["held"] for r in results], [True, True, True, True, False])
+        self.assertIn("(hard items)", results[0]["evidence"])
+        self.assertIn("tie in all_spans_share", results[4]["reasons"])
+        self.assertIn("Items hard for that model", report.render(data))
 
     def test_duplicate_and_inconsistent_outcomes_still_reject(self):
         data = receipt()
