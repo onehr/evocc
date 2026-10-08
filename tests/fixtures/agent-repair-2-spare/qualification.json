@@ -1,0 +1,1987 @@
+{
+  "schema": "agent-repair.spare-qualification.v1",
+  "date": "2026-10-08",
+  "claim": "Tool qualification of six spare items only. No model calls, no gates, no model preflight. The items are not registered.",
+  "population": {
+    "integer_and_checksum": 2,
+    "binary_codecs": 2,
+    "json_and_text": 2
+  },
+  "synthetic_items": 0,
+  "checks_reused_from": "tools/experiment/tests/test_corpus_v2.py (GUEST script and assertions); receipt tests/contracts/agent-repair-2-tool-preflight-20261008.json",
+  "evo": {
+    "path": "target/frontend/release/evo",
+    "sha256": "075508aaf8562c1e7d6e893933fc34ae70f8ca5633314e98d7690a95bad6b19f"
+  },
+  "sealed_image": {
+    "name": "evo-flight-lab:sealed",
+    "id": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93"
+  },
+  "toolchain": [
+    "gcc-14 (Debian 14.2.0-19) 14.2.0",
+    "Debian clang version 19.1.7 (3+b1)"
+  ],
+  "sealed_command": [
+    "container",
+    "run",
+    "--rm",
+    "--platform",
+    "linux/arm64",
+    "--network",
+    "none",
+    "--cpus",
+    "2",
+    "--memory",
+    "1G",
+    "-v",
+    "<staged copy of the spare items>:/corpus:ro",
+    "evo-flight-lab:sealed",
+    "python3",
+    "-c",
+    "<GUEST from tools/experiment/tests/test_corpus_v2.py>"
+  ],
+  "guest_sha256": "010a37b7fd7ab411f5cf5c583051fb66a4a9e71d28f5754d0fee08680a4afad1",
+  "guest_commands": {
+    "feedback_gcc": [
+      "gcc-14",
+      "-Wall",
+      "-Wextra",
+      "-fsanitize=undefined",
+      "-o",
+      "prog",
+      "program.c"
+    ],
+    "feedback_clang": [
+      "clang-19",
+      "-Weverything",
+      "-fsanitize=undefined",
+      "-o",
+      "prog",
+      "program.c"
+    ],
+    "score_compile": [
+      "gcc-14",
+      "-O0",
+      "-Dmain=program_main",
+      "-c",
+      "program.c",
+      "-o",
+      "program.o"
+    ],
+    "score_link": [
+      "gcc-14",
+      "-O0",
+      "program.o",
+      "reference_main.c",
+      "-o",
+      "score"
+    ],
+    "score_run": [
+      "./score"
+    ]
+  },
+  "per_seed_commands": {
+    "note": "Single-seed driver calls evaluate(argv[1]); main renamed to program_main.",
+    "plain": [
+      "gcc-14",
+      "-O0",
+      "-Dmain=program_main",
+      "-c",
+      "program.c",
+      "-o",
+      "p.o",
+      "&&",
+      "gcc-14",
+      "-O0",
+      "p.o",
+      "driver.c",
+      "-o",
+      "run"
+    ],
+    "ubsan": [
+      "gcc-14",
+      "-fsanitize=undefined",
+      "-Dmain=program_main",
+      "-c",
+      "program.c",
+      "-o",
+      "p.o",
+      "&&",
+      "gcc-14",
+      "-fsanitize=undefined",
+      "p.o",
+      "driver.c",
+      "-o",
+      "run"
+    ],
+    "run": [
+      "./run",
+      "<seed 0..11>"
+    ]
+  },
+  "variant_rule": "one-repair-N applies only the N-th difflib edit of program.c -> fixed.c, as in test_corpus_v2.py",
+  "items": {
+    "encoding-type-cost": {
+      "class": "integer_and_checksum",
+      "result": "pass",
+      "failures": [],
+      "sha256": {
+        "class": "4504a0cc8f2b5e20f7a00e557f7ab936911be72e8ec03411b703a29bc6b396a4",
+        "expected.txt": "163c55b49c945848358c4141979b44232544d93addce15e41ae961b8e0f8bddf",
+        "fix-spans.json": "dac0712e817cd87fffc071196b72f1d28a3300b411b33068782007a71aecf9bd",
+        "fixed.c": "06ed1c4500f2328104d72c4b7c556b9b785bced4d8e2ba75972116fda269bc4c",
+        "origin.md": "89e5922412486b7eed6dddfb7edbe7674ae1c9cca24a6764f72f38856ed47f4e",
+        "program.c": "6c73ae8d3fb562fae5c37ed32b1b0768ec537e5b7bedc4d836fb1ec239aebcd5",
+        "reference_main.c": "358e4d9d9c4cf82ea0dfe363f9d672d3fd5c1406965deb4f106a8a702f49d478"
+      },
+      "summary": {
+        "defects": [
+          "line 94: HIST_count_simple stops the largest-count scan before maxSymbolValue; an RLE stream under a cost strategy reaches kInverseProbabilityLog256[256] in ZSTD_entropyCost (E3011)",
+          "line 221: header cost in bytes added to costs in bits (missing << 3)"
+        ],
+        "ub_function": "ZSTD_entropyCost (reached through ZSTD_selectEncodingType for the three streams of each block)",
+        "call_distance": {
+          "HIST_count_simple": 4,
+          "ZSTD_selectEncodingType": 4,
+          "ZSTD_entropyCost": 5
+        }
+      },
+      "per_seed": {
+        "ub_seeds": {
+          "program.c": [
+            1,
+            5,
+            6,
+            8
+          ],
+          "fixed.c": [],
+          "one-repair-0": [],
+          "one-repair-1": [
+            1,
+            5,
+            6,
+            8
+          ]
+        },
+        "differing_seeds": {
+          "program.c": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "one-repair-0": [
+            1,
+            3,
+            5,
+            6,
+            7,
+            8,
+            10
+          ],
+          "one-repair-1": [
+            0,
+            1,
+            2,
+            4,
+            5,
+            6,
+            8,
+            9,
+            11
+          ]
+        }
+      },
+      "shape": {
+        "fields": [
+          "class",
+          "expected.txt",
+          "fix-spans.json",
+          "fixed.c",
+          "origin.md",
+          "program.c",
+          "reference_main.c"
+        ],
+        "program_lines": 321,
+        "candidate_profile": true,
+        "program_bytes": 13451,
+        "forbidden_markers": {
+          "#": false,
+          "%:": false,
+          "??=": false
+        },
+        "spans": [
+          [
+            94,
+            94
+          ],
+          [
+            221,
+            221
+          ]
+        ],
+        "span_metrics": {
+          "diff_added": 2,
+          "diff_removed": 2,
+          "changed_inside_spans": 4,
+          "spans_touched": [
+            true,
+            true
+          ]
+        },
+        "diff_u0": "--- /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-bssoga9c/original.c\t2026-10-08 22:37:02\n+++ /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-bssoga9c/final.c\t2026-10-08 22:37:02\n@@ -94 +94 @@\n-    for (s = 0; s < maxSymbolValue; s++)\n+    for (s = 0; s <= maxSymbolValue; s++)\n@@ -221 +221 @@\n-        size_t const compressedCost = NCountCost + ZSTD_entropyCost(count, max, nbSeq);\n+        size_t const compressedCost = (NCountCost << 3) + ZSTD_entropyCost(count, max, nbSeq);\n",
+        "expected_lines": 13
+      },
+      "host": {
+        "program.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/encoding-type-cost/program.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 1,
+          "codes": [
+            "E3011"
+          ],
+          "completion": null,
+          "first_diagnostic": "error[E3011]: out-of-bounds-memory-access\n  --> tests/fixtures/agent-repair-2-spare/encoding-type-cost/program.c:156:28\n     |\n 156 |         cost += count[s] * kInverseProbabilityLog256[norm];\n     |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ out-of-bounds-memory-access\n     |\n   = note: this operation failed on the executed path\n"
+        },
+        "fixed.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/encoding-type-cost/fixed.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 0,
+          "codes": [],
+          "completion": {
+            "claim": "executed-path-only",
+            "kind": "check",
+            "main_return": "62",
+            "schema": "evocc.check.v1",
+            "status": "completed"
+          },
+          "first_diagnostic": null
+        }
+      },
+      "variants": {
+        "program.c": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 4936352915115420909\n1 11082199563610934570\n2 9265081054506840031\n3 15711076218457158517\n4 2728268080249057873\n5 6776888697735580154\n6 12199326078759712863\n7 391902249384664325\n8 5065856431957555767\n9 11255802258190238967\n10 8143414124866497981\n11 1356792177968480924\nmain 63\n",
+          "differing_output_lines": 13,
+          "differing_seed_lines": 12,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 63,
+            "runtime_errors": [
+              "program.c:156:53: runtime error: index 256 out of bounds for type 'unsigned int [256]'",
+              "program.c:156:53: runtime error: load of address 0xaaaac9194c28 with insufficient space for an object of type 'const unsigned int'"
+            ]
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:60:14: warning: padding struct 'prevTable_t' with 2 bytes to align 'tableLog' [-Wpadded]",
+              "program.c:296:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:79:29: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:84:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:90:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:90:16: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:91:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:95:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:96:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:136:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:137:38: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:140:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:140:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:141:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:144:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:144:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:153:43: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:154:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:156:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:156:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:170:35: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:170:62: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:172:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:172:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:185:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:185:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:223:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:224:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:260:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:278:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:291:25: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:292:25: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:293:26: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:304:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:305:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:306:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:307:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:309:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:309:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 75,
+            "runtime_errors": [
+              "program.c:156:28: runtime error: index 256 out of bounds for type 'const unsigned int[256]'"
+            ]
+          }
+        },
+        "fixed.c": {
+          "score_passed": true,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 2397594648197454020\n1 15404656802671981358\n2 6339165003534355891\n3 18443005399803831509\n4 8296624970781832784\n5 2742510720205774989\n6 18280829741626336235\n7 6435218170645051900\n8 5510537493945234048\n9 3053634877287114916\n10 1013507280532313108\n11 671179431651915186\nmain 62\n",
+          "differing_output_lines": 0,
+          "differing_seed_lines": 0,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 62,
+            "runtime_errors": []
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:60:14: warning: padding struct 'prevTable_t' with 2 bytes to align 'tableLog' [-Wpadded]",
+              "program.c:296:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:79:29: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:84:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:90:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:90:16: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:91:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:95:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:96:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:136:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:137:38: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:140:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:140:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:141:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:144:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:144:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:153:43: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:154:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:156:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:156:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:170:35: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:170:62: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:172:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:172:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:185:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:185:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:223:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:224:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:260:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:278:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:291:25: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:292:25: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:293:26: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:304:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:305:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:306:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:307:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:309:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:309:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 62,
+            "runtime_errors": []
+          }
+        },
+        "one-repair-0": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 2397594648197454020\n1 2434014071035068391\n2 6339165003534355891\n3 15711076218457158517\n4 8296624970781832784\n5 2807413847091443549\n6 11926708480276795403\n7 391902249384664325\n8 12966596769570441575\n9 3053634877287114916\n10 8143414124866497981\n11 671179431651915186\nmain 119\n",
+          "differing_output_lines": 8,
+          "differing_seed_lines": 7
+        },
+        "one-repair-1": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 4936352915115420909\n1 11986780675419273299\n2 9265081054506840031\n3 18443005399803831509\n4 2728268080249057873\n5 16193298848321670551\n6 17614525653614297407\n7 6435218170645051900\n8 361594384158568132\n9 11255802258190238967\n10 1013507280532313108\n11 1356792177968480924\nmain 70\n",
+          "differing_output_lines": 10,
+          "differing_seed_lines": 9
+        }
+      }
+    },
+    "frame-block-walk": {
+      "class": "binary_codecs",
+      "result": "pass",
+      "failures": [],
+      "sha256": {
+        "class": "584075aef329b9930b2356170dc97ae344fc467549ae8153c03ec2cb5fa43e4e",
+        "expected.txt": "28375b4f8838e379a42f5b72fcb8fcc7bef45f9e95577fc517c313c9340aae4f",
+        "fix-spans.json": "38bb413d548b5bdb9091c97d775288bfff6a383f25ed2761e347f227484a468b",
+        "fixed.c": "782ddd33301c1665385118a7d53e69e04a590fae0d8daa68329275d1e5abe961",
+        "origin.md": "3fba5bc15cf70f2b0292c20e848a4b4adbdce43dd8d57c10e2b9925141a622bb",
+        "program.c": "d15e1b9ae02aa60520b554bb0edd618a65bff1778b991f86db1d6dd8d4aa6c78",
+        "reference_main.c": "358e4d9d9c4cf82ea0dfe363f9d672d3fd5c1406965deb4f106a8a702f49d478"
+      },
+      "summary": {
+        "defects": [
+          "line 134: frame header size adds the 1-byte content size only when fcsId is nonzero",
+          "line 268: ZSTD_decompressFrame passes the whole capacity to ZSTD_setRleBlock; an RLE block crossing the end writes past g_regen (E3011)"
+        ],
+        "ub_function": "ZSTD_setRleBlock (runs for every RLE block; raw blocks keep the remaining-capacity check)",
+        "call_distance": {
+          "ZSTD_decompressFrame": 3,
+          "ZSTD_frameHeaderSize_internal": 4,
+          "ZSTD_setRleBlock": 4
+        }
+      },
+      "per_seed": {
+        "ub_seeds": {
+          "program.c": [
+            5,
+            10
+          ],
+          "fixed.c": [],
+          "one-repair-0": [
+            5,
+            10
+          ],
+          "one-repair-1": []
+        },
+        "differing_seeds": {
+          "program.c": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "one-repair-0": [
+            5,
+            10
+          ],
+          "one-repair-1": [
+            1,
+            2,
+            3,
+            4,
+            7,
+            8,
+            9,
+            11
+          ]
+        }
+      },
+      "shape": {
+        "fields": [
+          "class",
+          "expected.txt",
+          "fix-spans.json",
+          "fixed.c",
+          "origin.md",
+          "program.c",
+          "reference_main.c"
+        ],
+        "program_lines": 387,
+        "candidate_profile": true,
+        "program_bytes": 16679,
+        "forbidden_markers": {
+          "#": false,
+          "%:": false,
+          "??=": false
+        },
+        "spans": [
+          [
+            134,
+            134
+          ],
+          [
+            268,
+            268
+          ]
+        ],
+        "span_metrics": {
+          "diff_added": 2,
+          "diff_removed": 2,
+          "changed_inside_spans": 4,
+          "spans_touched": [
+            true,
+            true
+          ]
+        },
+        "diff_u0": "--- /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-pxj9_gz9/original.c\t2026-10-08 22:37:02\n+++ /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-pxj9_gz9/final.c\t2026-10-08 22:37:02\n@@ -134 +134 @@\n-             + (singleSegment && fcsId);\n+             + (singleSegment && !fcsId);\n@@ -268 +268 @@\n-            decodedSize = ZSTD_setRleBlock(op, REGEN_CAPACITY, *ip, blockProperties.origSize);\n+            decodedSize = ZSTD_setRleBlock(op, REGEN_CAPACITY - op, *ip, blockProperties.origSize);\n",
+        "expected_lines": 13
+      },
+      "host": {
+        "program.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/frame-block-walk/program.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 1,
+          "codes": [
+            "E3011"
+          ],
+          "completion": null,
+          "first_diagnostic": "error[E3011]: out-of-bounds-memory-access\n  --> tests/fixtures/agent-repair-2-spare/frame-block-walk/program.c:221:9\n     |\n 221 |         g_regen[op + i] = b;\n     |         ^^^^^^^^^^^^^^^^^^^ out-of-bounds-memory-access\n     |\n   = note: this operation failed on the executed path\n"
+        },
+        "fixed.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/frame-block-walk/fixed.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 0,
+          "codes": [],
+          "completion": {
+            "claim": "executed-path-only",
+            "kind": "check",
+            "main_return": "125",
+            "schema": "evocc.check.v1",
+            "status": "completed"
+          },
+          "first_diagnostic": null
+        }
+      },
+      "variants": {
+        "program.c": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 1384089513022324463\n1 1820021987442107175\n2 5780292390058878655\n3 3840397791512517717\n4 2845951876370162379\n5 670028424515691569\n6 2425540772270870423\n7 12802323984003875282\n8 18240161835260652667\n9 5816326651005663439\n10 6742766029345792218\n11 12286121442398768631\nmain 69\n",
+          "differing_output_lines": 11,
+          "differing_seed_lines": 10,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 69,
+            "runtime_errors": [
+              "program.c:221:16: runtime error: index 128 out of bounds for type 'BYTE [128]'",
+              "program.c:221:25: runtime error: store to address 0xaaaae4891328 with insufficient space for an object of type 'BYTE'"
+            ]
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:37:9: warning: padding size of 'ZSTD_FrameHeader' with 4 bytes to alignment boundary [-Wpadded]",
+              "program.c:351:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:42:66: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:43:72: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:44:80: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:45:85: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:46:61: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:47:66: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:48:80: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:55:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:76:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:77:25: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:79:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:80:27: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:81:27: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:85:32: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:86:27: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:87:28: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:104:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:104:40: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:115:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:117:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:117:44: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:129:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:133:48: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:133:77: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:151:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:162:33: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:170:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:171:39: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:172:39: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:176:55: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:177:49: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:178:49: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:179:50: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:211:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:211:27: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:221:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:229:28: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:253:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:262:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:273:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:281:50: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:282:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:302:13: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:326:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:327:33: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:328:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:330:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:330:40: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:336:51: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:337:48: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:337:69: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:337:79: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:337:98: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:338:48: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:344:23: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:359:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:368:48: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:371:31: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 69,
+            "runtime_errors": [
+              "program.c:221:9: runtime error: index 128 out of bounds for type 'BYTE[128]' (aka 'unsigned char[128]')"
+            ]
+          }
+        },
+        "fixed.c": {
+          "score_passed": true,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 1384089513022324463\n1 2037827705420295120\n2 13428197928840354338\n3 12193386617771363115\n4 14913528181543040819\n5 3676642471234985836\n6 2425540772270870423\n7 4353968663206017377\n8 5072322574736057704\n9 9582423546298929432\n10 3144439317407861402\n11 14674449461465996164\nmain 125\n",
+          "differing_output_lines": 0,
+          "differing_seed_lines": 0,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 125,
+            "runtime_errors": []
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:37:9: warning: padding size of 'ZSTD_FrameHeader' with 4 bytes to alignment boundary [-Wpadded]",
+              "program.c:351:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:42:66: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:43:72: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:44:80: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:45:85: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:46:61: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:47:66: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:48:80: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:55:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:76:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:77:25: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:79:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:80:27: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:81:27: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:85:32: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:86:27: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:87:28: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:104:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:104:40: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:115:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:117:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:117:44: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:129:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:133:48: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:133:77: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:151:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:162:33: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:170:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:171:39: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:172:39: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:176:55: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:177:49: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:178:49: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:179:50: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:211:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:211:27: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:221:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:229:28: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:253:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:262:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:273:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:281:50: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:282:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:302:13: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:326:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:327:33: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:328:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:330:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:330:40: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:336:51: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:337:48: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:337:69: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:337:79: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:337:98: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:338:48: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:344:23: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:359:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:368:48: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:371:31: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 125,
+            "runtime_errors": []
+          }
+        },
+        "one-repair-0": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 1384089513022324463\n1 2037827705420295120\n2 13428197928840354338\n3 12193386617771363115\n4 14913528181543040819\n5 5288116980586631711\n6 2425540772270870423\n7 4353968663206017377\n8 5072322574736057704\n9 9582423546298929432\n10 6742766029345792218\n11 14674449461465996164\nmain 61\n",
+          "differing_output_lines": 3,
+          "differing_seed_lines": 2
+        },
+        "one-repair-1": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 1384089513022324463\n1 1820021987442107175\n2 5780292390058878655\n3 3840397791512517717\n4 2845951876370162379\n5 3676642471234985836\n6 2425540772270870423\n7 12802323984003875282\n8 18240161835260652667\n9 5816326651005663439\n10 3144439317407861402\n11 12286121442398768631\nmain 5\n",
+          "differing_output_lines": 9,
+          "differing_seed_lines": 8
+        }
+      }
+    },
+    "json-merge-patch": {
+      "class": "json_and_text",
+      "result": "pass",
+      "failures": [],
+      "sha256": {
+        "class": "b61f582d345c6f7d2855f9f1d3c304fd283a3fe69bace3e4d052595e0a8aea17",
+        "expected.txt": "ceb648038aac8ca116eca7dbd7dc1705346bcddd6421c5947dfd29366658b2c3",
+        "fix-spans.json": "8048e8eae79a4cd8e6064c256cd86e266d5db98a801b88eca18547cee7d6f4b2",
+        "fixed.c": "70ab4a27d753ab8092cd79f6d14bcbccce8cee9acb7b683152ab89160a9a49c3",
+        "origin.md": "f560d77823decb0adef638da02acea4c8eb26f5d2ac16d7ba0b060a161c788fd",
+        "program.c": "1a7171bcf7aa4509959ab3408e22b00880f663567686dec7e0055c67d12f6f95",
+        "reference_main.c": "358e4d9d9c4cf82ea0dfe363f9d672d3fd5c1406965deb4f106a8a702f49d478"
+      },
+      "summary": {
+        "defects": [
+          "line 74: cJSON_IsObject loses its null check; a new object member recurses with a null target (E3009)",
+          "line 136: cJSON_DetachItemViaPointer tests item->prev instead of item->next, so the head keeps a stale last-child link"
+        ],
+        "ub_function": "cJSON_IsObject (call sites in merge_patch for patch and target, through recursion)",
+        "call_distance": {
+          "cJSON_IsObject": 3,
+          "cJSON_DetachItemViaPointer": 4
+        }
+      },
+      "per_seed": {
+        "ub_seeds": {
+          "program.c": [
+            1,
+            2,
+            3,
+            4,
+            7,
+            8,
+            11
+          ],
+          "fixed.c": [],
+          "one-repair-0": [],
+          "one-repair-1": [
+            3,
+            8
+          ]
+        },
+        "differing_seeds": {
+          "program.c": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "one-repair-0": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "one-repair-1": [
+            3,
+            8
+          ]
+        }
+      },
+      "shape": {
+        "fields": [
+          "class",
+          "expected.txt",
+          "fix-spans.json",
+          "fixed.c",
+          "origin.md",
+          "program.c",
+          "reference_main.c"
+        ],
+        "program_lines": 347,
+        "candidate_profile": true,
+        "program_bytes": 11693,
+        "forbidden_markers": {
+          "#": false,
+          "%:": false,
+          "??=": false
+        },
+        "spans": [
+          [
+            74,
+            74
+          ],
+          [
+            136,
+            136
+          ]
+        ],
+        "span_metrics": {
+          "diff_added": 2,
+          "diff_removed": 2,
+          "changed_inside_spans": 4,
+          "spans_touched": [
+            true,
+            true
+          ]
+        },
+        "diff_u0": "--- /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-hy7xz7c4/original.c\t2026-10-08 22:37:02\n+++ /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-hy7xz7c4/final.c\t2026-10-08 22:37:02\n@@ -74 +74 @@\n-    return (item->type & 0xFF) == cJSON_Object;\n+    return item != 0 && (item->type & 0xFF) == cJSON_Object;\n@@ -136 +136 @@\n-    else if (item->prev == 0)\n+    else if (item->next == 0)\n",
+        "expected_lines": 13
+      },
+      "host": {
+        "program.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/json-merge-patch/program.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 1,
+          "codes": [
+            "E3009"
+          ],
+          "completion": null,
+          "first_diagnostic": "error[E3009]: null-pointer-access\n  --> tests/fixtures/agent-repair-2-spare/json-merge-patch/program.c:74:13\n    |\n 74 |     return (item->type & 0xFF) == cJSON_Object;\n    |             ^^^^^^^^^^ null-pointer-access\n    |\n   = note: this operation failed on the executed path\n"
+        },
+        "fixed.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/json-merge-patch/fixed.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 0,
+          "codes": [],
+          "completion": {
+            "claim": "executed-path-only",
+            "kind": "check",
+            "main_return": "32",
+            "schema": "evocc.check.v1",
+            "status": "completed"
+          },
+          "first_diagnostic": null
+        }
+      },
+      "variants": {
+        "program.c": {
+          "score_passed": false,
+          "score_exit": -11,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "",
+          "differing_output_lines": 13,
+          "differing_seed_lines": 12,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": -11,
+            "runtime_errors": [
+              "program.c:74:17: runtime error: member access within null pointer of type 'const struct cJSON'"
+            ]
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:25:9: warning: padding size of 'pool_t' with 4 bytes to alignment boundary [-Wpadded]",
+              "program.c:326:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:35:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:40:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:40:27: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:48:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:49:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:49:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:50:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:61:38: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:61:49: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:66:48: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:66:59: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:204:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:204:35: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:206:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:215:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:217:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:221:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:222:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:267:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:320:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 1,
+            "runtime_errors": [
+              "program.c:74:19: runtime error: member access within null pointer of type 'const cJSON' (aka 'const struct cJSON')"
+            ]
+          }
+        },
+        "fixed.c": {
+          "score_passed": true,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 553805193726068452\n1 1773196516001149436\n2 12742047962092584617\n3 14420362275533748752\n4 13531170200259175686\n5 3662568444163322745\n6 2685530390781841237\n7 13017194065727706339\n8 14334224697325399778\n9 6185893768815369362\n10 17779625367465631930\n11 2997809547684529043\nmain 32\n",
+          "differing_output_lines": 0,
+          "differing_seed_lines": 0,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 32,
+            "runtime_errors": []
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:25:9: warning: padding size of 'pool_t' with 4 bytes to alignment boundary [-Wpadded]",
+              "program.c:326:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:35:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:40:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:40:27: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:48:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:49:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:49:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:50:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:61:38: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:61:49: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:66:48: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:66:59: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:204:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:204:35: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:206:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:215:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:217:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:221:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:222:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:267:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:320:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 32,
+            "runtime_errors": []
+          }
+        },
+        "one-repair-0": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 553805193726068452\n1 6660535984396105693\n2 17208092902909981717\n3 11589652860188040496\n4 6053906391112445242\n5 5867618961091195661\n6 2685530390781841237\n7 12637827997715863860\n8 15069231455308325597\n9 17733803691540899306\n10 11248363979519635896\n11 7161941344457772166\nmain 45\n",
+          "differing_output_lines": 11,
+          "differing_seed_lines": 10
+        },
+        "one-repair-1": {
+          "score_passed": false,
+          "score_exit": -11,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "",
+          "differing_output_lines": 13,
+          "differing_seed_lines": 12
+        }
+      }
+    },
+    "json-parse-reformat": {
+      "class": "json_and_text",
+      "result": "pass",
+      "failures": [],
+      "sha256": {
+        "class": "b61f582d345c6f7d2855f9f1d3c304fd283a3fe69bace3e4d052595e0a8aea17",
+        "expected.txt": "58af9a27705e5f2a7b605ca6a6f6bbcfbbe70532e957d0aaefc2d257cc284f62",
+        "fix-spans.json": "725c1d254aff14d5b3077d598a67fe538cb295751b090c9c409d64f02b8a553d",
+        "fixed.c": "8146295f5097738fe4e1cdde5c949a9d8c15588aba973b3a2ff4f4dc659b1c36",
+        "origin.md": "6bed84c52e121a5e24ebcf20d5061aabfa92d12f8c195177f1c12d961bc5651a",
+        "program.c": "7e0b0f26d10d951fe76ac714cc33546f7c8db1ca759d0c7e339524c92dad1cd0",
+        "reference_main.c": "358e4d9d9c4cf82ea0dfe363f9d672d3fd5c1406965deb4f106a8a702f49d478"
+      },
+      "summary": {
+        "defects": [
+          "line 67: buffer_skip_whitespace treats only bytes below 32 as whitespace (space excluded)",
+          "line 84: parse_number loses the saturation guard; a long digit run overflows int (E3004)"
+        ],
+        "ub_function": "parse_number (reached from parse_value for top-level values, array elements and object members)",
+        "call_distance": {
+          "buffer_skip_whitespace": 3,
+          "parse_number": 4
+        }
+      },
+      "per_seed": {
+        "ub_seeds": {
+          "program.c": [
+            4,
+            7
+          ],
+          "fixed.c": [],
+          "one-repair-0": [
+            4,
+            7
+          ],
+          "one-repair-1": []
+        },
+        "differing_seeds": {
+          "program.c": [
+            1,
+            4,
+            6,
+            7,
+            9,
+            11
+          ],
+          "one-repair-0": [
+            4,
+            7
+          ],
+          "one-repair-1": [
+            1,
+            6,
+            9,
+            11
+          ]
+        }
+      },
+      "shape": {
+        "fields": [
+          "class",
+          "expected.txt",
+          "fix-spans.json",
+          "fixed.c",
+          "origin.md",
+          "program.c",
+          "reference_main.c"
+        ],
+        "program_lines": 384,
+        "candidate_profile": true,
+        "program_bytes": 12994,
+        "forbidden_markers": {
+          "#": false,
+          "%:": false,
+          "??=": false
+        },
+        "spans": [
+          [
+            67,
+            67
+          ],
+          [
+            84,
+            84
+          ]
+        ],
+        "span_metrics": {
+          "diff_added": 2,
+          "diff_removed": 2,
+          "changed_inside_spans": 4,
+          "spans_touched": [
+            true,
+            true
+          ]
+        },
+        "diff_u0": "--- /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-rsejucf3/original.c\t2026-10-08 22:37:03\n+++ /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-rsejucf3/final.c\t2026-10-08 22:37:03\n@@ -67 +67 @@\n-    while (can_access_at_index(buffer, 0) && buffer_at_offset(buffer)[0] < 32)\n+    while (can_access_at_index(buffer, 0) && buffer_at_offset(buffer)[0] <= 32)\n@@ -84 +84 @@\n-        value = value * 10 + digit;\n+        value = value > (2147483647 - digit) / 10 ? 2147483647 : value * 10 + digit;\n",
+        "expected_lines": 13
+      },
+      "host": {
+        "program.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/json-parse-reformat/program.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 1,
+          "codes": [
+            "E3004"
+          ],
+          "completion": null,
+          "first_diagnostic": "error[E3004]: signed-integer-overflow\n  --> tests/fixtures/agent-repair-2-spare/json-parse-reformat/program.c:84:17\n    |\n 84 |         value = value * 10 + digit;\n    |                 ^^^^^^^^^^ signed-integer-overflow\n    |\n   = note: this operation failed on the executed path\n"
+        },
+        "fixed.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/json-parse-reformat/fixed.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 0,
+          "codes": [],
+          "completion": {
+            "claim": "executed-path-only",
+            "kind": "check",
+            "main_return": "64",
+            "schema": "evocc.check.v1",
+            "status": "completed"
+          },
+          "first_diagnostic": null
+        }
+      },
+      "variants": {
+        "program.c": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 6230481133444652549\n1 3758096385\n2 8562802701075764380\n3 17915207265774841657\n4 3355071811213214217\n5 10377083745844869889\n6 3758096385\n7 6134258697845221533\n8 8908971602830350654\n9 3758096389\n10 4394003741925473579\n11 3758096384\nmain 31\n",
+          "differing_output_lines": 7,
+          "differing_seed_lines": 6,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 31,
+            "runtime_errors": [
+              "program.c:84:23: runtime error: signed integer overflow: 1234567890 * 10 cannot be represented in type 'int'"
+            ]
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:25:9: warning: padding size of 'pool_t' with 4 bytes to alignment boundary [-Wpadded]",
+              "program.c:355:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:37:78: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:45:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:50:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:50:27: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:58:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:58:39: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:80:50: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:80:67: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:82:52: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:82:70: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:83:21: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:96:42: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:97:38: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:103:26: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:105:13: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:107:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:112:28: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:114:18: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:126:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:128:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:174:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:174:43: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:175:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:237:12: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:256:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:256:35: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:258:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:275:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:277:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:281:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:282:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:290:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:364:31: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:374:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 31,
+            "runtime_errors": [
+              "program.c:84:23: runtime error: signed integer overflow: 1234567890 * 10 cannot be represented in type 'int'"
+            ]
+          }
+        },
+        "fixed.c": {
+          "score_passed": true,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 6230481133444652549\n1 4677913187212317050\n2 8562802701075764380\n3 17915207265774841657\n4 13312154106849469323\n5 10377083745844869889\n6 3291199301349792381\n7 616132262492567552\n8 8908971602830350654\n9 409842853526272613\n10 4394003741925473579\n11 3758096403\nmain 64\n",
+          "differing_output_lines": 0,
+          "differing_seed_lines": 0,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 64,
+            "runtime_errors": []
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:25:9: warning: padding size of 'pool_t' with 4 bytes to alignment boundary [-Wpadded]",
+              "program.c:355:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:37:78: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:45:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:50:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:50:27: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:58:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:58:39: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:80:50: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:80:67: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:82:52: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:82:70: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:83:21: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:96:42: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:97:38: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:103:26: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:105:13: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:107:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:112:28: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:114:18: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:126:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:128:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:174:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:174:43: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:175:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:237:12: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:256:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:256:35: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:258:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:275:5: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:277:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:281:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:282:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:290:19: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:364:31: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:374:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 64,
+            "runtime_errors": []
+          }
+        },
+        "one-repair-0": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 6230481133444652549\n1 4677913187212317050\n2 8562802701075764380\n3 17915207265774841657\n4 3355071811213214217\n5 10377083745844869889\n6 3291199301349792381\n7 6134258697845221533\n8 8908971602830350654\n9 409842853526272613\n10 4394003741925473579\n11 3758096403\nmain 70\n",
+          "differing_output_lines": 3,
+          "differing_seed_lines": 2
+        },
+        "one-repair-1": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 6230481133444652549\n1 3758096385\n2 8562802701075764380\n3 17915207265774841657\n4 13312154106849469323\n5 10377083745844869889\n6 3758096385\n7 616132262492567552\n8 8908971602830350654\n9 3758096389\n10 4394003741925473579\n11 3758096384\nmain 37\n",
+          "differing_output_lines": 5,
+          "differing_seed_lines": 4
+        }
+      }
+    },
+    "ldm-gear-buckets": {
+      "class": "integer_and_checksum",
+      "result": "pass",
+      "failures": [],
+      "sha256": {
+        "class": "4504a0cc8f2b5e20f7a00e557f7ab936911be72e8ec03411b703a29bc6b396a4",
+        "expected.txt": "c28d77b803a44e4a309f541497dc3b5bc2dfa04b3a7bb67c364947c8486dd224",
+        "fix-spans.json": "c7ffe6e2bc5f737180b468f9452c59d4bafeedd730f670e7739bf0e138f0932c",
+        "fixed.c": "b5c64d9592b0427b1351b94ae2ddf2021f29999f755f47587cc750314fb9e0e9",
+        "origin.md": "52d78c1019e206f2166bbdba39fa48abd6ae74e0a23bc46448dfa476b9ed6cac",
+        "program.c": "7bed22a96007e2754f15f06886ee2e659671cd3a9b93dc5d0f2080131f54691a",
+        "reference_main.c": "358e4d9d9c4cf82ea0dfe363f9d672d3fd5c1406965deb4f106a8a702f49d478"
+      },
+      "summary": {
+        "defects": [
+          "line 74: ZSTD_ldm_gear_init loses `hashRateLog <= maxBitsInMask`; a hash rate above the minimum match shifts by (unsigned)-1 (invalid shift, E3005)",
+          "line 266: litLength counts from the split, not from the backward-extended match start"
+        ],
+        "ub_function": "ZSTD_ldm_gear_init (call sites: ZSTD_ldm_fillHashTable, ZSTD_ldm_generateSequences_internal)",
+        "call_distance": {
+          "ZSTD_ldm_gear_init": 4,
+          "ZSTD_ldm_generateSequences_internal": 3
+        }
+      },
+      "per_seed": {
+        "ub_seeds": {
+          "program.c": [
+            2
+          ],
+          "fixed.c": [],
+          "one-repair-0": [],
+          "one-repair-1": [
+            2
+          ]
+        },
+        "differing_seeds": {
+          "program.c": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            10
+          ],
+          "one-repair-0": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            10
+          ],
+          "one-repair-1": [
+            2
+          ]
+        }
+      },
+      "shape": {
+        "fields": [
+          "class",
+          "expected.txt",
+          "fix-spans.json",
+          "fixed.c",
+          "origin.md",
+          "program.c",
+          "reference_main.c"
+        ],
+        "program_lines": 394,
+        "candidate_profile": true,
+        "program_bytes": 15525,
+        "forbidden_markers": {
+          "#": false,
+          "%:": false,
+          "??=": false
+        },
+        "spans": [
+          [
+            74,
+            74
+          ],
+          [
+            266,
+            266
+          ]
+        ],
+        "span_metrics": {
+          "diff_added": 2,
+          "diff_removed": 2,
+          "changed_inside_spans": 4,
+          "spans_touched": [
+            true,
+            true
+          ]
+        },
+        "diff_u0": "--- /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-rnrrgpqz/original.c\t2026-10-08 22:37:03\n+++ /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-rnrrgpqz/final.c\t2026-10-08 22:37:03\n@@ -74 +74 @@\n-    if (hashRateLog > 0) {\n+    if (hashRateLog > 0 && hashRateLog <= maxBitsInMask) {\n@@ -266 +266 @@\n-                seq->litLength = (U32)(split - anchor);\n+                seq->litLength = (U32)(split - backwardMatchLength - anchor);\n",
+        "expected_lines": 13
+      },
+      "host": {
+        "program.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/ldm-gear-buckets/program.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 1,
+          "codes": [
+            "E3005"
+          ],
+          "completion": null,
+          "first_diagnostic": "error[E3005]: invalid-shift-count\n  --> tests/fixtures/agent-repair-2-spare/ldm-gear-buckets/program.c:75:27\n    |\n 75 |         state->stopMask = (((U64)1 << hashRateLog) - 1) << (maxBitsInMask - hashRateLog);\n    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid-shift-count\n    |\n   = note: this operation failed on the executed path\n"
+        },
+        "fixed.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/ldm-gear-buckets/fixed.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 0,
+          "codes": [],
+          "completion": {
+            "claim": "executed-path-only",
+            "kind": "check",
+            "main_return": "87",
+            "schema": "evocc.check.v1",
+            "status": "completed"
+          },
+          "first_diagnostic": null
+        }
+      },
+      "variants": {
+        "program.c": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 12139208027514379376\n1 16768254291523761851\n2 1574574817157627745\n3 3220128883498690131\n4 9865011300630112710\n5 5772740868210402648\n6 11747891080477635995\n7 4296261637060318210\n8 3794970010391119178\n9 2366005286978706885\n10 8423176975078420643\n11 12766405913374350034\nmain 33\n",
+          "differing_output_lines": 10,
+          "differing_seed_lines": 9,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 33,
+            "runtime_errors": [
+              "program.c:75:57: runtime error: shift exponent 4294967295 is too large for 64-bit type 'long long unsigned int'"
+            ]
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:160:14: warning: possible misuse of comma operator here [-Wcomma]",
+              "program.c:170:14: warning: possible misuse of comma operator here [-Wcomma]",
+              "program.c:170:24: warning: possible misuse of comma operator here [-Wcomma]",
+              "program.c:360:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:49:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:59:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:87:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:87:47: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:100:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:100:47: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:103:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:145:12: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:150:21: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:152:7: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:160:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:160:16: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:169:52: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:169:63: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:170:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:170:16: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:190:17: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:190:22: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:190:35: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:191:40: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:191:37: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:191:42: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:200:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:215:24: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:216:26: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:226:5: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:234:36: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:234:33: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:234:38: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:247:38: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:247:62: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:251:48: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:254:75: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:263:31: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:274:22: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:277:26: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:278:49: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:279:22: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:283:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:294:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:294:38: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:296:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:300:41: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:301:70: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:314:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:314:18: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:316:29: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:321:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:321:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:323:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:323:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:328:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:328:20: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:330:18: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:330:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:351:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:351:23: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:351:32: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:353:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:355:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:379:32: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:379:57: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:379:84: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:383:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:383:63: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:385:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 33,
+            "runtime_errors": [
+              "program.c:75:57: runtime error: shift exponent 4294967295 is too large for 64-bit type 'U64' (aka 'unsigned long long')"
+            ]
+          }
+        },
+        "fixed.c": {
+          "score_passed": true,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 2648975784431815737\n1 10466341556562428975\n2 13825794697478049037\n3 16987074405231210366\n4 13780539617986146253\n5 6877346414682302261\n6 5653194064244229116\n7 1630726715051214704\n8 3794970010391119178\n9 2366005286978706885\n10 7534439017795892485\n11 12766405913374350034\nmain 87\n",
+          "differing_output_lines": 0,
+          "differing_seed_lines": 0,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 87,
+            "runtime_errors": []
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:160:14: warning: possible misuse of comma operator here [-Wcomma]",
+              "program.c:170:14: warning: possible misuse of comma operator here [-Wcomma]",
+              "program.c:170:24: warning: possible misuse of comma operator here [-Wcomma]",
+              "program.c:360:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:49:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:59:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:87:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:87:47: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:100:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:100:47: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:103:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:145:12: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:150:21: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:152:7: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:160:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:160:16: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:169:52: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:169:63: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:170:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:170:16: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:190:17: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:190:22: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:190:35: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:191:40: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:191:37: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:191:42: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:200:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:215:24: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:216:26: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:226:5: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:234:36: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:234:33: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:234:38: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:247:38: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:247:62: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:251:48: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:254:75: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:263:31: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:266:40: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:274:22: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:277:26: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:278:49: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:279:22: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:283:9: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:294:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:294:38: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:296:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:300:41: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:301:70: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:314:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:314:18: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:316:29: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:321:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:321:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:323:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:323:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:328:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:328:20: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:330:18: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:330:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:351:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:351:23: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:351:32: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:353:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:355:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:379:32: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:379:57: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:379:84: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:383:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:383:63: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:385:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 87,
+            "runtime_errors": []
+          }
+        },
+        "one-repair-0": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 12139208027514379376\n1 16768254291523761851\n2 11676480605249240050\n3 3220128883498690131\n4 9865011300630112710\n5 5772740868210402648\n6 11747891080477635995\n7 4296261637060318210\n8 3794970010391119178\n9 2366005286978706885\n10 8423176975078420643\n11 12766405913374350034\nmain 84\n",
+          "differing_output_lines": 10,
+          "differing_seed_lines": 9
+        },
+        "one-repair-1": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 2648975784431815737\n1 10466341556562428975\n2 17878125605289262182\n3 16987074405231210366\n4 13780539617986146253\n5 6877346414682302261\n6 5653194064244229116\n7 1630726715051214704\n8 3794970010391119178\n9 2366005286978706885\n10 7534439017795892485\n11 12766405913374350034\nmain 66\n",
+          "differing_output_lines": 2,
+          "differing_seed_lines": 1
+        }
+      }
+    },
+    "sequence-code-stream": {
+      "class": "binary_codecs",
+      "result": "pass",
+      "failures": [],
+      "sha256": {
+        "class": "584075aef329b9930b2356170dc97ae344fc467549ae8153c03ec2cb5fa43e4e",
+        "expected.txt": "a39c073d1ced90de6b830483bafa0e1df1a91184256e94e4560168cf305bb246",
+        "fix-spans.json": "0cfdcbaa706c0ca9715ac54f99579d48a6cfcba570986fe9dc662252a08856ab",
+        "fixed.c": "571dd88172560754b355378cb1f5917a5da417fe774976d4841d84c0b4f6405c",
+        "origin.md": "e39c5e29d264c9639e142ef4a8602d88035519cff7f11186ec303a7b94528ed7",
+        "program.c": "c17cb6133d32b6b1753e3fcae89e1f7c8622f04d7e1a4a07103ee8db80455b7c",
+        "reference_main.c": "358e4d9d9c4cf82ea0dfe363f9d672d3fd5c1406965deb4f106a8a702f49d478"
+      },
+      "summary": {
+        "defects": [
+          "line 74: ZSTD_LLcode uses the 64-entry table up to literal length 64 (E3011 at length 64)",
+          "line 107: ZSTD_updateRep always moves entry 1 to entry 2"
+        ],
+        "ub_function": "ZSTD_LLcode (call sites: ZSTD_seqToCodes, ZSTD_sequenceBits)",
+        "call_distance": {
+          "ZSTD_LLcode": 4,
+          "ZSTD_updateRep": 4
+        }
+      },
+      "per_seed": {
+        "ub_seeds": {
+          "program.c": [
+            1,
+            3
+          ],
+          "fixed.c": [],
+          "one-repair-0": [],
+          "one-repair-1": [
+            1,
+            3
+          ]
+        },
+        "differing_seeds": {
+          "program.c": [
+            0,
+            1,
+            2,
+            3,
+            6,
+            7,
+            9
+          ],
+          "one-repair-0": [
+            0,
+            2,
+            6,
+            7,
+            9
+          ],
+          "one-repair-1": [
+            1,
+            3
+          ]
+        }
+      },
+      "shape": {
+        "fields": [
+          "class",
+          "expected.txt",
+          "fix-spans.json",
+          "fixed.c",
+          "origin.md",
+          "program.c",
+          "reference_main.c"
+        ],
+        "program_lines": 334,
+        "candidate_profile": true,
+        "program_bytes": 12944,
+        "forbidden_markers": {
+          "#": false,
+          "%:": false,
+          "??=": false
+        },
+        "spans": [
+          [
+            74,
+            74
+          ],
+          [
+            107,
+            107
+          ]
+        ],
+        "span_metrics": {
+          "diff_added": 2,
+          "diff_removed": 2,
+          "changed_inside_spans": 4,
+          "spans_touched": [
+            true,
+            true
+          ]
+        },
+        "diff_u0": "--- /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-kl6rus52/original.c\t2026-10-08 22:37:03\n+++ /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-diff-kl6rus52/final.c\t2026-10-08 22:37:03\n@@ -74 +74 @@\n-    return (litLength > 64) ? ZSTD_highbit32(litLength) + LL_deltaCode : LL_Code[litLength];\n+    return (litLength > 63) ? ZSTD_highbit32(litLength) + LL_deltaCode : LL_Code[litLength];\n@@ -107 +107 @@\n-            rep[2] = rep[1];\n+            rep[2] = (repCode >= 2) ? rep[1] : rep[2];\n",
+        "expected_lines": 13
+      },
+      "host": {
+        "program.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/sequence-code-stream/program.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 1,
+          "codes": [
+            "E3011"
+          ],
+          "completion": null,
+          "first_diagnostic": "error[E3011]: out-of-bounds-memory-access\n  --> tests/fixtures/agent-repair-2-spare/sequence-code-stream/program.c:74:74\n    |\n 74 |     return (litLength > 64) ? ZSTD_highbit32(litLength) + LL_deltaCode : LL_Code[litLength];\n    |                                                                          ^^^^^^^^^^^^^^^^^^ out-of-bounds-memory-access\n    |\n   = note: this operation failed on the executed path\n"
+        },
+        "fixed.c": {
+          "argv": [
+            "target/frontend/release/evo",
+            "check",
+            "--json",
+            "tests/fixtures/agent-repair-2-spare/sequence-code-stream/fixed.c"
+          ],
+          "cwd": "<repository root>",
+          "exit_code": 0,
+          "codes": [],
+          "completion": {
+            "claim": "executed-path-only",
+            "kind": "check",
+            "main_return": "63",
+            "schema": "evocc.check.v1",
+            "status": "completed"
+          },
+          "first_diagnostic": null
+        }
+      },
+      "variants": {
+        "program.c": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 2548464058490484553\n1 13611711877705003934\n2 14550848074116153951\n3 6530414338454183235\n4 4235592463608450168\n5 2875248742409098318\n6 12317153937218642675\n7 12332780120270483622\n8 9530055324256857491\n9 14019528517173877819\n10 10678823311262921994\n11 6472637354282230948\nmain 19\n",
+          "differing_output_lines": 8,
+          "differing_seed_lines": 7,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 19,
+            "runtime_errors": [
+              "program.c:74:81: runtime error: index 64 out of bounds for type 'BYTE [64]'",
+              "program.c:74:81: runtime error: load of address 0xaaaae5597ad0 with insufficient space for an object of type 'const BYTE'",
+              "program.c:144:31: runtime error: index 36 out of bounds for type 'BYTE [36]'"
+            ]
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:52:9: warning: padding size of 'bitStream_t' with 4 bytes to alignment boundary [-Wpadded]",
+              "program.c:225:23: warning: cast from 'const unsigned char *' to 'unsigned char *' drops const qualifier [-Wcast-qual]",
+              "program.c:319:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:74:74: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:89:69: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:100:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:100:18: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:101:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:106:82: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:107:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:107:22: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:108:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:120:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:122:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:134:29: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:135:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:136:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:137:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:144:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:144:84: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:152:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:164:35: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:181:25: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:182:50: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:183:23: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:184:40: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:184:68: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:187:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:189:23: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:205:29: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:206:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:207:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:208:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:209:40: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:210:39: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:210:47: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:211:42: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:211:50: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:238:22: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:239:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:239:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:240:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:243:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:245:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:246:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:246:33: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:250:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:251:60: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:254:21: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:254:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:255:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:259:23: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:259:59: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:260:21: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:260:57: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:261:31: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:261:71: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:262:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:282:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:283:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:286:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:287:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:312:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:315:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:315:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:326:23: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 114,
+            "runtime_errors": [
+              "program.c:74:74: runtime error: index 64 out of bounds for type 'const BYTE[64]' (aka 'const unsigned char[64]')"
+            ]
+          }
+        },
+        "fixed.c": {
+          "score_passed": true,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 11686575288080417238\n1 5227279340539173155\n2 9242621630439766337\n3 1345902059488847926\n4 4235592463608450168\n5 2875248742409098318\n6 12504400682679457331\n7 963354087386608320\n8 9530055324256857491\n9 16353452597077241577\n10 10678823311262921994\n11 6472637354282230948\nmain 63\n",
+          "differing_output_lines": 0,
+          "differing_seed_lines": 0,
+          "gcc-14": {
+            "compile_exit": 0,
+            "compile_warnings": [],
+            "run_exit": 63,
+            "runtime_errors": []
+          },
+          "clang-19": {
+            "compile_exit": 0,
+            "compile_warnings": [
+              "program.c:52:9: warning: padding size of 'bitStream_t' with 4 bytes to alignment boundary [-Wpadded]",
+              "program.c:225:23: warning: cast from 'const unsigned char *' to 'unsigned char *' drops const qualifier [-Wcast-qual]",
+              "program.c:319:20: warning: no previous prototype for function 'evaluate' [-Wmissing-prototypes]",
+              "program.c:74:74: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:89:69: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:100:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:100:18: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:101:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:106:82: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:107:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:107:39: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:107:48: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:108:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:120:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:122:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:134:29: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:135:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:136:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:137:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:144:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:144:84: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:152:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:164:35: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:181:25: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:182:50: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:183:23: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:184:40: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:184:68: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:187:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:189:23: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:205:29: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]",
+              "program.c:206:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:207:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:208:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:209:40: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:210:39: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:210:47: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:211:42: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:211:50: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:238:22: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:239:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:239:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:240:13: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:243:30: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:245:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:246:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:246:33: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:250:26: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:251:60: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:254:21: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:254:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:255:17: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:259:23: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:259:59: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:260:21: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:260:57: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:261:31: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:261:71: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:262:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:282:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:283:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:286:29: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:287:9: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:312:24: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:315:28: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:315:37: warning: unsafe buffer access [-Wunsafe-buffer-usage]",
+              "program.c:326:23: warning: unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+            ],
+            "run_exit": 63,
+            "runtime_errors": []
+          }
+        },
+        "one-repair-0": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 2548464058490484553\n1 5227279340539173155\n2 14550848074116153951\n3 1345902059488847926\n4 4235592463608450168\n5 2875248742409098318\n6 12317153937218642675\n7 12332780120270483622\n8 9530055324256857491\n9 14019528517173877819\n10 10678823311262921994\n11 6472637354282230948\nmain 32\n",
+          "differing_output_lines": 6,
+          "differing_seed_lines": 5
+        },
+        "one-repair-1": {
+          "score_passed": false,
+          "score_exit": 0,
+          "score_timeout": false,
+          "compile_exit": 0,
+          "stdout": "0 11686575288080417238\n1 13611711877705003934\n2 9242621630439766337\n3 6530414338454183235\n4 4235592463608450168\n5 2875248742409098318\n6 12504400682679457331\n7 963354087386608320\n8 9530055324256857491\n9 16353452597077241577\n10 10678823311262921994\n11 6472637354282230948\nmain 12\n",
+          "differing_output_lines": 3,
+          "differing_seed_lines": 2
+        }
+      }
+    }
+  }
+}
