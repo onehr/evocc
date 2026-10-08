@@ -112,7 +112,10 @@ def request(payload, key, events, attempts=4):
             if attempt == attempts - 1 or not (error.code == 429 or 500 <= error.code < 600): raise Failure("http_" + str(error.code)) from None
             events[-1]["retry_after_seconds"] = 2 ** attempt
             time.sleep(2 ** attempt)
-        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException):
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as error:
+            # Exception text can contain request details; retain only typed transport evidence.
+            cause = getattr(error, "reason", None)
+            events.append(dict(transport_error=dict(kind=type(error).__name__, cause=type(cause).__name__ if cause is not None else None, errno=getattr(cause or error, "errno", None))))
             raise Stop("cost_unknown:transport_error") from None
 
 def usage(response):
@@ -181,8 +184,10 @@ def qualify(receipt, items, models, hashes):
     for item in items:
         for model in models:
             rows = [r for r in runs if r.get("item") == item.name and r.get("model_sent") == model]
-            if len(rows) != 3 or {r.get("repetition") for r in rows} != {1, 2, 3} or any(r.get("condition") != "c0" or r.get("rounds") != 1 or r.get("rounds_scored") != 1 or r.get("status") not in ("passed", "failed") or r.get("passed") != (r["status"] == "passed") for r in rows): raise Failure("incomplete_preflight")
-            if sum(not r["passed"] for r in rows) < 2: raise Failure("preflight_item_too_easy")
+            # Delivery errors occupy a trial but cannot establish a failed repair.
+            outcomes = {("passed", 1, True), ("failed", 1, False), ("response_error", 0, False)}
+            if len(rows) != 3 or {r.get("repetition") for r in rows} != {1, 2, 3} or any(r.get("condition") != "c0" or r.get("rounds") != 1 or (r.get("status"), r.get("rounds_scored"), r.get("passed")) not in outcomes for r in rows): raise Failure("incomplete_preflight")
+            if sum(r["status"] == "failed" for r in rows) < 2: raise Failure("preflight_item_too_easy")
 
 def native(mode, source, reference=None):
     name = "agent-repair-" + uuid.uuid4().hex

@@ -1,7 +1,7 @@
 {
   "schema": "agent-repair.preflight.v1",
   "date": "2026-10-08",
-  "claim": "Tool qualification only, repeated after model-visible behavior comments were clarified. Model preflight stopped before any score; registration remains pending. This is not full corpus eligibility or repair-benefit evidence.",
+  "claim": "Tool qualification only, repeated after model-visible behavior comments were clarified. Separate model preflights remain incomplete; registration and formal measurement have not started. This is not full corpus eligibility or repair-benefit evidence.",
   "population": {"json_and_text": 10, "integer_and_checksum": 10, "binary_codecs": 10},
   "synthetic_items": 10,
   "public_source_items": 20,
@@ -9,6 +9,10 @@
   "evo_ub_codes": {"E3002": 1, "E3004": 5, "E3005": 5, "E3009": 11, "E3011": 8},
   "command": "EVOCC_REPAIR_CAPTURE=.evidence/diagnostics/20261008/repair-experiment-prerequisites/corpus-v2-contracts-qualification.json python3 -m unittest tools.experiment.tests.test_corpus_v2",
   "tests": {"passed": 2, "failed": 0, "skipped": 0, "host_checks": 60, "native_variants": 120},
+  "supporting_checks": {
+    "repair_scripts": {"passed": 62, "failed": 0, "capture": ".evidence/diagnostics/20261008/repair-experiment-prerequisites/transport-admission-tests.log", "capture_sha256": "d90471a9383c9f8d003255d087445d042477f09869db538e58768eeac4fa7afc"},
+    "workspace": {"command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh --full-workspace --offline", "clean_start_commit": "3bfb68c5baefbcfa3c3dd46989e45d661401a5c7", "rust_source_unchanged_during_gate": true, "suites": 425, "passed": 3239, "failed": 0, "ignored": 5, "clippy": "PASS", "format": "PASS", "exit_code": 0, "capture": ".evidence/diagnostics/20261008/repair-experiment-prerequisites/full-workspace-3bfb68c5.log", "capture_sha256": "288b7b8f424574ef821e8b47797cb4a13c62d6d494adeee55db7a01f19ac43dd"}
+  },
   "capture": ".evidence/diagnostics/20261008/repair-experiment-prerequisites/corpus-v2-contracts-qualification.json",
   "capture_sha256": "e69a2483d205cce674fafd8cbe1aad257439e067957f3ceef84b07321417c44c",
   "capture_bytes": 545909,
@@ -26,5 +30,6 @@
     "Recompute the sorting insertion span from actual diff output: repeated braces changed its selected anchor after leading comments were added. All minimal changes again fall within the registered spans."
   ],
   "model_calls_in_tool_qualification": 0,
-  "interrupted_model_preflight": "tests/contracts/agent-repair-2-preflight-interrupted-20261008.json"
+  "interrupted_model_preflight": "tests/contracts/agent-repair-2-preflight-interrupted-20261008.json",
+  "transport_stopped_model_preflight": "tests/contracts/agent-repair-2-preflight-transport-20261008.json"
 }

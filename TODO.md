@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a, P18 | P01 through P17 and P19 are complete in their recorded scope. P18's model-visible behavior contracts are clarified and tool qualification passes again; the initial model preflight stopped before any score. Its receipt is retained, and model difficulty plus registration remain pending. P17 and its proposed P17a follow-up remain separate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a, P18 | P01 through P17 and P19 are complete in their recorded scope. P18's tool qualification passes. The current model preflight stopped after four of 180 slots: two scored and two response errors. Both stopped receipts are retained; model difficulty, registration and formal measurement remain incomplete. P17 and its proposed P17a follow-up remain separate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -977,6 +977,25 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   USD 0.005037825 for the day (USD 0.203326857 lifetime); these aggregates do
   not identify the retry's exact charge. Reserve USD 1 of the total preflight
   allowance for this attempt; a new draft's cap is at most USD 11, not USD 12.
+  The second preflight at `3bfb68c5` stopped with `cost_unknown:transport_error`:
+  four of 180 slots attempted, two scored (one pass, one failure), two response
+  errors, six HTTP attempts, USD 0.03732025 reported cost. The other 176 slots
+  were not attempted. One error exhausted the output budget twice; the other
+  had two transport failures with unknown per-request usage. Preserve its
+  [receipt](tests/contracts/agent-repair-2-preflight-transport-20261008.json)
+  and [transcripts](tests/contracts/agent-repair-2-preflight-transport-20261008.tar.gz).
+  A read-only usage query at 2026-10-08T12:04:16Z reports USD 0.049194125 for
+  the day and USD 0.247483157 lifetime; it does not identify individual charges.
+  Restore the owner's original preflight rule: two real scored failures out
+  of three slots. An error in the third slot is not a failure. The earlier
+  all-three-valid restriction was added by the implementation, not the owner.
+  Do not rerun attempted slots. Prefix-only continuation needs a small harness
+  addition; its line-budget exception is requested before implementation.
+  The transport/admission fixes pass 62 harness, report and secret tests.
+  The harness is 411 lines, exactly 120 above its original baseline. The full
+  offline workspace gate started on clean `3bfb68c5`: 425 suites, 3,239 passed,
+  zero failed, five existing ignores; Clippy and formatting pass. No Rust
+  source changed during that gate. This does not complete model qualification.
   Specify the span coordinates, mixed-defect classes, preflight eligibility,
   prediction comparisons and dry-run cost cap before the new tag.
   The required P17 ceiling-effect sentence is added to README RQ6 and the book

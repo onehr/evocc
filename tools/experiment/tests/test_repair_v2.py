@@ -1,5 +1,6 @@
 """Model-free tests for the second experiment; never execute a candidate."""
 import copy
+import errno
 import gzip
 import importlib.util
 import io
@@ -193,6 +194,28 @@ class V2Tests(unittest.TestCase):
         self.assertEqual(opener.open.call_count, 1)
         sleep.assert_not_called()
 
+    def test_transport_error_records_only_exception_classes_and_errno(self):
+        secret = "unit-secret-key sk-or-fixture-transport-detail"
+        variants = [
+            (urllib.error.URLError(ConnectionResetError(errno.ECONNRESET, secret)),
+             dict(kind="URLError", cause="ConnectionResetError", errno=errno.ECONNRESET)),
+            (ConnectionResetError(errno.ECONNRESET, secret),
+             dict(kind="ConnectionResetError", cause=None, errno=errno.ECONNRESET)),
+            (TimeoutError(secret), dict(kind="TimeoutError", cause=None, errno=None)),
+        ]
+        for error, metadata in variants:
+            opener, events = Mock(), []
+            opener.open.side_effect = error
+            with self.subTest(kind=metadata["kind"]), \
+                 patch.object(repair.urllib.request, "build_opener", return_value=opener):
+                with self.assertRaisesRegex(repair.Stop, "^cost_unknown:transport_error$"):
+                    repair.request({}, "unit-secret-key", events, attempts=1)
+                self.assertEqual(opener.open.call_count, 1)
+                self.assertEqual(events, [dict(transport_error=metadata)])
+                captured = repair.encode(events, "unit-secret-key")
+                self.assertNotIn(secret, captured)
+                self.assertNotIn("sk-or-", captured)
+
     def eligibility(self, items, models, hashes):
         rows = [dict(item=item.name, model_sent=model, condition="c0", repetition=rep,
                      rounds=1, rounds_scored=1, status="passed" if rep == 1 else "failed", passed=rep == 1)
@@ -200,7 +223,7 @@ class V2Tests(unittest.TestCase):
         return dict(schema="agent-repair.v2", plan={"phase": "preflight"}, stop_reason="completed",
                     provenance={"hashes": hashes}, runs=rows)
 
-    def test_eligibility_requires_three_valid_first_responses_for_each_model(self):
+    def test_eligibility_requires_three_first_response_slots_for_each_model(self):
         items, models, hashes = [Path("item")], ["first", "second"], {"program.c": "fixture-hash"}
         good = self.eligibility(items, models, hashes)
         repair.qualify(good, items, models, hashes)
@@ -208,7 +231,7 @@ class V2Tests(unittest.TestCase):
         missing = copy.deepcopy(good)
         missing["runs"].pop()
         variants.append((missing, "incomplete_preflight"))
-        for status in ("response_error", "error", "stopped"):
+        for status in ("error", "stopped"):
             failed_delivery = copy.deepcopy(good)
             failed_delivery["runs"][-1]["status"] = status
             variants.append((failed_delivery, "incomplete_preflight"))
@@ -226,6 +249,25 @@ class V2Tests(unittest.TestCase):
         variants.append((changed, "preflight_input_mismatch"))
         for receipt, reason in variants:
             with self.subTest(reason=reason), self.assertRaisesRegex(repair.Failure, reason):
+                repair.qualify(receipt, items, models, hashes)
+
+    def test_eligibility_accepts_error_slot_with_two_genuine_scored_failures(self):
+        items, models, hashes = [Path("item")], ["first", "second"], {"program.c": "fixture-hash"}
+        receipt = self.eligibility(items, models, hashes)
+        receipt["runs"][0].update(status="response_error", rounds_scored=0,
+                                  passed=False, error="response_error")
+        original = copy.deepcopy(receipt)
+        repair.qualify(receipt, items, models, hashes)
+        self.assertEqual(receipt, original)
+
+    def test_eligibility_response_errors_never_count_as_scored_failures(self):
+        items, models, hashes = [Path("item")], ["first", "second"], {"program.c": "fixture-hash"}
+        for error_repetitions in ((3,), (1, 3), (1, 2, 3)):
+            receipt = self.eligibility(items, models, hashes)
+            for rep in error_repetitions:
+                receipt["runs"][rep - 1].update(status="response_error", rounds_scored=0,
+                                               passed=False, error="response_error")
+            with self.subTest(error_repetitions=error_repetitions), self.assertRaises(repair.Failure):
                 repair.qualify(receipt, items, models, hashes)
 
     def test_preflight_clean_source_then_measurement_checks_receipt_and_hashes(self):
