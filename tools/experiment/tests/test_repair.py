@@ -223,7 +223,7 @@ class RepairTests(unittest.TestCase):
 
     def test_preflight_rejects_unregistered_rounds_before_container(self):
         protocol = json.loads((repair.HERE / "protocol.json").read_text())
-        models = (repair.HERE / "models.txt").read_text().split()
+        models = protocol.get("models") or (repair.HERE / "models.txt").read_text().split()
         args = SimpleNamespace(corpus_tag=protocol["corpus_tag"], items=repair.ROOT / "tests/fixtures/agent-repair")
         plan = dict(reps=protocol["repetitions"], rounds=protocol["rounds"] + 1, temperature=protocol["temperature"], cost_cap=protocol["reported_cost_cap_usd"], max_tokens=protocol["max_tokens"], class_counts=protocol["population"], conditions=list(protocol["conditions"]), models=models, max_requests=protocol["request_limit"])
         def mocked_run(argv, **kwargs):
@@ -234,7 +234,7 @@ class RepairTests(unittest.TestCase):
 
     def test_preflight_queries_only_registered_paths(self):
         protocol = json.loads((repair.HERE / "protocol.json").read_text())
-        models = (repair.HERE / "models.txt").read_text().split()
+        models = protocol.get("models") or (repair.HERE / "models.txt").read_text().split()
         args = SimpleNamespace(corpus_tag=protocol["corpus_tag"], items=repair.ROOT / "tests/fixtures/agent-repair")
         plan = dict(reps=protocol["repetitions"], rounds=protocol["rounds"], temperature=protocol["temperature"], cost_cap=protocol["reported_cost_cap_usd"], max_tokens=protocol["max_tokens"], class_counts=protocol["population"], conditions=list(protocol["conditions"]), models=models, max_requests=protocol["request_limit"])
         image = json.loads((repair.ROOT / "contracts/build-environment.json").read_text())["buildImage"]["executionReference"]

@@ -1,1 +1,2 @@
 deepseek/deepseek-v4.1-flash
+qwen/qwen3.5-9b

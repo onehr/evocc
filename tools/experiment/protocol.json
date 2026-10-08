@@ -3,6 +3,7 @@
   "corpus_tag": "agent-repair-corpus-2",
   "population": {"ub": 10, "frontend": 10, "logic": 10},
   "models_file": "tools/experiment/models.txt",
+  "models": ["deepseek/deepseek-v4.1-flash"],
   "repetitions": 3,
   "rounds": 3,
   "temperature": 0,
