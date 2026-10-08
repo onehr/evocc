@@ -12,7 +12,7 @@
   "max_tokens": 16384,
   "reported_cost_cap_usd": 160,
   "preflight_cost_cap_usd": 12,
-  "cost_planning_state": "Dry run completed on the 30-item draft: 2700 normal / 5400 maximum HTTP measurement slots; 180 normal / 360 maximum HTTP preflight slots. Corpus qualification and registration are still pending.",
+  "cost_planning_state": "Dry run and tool qualification completed on the 30-item draft: 2700 normal / 5400 maximum HTTP measurement slots; 180 normal / 360 maximum HTTP preflight slots. Model difficulty preflight and registration are still pending.",
   "cost_basis": "The largest initial serialized message is 10739 bytes before request metadata. Plan conservatively at 20000 input tokens and 16384 output tokens per attempt, using the observed 2026-10-08 endpoint maxima USD0.45/2.40 per million for DeepSeek and USD0.17/0.25 for Qwen. All slots plus retries estimate USD150.70752 measurement and USD10.047168 preflight; round to caps160 and12. Feedback or provider prices can exceed these estimates. The enforced rule is reported-cost stopping, not a hard invoice ceiling. Replacements consume only the remaining total preflight allowance.",
   "cost_stop": "The caps apply to reported cost, not an absolute provider invoice. Bill both attempts. Do not start another attempt after the cap. Unknown usage is null, not zero; after the one permitted identical retry and its score, stop before another logical slot if any cost remains unknown. The final attempt can cross the cap.",
   "request_limit": 2700,

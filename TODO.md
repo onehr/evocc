@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a, P18 | P01 through P17 and P19 are complete in their recorded scope. P18 uses the approved new tag and two-model request budget; corpus and harness work has started, with no model requests or registration yet. P17 and its proposed P17a follow-up remain separate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a, P18 | P01 through P17 and P19 are complete in their recorded scope. P18's 30-item corpus passes tool qualification and its harness is implemented; model difficulty preflight and registration remain pending. P17 and its proposed P17a follow-up remain separate. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -954,6 +954,13 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   30 items × five conditions × two models × three repetitions × three rounds:
   at most 2,700 normal requests, with one retry charged separately. Report
   repair rate excluding response errors and completion rate over all attempts.
+  Tool qualification: [receipt](tests/contracts/agent-repair-2-tool-preflight-20261008.json)
+  records 30 original hidden failures, 30 fixed passes, 60 single-repair failures,
+  and 30 UB diagnoses each from EvoCC, GCC and Clang. All fixed executions
+  complete. The CRC original's sanitizer and hidden timeouts remain failures.
+  The corpus has 20 public-source adaptations and ten marked synthetic items.
+  Commit `1e98993f` adds 115 harness lines and 58 report lines; 56 mock harness
+  and report tests pass. None of these results establishes model difficulty.
   Specify the span coordinates, mixed-defect classes, preflight eligibility,
   prediction comparisons and dry-run cost cap before the new tag.
   The required P17 ceiling-effect sentence is added to README RQ6 and the book
