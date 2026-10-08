@@ -2,6 +2,7 @@
 import copy
 import errno
 import gzip
+import hashlib
 import importlib.util
 import io
 import json
@@ -413,6 +414,174 @@ class V2Tests(unittest.TestCase):
                 else:
                     with self.assertRaisesRegex(repair.Stop, "response_limit"):
                         repair.request({}, "unit-secret-key", [], attempts=attempts)
+
+    def resume_fixture(self, root):
+        previous, output = root / "previous", root / "output"
+        previous.mkdir(); output.mkdir()
+        order = [dict(item=item, model=model, repetition=rep, condition="c0")
+                 for rep in (1, 2, 3) for item in ("adler", "bitstream")
+                 for model in ("first", "second")]
+        plan = dict(items=2, models=["first", "second"], conditions=["c0"], reps=3,
+                    rounds=1, temperature=0, cost_cap=11, max_tokens=16384,
+                    max_requests=12, max_http_attempts=24, phase="preflight")
+        hashes = {path: "frozen-" + path for path in (
+            "tools/experiment/repair.py", "tools/experiment/protocol-2.json",
+            "tools/experiment/prompt-2.txt", "tools/experiment/models.txt",
+            "tools/experiment/predictions-2.md", "contracts/build-environment.json",
+            "tests/fixtures/agent-repair-2/adler/program.c",
+            "tests/fixtures/agent-repair-2/bitstream/program.c")}
+        provenance = dict(commit="old-commit", corpus_tag="agent-repair-experiment-2",
+                          hashes=hashes, evo_sha256="same-evo", evocc_sha256="same-evocc",
+                          version="fixture-version", image="evo-flight-lab:sealed",
+                          image_inspect='[{"configuration":{"descriptor":{"digest":"sealed"}}}]')
+        rows = []
+        for index, slot in enumerate(order[:4]):
+            error = index >= 2
+            calls = [dict(attempt=attempt, cost=None if index == 3 else 0.25,
+                          response_error="cost_unknown:transport_error" if index == 3
+                          else "output_budget_exhausted" if error else None)
+                     for attempt in range(1, 3 if error else 2)]
+            row = dict(item=slot["item"], model_sent=slot["model"], condition="c0",
+                       repetition=slot["repetition"], rounds=1, rounds_scored=0 if error else 1,
+                       status="response_error" if error else "passed" if index == 0 else "failed",
+                       passed=index == 0, error="response_error" if error else None,
+                       cost=sum(call["cost"] or 0 for call in calls), calls=calls,
+                       transcript=f"{index:04d}.json.gz")
+            rows.append(row)
+            capture = json.dumps([dict(slot=index, calls=calls)]).encode()
+            (previous / row["transcript"]).write_bytes(gzip.compress(capture, mtime=0))
+        prior = dict(schema="agent-repair.v2", date="prior-date", plan=plan,
+                     provenance=provenance, runs=rows, total_cost=sum(row["cost"] for row in rows),
+                     stop_reason="cost_unknown:transport_error", acceptance=False, unattempted=8)
+        (previous / "receipt.json").write_text(json.dumps(prior, indent=2) + "\n")
+        (previous / "plan.json").write_text(json.dumps(dict(plan=plan, provenance=provenance, order=order)))
+        fresh = copy.deepcopy(prior)
+        fresh.update(date="continuation-date", runs=[], total_cost=0, stop_reason=None)
+        fresh["provenance"]["commit"] = "new-commit"
+        for path in ("tools/experiment/repair.py", "tools/experiment/protocol-2.json"):
+            fresh["provenance"]["hashes"][path] = "amended-" + path
+        return previous, output, prior, fresh, order
+
+    def test_resume_prefix_copies_evidence_costs_and_capture_totals_without_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            previous, output, prior, fresh, order = self.resume_fixture(Path(tmp))
+            originals = {path.name: path.read_bytes() for path in previous.iterdir()}
+            current_provenance = copy.deepcopy(fresh["provenance"])
+            packed = [originals[row["transcript"]] for row in prior["runs"]]
+            with patch.object(repair, "request", side_effect=AssertionError("no added retry")) as request:
+                totals = repair.resume_prefix(previous, output, fresh, order, "unit-secret-key")
+            request.assert_not_called()
+            self.assertEqual(totals, (sum(map(len, packed)), sum(len(gzip.decompress(data)) for data in packed)))
+            self.assertEqual(fresh["runs"], prior["runs"])
+            self.assertEqual(fresh["total_cost"], prior["total_cost"])
+            self.assertEqual(fresh["provenance"], current_provenance)
+            self.assertIsNone(fresh["runs"][-1]["calls"][0]["cost"])
+            self.assertEqual(len(fresh["runs"][-1]["calls"]), 2)
+            self.assertEqual((output / "prior-receipt.json").read_bytes(), originals["receipt.json"])
+            self.assertEqual(fresh["continuation"]["prior_receipt_sha256"],
+                             hashlib.sha256(originals["receipt.json"]).hexdigest())
+            self.assertEqual(fresh["continuation"]["prior_provenance"], prior["provenance"])
+            for row in prior["runs"]:
+                self.assertEqual((output / row["transcript"]).read_bytes(), originals[row["transcript"]])
+            self.assertFalse((output / "0004.json.gz").exists())
+            self.assertEqual({path.name: path.read_bytes() for path in previous.iterdir()}, originals)
+
+    def test_resume_prefix_rejects_changed_order_and_row_identity(self):
+        for field in ("order", "item", "model_sent", "repetition", "condition"):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
+                previous, output, prior, fresh, order = self.resume_fixture(Path(tmp))
+                if field == "order":
+                    order[-1]["model"] = "changed-unattempted-model"
+                else:
+                    prior["runs"][0][field] = 2 if field == "repetition" else "changed"
+                    (previous / "receipt.json").write_text(json.dumps(prior))
+                with self.assertRaises(repair.Failure):
+                    repair.resume_prefix(previous, output, fresh, order, "unit-secret-key")
+
+    def test_resume_prefix_rejects_missing_transcript(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            previous, output, prior, fresh, order = self.resume_fixture(Path(tmp))
+            (previous / prior["runs"][2]["transcript"]).unlink()
+            with self.assertRaises((repair.Failure, OSError)):
+                repair.resume_prefix(previous, output, fresh, order, "unit-secret-key")
+
+    def test_resume_prefix_rejects_changed_frozen_inputs_and_compiler(self):
+        fields = ["tests/fixtures/agent-repair-2/adler/program.c", "tools/experiment/prompt-2.txt",
+                  "tools/experiment/models.txt", "tools/experiment/predictions-2.md",
+                  "contracts/build-environment.json", "evo_sha256", "evocc_sha256",
+                  "version", "image", "image_inspect", "corpus_tag"]
+        for field in fields:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
+                previous, output, _, fresh, order = self.resume_fixture(Path(tmp))
+                target = fresh["provenance"]["hashes"] if "/" in field else fresh["provenance"]
+                target[field] = '[{"configuration":{"descriptor":{"digest":"changed"}}}]' if field == "image_inspect" else "changed"
+                with self.assertRaises(repair.Failure):
+                    repair.resume_prefix(previous, output, fresh, order, "unit-secret-key")
+
+    def test_resume_prefix_refuses_non_preflight_and_v1_receipts(self):
+        for variant in ("prior-measurement", "fresh-measurement", "both-measurement", "v1"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as tmp:
+                previous, output, prior, fresh, order = self.resume_fixture(Path(tmp))
+                if variant == "v1":
+                    prior["schema"] = fresh["schema"] = "agent-repair.v1"
+                else:
+                    if variant in ("prior-measurement", "both-measurement"):
+                        prior["plan"]["phase"] = "measurement"
+                    if variant in ("fresh-measurement", "both-measurement"):
+                        fresh["plan"]["phase"] = "measurement"
+                (previous / "receipt.json").write_text(json.dumps(prior))
+                (previous / "plan.json").write_text(json.dumps(dict(plan=prior["plan"],
+                                                                   provenance=prior["provenance"], order=order)))
+                with self.assertRaises(repair.Failure):
+                    repair.resume_prefix(previous, output, fresh, order, "unit-secret-key")
+
+    def test_resume_main_calls_only_unattempted_slots_and_preserves_prefix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            previous, _, prior, fresh, order = self.resume_fixture(root)
+            protocol, items = self.fixture(root, 2, ["first", "second"])
+            for index, name in enumerate(("adler", "bitstream")):
+                (items / str(index)).rename(items / name)
+                (items / name / "program.c").write_text("/* " + name + " */\n" + SOURCE)
+            configured = json.loads(protocol.read_text())
+            configured["preflight_cost_cap_usd"] = 11
+            protocol.write_text(json.dumps(configured))
+            prior["plan"]["class_counts"] = {"logic": 2}
+            (previous / "receipt.json").write_text(json.dumps(prior, indent=2) + "\n")
+            (previous / "plan.json").write_text(json.dumps(dict(plan=prior["plan"],
+                                                               provenance=prior["provenance"], order=order)))
+            prefix_bytes = {row["transcript"]: (previous / row["transcript"]).read_bytes()
+                            for row in prior["runs"]}
+            prior_bytes = (previous / "receipt.json").read_bytes()
+            sent = []
+            def request(payload, key, events, **kwargs):
+                program = payload["messages"][1]["content"]
+                item = "adler" if "/* adler */" in program else "bitstream"
+                sent.append((item, payload["model"]))
+                response = self.response()
+                events.append(dict(http_status=200, response=json.dumps(response)))
+                return response
+            metric = dict(diff_added=1, diff_removed=1, changed_inside_spans=2, spans_touched=[True])
+            output = root / "continued"
+            with patch.object(repair, "preflight", return_value=fresh["provenance"]), \
+                 patch.object(repair, "load_key", return_value="unit-secret-key"), \
+                 patch.object(repair, "request", side_effect=request), \
+                 patch.object(repair, "score", return_value=(True, [])), \
+                 patch.object(repair, "measure", return_value=(metric, "DIFF")), \
+                 patch.object(repair.shutil, "disk_usage", return_value=SimpleNamespace(free=30 * 1024 ** 3)), \
+                 patch("sys.stdout", new_callable=io.StringIO):
+                result = repair.main(["--protocol", str(protocol), "--preflight", "--resume-from",
+                                      str(previous), "--out", str(output)])
+            receipt = json.loads((output / "receipt.json").read_text())
+            self.assertEqual(result, 0)
+            self.assertEqual(sent, [(slot["item"], slot["model"]) for slot in order[4:]])
+            self.assertEqual(receipt["runs"][:4], prior["runs"])
+            self.assertEqual(len(receipt["runs"]), len(order))
+            self.assertEqual(receipt["total_cost"], prior["total_cost"] + len(sent) * 0.25)
+            self.assertEqual((output / "prior-receipt.json").read_bytes(), prior_bytes)
+            for name, packed in prefix_bytes.items():
+                self.assertEqual((output / name).read_bytes(), packed)
+            self.assertTrue((output / "0004.json.gz").exists())
 
 
 if __name__ == "__main__":

@@ -989,20 +989,28 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   Restore the owner's original preflight rule: two real scored failures out
   of three slots. An error in the third slot is not a failure. The earlier
   all-three-valid restriction was added by the implementation, not the owner.
-  Do not rerun attempted slots. Prefix-only continuation needs a small harness
-  addition; its line-budget exception is requested before implementation.
+  Do not rerun attempted slots. The owner approved a +150-line harness limit
+  for prefix-only continuation. Resume only the unattempted suffix into a new
+  directory, preserving all prior outcomes, transcripts, provenance and cost.
   The transport/admission fixes pass 62 harness, report and secret tests.
   The harness is 411 lines, exactly 120 above its original baseline. The full
   offline workspace gate started on clean `3bfb68c5`: 425 suites, 3,239 passed,
   zero failed, five existing ignores; Clippy and formatting pass. No Rust
   source changed during that gate. This does not complete model qualification.
+  The read-only usage query at 2026-10-08T12:54:09Z is unchanged from 12:04:16Z.
+  Keep the USD 1 reserve for prior unitemized charges and carry the current
+  campaign's reported cost against its USD 11 cap; neither amount resets.
+  Prefix-only continuation passes six new regressions (baseline lacks the API
+  and is RED); all 68 harness, report and secret tests pass. The script is
+  438 lines, a net increase of 147. No Rust, model, prompt or corpus changed.
   Specify the span coordinates, mixed-defect classes, preflight eligibility,
   prediction comparisons and dry-run cost cap before the new tag.
   The required P17 ceiling-effect sentence is added to README RQ6 and the book
   without changing any previous result. Exit still requires the qualified
   corpus, tagged run or cost stop, secret-checked receipt/transcripts, all five
-  prediction outcomes, report, changelog and full gate. Budgets: +120 harness
-  lines and +80 report lines. This is not a completion or repair-benefit claim.
+  prediction outcomes, report, changelog and full gate. Budgets: +150 harness
+  lines (owner-approved continuation exception) and +80 report lines.
+  This is not a completion or repair-benefit claim.
 
 ### Remaining verification and application sequence
 

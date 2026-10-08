@@ -262,6 +262,31 @@ def preflight(args, items, models, plan):
     if observed != json.loads((ROOT / "contracts/build-environment.json").read_text())["buildImage"]["executionReference"]: raise Failure("sealed_image_digest_mismatch")
     return dict(commit=commit, corpus_tag=args.corpus_tag, hashes={str(p.relative_to(ROOT)): digest(p) for p in paths}, evo_sha256=digest(EVO), evocc_sha256=digest(EVO.with_name("evocc")), version=run([EVO, "version"])["stdout"], image=IMAGE, image_inspect=image["stdout"])
 
+def resume_prefix(previous, output, receipt, order, key):
+    old = json.loads((previous / "receipt.json").read_text())
+    saved = json.loads((previous / "plan.json").read_text())
+    if receipt["schema"] != "agent-repair.v2" or receipt["plan"].get("phase") != "preflight" or old.get("schema") != receipt["schema"] or old.get("plan") != receipt["plan"] or not old.get("stop_reason") or old["stop_reason"] == "completed": raise Failure("invalid_preflight_resume")
+    if saved != dict(plan=old["plan"], provenance=old["provenance"], order=order): raise Failure("resume_plan_mismatch")
+    before, after = old["provenance"], receipt["provenance"]
+    amended = {"tools/experiment/repair.py", "tools/experiment/protocol-2.json"}
+    if {k: v for k, v in before["hashes"].items() if k not in amended} != {k: v for k, v in after["hashes"].items() if k not in amended} or any(before.get(k) != after.get(k) for k in ("corpus_tag", "evo_sha256", "evocc_sha256", "version", "image", "image_inspect")): raise Failure("resume_input_mismatch")
+    rows = old["runs"]
+    if not 0 < len(rows) < len(order): raise Failure("invalid_resume_prefix")
+    archive_bytes, raw_bytes = 0, 0
+    for index, row in enumerate(rows):
+        identity = dict(item=row["item"], model=row["model_sent"], repetition=row["repetition"], condition=row["condition"])
+        name = str(index).zfill(4) + ".json.gz"
+        if identity != order[index] or row["transcript"] != name: raise Failure("invalid_resume_prefix")
+        packed = (previous / name).read_bytes()
+        raw = gzip.decompress(packed); encode(json.loads(raw), key)
+        archive_bytes += len(packed); raw_bytes += len(raw)
+        if raw_bytes >= 400 * 1024 ** 2: raise Stop("capture_budget")
+        (output / name).write_bytes(packed)
+    # Keep attempted slots unchanged, including errors and unknown per-call costs.
+    receipt.update(runs=rows, total_cost=old["total_cost"], continuation=dict(prior_receipt_sha256=digest(previous / "receipt.json"), prior_provenance=before, prior_stop_reason=old["stop_reason"], history=old.get("continuation")))
+    shutil.copyfile(previous / "receipt.json", output / "prior-receipt.json")
+    return archive_bytes, raw_bytes
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", action="append"); parser.add_argument("--condition", action="append", choices=("c0", "c1", "c2", "c3", "c4"))
@@ -270,6 +295,7 @@ def main(argv=None):
     parser.add_argument("--temperature", type=float); parser.add_argument("--cost-cap", "--max-cost-usd", type=float)
     parser.add_argument("--corpus-tag"); parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--protocol", type=Path, default=HERE / "protocol.json"); parser.add_argument("--preflight", action="store_true")
+    parser.add_argument("--resume-from", type=Path)
     args = parser.parse_args(argv)
     args.protocol = args.protocol.resolve()
     protocol = json.loads(args.protocol.read_text()); v2 = protocol["schema"] == "agent-repair.protocol.v2"
@@ -279,6 +305,7 @@ def main(argv=None):
         if getattr(args, option) is None: setattr(args, option, protocol[field])
     if args.preflight: args.reps, args.rounds, args.condition = 3, 1, ["c0"]
     if not v2 and (args.preflight or any(c in ("c0", "c4") for c in args.condition or [])): parser.error("v2 protocol required")
+    if args.resume_from and not (v2 and args.preflight): parser.error("resume is only for unattempted preflight slots")
     args.items = args.items or ROOT / protocol.get("items", "tests/fixtures/agent-repair")
     if min(args.reps, args.rounds) < 1 or not math.isfinite(args.cost_cap) or args.cost_cap <= 0 or not math.isfinite(args.temperature): parser.error("invalid numeric limits")
     items = sorted(path.parent for path in args.items.resolve().glob("*/program.c"))
@@ -303,10 +330,10 @@ def main(argv=None):
     args.out.mkdir(mode=0o700, parents=True)
     receipt = dict(schema="agent-repair.v2" if v2 else "agent-repair.v1", date=datetime.datetime.now(datetime.timezone.utc).isoformat(), provenance=provenance, plan=plan, runs=[], total_cost=0.0, stop_reason=None, acceptance=False)
     order = [dict(item=item.name, model=model, repetition=rep, condition=condition) for item, model, rep, condition in trials]
+    archive_bytes, raw_bytes = resume_prefix(args.resume_from, args.out, receipt, order, key) if args.resume_from else (0, 0)
     (args.out / "plan.json").write_text(encode(dict(plan=plan, provenance=provenance, order=order), key))
     (args.out / "receipt.json").write_text(encode(receipt, key))
-    archive_bytes, raw_bytes = 0, 0
-    for index, (item, model, rep, condition) in enumerate(trials):
+    for index, (item, model, rep, condition) in enumerate(trials[len(receipt["runs"]):], start=len(receipt["runs"])):
         if receipt["total_cost"] >= args.cost_cap: receipt["stop_reason"] = "reported_cost_cap"; break
         row = dict(item=item.name, **{"class": (item / "class").read_text().strip()}, condition=condition, model_sent=model, repetition=rep, rounds=0, rounds_scored=0, passed=False, status="failed", error=None, tokens_in=0, tokens_out=0, cost=0.0, calls=[])
         row["synthetic"] = "written for this corpus" in (item / "origin.md").read_text().lower()

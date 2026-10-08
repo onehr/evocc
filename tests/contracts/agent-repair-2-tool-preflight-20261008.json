@@ -10,7 +10,7 @@
   "command": "EVOCC_REPAIR_CAPTURE=.evidence/diagnostics/20261008/repair-experiment-prerequisites/corpus-v2-contracts-qualification.json python3 -m unittest tools.experiment.tests.test_corpus_v2",
   "tests": {"passed": 2, "failed": 0, "skipped": 0, "host_checks": 60, "native_variants": 120},
   "supporting_checks": {
-    "repair_scripts": {"passed": 62, "failed": 0, "capture": ".evidence/diagnostics/20261008/repair-experiment-prerequisites/transport-admission-tests.log", "capture_sha256": "d90471a9383c9f8d003255d087445d042477f09869db538e58768eeac4fa7afc"},
+    "repair_scripts": {"passed": 68, "failed": 0, "capture": ".evidence/diagnostics/20261008/repair-experiment-prerequisites/resume-tests.log", "capture_sha256": "d36446ca78a8fdf90ba3146161ecb149d67f075060d43c74b7883e0998754bda"},
     "workspace": {"command": "CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh --full-workspace --offline", "clean_start_commit": "3bfb68c5baefbcfa3c3dd46989e45d661401a5c7", "rust_source_unchanged_during_gate": true, "suites": 425, "passed": 3239, "failed": 0, "ignored": 5, "clippy": "PASS", "format": "PASS", "exit_code": 0, "capture": ".evidence/diagnostics/20261008/repair-experiment-prerequisites/full-workspace-3bfb68c5.log", "capture_sha256": "288b7b8f424574ef821e8b47797cb4a13c62d6d494adeee55db7a01f19ac43dd"}
   },
   "capture": ".evidence/diagnostics/20261008/repair-experiment-prerequisites/corpus-v2-contracts-qualification.json",
