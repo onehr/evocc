@@ -1039,6 +1039,10 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   changelog record the result. Not done: the harness does not stop on the
   HTTP 403 key refusal, and the unattempted repetitions cannot be continued
   under this registration.
+  The full offline workspace gate on clean `249e522d` passes 425 suites:
+  3,239 passed, zero failed, five existing ignored; Clippy and formatting
+  pass. No Rust source changed. Capture:
+  `.evidence/diagnostics/20261009/repair-experiment-2/full-workspace-249e522d.log`.
 
 ### Remaining verification and application sequence
 
