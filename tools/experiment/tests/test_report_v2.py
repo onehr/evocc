@@ -120,6 +120,27 @@ class ReportV2Tests(unittest.TestCase):
         self.assertIn("tie in all_spans_share", results[4]["reasons"])
         self.assertIn("Items hard for that model", report.render(data))
 
+    def test_key_refusal_ends_the_campaign_at_the_first_refused_slot(self):
+        data = receipt()
+        refused = dict(response_error="http_403", tokens_in=None, tokens_out=None, cost=None)
+        for order, row in enumerate(data["runs"]):
+            row.update(start_order=order, cost=0.25)
+        data["runs"][1]["calls"] = [dict(tokens_in=1, tokens_out=1, cost=0.25), refused]
+        data["runs"][1].update(passed=False, status="response_error")
+        for row in data["runs"][2:]:
+            row.update(passed=False, status="response_error", cost=0.0, calls=[refused, refused])
+        data["total_cost"] = 0.5
+        normalized = report.key_limit_stop(data)
+        self.assertEqual([r["status"] for r in normalized["runs"]], ["passed", "stopped", "stopped"])
+        self.assertEqual((normalized["stop_reason"], normalized["unattempted"], normalized["total_cost"]), ("provider_refused_key:http_403", 2, 0.5))
+        self.assertEqual(normalized["key_limit_stop"]["first_refused_slot"], 2)
+        self.assertIs(report.key_limit_stop(normalized), normalized)
+        self.assertEqual(next(r for r in report.summarize(data) if r["condition"] == "c3")["attempted"], 0)
+        self.assertTrue(all("incomplete population" in r["reasons"] for r in report.predictions(data)))
+        self.assertIn("Key-limit stop applied by the report: the first refused slot is 2", report.render(data))
+        clean = receipt()
+        self.assertIs(report.key_limit_stop(clean), clean)
+
     def test_duplicate_and_inconsistent_outcomes_still_reject(self):
         data = receipt()
         data["runs"].append(copy.deepcopy(data["runs"][0]))

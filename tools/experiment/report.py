@@ -36,9 +36,34 @@ def statistics_for(rows, version=1):
     return result
 
 
+REFUSED = ("http_401", "http_402", "http_403")
+
+
+def key_limit_stop(receipt):
+    """Apply the registered key-refusal stop that the tagged harness missed for HTTP 403.
+
+    OpenRouter refused the exhausted key with HTTP 403 "Key limit exceeded"; the harness
+    recorded each refusal as a response error and kept starting slots. The campaign ends
+    at the first slot whose first request was refused. Earlier slots keep their genuine
+    attempts; one that also met a refusal is stopped. Later slots are unattempted.
+    """
+    if receipt["schema"] != "agent-repair.v2" or receipt.get("key_limit_stop"):
+        return receipt
+    runs = sorted(receipt["runs"], key=lambda r: r.get("start_order", 0))
+    first = next((r["start_order"] for r in runs if r["calls"] and r["calls"][0].get("response_error") in REFUSED), None)
+    if first is None:
+        return receipt
+    kept = [dict(r, status="stopped", passed=False, error="provider_refused_key:" + next(c["response_error"] for c in r["calls"] if c.get("response_error") in REFUSED))
+            if any(c.get("response_error") in REFUSED for c in r["calls"]) else r for r in runs if r["start_order"] <= first]
+    unknown = sum(c.get("cost") is None and c.get("response_error") not in REFUSED for r in kept for c in r["calls"])
+    return dict(receipt, runs=kept, stop_reason=kept[-1]["error"], unattempted=len(runs) + receipt["unattempted"] - len(kept), total_cost=sum(r["cost"] for r in kept),
+                unknown_cost_attempts=unknown, key_limit_stop=dict(first_refused_slot=first, recorded_rows=len(runs), recorded_stop_reason=receipt["stop_reason"]))
+
+
 def summarize(receipt):
     if receipt["schema"] not in ("agent-repair.v1", "agent-repair.v2"):
         raise ValueError("unsupported receipt schema")
+    receipt = key_limit_stop(receipt)
     version = 2 if receipt["schema"] == "agent-repair.v2" else 1
     plan, runs = receipt["plan"], receipt["runs"]
     hard = receipt.get("provenance", {}).get("preflight_hard")
@@ -77,6 +102,7 @@ MISSING = {"success_tokens": "unknown_success_usage", "success_diff": "unknown_s
 
 
 def predictions(receipt):
+    receipt = key_limit_stop(receipt)
     rows, results = summarize(receipt), []
     population = "hard" if receipt.get("provenance", {}).get("preflight_hard") else "all"
     for model in receipt["plan"]["models"]:
@@ -103,6 +129,7 @@ def predictions(receipt):
 
 
 def render_v2(receipt):
+    receipt = key_limit_stop(receipt)
     fmt = lambda value: "NOT OBSERVED" if value is None else f"{value:.3f}".rstrip("0").rstrip(".") if isinstance(value, float) else json.dumps(value)
     rows, lines = summarize(receipt), []
     titles = {"all": "All items", "hard": "Items hard for that model in preflight (prediction population)"}
@@ -121,6 +148,7 @@ def render_v2(receipt):
     for result in predictions(receipt):
         lines.append(f'- {result["model"]} P{result["prediction"]}: {"held" if result["held"] else "did not hold"}. {result["evidence"]}')
     lines += ["", f'Stop: {receipt["stop_reason"]}. Unattempted repetitions: {receipt["unattempted"]}. Reported cost: USD {receipt["total_cost"]:.6f}. Unknown-usage attempts: {receipt.get("unknown_cost_attempts", "not recorded")}.',
+              *([f'Key-limit stop applied by the report: the first refused slot is {receipt["key_limit_stop"]["first_refused_slot"]}; the harness recorded {receipt["key_limit_stop"]["recorded_rows"]} rows with stop {receipt["key_limit_stop"]["recorded_stop_reason"]}.'] if receipt.get("key_limit_stop") else []),
               "Incomplete populations or missing measures do not establish a prediction. A tie is not a strict improvement. C0 preflight selects a C0-hard population; these results do not establish a general benefit of feedback."]
     return "\n".join(lines) + "\n"
 
