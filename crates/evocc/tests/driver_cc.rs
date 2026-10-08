@@ -229,6 +229,64 @@ fn the_version_line_names_the_release_the_commit_and_the_target() {
 }
 
 #[test]
+fn assembly_producer_version_matches_the_driver_release() {
+    let work = Work::new("producer-version");
+    let version = work.run(&["--version"]);
+    succeeded(&version);
+    let version = String::from_utf8(version.stdout).unwrap();
+    let release = version.split_whitespace().nth(1).unwrap();
+    assert_eq!(release, env!("CARGO_PKG_VERSION"));
+
+    succeeded(&work.run(&[
+        "-S",
+        "--target=aarch64-unknown-linux-gnu",
+        "--ub-checks=checked",
+        "-nostdinc",
+        "helper.c",
+        "-o",
+        "linux.s",
+    ]));
+    let expected = format!(".ident \"EvoCC {release} aarch64-unknown-linux-gnu\"");
+    let assembly = work.read("linux.s");
+    let producers: Vec<_> = assembly
+        .lines()
+        .filter(|line| line.starts_with(".ident"))
+        .collect();
+    assert_eq!(producers, [expected.as_str()]);
+
+    succeeded(&work.run(&[
+        "-S",
+        "--target=aarch64-apple-darwin",
+        "helper.c",
+        "-o",
+        "darwin.s",
+    ]));
+    assert!(!work.read("darwin.s").contains(".ident"));
+}
+
+#[test]
+fn checked_assembly_ast_producer_matches_the_driver_release() {
+    let module = evocc_evoir::parse_section9_module(include_bytes!(
+        "../../../tests/fixtures/verification/machine-private.evo"
+    ))
+    .unwrap();
+    let (ast, assembly) = evocc_mir::asm_ast::export_core_asm(&module).unwrap();
+    let producer = format!(
+        "EvoCC {} aarch64-unknown-linux-gnu",
+        env!("CARGO_PKG_VERSION")
+    );
+    assert!(
+        ast.starts_with(&format!(
+            "[\"core-asm-v1\",\"aarch64-unknown-linux-gnu\",\"checked\",\"{producer}\","
+        )),
+        "{ast}"
+    );
+    assert!(assembly
+        .lines()
+        .any(|line| line == format!(".ident \"{producer}\"")));
+}
+
+#[test]
 fn unknown_inputs_and_unnamed_standard_input_are_errors() {
     let work = Work::new("inputs");
     std::fs::write(work.file("notes.txt"), "int x;\n").unwrap();

@@ -168,6 +168,77 @@ fn apply(index: usize) {
 fn remove_constant_unused_declaration() {
     apply(0);
 }
+
+#[test]
+fn fix_accepts_file_before_between_or_after_options() {
+    for mode in ["--plan", "--apply"] {
+        for file_index in 0..=2 {
+            let before = CASES[0].2;
+            let source = Source::new(before);
+            let mut args = vec![std::ffi::OsString::from(mode), "--json".into()];
+            args.insert(file_index, source.0.clone().into_os_string());
+            let output = Command::new(env!("CARGO_BIN_EXE_evo"))
+                .arg("fix")
+                .args(args)
+                .env("EVOCC", env!("CARGO_BIN_EXE_evocc"))
+                .output()
+                .unwrap();
+            success(&output);
+            json(
+                &output.stdout,
+                "assert r['exit_code'] == 0\nassert r['applied'] == int(sys.argv[1])\nassert [p['repair_id'] for p in r['repairs']] == ['W0001.remove-declaration']",
+                &[if mode == "--plan" { "0" } else { "1" }],
+            );
+            let expected = if mode == "--plan" { before } else { CASES[0].3 };
+            assert_eq!(std::fs::read(&source.0).unwrap(), expected.as_bytes());
+        }
+    }
+}
+
+#[test]
+fn unused_declaration_removal_consumes_its_otherwise_empty_line() {
+    for newline in ["\n", "\r\n"] {
+        for declaration in [
+            "    int unused = 2;",
+            "\tint unused = 2; \t",
+            "    int unused =\n        2;",
+            "    int unused = 2, also_unused = 3;",
+        ] {
+            let before = format!("int f(void) {{\n{declaration}\n\n    return 0;\n}}\n")
+                .replace('\n', newline);
+            let expected = "int f(void) {\n\n    return 0;\n}\n".replace('\n', newline);
+            let source = Source::new(&before);
+            success(&source.fix(&["--apply", "--json"]));
+            assert_eq!(std::fs::read(&source.0).unwrap(), expected.as_bytes());
+            success(&source.check());
+        }
+    }
+}
+
+#[test]
+fn unused_declaration_removal_preserves_neighboring_code_and_comments() {
+    for (before, expected) in [
+        (CASES[0].2, CASES[0].3),
+        (
+            "int f(void) {\n    int unused = 2; // keep this comment\n    return 0;\n}\n",
+            "int f(void) {\n     // keep this comment\n    return 0;\n}\n",
+        ),
+        (
+            "int f(void) {\n    /* keep this comment */ int unused = 2;\n    return 0;\n}\n",
+            "int f(void) {\n    /* keep this comment */ \n    return 0;\n}\n",
+        ),
+        (
+            "int f(void) {\n    int unused = 2; return 0;\n}\n",
+            "int f(void) {\n     return 0;\n}\n",
+        ),
+    ] {
+        let source = Source::new(before);
+        success(&source.fix(&["--apply", "--json"]));
+        assert_eq!(std::fs::read(&source.0).unwrap(), expected.as_bytes());
+        success(&source.check());
+    }
+}
+
 #[test]
 fn use_unused_parameter() {
     apply(1);

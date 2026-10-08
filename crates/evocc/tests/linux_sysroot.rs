@@ -50,7 +50,21 @@ impl Work {
     }
 
     fn command(&self) -> Command {
-        let mut command = Command::new(self.0.join("bin/evocc"));
+        self.command_at(&self.0.join("bin/evocc"))
+    }
+
+    fn source_command(&self) -> Command {
+        let root = self.0.join("checkout");
+        std::fs::create_dir_all(root.join("lean")).unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
+        let executable = root.join("target/frontend/release/evocc");
+        std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        std::fs::copy(env!("CARGO_BIN_EXE_evocc"), &executable).unwrap();
+        self.command_at(&executable)
+    }
+
+    fn command_at(&self, executable: &Path) -> Command {
+        let mut command = Command::new(executable);
         command
             .current_dir(&self.0)
             .env_remove("EVOCC_SYSROOT")
@@ -139,6 +153,70 @@ fn a_missing_selected_root_does_not_fall_back() {
         ] {
             assert!(stderr.contains(remedy), "{stderr}");
         }
+    }
+}
+
+#[test]
+fn source_checkout_headers_ignore_working_directory() {
+    let work = Work::new();
+    let source = work.headers(&format!("checkout/sysroot/{TARGET}"), 44);
+    // The working directory is not the checkout that contains the executable.
+    work.headers(&format!("sysroot/{TARGET}"), 99);
+    work.selected(
+        work.source_command()
+            .args(["-v", "-E", "probe.c"])
+            .output()
+            .unwrap(),
+        &source,
+        44,
+    );
+}
+
+#[test]
+fn source_checkout_headers_follow_explicit_environment_and_bundled_roots() {
+    let work = Work::new();
+    work.headers(&format!("checkout/sysroot/{TARGET}"), 44);
+    let bundled = work.headers(&format!("checkout/target/frontend/sysroot/{TARGET}"), 11);
+    let environment = work.headers("environment", 22);
+    let explicit = work.headers("explicit", 33);
+    work.selected(
+        work.source_command()
+            .args(["-v", "-E", "probe.c"])
+            .output()
+            .unwrap(),
+        &bundled,
+        11,
+    );
+    work.selected(
+        work.source_command()
+            .env("EVOCC_SYSROOT", &environment)
+            .args(["-v", "-E", "probe.c"])
+            .output()
+            .unwrap(),
+        &environment,
+        22,
+    );
+    work.selected(
+        work.source_command()
+            .env("EVOCC_SYSROOT", &environment)
+            .arg(format!("--sysroot={}", explicit.display()))
+            .args(["-v", "-E", "probe.c"])
+            .output()
+            .unwrap(),
+        &explicit,
+        33,
+    );
+    for explicit in [false, true] {
+        let mut command = work.source_command();
+        if explicit {
+            command.arg("--sysroot=missing");
+        } else {
+            command.env("EVOCC_SYSROOT", "missing");
+        }
+        let output = command.args(["-E", "probe.c"]).output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert!(stderr.contains("Linux sysroot"), "{stderr}");
     }
 }
 
