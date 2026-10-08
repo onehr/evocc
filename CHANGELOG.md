@@ -96,6 +96,14 @@ The first public version.
 - Darwin stack-protector lowering uses Mach-O symbols and relocations. Angle includes honor
   supplied include paths; quoted includes still search the source file's directory first.
 
+### Fixed
+
+- `evo fix` accepts its file before or after options. Removing an unused declaration also
+  removes its otherwise empty line, without removing adjacent comments or code.
+- Linux assembly and checked assembly records use the same release version as `evocc --version`.
+- A source-checkout compiler finds its Linux sysroot from the executable's repository root,
+  regardless of the current directory. Explicit and installed roots keep their priority.
+
 ### Results at this version
 
 These results were recorded between 2026-09-13 and 2026-10-07. [docs/evidence.md](docs/evidence.md)

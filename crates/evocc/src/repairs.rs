@@ -194,6 +194,28 @@ pub fn suggest<'a>(
                     .collect();
                 if preceding.ends_with(&[K::For, K::LParen]) {
                     edit.byte_end -= 1;
+                } else {
+                    let start = edit.byte_start as usize;
+                    let end = edit.byte_end as usize;
+                    let line_start = source
+                        .get(..start)?
+                        .iter()
+                        .rposition(|b| *b == b'\n')
+                        .map_or(0, |i| i + 1);
+                    let line_end = source
+                        .get(end..)?
+                        .iter()
+                        .position(|b| *b == b'\n')
+                        .map_or(source.len(), |i| end + i + 1);
+                    // Remove the line only when no neighboring code or comment remains.
+                    if source[line_start..start]
+                        .iter()
+                        .chain(&source[end..line_end])
+                        .all(u8::is_ascii_whitespace)
+                    {
+                        edit.byte_start = line_start as u32;
+                        edit.byte_end = line_end as u32;
+                    }
                 }
             }
             let safe = |o: &&ObjectDecl<'a>| {
@@ -278,7 +300,13 @@ pub fn suggest<'a>(
     // Expansion coordinates locate an invocation, not editable declaration text.
     if edit.file != finding.span.file
         || expanded.iter().any(|s| {
-            s.file == edit.file && s.byte_start <= edit.byte_end && s.byte_end >= edit.byte_start
+            s.file == edit.file
+                && if edit.byte_start == edit.byte_end {
+                    // Keep insertions at expansion boundaries conservative.
+                    s.byte_start <= edit.byte_start && edit.byte_start <= s.byte_end
+                } else {
+                    s.byte_start < edit.byte_end && edit.byte_start < s.byte_end
+                }
         })
         || expanded.iter().any(|s| contains(*s))
     {

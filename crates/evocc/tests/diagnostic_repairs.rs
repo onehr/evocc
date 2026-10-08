@@ -240,6 +240,29 @@ fn unused_declaration_removal_preserves_neighboring_code_and_comments() {
 }
 
 #[test]
+fn unused_declaration_line_removal_preserves_a_following_macro() {
+    let source = Source::new("#define RET return 0;\nint f(void) {\n    int unused = 1;\nRET\n}\n");
+    let output = source.fix(&["--apply", "--json"]);
+    success(&output);
+    json(&output.stdout, "assert r['applied'] == 1", &[]);
+    assert_eq!(
+        std::fs::read_to_string(&source.0).unwrap(),
+        "#define RET return 0;\nint f(void) {\nRET\n}\n"
+    );
+    success(&source.check());
+}
+
+#[test]
+fn repair_insertion_at_a_macro_boundary_still_requires_caution() {
+    let before = "#define RET return 0;\nint f(int unused) {RET}\n";
+    let source = Source::new(before);
+    let output = source.fix(&["--apply", "--json"]);
+    success(&output);
+    json(&output.stdout, "assert r['applied'] == 0", &[]);
+    assert_eq!(std::fs::read_to_string(&source.0).unwrap(), before);
+}
+
+#[test]
 fn use_unused_parameter() {
     apply(1);
 }

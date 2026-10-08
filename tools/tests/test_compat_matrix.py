@@ -137,7 +137,7 @@ class ChannelWorkflowTests(unittest.TestCase):
 
 class ReleaseChangelogTests(unittest.TestCase):
     @contextmanager
-    def fixture(self, changelog):
+    def fixture(self, changelog, inherited_version=False):
         with tempfile.TemporaryDirectory(prefix="evocc-release-version-") as directory:
             root = Path(directory)
             target = "aarch64-apple-darwin"
@@ -148,7 +148,12 @@ class ReleaseChangelogTests(unittest.TestCase):
             (root / "CHANGELOG.md").write_text(changelog)
             manifest = root / "crates/evocc/Cargo.toml"
             manifest.parent.mkdir(parents=True)
-            manifest.write_text('[package]\nversion = "0.1.0"\n')
+            if inherited_version:
+                manifest.write_text('[package]\nversion.workspace = true\n')
+                (root / "Cargo.toml").write_text(
+                    '[workspace.package]\nversion = "0.1.0"\n')
+            else:
+                manifest.write_text('[package]\nversion = "0.1.0"\n')
             # --skip-build reads these tiny stand-ins; no Cargo or Lake runs.
             for relative in ("prebuilt/release", f"prebuilt/{target}/release",
                              "lean/.lake/build/bin"):
@@ -158,7 +163,8 @@ class ReleaseChangelogTests(unittest.TestCase):
                     "evo", "evocc", "evocc-checker")
                 for name in names:
                     binary = directory / name
-                    binary.write_text("#!/bin/sh\nprintf '%s\\n' 'evocc 0.1.0 (fixture)'\n")
+                    binary.write_text("#!/bin/sh\nexit 0\n" if inherited_version else
+                                      "#!/bin/sh\nprintf '%s\\n' 'evocc 0.1.0 (fixture)'\n")
                     binary.chmod(0o755)
             env = {**os.environ, "CARGO_TARGET_DIR": str(root / "prebuilt"),
                    "SOURCE_DATE_EPOCH": "0"}
@@ -171,6 +177,12 @@ class ReleaseChangelogTests(unittest.TestCase):
 
     def test_release_packages_a_version_with_its_own_changelog_heading(self):
         with self.fixture("# Changelog\n\n## [0.1.0] - Unreleased\n") as (root, result):
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((root / "dist/evocc-0.1.0-aarch64-apple-darwin.tar.gz").is_file())
+
+    def test_release_falls_back_to_the_inherited_workspace_version(self):
+        with self.fixture("# Changelog\n\n## [0.1.0] - Unreleased\n",
+                          inherited_version=True) as (root, result):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((root / "dist/evocc-0.1.0-aarch64-apple-darwin.tar.gz").is_file())
 

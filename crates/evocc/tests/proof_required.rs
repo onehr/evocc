@@ -318,8 +318,8 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
 fn pilot_entries_are_checked_to_final_assembly_text() {
     let (directory, record) = accept(&fixture("musl-abs.c"), &["--core-entry=abs"]);
     assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 5);
-    // The allocation export, the AST and the text are the frozen allocation
-    // and frame-emission fixtures of this module.
+    // The allocation export, the AST and the text match the frozen allocation
+    // and frame-emission fixtures, apart from the compiler release metadata.
     for (exported, frozen) in [
         ("allocation.json", "lean/EvoIR/Alloc/Fixtures/musl-abs.json"),
         (
@@ -328,9 +328,25 @@ fn pilot_entries_are_checked_to_final_assembly_text() {
         ),
         ("assembly.s", "tests/fixtures/verification/asm/musl-abs.s"),
     ] {
+        let frozen = std::fs::read_to_string(repository().join(frozen)).unwrap();
+        let expected = if exported == "allocation.json" {
+            frozen
+        } else {
+            // Preserve the historical fixtures. Only the exact producer note
+            // follows today's release; every instruction and hint stays fixed.
+            let producer = "EvoCC 0.0.0 aarch64-unknown-linux-gnu";
+            assert_eq!(frozen.matches(producer).count(), 1, "{exported}");
+            frozen.replace(
+                producer,
+                &format!(
+                    "EvoCC {} aarch64-unknown-linux-gnu",
+                    env!("CARGO_PKG_VERSION")
+                ),
+            )
+        };
         assert_eq!(
-            std::fs::read(directory.join("inputs").join(exported)).unwrap(),
-            std::fs::read(repository().join(frozen)).unwrap(),
+            std::fs::read_to_string(directory.join("inputs").join(exported)).unwrap(),
+            expected,
             "{exported}"
         );
     }

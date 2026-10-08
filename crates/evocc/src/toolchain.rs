@@ -16,7 +16,7 @@ const LINUX_MULTIARCH: &str = "aarch64-linux-gnu";
 
 /// Select one header root. A named root must work; never hide a bad override
 /// by combining it with headers from another installation. Native Linux keeps
-/// its system root when no explicit or packaged root exists.
+/// its system root when no explicit, packaged or source-checkout root exists.
 pub(crate) fn linux_sysroot(explicit: Option<&str>) -> Result<String, String> {
     let named = explicit
         .map(PathBuf::from)
@@ -25,35 +25,48 @@ pub(crate) fn linux_sysroot(explicit: Option<&str>) -> Result<String, String> {
     let selected = if let Some(root) = named {
         valid(&root).then_some(root)
     } else {
-        let bundled = std::env::current_exe().ok().and_then(|exe| {
+        let executable = std::env::current_exe().ok();
+        let bundled = executable.as_deref().and_then(|exe| {
             Some(
                 exe.parent()?
                     .parent()?
                     .join("sysroot/aarch64-unknown-linux-gnu"),
             )
         });
-        bundled.filter(|root| valid(root)).or_else(|| {
-            if cfg!(target_os = "linux") {
-                return valid(Path::new("/")).then(|| PathBuf::from("/"));
-            }
-            if !cfg!(target_os = "macos") || !on_path("container") {
-                return None;
-            }
-            // Reuse a previous sealed-image export. This lookup never starts
-            // a container, exports files or downloads headers.
-            std::env::var_os("EVOCC_BENCH_SYSROOT")
-                .map(PathBuf::from)
-                .filter(|root| valid(root))
-                .or_else(|| {
-                    let cwd = std::env::current_dir().ok()?;
-                    cwd.ancestors().find_map(|parent| {
-                        ["sysroot/aarch64-unknown-linux-gnu", ".build/ladder/sysroot"]
-                            .into_iter()
-                            .map(|name| parent.join(name))
-                            .find(|root| valid(root))
+        let source = || {
+            let root = executable
+                .as_deref()?
+                .parent()?
+                .ancestors()
+                .find(|root| root.join("Cargo.toml").is_file() && root.join("lean").is_dir())?;
+            let root = root.join("sysroot/aarch64-unknown-linux-gnu");
+            valid(&root).then_some(root)
+        };
+        bundled
+            .filter(|root| valid(root))
+            .or_else(source)
+            .or_else(|| {
+                if cfg!(target_os = "linux") {
+                    return valid(Path::new("/")).then(|| PathBuf::from("/"));
+                }
+                if !cfg!(target_os = "macos") || !on_path("container") {
+                    return None;
+                }
+                // Reuse a previous sealed-image export. This lookup never starts
+                // a container, exports files or downloads headers.
+                std::env::var_os("EVOCC_BENCH_SYSROOT")
+                    .map(PathBuf::from)
+                    .filter(|root| valid(root))
+                    .or_else(|| {
+                        let cwd = std::env::current_dir().ok()?;
+                        cwd.ancestors().find_map(|parent| {
+                            ["sysroot/aarch64-unknown-linux-gnu", ".build/ladder/sysroot"]
+                                .into_iter()
+                                .map(|name| parent.join(name))
+                                .find(|root| valid(root))
+                        })
                     })
-                })
-        })
+            })
     };
     selected
         .and_then(|root| root.canonicalize().ok())

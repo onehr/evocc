@@ -124,7 +124,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10, P17a | P01 through P17 are complete in their recorded scope. P17 records a completed negative comparison, not a general agent-repair advantage. Its response-budget and E3004 follow-up is P17a; no new run is started. The original guarded-division refusal stays open as D06, with no core-v1/export/Lean changes. P09 keeps its screenshot waiver; coverage options do not instrument. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
-| AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
+| AUDIT | T03, D01, D02, D03, D04, D05, D06, D07 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. D07's four command defaults await the full gate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -3874,6 +3874,20 @@ refusal; changing the P13 demo does not close it.
   gates passed. The original slice's capture was 124 KiB with 171 GiB free;
   no before-build target size was recorded, so its total disk delta is unknown.
   No new proof replay or raw-capture commit is claimed by this tracker update.
+
+- [ ] **D07 — Consistent command defaults and repair output** — `RETEST`, P1.
+  Seven public regressions at `b11047ce` cover the four reported issues:
+  fix argument order, whole-line unused-declaration removal, producer version,
+  and source-checkout sysroot lookup. Each issue has a retained failing run in
+  `.evidence/diagnostics/20261008/driver-usability/` (500 MiB cap).
+  The fixes preserve neighboring code and comments, explicit sysroot errors,
+  installed-root precedence and historical assembly/proof fixtures. The driver
+  and emitter inherit one workspace release version. Two additional controls
+  cover half-open deletion ranges next to a macro and conservative insertion
+  boundaries. The seven focused suites pass 83 tests; the final repair suite
+  passes 22 tests, including those two controls. Release/tracker Python checks
+  pass 17 tests. Full workspace acceptance and rebuilt release-command checks
+  remain open. No Lean semantics change.
 
 ## Codegen quality track — next quarter
 

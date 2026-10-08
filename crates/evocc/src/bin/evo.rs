@@ -98,13 +98,17 @@ fn forward(output: &Output) -> Result<()> {
 }
 
 fn fix(compiler: &Path, args: &[String]) -> Result<i32> {
-    let file = args.first().ok_or("fix requires a C file")?;
-    let json = args[1..].iter().any(|s| s == "--json");
-    let mut flags: Vec<_> = args[1..]
+    let (flags, files): (Vec<_>, Vec<_>) = args
         .iter()
         .map(String::as_str)
-        .filter(|s| *s != "--json")
-        .collect();
+        .partition(|s| s.starts_with('-'));
+    let file = match files.as_slice() {
+        [file] => *file,
+        [] => return Err("fix requires a C file".into()),
+        _ => return Err("fix requires exactly one C file".into()),
+    };
+    let json = flags.contains(&"--json");
+    let mut flags: Vec<_> = flags.into_iter().filter(|s| *s != "--json").collect();
     flags.sort_unstable();
     let mode = match flags.as_slice() {
         ["--plan"] => "plan",

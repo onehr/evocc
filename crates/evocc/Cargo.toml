@@ -1,6 +1,6 @@
 [package]
 name = "evocc"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Equality-native, self-contained C compiler (flight-lab scaffold)"

@@ -79,6 +79,7 @@ Compilation:
   --sysroot=DIR, -isysroot DIR   The root of the target's headers.
   EVOCC_SYSROOT       Linux header root when --sysroot is absent.
                      Otherwise use ../sysroot/TARGET beside the executable directory.
+                     Then try sysroot/TARGET at its enclosing source-checkout root.
 
 Dependencies: -M -MM -MD -MMD -MF FILE -MT TARGET -MQ TARGET -MP
 

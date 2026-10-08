@@ -18,7 +18,7 @@
 # and links glibc dynamically on Linux in all cases.
 #
 # The version is the second word of `evocc --version`. If that fails, the
-# version comes from crates/evocc/Cargo.toml.
+# version comes from the package manifest or its inherited workspace version.
 #
 # The output is DIR/evocc-<version>-<target>.tar.gz. The archive holds one
 # directory of the same name: bin/ with the four binaries, LICENSE, NOTICE,
@@ -129,8 +129,8 @@ fi
 if [ -z "$version" ]; then
     version="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' crates/evocc/Cargo.toml | head -n 1)"
     [ -n "$version" ] || version="$(sed -n '/^\[workspace.package\]/,/^\[/s/^version *= *"\([^"]*\)".*/\1/p' Cargo.toml | head -n 1)"
-    [ -n "$version" ] || die "no version from evocc --version or crates/evocc/Cargo.toml"
-    warn "evocc --version gave no version; using $version from crates/evocc/Cargo.toml"
+    [ -n "$version" ] || die "no version from evocc --version or the package/workspace manifests"
+    warn "evocc --version gave no version; using $version from the package/workspace manifests"
 fi
 
 # A package version must follow the current release policy and be documented.
