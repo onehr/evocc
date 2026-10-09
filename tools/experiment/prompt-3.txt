@@ -1,0 +1,7 @@
+The file program.c in the current directory is a C program with defects.
+Its comments describe the intended behavior.
+Run `check program.c` to get the feedback that this environment offers.
+Fix every defect in program.c. Edit the file in place.
+Keep the function names, the parameter types and main.
+Do not add I/O. Do not add preprocessor directives.
+Stop when the program is correct.
