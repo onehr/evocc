@@ -772,6 +772,13 @@ at the ceiling again for that model. The registered rules record all five predic
 for an incomplete population. *Answer.* Inconclusive ([Experiment 2](book/src/evaluation-agents.md#experiment-2),
 [receipt](tests/contracts/agent-repair-2-20261009.json)).
 
+A registered coding-agent run then compared default GCC warnings + UBSan with EvoCC on
+18 silent memory defects and six controls. Both conditions repaired 18/18 silent items
+and 5/6 controls: P1 did not hold (exact McNemar p=1); P2 held. All 48 sessions completed.
+EvoCC used fewer steps and tokens in this run; these are descriptive results, not a tested
+efficiency claim. The [method, tool matrix and results](book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior)
+state the shared-kernel and single-repetition limits. No general repair advantage is established.
+
 ### 8 Related work
 
 **Verified compilers.** CompCert [1] proves its passes correct in Coq, from Clight [2], a large C

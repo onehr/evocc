@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a, P20 | P20 qualifies silent-UB items before its quota-bounded pilot and registered C1/C3 comparison. P01 through P19 are complete in their recorded scope. P18 stopped at the provider key limit after 444 of 900 repetitions; none of its five predictions held. P17a remains separate. D06 retains its original guarded-division refusal. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a, P20 | P20 completed all 48 registered sessions; its report is published and the final full-workspace gate remains. P01 through P19 are complete in their recorded scope. P18 stopped at the provider key limit after 444 of 900 repetitions; none of its five predictions held. P17a remains separate. D06 retains its original guarded-division refusal. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -921,17 +921,22 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   improvement proposal, not an observed compiler defect or an active campaign.
 
 - [ ] **P20 — Agent repairs of silent undefined behavior** — `OPEN`, P1.
-  Qualify 18 silent items and six controls before any Kimi Code session.
-  Keep C1/C3 and prompt-3 unchanged. Score each repair with GCC 14 at O0/O2
-  and Clang 19 at O2. Run a six-session pilot, apply the approved quota
-  projection, then freeze protocol-4 and agent-repair-experiment-4 before
-  measurement. Report paired outcomes, the detection matrix and provider
-  failures separately. No measured run or repair-rate claim exists yet.
-  The corpus and qualification live in tests/fixtures/agent-repair-4/.
-  All 24 items qualify; two rejected candidates are retained. The six-session
-  pilot passes C1 2/3 and C3 3/3, with zero escapes. Its weekly quota increase
-  is 0.007233; the 48-session projection is 0.057864, so no reduction is needed.
-  All 112 experiment tests pass. protocol-4.md fixes the formal method.
+  All 24 items qualify: six each of E3001/E3010/E3011 and two each of
+  E3002/E3004/E3005. Two pre-registration replacements remain in the
+  [qualification receipt](tests/fixtures/agent-repair-4/qualification.json).
+  The six-session pilot passes C1 2/3 and C3 3/3; its quota projection is
+  0.057864, so all items remain. Tag `agent-repair-experiment-4` fixes clean
+  `5b765db0`, C1/C3, prompt-3 and GCC O0/O2 plus Clang O2 scoring.
+  The [formal receipt](tests/contracts/agent-repair-4-20261009.json) records
+  48/48 completed sessions: each condition passes 18/18 silent items and
+  5/6 controls. P1 does not hold (exact McNemar p=1); P2 holds (difference 0).
+  Both failures are incorrect `mean-empty` repairs on all three builds.
+  There are zero overloads, retries, unknown scores, unattempted cells and
+  escapes. The weekly quota rises by 0.035898, below the approved 0.30.
+  The [report](book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior)
+  retains the matrix, pilot and descriptive cost counts without a general
+  repair-advantage claim. All 112 experiment tests and both secret scans pass.
+  Remaining exit: the offline full-workspace gate on this published clean tree.
 
 - [x] **P19 — Consistent options and checkout defaults** — `DONE`, P1.
   D07 supplies the four fixes and its retained full-workspace acceptance.

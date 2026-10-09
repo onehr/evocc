@@ -9,6 +9,11 @@ The first public version.
 
 ### Added
 
+- A registered 24-program coding-agent study of silent memory defects and integer-UB
+  controls. All 48 sessions completed under three hidden scoring builds. Default GCC
+  warnings plus UBSan and EvoCC each repaired 18/18 silent items and 5/6 controls;
+  the predicted repair-count advantage did not hold. The report retains the detection
+  matrix, pilot, transcripts, quota use and the two incorrect functional repairs.
 - A preregistered 30-program agent repair experiment with one model, three feedback
   conditions and three repetitions. All 270 outcomes and full transcripts are retained,
   including response failures. EvoCC feedback passed 87/90 attempts, GCC plus UBSan

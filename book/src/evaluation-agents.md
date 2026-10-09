@@ -638,3 +638,209 @@ Sources: [initial receipt](../../tests/contracts/agent-repair-3-pilot-20261009.j
 [initial wire logs](../../tests/contracts/agent-repair-3-pilot-wire-20261009.tar.gz),
 [re-pilot receipt](../../tests/contracts/agent-repair-3-repilot-20261009.json),
 [re-pilot wire logs](../../tests/contracts/agent-repair-3-repilot-wire-20261009.tar.gz).
+
+## Experiment 4: silent undefined behavior
+
+This experiment asks a narrower question: does EvoCC feedback help a coding
+agent repair defects that the default GCC warnings and UBSan do not report?
+The registered method is [protocol-4.md](../../tools/experiment/protocol-4.md).
+The tag `agent-repair-experiment-4` is commit
+`5b765db0467dc92a94077e3f37617c04e16f24b0`. Measurement began from its clean
+tree, after qualification and the six-session pilot.
+
+### Method and qualification
+
+Kimi Code 2.0.2 used `kimi-code/k3`, low effort, 100 steps and 900 seconds per
+session. Each of 24 items ran once in C1 and once in C3. Conditions alternated
+order by sorted item name. The prompt and check command did not change from
+Experiment 3. Each session had a fresh Seatbelt workspace.
+
+C1 built and ran with GCC 14 `-O0 -Wall -Wextra -fsanitize=undefined`.
+C3 built and ran with EvoCC, then supplied `evo check`, diagnostic explanations
+and repair plans. In both conditions the agent could read the source, edit it
+and check its own C test drivers. This compares tool bundles. It does not
+isolate JSON formatting or a single diagnostic feature.
+
+The final source had to pass the same hidden test under sealed GCC 14 at O0
+and O2, and Clang 19 at O2. The hidden driver checked twelve input seeds and
+the program return value. Removing a diagnostic was not enough.
+
+The corpus has six items each for uninitialized reads (E3001), dangling-pointer
+access (E3010) and out-of-bounds access (E3011). Six controls have two items
+each for division by zero (E3002), signed overflow (E3004) and shift counts
+(E3005). All programs have 83 to 147 lines and one injected defect.
+
+Eighteen items adapt six public kernels from zlib 1.3.2, Zstandard 1.5.7 and
+cJSON 1.7.19. Each kernel has three memory-defect variants. The XXH32 and
+XXH64 items adapt the byte-tail and avalanche operations, not the full hash
+APIs. The six controls were written for this corpus. These are injected
+defects, not defects found upstream.
+
+All 24 items qualified. Each fixed source passed five runs of each scoring
+build with identical output: 360 fixed executions. The 360 original executions
+established a hidden-test failure for each item. The 18 silent originals
+produced the same C1 main output and exit code as their fixed source, without
+C1 warnings or runtime findings. EvoCC reported the requested code at the
+repair line for all 24 items, without E3008. Fixed sources passed `evo check`.
+
+Two candidates were replaced once before registration. The first empty-mean
+contract matched the native divide-by-zero result and did not fail its hidden
+test. A remainder candidate reported E3003 rather than E3002. Their rejected
+records remain in the qualification receipt. No class has a shortfall.
+
+See the [corpus and origins](../../tests/fixtures/agent-repair-4/README.md)
+and [qualification receipt](../../tests/fixtures/agent-repair-4/qualification.json).
+
+### Detection matrix
+
+Y means a finding at a line in the fixed repair span. N means no finding
+there, not absence of a finding elsewhere. All tool builds and runtimes
+were available. Columns use these exact configurations:
+
+- G0/G2: GCC 14 `-Wall -Wextra`, at O0/O2.
+- CW: Clang 19 `-Weverything -O0`.
+- GU/CU: GCC 14 / Clang 19 `-fsanitize=undefined -O0`.
+- MS: Clang 19 `-fsanitize=memory -O0`.
+- CA: Clang 19 `-fsanitize=address -fsanitize-address-use-after-scope -O0`,
+  with `ASAN_OPTIONS=detect_stack_use_after_return=1`.
+- GA: GCC 14 `-fsanitize=address -O0`. E: `evo check`.
+
+| Item | Code | G0 | G2 | CW | GU | CU | MS | CA | GA | E |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| adler-byte | E3011 | N | N | Y | N | N | N | Y | Y | Y |
+| adler-reset | E3001 | N | Y | N | N | N | N | N | N | Y |
+| adler-view | E3010 | N | N | Y | N | N | N | Y | Y | Y |
+| crc-byte | E3011 | N | N | Y | N | N | N | Y | Y | Y |
+| crc-reset | E3001 | N | Y | N | N | N | N | N | N | Y |
+| crc-view | E3010 | N | N | Y | N | N | N | Y | Y | Y |
+| increment-limit | E3004 | N | N | N | Y | Y | N | N | N | Y |
+| left-count | E3005 | N | N | N | Y | Y | N | N | N | Y |
+| magnitude-limit | E3004 | N | N | N | Y | Y | N | N | N | Y |
+| mean-empty | E3002 | N | N | N | Y | Y | N | N | N | Y |
+| minify-byte | E3011 | N | N | Y | N | N | N | Y | Y | Y |
+| minify-reset | E3001 | N | Y | N | N | N | N | N | N | Y |
+| minify-view | E3010 | N | N | Y | N | N | Y | Y | Y | Y |
+| pointer-byte | E3011 | N | N | Y | N | N | N | Y | Y | Y |
+| pointer-reset | E3001 | N | Y | N | N | N | N | N | N | Y |
+| pointer-view | E3010 | N | N | Y | N | N | Y | Y | Y | Y |
+| right-count | E3005 | N | N | N | Y | Y | N | N | N | Y |
+| scale-empty | E3002 | N | N | N | Y | Y | N | N | N | Y |
+| xxh32-byte | E3011 | N | N | Y | N | N | N | Y | Y | Y |
+| xxh32-reset | E3001 | N | Y | N | N | N | N | N | N | Y |
+| xxh32-view | E3010 | N | N | Y | N | N | N | Y | Y | Y |
+| xxh64-byte | E3011 | N | N | Y | N | N | N | Y | Y | Y |
+| xxh64-reset | E3001 | N | Y | N | N | N | N | N | N | Y |
+| xxh64-view | E3010 | N | N | Y | N | N | N | Y | Y | Y |
+
+MemorySanitizer reports uninitialized values at later uses in all six
+`reset` items; its N cells must not be read as missed defects. The Clang
+warning cells include general unsafe-buffer warnings. ASan reports the
+out-of-bounds and dangling-pointer cases. The selected silence applies to
+C1's default GCC warnings and UBSan, not to every other tool.
+
+### Pilot and quota
+
+The three pilot items cover one silent class each. PASS requires all three
+hidden scoring builds. Tokens include cached input. Scratch use is allowed;
+a blocked attempt is not a successful escape.
+
+| Item | Condition | GCC O0 / O2 / Clang O2 | Steps | Tokens | Checks | Seconds | Blocked / escapes / scratch | Weekly ratio increase |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- | ---: |
+| adler-reset | c1 | FAIL / FAIL / FAIL | 19 | 398,911 | 6 | 143.5 | 3 / 0 / 6 | 0.003281 |
+| adler-reset | c3 | PASS / PASS / PASS | 7 | 141,206 | 4 | 71.2 | 1 / 0 / 2 | 0.001300 |
+| xxh32-view | c3 | PASS / PASS / PASS | 6 | 113,512 | 1 | 53.4 | 0 / 0 / 4 | 0.000604 |
+| xxh32-view | c1 | PASS / PASS / PASS | 5 | 93,902 | 1 | 27.7 | 0 / 0 / 3 | 0.000542 |
+| pointer-byte | c1 | PASS / PASS / PASS | 6 | 94,194 | 2 | 38.6 | 0 / 0 / 5 | 0.000658 |
+| pointer-byte | c3 | PASS / PASS / PASS | 6 | 116,151 | 2 | 67.5 | 0 / 0 / 3 | 0.000848 |
+
+The pilot completed six sessions, with C1 at 2/3 and C3 at 3/3. It recorded
+49 steps, 957,876 tokens, 16 checks and 401.9 seconds, with zero escapes.
+The C1 `adler-reset` repair removed the uninitialized read but changed the
+seeded checksum. It failed the functional score and was not replaced.
+
+The seven-day used ratio rose from 0.070627 to 0.077860: an increase of
+0.007233. The mean per session was 0.0012055, giving a 48-session projection
+of 0.057864. This was below 0.30, so all 24 items were retained.
+The formal limit was the initial ratio plus 0.30, or an absolute ratio of
+0.85, whichever came first. Quota was checked between sessions.
+
+Sources: [pilot receipt](../../tests/contracts/agent-repair-4-pilot-20261009.json)
+and [pilot wire logs](../../tests/contracts/agent-repair-4-pilot-wire-20261009.tar.gz).
+
+### Measured results
+
+All 48 registered sessions completed, from 12:11:47 to 12:55:31 UTC on
+2026-10-09. No session was retried. No provider overload, scoring error,
+unknown pair, unattempted cell or sandbox escape occurred. The audit recorded
+nine blocked attempts and 143 allowed scratch uses.
+
+| Population | Items | C1 repaired | C3 repaired | C1 only | C3 only |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| E3001: uninitialized read | 6 | 6 | 6 | 0 | 0 |
+| E3010: dangling pointer | 6 | 6 | 6 | 0 | 0 |
+| E3011: out-of-bounds access | 6 | 6 | 6 | 0 | 0 |
+| All silent items | 18 | 18 | 18 | 0 | 0 |
+| E3002: division by zero | 2 | 1 | 1 | 0 | 0 |
+| E3004: signed overflow | 2 | 2 | 2 | 0 | 0 |
+| E3005: shift count | 2 | 2 | 2 | 0 | 0 |
+| All controls | 6 | 5 | 5 | 0 | 0 |
+| Total | 24 | 23 | 23 | 0 | 0 |
+
+Each condition passed 23/24 under each of the three scoring builds.
+`mean-empty` failed all three builds in both conditions. C3 inserted a zero
+return for an empty mean, although the source comment required -1. C1 changed
+the parameter generator so that it never produced zero. Both removed the
+executed division by zero but changed the required result. These are incorrect
+repairs, not provider or scoring failures.
+
+The pilot's C1 `adler-reset` failure did not recur in the measured session.
+The registered measured result stands; it is not pooled with the pilot.
+
+| Condition | Sessions | Steps | Tokens, including cached input | Check calls | Agent wall time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| C1 | 24 | 167 | 3,232,689 | 62 | 1,446.4 s |
+| C3 | 24 | 119 | 2,274,022 | 46 | 978.9 s |
+
+These are descriptive totals, not separately tested efficiency claims.
+The agent used 5,506,711 tokens in total, including 5,296,896 cached-input
+tokens. The seven-day quota ratio rose from 0.077860 to 0.113758, an increase
+of 0.035898. Neither the 0.30 increase limit nor the 0.85 absolute limit
+was reached. The run stopped with `completed`, not with a quota refusal.
+
+### Predictions and limits
+
+**P1 did not hold.** Both conditions repaired all 18 silent items.
+There were zero C1-only and zero C3-only repairs. The two-sided exact
+McNemar p-value is 1. There is no observed repair-count advantage for C3
+on this selected population.
+
+**P2 held.** Both conditions repaired 5/6 controls; the difference is zero,
+within the registered limit of one. This is not an equivalence proof.
+
+The silent-item result is a ceiling in both conditions. Silent default
+build-and-run feedback did not make these source-visible defects hard for
+this agent. It could inspect the source and make its own tests in either
+condition. A finding advantage is therefore not a measured repair advantage.
+
+This small corpus shares six public kernels and defect scaffolding. Its
+items are not independent samples of arbitrary C programs. The registered
+p-value describes these fixed pairs; it does not support a general model or
+tool ranking. There was one repetition, one model and one effort setting.
+The line-specific matrix also shows that ASan, MSan and other compiler modes
+can report defects outside the default comparison.
+
+For autonomous repair, the failed control makes a separate point: removing
+undefined behavior does not establish the required function result. The
+hidden functional score must remain separate from diagnostic status.
+
+Sources: [measured receipt](../../tests/contracts/agent-repair-4-20261009.json)
+and [measured wire logs](../../tests/contracts/agent-repair-4-wire-20261009.tar.gz).
+The receipt and expanded logs passed the existing secret scan and an exact
+credential-value scan before publication. The scans found none of the
+credential values checked; they do not prove that
+an arbitrary transcript contains no sensitive information.
+Reproduce the analysis without a model request:
+
+```sh
+python3 tools/experiment/report.py tests/contracts/agent-repair-4-20261009.json --json
+```
