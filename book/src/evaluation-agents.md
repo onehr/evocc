@@ -283,6 +283,18 @@ The first run reached a ceiling: every success came on the first response.
 The second experiment uses harder programs and more measures. It asks what
 the feedback costs and where the repairs go, not only whether they pass.
 
+**Summary.** The run did not test the predictions. 277 of the 444
+repetitions that ran ended in a response error. DeepSeek V4.1 Flash used the
+whole 16,384-token output budget in 252 calls. Qwen3.5 9B did so in 206 calls
+and reached the 300 s deadline in 183. The harness set no limit on reasoning
+tokens. The provider key's spending limit stopped the run after 444 of 900
+repetitions. Every DeepSeek answer that arrived passed (119 of 119), so the
+corpus was again at the ceiling for that model. The preflight counted an item
+as hard only after two scored failures, so an item with response errors
+counted as easy, and DeepSeek's prediction population shrank to one item. A
+third experiment must limit reasoning tokens, use fast providers, fund the key
+for the whole run, and count an item as easy only after scored passes.
+
 ### Predictions
 
 The predictions were written before any measured request. They are in

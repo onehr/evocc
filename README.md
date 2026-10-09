@@ -763,12 +763,14 @@ bundles, not JSON formatting alone. See the [method, class tables and limits](bo
 
 Every successful repair came on the first response, so this corpus did not separate the conditions: the result is a ceiling effect, not evidence that the conditions are equal.
 
-A second registered experiment (30 harder programs, five conditions, two models) stopped at the
-provider key limit after 444 of 900 repetitions ([receipt](tests/contracts/agent-repair-2-20261009.json)).
-DeepSeek V4.1 Flash, on its one preflight-hard item: P1 to P5 did not hold. The population is
-incomplete; P3 to P5 also tie. Qwen3.5 9B, on its eight hard items: P1 to P5 did not hold. The
-population is incomplete; C1 has no success (P1 to P3), P4 ties on rounds, and C0 has no success
-(P5). See [Experiment 2](book/src/evaluation-agents.md#experiment-2).
+A second registered experiment (30 harder programs, five conditions, two models) did not test its
+predictions. 277 of the 444 repetitions that ran ended in a response error, mostly because a model
+used its whole 16,384-token output budget (DeepSeek V4.1 Flash in 252 calls, Qwen3.5 9B in 206) or
+reached the 300 s deadline (Qwen, 183 calls). The provider key's spending limit then stopped the run
+at 444 of 900 repetitions. Every DeepSeek answer that arrived passed (119 of 119), so the corpus was
+at the ceiling again for that model. The registered rules record all five predictions as not held,
+for an incomplete population. *Answer.* Inconclusive ([Experiment 2](book/src/evaluation-agents.md#experiment-2),
+[receipt](tests/contracts/agent-repair-2-20261009.json)).
 
 ### 8 Related work
 
