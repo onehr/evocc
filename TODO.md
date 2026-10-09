@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a, P21, P22 | P21 replicates effort with frozen feedback and a larger qualified corpus. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -920,7 +920,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   registration; do not tune or rerun failed cells of P17. This is an untested
   improvement proposal, not an observed compiler defect or an active campaign.
 
-- [ ] **P21 — Replicate repair effort and test larger programs** — `OPEN`, P1.
+- [x] **P21 — Replicate repair effort and test larger programs** — `DONE`, P1.
   Keep experiment 4 repetition 1 descriptive. Register two new repetitions
   of its unchanged 24 items and 12 larger silent-defect programs. Use the
   same model, prompt, C1/C3 feedback and sandbox. Count a censored session
@@ -948,7 +948,14 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   A repairs C1 44/48 and C3 47/48; B repairs 24/24 in both conditions.
   All 127 experiment tests pass. Exact p-values also match an independent
   calculation. Secret scans cover all captures, including four credential
-  values, without printing them. The final workspace gate remains pending.
+  values, without printing them. Results are committed in `0afe36cc`.
+  The full offline workspace gate passed on that clean tree: 425 suites,
+  3,239 passed, zero failed, five existing ignored campaigns; Clippy and
+  formatting passed. No bypass or new Lean claim is made. Gate log:
+  `/private/tmp/evocc-effort-cleanup.a6FU3J/full-workspace.log`, SHA-256
+  `2fefc441b1bcec84ebedf2dd33f2e69009c8a77c194ab40f603ce6eec2afdee3`.
+  The final 127-test experiment run also passes. Both status render commands
+  pass. Frozen inputs and analysis remain identical to the registration tag.
   Capture retention limit is 500 MiB per run, outside the repository.
   Cleanup removed the stopped containers `evocc-asm-edges-20260905`
   (2,186,324 KiB), `evocc-asm-edges-20260905-retry` (2,186,308 KiB) and
@@ -978,7 +985,86 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   qualification containers can change `container system df` during checks.
   Protected image aliases share tracked digests and were not removed.
   All large suggested evidence directories have tracked references and stay.
-  Record the final cleanup, net change, tagged commit and gate result here.
+  Before the final gate, free space was below 50 GiB. With no process using
+  the dev tree, `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo
+  clean --offline --target-dir target/frontend --profile dev` removed
+  265,080 files (Cargo logical total: 16.5 GiB; prior `du`: 12,616,560 KiB).
+  Free space rose from 35 to 46 GiB; container storage stayed at zero.
+  The gate rebuilt this one dev tree once. Release binaries kept their hashes.
+
+  After the gate, `rm -rf --` removed only the reviewed paths below, after
+  open-handle checks. The common temporary prefix is
+  `/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/`.
+  Each numbered cache path is a separate item, exactly 2,012 KiB. The full
+  148-path list and per-path sizes remain in the cleanup ledger.
+
+  | Deleted path | KiB |
+  | --- | ---: |
+  | `agent-repair-ws-h2kx3pzg/{01..04}/home/Library/Caches` | 4 × 2,012 = 8,048 |
+  | `agent-repair-ws-0o9p_tqq/{01..96}/home/Library/Caches` | 96 × 2,012 = 193,152 |
+  | `agent-repair-ws-zm18o9a8/{01..48}/home/Library/Caches` | 48 × 2,012 = 96,576 |
+  | `evocc-c-corpus-38782-day5` | 1,024 |
+  | `evocc-c-corpus-38782-day7` | 528 |
+  | `evocc-reference-38782` | 0 |
+  | repository `tools/experiment/__pycache__` | 140 |
+  | repository `tools/experiment/tests/__pycache__` | 212 |
+
+  This final cleanup removed 299,680 KiB. Free space changed from 35 to
+  36 GiB; container storage stayed at zero. All 148 retained final-source
+  hashes and the three release executable hashes still match. These caches
+  can be rebuilt. Deleted old captures have checked archives in Git; the
+  old container runtimes must be recreated from their retained inputs.
+  No deletion used Trash.
+
+  Cleanup commands were `container rm evocc-asm-edges-20260905
+  evocc-asm-edges-20260905-retry buildkit`, `rm -rf --` with the exact
+  reviewed paths in the two tables, the dev-profile Cargo command above,
+  and `rmdir .evidence/b11-zero-runs`. The cache loop accepted only the
+  three explicit roots and two-digit session directories; it checked that
+  each cache was a directory, not a symlink. No cleanup script was added.
+  Before/after `df -h .` and `container system df`, deletion lists, handle
+  checks and retained-file checks are in `/private/tmp/evocc-effort-cleanup.a6FU3J`.
+
+  Kept because of tracked references or uncertain retention:
+
+  | Retained item | KiB or stated image size |
+  | --- | ---: |
+  | `.evidence/eqsat-completion` | 3,400,792 KiB |
+  | `.evidence/day5-kernel-reconnaissance` | 1,726,688 KiB |
+  | `.evidence/full-config-lowering-survey` | 1,486,196 KiB |
+  | `.evidence/full-config-parse-survey` | 685,928 KiB |
+  | `.evidence/eqsat-pilot` | 753,960 KiB |
+  | `.evidence/cpp-conformance` | 10,792 KiB |
+  | `.evidence/eqsat-native-20260929-5h9u11` | 300 KiB |
+  | `.evidence/harness-checks` | 32 KiB |
+  | `.evidence/inline-assembly` | 4,072 KiB |
+  | `.evidence/kernel-dashboard-aa2`, `-runtime` | 20 KiB each |
+  | `.evidence/kernel-dashboard-alignof`, `-constant-p`, `-expect`, `-retry`, `-retry-absolute` | 28 KiB each |
+  | `.evidence/kernel-dashboard-failed`, `-runtime-absolute` | 8 / 40 KiB |
+  | `.evidence/layout-attributed`, `.evidence/library-prototypes` | 2,696 / 3,704 KiB |
+  | Debian index `29ab26a75d6c...`, variant named by tracked digest | 30,145,116 compressed bytes |
+  | `evocc-asm-edges:20260905`, shares the protected sealed digest | 272,180,903 compressed bytes |
+  | `/private/tmp/evocc-silent-source.Of31zp` | 92 KiB |
+  | `/private/tmp/evocc-silent-gate.EVypk3` | 308 KiB |
+  | `/private/tmp/evocc-effort-sources.aXoUcO` | 512 KiB |
+  | `/private/tmp/evocc-effort-{pilot,replication,scale}-20261010` | 1,576 / 21,460 / 16,084 KiB |
+  | temporary `agent-repair-ws-{h2kx3pzg,0o9p_tqq,zm18o9a8}` after cache removal | 24 / 392 / 200 KiB |
+
+  Older temporary agent roots also stay because their retention is uncertain:
+  `agent-repair-ws-n_0ux3xv` (2,680 KiB), `-is_u5geo` (2,024),
+  `-sosryqy_` (12,104), `-1njj8gin` (6,056), `-lrql3am4` (12,104),
+  `-jffsspvk` (2,680), `-603b9z49` (2,024), `-ldzhxpa1` (2,680),
+  and `-fckh8rqc` (2,024). The older unarchived capture also stays at
+  `/private/tmp/claude-501/-Users-onehrxn-dev-30days-c30/f86a2a66-604e-49db-ba1c-7e287919f116/scratchpad/exp3-out/smoke`
+  (348 KiB). No protected build tree, sysroot, Lean cache or actual Kimi
+  home configuration was removed.
+
+  Disk checkpoint: `target/frontend` fell from 13,583,820 to 8,922,524 KiB.
+  New corpus, contracts, captures, remaining session roots, source scratch
+  and the cleanup ledger total 49,292 KiB. This measured scope therefore
+  fell by 4,612,004 KiB. It excludes `.git`, modified documentation, the
+  41,160 KiB of retired external copies, deleted containers and unrelated
+  host activity. Do not treat a host-wide `df` change as attributable usage.
 
 - [ ] **P22 — Shorten the check feedback of the agent interface; the controls of experiments 4 and 5 show its cost** — `OPEN`, P2.
   Keep separate from the registered effort experiment. Do not change its
