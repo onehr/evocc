@@ -28,7 +28,7 @@ int clamp(int x, int lo, int hi) {
 }
 int main(void) { return clamp(300, 0, 255); }
 $ evo check clamp.c
-check completed: main returned 255; no finding on the executed path
+check completed: main returned 255. No undefined behavior was found on the executed path. This does not check that the results are correct.
 $ evo prove clamp.c -o clamp.s
 checked from typed Core source to final assembly text: <proof-dir>/checked/record.json
 ```

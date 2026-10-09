@@ -46,15 +46,20 @@ impl Format {
 
     pub fn completion(self, result: i128) -> String {
         match self {
-            Self::Text | Self::Short => format!(
-                "check completed: main returned {result}; no finding on the executed path\n"
-            ),
+            Self::Text | Self::Short => {
+                format!("check completed: main returned {result}. {CHECK_SCOPE}\n")
+            }
             Self::Json => format!(
-                "{{\"schema\":\"evocc.check.v1\",\"kind\":\"check\",\"status\":\"completed\",\"main_return\":\"{result}\",\"claim\":\"executed-path-only\"}}\n"
+                "{{\"schema\":\"evocc.check.v1\",\"kind\":\"check\",\"status\":\"completed\",\"main_return\":\"{result}\",\"claim\":\"executed-path-only\",\"scope\":{}}}\n",
+                quoted(CHECK_SCOPE)
             ),
         }
     }
 }
+
+/// The scope of a completed check. It is not a correctness claim.
+const CHECK_SCOPE: &str =
+    "No undefined behavior was found on the executed path. This does not check that the results are correct.";
 
 pub fn command_color() -> Color {
     std::env::args()

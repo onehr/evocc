@@ -1,6 +1,6 @@
 # Diagnostic Presentation
 
-**Revision 1.1.0** | **Pinned ground truth** | **2026-10-07**
+**Revision 1.2.0** | **Pinned ground truth** | **2026-10-09**
 
 ## 1. Scope
 
@@ -110,6 +110,17 @@ Empty notes and help are empty arrays. Strings use JSON escaping. Records have
 no extra wrapper, embedded record separator, or trailing comma. The successful
 `--check` result on standard output is not a diagnostic and keeps its separate
 completion record. A completed path is not a whole-program safety proof.
+
+A completed check states its scope in text and in JSON. The JSON completion
+record has a `scope` string. The text form ends with the same two sentences:
+
+```text
+No undefined behavior was found on the executed path. This does not check that the results are correct.
+```
+
+This statement applies only to the executed path. It does not claim that the
+program results are correct. Revision 1.2.0 adds `scope`. The record keeps all
+other fields and values, including `claim` with the value `executed-path-only`.
 
 These field names, types and meanings are stable. An incompatible change
 requires a new major revision of this specification.

@@ -4,6 +4,10 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
+/// The scope statement of every completed check, in text and in JSON.
+const SCOPE: &str =
+    "No undefined behavior was found on the executed path. This does not check that the results are correct.";
+
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -26,7 +30,7 @@ fn run(args: &[&str], source: Option<&str>) -> Output {
 
 fn json_assert(bytes: &[u8], assertion: &str) {
     let program = format!(
-        "{}\nimport sys\nrows=[json.loads(x) for x in sys.stdin if x.strip()]\n{}\n{assertion}\n",
+        "{}\nimport sys\nSCOPE={SCOPE:?}\nrows=[json.loads(x) for x in sys.stdin if x.strip()]\n{}\n{assertion}\n",
         include_str!("../../../tests/ui/check/validate.py"),
         r#"for r in rows:
     assert isinstance(r, dict)
@@ -34,8 +38,9 @@ fn json_assert(bytes: &[u8], assertion: &str) {
         validate(r)
     else:
         assert r['schema'] == 'evocc.check.v1'
-        assert set(r) == {'schema','kind','status','main_return','claim'}
+        assert set(r) == {'schema','kind','status','main_return','claim','scope'}
         assert r['kind']=='check' and r['status']=='completed' and r['claim']=='executed-path-only'
+        assert r['scope'] == SCOPE
         assert isinstance(r['main_return'],str)
         int(r['main_return'])"#
     );
@@ -121,7 +126,7 @@ fn check_completes_a_defined_path_even_when_main_returns_nonzero() {
         assert!(out.stderr.is_empty());
         assert_eq!(
             String::from_utf8(out.stdout).unwrap(),
-            format!("check completed: main returned {result}; no finding on the executed path\n")
+            format!("check completed: main returned {result}. {SCOPE}\n")
         );
     }
 }
@@ -254,7 +259,7 @@ fn json_completion_is_not_a_whole_program_proof() {
     assert!(out.stderr.is_empty());
     json_assert(
         &out.stdout,
-        "assert len(rows)==1\nr=rows[0]\nassert r['schema']=='evocc.check.v1' and r['kind']=='check'\nassert r['status']=='completed' and r['main_return']=='7' and r['claim']=='executed-path-only'",
+        "assert len(rows)==1\nr=rows[0]\nassert r['schema']=='evocc.check.v1' and r['kind']=='check'\nassert r['status']=='completed' and r['main_return']=='7' and r['claim']=='executed-path-only'\nassert set(r)=={'schema','kind','status','main_return','claim','scope'} and r['scope']==SCOPE",
     );
 }
 

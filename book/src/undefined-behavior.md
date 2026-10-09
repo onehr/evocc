@@ -146,7 +146,7 @@ finding, `--check` writes a record of the result instead. Here is `sum.c` from c
 
 ```console
 $ evocc --check --error-format=json sum.c
-{"schema":"evocc.check.v1","kind":"check","status":"completed","main_return":"55","claim":"executed-path-only"}
+{"schema":"evocc.check.v1","kind":"check","status":"completed","main_return":"55","claim":"executed-path-only","scope":"No undefined behavior was found on the executed path. This does not check that the results are correct."}
 ```
 
 ## What `--check` does not tell you

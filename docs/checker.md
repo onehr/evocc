@@ -58,7 +58,7 @@ unclassified execution errors conservatively use `execution-contract`.
 Successful `--check --error-format=json` writes a separate stdout record:
 
 ```json
-{"schema":"evocc.check.v1","kind":"check","status":"completed","main_return":"7","claim":"executed-path-only"}
+{"schema":"evocc.check.v1","kind":"check","status":"completed","main_return":"7","claim":"executed-path-only","scope":"No undefined behavior was found on the executed path. This does not check that the results are correct."}
 ```
 
 Failure writes no completion record. Other action modes keep their existing
