@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a, P20 | P20 completed all 48 registered sessions; its report is published and the final full-workspace gate remains. P01 through P19 are complete in their recorded scope. P18 stopped at the provider key limit after 444 of 900 repetitions; none of its five predictions held. P17a remains separate. D06 retains its original guarded-division refusal. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a | P01 through P20 are complete in their recorded scope. P20 completed all 48 registered sessions; both conditions repaired 18/18 silent items and 5/6 controls, so no repair-count advantage was observed. P18 stopped at the provider key limit after 444 of 900 repetitions; none of its five predictions held. P17a remains separate. D06 retains its original guarded-division refusal. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -920,7 +920,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   registration; do not tune or rerun failed cells of P17. This is an untested
   improvement proposal, not an observed compiler defect or an active campaign.
 
-- [ ] **P20 — Agent repairs of silent undefined behavior** — `OPEN`, P1.
+- [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`, P1.
   All 24 items qualify: six each of E3001/E3010/E3011 and two each of
   E3002/E3004/E3005. Two pre-registration replacements remain in the
   [qualification receipt](tests/fixtures/agent-repair-4/qualification.json).
@@ -936,7 +936,22 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   The [report](book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior)
   retains the matrix, pilot and descriptive cost counts without a general
   repair-advantage claim. All 112 experiment tests and both secret scans pass.
-  Remaining exit: the offline full-workspace gate on this published clean tree.
+  On clean `2c0153a6`, the offline full-workspace gate passes 425 suites:
+  3,239 passed, zero failed and five existing ignored; Clippy and formatting
+  pass. The report's paired counts and p-value were independently recomputed.
+  All 24 matrix rows match the qualification receipt; copied evidence is
+  byte-identical. TODO rendering and the status checkpoint checks pass.
+  Gate log: `/private/tmp/evocc-silent-gate.EVypk3/full-workspace.log`, SHA-256
+  `9b9e4b9043365c3fc5c0fcaf632f889a927af0dbf6297c342ac8d19e7ed02448`.
+  No Rust or Lean semantic source changed; the Lean gate is not part of this
+  package's exit. No additional model requests or frozen-input changes remain.
+  Retained pilot/formal captures use 1,368/10,056 KiB, below 500 MiB each.
+  Removed 108,880 KiB of completed-session tools/caches after an open-handle
+  check, plus 368 KiB of copied sources and generated scratch views. Final
+  source hashes and all evidence remain. In the closing interval, the measured
+  target and scratch/capture paths decrease by 108,200 KiB: target/frontend
+  grows 724 KiB and the gate capture adds 324 KiB. This is not a whole-host
+  disk attribution. No new target tree or runtime image was created.
 
 - [x] **P19 — Consistent options and checkout defaults** — `DONE`, P1.
   D07 supplies the four fixes and its retained full-workspace acceptance.
