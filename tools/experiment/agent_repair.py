@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Third repair experiment: the Kimi Code CLI repairs one C program per session (one item, one condition).
-The agent runs under a Seatbelt sandbox in a fresh workspace with only program.c and an opaque `check`.
-`check FILE.c` builds and runs any C file in the sealed container; only the diagnostic layer differs. The
-harness scores the final file with repair.py. Standard library; Python 3.9+. See protocol-3.md."""
+The agent runs under a Seatbelt sandbox with only program.c and an opaque `check` that builds and runs any
+C file in the sealed container; only the diagnostic layer differs. Scores with repair.py. See protocol-3.md."""
 import argparse, datetime, hashlib, json, os, re, shlex, shutil, signal, subprocess, sys, tarfile, time, urllib.request, uuid
 from pathlib import Path
 
@@ -10,8 +9,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import repair  # noqa: E402  scoring, diff measure, host run and sealed container of the second experiment
 
-ROOT, KIMI = repair.ROOT, Path.home() / ".kimi-code/bin/kimi"
-KHOME, UHOME = Path.home() / ".kimi-code", Path.home()
+ROOT, KIMI, KHOME, UHOME = repair.ROOT, Path.home() / ".kimi-code/bin/kimi", Path.home() / ".kimi-code", Path.home()
 EVO, EVOCC = repair.EVO, repair.EVO.with_name("evocc")
 SYSROOT = ROOT / "sysroot/aarch64-unknown-linux-gnu"
 TOOLS = "sh bash cat ls head tail sed awk grep diff wc sort uniq cut tr echo printf cp mv rm mkdir test true false sleep".split()
@@ -20,8 +18,7 @@ TOKENS = ("inputOther", "inputCacheRead", "inputCacheCreation", "output")
 AGENT_FILE = ("---\nname: evocc-repair\ndescription: The default Kimi Code agent without web tools and without sub-agents.\n"
               "disallowedTools: WebSearch, FetchURL, Agent, AgentSwarm\n---\n${base_prompt}\n")
 LOGIN_SHELL = "#!/bin/sh\nexec /usr/bin/env\n"  # Kimi runs "$SHELL -l -c /usr/bin/env" once; this reads no profile.
-WEB = {"WebSearch", "FetchURL", "WebFetch"}
-FILE_TOOLS = {"Read", "Write", "Edit", "Grep", "Glob", "ReadMediaFile"}
+WEB, FILE_TOOLS = {"WebSearch", "FetchURL", "WebFetch"}, {"Read", "Write", "Edit", "Grep", "Glob", "ReadMediaFile"}
 # A compiler, interpreter or network tool. The sandbox blocks these; the audit flags any that ran.
 FORBIDDEN = re.compile(r"^(cc|c\d\d|gcc|g\+\+|c\+\+|clang|clang\+\+|cpp|tcc|cc1|zig|xcrun|as|ld|evo|evocc|"
                        r"python\d?|python\d\.\d+|perl|ruby|node|deno|bun|osascript|swift|swiftc|java|"
@@ -102,8 +99,8 @@ def profile(execs, ws, tmp, home, binp, out, siblings):
         "(allow process-exec*\n  %s)" % lit(allow_exec),
         "(deny file-write*)",
         "(allow file-write*\n  %s %s)" % (sub(wr), lit(["/dev/null", "/dev/random", "/dev/urandom"])),
-        "(deny file-read-data\n  %s)" % sub(deny_read),
-        "(allow file-read*\n  %s)" % sub(allow_read), ""])
+        "(deny file-read-data\n  %s)" % sub(deny_read),  # explicit ops re-allow the Kimi home; file-read* would not
+        "(allow file-read-data file-read-metadata\n  %s)" % sub(allow_read), ""])
 
 
 def workspace(args, out, index, item):
@@ -123,13 +120,14 @@ def workspace(args, out, index, item):
     execs.add(str(binp / "check")); execs.add(str(args.base / "login-shell"))
     siblings = [p for p in args.wroot.iterdir() if p.is_dir() and p != wdir and p != args.base]
     (sdir / "profile.sb").write_text(profile(execs, ws, tmp, home, binp, out, siblings))
-    return dict(sdir=sdir, ws=ws, tmp=tmp, home=home, bin=binp)
+    return dict(sdir=sdir, ws=ws, tmp=tmp, home=home, bin=binp, deny=[str(ROOT), "/etc", "/private/etc", str(out)] + [str(p) for p in siblings])
 
 
 def environment(args, w):
     env = dict(HOME=str(w["home"]), KIMI_CODE_HOME=str(KHOME), PATH=str(w["bin"]), SHELL=str(args.base / "login-shell"),
                TMPDIR=str(w["tmp"]), TERM="dumb", NO_COLOR="1", KIMI_LOOP_MAX_STEPS_PER_TURN=str(args.max_steps),
-               KIMI_CODE_NO_AUTO_UPDATE="1", KIMI_DISABLE_TELEMETRY="1", KIMI_CODE_BUILTIN_PRODUCT_SKILLS="0")
+               KIMI_CODE_NO_AUTO_UPDATE="1", KIMI_DISABLE_TELEMETRY="1", KIMI_CODE_BUILTIN_PRODUCT_SKILLS="0",
+               KIMI_CODE_WATCH="0", KIMI_CODE_SEARCH_WORKER="0", KIMI_CODE_PERSISTENCE_MINIDB_READMODEL="0")  # the sandbox blocks fs watch
     env.update({n: os.environ[n] for n in ("USER", "LOGNAME", "LANG") if n in os.environ})
     if args.effort != "default": env["KIMI_MODEL_THINKING_EFFORT"] = args.effort
     return env
@@ -277,36 +275,38 @@ def command_words(command):
 
 
 def path_tokens(command):
-    found = []
-    for token in re.findall(r"[^\s'\"`;|&<>()=,]+", HEREDOC.sub(r"\1", command)):
-        if token.startswith(("~", "$HOME", "${HOME}")) or token == ".." or token.startswith("../") or "/../" in token: found.append(token)
-        elif token.startswith("/") and os.path.exists("/" + token[1:].split("/")[0]): found.append(token)
-    return found
+    toks = re.findall(r"[^\s'\"`;|&<>()=,]+", HEREDOC.sub(r"\1", command))
+    return [t for t in toks if t.startswith(("~", "$HOME", "${HOME}", "$TMPDIR", "${TMPDIR}", "..")) or t.startswith("../") or "/../" in t or (t.startswith("/") and os.path.exists("/" + t[1:].split("/")[0]))]
 
 
-def inside(token, w):
-    for base in (w["ws"], w["tmp"]):
-        p = os.path.normpath(os.path.join(str(base), token))
-        p = "/private" + p if p == "/tmp" or p.startswith("/tmp/") else p
-        if p == str(base) or p.startswith(str(base) + os.sep): return True
-    return False
+def classify(token, w):
+    """A path reference: 'scratch' (workspace or session temp), 'forbidden' (a sandbox-denied tree) or 'benign'."""
+    if token.startswith(("$TMPDIR", "${TMPDIR}")): return "scratch"
+    if token.startswith(("~", "$HOME", "${HOME}")): return "benign"
+    p = os.path.normpath(os.path.join(str(w["ws"]), token))
+    p = "/private" + p if p == "/tmp" or p.startswith("/tmp/") else p
+    under = lambda base: p == base or p.startswith(base + os.sep)
+    if under(str(w["ws"])) or under(str(w["tmp"])): return "scratch"
+    if under(str(KHOME)): return "benign"
+    if any(under(root) for root in w["deny"]) or (under(str(UHOME)) and not under(str(KHOME))): return "forbidden"
+    return "benign"
 
 
 def intents(name, args, w):
-    """The forbidden or scratch references in one tool call: (kind, detail, is_scratch)."""
+    """The web, tool or path references in one tool call: (kind, detail, class)."""
     found = []
-    if name in WEB or name.startswith("mcp__"): found.append(("web", name, False))
+    if name in WEB or name.startswith("mcp__"): found.append(("web", name, "forbidden"))
     elif name == "Bash":
         command = str(args.get("command", ""))
         for token in ([str(args["cwd"])] if args.get("cwd") else []) + path_tokens(command):
-            found.append(("path", token, inside(token, w)))
+            found.append(("path", token, classify(token, w)))
         for word in command_words(command):
-            if FORBIDDEN.match(os.path.basename(word)): found.append(("tool", word, False))
+            if FORBIDDEN.match(os.path.basename(word)): found.append(("tool", word, "forbidden"))
     elif name in FILE_TOOLS:
         for key in ("path", "file_path") + (("pattern",) if name == "Glob" else ()):
             value = args.get(key)
             if isinstance(value, str) and (key != "pattern" or value.startswith(("/", "~", ".."))):
-                found.append(("path", value, inside(value, w)))
+                found.append(("path", value, classify(value, w)))
     return found
 
 
@@ -316,25 +316,24 @@ def audit(calls, results, w):
     for cid, name, args in calls:
         output, is_error = results.get(cid, ("", False))
         denied = bool(DENIED.search(output))
-        for kind, detail, is_scratch in intents(name, args, w):
+        for kind, detail, klass in intents(name, args, w):
+            if klass == "benign": continue
             row = dict(tool=name, kind=kind, detail=detail[:200])
-            if is_scratch: scratch.append(row)
-            elif denied or is_error or kind == "web": blocked.append(row)  # web tools are off, so a web call cannot run
+            if klass == "scratch": scratch.append(row)
+            elif denied or is_error: blocked.append(row)
             else: escapes.append(row)
     return dict(blocked=blocked, escapes=escapes, scratch=scratch)
 
 
-def filesystem_escape(w, started):
-    """A backstop for the sandbox: new files directly in the common escape targets during the session."""
-    hits = []
-    for root in (Path("/private/tmp"), UHOME, ROOT):
-        try: children = list(root.iterdir())
-        except OSError: children = []
-        for p in children:
-            try:
-                if p.is_file() and not p.is_symlink() and p.stat().st_mtime > started: hits.append(str(p)[:200])
-            except OSError: pass
-    return sorted(set(hits))[:20]
+def repo_untracked():
+    r = repair.run(["git", "status", "--porcelain", "--untracked-files=all"])
+    return {line[3:] for line in r["stdout"].splitlines()} if r["exit_code"] == 0 else set()
+
+
+def filesystem_escape(baseline):
+    """A backstop for the sandbox: files the session added to the repository working tree. The sandbox
+    confines writes to the workspace, the session temp and the Kimi home, so this stays empty."""
+    return sorted(repo_untracked() - baseline)[:20]
 
 
 def quota(kimi, port):
@@ -355,9 +354,8 @@ def quota(kimi, port):
 
 
 def ratios(q):
-    data = q.get("data") if isinstance(q.get("data"), dict) else {}
-    usages = data.get("quota", {}).get("usages", {}) if isinstance(data.get("quota"), dict) else {}
-    return usages.get("limit5h") or {}, usages.get("limit7d") or {}
+    u = ((q.get("data") or {}).get("quota") or {}).get("usages", {}) if isinstance(q.get("data"), dict) else {}
+    return u.get("limit5h") or {}, u.get("limit7d") or {}
 
 
 def pace(args, label, read=quota):
@@ -379,7 +377,7 @@ def pace(args, label, read=quota):
 
 def session(args, out, index, item, condition):
     w = workspace(args, out, index, item)
-    original, started = (item / "program.c").read_text(), time.time()
+    original, repo_before = (item / "program.c").read_text(), repo_untracked()
     row = dict(index=index, item=item.name, condition=condition, model=args.model, effort=args.effort, workspace=str(w["ws"]), started_at=now())
     status, stop, code, seconds = launch(args, w, environment(args, w), condition)
     lines = (w["sdir"] / "stderr.txt").read_text(errors="replace").splitlines()
@@ -391,7 +389,7 @@ def session(args, out, index, item, condition):
     if stop: status = "stopped"
     elif status is None: status = "completed" if code == 0 else "step_limit" if any("max_steps_exceeded" in line for line in fatal) else "error"
     classes = audit(m["calls"], results, w)
-    classes["escapes"] += [dict(tool=None, kind="filesystem", detail=p) for p in filesystem_escape(w, started)]
+    classes["escapes"] += [dict(tool=None, kind="filesystem", detail=p) for p in filesystem_escape(repo_before)]
     checks = (w["sdir"] / "checks.jsonl").read_text().splitlines() if (w["sdir"] / "checks.jsonl").exists() else []
     bash = [str(a.get("command", "")) for _, n, a in m["calls"] if n == "Bash"]
     row.update(seconds=seconds, exit_status=code, status=status, stop=stop, fatal=fatal[:5] or (lines[-3:] if code else []),

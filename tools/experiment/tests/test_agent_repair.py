@@ -260,7 +260,7 @@ class HarnessTests(Base):
         self.assertIn("disallowedTools: WebSearch, FetchURL, Agent, AgentSwarm", Path(argv[argv.index("--agent-file") + 1]).read_text())
 
     def test_audit_three_classes(self):
-        w = dict(ws=Path("/private/tmp/exp/ws"), tmp=Path("/private/tmp/exp/tmp"))
+        w = dict(ws=Path("/private/tmp/exp/ws"), tmp=Path("/private/tmp/exp/tmp"), deny=["/etc", "/private/etc", str(agent.ROOT)])
         calls = [
             ("1", "Bash", {"command": "check program.c"}),
             ("2", "Bash", {"command": "sed -n 1,5p program.c"}),
@@ -285,10 +285,11 @@ class HarnessTests(Base):
         self.assertIn(("tool", "curl"), kinds)
         self.assertIn(("path", "/etc/hosts"), kinds)
         self.assertIn(("web", "FetchURL"), kinds)
-        self.assertTrue(cl["scratch"] and all(agent.inside(r["detail"], w) for r in cl["scratch"]))
+        self.assertTrue(cl["scratch"] and all(agent.classify(r["detail"], w) == "scratch" for r in cl["scratch"]))
+        self.assertEqual(agent.classify("/usr/lib/x", w), "benign")
 
     def test_audit_marks_a_real_escape(self):
-        w = dict(ws=Path("/private/tmp/exp/ws"), tmp=Path("/private/tmp/exp/tmp"))
+        w = dict(ws=Path("/private/tmp/exp/ws"), tmp=Path("/private/tmp/exp/tmp"), deny=["/etc", str(agent.ROOT)])
         calls = [("1", "Bash", {"command": "/usr/bin/cc -o p program.c && ./p"})]
         results = {"1": ("compiled and ran, output 42", False)}
         cl = agent.audit(calls, results, w)
@@ -297,13 +298,11 @@ class HarnessTests(Base):
         self.assertEqual(cl["blocked"], [])
 
     def test_filesystem_escape_backstop(self):
-        w = dict(ws=self.tmp / "ws", tmp=self.tmp / "tmp")
-        started = time.time() - 1
-        probe = Path("/private/tmp") / ("agent-repair-escape-%d.txt" % os.getpid())
-        probe.write_text("x")
-        self.addCleanup(lambda: probe.unlink(missing_ok=True))
-        hits = agent.filesystem_escape(w, started)
-        self.assertIn(str(probe), hits)
+        with patch.object(agent, "repo_untracked", side_effect=[{"a", "b"}, {"a", "b", "c/new.c"}]):
+            baseline = agent.repo_untracked()
+            self.assertEqual(agent.filesystem_escape(baseline), ["c/new.c"])
+        with patch.object(agent, "repo_untracked", side_effect=[{"a"}, {"a"}]):
+            self.assertEqual(agent.filesystem_escape(agent.repo_untracked()), [])
 
     def test_wire_parse_nested_and_errors(self):
         records = [
