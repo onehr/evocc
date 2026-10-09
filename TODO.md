@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a | P01 through P20 are complete in their recorded scope. P20 completed all 48 registered sessions; both conditions repaired 18/18 silent items and 5/6 controls, so no repair-count advantage was observed. P18 stopped at the provider key limit after 444 of 900 repetitions; none of its five predictions held. P17a remains separate. D06 retains its original guarded-division refusal. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, B08d, B08d10, P17a, P21, P22 | P21 replicates effort with frozen feedback and a larger qualified corpus. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -919,6 +919,55 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   separately from hidden-test correctness. Any new model requests need a new
   registration; do not tune or rerun failed cells of P17. This is an untested
   improvement proposal, not an observed compiler defect or an active campaign.
+
+- [ ] **P21 — Replicate repair effort and test larger programs** — `OPEN`, P1.
+  Keep experiment 4 repetition 1 descriptive. Register two new repetitions
+  of its unchanged 24 items and 12 larger silent-defect programs. Use the
+  same model, prompt, C1/C3 feedback and sandbox. Count a censored session
+  as not repaired. Test item-mean effort with an exact one-sided signed-rank
+  test; do not select items by the agent's repair outcome.
+  The [larger corpus](tests/fixtures/agent-repair-5/README.md) has 12 qualified
+  items, 722 lines each, four per E3001/E3010/E3011. All share one adapted
+  module bundle and four input workloads. This is not a random-source sample.
+  The [qualification](tests/fixtures/agent-repair-5/qualification.json) retains
+  all reference runs, line-specific findings and unrelated warnings.
+  [Feedback identity](tests/contracts/agent-repair-5-feedback-identity.json)
+  passes all 96 raw-byte comparisons, including the fixed-source controls.
+  Pilot, registration, measurement and final gate remain pending. Capture
+  retention limit is 500 MiB per run, outside the repository.
+  Cleanup removed the stopped containers `evocc-asm-edges-20260905`
+  (2,186,324 KiB), `evocc-asm-edges-20260905-retry` (2,186,308 KiB) and
+  `buildkit` (3,129,952 KiB), with `container rm`. Container-accounted size
+  fell from 7,682,646,016 bytes to zero; `df` changed from 38 to 40 GiB free.
+  The two old containers ran the retained September 5 asm-goto GCC/Clang
+  probe without automatic removal; its receipt and source remain intact.
+  Current tool launches use `--rm` or explicit cleanup in `finally`.
+  Archived copies removed with `rm -rf` after archive and handle checks:
+
+  | Deleted path (under `/private/tmp/`) | KiB |
+  | --- | ---: |
+  | `evocc-agent-repair-20261008` | 1,488 |
+  | `evocc-silent-pilot-20261009` | 1,368 |
+  | `evocc-repair-2-measured-20261009` | 16,196 |
+  | `evocc-repair-2-preflight-20261008` | 116 |
+  | `evocc-repair-2-preflight-contracts-20261008` | 184 |
+  | `evocc-silent-measured-20261009` | 10,056 |
+  | `evocc-repair-2-preflight-fresh-20261008` | 4,828 |
+  | `evocc-repair-2-preflight-resume-20261008-2057` | 368 |
+  | `agent-repair-codecs.s14zOF` (retired source/build scratch) | 1,012 |
+  | `claude-501/-Users-onehrxn-dev-30days-c30/f86a2a66-604e-49db-ba1c-7e287919f116/scratchpad/exp3-out/pilot-20261009` | 3,172 |
+  | `claude-501/-Users-onehrxn-dev-30days-c30/f86a2a66-604e-49db-ba1c-7e287919f116/scratchpad/exp3-out/repilot-20261009` | 2,372 |
+
+  `rmdir .evidence/b11-zero-runs` removed an empty directory (0 KiB).
+  Raw-cleanup `df` readings were 38/38 and 40/40 GiB before/after; active
+  qualification containers can change `container system df` during checks.
+  Protected image aliases share tracked digests and were not removed.
+  All large suggested evidence directories have tracked references and stay.
+  Record the final cleanup, net change, tagged commit and gate result here.
+
+- [ ] **P22 — Shorten the check feedback of the agent interface; the controls of experiments 4 and 5 show its cost** — `OPEN`, P2.
+  Keep separate from the registered effort experiment. Do not change its
+  frozen feedback. The experiment 5 result must bound any later cost claim.
 
 - [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`, P1.
   All 24 items qualify: six each of E3001/E3010/E3011 and two each of

@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import statistics
+from fractions import Fraction
 from pathlib import Path
 
 
@@ -221,12 +222,71 @@ def paired_results(receipt):
     return groups
 
 
+def exact_wilcoxon(differences):
+    """One-sided C1 > C3 signed-rank test; enumerate all signs of nonzero item differences."""
+    values = [d for d in differences if d != 0]
+    ordered = sorted(abs(d) for d in values)
+    ranks = [ordered.index(abs(d)) + len(ordered) - ordered[::-1].index(abs(d)) + 1 for d in values]
+    observed = sum(r for r, d in zip(ranks, values) if d > 0)  # twice the midrank; integers preserve ties
+    sums = [0]
+    for rank in ranks: sums += [s + rank for s in sums]
+    return dict(nonzero=len(values), positive_rank=observed / 2, p=sum(s >= observed for s in sums) / len(sums))
+
+
+def effort_results(part_a, part_b):
+    """Exclude the exploratory run. Average only complete C1/C3 repetition pairs within each item."""
+    result, populations = dict(tables=[]), {}
+    usable = lambda r: r and r.get("status") in ("completed", "timeout", "step_limit") and not r.get("score_error") and not r.get("escapes")
+    repaired = lambda r: usable(r) and r["status"] == "completed" and r.get("passed") is True
+    for part, receipt, allowed in (("A", part_a, {2, 3}), ("B", part_b, {1, 2})):
+        classes, selected = receipt["plan"]["classes"], {}
+        plan = {(r["item"], r["condition"], r["repetition"]) for r in receipt["plan"]["order"]}
+        if any(r not in allowed for _, _, r in plan): raise ValueError("unregistered repetition")
+        for row in sorted(receipt["runs"], key=lambda r: r["index"]):
+            key = row["item"], row["condition"], row["repetition"]
+            if key not in plan: raise ValueError("unregistered repetition")
+            if key in selected and row.get("retry_of") != selected[key]["index"]: raise ValueError("duplicate repetition")
+            selected[key] = row
+        pairs, means = {}, {}
+        for item in classes:
+            reps = sorted({r for i, _, r in plan if i == item})
+            pairs[item] = [(selected.get((item, "c1", r)), selected.get((item, "c3", r))) for r in reps]
+            valid = [(a, b) for a, b in pairs[item] if usable(a) and usable(b)]
+            if valid:
+                means[item] = {field: [sum((Fraction(r[c][field] if field == "steps" else r[c]["tokens"]["total"]) for r in valid), Fraction()) / len(valid)
+                                       for c in (0, 1)] for field in ("steps", "tokens")}
+        silent = [i for i, c in classes.items() if c in ("E3001", "E3010", "E3011")]
+        populations[part] = (means, silent, any(not usable(a) or not usable(b) for i in silent for a, b in pairs[i]))
+        for group in ("all", "silent", "control", *sorted(set(classes.values()))):
+            items = [i for i in classes if group == "all" or classes[i] == group or (group == "silent" and i in silent) or (group == "control" and i not in silent)]
+            for condition in ("c1", "c3"):
+                rows = [r for (i, c, _), r in selected.items() if i in items and c == condition]
+                valid = [r for r in rows if usable(r)]
+                result["tables"].append(dict(part=part, group=group, condition=condition, items=len(items), attempted=len(rows),
+                    planned=sum(i in items and c == condition for i, c, _ in plan), unknown=len(rows)-len(valid),
+                    passed=sum(bool(repaired(r)) for r in valid), repair_rate=sum(bool(repaired(r)) for r in valid)/len(valid) if valid else None,
+                    censored=sum(r["status"] in ("timeout", "step_limit") for r in rows),
+                    steps=sum(r["steps"] for r in valid), tokens=sum(r["tokens"]["total"] for r in valid)))
+    for name, part, field in (("P1", "A", "steps"), ("P2", "A", "tokens"), ("P3", "B", "steps")):
+        means, items, incomplete = populations[part]
+        values = [means[i][field] for i in items if i in means]
+        test = exact_wilcoxon([a-b for a, b in values])
+        result[name] = dict(test, items=len(values), incomplete=incomplete,
+                            c1=float(sum(a for a, _ in values)), c3=float(sum(b for _, b in values)), held=bool(values) and test["p"] < 0.05)
+    savings = {p: 1-result[n]["c3"]/result[n]["c1"] if result[n]["c1"] else None for p, n in (("A", "P1"), ("B", "P3"))}
+    result["P4"] = dict(savings, held=all(v is not None for v in savings.values()) and savings["B"] > savings["A"],
+                        incomplete=result["P1"]["incomplete"] or result["P3"]["incomplete"], test="none; point comparison")
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("receipt", type=Path)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--part-b", type=Path, help="registered effort comparison; positional receipt is Part A")
     args = parser.parse_args()
     receipt = json.loads(args.receipt.read_text())
+    if args.part_b: print(json.dumps(effort_results(receipt, json.loads(args.part_b.read_text())), indent=2)); return
     print(json.dumps(summarize(receipt), indent=2) if args.json else render(receipt), end="\n" if args.json else "")
 
 

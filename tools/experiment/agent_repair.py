@@ -135,6 +135,7 @@ def environment(args, w):
 
 
 def container_build(stage, mode):
+    if shutil.disk_usage(ROOT).free < 25 * 1024**3: raise repair.Failure("disk_below_25_GiB")
     name = "agent-repair-check-" + uuid.uuid4().hex
     try:
         result = repair.run([repair.CONTAINER, "run", "--name", name, "--platform", "linux/arm64", "--network", "none",
@@ -416,7 +417,7 @@ def session(args, out, index, item, condition):
     shutil.move(str(w["ws"]), str(w["sdir"] / "workspace"))
     try:
         row["score_builds"] = qualify_silent.score_builds(final, item)
-        row["passed"] = all(r["passed"] for r in row["score_builds"].values())
+        row["passed"] = status == "completed" and all(r["passed"] for r in row["score_builds"].values())
         metric, delta = repair.measure(original, final, json.loads((item / "fix-spans.json").read_text())["spans"])
         (w["sdir"] / "final.diff").write_text(delta)
         row.update(diff_size=metric["diff_added"] + metric["diff_removed"], span_hits=metric["spans_touched"],
@@ -461,13 +462,15 @@ def archive(out):
 
 def run(args):
     conditions = args.condition or ["c1", "c3"]
-    items = [args.items.resolve() / name for name in args.item]
-    order = [(item, c) for rep in range(args.reps) for i, item in enumerate(items)
-             for c in conditions[(i + rep) % len(conditions):] + conditions[:(i + rep) % len(conditions)]]
+    items = [args.items.resolve() / name for name in sorted(args.item)]
+    first = getattr(args, "first_repetition", 1)
+    if first < 1 or args.reps < 1: raise SystemExit("repetition numbers must be positive")
+    order = [(item, c, rep) for rep in range(first, first + args.reps) for i, item in enumerate(items)
+             for c in conditions[(i + rep - 1) % len(conditions):] + conditions[:(i + rep - 1) % len(conditions)]]
     if len(order) > args.max_sessions: raise SystemExit("the plan has %d sessions; --max-sessions is %d" % (len(order), args.max_sessions))
     if args.out.resolve().is_relative_to(ROOT): raise SystemExit("--out must be outside the repository")
     if any(not (item / "program.c").is_file() or not (item / "fix-spans.json").is_file() for item in items): raise SystemExit("an item is incomplete")
-    plan = dict(order=[dict(item=i.name, condition=c) for i, c in order], items=str(args.items), model=args.model, effort=args.effort,
+    plan = dict(order=[dict(item=i.name, condition=c, repetition=r) for i, c, r in order], items=str(args.items), model=args.model, effort=args.effort,
                 wall_seconds=args.wall, max_steps=args.max_steps, max_sessions=args.max_sessions, reps=args.reps, max_week_ratio=args.max_week_ratio)
     if args.dry_run: print(json.dumps(plan)); return 0
     if not args.quota_port: raise SystemExit("--quota-port is required for a live run")
@@ -483,15 +486,16 @@ def run(args):
                    workspaces=str(args.wroot), prompt=args.prompt_text, quota=[], runs=[], totals=None, stop_reason=None)
     write(out, receipt)
     retried = {}
-    for index, (item, condition) in enumerate(order, 1):
+    for index, (item, condition, repetition) in enumerate(order, 1):
         if args.quota_port:
             q, decision = pace(args, "before %02d" % index); receipt["quota"].append(q)
             if decision != "ok": receipt["stop_reason"] = decision; write(out, receipt); break
         try: row = session(args, out, index, item, condition)
         except Exception as error: row = dict(index=index, item=item.name, condition=condition, status="harness_error", error="%s: %s" % (type(error).__name__, error)); receipt["stop_reason"] = "harness_error"
-        row["retry_of"] = retried.get((item, condition))
-        if row["status"] == "provider_overloaded" and (item, condition) not in retried:
-            retried[item, condition] = index; order.append((item, condition))
+        row["repetition"] = repetition
+        row["retry_of"] = retried.get((item, condition, repetition))
+        if row["status"] == "provider_overloaded" and (item, condition, repetition) not in retried:
+            retried[item, condition, repetition] = index; order.append((item, condition, repetition))
         receipt["runs"].append(row); receipt["totals"] = totals(receipt["runs"]); write(out, receipt)
         if row["status"] == "stopped": receipt["stop_reason"] = receipt["stop_reason"] or "provider_refusal"
         if row.get("escapes"): receipt["stop_reason"] = receipt["stop_reason"] or "escape_detected"
@@ -508,6 +512,7 @@ def main(argv=None):
     parser.add_argument("command", choices=("run",))
     parser.add_argument("--items", type=Path, required=True); parser.add_argument("--item", action="append", required=True)
     parser.add_argument("--condition", action="append", choices=("c1", "c3")); parser.add_argument("--reps", type=int, default=1)
+    parser.add_argument("--first-repetition", type=int, default=1)
     parser.add_argument("--max-sessions", type=int, default=9); parser.add_argument("--phase", default="pilot")
     parser.add_argument("--out", type=Path, required=True); parser.add_argument("--kimi", type=Path, default=KIMI)
     parser.add_argument("--model", default="kimi-code/k3"); parser.add_argument("--effort", default="low", help="KIMI_MODEL_THINKING_EFFORT, or 'default'")

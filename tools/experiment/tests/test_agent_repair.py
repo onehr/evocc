@@ -67,6 +67,8 @@ for act in script:
         sys.stderr.write("error: failed to run prompt: provider.auth_error: 401 Invalid Authentication\n"); flush(); sys.exit(1)
     elif kind == "sleep":
         flush(); time.sleep(act[1])
+    elif kind == "step_limit":
+        sys.stderr.write("error: failed to run prompt: max_steps_exceeded\n"); flush(); sys.exit(1)
     elif kind == "text":
         emit(dict(role="assistant", content=act[1]))
 flush()
@@ -237,6 +239,53 @@ class HarnessTests(Base):
         notes = json.loads((self.tmp / "notes.json").read_text())
         with self.assertRaises(ProcessLookupError):
             os.kill(notes["pid"], 0)
+
+    def test_censored_final_source_is_not_a_completed_repair(self):
+        row = self.session([["edit", FIXED], ["sleep", 60]], wall=1)
+        self.assertTrue(all(r["passed"] for r in row["score_builds"].values()))
+        self.assertEqual(row["status"], "timeout")
+        self.assertFalse(row["passed"])
+        self.assertEqual(row["steps"], 1)
+        self.assertEqual(row["tokens"]["total"], 425)
+
+    def test_replication_order_and_corpus_wall_limit(self):
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            agent.main(["run", "--items", str(self.items), "--item", "b", "--item", "a",
+                        "--out", str(self.tmp / "out"), "--max-week-ratio", "0.85",
+                        "--first-repetition", "2", "--reps", "2", "--wall", "1800", "--dry-run"])
+        plan = json.loads(output.getvalue())
+        self.assertEqual(plan["wall_seconds"], 1800)
+        self.assertEqual([(r["item"], r["condition"], r["repetition"]) for r in plan["order"]],
+                         [("a", "c3", 2), ("a", "c1", 2), ("b", "c1", 2), ("b", "c3", 2),
+                          ("a", "c1", 3), ("a", "c3", 3), ("b", "c3", 3), ("b", "c1", 3)])
+
+    def test_step_limit_final_source_is_not_a_completed_repair(self):
+        row = self.session([["edit", FIXED], ["step_limit"]])
+        self.assertTrue(all(r["passed"] for r in row["score_builds"].values()))
+        self.assertEqual(row["status"], "step_limit")
+        self.assertFalse(row["passed"])
+        self.assertEqual(row["steps"], 1)
+
+    def test_overload_retry_key_includes_repetition(self):
+        args = self.ns(reps=2, max_sessions=4, quota_port=1234)
+        def session(args, out, index, item, condition):
+            return dict(index=index, item=item.name, condition=condition,
+                        status="provider_overloaded" if index <= 4 else "completed", passed=False)
+        with patch.object(agent, "session", side_effect=session), patch.object(agent, "provenance", return_value={}), \
+             patch.object(agent, "pace", return_value=({}, "ok")), patch("sys.stdout", io.StringIO()):
+            self.assertEqual(agent.run(args), 0)
+        rows = json.loads((args.out / "receipt.json").read_text())["runs"]
+        self.assertEqual([r["repetition"] for r in rows], [1, 1, 2, 2, 1, 1, 2, 2])
+        self.assertEqual([r["retry_of"] for r in rows], [None] * 4 + [1, 2, 3, 4])
+
+    def test_package_absolute_cap_is_not_reset_between_parts(self):
+        for initial in (0.20, 0.24, 0.40):
+            args = self.ns(max_week_ratio=0.45, max_week_increase=0.25)
+            read = lambda *unused: {"data": {"quota": {"usages": {"limit7d": {"usedRatio": initial}}}}}
+            self.assertEqual(agent.pace(args, "part", read=read)[1], "ok")
+            at_cap = lambda *unused: {"data": {"quota": {"usages": {"limit7d": {"usedRatio": 0.45}}}}}
+            self.assertEqual(agent.pace(args, "next", read=at_cap)[1], "stop_week")
 
     def test_rate_limit_notice_stops_the_session(self):
         start = time.monotonic()

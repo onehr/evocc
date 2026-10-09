@@ -104,13 +104,13 @@ def score_builds(source, item):
     return {key: dict(passed=passes(row, expected, 1), **row) for key, row in rows.items()}
 
 
-def qualify(item):
+def qualify(item, line_limits=(80, 200)):
     import agent_repair as agent
     sources = {name: (item / name).read_text() for name in ("program.c", "fixed.c")}
     spans = json.loads((item / "fix-spans.json").read_text())["spans"]
     code = (item / "class").read_text().strip()
     source = sources["program.c"]
-    checks = dict(profile=len(source.encode()) <= 65536 and 80 <= len(source.splitlines()) <= 200
+    checks = dict(profile=len(source.encode()) <= 65536 and line_limits[0] <= len(source.splitlines()) <= line_limits[1]
                   and not any(t in source for t in ("#", "%:", "??=")), spans=spans == changed_lines(source, sources["fixed.c"]))
     result = guest(sources, (item / "reference_main.c").read_text(), 5, True)
     expected = (item / "expected.txt").read_text()
@@ -150,17 +150,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--items", type=Path, default=repair.ROOT / "tests/fixtures/agent-repair-4")
     parser.add_argument("--item", action="append")
+    parser.add_argument("--min-lines", type=int, default=80)
+    parser.add_argument("--max-lines", type=int, default=200)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     selected = sorted(p for p in args.items.iterdir() if p.is_dir() and (not args.item or p.name in args.item))
     receipt = dict(schema="agent-repair.qualification.v4", date=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                   image=repair.IMAGE, builds=BUILDS, repeats=5, items=[])
+                   image=repair.IMAGE, builds=BUILDS, repeats=5, line_limits=[args.min_lines, args.max_lines], items=[])
     if args.item and args.out.exists(): receipt = json.loads(args.out.read_text())
     for old in list(receipt["items"]):
         if not (args.items / old["item"]).is_dir():
             receipt.setdefault("replaced", []).append(old); receipt["items"].remove(old)
     for item in selected:
-        row = qualify(item)
+        row = qualify(item, (args.min_lines, args.max_lines))
         for old in list(receipt["items"]):
             if old["item"] == item.name:
                 receipt.setdefault("replaced", []).append(old); receipt["items"].remove(old)
