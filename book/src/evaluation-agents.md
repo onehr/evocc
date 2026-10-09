@@ -601,3 +601,40 @@ python3 tools/experiment/report.py /private/tmp/repair-2-replay/receipt.json
 
 The tagged harness does not stop on an HTTP 403 key refusal. Watch the key
 limit. The report applies the registered stop when it reads the receipt.
+
+## Experiment 3: pilots with a coding agent
+
+These pilots used Kimi Code 2.0.2, `kimi-code/k3`, low effort, one session per
+item and condition, 100 steps and a 900-second limit. The agent could edit
+files and call `check FILE.c`. Scoring used the sealed GCC 14 `-O0` hidden
+test. This was not a registered full experiment.
+
+| Pilot | Attempted / planned | Hidden tests passed | Steps | Tokens, including cached input | Check calls | Time |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Initial | 9/9 | 7/9 | 81 | 2,160,549 | 23 | 1,354.9 s |
+| Sandboxed re-pilot | 6/9 | 6/6 | 68 | 1,759,542 | 30 | 1,391.5 s |
+
+The initial pilot did not isolate the agent's shell. It could fetch public
+source and run host tools. Its conditions therefore did not control tool
+access, and its 7/9 score is not a valid feedback comparison. The original
+audit also counted scratch use among its deviations; that count is not a
+count of successful escapes.
+
+The re-pilot used a Seatbelt execution allowlist and separate workspaces.
+The sandbox denied repository, hidden-test and unrelated home-file reads.
+An opaque `check` client sent requests to the host harness. All conditions
+could build and run a file: C0 used plain GCC, C1 added warnings and UBSan,
+and C3 used EvoCC plus its check, explanation and repair-plan records.
+The audit recorded four blocked attempts, zero escapes and 27 scratch uses.
+
+All six attempted final files passed. Five sessions completed; the sixth
+was stopped on an overload notice after it had already written a passing
+repair. The three `json-merge-patch` sessions did not start. The two completed
+item groups thus hit a ceiling again; they do not show equal capability on
+other defects. The next experiment removes C0 and changes the corpus, not
+the prompt or the C1/C3 feedback bundles.
+
+Sources: [initial receipt](../../tests/contracts/agent-repair-3-pilot-20261009.json),
+[initial wire logs](../../tests/contracts/agent-repair-3-pilot-wire-20261009.tar.gz),
+[re-pilot receipt](../../tests/contracts/agent-repair-3-repilot-20261009.json),
+[re-pilot wire logs](../../tests/contracts/agent-repair-3-repilot-wire-20261009.tar.gz).

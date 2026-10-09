@@ -2,6 +2,7 @@
 """Render measured repair outcomes without treating unattempted cells as failures."""
 import argparse
 import json
+import math
 import statistics
 from pathlib import Path
 
@@ -61,6 +62,7 @@ def key_limit_stop(receipt):
 
 
 def summarize(receipt):
+    if receipt["schema"] == "agent-repair.v4": return paired_results(receipt)
     if receipt["schema"] not in ("agent-repair.v1", "agent-repair.v2"):
         raise ValueError("unsupported receipt schema")
     receipt = key_limit_stop(receipt)
@@ -154,6 +156,7 @@ def render_v2(receipt):
 
 
 def render(receipt):
+    if receipt["schema"] == "agent-repair.v4": return json.dumps(paired_results(receipt), indent=2) + "\n"
     if receipt["schema"] == "agent-repair.v2": return render_v2(receipt)
     fmt = lambda value: "NOT RUN" if value is None else f"{value:.3f}"
     lines = ["| Model | Condition | Class | Pass / attempted | Repair rate | Mean rounds | Mean rounds (success) | Rate range | Rounds range | Attempts / planned by repetition | Synthetic attempts | Errors/stops |",
@@ -179,6 +182,43 @@ def render(receipt):
                   f'Reported cost: USD {receipt["total_cost"]:.6f}.',
                   "Rates include recorded errors in the attempted denominator. A range from incomplete repetitions is not a full-population estimate."])
     return "\n".join(lines) + "\n"
+
+
+def exact_mcnemar(c1_only, c3_only):
+    """Two-sided exact conditional test; ties are not discordant observations."""
+    if any(type(n) is not int or n < 0 for n in (c1_only, c3_only)): raise ValueError("invalid pair count")
+    n = c1_only + c3_only
+    return min(1.0, 2 * sum(math.comb(n, k) for k in range(min(c1_only, c3_only) + 1)) / 2**n)
+
+
+def paired_results(receipt):
+    classes, selected = receipt["plan"]["classes"], {}
+    for row in sorted(receipt["runs"], key=lambda r: r["index"]):
+        selected[row["item"], row["condition"]] = row
+    def usable(row):
+        return row and row.get("status") in ("completed", "timeout", "step_limit") and not row.get("score_error") and not row.get("escapes")
+    groups = {}
+    for group in ("silent", "control", *sorted(set(classes.values()))):
+        items = [i for i, c in classes.items() if c == group or
+                 (group == "silent" and c in ("E3001", "E3010", "E3011")) or
+                 (group == "control" and c in ("E3002", "E3004", "E3005"))]
+        pairs = [(selected.get((i, "c1")), selected.get((i, "c3"))) for i in items]
+        valid = [(a, b) for a, b in pairs if usable(a) and usable(b)]
+        c1_only = sum(a["passed"] and not b["passed"] for a, b in valid)
+        c3_only = sum(b["passed"] and not a["passed"] for a, b in valid)
+        groups[group] = dict(planned=len(items), paired=len(valid), unknown=len(items)-len(valid),
+                             c1=sum(a["passed"] for a, _ in valid), c3=sum(b["passed"] for _, b in valid),
+                             c1_only=c1_only, c3_only=c3_only, p=exact_mcnemar(c1_only, c3_only))
+    s, c = groups["silent"], groups["control"]
+    groups["P1"] = s["paired"] > 0 and s["unknown"] == 0 and s["c3"] > s["c1"] and s["p"] < 0.05
+    groups["P2"] = c["paired"] > 0 and c["unknown"] == 0 and abs(c["c3"]-c["c1"]) <= 1
+    groups["descriptive"] = {}
+    for condition in ("c1", "c3"):
+        rows = [r for r in receipt["runs"] if r["condition"] == condition]
+        groups["descriptive"][condition] = dict(attempts=len(rows), steps=sum(r.get("steps", 0) for r in rows),
+            tokens=sum(r.get("tokens", {}).get("total", 0) for r in rows), checks=sum(r.get("check_runs", 0) for r in rows),
+            seconds=round(sum(r.get("seconds", 0) for r in rows), 1), overloads=sum(r["status"] == "provider_overloaded" for r in rows))
+    return groups
 
 
 def main():

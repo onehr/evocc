@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Third repair experiment: the Kimi Code CLI repairs one C program per session (one item, one condition).
+"""Silent-UB repair experiment: the Kimi Code CLI repairs one C program per session (one item, one condition).
 The agent runs under a Seatbelt sandbox with only program.c and an opaque `check` that builds and runs any
-C file in the sealed container; only the diagnostic layer differs. Scores with repair.py. See protocol-3.md."""
+C file in the sealed container; only the diagnostic layer differs. Uses three sealed scoring builds."""
 import argparse, datetime, hashlib, json, os, re, shlex, shutil, signal, subprocess, sys, tarfile, time, urllib.request, uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import repair  # noqa: E402  scoring, diff measure, host run and sealed container of the second experiment
+import qualify_silent
 
 ROOT, KIMI, KHOME, UHOME = repair.ROOT, Path.home() / ".kimi-code/bin/kimi", Path.home() / ".kimi-code", Path.home()
 EVO, EVOCC = repair.EVO, repair.EVO.with_name("evocc")
@@ -190,6 +191,11 @@ def refusal(record):
     return bool(re.search(r'"(?:status_code|statusCode)": (40[123]|429)\b', text) or STOP.search(text))
 
 
+def overloaded(record):
+    message = next((str(record[k]) for k in ("error_message", "errorMessage", "message") if record.get(k)), str(record.get("error", "")))
+    return "429" in json.dumps(record) and "overloaded" in message.lower() and not re.search(r"\b(quota|limit|usage)\b", message, re.I)
+
+
 def meta_stop(line):
     try: record = json.loads(line)
     except ValueError: return None
@@ -201,7 +207,7 @@ def launch(args, w, env, condition):
     """Run one sandboxed session. Service check requests, watch for a refusal, and enforce the wall limit."""
     argv = ["/usr/bin/sandbox-exec", "-f", str(w["sdir"] / "profile.sb"), str(args.kimi), "-p", args.prompt_text,
             "--output-format", "stream-json", "-m", args.model, "--agent-file", str(args.base / "agent.md"), "--skills-dir", str(args.base / "skills")]
-    status = stop = None
+    status = stop = None; overloads = 0
     handled, checklog = set(), w["sdir"] / "checks.jsonl"
     with open(w["sdir"] / "stdout.jsonl", "wb") as out, open(w["sdir"] / "stderr.txt", "wb") as err, open(w["sdir"] / "stdout.jsonl", "rb") as reader:
         start, pending = time.monotonic(), b""
@@ -212,8 +218,12 @@ def launch(args, w, env, condition):
                 serve(condition, w["ws"], handled, checklog)
                 pending += reader.read()
                 *lines, pending = pending.split(b"\n")
-                stop = stop or next(filter(None, map(meta_stop, lines)), None)
-                if stop: status = "stopped"
+                for notice in filter(None, map(meta_stop, lines)):
+                    if overloaded(json.loads(notice)):
+                        overloads += 1
+                        if overloads > 3: status, stop = "provider_overloaded", notice
+                    else: status, stop = "stopped", notice; break
+                if stop: status = status or "stopped"
                 elif done: break
                 elif time.monotonic() - start > args.wall: status = "timeout"
                 elif os.fstat(out.fileno()).st_size + os.fstat(err.fileno()).st_size > CAPTURE: status = "capture_limit"
@@ -362,6 +372,9 @@ def pace(args, label, read=quota):
     """Read the plan quota. Wait out a nearly spent 5-hour window; stop when the 7-day ratio is reached."""
     q = read(args.kimi, args.quota_port); q["label"] = label
     five, week = ratios(q)
+    if not isinstance(week.get("usedRatio"), (float, int)): return q, "quota_unavailable"
+    if not hasattr(args, "initial_week_ratio"): args.initial_week_ratio = week["usedRatio"]
+    args.max_week_ratio = min(args.max_week_ratio, args.initial_week_ratio + args.max_week_increase)
     if (week.get("usedRatio") or 0) >= args.max_week_ratio: return q, "stop_week"
     waited = 0.0
     while (five.get("usedRatio") or 0) >= 0.9 and waited < args.max_wait:
@@ -371,8 +384,9 @@ def pace(args, label, read=quota):
         seconds = max(5.0, min(seconds + 5, args.max_wait - waited))
         time.sleep(seconds); waited += seconds
         q = read(args.kimi, args.quota_port); q["label"] = label + "-waited"; five, week = ratios(q)
+        if not isinstance(week.get("usedRatio"), (float, int)): return q, "quota_unavailable"
         if (week.get("usedRatio") or 0) >= args.max_week_ratio: return q, "stop_week"
-    return q, "ok"
+    return q, "five_hour_quota" if (five.get("usedRatio") or 0) >= 0.9 else "ok"
 
 
 def session(args, out, index, item, condition):
@@ -385,8 +399,8 @@ def session(args, out, index, item, condition):
     final = (w["ws"] / "program.c").read_text(errors="replace") if (w["ws"] / "program.c").is_file() else ""
     logs = session_logs(w)
     m, results = parse(logs)
-    stop = stop or next(filter(STOP.search, fatal), None) or next((json.dumps(e) for e in m["errors"] if refusal(e)), None)
-    if stop: status = "stopped"
+    stop = stop or next(filter(STOP.search, fatal), None) or next((json.dumps(e) for e in m["errors"] if refusal(e) and not overloaded(e)), None)
+    if stop: status = status if status == "provider_overloaded" else "stopped"
     elif status is None: status = "completed" if code == 0 else "step_limit" if any("max_steps_exceeded" in line for line in fatal) else "error"
     classes = audit(m["calls"], results, w)
     classes["escapes"] += [dict(tool=None, kind="filesystem", detail=p) for p in filesystem_escape(repo_before)]
@@ -401,8 +415,8 @@ def session(args, out, index, item, condition):
                final_sha256=hashlib.sha256(final.encode()).hexdigest(), preprocessor=bool(re.search(r"#|%:|\?\?=", re.sub(r"\\\r?\n", "", final))))
     shutil.move(str(w["ws"]), str(w["sdir"] / "workspace"))
     try:
-        row["passed"], records = repair.score(final, item)
-        row["score_exit_codes"] = [r["exit_code"] for r in records]
+        row["score_builds"] = qualify_silent.score_builds(final, item)
+        row["passed"] = all(r["passed"] for r in row["score_builds"].values())
         metric, delta = repair.measure(original, final, json.loads((item / "fix-spans.json").read_text())["spans"])
         (w["sdir"] / "final.diff").write_text(delta)
         row.update(diff_size=metric["diff_added"] + metric["diff_removed"], span_hits=metric["spans_touched"],
@@ -420,7 +434,7 @@ def provenance(args):
     return dict(commit=text("git", "rev-parse", "HEAD"), dirty=bool(text("git", "status", "--porcelain")), kimi=str(args.kimi),
                 kimi_version=text(str(args.kimi), "--version"), kimi_sha256=digest(args.kimi), evo_sha256=digest(EVO), evocc_sha256=digest(EVOCC),
                 image=repair.IMAGE, image_digest=image, harness_sha256=digest(HERE / "agent_repair.py"), repair_sha256=digest(HERE / "repair.py"),
-                prompt_sha256=digest(args.prompt), sysroot=str(SYSROOT), python=sys.version.split()[0])
+                prompt_sha256=digest(args.prompt), scorer_sha256=digest(HERE / "qualify_silent.py"), sysroot=str(SYSROOT), python=sys.version.split()[0])
 
 
 def totals(runs):
@@ -446,7 +460,7 @@ def archive(out):
 
 
 def run(args):
-    conditions = args.condition or ["c0", "c1", "c3"]
+    conditions = args.condition or ["c1", "c3"]
     items = [args.items.resolve() / name for name in args.item]
     order = [(item, c) for rep in range(args.reps) for i, item in enumerate(items)
              for c in conditions[(i + rep) % len(conditions):] + conditions[:(i + rep) % len(conditions)]]
@@ -456,20 +470,28 @@ def run(args):
     plan = dict(order=[dict(item=i.name, condition=c) for i, c in order], items=str(args.items), model=args.model, effort=args.effort,
                 wall_seconds=args.wall, max_steps=args.max_steps, max_sessions=args.max_sessions, reps=args.reps, max_week_ratio=args.max_week_ratio)
     if args.dry_run: print(json.dumps(plan)); return 0
+    if not args.quota_port: raise SystemExit("--quota-port is required for a live run")
+    if not 0 < args.max_week_increase <= 0.30 or not 0 < args.max_week_ratio <= 0.85: raise SystemExit("quota limits exceed the approved bounds")
+    plan["max_week_increase"] = args.max_week_increase
+    plan["classes"] = {item.name: (item / "class").read_text().strip() for item in items}
     out, args.prompt_text = args.out.resolve(), args.prompt.read_text().strip()
     args.wroot = Path(repair.tempfile.mkdtemp(prefix="agent-repair-ws-")).resolve(); args.base = args.wroot / "env"
     out.mkdir(parents=True); (args.base / "skills").mkdir(parents=True)
     (args.base / "agent.md").write_text(AGENT_FILE); executable(args.base / "login-shell", LOGIN_SHELL)
     repair.ENV = dict(repair.ENV, EVOCC_SYSROOT=str(SYSROOT))
-    receipt = dict(schema="agent-repair.v3", phase=args.phase, date=now(), plan=plan, provenance=provenance(args), mechanism="seatbelt",
+    receipt = dict(schema="agent-repair.v4", phase=args.phase, date=now(), plan=plan, provenance=provenance(args), mechanism="seatbelt",
                    workspaces=str(args.wroot), prompt=args.prompt_text, quota=[], runs=[], totals=None, stop_reason=None)
     write(out, receipt)
+    retried = {}
     for index, (item, condition) in enumerate(order, 1):
         if args.quota_port:
             q, decision = pace(args, "before %02d" % index); receipt["quota"].append(q)
-            if decision == "stop_week": receipt["stop_reason"] = "week_quota_%.3f" % (ratios(q)[1].get("usedRatio") or 0); write(out, receipt); break
+            if decision != "ok": receipt["stop_reason"] = decision; write(out, receipt); break
         try: row = session(args, out, index, item, condition)
         except Exception as error: row = dict(index=index, item=item.name, condition=condition, status="harness_error", error="%s: %s" % (type(error).__name__, error)); receipt["stop_reason"] = "harness_error"
+        row["retry_of"] = retried.get((item, condition))
+        if row["status"] == "provider_overloaded" and (item, condition) not in retried:
+            retried[item, condition] = index; order.append((item, condition))
         receipt["runs"].append(row); receipt["totals"] = totals(receipt["runs"]); write(out, receipt)
         if row["status"] == "stopped": receipt["stop_reason"] = receipt["stop_reason"] or "provider_refusal"
         if row.get("escapes"): receipt["stop_reason"] = receipt["stop_reason"] or "escape_detected"
@@ -485,13 +507,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("run",))
     parser.add_argument("--items", type=Path, required=True); parser.add_argument("--item", action="append", required=True)
-    parser.add_argument("--condition", action="append", choices=("c0", "c1", "c3")); parser.add_argument("--reps", type=int, default=1)
+    parser.add_argument("--condition", action="append", choices=("c1", "c3")); parser.add_argument("--reps", type=int, default=1)
     parser.add_argument("--max-sessions", type=int, default=9); parser.add_argument("--phase", default="pilot")
     parser.add_argument("--out", type=Path, required=True); parser.add_argument("--kimi", type=Path, default=KIMI)
     parser.add_argument("--model", default="kimi-code/k3"); parser.add_argument("--effort", default="low", help="KIMI_MODEL_THINKING_EFFORT, or 'default'")
     parser.add_argument("--wall", type=float, default=900); parser.add_argument("--max-steps", type=int, default=100)
     parser.add_argument("--prompt", type=Path, default=HERE / "prompt-3.txt"); parser.add_argument("--quota-port", type=int)
     parser.add_argument("--max-week-ratio", type=float, required=True, help="stop before a session when the 7-day plan ratio is at or above this")
+    parser.add_argument("--max-week-increase", type=float, default=0.30)
     parser.add_argument("--max-wait", type=float, default=21600.0); parser.add_argument("--dry-run", action="store_true", help="print the plan; start no session")
     return run(parser.parse_args(argv))
 

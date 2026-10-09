@@ -60,6 +60,9 @@ for act in script:
     elif kind == "quota":
         emit(dict(role="meta", type="turn.step.retrying", status_code=429, error_name="APIProviderRateLimitError", error_message="429 Rate limit reached"))
         flush(); time.sleep(60)
+    elif kind == "overload":
+        record = dict(role="meta", type="turn.step.retrying", status_code=429, error_message="429 service overloaded")
+        emit(record); rec.append(record); flush(); time.sleep(0.4)
     elif kind == "auth":
         sys.stderr.write("error: failed to run prompt: provider.auth_error: 401 Invalid Authentication\n"); flush(); sys.exit(1)
     elif kind == "sleep":
@@ -85,7 +88,7 @@ class Base(unittest.TestCase):
     def ns(self, **kw):
         base = dict(items=self.items, item=["a"], condition=None, reps=1, max_sessions=9, phase="pilot",
                     out=self.tmp / "out", kimi=self.tmp / "kimi", model="kimi-code/k3", effort="low", wall=20,
-                    max_steps=100, prompt=agent.HERE / "prompt-3.txt", quota_port=None, max_week_ratio=0.6,
+                    max_steps=100, prompt=agent.HERE / "prompt-3.txt", quota_port=None, max_week_ratio=0.6, max_week_increase=0.30,
                     max_wait=5, dry_run=False)
         base.update(kw)
         args = types.SimpleNamespace(**base)
@@ -181,14 +184,15 @@ class HarnessTests(Base):
         return patch.object(agent, "KHOME", khome), patch.object(agent.subprocess, "Popen", side_effect=popen)
 
     def score(self, source, item):
-        return source == FIXED, [dict(exit_code=0, stdout="")] * 3
+        return {cc + opt: dict(passed=source == FIXED, compile=dict(exit_code=0), link=dict(exit_code=0),
+                              runs=[dict(exit_code=0, stdout="")]) for cc, opt in agent.qualify_silent.BUILDS}
 
     def session(self, script, condition="c0", feedback="=== build exit 0\n", wall=20):
         args = self.ns(kimi=self.fake_kimi(), wall=wall)
         args.prompt_text = "do it"
         khome_patch, popen_patch = self.patched_popen(script)
         with khome_patch, popen_patch, patch.object(agent, "feedback", return_value=feedback), \
-             patch.object(agent.repair, "score", side_effect=self.score):
+             patch.object(agent.qualify_silent, "score_builds", side_effect=self.score):
             row = agent.session(args, args.out, 1, self.items / "a", condition)
         return row
 
@@ -240,6 +244,48 @@ class HarnessTests(Base):
         self.assertLess(time.monotonic() - start, 40)
         self.assertEqual(row["status"], "stopped")
         self.assertIn("429", row["stop"])
+
+    def test_three_overload_notices_allow_the_repair(self):
+        row = self.session([["overload"]] * 3 + [["edit", FIXED]])
+        self.assertEqual(row["status"], "completed")
+        self.assertTrue(row["passed"])
+        self.assertEqual(set(row["score_builds"]), {"gcc-14-O0", "gcc-14-O2", "clang-19-O2"})
+
+    def test_fourth_overload_notice_stops_only_the_session(self):
+        row = self.session([["overload"]] * 4 + [["sleep", 60]], wall=20)
+        self.assertEqual(row["status"], "provider_overloaded")
+        self.assertFalse(row["passed"])
+
+    def test_one_failing_build_rejects_the_repair(self):
+        original = self.score
+        def score(source, item):
+            rows = original(source, item); rows["clang-19-O2"]["passed"] = False
+            return rows
+        with patch.object(self, "score", side_effect=score):
+            row = self.session([["edit", FIXED]])
+        self.assertFalse(row["passed"])
+
+    def test_quota_increase_and_missing_read_stop(self):
+        args = self.ns(max_week_ratio=0.85)
+        read = lambda ratio: lambda *unused: {"data": {"quota": {"usages": {"limit7d": {"usedRatio": ratio}}}}}
+        self.assertEqual(agent.pace(args, "first", read=read(0.2))[1], "ok")
+        self.assertEqual(agent.pace(args, "last", read=read(0.5))[1], "stop_week")
+        self.assertEqual(agent.pace(args, "missing", read=lambda *unused: {"error": "timeout"})[1], "quota_unavailable")
+
+    def test_overloaded_pairs_are_retried_once_after_other_pairs(self):
+        args = self.ns(kimi=self.fake_kimi(), quota_port=1234, max_sessions=2)
+        khome_patch, popen_patch = self.patched_popen([["overload"]] * 4 + [["sleep", 60]])
+        with khome_patch, popen_patch, patch.object(agent, "provenance", return_value={}), \
+             patch.object(agent, "pace", return_value=({}, "ok")), \
+             patch.object(agent.qualify_silent, "score_builds", side_effect=self.score):
+            self.assertEqual(agent.run(args), 0)
+        rows = json.loads((args.out / "receipt.json").read_text())["runs"]
+        self.assertEqual([r["condition"] for r in rows], ["c1", "c3", "c1", "c3"])
+        self.assertEqual([r["retry_of"] for r in rows], [None, None, 1, 2])
+        self.assertTrue(all(r["status"] == "provider_overloaded" for r in rows))
+
+    def test_quota_word_takes_priority_over_overload(self):
+        self.assertFalse(agent.overloaded(dict(status_code=429, error_message="quota limit exceeded; overloaded")))
 
     def test_authentication_error_stops_the_session(self):
         row = self.session([["auth"]])
@@ -341,7 +387,10 @@ class HarnessTests(Base):
             self.assertEqual(agent.main(["run", "--items", str(self.items), "--item", "a", "--item", "b", "--item", "c",
                                          "--out", str(self.tmp / "o"), "--max-week-ratio", "0.6", "--dry-run"]), 0)
         order = [(r["item"], r["condition"]) for r in json.loads(out.getvalue())["order"]]
-        self.assertEqual(order[:4], [("a", "c0"), ("a", "c1"), ("a", "c3"), ("b", "c1")])
+        self.assertEqual(order[:4], [("a", "c1"), ("a", "c3"), ("b", "c3"), ("b", "c1")])
+        with self.assertRaises(SystemExit):
+            agent.main(["run", "--items", str(self.items), "--item", "a", "--out", str(self.tmp / "x"),
+                        "--condition", "c0", "--max-week-ratio", "0.85", "--dry-run"])
         with self.assertRaisesRegex(SystemExit, "outside the repository"):
             agent.main(["run", "--items", str(self.items), "--item", "a", "--out", str(agent.ROOT / "x"), "--max-week-ratio", "0.6"])
         with self.assertRaises(SystemExit):  # --max-week-ratio is required
