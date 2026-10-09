@@ -933,7 +933,11 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   all reference runs, line-specific findings and unrelated warnings.
   [Feedback identity](tests/contracts/agent-repair-5-feedback-identity.json)
   passes all 96 raw-byte comparisons, including the fixed-source controls.
-  Pilot, registration, measurement and final gate remain pending. Capture
+  The [four-session pilot](tests/contracts/agent-repair-5-pilot-20261010.json)
+  completes 4/4 repairs with zero escapes. Its quota increase is 0.011111;
+  the fixed projection is 0.205332, so Part B keeps two repetitions.
+  [Registration](tools/experiment/protocol-5.md) fixes the package stop line
+  at 0.363758. Measurement and the final gate remain pending. Capture
   retention limit is 500 MiB per run, outside the repository.
   Cleanup removed the stopped containers `evocc-asm-edges-20260905`
   (2,186,324 KiB), `evocc-asm-edges-20260905-retry` (2,186,308 KiB) and
