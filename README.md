@@ -775,8 +775,9 @@ for an incomplete population. *Answer.* Inconclusive ([Experiment 2](book/src/ev
 A registered coding-agent run then compared default GCC warnings + UBSan with EvoCC on
 18 silent memory defects and six controls. Both conditions repaired 18/18 silent items
 and 5/6 controls: P1 did not hold (exact McNemar p=1); P2 held. All 48 sessions completed.
-EvoCC used fewer steps and tokens in this run; these are descriptive results, not a tested
-efficiency claim. The [method, tool matrix and results](book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior)
+An exploratory split, chosen after the data, shows where EvoCC helped: on the silent classes the
+agent needed 24% to 44% fewer steps and tokens with EvoCC (E3011: 30 against 54 steps), and on the
+controls about 10% more, because EvoCC's feedback is longer. A registered replication must confirm it. The [method, tool matrix and results](book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior)
 state the shared-kernel and single-repetition limits. No general repair advantage is established.
 
 ### 8 Related work

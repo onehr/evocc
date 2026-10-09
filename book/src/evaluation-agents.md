@@ -802,6 +802,26 @@ The registered measured result stands; it is not pooled with the pilot.
 | C3 | 24 | 119 | 2,274,022 | 46 | 978.9 s |
 
 These are descriptive totals, not separately tested efficiency claims.
+
+**Exploratory analysis (not registered).** The totals hide a pattern by defect
+class. Where only EvoCC reported the defect, C3 needed fewer steps and tokens.
+Where both toolchains reported it, C3 cost the same or slightly more, because
+its feedback (the explanation page and the repair plan) is longer.
+
+| Class | Items | Steps C1 | Steps C3 | Change | Tokens C1 | Tokens C3 | Change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| E3001: uninitialized read | 6 | 48 | 30 | −38% | 936k | 575k | −39% |
+| E3010: dangling pointer | 6 | 38 | 29 | −24% | 728k | 552k | −24% |
+| E3011: out-of-bounds access | 6 | 54 | 30 | −44% | 1,066k | 578k | −46% |
+| Controls (E3002, E3004, E3005) | 6 | 27 | 30 | +11% | 502k | 568k | +13% |
+
+C3 sessions were uniform: four to six steps and one or two check calls on every
+item. C1 sessions ranged from four to 19 steps; six silent items took C1 ten
+steps or more. Over the 24 pairs, C3 used fewer steps on 12 items, more on 4
+and the same on 8 (one-sided sign test p = 0.038). Over tokens, C3 used fewer
+on 12 items and more on 12. The saving is in the hard cases: EvoCC bounds the
+search when the default toolchain is silent. This analysis was chosen after
+the data; a registered replication must confirm it.
 The agent used 5,506,711 tokens in total, including 5,296,896 cached-input
 tokens. The seven-day quota ratio rose from 0.077860 to 0.113758, an increase
 of 0.035898. Neither the 0.30 increase limit nor the 0.85 absolute limit
