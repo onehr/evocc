@@ -928,6 +928,10 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   measurement. Report paired outcomes, the detection matrix and provider
   failures separately. No measured run or repair-rate claim exists yet.
   The corpus and qualification live in tests/fixtures/agent-repair-4/.
+  All 24 items qualify; two rejected candidates are retained. The six-session
+  pilot passes C1 2/3 and C3 3/3, with zero escapes. Its weekly quota increase
+  is 0.007233; the 48-session projection is 0.057864, so no reduction is needed.
+  All 112 experiment tests pass. protocol-4.md fixes the formal method.
 
 - [x] **P19 — Consistent options and checkout defaults** — `DONE`, P1.
   D07 supplies the four fixes and its retained full-workspace acceptance.
