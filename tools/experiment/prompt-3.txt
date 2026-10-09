@@ -1,7 +1,7 @@
 The file program.c in the current directory is a C program with defects.
 Its comments describe the intended behavior.
-Run `check program.c` to get the feedback that this environment offers.
+Run `check FILE.c` to build and run any C file of this workspace. It prints the build output, the program stdout and stderr, and the exit codes. It also prints the diagnostic feedback that this environment offers. Running `check program.c` checks the program you are repairing; you may also write your own C test driver and check it.
 Fix every defect in program.c. Edit the file in place.
 Keep the function names, the parameter types and main.
-Do not add I/O. Do not add preprocessor directives.
+Do not add I/O to program.c. Do not add preprocessor directives to program.c.
 Stop when the program is correct.

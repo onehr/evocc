@@ -1,140 +1,242 @@
 #!/usr/bin/env python3
-"""Third repair experiment: the Kimi Code CLI repairs one C program per session (one item and condition).
-The agent works in a fresh directory with only program.c and `check`; only `check` differs between conditions.
-The harness scores the final file with the unchanged hidden test of repair.py. Standard library; Python 3.9+."""
+"""Third repair experiment: the Kimi Code CLI repairs one C program per session (one item, one condition).
+The agent runs under a Seatbelt sandbox in a fresh workspace with only program.c and an opaque `check`.
+`check FILE.c` builds and runs any C file in the sealed container; only the diagnostic layer differs. The
+harness scores the final file with repair.py. Standard library; Python 3.9+. See protocol-3.md."""
 import argparse, datetime, hashlib, json, os, re, shlex, shutil, signal, subprocess, sys, tarfile, time, urllib.request, uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import repair  # noqa: E402  (scoring, diff measure and sealed container of the second experiment)
+import repair  # noqa: E402  scoring, diff measure, host run and sealed container of the second experiment
 
 ROOT, KIMI = repair.ROOT, Path.home() / ".kimi-code/bin/kimi"
-TOOLS = "sh bash cat ls head tail sed awk grep diff wc sort uniq cut tr echo printf cp mv rm mkdir test true false".split()
-EXTRA_TOOLS = ["rg"]  # Kimi's Grep and Glob tools use rg from PATH; without it Kimi downloads rg into its home.
+KHOME, UHOME = Path.home() / ".kimi-code", Path.home()
+EVO, EVOCC = repair.EVO, repair.EVO.with_name("evocc")
+SYSROOT = ROOT / "sysroot/aarch64-unknown-linux-gnu"
+TOOLS = "sh bash cat ls head tail sed awk grep diff wc sort uniq cut tr echo printf cp mv rm mkdir test true false sleep".split()
+EXTRA_TOOLS = ["rg"]  # Kimi's Grep and Glob call rg from PATH; without it Kimi downloads rg into its home.
 TOKENS = ("inputOther", "inputCacheRead", "inputCacheCreation", "output")
-C0_TEXT = "No feedback is available in this environment.\n"
-# The agent file removes the web tools from the main agent. Coder sub-agents keep them, so delegation is off too.
 AGENT_FILE = ("---\nname: evocc-repair\ndescription: The default Kimi Code agent without web tools and without sub-agents.\n"
               "disallowedTools: WebSearch, FetchURL, Agent, AgentSwarm\n---\n${base_prompt}\n")
-# Kimi runs "$SHELL -l -c /usr/bin/env" at start and appends that PATH. This stand-in reads no profile.
-LOGIN_SHELL = "#!/bin/sh\nexec /usr/bin/env\n"
-WEB, FILE_TOOLS = {"WebSearch", "FetchURL", "WebFetch"}, {"Read", "Write", "Edit", "Grep", "Glob", "ReadMediaFile"}
-COMPILER = re.compile(r"(cc|c89|c99|gcc|g\+\+|c\+\+|clang|clang\+\+|tcc|icc|icx|zig|xcrun|cc1|evo|evocc)(-[0-9.]+)?")
-STOP = re.compile(r"(?i)rate.?limit|quota|balance|auth|unauthori|forbidden|login|provider\.\w+: (40[123]|429)\b")
+LOGIN_SHELL = "#!/bin/sh\nexec /usr/bin/env\n"  # Kimi runs "$SHELL -l -c /usr/bin/env" once; this reads no profile.
+WEB = {"WebSearch", "FetchURL", "WebFetch"}
+FILE_TOOLS = {"Read", "Write", "Edit", "Grep", "Glob", "ReadMediaFile"}
+# A compiler, interpreter or network tool. The sandbox blocks these; the audit flags any that ran.
+FORBIDDEN = re.compile(r"^(cc|c\d\d|gcc|g\+\+|c\+\+|clang|clang\+\+|cpp|tcc|cc1|zig|xcrun|as|ld|evo|evocc|"
+                       r"python\d?|python\d\.\d+|perl|ruby|node|deno|bun|osascript|swift|swiftc|java|"
+                       r"curl|wget|nc|ncat|netcat|ssh|scp|sftp|telnet|ftp|git|open|nscurl)$")
+DENIED = re.compile(r"(?i)operation not permitted|not permitted|permission denied|command not found|"
+                    r"no such file or directory|cannot execute|killed|sandbox")
+STOP = re.compile(r"(?i)rate.?limit|quota|balance|unauthori|forbidden|provider\.\w+: (40[123]|429)\b")
 HEREDOC = re.compile(r"(<<-?[ \t]*(['\"]?)(\w+)\2[^\n]*)\n(?:.*?\n)??[ \t]*\3[ \t]*(?=\n|$)", re.S)
 SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", ";;", "|&"}
 PREFIXES = {"env", "command", "exec", "time", "nice", "nohup", "sudo", "xargs", "builtin", "then", "do", "else", "if", "while", "until", "!"}
 CAPTURE = 64 * 1024 ** 2
+# The agent's check command. It is opaque: it holds no harness, repository or run-directory path. It finds
+# the workspace .check directory by walking up from the current directory, and relays the file name.
+CHECK_CLIENT = r"""#!/bin/sh
+set -u
+dir=$PWD
+while [ ! -d "$dir/.check/req" ]; do
+  [ -z "$dir" ] && { echo "check: run this inside the working directory" >&2; exit 2; }
+  dir=${dir%/*}
+done
+file=${1:-program.c}
+id="$$-$(awk 'BEGIN{srand(); print int(rand()*1000000000)}')"
+printf '%s\n' "$file" > "$dir/.check/req/$id.file"
+: > "$dir/.check/req/$id.ready"
+i=0
+while [ ! -f "$dir/.check/resp/$id.done" ]; do
+  sleep 1; i=$((i + 1))
+  [ "$i" -gt 900 ] && { echo "check: timed out" >&2; exit 3; }
+done
+cat "$dir/.check/resp/$id.out"
+exit "$(cat "$dir/.check/resp/$id.code" 2>/dev/null || echo 0)"
+"""
+# Builds and runs one C file in the sealed, network-disabled container. Mode c3 assembles a prebuilt input.s.
+CONTAINER_BUILD = r"""ulimit -t 25 2>/dev/null; ulimit -f 1048576 2>/dev/null
+cd "$(mktemp -d)" || exit 70
+cp /in/input.c input.c 2>/dev/null
+mode=$1
+if [ "$mode" = c3 ]; then
+  cp /in/input.s input.s 2>/dev/null
+  if gcc-14 -O0 input.s -o prog 2>err; then rc=0; else rc=$?; fi
+  printf '=== assemble and link exit %s\n' "$rc"; sed -n 1,80p err
+else
+  [ "$mode" = c1 ] && f='-Wall -Wextra -fsanitize=undefined' || f=''
+  if gcc-14 -O0 $f -o prog input.c 2>err; then rc=0; else rc=$?; fi
+  printf '=== build exit %s\n' "$rc"; sed -n 1,200p err
+fi
+if [ "$rc" = 0 ]; then
+  ./prog >out 2>rerr; pr=$?
+  printf '=== run exit %s\n--- stdout\n' "$pr"; sed -n 1,400p out
+  printf -- '--- stderr\n'; sed -n 1,400p rerr
+fi
+"""
+
 
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 def digest(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-
 def executable(path, text): path.write_text(text); path.chmod(0o755)
 
-def check(condition, work, log, names):
-    """The `check` command of one workspace. The generated script calls this in a new process."""
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))  # finally blocks then delete the container
-    work, code = Path(work), 0
-    path = (Path.cwd() / (names[0] if names else "program.c")).resolve()
-    if condition == "c0": text = C0_TEXT
-    elif not path.is_relative_to(work) or not path.is_file(): text, code = "check: give a C file in the working directory\n", 2
-    elif path.stat().st_size > 65536: text, code = "check: the file is larger than 65536 bytes\n", 2
-    else:
-        try: text = c1_feedback(path.read_text(errors="replace")) if condition == "c1" else c3_feedback(work, path.relative_to(work))
-        except (repair.Failure, OSError) as error: text, code = "check: internal error: %s\n" % error, 3
-    with open(log, "a") as handle: handle.write(json.dumps(dict(time=now(), cwd=os.getcwd(), args=names, exit_code=code, output=text)) + "\n")
-    sys.stdout.write(text)
-    return code
 
-def c1_feedback(source):
-    """Sealed gcc-14 UBSan build and run, as repair.py C1: compiler stderr, program stderr, exit codes."""
-    lines = []
-    for step in repair.native("c1", source):
-        lines += ["$ " + " ".join(step["argv"])] + ([step["stderr"].rstrip("\n")] if step["stderr"] else []) + ["exit status %d" % step["exit_code"]]
-    return "\n".join(lines) + "\n"
+def kill(proc):
+    try: os.killpg(proc.pid, signal.SIGTERM); proc.wait(10)
+    except (subprocess.TimeoutExpired, ProcessLookupError):
+        try: os.killpg(proc.pid, signal.SIGKILL); proc.wait()
+        except ProcessLookupError: pass
 
-def c3_feedback(work, name):
-    """Host evo check, explain for each code and fix --plan, as repair.py C3, on the workspace file."""
-    def evo(*argv): return repair.run([repair.EVO, *argv], cwd=work)
-    records = [evo("check", "--json", name)]
-    try: codes = sorted({d["code"] for line in records[0]["stdout"].splitlines() if line.strip() for d in json.loads(line).get("diagnostics", [])})
-    except (ValueError, KeyError, TypeError, AttributeError): codes = []
-    records += [evo("explain", code, "--json") for code in codes] + [evo("fix", name, "--plan", "--json")]
-    return "".join(r["stdout"] if r["stdout"].strip() else r["stderr"] for r in records)
 
-def workspace(args, out, index, item, condition):
-    sdir, work = out / "sessions" / ("%02d" % index), (args.workspaces / ("w%02d-%s" % (index, uuid.uuid4().hex[:8]))).resolve()
-    (sdir / "bin").mkdir(parents=True); work.mkdir(parents=True)
-    shutil.copyfile(item / "program.c", work / "program.c")
-    words = map(shlex.quote, (sys.executable, str(HERE / "agent_repair.py"), condition, str(work), str(sdir / "checks.jsonl")))
-    executable(sdir / "check", "#!/bin/sh\nexec %s -I %s check %s %s %s \"$@\"\n" % tuple(words))
-    executable(work / "check", "#!/bin/sh\nexec %s \"$@\"\n" % shlex.quote(str(sdir / "check")))
+def profile(execs, ws, tmp, home, binp, out, siblings):
+    """A Seatbelt profile. Exec uses an allowlist. Reads deny the sensitive trees, including the output
+    tree and the other sessions. Writes confine to the workspace, the session temp and the Kimi home."""
+    allow_exec = sorted(set(execs) | {"/usr/bin/env", str(KIMI)})
+    wr = [str(ws), str(tmp), str(home), str(KHOME), "/private/var/folders"]
+    deny_read = [str(ROOT), str(UHOME), "/etc", "/private/etc", str(out)] + [str(p) for p in siblings]
+    allow_read = [str(KHOME), str(KIMI.parent), str(ws), str(tmp), str(home), str(binp)]
+    sub = lambda xs: " ".join('(subpath "%s")' % x for x in sorted(set(xs)))
+    lit = lambda xs: " ".join('(literal "%s")' % x for x in sorted(set(xs)))
+    return "\n".join([
+        "(version 1)", "(allow default)", "(deny process-exec*)",
+        "(allow process-exec*\n  %s)" % lit(allow_exec),
+        "(deny file-write*)",
+        "(allow file-write*\n  %s %s)" % (sub(wr), lit(["/dev/null", "/dev/random", "/dev/urandom"])),
+        "(deny file-read-data\n  %s)" % sub(deny_read),
+        "(allow file-read*\n  %s)" % sub(allow_read), ""])
+
+
+def workspace(args, out, index, item):
+    # The agent tree lives under the workspaces root; getcwd needs its ancestors readable, so the harness
+    # output (receipts, logs, the profile) lives apart under `out` and is read-denied.
+    sdir, wdir = out / "sessions" / ("%02d" % index), args.wroot / ("%02d" % index)
+    ws, tmp, home, binp = wdir / "ws", wdir / "tmp", wdir / "home", wdir / "bin"
+    for d in (ws / ".check/req", ws / ".check/resp", tmp, home, binp, sdir):
+        d.mkdir(parents=True)
+    shutil.copyfile(item / "program.c", ws / "program.c")
+    executable(binp / "check", CHECK_CLIENT)
+    execs = set()
     for tool in TOOLS + EXTRA_TOOLS:
         found = shutil.which(tool, path="/bin:/usr/bin:/usr/local/bin:/opt/homebrew/bin")
-        if found: (sdir / "bin" / tool).symlink_to(found)
+        if found: (binp / tool).symlink_to(found); execs.add(os.path.realpath(found))
         elif tool in TOOLS: raise repair.Failure("missing_tool_" + tool)
-    (sdir / "bin" / "check").symlink_to(work / "check")
-    return sdir, work
+    execs.add(str(binp / "check")); execs.add(str(args.base / "login-shell"))
+    siblings = [p for p in args.wroot.iterdir() if p.is_dir() and p != wdir and p != args.base]
+    (sdir / "profile.sb").write_text(profile(execs, ws, tmp, home, binp, out, siblings))
+    return dict(sdir=sdir, ws=ws, tmp=tmp, home=home, bin=binp)
 
-def environment(args, base, sdir):
-    env = dict(HOME=os.environ["HOME"], PATH=str(sdir / "bin"), SHELL=str(base / "login-shell"), TERM="dumb", NO_COLOR="1",
-               KIMI_LOOP_MAX_STEPS_PER_TURN=str(args.max_steps), KIMI_CODE_NO_AUTO_UPDATE="1", KIMI_DISABLE_TELEMETRY="1",
-               KIMI_CODE_BUILTIN_PRODUCT_SKILLS="0")
-    env.update({name: os.environ[name] for name in ("USER", "LOGNAME", "LANG", "TMPDIR") if name in os.environ})
+
+def environment(args, w):
+    env = dict(HOME=str(w["home"]), KIMI_CODE_HOME=str(KHOME), PATH=str(w["bin"]), SHELL=str(args.base / "login-shell"),
+               TMPDIR=str(w["tmp"]), TERM="dumb", NO_COLOR="1", KIMI_LOOP_MAX_STEPS_PER_TURN=str(args.max_steps),
+               KIMI_CODE_NO_AUTO_UPDATE="1", KIMI_DISABLE_TELEMETRY="1", KIMI_CODE_BUILTIN_PRODUCT_SKILLS="0")
+    env.update({n: os.environ[n] for n in ("USER", "LOGNAME", "LANG") if n in os.environ})
     if args.effort != "default": env["KIMI_MODEL_THINKING_EFFORT"] = args.effort
     return env
 
-def stop_process(process):
-    try: os.killpg(process.pid, signal.SIGTERM); process.wait(10)
-    except subprocess.TimeoutExpired: os.killpg(process.pid, signal.SIGKILL); process.wait()
-    except ProcessLookupError: process.wait()
+
+def container_build(stage, mode):
+    name = "agent-repair-check-" + uuid.uuid4().hex
+    try:
+        result = repair.run([repair.CONTAINER, "run", "--name", name, "--platform", "linux/arm64", "--network", "none",
+                             "--cpus", "1", "--memory", "512M", "--user", "65534:65534", "-i", "-v", str(stage) + ":/in:ro",
+                             repair.IMAGE, "sh", "-c", CONTAINER_BUILD, "check", mode])
+    finally:
+        subprocess.run([repair.CONTAINER, "delete", "--force", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=repair.ENV, timeout=30)
+    return result["stdout"] + (("\n" + result["stderr"]) if result["exit_code"] and result["stderr"] else "")
+
+
+def c3_diagnostics(src, stage):
+    build = repair.run([EVOCC, "-S", "--target=aarch64-unknown-linux-gnu", "-O0", str(src), "-o", str(stage / "input.s")], cwd=stage)
+    text = "=== evocc build exit %d\n%s" % (build["exit_code"], build["stderr"][:4000])
+    text += container_build(stage, "c3") if build["exit_code"] == 0 else "=== evocc build failed; the container did not run\n"
+    check = repair.run([EVO, "check", "--json", str(src)], cwd=stage)
+    try: codes = sorted({d["code"] for line in check["stdout"].splitlines() if line.strip() for d in json.loads(line).get("diagnostics", [])})
+    except (ValueError, KeyError, TypeError, AttributeError): codes = []
+    records = [check] + [repair.run([EVO, "explain", c, "--json"], cwd=stage) for c in codes] + [repair.run([EVO, "fix", str(src), "--plan", "--json"], cwd=stage)]
+    return text + "=== evo diagnostics\n" + "".join(r["stdout"] if r["stdout"].strip() else r["stderr"] for r in records)
+
+
+def feedback(condition, src, stage):
+    shutil.copyfile(src, stage / "input.c")
+    if condition == "c3": return c3_diagnostics(stage / "input.c", stage)
+    return container_build(stage, condition)
+
+
+def serve(condition, ws, handled, log):
+    """Answer each pending check request. The file name is data; it must resolve inside the workspace."""
+    req, resp = ws / ".check/req", ws / ".check/resp"
+    for ready in sorted(req.glob("*.ready")):
+        rid = ready.stem
+        if rid in handled: continue
+        handled.add(rid)
+        name = (req / (rid + ".file")).read_text().strip() if (req / (rid + ".file")).is_file() else "program.c"
+        wsr = ws.resolve(); target = (wsr / name).resolve()
+        code, text = 0, ""
+        try:
+            if not target.is_relative_to(wsr) or not target.is_file(): code, text = 2, "check: name a C file in the working directory\n"
+            elif target.stat().st_size > 262144: code, text = 2, "check: the file is larger than 262144 bytes\n"
+            else:
+                with repair.tempfile.TemporaryDirectory(prefix="agent-repair-check-") as scratch:
+                    text = feedback(condition, target, Path(scratch))
+        except (repair.Failure, repair.Stop, OSError, subprocess.SubprocessError) as error:
+            code, text = 3, "check: internal error: %s\n" % type(error).__name__
+        (resp / (rid + ".out")).write_text(text)
+        (resp / (rid + ".code")).write_text(str(code))
+        (resp / (rid + ".done")).write_text("")
+        with open(log, "a") as handle: handle.write(json.dumps(dict(time=now(), file=name, exit=code, bytes=len(text))) + "\n")
+
 
 def refusal(record):
-    """A rate-limit, quota or authentication error, by HTTP status field or by the error words of the CLI."""
     text = json.dumps(record)
     return bool(re.search(r'"(?:status_code|statusCode)": (40[123]|429)\b', text) or STOP.search(text))
 
+
 def meta_stop(line):
-    """A stream-json retry or error notice that reports a refusal; numbers in tool output never count."""
     try: record = json.loads(line)
     except ValueError: return None
     if not isinstance(record, dict) or record.get("role") != "meta" or not re.search("retry|error", str(record.get("type"))): return None
     return json.dumps(record) if refusal(record) else None
 
-def launch(argv, work, env, sdir, wall):
-    """Run one session. Kill the process group at the wall limit or at the first refusal notice."""
+
+def launch(args, w, env, condition):
+    """Run one sandboxed session. Service check requests, watch for a refusal, and enforce the wall limit."""
+    argv = ["/usr/bin/sandbox-exec", "-f", str(w["sdir"] / "profile.sb"), str(args.kimi), "-p", args.prompt_text,
+            "--output-format", "stream-json", "-m", args.model, "--agent-file", str(args.base / "agent.md"), "--skills-dir", str(args.base / "skills")]
     status = stop = None
-    with open(sdir / "stdout.jsonl", "wb") as out, open(sdir / "stderr.txt", "wb") as err, open(sdir / "stdout.jsonl", "rb") as reader:
+    handled, checklog = set(), w["sdir"] / "checks.jsonl"
+    with open(w["sdir"] / "stdout.jsonl", "wb") as out, open(w["sdir"] / "stderr.txt", "wb") as err, open(w["sdir"] / "stdout.jsonl", "rb") as reader:
         start, pending = time.monotonic(), b""
-        process = subprocess.Popen(argv, cwd=work, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err, start_new_session=True)
+        proc = subprocess.Popen(argv, cwd=str(w["ws"]), env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=err, start_new_session=True)
         try:
             while True:
-                done = process.poll() is not None
+                done = proc.poll() is not None
+                serve(condition, w["ws"], handled, checklog)
                 pending += reader.read()
                 *lines, pending = pending.split(b"\n")
                 stop = stop or next(filter(None, map(meta_stop, lines)), None)
                 if stop: status = "stopped"
                 elif done: break
-                elif time.monotonic() - start > wall: status = "timeout"
+                elif time.monotonic() - start > args.wall: status = "timeout"
                 elif os.fstat(out.fileno()).st_size + os.fstat(err.fileno()).st_size > CAPTURE: status = "capture_limit"
                 if status: break
-                time.sleep(0.5)
+                time.sleep(0.3)
         finally:
-            if process.poll() is None: stop_process(process)
-    return status, stop, process.returncode, time.monotonic() - start
+            if proc.poll() is None: kill(proc)
+    return status, stop, proc.returncode, round(time.monotonic() - start, 1)
 
-def session_logs(work, sdir):
-    """Copy every wire.jsonl of the Kimi session whose working directory is this workspace."""
-    key, paths = hashlib.sha256(str(work).encode()).hexdigest()[:12], []
-    for wire in sorted((Path(os.environ["HOME"]) / ".kimi-code/sessions").glob("wd_*_%s/session_*/agents/*/wire.jsonl" % key)):
-        target = sdir / "wire" / wire.parents[2].name / (wire.parent.name + ".jsonl")
+
+def session_logs(w):
+    key, paths = hashlib.sha256(str(w["ws"]).encode()).hexdigest()[:12], []
+    for wire in sorted((KHOME / "sessions").glob("wd_*_%s/session_*/agents/*/wire.jsonl" % key)):
+        target = w["sdir"] / "wire" / wire.parents[2].name / (wire.parent.name + ".jsonl")
         target.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(wire, target); paths.append(target)
     return paths
 
+
 def parse(paths):
-    """Steps, tokens, tool calls and errors from wire.jsonl files (Kimi Code 2.0 nests loop events)."""
-    m = dict(steps=0, request_kinds={}, models=[], efforts=[], tokens=dict.fromkeys(TOKENS, 0), tool_calls={}, calls=[], errors=[], agents_md=[])
+    m = dict(steps=0, request_kinds={}, models=[], efforts=[], tokens=dict.fromkeys(TOKENS, 0), tool_calls={}, calls=[], errors=[])
+    results = {}
     for path in paths:
         for line in Path(path).read_text(errors="replace").splitlines():
             try: record = json.loads(line)
@@ -148,102 +250,94 @@ def parse(paths):
                 for field, key in (("models", "modelAlias"), ("efforts", "thinkingEffort")):
                     if record.get(key) not in m[field]: m[field].append(record.get(key))
             elif kind == "usage.record":
-                for name in TOKENS: m["tokens"][name] += int((record.get("usage") or {}).get(name) or 0)
+                for n in TOKENS: m["tokens"][n] += int((record.get("usage") or {}).get(n) or 0)
             elif kind == "tool.call":
                 name, args = str(record.get("name")), record.get("args")
                 m["tool_calls"][name] = m["tool_calls"].get(name, 0) + 1
-                m["calls"].append((name, args if isinstance(args, dict) else {"raw": args}))
+                m["calls"].append((str(record.get("toolCallId")), name, args if isinstance(args, dict) else {"raw": args}))
+            elif kind == "tool.result":
+                r = record.get("result") or {}
+                results[str(record.get("toolCallId"))] = (str(r.get("output", "")), bool(r.get("isError")))
             elif kind in ("turn.ended", "turn.step.retrying", "turn.step.interrupted") and (record.get("error") or record.get("errorName") or record.get("reason") == "error"):
                 m["errors"].append({k: record.get(k) for k in ("type", "error", "errorName", "errorMessage", "statusCode", "message") if record.get(k) is not None})
-            elif kind == "profile.bind": m["agents_md"] += record.get("agentsMdPaths") or []
-    return m
+    return m, results
+
 
 def command_words(command):
-    """The first word of every simple command, also inside sh -c and bash -c."""
     text = HEREDOC.sub(r"\1", command).replace("\n", ";")
     try: lexer = shlex.shlex(text, posix=True, punctuation_chars=True); lexer.whitespace_split = True; tokens = list(lexer)
     except ValueError: tokens = re.findall(r"[;|&()]+|[^\s;|&()]+", text)
     words, start = [], True
-    for index, token in enumerate(tokens):
+    for i, token in enumerate(tokens):
         if token in SEPARATORS: start = True
         elif start and not (re.fullmatch(r"\w+=.*", token) or token in PREFIXES):
-            words.append(token)
-            start = False
-            if os.path.basename(token) in ("sh", "bash") and tokens[index + 1:index + 2] == ["-c"] and index + 2 < len(tokens): words += command_words(tokens[index + 2])
+            words.append(token); start = False
+            if os.path.basename(token) in ("sh", "bash") and tokens[i + 1:i + 2] == ["-c"] and i + 2 < len(tokens): words += command_words(tokens[i + 2])
     return words
 
+
 def path_tokens(command):
-    """Words that name a file: home or temp variables, parent references, existing absolute roots."""
     found = []
     for token in re.findall(r"[^\s'\"`;|&<>()=,]+", HEREDOC.sub(r"\1", command)):
-        head = token[1:].split("/")[0]
-        if token.startswith(("~", "$HOME", "${HOME}", "$TMPDIR", "${TMPDIR}")) or token == ".." or token.startswith("../") or "/../" in token: found.append(token)
-        elif token.startswith("/") and head and os.path.exists("/" + head): found.append(token)
+        if token.startswith(("~", "$HOME", "${HOME}")) or token == ".." or token.startswith("../") or "/../" in token: found.append(token)
+        elif token.startswith("/") and os.path.exists("/" + token[1:].split("/")[0]): found.append(token)
     return found
 
-def outside(token, work):
-    if token.startswith(("~", "$HOME", "${HOME}", "$TMPDIR", "${TMPDIR}")): return True
-    if token in ("/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr") or token.startswith("/dev/fd/"): return False
-    path = os.path.normpath(os.path.join(str(work), token))
-    path = "/private" + path if path == "/tmp" or path.startswith("/tmp/") else path  # /tmp is a link to /private/tmp
-    return path != str(work) and not path.startswith(str(work) + os.sep)
 
-def audit(calls, work):
-    """Deviations: a path outside the workspace, a compiler or evo outside check, or a web tool."""
+def inside(token, w):
+    for base in (w["ws"], w["tmp"]):
+        p = os.path.normpath(os.path.join(str(base), token))
+        p = "/private" + p if p == "/tmp" or p.startswith("/tmp/") else p
+        if p == str(base) or p.startswith(str(base) + os.sep): return True
+    return False
+
+
+def intents(name, args, w):
+    """The forbidden or scratch references in one tool call: (kind, detail, is_scratch)."""
     found = []
-    for name, args in calls:
-        if name in WEB or name.startswith("mcp__"): found.append(dict(kind="web", tool=name, detail=json.dumps(args)[:300]))
-        elif name == "Bash":
-            command = str(args.get("command", ""))
-            for token in ([str(args["cwd"])] if args.get("cwd") else []) + path_tokens(command):
-                if outside(token, work): found.append(dict(kind="path", tool=name, detail=token))
-            for word in command_words(command):
-                if COMPILER.fullmatch(os.path.basename(word)): found.append(dict(kind="compiler", tool=name, detail=command[:300]))
-        elif name in FILE_TOOLS:
-            for key in ("path", "file_path") + (("pattern",) if name == "Glob" else ()):  # a Grep pattern is a regex
-                value = args.get(key)
-                if isinstance(value, str) and (key != "pattern" or value.startswith(("/", "~", ".."))) and outside(value, work):
-                    found.append(dict(kind="path", tool=name, detail=value))
+    if name in WEB or name.startswith("mcp__"): found.append(("web", name, False))
+    elif name == "Bash":
+        command = str(args.get("command", ""))
+        for token in ([str(args["cwd"])] if args.get("cwd") else []) + path_tokens(command):
+            found.append(("path", token, inside(token, w)))
+        for word in command_words(command):
+            if FORBIDDEN.match(os.path.basename(word)): found.append(("tool", word, False))
+    elif name in FILE_TOOLS:
+        for key in ("path", "file_path") + (("pattern",) if name == "Glob" else ()):
+            value = args.get(key)
+            if isinstance(value, str) and (key != "pattern" or value.startswith(("/", "~", ".."))):
+                found.append(("path", value, inside(value, w)))
     return found
 
-def session(args, out, base, index, item, condition, prompt):
-    sdir, work = workspace(args, out, index, item, condition)
-    original, sealed = (item / "program.c").read_text(), digest(work / "check")
-    row = dict(index=index, item=item.name, condition=condition, model=args.model, effort=args.effort, workspace=str(work), started_at=now())
-    argv = [str(args.kimi), "-p", prompt, "--output-format", "stream-json", "-m", args.model, "--agent-file", str(base / "agent.md"), "--skills-dir", str(base / "skills")]
-    status, stop, code, seconds = launch(argv, work, environment(args, base, sdir), sdir, args.wall)
-    lines = (sdir / "stderr.txt").read_text(errors="replace").splitlines()  # tool output also goes to stderr
-    fatal = [line for line in lines if line.startswith("error: failed to run prompt:")]
-    final = (work / "program.c").read_text(errors="replace") if (work / "program.c").is_file() else ""
-    logs = session_logs(work, sdir)
-    m = parse(logs)
-    stop = stop or next(filter(STOP.search, fatal), None) or next((json.dumps(e) for e in m["errors"] if refusal(e)), None)
-    if stop: status = "stopped"
-    elif status is None: status = "completed" if code == 0 else "step_limit" if any("max_steps_exceeded" in line for line in fatal) else "error"
-    deviations = audit(m["calls"], work)
-    if not (work / "check").is_file() or digest(work / "check") != sealed: deviations.append(dict(kind="check_modified", tool=None, detail="check"))
-    checks = (sdir / "checks.jsonl").read_text().splitlines() if (sdir / "checks.jsonl").exists() else []
-    bash = [str(a.get("command", "")) for n, a in m["calls"] if n == "Bash"]
-    row.update(seconds=round(seconds, 1), exit_status=code, status=status, stop=stop, fatal=fatal[:5] or (lines[-3:] if code else []), session_dirs=sorted({p.parent.name for p in logs}),
-               models_seen=m["models"], efforts_seen=m["efforts"], steps=m["steps"], request_kinds=m["request_kinds"],
-               tokens=dict(m["tokens"], total=sum(m["tokens"].values())), tool_calls=m["tool_calls"],
-               check_runs=sum(any(os.path.basename(w) == "check" for w in command_words(c)) for c in bash), check_invocations=len(checks),
-               bash_commands=bash, deviations=deviations, errors=m["errors"][:20], agents_md=m["agents_md"],
-               extra_files=sorted(set(os.listdir(work)) - {"program.c", "check"}), final_sha256=hashlib.sha256(final.encode()).hexdigest(),
-               preprocessor=bool(re.search(r"#|%:|\?\?=", re.sub(r"\\\r?\n", "", final))))
-    shutil.move(str(work), str(sdir / "workspace"))
-    try:
-        row["passed"], records = repair.score(final, item)
-        row["score_exit_codes"] = [r["exit_code"] for r in records]
-        metric, delta = repair.measure(original, final, json.loads((item / "fix-spans.json").read_text())["spans"])
-        (sdir / "final.diff").write_text(delta)
-        row.update(diff_size=metric["diff_added"] + metric["diff_removed"], diff_added=metric["diff_added"], diff_removed=metric["diff_removed"],
-                   span_hits=metric["spans_touched"], all_spans=all(metric["spans_touched"]), changed_inside_spans=metric["changed_inside_spans"])
-    except (repair.Failure, OSError, ValueError, KeyError) as error: row.update(passed=False, score_error=str(error))
-    return row
+
+def audit(calls, results, w):
+    """Three classes: scratch use of the workspace or session temp, blocked attempts, successful escapes."""
+    blocked, escapes, scratch = [], [], []
+    for cid, name, args in calls:
+        output, is_error = results.get(cid, ("", False))
+        denied = bool(DENIED.search(output))
+        for kind, detail, is_scratch in intents(name, args, w):
+            row = dict(tool=name, kind=kind, detail=detail[:200])
+            if is_scratch: scratch.append(row)
+            elif denied or is_error or kind == "web": blocked.append(row)  # web tools are off, so a web call cannot run
+            else: escapes.append(row)
+    return dict(blocked=blocked, escapes=escapes, scratch=scratch)
+
+
+def filesystem_escape(w, started):
+    """A backstop for the sandbox: new files directly in the common escape targets during the session."""
+    hits = []
+    for root in (Path("/private/tmp"), UHOME, ROOT):
+        try: children = list(root.iterdir())
+        except OSError: children = []
+        for p in children:
+            try:
+                if p.is_file() and not p.is_symlink() and p.stat().st_mtime > started: hits.append(str(p)[:200])
+            except OSError: pass
+    return sorted(set(hits))[:20]
+
 
 def quota(kimi, port):
-    """Plan quota from the local Kimi server (GET /api/v1/oauth/usage). The bearer token stays in memory."""
     env = dict(os.environ, KIMI_CODE_NO_AUTO_UPDATE="1", KIMI_DISABLE_TELEMETRY="1")
     server = subprocess.Popen([str(kimi), "web", "--no-open", "--port", str(port)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, start_new_session=True)
     base, result, token = "http://127.0.0.1:%d/api/v1/" % port, dict(time=now()), ""
@@ -251,13 +345,73 @@ def quota(kimi, port):
         for _ in range(100):
             try: urllib.request.urlopen(base + "healthz", timeout=2).close(); break
             except OSError: time.sleep(0.3)
-        token = (Path(os.environ["HOME"]) / ".kimi-code/server.token").read_text().strip()
+        token = (KHOME / "server.token").read_text().strip()
         request = urllib.request.Request(base + "oauth/usage", headers={"Authorization": "Bearer " + token})
         with urllib.request.urlopen(request, timeout=30) as response: result["data"] = json.loads(response.read()).get("data")
     except (OSError, ValueError) as error: result["error"] = type(error).__name__
-    finally: stop_process(server)
+    finally: kill(server)
     if token and token in json.dumps(result): result = dict(time=result["time"], error="token_in_response")
     return result
+
+
+def ratios(q):
+    data = q.get("data") if isinstance(q.get("data"), dict) else {}
+    usages = data.get("quota", {}).get("usages", {}) if isinstance(data.get("quota"), dict) else {}
+    return usages.get("limit5h") or {}, usages.get("limit7d") or {}
+
+
+def pace(args, label, read=quota):
+    """Read the plan quota. Wait out a nearly spent 5-hour window; stop when the 7-day ratio is reached."""
+    q = read(args.kimi, args.quota_port); q["label"] = label
+    five, week = ratios(q)
+    if (week.get("usedRatio") or 0) >= args.max_week_ratio: return q, "stop_week"
+    waited = 0.0
+    while (five.get("usedRatio") or 0) >= 0.9 and waited < args.max_wait:
+        reset = five.get("resetAt")
+        try: seconds = (datetime.datetime.fromisoformat(reset.replace("Z", "+00:00")) - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+        except (AttributeError, ValueError): seconds = 300
+        seconds = max(5.0, min(seconds + 5, args.max_wait - waited))
+        time.sleep(seconds); waited += seconds
+        q = read(args.kimi, args.quota_port); q["label"] = label + "-waited"; five, week = ratios(q)
+        if (week.get("usedRatio") or 0) >= args.max_week_ratio: return q, "stop_week"
+    return q, "ok"
+
+
+def session(args, out, index, item, condition):
+    w = workspace(args, out, index, item)
+    original, started = (item / "program.c").read_text(), time.time()
+    row = dict(index=index, item=item.name, condition=condition, model=args.model, effort=args.effort, workspace=str(w["ws"]), started_at=now())
+    status, stop, code, seconds = launch(args, w, environment(args, w), condition)
+    lines = (w["sdir"] / "stderr.txt").read_text(errors="replace").splitlines()
+    fatal = [line for line in lines if line.startswith("error: failed to run prompt:")]
+    final = (w["ws"] / "program.c").read_text(errors="replace") if (w["ws"] / "program.c").is_file() else ""
+    logs = session_logs(w)
+    m, results = parse(logs)
+    stop = stop or next(filter(STOP.search, fatal), None) or next((json.dumps(e) for e in m["errors"] if refusal(e)), None)
+    if stop: status = "stopped"
+    elif status is None: status = "completed" if code == 0 else "step_limit" if any("max_steps_exceeded" in line for line in fatal) else "error"
+    classes = audit(m["calls"], results, w)
+    classes["escapes"] += [dict(tool=None, kind="filesystem", detail=p) for p in filesystem_escape(w, started)]
+    checks = (w["sdir"] / "checks.jsonl").read_text().splitlines() if (w["sdir"] / "checks.jsonl").exists() else []
+    bash = [str(a.get("command", "")) for _, n, a in m["calls"] if n == "Bash"]
+    row.update(seconds=seconds, exit_status=code, status=status, stop=stop, fatal=fatal[:5] or (lines[-3:] if code else []),
+               models_seen=m["models"], efforts_seen=m["efforts"], steps=m["steps"], request_kinds=m["request_kinds"],
+               tokens=dict(m["tokens"], total=sum(m["tokens"].values())), tool_calls=m["tool_calls"],
+               check_runs=sum(any(os.path.basename(x) == "check" for x in command_words(c)) for c in bash), check_served=len(checks),
+               bash_commands=bash, audit={k: len(v) for k, v in classes.items()}, blocked=classes["blocked"][:40],
+               escapes=classes["escapes"], scratch=classes["scratch"][:40], errors=m["errors"][:20],
+               final_sha256=hashlib.sha256(final.encode()).hexdigest(), preprocessor=bool(re.search(r"#|%:|\?\?=", re.sub(r"\\\r?\n", "", final))))
+    shutil.move(str(w["ws"]), str(w["sdir"] / "workspace"))
+    try:
+        row["passed"], records = repair.score(final, item)
+        row["score_exit_codes"] = [r["exit_code"] for r in records]
+        metric, delta = repair.measure(original, final, json.loads((item / "fix-spans.json").read_text())["spans"])
+        (w["sdir"] / "final.diff").write_text(delta)
+        row.update(diff_size=metric["diff_added"] + metric["diff_removed"], span_hits=metric["spans_touched"],
+                   all_spans=all(metric["spans_touched"]), changed_inside_spans=metric["changed_inside_spans"])
+    except (repair.Failure, OSError, ValueError, KeyError) as error: row.update(passed=False, score_error=str(error))
+    return row
+
 
 def provenance(args):
     def text(*argv):
@@ -266,21 +420,24 @@ def provenance(args):
     try: image = json.loads(text(repair.CONTAINER, "image", "inspect", repair.IMAGE))[0]["configuration"]["descriptor"]["digest"]
     except (TypeError, ValueError, KeyError, IndexError): image = None
     return dict(commit=text("git", "rev-parse", "HEAD"), dirty=bool(text("git", "status", "--porcelain")), kimi=str(args.kimi),
-                kimi_version=text(str(args.kimi), "--version"), kimi_sha256=digest(args.kimi), evo_sha256=digest(repair.EVO),
+                kimi_version=text(str(args.kimi), "--version"), kimi_sha256=digest(args.kimi), evo_sha256=digest(EVO), evocc_sha256=digest(EVOCC),
                 image=repair.IMAGE, image_digest=image, harness_sha256=digest(HERE / "agent_repair.py"), repair_sha256=digest(HERE / "repair.py"),
-                prompt_sha256=digest(args.prompt), python=sys.version.split()[0])
+                prompt_sha256=digest(args.prompt), sysroot=str(SYSROOT), python=sys.version.split()[0])
+
 
 def totals(runs):
-    total = dict(sessions=len(runs), passed=sum(r.get("passed") is True for r in runs), status={}, tool_calls={})
-    for key in ("steps", "seconds", "check_runs", "check_invocations", "diff_size"): total[key] = round(sum(r.get(key) or 0 for r in runs), 1)
-    total.update(tokens={k: sum(r.get("tokens", {}).get(k, 0) for r in runs) for k in TOKENS + ("total",)}, deviations=sum(len(r.get("deviations", [])) for r in runs),
-                 sessions_with_deviations=sum(bool(r.get("deviations")) for r in runs))
+    total = dict(sessions=len(runs), passed=sum(r.get("passed") is True for r in runs), status={}, tool_calls={}, audit=dict(blocked=0, escapes=0, scratch=0))
+    for key in ("steps", "seconds", "check_runs", "check_served"): total[key] = round(sum(r.get(key) or 0 for r in runs), 1)
+    total["tokens"] = {k: sum(r.get("tokens", {}).get(k, 0) for r in runs) for k in TOKENS + ("total",)}
     for r in runs:
         total["status"][r["status"]] = total["status"].get(r["status"], 0) + 1
         for name, count in r.get("tool_calls", {}).items(): total["tool_calls"][name] = total["tool_calls"].get(name, 0) + count
+        for k in total["audit"]: total["audit"][k] += r.get("audit", {}).get(k, 0)
     return total
 
+
 def write(out, receipt): (out / "receipt.json").write_text(json.dumps(receipt, indent=1) + "\n")
+
 
 def archive(out):
     with tarfile.open(out / "wire.tar.gz", "w:gz") as tar:
@@ -289,60 +446,57 @@ def archive(out):
             info.mtime, info.uid, info.gid, info.uname, info.gname = 0, 0, 0, "", ""
             with open(path, "rb") as handle: tar.addfile(info, handle)
 
+
 def run(args):
     conditions = args.condition or ["c0", "c1", "c3"]
     items = [args.items.resolve() / name for name in args.item]
     order = [(item, c) for rep in range(args.reps) for i, item in enumerate(items)
              for c in conditions[(i + rep) % len(conditions):] + conditions[:(i + rep) % len(conditions)]]
     if len(order) > args.max_sessions: raise SystemExit("the plan has %d sessions; --max-sessions is %d" % (len(order), args.max_sessions))
-    if any(path.resolve().is_relative_to(ROOT) for path in (args.out, args.workspaces)): raise SystemExit("--out and --workspaces must be outside the repository")
+    if args.out.resolve().is_relative_to(ROOT): raise SystemExit("--out must be outside the repository")
     if any(not (item / "program.c").is_file() or not (item / "fix-spans.json").is_file() for item in items): raise SystemExit("an item is incomplete")
     plan = dict(order=[dict(item=i.name, condition=c) for i, c in order], items=str(args.items), model=args.model, effort=args.effort,
-                wall_seconds=args.wall, max_steps=args.max_steps, max_sessions=args.max_sessions, reps=args.reps)
+                wall_seconds=args.wall, max_steps=args.max_steps, max_sessions=args.max_sessions, reps=args.reps, max_week_ratio=args.max_week_ratio)
     if args.dry_run: print(json.dumps(plan)); return 0
-    out, base, prompt = args.out.resolve(), args.out.resolve() / "env", args.prompt.read_text().strip()
-    out.mkdir(parents=True); (base / "skills").mkdir(parents=True)
-    args.workspaces = args.workspaces.resolve(); args.workspaces.mkdir(parents=True, exist_ok=True)
-    (base / "agent.md").write_text(AGENT_FILE); executable(base / "login-shell", LOGIN_SHELL)
-    controls = dict(argv=["<kimi>", "-p", "<prompt>", "--output-format", "stream-json", "-m", args.model, "--agent-file", "<agent.md>", "--skills-dir", "<empty dir>"],
-                    env={k: v for k, v in environment(args, base, out).items() if k.startswith("KIMI_")}, path_tools=TOOLS + EXTRA_TOOLS + ["check"],
-                    agent_file=AGENT_FILE, login_shell=LOGIN_SHELL)
-    receipt = dict(schema="agent-repair.v3", phase=args.phase, date=now(), plan=plan, provenance=provenance(args), controls=controls,
-                   prompt=prompt, quota=[], runs=[], totals=None, stop_reason=None)
+    out, args.prompt_text = args.out.resolve(), args.prompt.read_text().strip()
+    args.wroot = Path(repair.tempfile.mkdtemp(prefix="agent-repair-ws-")).resolve(); args.base = args.wroot / "env"
+    out.mkdir(parents=True); (args.base / "skills").mkdir(parents=True)
+    (args.base / "agent.md").write_text(AGENT_FILE); executable(args.base / "login-shell", LOGIN_SHELL)
+    repair.ENV = dict(repair.ENV, EVOCC_SYSROOT=str(SYSROOT))
+    receipt = dict(schema="agent-repair.v3", phase=args.phase, date=now(), plan=plan, provenance=provenance(args), mechanism="seatbelt",
+                   workspaces=str(args.wroot), prompt=args.prompt_text, quota=[], runs=[], totals=None, stop_reason=None)
     write(out, receipt)
-    if args.quota_port: receipt["quota"].append(dict(label="before", **quota(args.kimi, args.quota_port)))
     for index, (item, condition) in enumerate(order, 1):
-        try: row = session(args, out, base, index, item, condition, prompt)
-        except Exception as error:  # record the infrastructure failure, then stop: no blind continuation
-            row = dict(index=index, item=item.name, condition=condition, status="harness_error", error="%s: %s" % (type(error).__name__, error))
-            receipt["stop_reason"] = "harness_error"
-        receipt["runs"].append(row)
-        if args.quota_port: receipt["quota"].append(dict(label="after %02d" % index, **quota(args.kimi, args.quota_port)))
-        receipt["totals"] = totals(receipt["runs"])
-        write(out, receipt)
-        if row["status"] == "stopped": receipt["stop_reason"] = "provider_refusal"
+        if args.quota_port:
+            q, decision = pace(args, "before %02d" % index); receipt["quota"].append(q)
+            if decision == "stop_week": receipt["stop_reason"] = "week_quota_%.3f" % (ratios(q)[1].get("usedRatio") or 0); write(out, receipt); break
+        try: row = session(args, out, index, item, condition)
+        except Exception as error: row = dict(index=index, item=item.name, condition=condition, status="harness_error", error="%s: %s" % (type(error).__name__, error)); receipt["stop_reason"] = "harness_error"
+        receipt["runs"].append(row); receipt["totals"] = totals(receipt["runs"]); write(out, receipt)
+        if row["status"] == "stopped": receipt["stop_reason"] = receipt["stop_reason"] or "provider_refusal"
+        if row.get("escapes"): receipt["stop_reason"] = receipt["stop_reason"] or "escape_detected"
         if receipt["stop_reason"]: break
+    if args.quota_port and receipt["stop_reason"] is None: receipt["quota"].append(pace(args, "final")[0])
     receipt.update(stop_reason=receipt["stop_reason"] or "completed", unattempted=len(order) - len(receipt["runs"]), totals=totals(receipt["runs"]))
-    archive(out)
-    write(out, receipt)
+    archive(out); write(out, receipt)
     print(json.dumps(dict(runs=len(receipt["runs"]), stop_reason=receipt["stop_reason"], totals=receipt["totals"])))
     return 0 if receipt["stop_reason"] == "completed" else 1
 
+
 def main(argv=None):
-    argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] == ["check"] and len(argv) >= 4: return check(argv[1], argv[2], argv[3], argv[4:])  # no argparse: agent arguments stay data
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("run",))
     parser.add_argument("--items", type=Path, required=True); parser.add_argument("--item", action="append", required=True)
     parser.add_argument("--condition", action="append", choices=("c0", "c1", "c3")); parser.add_argument("--reps", type=int, default=1)
     parser.add_argument("--max-sessions", type=int, default=9); parser.add_argument("--phase", default="pilot")
-    parser.add_argument("--out", type=Path, required=True); parser.add_argument("--workspaces", type=Path, required=True)
-    parser.add_argument("--kimi", type=Path, default=KIMI); parser.add_argument("--model", default="kimi-code/k3")
-    parser.add_argument("--effort", default="low", help="KIMI_MODEL_THINKING_EFFORT, or 'default' to leave it unset")
+    parser.add_argument("--out", type=Path, required=True); parser.add_argument("--kimi", type=Path, default=KIMI)
+    parser.add_argument("--model", default="kimi-code/k3"); parser.add_argument("--effort", default="low", help="KIMI_MODEL_THINKING_EFFORT, or 'default'")
     parser.add_argument("--wall", type=float, default=900); parser.add_argument("--max-steps", type=int, default=100)
     parser.add_argument("--prompt", type=Path, default=HERE / "prompt-3.txt"); parser.add_argument("--quota-port", type=int)
-    parser.add_argument("--dry-run", action="store_true", help="print the plan; start no session")
+    parser.add_argument("--max-week-ratio", type=float, required=True, help="stop before a session when the 7-day plan ratio is at or above this")
+    parser.add_argument("--max-wait", type=float, default=21600.0); parser.add_argument("--dry-run", action="store_true", help="print the plan; start no session")
     return run(parser.parse_args(argv))
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
