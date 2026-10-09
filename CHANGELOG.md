@@ -9,6 +9,12 @@ The first public version.
 
 ### Added
 
+- A registered repair-effort replication with 96 small-program sessions and 48
+  larger-program sessions. EvoCC feedback used fewer steps and tokens on the
+  selected small silent defects and fewer steps on the larger items. The three
+  exact effort tests held, but relative step savings did not grow with size.
+  The report retains the control result, functional failures, overload notices,
+  quota use and transcripts. No general repair or causal size claim is made.
 - A registered 24-program coding-agent study of silent memory defects and integer-UB
   controls. All 48 sessions completed under three hidden scoring builds. Default GCC
   warnings plus UBSan and EvoCC each repaired 18/18 silent items and 5/6 controls;

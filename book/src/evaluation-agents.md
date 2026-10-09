@@ -822,6 +822,7 @@ and the same on 8 (one-sided sign test p = 0.038). Over tokens, C3 used fewer
 on 12 items and more on 12. The saving is in the hard cases: EvoCC bounds the
 search when the default toolchain is silent. This analysis was chosen after
 the data; a registered replication must confirm it.
+Experiment 5 confirms lower effort on these silent items, but not larger relative savings on larger programs or the earlier control penalty.
 The agent used 5,506,711 tokens in total, including 5,296,896 cached-input
 tokens. The seven-day quota ratio rose from 0.077860 to 0.113758, an increase
 of 0.035898. Neither the 0.30 increase limit nor the 0.85 absolute limit
@@ -863,4 +864,216 @@ Reproduce the analysis without a model request:
 
 ```sh
 python3 tools/experiment/report.py tests/contracts/agent-repair-4-20261009.json --json
+```
+
+## Experiment 5: repair effort and program size
+
+The registered replication found lower effort with C3 on both selected
+populations. P1, P2 and P3 held. P4 did not hold: the relative step saving
+was 36.62% on the small silent items and 35.27% on the larger items.
+The earlier control penalty did not repeat in the aggregate.
+These results concern the fixed corpora and tool bundles, not arbitrary C
+programs, all agent models or JSON formatting alone.
+
+### Registration and method
+
+[Protocol 5](../../tools/experiment/protocol-5.md) was committed before
+measurement. Tag `agent-repair-experiment-5` is
+`9672d2d92691f984af28e94fda0e7d433fdd868e`. Both parts ran from that clean
+commit. The corpora, prompt, conditions, scoring and analysis did not change
+after the tag. Kimi Code 2.0.2 logged `kimi-code/k3` and low effort in every
+session. Each session used a fresh Seatbelt workspace and a 100-step limit.
+
+Part A repeated all 24 experiment 4 items twice, as repetitions 2 and 3,
+with a 900-second limit: 96 sessions. Part B used 12 larger items twice,
+with a 1,800-second limit: 48 sessions. Items ran in sorted order, one
+session at a time. C1/C3 order alternated by item and reversed in the next
+repetition. The four pilot sessions and experiment 4 repetition 1 were not
+included in any registered test.
+
+C1 remained GCC 14 O0 warnings plus UBSan. C3 remained the EvoCC build,
+check, explanation and repair-plan bundle. The agent could inspect source
+and write its own test drivers in either condition. Final sources had to
+pass the same hidden tests under GCC 14 O0, GCC 14 O2 and Clang 19 O2.
+The Part B hidden driver used 16 seeds and checked the program return value.
+
+A timeout or step limit would retain its effort and count as not repaired,
+even if the final source passed. Provider failures would remain unknown.
+The registered tests average each item's complete C1/C3 repetition pairs,
+then apply an exact one-sided Wilcoxon signed-rank test. They drop zero
+differences, use tied midranks and enumerate all signs. The item, not each
+session, is the unit. P1-P3 use individual, unadjusted p < 0.05 thresholds.
+P4 is a comparison of point values with no significance test.
+
+### Larger corpus and feedback identity
+
+All 12 larger programs qualified, with no replacements or class shortfall:
+four each of E3001, E3010 and E3011. Each program has 722 lines and one
+injected defect, more than 300 lines before `main`, with several callers.
+There are no preprocessor directives or I/O in the programs. No item is
+synthetic-only, and none represents a defect found in upstream software.
+
+The programs adapt modules from cJSON 1.7.19, zlib 1.3.2 and Zstandard 1.5.7:
+bounded JSON parsing and printing, checksums, hashing, symbol counts,
+canonical prefix codes, and LZ matching and decoding. All modules affect
+the fingerprint. The four input workloads share this module bundle and
+the same three defect shapes. They are not twelve independent projects.
+An early scratch workload exceeded interpreter fuel; it was shortened
+before making the corpus. No interpreter limit or feedback was changed.
+
+Qualification ran each fixed build five times, for 180 fixed executions,
+and retained 180 original executions. Every fixed build passed with stable
+output. Every original failed its hidden test, stayed silent at the fix
+span in C1, and received its requested C3 finding without E3008. Unrelated
+warnings remain in the records. See the [corpus and source hashes](../../tests/fixtures/agent-repair-5/README.md)
+and [qualification](../../tests/fixtures/agent-repair-5/qualification.json).
+
+Part A feedback matched experiment 4 in all 96 raw-byte comparisons:
+24 items, original and fixed sources, C1 and C3. The check reproduced the
+recorded source paths; it did not normalize diagnostics. The [identity
+record](../../tests/contracts/agent-repair-5-feedback-identity.json) retains
+the expected and observed hashes and compiler hashes.
+
+The detection matrix uses the same configurations as experiment 4 above.
+Counts are findings at the fix span, out of four items in each class.
+G0/G2 are GCC warnings at O0/O2; CW is Clang `-Weverything` at O0.
+GU/CU are GCC/Clang UBSan; MS is Clang MSan; CA/GA are Clang/GCC ASan.
+All nine configurations were available for all twelve programs.
+
+| Code | G0 | G2 | CW | GU | CU | MS | CA | GA | EvoCC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| E3001 | 0/4 | 4/4 | 0/4 | 0/4 | 0/4 | 0/4 | 0/4 | 0/4 | 4/4 |
+| E3010 | 0/4 | 0/4 | 4/4 | 0/4 | 0/4 | 0/4 | 4/4 | 4/4 | 4/4 |
+| E3011 | 0/4 | 0/4 | 4/4 | 0/4 | 0/4 | 0/4 | 4/4 | 4/4 | 4/4 |
+
+MSan reported uninitialized data at a later use in all four E3001 programs.
+Its zero fix-span count does not mean that it missed those defects. Clang's
+warning findings include general unsafe-buffer warnings. The corpus is
+silent under C1's default configuration, not under every compiler mode.
+
+### Pilot and quota
+
+All four pilot sessions completed and passed all three hidden builds.
+Tokens include cached input. A blocked attempt is not a sandbox escape.
+
+| Item | Condition | Steps | Tokens | Seconds | Blocked / escapes / scratch | Weekly ratio increase |
+| --- | --- | ---: | ---: | ---: | --- | ---: |
+| codec-controls-reset | C1 | 14 | 371,668 | 124.6 | 1 / 0 / 3 | 0.004066 |
+| codec-controls-reset | C3 | 6 | 143,192 | 50.3 | 0 / 0 / 2 | 0.001554 |
+| codec-window-byte | C3 | 17 | 460,856 | 109.2 | 3 / 0 / 15 | 0.003433 |
+| codec-window-byte | C1 | 9 | 220,471 | 88.4 | 1 / 0 / 7 | 0.002058 |
+
+The pilot increased the weekly ratio by 0.011111, or 0.00277775 per session.
+The fixed projection was `48 * 0.00277775 + 96 * 0.00075 = 0.205332`.
+It was below 0.25, so Part B retained two repetitions before registration.
+Including pilot usage, the estimate was 0.216443. See the [pilot receipt](../../tests/contracts/agent-repair-5-pilot-20261010.json)
+and [pilot wire logs](../../tests/contracts/agent-repair-5-pilot-20261010-wire.tar.gz).
+
+The package began at 0.113758 and used one stop line, 0.363758, across all
+three runs. The final ratio was 0.288314: an increase of 0.174556, below
+both the 0.25 package limit and the absolute 0.85 ceiling. Pilot, A and B
+increases were 0.011111, 0.085899 and 0.077546. The reads occur between
+sessions; quota is not a dollar-cost measure.
+
+### Measured results
+
+Part A ran from 18:31:51 to 19:47:08 UTC; Part B ran from 19:47:09 to
+20:42:10 UTC, both on 2026-10-09. All 144 sessions completed. There were
+zero censored sessions, unknown outcomes, unattempted cells or escapes.
+The provider issued 21 overload retry notices in A and 15 in B. No session
+received more than three, so the CLI handled them within the registered
+rule. No entire session was retried. No quota or authentication refusal
+occurred. All retry effort and quota usage remain included.
+
+The audit recorded 31 blocked attempts and 322 scratch uses in A, and
+23 blocked attempts and 189 scratch uses in B. Neither run escaped.
+The old repetition below is descriptive and is not pooled into the tests.
+All totals include unsuccessful repairs, not only successful sessions.
+
+| Population | Repetitions | C1 repaired | C3 repaired | Steps C1 | Steps C3 | Tokens C1 | Tokens C3 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Experiment 4: all | 1 | 23/24 | 23/24 | 167 | 119 | 3,232,689 | 2,274,022 |
+| Experiment 4: silent | 1 | 18/18 | 18/18 | 140 | 89 | 2,730,457 | 1,705,853 |
+| Experiment 4: controls | 1 | 5/6 | 5/6 | 27 | 30 | 502,232 | 568,169 |
+| A: all | 2, 3 | 44/48 | 47/48 | 388 | 266 | 7,502,202 | 4,923,097 |
+| A: silent | 2, 3 | 33/36 | 36/36 | 325 | 206 | 6,382,052 | 3,845,772 |
+| A: controls | 2, 3 | 11/12 | 11/12 | 63 | 60 | 1,120,150 | 1,077,325 |
+| B: all silent | 1, 2 | 24/24 | 24/24 | 241 | 156 | 5,795,989 | 3,465,780 |
+
+Repair rates are 91.67% versus 97.92% in A and 100% versus 100% in B.
+There are no unknown outcomes to remove from these denominators. Repair
+rate differences are descriptive; this experiment registered effort tests.
+
+| Part / class | C1 repaired | C3 repaired | Steps C1 | Steps C3 | Tokens C1 | Tokens C3 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A / E3001 | 10/12 | 12/12 | 111 | 72 | 2,204,488 | 1,289,223 |
+| A / E3010 | 11/12 | 12/12 | 104 | 70 | 2,074,218 | 1,311,979 |
+| A / E3011 | 12/12 | 12/12 | 110 | 64 | 2,103,346 | 1,244,570 |
+| A / E3002 | 3/4 | 3/4 | 21 | 18 | 394,589 | 340,086 |
+| A / E3004 | 4/4 | 4/4 | 22 | 21 | 353,184 | 357,774 |
+| A / E3005 | 4/4 | 4/4 | 20 | 21 | 372,377 | 379,465 |
+| B / E3001 | 8/8 | 8/8 | 77 | 60 | 1,768,462 | 1,356,311 |
+| B / E3010 | 8/8 | 8/8 | 91 | 46 | 2,242,344 | 1,003,615 |
+| B / E3011 | 8/8 | 8/8 | 73 | 50 | 1,785,183 | 1,105,854 |
+
+A's four C1 failures changed required behavior. In repetition 2,
+`adler-view` discarded the caller's seed and `xxh64-reset` changed hash
+constants. In repetition 3, `crc-reset` changed the polynomial multiplier.
+Both conditions also failed `mean-empty` in repetition 3: they returned
+the input value for an empty mean, rather than the required -1. All five
+failures failed all three scoring builds. Removing UB was not sufficient.
+
+### Registered predictions and limits
+
+The totals in this table sum item means, so they are half the two-repeat
+session totals above. Each item contributes one paired observation.
+An independent dynamic-programming calculation reproduced the exact
+sign-enumeration probabilities. One zero step difference was dropped in P1.
+
+| Prediction | Items / nonzero | C1 item-mean total | C3 item-mean total | Exact one-sided p | Result |
+| --- | --- | ---: | ---: | --- | --- |
+| P1: A silent steps | 18 / 17 | 162.5 | 103 | 5/131072 = 0.00003815 | Held |
+| P2: A silent tokens | 18 / 18 | 3,191,026 | 1,922,886 | 7/131072 = 0.00005341 | Held |
+| P3: B steps | 12 / 12 | 120.5 | 78 | 1/2048 = 0.00048828 | Held |
+| P4: relative step saving | A: 18; B: 12 | A: 36.62% | B: 35.27% | No test | Did not hold |
+
+The registered replication supports the earlier silent-item effort pattern
+on this corpus: C3 used 36.62% fewer steps and 39.74% fewer tokens in A.
+It also used 35.27% fewer steps in B. It did not show a larger relative
+step saving with program size. P4's point difference is -1.35 percentage
+points, not evidence that size has a negative causal effect.
+
+The aggregate control penalty did not repeat: C3 used 60 versus 63 steps
+and 1,077,325 versus 1,120,150 tokens. The small E3004/E3005 token increases
+are descriptive. Neither these controls nor the earlier run isolate the
+effect of feedback length. The separate follow-up task must keep this limit.
+
+The small corpus shares six kernels; the large corpus shares one module
+bundle and four workloads. Dependence between items limits the independent
+item interpretation behind the nominal p-values. These are not independent
+project-level results. Two repetitions, one model ID, one effort setting,
+injected defects and fixed hidden inputs further limit generalization.
+Program size and source structure change together. This experiment cannot
+establish a causal size effect or the correctness of a repair for all inputs.
+
+For autonomous repair, the functional failures show why clean diagnostics
+must not replace an independent functional test. A localized UB repair can
+still change required arithmetic or boundary behavior.
+
+Sources: [registered analysis](../../tests/contracts/agent-repair-5-20261010.json),
+[A receipt](../../tests/contracts/agent-repair-5-replication-20261010.json),
+[B receipt](../../tests/contracts/agent-repair-5-scale-20261010.json),
+[A wire logs](../../tests/contracts/agent-repair-5-replication-wire-20261010.tar.gz)
+and [B wire logs](../../tests/contracts/agent-repair-5-scale-wire-20261010.tar.gz).
+All 127 experiment tests passed before measurement. The existing secret
+scan passed; an exact-value scan checked 3,242 capture files against four
+private credential values and found none. These scans do not prove that
+arbitrary transcripts contain no sensitive information.
+
+Reproduce the registered analysis without making a model request:
+
+```sh
+python3 tools/experiment/report.py \
+  tests/contracts/agent-repair-5-replication-20261010.json \
+  --part-b tests/contracts/agent-repair-5-scale-20261010.json
 ```

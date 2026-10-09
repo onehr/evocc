@@ -780,6 +780,11 @@ agent needed 24% to 44% fewer steps and tokens with EvoCC (E3011: 30 against 54 
 controls about 10% more, because EvoCC's feedback is longer. A registered replication must confirm it. The [method, tool matrix and results](book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior)
 state the shared-kernel and single-repetition limits. No general repair advantage is established.
 
+The registered replication completed 144 new sessions. On the small silent items, C3 used 36.62%
+fewer steps and 39.74% fewer tokens; on the larger items it used 35.27% fewer steps (P1-P3 held).
+The relative saving did not grow with size (P4 did not hold), and the aggregate control penalty did not repeat.
+See [Experiment 5](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size) for exact tests, repair rates and shared-corpus limits. These results do not establish an advantage on arbitrary C programs.
+
 ### 8 Related work
 
 **Verified compilers.** CompCert [1] proves its passes correct in Coq, from Clight [2], a large C

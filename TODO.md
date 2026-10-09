@@ -937,8 +937,19 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   completes 4/4 repairs with zero escapes. Its quota increase is 0.011111;
   the fixed projection is 0.205332, so Part B keeps two repetitions.
   [Registration](tools/experiment/protocol-5.md) fixes the package stop line
-  at 0.363758. Measurement and the final gate remain pending. Capture
-  retention limit is 500 MiB per run, outside the repository.
+  at 0.363758. Tag `agent-repair-experiment-5` is `9672d2d9`. All 96 Part A
+  and 48 Part B sessions complete, with zero censoring, unknown outcomes or
+  escapes. There are 36 allowed in-session overload notices, no session
+  reruns and no provider refusal. Package quota rises from 0.113758 to
+  0.288314, an increase of 0.174556. P1-P3 hold; P4 does not: relative
+  step savings are 36.62% on A silent and 35.27% on B. The aggregate
+  control penalty does not repeat. See the [analysis](tests/contracts/agent-repair-5-20261010.json)
+  and [report](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size).
+  A repairs C1 44/48 and C3 47/48; B repairs 24/24 in both conditions.
+  All 127 experiment tests pass. Exact p-values also match an independent
+  calculation. Secret scans cover all captures, including four credential
+  values, without printing them. The final workspace gate remains pending.
+  Capture retention limit is 500 MiB per run, outside the repository.
   Cleanup removed the stopped containers `evocc-asm-edges-20260905`
   (2,186,324 KiB), `evocc-asm-edges-20260905-retry` (2,186,308 KiB) and
   `buildkit` (3,129,952 KiB), with `container rm`. Container-accounted size
@@ -971,7 +982,11 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
 
 - [ ] **P22 — Shorten the check feedback of the agent interface; the controls of experiments 4 and 5 show its cost** — `OPEN`, P2.
   Keep separate from the registered effort experiment. Do not change its
-  frozen feedback. The experiment 5 result must bound any later cost claim.
+  frozen feedback. The title retains the owner's requested follow-up, not
+  an established penalty: experiment 5 controls use 60 versus 63 steps and
+  1,077,325 versus 1,120,150 tokens in C3 versus C1. The aggregate penalty
+  did not repeat. Do not infer a causal feedback-length effect from either
+  experiment. No implementation work starts in this package.
 
 - [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`, P1.
   All 24 items qualify: six each of E3001/E3010/E3011 and two each of
