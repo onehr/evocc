@@ -39,21 +39,22 @@ The README keeps short captions. These are the full caption facts of each image:
 | Doom / Freedoom | A real game engine; headless replay. |
 | TinyCC paints reflections | EvoCC → TinyCC → a C ray tracer. |
 | Lua explores a fractal | Floating-point iteration → RGB pixels. |
-| SQLite builds an island | 2,304 cells; rollback keeps the world. |
-| jq follows a Mars rover | Simulated telemetry → mission charts. |
-| cJSON carries a city | Scene data → a neon harbor. |
-| Linux: boot, load, stress | Kernel/user FPU state isolation; 4,000 worker OKs. |
-| PolyBench models a field | 20 simulation steps; FDTD-2D. |
+| SQLite | Its own `veryquick` suite: 0 errors in 329,803 tests. |
+| jq | `make check`: 9 of 9 test programs pass; `main.c` is GCC-built (B07a). |
+| cJSON | `cJSON_test` prints the example JSON; 216 unit tests, 0 failures. |
+| Linux 6.18 | 7,008 EvoCC C units; boots on 4 CPUs, runs init, powers down. |
+| Toybox | 1,669 tests; PASS, FAIL and SKIP lines identical to the GCC build. |
 | Mbed TLS seals pixels | Encrypt → restore → reject tampering. |
 | Zstandard packs a fractal | Smaller bytes; identical pixels. |
 | zlib ships a tiny arcade | Pixel-art sprites → gzip → intact. |
-| Toybox verifies a build artifact | C + ELF + RGB → tar → verify → detect change. |
+| PolyBench models a field | 20 simulation steps; FDTD-2D. |
 | OpenTyrian | 52 C units; three frames match GCC exactly. |
 | Neverball | Physics + OpenGL; one disclosed source fix. |
 | Quakespasm / LibreQuake | 77 C units; real 3D demo replay. |
 
 Doom is a bounded headless replay, not interactive gameplay. Kernel boot is not full kernel-test
-completion. The library demos use explicitly labeled reference-built adapters. The charts are
+completion. The SQLite, jq, cJSON, Linux and Toybox cards quote recorded test logs; their text is
+verbatim. The library demos use explicitly labeled reference-built adapters. The charts are
 renderings of captured data, not native application UIs. The three games use reference SDL/OpenGL
 libraries. Their screenshots are bounded native runs, not full-game acceptance or graphics-driver
 compilation. The [capture notes, exact commands and limitations](images/showcase/README.md) keep

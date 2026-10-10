@@ -1,7 +1,0 @@
-[    0.287056] PM: genpd: Disabling unused power domains
-[    0.289122] Freeing unused kernel memory: 3456K
-[    0.289201] Run /init as init process
-EVO_INIT_ALIVE
-EVO_BOOT_NONCE k1-20260928T110715Z-7dbe7cc4
-EVO_INIT_DONE
-[    0.291147] reboot: Power down

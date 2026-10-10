@@ -1,31 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
-<title>Toybox / verify a build artifact: Package the TinyCC demo&#x27;s C source, ELF and rendered RGB</title>
-<rect width="800" height="500" rx="16" fill="#0b1424"/>
-<text x="28" y="42" font-family="sans-serif" font-size="30" fill="#f3f7ff">Toybox / verify a build artifact</text>
-<text x="28" y="73" font-family="sans-serif" font-size="18" fill="#97b9da">Package the TinyCC demo&#x27;s C source, ELF and rendered RGB</text>
-<text x="28" y="476" font-family="sans-serif" font-size="15" fill="#97aac1">Real Toybox commands / disposable one-byte negative control / not a full-suite run</text>
-<rect x="28" y="99" width="224" height="40" rx="5" fill="#183044"/>
-<text x="42" y="125" font-family="monospace" font-size="20" fill="#a8d4ed">BUILD OUTPUT</text>
-<rect x="288" y="99" width="224" height="40" rx="5" fill="#183044"/>
-<text x="302" y="125" font-family="monospace" font-size="20" fill="#a8d4ed">tar → extract</text>
-<rect x="548" y="99" width="224" height="40" rx="5" fill="#183044"/>
-<text x="562" y="125" font-family="monospace" font-size="20" fill="#a8d4ed">sha256sum -c</text>
-<text x="260" y="126" font-family="sans-serif" font-size="23" fill="#66dec4">→</text>
-<text x="520" y="126" font-family="sans-serif" font-size="23" fill="#66dec4">→</text>
-<text x="30" y="175" font-family="monospace" font-size="21" fill="#dce8f5">raytrace.c</text>
-<text x="240" y="175" font-family="monospace" font-size="19" fill="#97b9da">13cbe8f576935f47…</text>
-<text x="565" y="175" font-family="monospace" font-size="22" fill="#66dec4">OK</text>
-<text x="30" y="212" font-family="monospace" font-size="21" fill="#dce8f5">raytrace</text>
-<text x="240" y="212" font-family="monospace" font-size="19" fill="#97b9da">56ef5d23f268878c…</text>
-<text x="565" y="212" font-family="monospace" font-size="22" fill="#66dec4">OK</text>
-<text x="30" y="249" font-family="monospace" font-size="21" fill="#dce8f5">frame.rgb</text>
-<text x="240" y="249" font-family="monospace" font-size="19" fill="#97b9da">475d1c63ae3fcad8…</text>
-<text x="565" y="249" font-family="monospace" font-size="22" fill="#66dec4">OK</text>
-<text x="30" y="289" font-family="sans-serif" font-size="21" fill="#dce8f5">79,360-byte tar / manifest + byte-for-byte cmp verified</text>
-<rect x="28" y="309" width="744" height="136" rx="8" fill="#172334"/>
-<text x="44" y="337" font-family="monospace" font-size="19" fill="#f3bc7c">CONTROL: flip one byte in extracted raytrace.c</text>
-<text x="44" y="368" font-family="monospace" font-size="20" fill="#f3bc7c">raytrace.c: FAILED</text>
-<text x="44" y="395" font-family="monospace" font-size="20" fill="#66dec4">raytrace: OK</text>
-<text x="44" y="422" font-family="monospace" font-size="20" fill="#66dec4">frame.rgb: OK</text>
-<text x="588" y="399" font-family="monospace" font-size="27" fill="#f3bc7c">exit 1</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Toybox 0.8.14: make tests">
+<title>Toybox 0.8.14: make tests</title>
+<defs><clipPath id="body"><rect x="0" y="56" width="776" height="444"/></clipPath><linearGradient id="fade"><stop offset="0" stop-color="#0d1117" stop-opacity="0"/><stop offset="1" stop-color="#0d1117"/></linearGradient></defs>
+<rect x="1" y="1" width="798" height="498" rx="16" fill="#0d1117" stroke="#30363d" stroke-width="2"/>
+<circle cx="32" cy="30" r="9" fill="#ff5f56"/><circle cx="60" cy="30" r="9" fill="#ffbd2e"/><circle cx="88" cy="30" r="9" fill="#27c93f"/>
+<text x="400" y="38" fill="#e6edf3" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" text-anchor="middle">Toybox 0.8.14: make tests</text>
+<g clip-path="url(#body)">
+<text x="34" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">PASS</tspan><tspan fill="#e6edf3">: xxd -r long</tspan></text>
+<text x="34" y="135" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">PASS</tspan><tspan fill="#e6edf3">: xxd -r -p long</tspan></text>
+<text x="34" y="170" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">PASS</tspan><tspan fill="#e6edf3">: xxd -r unnecessary output seeks</tspan></text>
+<text x="34" y="205" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">PASS</tspan><tspan fill="#e6edf3">: xxd LE partial</tspan></text>
+<text x="34" y="240" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">PASS</tspan><tspan fill="#e6edf3">: xxd LE partial mid-line</tspan></text>
+<text x="34" y="275" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#d29922" font-weight="700">SKIP</tspan><tspan fill="#e6edf3">: xzcat disabled</tspan></text>
+<text x="34" y="310" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">PASS</tspan><tspan fill="#e6edf3">: zcat files</tspan></text>
+<text x="34" y="345" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">PASS</tspan><tspan fill="#e6edf3">: zcat -c</tspan></text>
+<text x="34" y="380" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">PASS</tspan><tspan fill="#e6edf3">: zcat concatenated</tspan></text>
+<text x="34" y="415" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">PASS</tspan><tspan fill="#e6edf3">: zcat error</tspan></text>
+</g>
+<rect x="736" y="56" width="40" height="420" fill="url(#fade)"/>
 </svg>

@@ -1,1 +1,0 @@
-{"scene":"Neon harbor","buildings":[{"x":0,"height":3,"color":"#45c8d6"},{"x":1,"height":7,"color":"#e69b61"},{"x":2,"height":5,"color":"#9381ed"},{"x":3,"height":9,"color":"#45c8d6"},{"x":4,"height":6,"color":"#e69b61"},{"x":5,"height":4,"color":"#9381ed"}],"floors":34}

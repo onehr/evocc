@@ -56,40 +56,8 @@ class ShowcaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "sprite sheet differs"):
             visuals.draw("zlib", record)
 
-    def test_bundle_rejects_changed_hashes_and_false_negative_control(self):
-        original = showcase.read_json(showcase.OUT / "captures.json")["programs"]["toybox"]
-        record = copy.deepcopy(original)
-        record["bundle"]["files"][0]["sha256"] = "0" * 64
-        with self.assertRaisesRegex(ValueError, "manifest differs"):
-            visuals.draw("toybox", record)
-        record = copy.deepcopy(original)
-        negative, = [c for c in record["commands"] if c.get("stage") == "detect-change"]
-        negative["exitCode"] = 0
-        with self.assertRaisesRegex(ValueError, "exit code"):
-            visuals.draw("toybox", record)
-
-    def test_bundle_requires_both_restore_and_change_detection(self):
-        original = showcase.read_json(showcase.OUT / "captures.json")["programs"]["toybox"]
-        for stage, message in (("verify", "did not all verify"), ("detect-change", "not detected")):
-            record = copy.deepcopy(original)
-            command, = [c for c in record["commands"] if c.get("stage") == stage]
-            command["stdout"] = "raytrace.c:  OK\nraytrace:  OK\n"  # Missing image result.
-            with self.assertRaisesRegex(ValueError, message):
-                visuals.draw("toybox", record)
-
-    def test_fpu_capture_rejects_missing_worker_module_or_nonce(self):
-        record = showcase.read_json(showcase.OUT / "captures.json")["linux"]["fpu"]
-        log = (showcase.OUT / "linux-fpu.stdout.txt").read_text()
-        self.assertEqual(showcase.fpu_facts(log, record["nonce"]), record["facts"])
-        for changed in (log.replace("# [OK]\ttest_fpu\n", "", 1),
-                        log.replace("module test_fpu loaded", "module test_fpu missing"),
-                        log.replace("EVO_BOOT_NONCE", "WRONG_NONCE"),
-                        log.replace("reboot: Power down", "not powered off")):
-            with self.assertRaises(ValueError):
-                showcase.fpu_facts(changed, record["nonce"])
-
     def test_boot_facts_require_ordered_milestones_and_bound_nonce(self):
-        facts = showcase.read_json(showcase.OUT / "captures.json")["linux"]["facts"]
+        facts = showcase.read_json(showcase.OUT / "captures.json")["logs"]["linux"]["facts"]
         lines = [facts[k]["line"] for k in ("reset", "cpus", "memory", "devices", "init")]
         lines += ["EVO_INIT_ALIVE", "EVO_BOOT_NONCE " + facts["nonce"], "EVO_INIT_DONE", facts["poweroff"]["line"]]
         log = "\n".join(lines) + "\n"
@@ -100,6 +68,29 @@ class ShowcaseTests(unittest.TestCase):
             showcase.boot_facts(log.replace("devtmpfs: initialized", "not initialized"), facts["nonce"])
         with self.assertRaisesRegex(ValueError, "missing/out of order"):
             showcase.boot_facts(log.replace("EVO_INIT_ALIVE", "EVO_INIT_DONE").replace("\nEVO_INIT_DONE\n[", "\nEVO_INIT_ALIVE\n["), facts["nonce"])
+
+    def test_log_card_quotes_text_verbatim_not_as_markup(self):
+        record = {"title": "<Log> & card", "segments": [{"line": 1, "text": ["PASS: <script>x</script>"]},
+                                                        {"line": 9, "text": ["\tkey:\tvalue"]}]}
+        root = ET.fromstring(visuals.log_card("toybox", record))
+        self.assertNotIn("script", [node.tag.rsplit("}", 1)[-1] for node in root.iter()])
+        rows = ["".join(node.itertext()) for node in root.iter() if node.tag.endswith("}text")]
+        self.assertEqual(rows, ["<Log> & card", "PASS: <script>x</script>", "\u2026", "\tkey:\tvalue".expandtabs()])
+
+    def test_log_excerpt_needs_one_exact_start_and_enough_lines(self):
+        text = "a\nPASS: one\nPASS: two\nend\n"
+        self.assertEqual(showcase.excerpt(text, [(r"^PASS: one$", 2)]),
+                         [{"line": 2, "text": ["PASS: one", "PASS: two"]}])
+        for segments in ([(r"^PASS", 1)], [(r"^missing$", 1)], [(r"^end$", 2)]):
+            with self.assertRaisesRegex(ValueError, "missing or ambiguous"):
+                showcase.excerpt(text, segments)
+
+    def test_changed_log_excerpt_is_rejected(self):
+        records = showcase.read_json(showcase.OUT / "captures.json")
+        records["logs"]["sqlite"]["segments"][1]["text"][-1] = "1 errors out of 329803 tests"
+        with patch.object(showcase, "read_json", return_value=records):
+            with self.assertRaisesRegex(ValueError, "differs from its recorded excerpt"):
+                showcase.check()
 
     def test_sprite_fixture_is_well_formed(self):
         scene = showcase.demo_inputs().sprite_sheet()
@@ -138,7 +129,7 @@ class ShowcaseTests(unittest.TestCase):
 
         gallery = Gallery()
         gallery.assert_exists = lambda value: self.assertTrue((showcase.ROOT / value.split("#")[0]).is_file(), value)
-        section = (showcase.ROOT / "README.md").read_text().split("## What it builds\n", 1)[1].split("\n## ", 1)[0]
+        section = (showcase.ROOT / "README.md").read_text().split("## What it compiles correctly\n", 1)[1].split("\n## ", 1)[0]
         gallery.feed(section)
         self.assertEqual((gallery.images, gallery.cells), (15, 15))
         self.assertEqual(gallery.rows, [3, 3, 3, 3, 3])

@@ -122,7 +122,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B07a, B08, B08b, B08d, B08d10, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -2165,6 +2165,24 @@ complete K7/KUnit success; these configurations and their Images are distinct.
   retains the option and passes again. All 526 driver regressions, 257 ladder
   regressions, Clippy and fmt pass. B10's final unified campaign remains separate.
   [Receipt](tests/contracts/ladder-jq-receipt.json).
+
+  - [ ] **B07a — Count jq's `src/main.c` and rerun `make check`** — `OPEN`, P2.
+    Found on 2026-10-10, when the README gallery quoted run `20260927T082205Z`.
+    The ladder build-log parser skips a compile command that continues across
+    lines. Automake prints jq's non-libtool rule for `src/main.c` in this form,
+    so `main.c` is not one of the 69 measured units, and `unmeasuredBuildUnits`
+    is empty. GCC compiled `main.c` in the build. In the test step, clock skew
+    made `make` regenerate `src/version.h`, rebuild `main.c` with GCC and
+    relink `jq`. The rebuilt-unit check covers only measured units, so it did
+    not report this. The tested `jq` had 69 of its 70 C units from EvoCC. The
+    B07 statement that make replaced no target object holds only for the 69
+    measured units. No other ladder build log has a skipped compile line; the
+    other 21 skipped jq lines are libtool wrappers, and their real compile
+    commands are captured. Next action: add a parser regression with the exact
+    continued automake rule, count continued commands, and make the
+    rebuilt-unit check cover every compile in the test log. Then rerun E10 jq
+    from its pinned source. Exit: a new receipt with 70/70 units and no compile
+    command in the test log. Until then, the README caption names `libjq`.
 
 - [ ] **B08 — Build and test musl with its actual semantic flags** — `OPEN`, P2.
   Fresh run `20260927T110110Z` attempts all 1,339 records with `-frounding-math`:

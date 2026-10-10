@@ -3,7 +3,8 @@
 
 --capture executes existing ARM64 builds and small explicitly labeled adapters.
 --render visualizes their output, never fabricating application screenshots.
-Linux and Doom reuse explicitly identified, already recorded output.
+Doom reuses explicitly identified, already recorded output. --render-logs quotes
+the recorded test logs of accepted runs verbatim; it needs the local .evidence tree.
 """
 from __future__ import annotations
 
@@ -24,15 +25,23 @@ OUT = ROOT / "docs/images/showcase"
 FIXTURES = ROOT / "tools/showcase"
 APPS = {
     "tinycc": ("tinycc", "tcc"),
-    "sqlite": ("sqlite/sqlite-src-3530400", "testfixture"),
     "lua": ("lua/lua-5.5.1", "src/lua"),
-    "jq": ("jq/jq-1.8.2", "jq"),
     "zstd": ("zstd/zstd-1.5.7", "programs/zstd"),
-    "cjson": ("cjson/cJSON-1.7.19", "cJSON_test"),
     "zlib": ("zlib/zlib-1.3.2", "minigzip"),
-    "toybox": ("toybox-work", "toybox"),
     "mbedtls": ("mbedtls/mbedtls-4.2.0", "build/programs/test/selftest"),
     "polybench": ("polybench", "native/20260919T222638Z/evocc/fdtd-2d.exe"),
+}
+# Gallery cards that quote the recorded logs of accepted runs. Each segment is
+# (pattern of its first line, number of lines); the lines are copied verbatim.
+LOGS = {
+    "sqlite": ("SQLite 3.53.4: testrunner.tcl veryquick", "ladder-sqlite-receipt.json",
+               [(r"^splitting work across ", 2), (r"^02:13 tcl\(", 6)]),
+    "jq": ("jq 1.8.2: make check", "ladder-jq-receipt.json", [(r"^PASS: tests/mantest$", 11)]),
+    "cjson": ("cJSON 1.7.19: ./cJSON_test", "ladder-cjson-receipt.json", [(r"^Version: 1\.7\.19$", 11)]),
+    "linux": ("Linux 6.18.44: serial console", "kernel-bpf-full-receipt.json",
+              [(r"\] Booting Linux on physical CPU ", 1), (r"\] smp: Brought up ", 1),
+               (r"\] Run /init as init process$", 5)]),
+    "toybox": ("Toybox 0.8.14: make tests", "ladder-toybox-receipt.json", [(r"^PASS: xxd -r long$", 10)]),
 }
 
 
@@ -92,34 +101,6 @@ def boot_facts(log, nonce):
     return facts
 
 
-def fpu_facts(log, nonce):
-    """Reuse the kernel verdict parser, including its nested-worker checks."""
-    spec = importlib.util.spec_from_file_location("showcase_selftest", ROOT / "tools/k1/selftest.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    program = "fpu:run_test_fpu.sh"
-    row, = module.parse_transcript(log, nonce, [program])
-    if (row["outcome"] != "PASS" or not row["valid"] or row["nestedFailureSummaries"]
-            or row["nestedSkipSummaries"] or row["nestedSummaryErrors"]):
-        raise ValueError("FPU stress did not pass its full worker protocol")
-    summary, = row["fpuSummaries"]
-    lines = log.replace("\r", "").splitlines()
-    milestones = ["EVO_INIT_ALIVE", f"EVO_BOOT_NONCE {nonce}",
-                  "KSELFTEST_SETUP module test_fpu loaded",
-                  f"KSELFTEST_BEGIN {nonce} {program}",
-                  f"KSELFTEST_END {nonce} {program} 0", "EVO_INIT_DONE"]
-    try:
-        positions = [lines.index(line) for line in milestones]
-        poweroff = next(i for i, line in enumerate(lines) if "reboot: Power down" in line)
-    except (ValueError, StopIteration) as error:
-        raise ValueError("missing module load or orderly FPU shutdown") from error
-    if positions != sorted(positions) or poweroff <= positions[-1]:
-        raise ValueError("FPU lifecycle milestones out of order")
-    return {**summary, "onlineCpus": summary["expectedWorkers"] // 1000,
-            "moduleLoaded": milestones[2], "poweroff": lines[poweroff],
-            "tap": "ok 1 selftests: fpu: run_test_fpu.sh"}
-
-
 def run(argv, *, cwd, input_data=None, expected_exit=0, stage=None):
     result = subprocess.run([str(a) for a in argv], cwd=cwd, input=input_data,
                             capture_output=True, timeout=30)
@@ -144,10 +125,6 @@ def audit(name, tree, binary):
         # This receipt binds the final binary itself. Intermediate objects may
         # have since been reused by compiler diagnostics; do not relink them.
         expected = {}
-    elif name == "toybox":
-        if digest(binary) != receipt["substitutedTest"]["binarySha256"]:
-            raise ValueError("Toybox executable differs from the tested build")
-        expected = {}
     elif name == "polybench":
         rows = [json.loads(line) for line in (ROOT / receipt["evidence"] / "results.jsonl").read_text().splitlines()]
         expected = {"evocc-objects/" + r["unit"]: r["objectSha256"] for r in rows if r["unit"] == "obj/fdtd-2d.o"}
@@ -165,7 +142,7 @@ def audit(name, tree, binary):
             raise ValueError(f"installed object differs from receipt: {name}/{unit}")
     return {"buildReceipt": str(receipt_path.relative_to(ROOT)),
             "buildReceiptSha256": digest(receipt_path), "buildRun": receipt["run"],
-            "binaryMatchesOriginalReceipt": name in ("tinycc", "toybox"),
+            "binaryMatchesOriginalReceipt": name == "tinycc",
             "verifiedInstalledObjects": len(expected), "binary": str(binary.relative_to(ROOT)),
             "binarySha256": digest(binary), "objectHashes": list(expected.values())}
 
@@ -199,15 +176,8 @@ def capture():
                                      FIXTURES / "raytrace.c", "-lm", "-o", work / "raytrace"], cwd=work))
                 commands.append(run([work / "raytrace"], cwd=work))
                 record["generatedExecutableSha256"] = digest(work / "raytrace")
-            elif name == "sqlite":
-                commands.append(run([binary, FIXTURES / "island.tcl"], cwd=work))
             elif name == "lua":
                 commands.append(run([binary, FIXTURES / "fractal.lua"], cwd=work))
-            elif name == "jq":
-                commands.append(run([binary, "-n", "-M", "-f", FIXTURES / "telemetry.jq"], cwd=work))
-                result = json.loads(commands[-1]["stdout"])
-                if len(result["samples"]) != 48 or result["distance"] != 47 * 47 * 0.018:
-                    raise ValueError("jq result mismatch")
             elif name in ("zstd", "zlib"):
                 picture = (json.loads(records["programs"]["lua"]["commands"][-1]["stdout"])
                            if name == "zstd" else demo_inputs().sprite_sheet())
@@ -233,45 +203,6 @@ def capture():
                                        "width": picture["width"], "height": picture["height"]}
                 if name == "zlib":
                     record["picture"] = picture
-            elif name == "cjson":
-                commands.append(run(["gcc-14", "-no-pie", "-I" + str(tree), FIXTURES / "scene.c",
-                                     tree / "cJSON.o", "-lm", "-o", work / "scene"], cwd=work))
-                commands.append(run([work / "scene"], cwd=work))
-                record["adapter"] = "GCC14-built scene adapter linked to audited EvoCC cJSON.o"
-                record["generatedExecutableSha256"] = digest(work / "scene")
-            elif name == "toybox":
-                release, restored = work / "release", work / "unpacked"
-                commands.append(run([binary, "mkdir", release, restored], cwd=work))
-                commands.append(run([binary, "cp", FIXTURES / "raytrace.c", work / "raytrace", release], cwd=work))
-                picture = json.loads(records["programs"]["tinycc"]["commands"][-1]["stdout"])
-                (release / "frame.rgb").write_bytes(bytes.fromhex(picture["rgb"]))
-                names = ["raytrace.c", "raytrace", "frame.rgb"]
-                commands.append(run([binary, "sha256sum", *names], cwd=release, stage="manifest"))
-                manifest = commands[-1]["stdout"]
-                if {line.split()[1]: line.split()[0] for line in manifest.splitlines()} != {
-                        name: digest(release / name) for name in names}:
-                    raise ValueError("Toybox manifest differs from actual build artifacts")
-                (release / "SHA256SUMS").write_text(manifest)
-                archive = work / "raytrace.tar"
-                commands.append(run([binary, "tar", "-cf", archive, *names, "SHA256SUMS"], cwd=release))
-                commands.append(run([binary, "tar", "-tf", archive], cwd=work, stage="contents"))
-                if commands[-1]["stdout"].splitlines() != names + ["SHA256SUMS"]:
-                    raise ValueError("Toybox archive contents differ")
-                commands.append(run([binary, "tar", "-xf", archive], cwd=restored))
-                commands.append(run([binary, "sha256sum", "-c", "SHA256SUMS"], cwd=restored, stage="verify"))
-                for filename in names + ["SHA256SUMS"]:
-                    commands.append(run([binary, "cmp", release / filename, restored / filename], cwd=work))
-                # Controlled change in a disposable extracted copy, never a source/artifact in the repo.
-                changed = bytearray((restored / "raytrace.c").read_bytes())
-                changed[0] ^= 1
-                (restored / "raytrace.c").write_bytes(changed)
-                commands.append(run([binary, "sha256sum", "-c", "SHA256SUMS"], cwd=restored,
-                                    expected_exit=1, stage="detect-change"))
-                record["bundle"] = {"files": [{"name": name, "bytes": (release / name).stat().st_size,
-                                                "sha256": digest(release / name)} for name in names],
-                                    "archiveBytes": archive.stat().st_size, "archiveSha256": digest(archive),
-                                    "changedFile": "raytrace.c", "changedBytes": 1}
-                record["adapter"] = "Python routes actual TinyCC demo source, ELF and RGB output; changes one byte only in a temporary extracted copy"
             elif name == "mbedtls":
                 library = tree / "build/tf-psa-crypto/core/libtfpsacrypto.a"
                 record["archive"] = checked_archive(library, set(record["objectHashes"]))
@@ -294,8 +225,6 @@ def capture():
             if digest(binary) != record["binarySha256"]:
                 raise ValueError(f"binary changed while running: {name}")
             record["commands"] = commands
-            if name == "toybox":
-                visualizer().bundle_commands(record)
             record.pop("objectHashes")
             records["programs"][name] = record
             print(f"{name}: capture verified; {record['verifiedInstalledObjects']} installed objects verified", flush=True)
@@ -315,45 +244,7 @@ def render():
         if stdout != expected:
             raise ValueError(f"capture text changed: {name}")
         (OUT / f"{name}.svg").write_text(visuals.draw(name, records["programs"][name], records["programs"]))
-    receipt = read_json(ROOT / "tests/contracts/kernel-bpf-full-receipt.json")
-    boot = receipt["boot"]
-    path = Path(boot["serialLog"])
-    if digest(path) != boot["serialLogSha256"] or boot["verdict"] != "PASS":
-        raise ValueError("boot log does not match its accepted receipt")
-    lines = path.read_text().splitlines()[-7:]
-    (OUT / "linux.stdout.txt").write_text("\n".join(lines) + "\n")
-    facts = boot_facts(path.read_text(), boot["nonce"])
-    # This prior test is on exactly the kernel Image named by the build receipt.
-    # The tracked fixture pins the source result and raw serial hashes, not just a PASS label.
-    fpu_path = ROOT / ".build/floating-targeted/module-uniform-20260928/final-subject-prerequisites/subject.json"
-    fpu_receipt = read_json(fpu_path)
-    fixture = ROOT / "tests/fixtures/fpu-worker-verdict.out"
-    if f"Original results {digest(fpu_path)}" not in fixture.read_text():
-        raise ValueError("FPU source result differs from tracked closure evidence")
-    row, = [r for r in fpu_receipt["rows"] if r["id"] == "fpu:run_test_fpu.sh"]
-    fpu_boot = row["result"]["boot"]
-    fpu_log = Path(fpu_boot["serialLog"])
-    if (fpu_boot["imageSha256"] != boot["imageSha256"] or fpu_boot["verdict"] != "PASS"
-            or digest(fpu_log) != fpu_boot["serialLogSha256"]):
-        raise ValueError("FPU log or kernel Image differs from the passing run")
-    stress = fpu_facts(fpu_log.read_text(), fpu_boot["nonce"])
-    expected_stress, = row["result"]["programs"][0]["fpuSummaries"]
-    if {k: stress[k] for k in expected_stress} != expected_stress:
-        raise ValueError("reparsed FPU worker totals differ")
-    (OUT / "linux-fpu.stdout.txt").write_bytes(fpu_log.read_bytes())
-    counts = receipt["counts"]
-    if counts["substituted"] != receipt["requestedUnits"] or not receipt["completeComposition"]:
-        raise ValueError("Linux composition is incomplete")
-    (OUT / "linux.svg").write_text(visuals.linux(stress, counts["substituted"], boot["imageSha256"]))
-    records["linux"] = {"buildReceipt": "tests/contracts/kernel-bpf-full-receipt.json",
-                        "imageSha256": boot["imageSha256"], "serialLogSha256": digest(path),
-                        "flownAt": boot["flownAt"], "excerpt": "last 7 lines; CRLF normalized",
-                        "facts": facts,
-                        "fpu": {"evidence": str(fpu_path.relative_to(ROOT)), "evidenceSha256": digest(fpu_path),
-                                "fixture": str(fixture.relative_to(ROOT)), "fixtureSha256": digest(fixture),
-                                "serialLogSha256": digest(fpu_log), "nonce": fpu_boot["nonce"],
-                                "flownAt": fpu_boot["flownAt"], "bootLane": fpu_boot["bootLane"],
-                                "qemuMatchesContract": fpu_boot["qemu"]["matchesContract"], "facts": stress}}
+    render_logs(records)
     source = ROOT / ".build/ladder/doom/evocc-demo1-0/frame-350.png"
     doom_receipt = read_json(ROOT / "tests/contracts/ladder-doom-receipt.json")
     runtime = ROOT / ".build/ladder/doom/runtime.json"
@@ -375,6 +266,63 @@ def render():
                        "source": str(source.relative_to(ROOT)), "imageSha256": digest(source),
                        "buildRun": doom_receipt["run"], "frameBgraSha256": runs[0]["frames"][349],
                        "demo": "demo1", "frame": 350, "repeat": 0, "compiler": "evocc"}
+    write_records(records)
+
+
+def relative(path):
+    path = Path(path).resolve()
+    return str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
+
+
+def source_log(name, receipt):
+    """Return an accepted run's recorded log and the hash its receipt pins, if any."""
+    if name == "linux":
+        boot = receipt["boot"]
+        if (boot["verdict"] != "PASS" or not receipt["completeComposition"]
+                or receipt["counts"]["substituted"] != receipt["requestedUnits"]):
+            raise ValueError("Linux boot or EvoCC composition did not pass")
+        return Path(boot["serialLog"]), boot["serialLogSha256"]
+    evidence = ROOT / receipt["evidence"]
+    if name == "toybox":
+        test = receipt["substitutedTest"]
+        if receipt["testResult"] != "no-regression" or test["outcomes"] != receipt["baselineTest"]["outcomes"]:
+            raise ValueError("Toybox results differ from the GCC build")
+        return evidence / "substituted-tests.log", test["logSha256"]
+    if not receipt["test"]["passed"]:
+        raise ValueError(f"accepted tests did not pass: {name}")
+    return evidence / f"test-{receipt['test']['completedTrial']}.log", None
+
+
+def excerpt(text, segments):
+    """Copy whole lines. Only trailing spaces are removed."""
+    lines = [line.rstrip() for line in text.splitlines()]
+    out = []
+    for pattern, count in segments:
+        starts = [i for i, line in enumerate(lines) if re.search(pattern, line)]
+        if len(starts) != 1 or starts[0] + count > len(lines):
+            raise ValueError(f"log excerpt is missing or ambiguous: {pattern}")
+        out.append({"line": starts[0] + 1, "text": lines[starts[0]:starts[0] + count]})
+    return out
+
+
+def render_logs(records):
+    visuals = visualizer()
+    records["logs"] = {}
+    for name, (title, receipt_name, segments) in LOGS.items():
+        receipt = read_json(ROOT / "tests/contracts" / receipt_name)
+        path, pinned = source_log(name, receipt)
+        if pinned and digest(path) != pinned:
+            raise ValueError(f"recorded log differs from its receipt: {name}")
+        text = path.read_text()
+        record = {"title": title, "receipt": f"tests/contracts/{receipt_name}", "source": relative(path),
+                  "sourceSha256": digest(path), "segments": excerpt(text, segments)}
+        if name == "linux":
+            record["facts"] = boot_facts(text.replace("\r", ""), receipt["boot"]["nonce"])
+        records["logs"][name] = record
+        (OUT / f"{name}.svg").write_text(visuals.log_card(name, record))
+
+
+def write_records(records):
     records["assets"] = {p.name: digest(p) for p in sorted(OUT.iterdir()) if p.suffix in (".svg", ".png", ".txt")}
     (OUT / "captures.json").write_text(json.dumps(records, indent=2) + "\n")
 
@@ -385,7 +333,7 @@ def check():
     game_spec.loader.exec_module(games)
     games.check()
     records = read_json(OUT / "captures.json")
-    required = {"doom.png", "linux.svg", *[f"{name}.svg" for name in APPS]}
+    required = {"doom.png", *[f"{name}.svg" for name in APPS], *[f"{name}.svg" for name in LOGS]}
     if not required <= set(records["assets"]):
         raise ValueError("missing showcase assets")
     for name, expected in records["assets"].items():
@@ -395,9 +343,7 @@ def check():
         commands = records["programs"][name]["commands"]
         if not commands or any(c["exitCode"] != c.get("expectedExitCode", 0) for c in commands):
             raise ValueError(f"unsuccessful demo capture: {name}")
-        if name == "toybox":
-            visualizer().bundle_commands(records["programs"][name])
-        elif any(c.get("expectedExitCode", 0) for c in commands):
+        if any(c.get("expectedExitCode", 0) for c in commands):
             raise ValueError(f"unexpected negative test: {name}")
         for stream in ("stdout", "stderr"):
             expected = "".join(c[stream] for c in records["programs"][name]["commands"])
@@ -406,24 +352,41 @@ def check():
     for name, expected in records["fixtures"].items():
         if digest(FIXTURES / name) != expected:
             raise ValueError(f"demo source differs from capture: {name}")
-    fpu = records["linux"]["fpu"]
-    raw = OUT / "linux-fpu.stdout.txt"
-    if digest(raw) != fpu["serialLogSha256"] or fpu_facts(raw.read_text(), fpu["nonce"]) != fpu["facts"]:
-        raise ValueError("FPU capture no longer matches worker verdicts")
-    print(f"Showcase: {len(required) + len(games.NAMES)} images, {len(APPS)} output demos and {len(games.NAMES)} paired game captures verified")
+    for name, (title, receipt_name, segments) in LOGS.items():
+        record = records["logs"][name]
+        if (record["title"], record["receipt"]) != (title, f"tests/contracts/{receipt_name}"):
+            raise ValueError(f"log card source changed: {name}")
+        if [len(s["text"]) for s in record["segments"]] != [count for _, count in segments]:
+            raise ValueError(f"log excerpt changed: {name}")
+        if visualizer().log_card(name, record) != (OUT / f"{name}.svg").read_text():
+            raise ValueError(f"log card differs from its recorded excerpt: {name}")
+        # The evidence tree is local. Where it exists, the excerpt must still match it.
+        source = ROOT / record["source"]
+        if source.exists():
+            if digest(source) != record["sourceSha256"]:
+                raise ValueError(f"recorded log changed: {name}")
+            if excerpt(source.read_text(), segments) != record["segments"]:
+                raise ValueError(f"log excerpt differs from the recorded log: {name}")
+    print(f"Showcase: {len(required) + len(games.NAMES)} images, {len(APPS)} output demos, "
+          f"{len(LOGS)} log excerpts and {len(games.NAMES)} paired game captures verified")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--capture", action="store_true")
     parser.add_argument("--render", action="store_true")
+    parser.add_argument("--render-logs", action="store_true")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     if args.capture:
         capture()
     if args.render:
         render()
+    if args.render_logs:
+        records = read_json(OUT / "captures.json")
+        render_logs(records)
+        write_records(records)
     if args.check:
         check()
-    if not (args.capture or args.render or args.check):
-        parser.error("choose --capture (sealed ARM64 container), --render (host), or --check")
+    if not (args.capture or args.render or args.render_logs or args.check):
+        parser.error("choose --capture (sealed ARM64 container), --render (host), --render-logs (host), or --check")
