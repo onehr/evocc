@@ -133,13 +133,16 @@ program, `struct stats s;` gives `count` and `total` no value:
 
 ```c
 static void add(struct stats *s, int x) {
-    if (x > 0) { s->count += 1; s->total += x; }
+    if (x > 0) {
+        s->count += 1;
+        s->total += x;
+    }
 }
 ```
 
-GCC with `-Wall -Wextra -fsanitize=undefined` reports nothing. The program returns 0 at `-O0` and
-39 at `-O2`; the right answer is 4. `evo check` reports a read of an uninitialized object at
-`s->count += 1`.
+GCC with `-Wall -Wextra -fsanitize=undefined` reports nothing. The program returns 0 at `-O0`. At
+`-O2`, it returns a wrong value that changes from run to run. The right answer is 4. `evo check`
+reports a read of an uninitialized object at `s->count += 1`.
 
 **EvoIR makes undefined behavior data.** EvoIR is a typed SSA representation for optimization. Each
 rule of C becomes a total predicate and an obligation. `signed_mul_defined %a, %b` computes whether

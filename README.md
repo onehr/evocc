@@ -20,7 +20,7 @@ EvoCC is a C compiler for AArch64 Linux and macOS, written from scratch in Rust.
 the reason. EvoCC can also prove, with Lean 4, that a compilation is correct.
 
 <p align="center">
-  <img src="docs/images/readme/check.svg" alt="evo check reports a signed overflow at (lo + hi) / 2 in a binary search" width="560">
+  <img src="docs/images/readme/highlights.svg" alt="Four terminal sessions. evocc builds zlib, and zlib passes its tests. evo check finds a signed overflow in a binary search. GCC 14 with UBSan gives no report and the program returns a wrong value, but evo check finds the uninitialized read. evo prove checks the compilation of abs, and the checked assembly traps on overflow.">
 </p>
 
 ## Highlights
@@ -94,15 +94,16 @@ Change the line to `int mid = lo + (hi - lo) / 2;`, and the check passes.
 
 In [`mean.c`](examples/mean.c), the declaration `struct stats s;` gives `count` and `total` no
 value. GCC with `-Wall -Wextra -fsanitize=undefined` gives no warning and no report. The program
-returns 0 at `-O0` and 39 at `-O2`. The right answer is 4.
+returns 0 at `-O0`. At `-O2`, it returns a wrong value that changes from run to run. The right
+answer is 4.
 
 ```console
 $ evo check mean.c
 error[E3001]: read-of-uninitialized-object
-  --> mean.c:6:18
+  --> mean.c:7:9
    |
- 6 |     if (x > 0) { s->count += 1; s->total += x; }
-   |                  ^^^^^^^^^^^^^ read-of-uninitialized-object
+ 7 |         s->count += 1;
+   |         ^^^^^^^^^^^^^ read-of-uninitialized-object
    |
    = note: this operation failed on the executed path
 $ evo explain E3001 | head -n 3

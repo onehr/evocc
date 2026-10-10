@@ -5,29 +5,38 @@ Run from the repository root after a release build:
 
     python3 tools/render-readme.py
 
-The terminal figure runs `evo check` on `examples/first_bad.c` and draws its
-colored output. The pipeline figure has a light and a dark variant.
+The highlights figure runs four short terminal sessions and draws their real output. Each
+session runs in one shell, in a temporary directory. The GCC session runs in the sealed
+`evo-flight-lab:sealed` container. The pipeline figure and the paper's agent-effort chart have
+a light and a dark variant.
 """
 import html
+import math
+import os
 import re
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "images" / "readme"
-EVO = ROOT / "target" / "frontend" / "release" / "evo"
-EVOCC = ROOT / "target" / "frontend" / "release" / "evocc"
+EXAMPLES = ROOT / "examples"
+BIN = ROOT / "target" / "frontend" / "release"
+ZLIB = ROOT / ".build" / "ladder" / "zlib" / "zlib-1.3.2.tar.gz"
+GCC_IMAGE = "evo-flight-lab:sealed"
 
 MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 ANSI = {"31": "#ff7b72", "32": "#7ee787", "33": "#d29922", "34": "#79c0ff",
         "35": "#d2a8ff", "36": "#39c5cf"}
+SGR = re.compile(r"\x1b\[([0-9;]*)m")
 
 
 def spans(line):
     """Split one line with ANSI SGR codes into (text, color, bold) parts."""
     parts, color, bold, pos = [], None, False, 0
-    for match in re.finditer(r"\x1b\[([0-9;]*)m", line):
+    for match in SGR.finditer(line):
         if match.start() > pos:
             parts.append((line[pos:match.start()], color, bold))
         for code in (match.group(1) or "0").split(";"):
@@ -43,37 +52,124 @@ def spans(line):
     return parts
 
 
-def terminal(lines, title):
-    """Draw a terminal window. Each line is a list of (text, color, bold)."""
-    width = 48 + int(8.43 * max(sum(len(t) for t, _, _ in line) for line in lines))
-    height = 56 + 21 * len(lines)
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-           f'viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
-           f'<rect width="{width}" height="{height}" rx="10" fill="#0d1117" stroke="#30363d"/>',
+def session(commands, cwd, container=False):
+    """Run commands in one shell, as typed at a prompt. Return [(command, output)]."""
+    script = "exec 2>&1\n" + "".join("printf '\\036\\n'; " + c + "\n" for c in commands)
+    if container:
+        argv = ["container", "run", "--rm", "--platform", "linux/arm64", "--network", "none",
+                "-v", f"{cwd}:/w", GCC_IMAGE, "sh", "-c", "cd /w\n" + script]
+    else:
+        argv = ["sh", "-c", script]
+    env = dict(os.environ, PATH=f"{BIN}{os.pathsep}{os.environ['PATH']}", TMPDIR=str(cwd))
+    result = subprocess.run(argv, cwd=cwd, env=env, text=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    outputs = result.stdout.split("\x1e\n")
+    if outputs[0] or len(outputs) != len(commands) + 1:
+        raise SystemExit(f"session did not run: {result.stdout!r}")
+    return list(zip(commands, outputs[1:]))
+
+
+def expect(steps, index, wanted):
+    command, output = steps[index]
+    if output != wanted:
+        raise SystemExit(f"`{command}` printed {output!r}, not {wanted!r}")
+
+
+def check(name, cwd):
+    """`evo check NAME`, in color. The colors come from `evocc --check --color=always`."""
+    (_, plain), (_, colored) = session([f"evo check {name}",
+                                        f"evocc --check --color=always {name}"], cwd)
+    if SGR.sub("", colored) != plain:
+        raise SystemExit(f"evo check {name} and evocc --check print different text")
+    return (f"evo check {name}", colored)
+
+
+def drop_in(work):
+    shutil.copy(EXAMPLES / "hello.c", work)
+    subprocess.run(["tar", "xzf", str(ZLIB), "-C", str(work)], check=True)
+    steps = session(["evocc --version", "evocc hello.c -o hello && ./hello",
+                     "cd zlib-1.3.2 && CC=evocc ./configure > /dev/null",
+                     "make test | grep -o 'zlib.*OK'"], work)
+    expect(steps, 1, "Hello, world!\n")
+    expect(steps, 2, "")
+    expect(steps, 3, "zlib test OK\nzlib shared test OK\n")
+    return steps
+
+
+def find_ub(work):
+    shutil.copy(EXAMPLES / "first_bad.c", work)
+    return [check("first_bad.c", work)]
+
+
+def ubsan(work):
+    shutil.copy(EXAMPLES / "mean.c", work)
+    steps = session(["gcc-14 -O2 -Wall -Wextra -fsanitize=undefined mean.c",
+                     "./a.out; echo $?  # expect 4"], work, container=True)
+    expect(steps, 0, "")
+    if not re.fullmatch(r"\d+\n", steps[1][1]) or steps[1][1] == "4\n":
+        raise SystemExit(f"mean.c built by GCC printed {steps[1][1]!r}")
+    return steps + [check("mean.c", work)]
+
+
+def prove(work):
+    shutil.copy(EXAMPLES / "abs.c", work)
+    steps = session(["cat abs.c", "evo prove abs.c -o abs.s --json | jq -r .result",
+                     r"grep -E 'subs|b\.vs|brk' abs.s"], work)
+    expect(steps, 1, "CHECKED_TO_FINAL_ASSEMBLY\n")
+    expect(steps, 2, "    subs w0, w2, w0\n    b.vs .Labs_block4\n    brk #3004\n")
+    return steps
+
+
+PANELS = [("A drop-in cc", drop_in), ("Undefined behavior, with evidence", find_ub),
+          ("Catches what UBSan misses", ubsan), ("Proof-carrying compilation", prove)]
+FONT, CHAR, LINE, PAD, GAP, TOP = 13, 7.83, 19, 18, 16, 56
+
+
+def window(x, y, width, height, title, lines):
+    """Draw one terminal window. Each line is a list of (text, color, bold)."""
+    out = [f'<g transform="translate({x} {y})">',
+           f'<rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" rx="10" '
+           f'fill="#0d1117" stroke="#30363d"/>',
            '<circle cx="20" cy="18" r="6" fill="#ff5f56"/><circle cx="40" cy="18" r="6" '
            'fill="#ffbd2e"/><circle cx="60" cy="18" r="6" fill="#27c93f"/>',
-           f'<text x="{width // 2}" y="22" fill="#8b949e" font-family="{SANS}" font-size="12" '
-           f'text-anchor="middle">{html.escape(title)}</text>']
+           f'<text x="{width // 2}" y="23" fill="#e6edf3" font-family="{SANS}" font-size="13" '
+           f'font-weight="600" text-anchor="middle">{html.escape(title)}</text>']
+    bold_attr = ' font-weight="700"'
     for row, line in enumerate(lines):
-        y = 58 + 21 * row
-        bold_attr = ' font-weight="700"'
-        tspans = "".join(
-            f'<tspan fill="{color or "#e6edf3"}"{bold_attr if bold else ""}>'
-            f'{html.escape(text)}</tspan>' for text, color, bold in line)
-        out.append(f'<text x="24" y="{y}" font-family="{MONO}" font-size="14" '
-                   f'xml:space="preserve">{tspans}</text>')
+        tspans = "".join(f'<tspan fill="{color or "#e6edf3"}"{bold_attr if bold else ""}>'
+                         f'{html.escape(text)}</tspan>' for text, color, bold in line)
+        if tspans:
+            out.append(f'<text x="{PAD}" y="{TOP + LINE * row}" font-family="{MONO}" '
+                       f'font-size="{FONT}" xml:space="preserve">{tspans}</text>')
+    out.append("</g>")
+    return "\n".join(out)
+
+
+def highlights():
+    """Four terminal sessions in a 2 x 2 grid, one per highlight."""
+    panels = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, (title, run) in enumerate(PANELS):
+            work = Path(tmp).resolve() / str(i)
+            work.mkdir()
+            lines = []
+            for command, output in run(work):
+                lines.append([("$ ", "#7ee787", True), (command, None, True)])
+                lines += [spans(line.expandtabs()) for line in output.splitlines()]
+            panels.append((title, lines))
+    columns = max(sum(len(t) for t, _, _ in line) for _, lines in panels for line in lines)
+    width = 2 * PAD + math.ceil(CHAR * columns)
+    rows = [max(len(panels[i][1]), len(panels[i + 1][1])) for i in (0, 2)]
+    heights = [TOP + LINE * (n - 1) + 20 for n in rows]
+    total_w, total_h = 2 * width + GAP, sum(heights) + GAP
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="{total_h}" '
+           f'viewBox="0 0 {total_w} {total_h}" role="img" aria-label="EvoCC highlights: '
+           + "; ".join(title for title, _ in PANELS) + '">']
+    for i, (title, lines) in enumerate(panels):
+        x, y = (i % 2) * (width + GAP), (i // 2) * (heights[0] + GAP)
+        out.append(window(x, y, width, heights[i // 2], title, lines))
     out.append("</svg>")
     return "\n".join(out) + "\n"
-
-
-def check_figure():
-    command = "evo check first_bad.c"
-    result = subprocess.run([str(EVOCC), "--check", "--color=always", "first_bad.c"],
-                            cwd=ROOT / "examples", capture_output=True, text=True)
-    output = (result.stdout + result.stderr).rstrip("\n").split("\n")
-    lines = [[("$ ", "#7ee787", True), (command, None, True)]]
-    lines += [spans(line) for line in output]
-    return terminal(lines, "evo check")
 
 
 THEMES = {
@@ -177,13 +273,13 @@ def effort_chart(theme):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "check.svg").write_text(check_figure())
+    (OUT / "highlights.svg").write_text(highlights())
     paper = ROOT / "docs" / "images" / "paper"
     paper.mkdir(parents=True, exist_ok=True)
     for theme in THEMES:
         (OUT / f"pipeline-{theme}.svg").write_text(pipeline(theme))
         (paper / f"agent-effort-{theme}.svg").write_text(effort_chart(theme))
-    print("wrote docs/images/readme (check, pipeline) and docs/images/paper (agent-effort)")
+    print("wrote docs/images/readme (highlights, pipeline) and docs/images/paper (agent-effort)")
 
 
 if __name__ == "__main__":

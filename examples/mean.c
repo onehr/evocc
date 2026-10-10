@@ -3,7 +3,10 @@
 struct stats { int count; int total; };
 
 static void add(struct stats *s, int x) {
-    if (x > 0) { s->count += 1; s->total += x; }
+    if (x > 0) {
+        s->count += 1;
+        s->total += x;
+    }
 }
 
 int mean(const int *xs, int n) {

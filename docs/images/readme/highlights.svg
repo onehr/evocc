@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="966" height="510" viewBox="0 0 966 510" role="img" aria-label="EvoCC highlights: A drop-in cc; Undefined behavior, with evidence; Catches what UBSan misses; Proof-carrying compilation">
+<g transform="translate(0 0)">
+<rect x="0.5" y="0.5" width="474" height="227" rx="10" fill="#0d1117" stroke="#30363d"/>
+<circle cx="20" cy="18" r="6" fill="#ff5f56"/><circle cx="40" cy="18" r="6" fill="#ffbd2e"/><circle cx="60" cy="18" r="6" fill="#27c93f"/>
+<text x="237" y="23" fill="#e6edf3" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle">A drop-in cc</text>
+<text x="18" y="56" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">evocc --version</tspan></text>
+<text x="18" y="75" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">evocc 0.1.0 (c9023f1dd993 2026-10-09)</tspan></text>
+<text x="18" y="94" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">Target: aarch64-apple-darwin</tspan></text>
+<text x="18" y="113" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">evocc hello.c -o hello &amp;&amp; ./hello</tspan></text>
+<text x="18" y="132" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">Hello, world!</tspan></text>
+<text x="18" y="151" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">cd zlib-1.3.2 &amp;&amp; CC=evocc ./configure &gt; /dev/null</tspan></text>
+<text x="18" y="170" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">make test | grep -o &#x27;zlib.*OK&#x27;</tspan></text>
+<text x="18" y="189" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">zlib test OK</tspan></text>
+<text x="18" y="208" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">zlib shared test OK</tspan></text>
+</g>
+<g transform="translate(491 0)">
+<rect x="0.5" y="0.5" width="474" height="227" rx="10" fill="#0d1117" stroke="#30363d"/>
+<circle cx="20" cy="18" r="6" fill="#ff5f56"/><circle cx="40" cy="18" r="6" fill="#ffbd2e"/><circle cx="60" cy="18" r="6" fill="#27c93f"/>
+<text x="237" y="23" fill="#e6edf3" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle">Undefined behavior, with evidence</text>
+<text x="18" y="56" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">evo check first_bad.c</tspan></text>
+<text x="18" y="75" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#ff7b72" font-weight="700">error[E3004]</tspan><tspan fill="#e6edf3">: signed-integer-overflow</tspan></text>
+<text x="18" y="94" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">  --&gt; first_bad.c:9:19</tspan></text>
+<text x="18" y="113" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">   |</tspan></text>
+<text x="18" y="132" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3"> 9 |         int mid = (lo + hi) / 2;</tspan></text>
+<text x="18" y="151" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">   |                   </tspan><tspan fill="#ff7b72" font-weight="700">^^^^^^^^^</tspan><tspan fill="#e6edf3"> signed-integer-overflow</tspan></text>
+<text x="18" y="170" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">   |</tspan></text>
+<text x="18" y="189" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">   = note: this operation failed on the executed path</tspan></text>
+</g>
+<g transform="translate(0 244)">
+<rect x="0.5" y="0.5" width="474" height="265" rx="10" fill="#0d1117" stroke="#30363d"/>
+<circle cx="20" cy="18" r="6" fill="#ff5f56"/><circle cx="40" cy="18" r="6" fill="#ffbd2e"/><circle cx="60" cy="18" r="6" fill="#27c93f"/>
+<text x="237" y="23" fill="#e6edf3" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle">Catches what UBSan misses</text>
+<text x="18" y="56" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">gcc-14 -O2 -Wall -Wextra -fsanitize=undefined mean.c</tspan></text>
+<text x="18" y="75" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">./a.out; echo $?  # expect 4</tspan></text>
+<text x="18" y="94" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">12</tspan></text>
+<text x="18" y="113" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">evo check mean.c</tspan></text>
+<text x="18" y="132" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#ff7b72" font-weight="700">error[E3001]</tspan><tspan fill="#e6edf3">: read-of-uninitialized-object</tspan></text>
+<text x="18" y="151" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">  --&gt; mean.c:7:9</tspan></text>
+<text x="18" y="170" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">   |</tspan></text>
+<text x="18" y="189" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3"> 7 |         s-&gt;count += 1;</tspan></text>
+<text x="18" y="208" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">   |         </tspan><tspan fill="#ff7b72" font-weight="700">^^^^^^^^^^^^^</tspan><tspan fill="#e6edf3"> read-of-uninitialized-object</tspan></text>
+<text x="18" y="227" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">   |</tspan></text>
+<text x="18" y="246" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">   = note: this operation failed on the executed path</tspan></text>
+</g>
+<g transform="translate(491 244)">
+<rect x="0.5" y="0.5" width="474" height="265" rx="10" fill="#0d1117" stroke="#30363d"/>
+<circle cx="20" cy="18" r="6" fill="#ff5f56"/><circle cx="40" cy="18" r="6" fill="#ffbd2e"/><circle cx="60" cy="18" r="6" fill="#27c93f"/>
+<text x="237" y="23" fill="#e6edf3" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle">Proof-carrying compilation</text>
+<text x="18" y="56" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">cat abs.c</tspan></text>
+<text x="18" y="75" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">int abs(int a) {</tspan></text>
+<text x="18" y="94" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">    return a &gt; 0 ? a : -a;</tspan></text>
+<text x="18" y="113" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">}</tspan></text>
+<text x="18" y="132" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">evo prove abs.c -o abs.s --json | jq -r .result</tspan></text>
+<text x="18" y="151" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">CHECKED_TO_FINAL_ASSEMBLY</tspan></text>
+<text x="18" y="170" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">$ </tspan><tspan fill="#e6edf3" font-weight="700">grep -E &#x27;subs|b\.vs|brk&#x27; abs.s</tspan></text>
+<text x="18" y="189" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">    subs w0, w2, w0</tspan></text>
+<text x="18" y="208" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">    b.vs .Labs_block4</tspan></text>
+<text x="18" y="227" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve"><tspan fill="#e6edf3">    brk #3004</tspan></text>
+</g>
+</svg>
