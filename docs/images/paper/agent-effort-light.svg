@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="300" viewBox="0 0 820 300" role="img" aria-label="Agent steps to repair, GCC and UBSan against EvoCC">
+<text x="0" y="40" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Silent bugs, short programs</text>
+<text x="0" y="60" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">18 programs, 2 runs each</text>
+<rect x="300" y="26" width="400" height="20" rx="3" fill="#afb8c1"/>
+<text x="708" y="41" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">325 steps</text>
+<rect x="300" y="52" width="253" height="20" rx="3" fill="#0969da"/>
+<text x="561" y="67" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">206 steps (−37%)</text>
+<text x="0" y="122" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Silent bugs, 722-line programs</text>
+<text x="0" y="142" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">12 programs, 2 runs each</text>
+<rect x="300" y="108" width="296" height="20" rx="3" fill="#afb8c1"/>
+<text x="604" y="123" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">241 steps</text>
+<rect x="300" y="134" width="192" height="20" rx="3" fill="#0969da"/>
+<text x="500" y="149" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">156 steps (−35%)</text>
+<text x="0" y="204" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Controls: GCC and UBSan report them</text>
+<text x="0" y="224" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">6 programs, 2 runs each</text>
+<rect x="300" y="190" width="77" height="20" rx="3" fill="#afb8c1"/>
+<text x="385" y="205" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">63 steps</text>
+<rect x="300" y="216" width="73" height="20" rx="3" fill="#0969da"/>
+<text x="381" y="231" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">60 steps (−5%)</text>
+<rect x="300" y="268" width="14" height="14" rx="2" fill="#afb8c1"/><text x="320" y="280" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">GCC warnings and UBSan</text>
+<rect x="500" y="268" width="14" height="14" rx="2" fill="#0969da"/><text x="520" y="280" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">EvoCC</text>
+</svg>

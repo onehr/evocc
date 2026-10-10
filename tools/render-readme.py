@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the README figures from real compiler output.
+"""Render the README and paper figures from real compiler output and receipts.
 
 Run from the repository root after a release build:
 
@@ -123,12 +123,67 @@ def pipeline(theme):
     return "\n".join(out) + "\n"
 
 
+EFFORT = [("Silent bugs, short programs", "18 programs, 2 runs each", "agent-repair-5-replication-20261010.json", "agent-repair-4", True),
+          ("Silent bugs, 722-line programs", "12 programs, 2 runs each", "agent-repair-5-scale-20261010.json", "agent-repair-5", None),
+          ("Controls: GCC and UBSan report them", "6 programs, 2 runs each", "agent-repair-5-replication-20261010.json", "agent-repair-4", False)]
+CONTROL_CODES = {"E3002", "E3004", "E3005"}
+
+
+def effort_totals():
+    import json
+    rows = []
+    for label, sub, receipt, corpus, silent in EFFORT:
+        runs = json.loads((ROOT / "tests" / "contracts" / receipt).read_text())["runs"]
+        total = {"c1": 0, "c3": 0}
+        for run in runs:
+            code = (ROOT / "tests" / "fixtures" / corpus / run["item"] / "class").read_text().strip()
+            if silent is not None and (code in CONTROL_CODES) == silent:
+                continue
+            total[run["condition"]] += run["steps"]
+        rows.append((label, sub, total["c1"], total["c3"]))
+    return rows
+
+
+def effort_chart(theme):
+    t = THEMES[theme]
+    base = "#afb8c1" if theme == "light" else "#6e7681"
+    rows = effort_totals()
+    peak = max(max(a, b) for _, _, a, b in rows)
+    scale, x0 = 400 / peak, 300
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="820" height="300" viewBox="0 0 820 300" '
+           f'role="img" aria-label="Agent steps to repair, GCC and UBSan against EvoCC">']
+    for i, (label, sub, c1, c3) in enumerate(rows):
+        y = 20 + 82 * i
+        out.append(f'<text x="0" y="{y + 20}" fill="{t["title"]}" font-family="{SANS}" font-size="14" '
+                   f'font-weight="600">{html.escape(label)}</text>')
+        out.append(f'<text x="0" y="{y + 40}" fill="{t["sub"]}" font-family="{SANS}" font-size="12">'
+                   f'{html.escape(sub)}</text>')
+        for j, (value, color) in enumerate(((c1, base), (c3, t["prove"]))):
+            w = int(value * scale)
+            out.append(f'<rect x="{x0}" y="{y + 6 + 26 * j}" width="{w}" height="20" rx="3" fill="{color}"/>')
+            note = f"{value} steps" if j == 0 else f"{value} steps ({100 * (c3 - c1) / c1:+.0f}%)".replace("-", "\u2212")
+            out.append(f'<text x="{x0 + w + 8}" y="{y + 21 + 26 * j}" fill="{t["title"]}" '
+                       f'font-family="{SANS}" font-size="13">{note}</text>')
+    y = 268
+    out.append(f'<rect x="{x0}" y="{y}" width="14" height="14" rx="2" fill="{base}"/>'
+               f'<text x="{x0 + 20}" y="{y + 12}" fill="{t["sub"]}" font-family="{SANS}" font-size="13">'
+               f'GCC warnings and UBSan</text>')
+    out.append(f'<rect x="{x0 + 200}" y="{y}" width="14" height="14" rx="2" fill="{t["prove"]}"/>'
+               f'<text x="{x0 + 220}" y="{y + 12}" fill="{t["sub"]}" font-family="{SANS}" font-size="13">'
+               f'EvoCC</text>')
+    out.append("</svg>")
+    return "\n".join(out) + "\n"
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "check.svg").write_text(check_figure())
+    paper = ROOT / "docs" / "images" / "paper"
+    paper.mkdir(parents=True, exist_ok=True)
     for theme in THEMES:
         (OUT / f"pipeline-{theme}.svg").write_text(pipeline(theme))
-    print(f"wrote {OUT.relative_to(ROOT)}: check.svg, pipeline-light.svg, pipeline-dark.svg")
+        (paper / f"agent-effort-{theme}.svg").write_text(effort_chart(theme))
+    print("wrote docs/images/readme (check, pipeline) and docs/images/paper (agent-effort)")
 
 
 if __name__ == "__main__":
