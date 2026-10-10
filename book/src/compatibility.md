@@ -24,7 +24,7 @@ from recorded UTC run identifiers; they are not source-release or regeneration d
 | [csmith](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-csmith-receipt.json) | commit 0cdc710315cfee9035e22ef4363ca479270d1934 | 9f571ca | INCOMPLETE | 932/1000 programs | 2026-09-19 22:26:55 UTC |
 | [doom](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-doom-receipt.json) | commit dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284 | not recorded | PASS | 81/81 units | 2026-09-28 12:29:10 UTC |
 | [torture](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-e0-receipt.json) | releases/gcc-16.2.0 | edc6905 | PROFILE_CLEAN | 1522/1692 programs | 2026-09-27 08:40:53 UTC |
-| [jq](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-jq-receipt.json) | jq-1.8.2 | not recorded | PASS | 69/69 units | 2026-09-27 08:22:05 UTC |
+| [jq](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-jq-receipt.json) | jq-1.8.2 | not recorded | PASS | 70/70 units | 2026-10-10 09:45:47 UTC |
 | [llvm-test-suite](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-llvm-test-suite-receipt.json) | llvmorg-23.1.0 (2919e55176a572ee085cb46b291c47b7092c363e) | not recorded | INCOMPLETE | 1039/1735 programs | 2026-09-27 08:51:37 UTC |
 | [lua](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-lua-receipt.json) | 5.5.1 | not recorded | PASS | 34/34 units | 2026-09-19 23:16:34 UTC |
 | [mbedtls](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-mbedtls-receipt.json) | 4.2.0 (2026-07-07, github.com/Mbed-TLS/mbedtls) | not recorded | PASS | 382/382 units | 2026-09-19 23:21:27 UTC |
@@ -75,10 +75,10 @@ Refusals: E0112=8, E1001=3, E1003=4, E1205=20, E2001=11, E2101=2, E2102=2, E2202
 ### jq
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20260927T082205Z.
-Compiler SHA-256: 523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa.
+Recorded checkout: not recorded; run: 20261010T094547Z.
+Compiler SHA-256: e4c658668f503ba23b80a1ec7c398c0b12f24d806f1642276358fe38f1448130.
 Scope: original make check with bundled Oniguruma; mixed-object ramp.
-Compiled: 69.
+Compiled: 70.
 
 ### llvm-test-suite
 

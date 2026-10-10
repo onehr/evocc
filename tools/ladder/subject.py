@@ -306,7 +306,7 @@ def parse_build_log(text: str, tree: str) -> list[Unit]:
             return value[len(prefix) :]
         return value
 
-    for line in text.splitlines():
+    for line in _logical_lines(text):
         # Libtool prints the actual compiler invocation after this prefix;
         # its wrapper command names a .lo descriptor, not the installed .o.
         if line.startswith('libtool: compile: '):
@@ -332,6 +332,26 @@ def parse_build_log(text: str, tree: str) -> list[Unit]:
     return list(units.values())
 
 
+def _logical_lines(text: str) -> list[str]:
+    """Join a recipe that make printed across lines with a trailing backslash.
+
+    Automake prints a compile rule that is not a libtool rule as three such
+    lines; read one line at a time, the compile command looks unfinished
+    and its unit is lost.
+    """
+    lines: list[str] = []
+    pending = ""
+    for line in text.splitlines():
+        if line.endswith("\\"):
+            pending += line[:-1] + " "
+            continue
+        lines.append(pending + line)
+        pending = ""
+    if pending:
+        lines.append(pending)
+    return lines
+
+
 def _commands(line: str) -> list[list[str]]:
     """The commands on one log line, split on ``&&`` and ``;``.
 
@@ -342,14 +362,20 @@ def _commands(line: str) -> list[list[str]]:
     line = line.strip()
     if not line or "-c" not in line:
         return []
+    # Automake writes ``depbase=`...`;`` with the semicolon against the
+    # backquote; it still ends that command. Only an unquoted ``;`` is split
+    # this way, so a quoted one and ``2>&1`` stay inside their tokens.
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=";")
+    lexer.whitespace_split = True
+    lexer.commenters = ""
     try:
-        tokens = shlex.split(line, comments=False)
+        tokens = list(lexer)
     except ValueError:
         return []
     commands: list[list[str]] = []
     current: list[str] = []
     for token in tokens:
-        if token in ("&&", "||", ";", "|"):
+        if token in ("&&", "||", ";", ";;", "|"):
             if current:
                 commands.append(current)
             current = []

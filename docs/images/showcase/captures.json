@@ -303,11 +303,11 @@
     "jq": {
       "title": "jq 1.8.2: make check",
       "receipt": "tests/contracts/ladder-jq-receipt.json",
-      "source": ".evidence/ladder/jq/20260927T082205Z/test-attempt-1.log",
-      "sourceSha256": "493388fdb28f0691d41a0e9b9d05375802d7b406e1dc6e11fe60e8be5d28e5fb",
+      "source": ".evidence/ladder/jq/20261010T094547Z/test-attempt-1.log",
+      "sourceSha256": "8487aa8362c06c7d4e103357f151151743543cc162dfecfd2b5f24e47b6c0a86",
       "segments": [
         {
-          "line": 120,
+          "line": 106,
           "text": [
             "PASS: tests/mantest",
             "PASS: tests/jqtest",

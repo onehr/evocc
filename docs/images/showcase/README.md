@@ -12,7 +12,7 @@ no kernel rebuild or large disk image is needed.
 | TinyCC ray tracer | EvoCC-built TinyCC compiles a new C program; that program computes reflections and emits RGB pixels | [11-unit compiler](../../../tests/contracts/ladder-tinycc-receipt.json); ray tracer is compiled by TinyCC, not directly by EvoCC; platform libm |
 | Lua fractal | EvoCC-built Lua performs Mandelbrot iteration and computes every displayed RGB pixel | [34 C units](../../../tests/contracts/ladder-lua-receipt.json); 192×108 image, up to 120 iterations per pixel |
 | SQLite tests | The accepted EvoCC build of `testfixture` ran SQLite's own `veryquick` suite: 0 errors out of 329,803 tests | [86 C units](../../../tests/contracts/ladder-sqlite-receipt.json); Tcl is reference-built; see [test-log cards](#test-log-cards) |
-| jq tests | `make check` ran jq's 9 test programs, and all passed | [69 C units](../../../tests/contracts/ladder-jq-receipt.json); the tested `jq` used a GCC-built `src/main.c`; see [test-log cards](#test-log-cards) |
+| jq tests | `make check` ran jq's 9 test programs and Oniguruma's 21, and all passed | [70 C units](../../../tests/contracts/ladder-jq-receipt.json); the build creates a missing version stamp; see [test-log cards](#test-log-cards) |
 | cJSON tests | `./cJSON_test` parses and prints the example JSON; 26 Unity programs then ran 216 tests with 0 failures | [23 C units](../../../tests/contracts/ladder-cjson-receipt.json); the Unity framework is GCC-built |
 | Linux boot | The recorded kernel boots on 4 CPUs, runs `/init` and powers down | [7,008 target C units](../../../tests/contracts/kernel-bpf-full-receipt.json); assembly, linking and the version banner come from the GCC toolchain |
 | PolyBench field | Existing EvoCC FDTD-2D executable runs 20 steps and dumps a 20×30 magnetic field | [Original kernel](../../../tests/contracts/ladder-polybench-receipt.json); exact output matches retained GCC dump; reference-built allocation harness; field colors normalized to observed min/max |
@@ -157,14 +157,16 @@ exists, it also compares the excerpt with the log.
   `testfixture test/testrunner.tcl --jobs 2 veryquick` as an unprivileged user.
   All 86 C units of `testfixture` come from EvoCC. The Tcl library is
   reference-built.
-- **jq.** `make check V=1` passed. The 69 measured units are all of `libjq`,
-  decNumber and Oniguruma. The harness did not count `src/main.c`: automake
-  prints its compile rule across continued lines, and the build-log parser
-  skipped them. So GCC compiled `main.c` in the build. During the test, clock
-  skew made `make` rebuild `main.c` with GCC again and relink `jq`. The tested
-  `jq` had 69 of its 70 C units from EvoCC. The receipt lists no unmeasured
-  build unit, which is wrong. For this reason, the README caption names
-  `libjq`. The fix and a rerun are open as B07a in [TODO.md](../../../TODO.md).
+- **jq.** Run `20261010T094547Z`: all 70 C units come from EvoCC, and the
+  original `make check V=1` passes 30 test programs, 9 from jq and 21 from
+  Oniguruma. The relink and test logs contain no compile command. The earlier
+  run counted only 69 units. Automake prints the compile rule for
+  `src/main.c` across continued lines, and the build-log parser skipped them,
+  so GCC compiled `main.c`. Also, the release ships `src/version.h` without its
+  `.remake-version-h` stamp, so every later `make` regenerated the header and
+  recompiled `main.c` with GCC. The parser now joins continued lines, and the
+  jq build creates the stamp with an old time. See B07a in
+  [TODO.md](../../../TODO.md).
 - **cJSON.** `./cJSON_test` prints the examples from the cJSON README. Then 26
   Unity test programs run 216 tests: none fails, and upstream marks one as
   ignored. The Unity framework itself is GCC-built.

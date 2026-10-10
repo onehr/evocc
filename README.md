@@ -157,7 +157,7 @@ record.
   </tr>
   <tr>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/sqlite.svg"><img src="docs/images/showcase/sqlite.svg" alt="End of the SQLite veryquick test log: 0 errors out of 329803 tests" width="320"></a><br><b>SQLite</b><br>0 errors in 329,803 tests<br><a href="tests/contracts/ladder-sqlite-receipt.json">results</a></td>
-    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/jq.svg"><img src="docs/images/showcase/jq.svg" alt="jq make check log: all nine test programs pass" width="320"></a><br><b>jq</b><br>libjq passes make check<br><a href="tests/contracts/ladder-jq-receipt.json">results</a></td>
+    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/jq.svg"><img src="docs/images/showcase/jq.svg" alt="jq make check log: all nine test programs pass" width="320"></a><br><b>jq</b><br>make check passes<br><a href="tests/contracts/ladder-jq-receipt.json">results</a></td>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/cjson.svg"><img src="docs/images/showcase/cjson.svg" alt="cJSON test program output: the example JSON, parsed and printed" width="320"></a><br><b>cJSON</b><br>216 unit tests, 0 failures<br><a href="tests/contracts/ladder-cjson-receipt.json">results</a></td>
   </tr>
   <tr>

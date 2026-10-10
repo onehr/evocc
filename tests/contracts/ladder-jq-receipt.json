@@ -2,22 +2,22 @@
  "schemaVersion": 1,
  "rung": "E10",
  "subject": "jq",
- "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260927T082205Z",
+ "authority": "docs/archive/roadmap.md, milestone ladder",
+ "run": "20261010T094547Z",
  "pin": "jq-1.8.2",
  "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-1.8.2.tar.gz",
  "tarballSha256": "71b8d6e8f5fe81f6c6d0d110e3892251f6ce76ed095abd315e26e6e1193af3af",
  "tarball": "jq-1.8.2.tar.gz",
- "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa",
+ "driverSha256": "e4c658668f503ba23b80a1ec7c398c0b12f24d806f1642276358fe38f1448130",
  "target": "aarch64-unknown-linux-gnu",
- "unitsTotal": 69,
+ "unitsTotal": 70,
  "unmeasuredBuildUnits": [],
- "unitsEvoccCompiled": 69,
- "unitsSubstituted": 69,
+ "unitsEvoccCompiled": 70,
+ "unitsSubstituted": 70,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
-  "vendor/oniguruma/src/regcomp.o",
   "vendor/oniguruma/src/regparse.o",
+  "vendor/oniguruma/src/regcomp.o",
   "vendor/oniguruma/src/regexec.o",
   "vendor/oniguruma/src/regenc.o",
   "vendor/oniguruma/src/regerror.o",
@@ -84,12 +84,13 @@
   "src/util.o",
   "src/jv_dtoa_tsd.o",
   "vendor/decNumber/decContext.o",
-  "vendor/decNumber/decNumber.o"
+  "vendor/decNumber/decNumber.o",
+  "src/main.o"
  ],
  "unitsExcluded": 0,
- "unitsInPassingBuild": 69,
+ "unitsInPassingBuild": 70,
  "outcomes": {
-  "assembled": 69
+  "assembled": 70
  },
  "refusalsByCode": {},
  "refusals": [],
@@ -117,7 +118,7 @@
    "status": 0,
    "relinkStatus": 0,
    "regeneratedInputs": [],
-   "unitCount": 69
+   "unitCount": 70
   }
  ],
  "adjustments": {
@@ -125,28 +126,24 @@
   "portableBuildSymlinks": {},
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
   ],
   "configure": "./configure CC=gcc-14 --disable-shared --disable-docs --with-oniguruma=builtin LDFLAGS=-no-pie",
   "subject": [
    "Official release, static libjq and bundled Oniguruma; original nine make-check scripts.",
-   "Mixed-object coverage includes Oniguruma; FP sources are attempted, not prefiltered."
+   "Mixed-object coverage includes Oniguruma; FP sources are attempted, not prefiltered.",
+   "The build creates the missing .remake-version-h stamp with an old time. Otherwise every later make regenerates src/version.h and recompiles src/main.c with GCC, which would replace the substituted object before make check."
   ],
-  "buildCommand": "make -j2 V=1",
+  "buildCommand": "make -j2 V=1 && touch -d @0 .remake-version-h",
   "optionsTheDriverRejects": [],
   "omittedFlags": [
+   "$depbase.Tpo",
    "-MD",
    "-MF",
    "-MP",
    "-MT",
-   "-Wall",
-   "-Wextra",
-   "-Wno-unused-function",
-   "-Wno-unused-parameter",
-   "-Woverlength-strings",
-   "-Wstrict-prototypes",
    "-g",
    ".deps/ascii.Tpo",
    ".deps/big5.Tpo",
@@ -269,6 +266,7 @@
    "src/lexer.lo",
    "src/linker.lo",
    "src/locfile.lo",
+   "src/main.o",
    "src/parser.lo",
    "src/util.lo",
    "st.lo",
@@ -290,6 +288,6 @@
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/jq/20260927T082205Z",
- "summaryLine": "jq: 69 of 69 units by EvoCC in a passing build; refused by code {}"
+ "evidence": ".evidence/ladder/jq/20261010T094547Z",
+ "summaryLine": "jq: 70 of 70 units by EvoCC in a passing build; refused by code {}"
 }

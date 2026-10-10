@@ -182,6 +182,33 @@ class ParseBuildLogTest(unittest.TestCase):
         )
         self.assertEqual(ladder.parse_build_log(log, TREE), [])
 
+    def test_a_continued_automake_rule_is_one_unit(self) -> None:
+        # jq 1.8.2 prints its one non-libtool rule, for src/main.c, this way.
+        log = (
+            "depbase=`echo src/main.o | sed 's|[^/]*$|.deps/&|;s|\\.o$||'`;\\\n"
+            "gcc-14 -DHAVE_CONFIG_H -I. -g -O2 -MT src/main.o -MD -MP -MF $depbase.Tpo"
+            " -c -o src/main.o src/main.c &&\\\n"
+            "mv -f $depbase.Tpo $depbase.Po\n"
+        )
+        (unit,) = ladder.parse_build_log(log, TREE)
+        self.assertEqual((unit.obj, unit.source), ("src/main.o", "src/main.c"))
+        self.assertEqual(unit.argv[0], "gcc-14")
+        self.assertEqual(unit.argv[-4:], ("-c", "-o", "src/main.o", "src/main.c"))
+
+    def test_a_continued_libtool_wrapper_adds_no_second_unit(self) -> None:
+        log = (
+            "depbase=`echo src/jv.lo | sed 's|[^/]*$|.deps/&|;s|\\.lo$||'`;\\\n"
+            "/bin/bash ./libtool  --tag=CC   --mode=compile gcc-14 -c -o src/jv.lo src/jv.c &&\\\n"
+            "mv -f $depbase.Tpo $depbase.Plo\n"
+            "libtool: compile:  gcc-14 -c src/jv.c -o src/jv.o\n"
+        )
+        self.assertEqual([unit.obj for unit in ladder.parse_build_log(log, TREE)], ["src/jv.o"])
+
+    def test_a_quoted_semicolon_stays_inside_its_argument(self) -> None:
+        (unit,) = ladder.parse_build_log("gcc '-DLIST=a;b' -c -o a.o a.c 2>&1\n", TREE)
+        self.assertIn("-DLIST=a;b", unit.argv)
+        self.assertEqual(unit.argv[-1], "2>&1")
+
     def test_an_unparsable_line_is_skipped_rather_than_guessed_at(self) -> None:
         log = "gcc -c -o a.o 'unterminated\ngcc -c -o b.o b.c\n"
         self.assertEqual([unit.obj for unit in ladder.parse_build_log(log, TREE)], ["b.o"])

@@ -40,7 +40,7 @@ The README keeps short captions. These are the full caption facts of each image:
 | TinyCC paints reflections | EvoCC → TinyCC → a C ray tracer. |
 | Lua explores a fractal | Floating-point iteration → RGB pixels. |
 | SQLite | Its own `veryquick` suite: 0 errors in 329,803 tests. |
-| jq | `make check`: 9 of 9 test programs pass; `main.c` is GCC-built (B07a). |
+| jq | `make check`: 9 of 9 jq test programs pass; 70 of 70 C units by EvoCC. |
 | cJSON | `cJSON_test` prints the example JSON; 216 unit tests, 0 failures. |
 | Linux 6.18 | 7,008 EvoCC C units; boots on 4 CPUs, runs init, powers down. |
 | Toybox | 1,669 tests; PASS, FAIL and SKIP lines identical to the GCC build. |
@@ -98,7 +98,7 @@ reference-built code.
 | musl + libc-test | INCOMPLETE | 1,271/1,339 TU retained in the mixed build | Two complete runtime replays: zero added failures or replaced objects; 68 floating-complex refusals and 17 shared reference failures remain, with option omissions separately recorded |
 | PolyBench/C | PASS | 30/30 kernels | MINI_DATASET array-output correctness, not performance; reference-built allocation utility |
 | LLVM test-suite | INCOMPLETE | 1,039/1,735 programs PASS | Fresh full run: 1 unresolved compiler failure, 30 FP-deferred, 664 not applicable, 1 oracle-unusable; no installed object rebuilt |
-| jq | PASS | 69/69 TU; original `make check` PASS | Real binary128 interface; original `-pthread` preserved; no object fallback |
+| jq | PASS | 70/70 TU; original `make check` PASS | Real binary128 interface; original `-pthread` preserved; no object fallback |
 | Lua | PASS | 34/34 TU | Matching official `all.lua`, without soft skips |
 | SQLite | PASS | 86/86 TU | Public Tcl `veryquick`: 329,803 assertions; not proprietary TH3 |
 
@@ -188,7 +188,7 @@ lexical `FENV_ACCESS` now have
 musl replay of September 27 keeps 1,271 EvoCC objects through two complete libc-test runs with no
 added failures. It is still a mixed build, not full musl acceptance. The scalar `w` asm extension
 and its original pthread regressions are repaired. Binary128 source/IR, both interpreters and the
-hosted native helpers/ABI now have targeted tests. The fresh 69/69-object original test replay of
+hosted native helpers/ABI now have targeted tests. The fresh 70/70-object original test replay of
 jq also passes. Floating complex/vectors and other explicitly refused forms stay outside the
 current source profile. FP is not the only remaining application or kernel-test blocker.
 
