@@ -14,6 +14,9 @@ every result is a numbered, explained, machine-readable record.
 | Sealed GCC and Clang oracles, RED-first tests, receipts | `evo check` finds undefined behavior on the executed path |
 | 68,000 lines of Lean 4 proofs, kernel-checked, no `sorry` | `evo prove` writes checked assembly or nothing |
 
+**Measured:** when GCC warnings and UBSan report nothing, a coding agent with EvoCC fixes the defect
+in about a third fewer steps and tokens ([registered experiment](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size), p < 0.001).
+
 ## EvoCC in sixty seconds
 
 Download the release for your host, check a program and compile it with a proof:
@@ -180,6 +183,14 @@ agent gets:
 - **One command per intent.** `evo run`, `evo check`, `evo explain`, `evo fix`, `evo prove`,
   `evo build`: each has one meaning and one exit code rule, so a loop of agent calls needs no
   parsing of prose.
+
+**Measured, not claimed.** In a registered experiment, a coding agent (Kimi Code CLI, model k3)
+repaired 18 small programs and 12 larger ones (722 lines) twice with each toolchain. Each program had
+one defect that GCC 14 `-Wall -Wextra` and UBSan did not report: an uninitialized read, a dangling
+pointer or an out-of-bounds access. With EvoCC's feedback the agent used 37% fewer steps and 40%
+fewer tokens on the small programs, and 35% fewer steps on the larger ones (one-sided exact tests,
+p < 0.001). Both toolchains led to nearly the same repairs: EvoCC saved search, not success. Clang
+warnings and ASan report some of these defects; the [detection matrix](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size) lists them.
 
 ### The tour
 
@@ -375,8 +386,9 @@ compiled Lean checkers inspect each stage of an actual compilation, and one kern
 states that an accepted output refines its typed Core source to the final assembly text. EvoCC
 compiles every target C file of a Linux 6.18 kernel that boots, and ten of fifteen application lanes
 pass. It checked 107 of 107 pilot entries, with no difference in 14,194 native comparisons. On five
-library units, its code is 2.0 to 2.7 times the size of GCC 14 `-O2` output. A registered
-30-program agent repair study found no overall advantage over both conventional baselines.
+library units, its code is 2.0 to 2.7 times the size of GCC 14 `-O2` output. In registered
+agent-repair studies, the feedback did not change which defects an agent repaired; on defects that
+GCC warnings and UBSan miss, EvoCC cut a coding agent's steps by 35% to 37% (p < 0.001).
 
 ### 1 Introduction
 
@@ -401,9 +413,10 @@ agents propose; sealed oracles, two interpreters and proved checkers decide. Our
    of the checked output, and code size against GCC 14 and Clang 19 (§7).
 5. **An auditable agent workflow:** pinned specifications, sealed oracles, RED-first commits,
    receipts and fail-closed gates over 1,986 commits (§6, [Part I](#how-it-was-built)).
-6. **An agent-facing interface:** numbered diagnostics with a frozen JSON schema and a tested
-   explanation for each code, one command per intent, and a certificate or receipt for each result
-   ([Part I](#built-for-agents)).
+6. **An agent-facing interface, measured:** numbered diagnostics with a frozen JSON schema and a
+   tested explanation for each code, one command per intent, and a certificate or receipt for each
+   result; on defects that GCC warnings and UBSan miss, it cut a coding agent's steps by about a
+   third in a registered experiment ([Part I](#built-for-agents), §7).
 
 ### 2 Design principles
 
@@ -772,18 +785,24 @@ at the ceiling again for that model. The registered rules record all five predic
 for an incomplete population. *Answer.* Inconclusive ([Experiment 2](book/src/evaluation-agents.md#experiment-2),
 [receipt](tests/contracts/agent-repair-2-20261009.json)).
 
-A registered coding-agent run then compared default GCC warnings + UBSan with EvoCC on
-18 silent memory defects and six controls. Both conditions repaired 18/18 silent items
-and 5/6 controls: P1 did not hold (exact McNemar p=1); P2 held. All 48 sessions completed.
-An exploratory split, chosen after the data, shows where EvoCC helped: on the silent classes the
-agent needed 24% to 44% fewer steps and tokens with EvoCC (E3011: 30 against 54 steps), and on the
-controls about 10% more, because EvoCC's feedback is longer. A registered replication must confirm it. The [method, tool matrix and results](book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior)
-state the shared-kernel and single-repetition limits. No general repair advantage is established.
+A registered coding-agent run (Kimi Code CLI, model k3) then compared GCC warnings + UBSan (C1)
+with EvoCC (C3) on 18 defects that C1 does not report (uninitialized read, dangling pointer,
+out-of-bounds access) and six controls that both report. Both repaired 18/18 silent items and 5/6
+controls (exact McNemar p = 1). An analysis chosen after the data showed fewer steps for C3 on the
+silent classes, so a registered replication tested it with 144 new sessions:
 
-The registered replication completed 144 new sessions. On the small silent items, C3 used 36.62%
-fewer steps and 39.74% fewer tokens; on the larger items it used 35.27% fewer steps (P1-P3 held).
-The relative saving did not grow with size (P4 did not hold), and the aggregate control penalty did not repeat.
-See [Experiment 5](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size) for exact tests, repair rates and shared-corpus limits. These results do not establish an advantage on arbitrary C programs.
+| Prediction | Items | Steps or tokens, C1 → C3 | One-sided exact p | Result |
+|---|---:|---|---:|---|
+| Fewer steps, small silent items | 18 | 325 → 206 (−37%) | 0.00004 | held |
+| Fewer tokens, small silent items | 18 | 6.38 M → 3.85 M (−40%) | 0.00005 | held |
+| Fewer steps, 722-line items | 12 | 241 → 156 (−35%) | 0.0005 | held |
+| Saving grows with size | 18 / 12 | 36.6% and 35.3% | — | did not hold |
+
+Repairs: C1 44/48 and C3 47/48 on the small items, 24/24 each on the larger ones. *Answer.* For
+defects that the default GCC toolchain does not report, EvoCC's evidence cut the agent's search
+effort by about a third; it did not change which defects the agent repaired. One agent and model,
+one corpus; the 12 larger items share modules; clang warnings and ASan report some of the defects
+([Experiment 4](book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior), [Experiment 5](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size)).
 
 ### 8 Related work
 
