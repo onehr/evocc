@@ -1,0 +1,648 @@
+# EvoCC: the experiment and the system
+
+This document has two parts. Part I tells how AI agents built EvoCC and what is new in it. Part II
+describes EvoCC as a system, in the form of a short paper. To install and use EvoCC, read the
+[README](../README.md) and [the book](../book/src/SUMMARY.md).
+
+## Part I — The experiment
+
+### The question
+
+Can AI agents, directed by one expert, build a real C compiler in weeks instead of years? "Real"
+means three things here:
+
+- **Its own compiler.** EvoCC has its own preprocessor, parser, three IRs, optimizer, register
+  allocator and assembly emitter. Only the assembler, the linker and the runtime libraries come from
+  outside. The Rust code uses three external crates: `bitflags`, `smallvec` and `rustc_apfloat`.
+- **It boots Linux and runs real programs.** EvoCC compiles every target C file of a Linux 6.18
+  ARM64 kernel that boots. Doom, SQLite, Lua, jq, Mbed TLS, Zstandard, zlib and TinyCC pass their
+  original tests or demo replays, and three C games run natively.
+- **It is checked, not trusted.** Two interpreters and two sealed reference compilers judge ordinary
+  output. For a C subset, Lean 4 checkers give a proved, fail-closed compilation path: each accepted
+  output is checked from typed Core source to final assembly text.
+
+The first commit landed on 2026-08-10, Linux booted from EvoCC objects on 2026-09-13, and the proved
+path reached the final assembly text on 2026-10-06.
+
+### Not a copy of GCC or LLVM
+
+EvoCC does not wrap, port or translate GCC or LLVM. It uses them as sealed oracles: they answer
+"what does this program do?", and EvoCC must agree. Seven design choices set it apart from both.
+
+1. **Undefined behavior is data.** In LLVM, signed overflow is an `nsw` flag that a pass may drop.
+   In EvoIR, a total predicate such as `signed_mul_defined` feeds an `ub.assume.<reason>`
+   instruction: a rewrite can remove the multiply, never the obligation.
+   ([EvoIR §6](../spec/evoir.md#6-undefined-behavior))
+2. **Effects are values.** Memory and observable events travel on explicit `mem` and `world` SSA
+   tokens. Each e-node carries a sort and an effect class, so a pure expression and a volatile
+   load can never be alternatives. ([EvoIR §4](../spec/evoir.md#4-effect-model))
+3. **The front end has an executable C semantics.** C-HIR tracks provenance for each pointer and
+   initializedness for each byte. Its interpreter reports undefined behavior as a numbered
+   diagnostic, such as `E3002` for division by zero. ([checker workflow](checker.md))
+4. **The optimizer keeps alternatives and proves its rules.** Under `-Oeq-scalar`, scalar regions go
+   into an e-graph. Lean 4 proves each of the 62 rules for every bit width, and a separate, pinned
+   checker replays each rewrite. ([design](verified-optimization-design.md))
+5. **A compilation can carry a proof.** With `--proof-required`, five compiled Lean checkers read
+   the actual input and output of each stage, and one kernel-checked theorem covers the chain. If a
+   check refuses, EvoCC writes no output. ([verification contract](../spec/verification.md))
+6. **Two IRs, two interpreters, one answer.** C-HIR and EvoIR each have an interpreter that stops at
+   undefined behavior. A test program must give the same result and volatile trace in both, and
+   agree with GCC 14 and Clang 19.
+7. **The process is part of the compiler.** Each specification is pinned by SHA-256. Each change
+   starts with a failing test and ends with a gate and a receipt that binds the result to its
+   compiler and inputs. A gate that cannot find its evidence fails. ([evidence](evidence.md))
+
+### Built for agents
+
+Vercel Labs' Zero makes one bet: the first reader of a compiler's output is now an agent, so the
+compiler must speak in stable codes and structured data. EvoCC makes the same bet for C, the language
+that agents already write and that the existing code is in. No new language, no new syntax. The
+agent gets:
+
+- **A numbered, explained, machine-readable diagnostic.** Every diagnostic has a code, a tested
+  explanation page (`evo explain E3002`; each example is checked against the compiler), and a JSON
+  record with a frozen schema ([`spec/diagnostics.md`](../spec/diagnostics.md)). Lint levels follow
+  GCC's flags.
+- **Evidence instead of a warning.** `evo check` runs the program on its executable semantics and
+  reports undefined behavior on the executed path, with the location of the operation that failed.
+- **A certificate instead of trust.** `evo prove` compiles with the checked pipeline and writes a
+  record that names each stage, its theorem and the digests of what it checked. A refused check
+  gives no output, so an agent cannot ship an unchecked result by mistake.
+- **A receipt for every build.** `evo build` runs a project's own build and writes what was compiled,
+  which warnings appeared and where it failed.
+- **One command per intent.** `evo run`, `evo check`, `evo explain`, `evo fix`, `evo prove`,
+  `evo build`: each has one meaning and one exit code rule, so a loop of agent calls needs no
+  parsing of prose.
+
+**Measured, not claimed.** In a registered experiment, a coding agent (Kimi Code CLI, model k3)
+repaired 18 small programs and 12 larger ones (722 lines) twice with each toolchain. Each program had
+one defect that GCC 14 `-Wall -Wextra` and UBSan did not report: an uninitialized read, a dangling
+pointer or an out-of-bounds access. With EvoCC's feedback the agent used 37% fewer steps and 40%
+fewer tokens on the small programs, and 35% fewer steps on the larger ones (one-sided exact tests,
+p < 0.001). Both toolchains led to nearly the same repairs: EvoCC saved search, not success. Clang
+warnings and ASan report some of these defects; the [detection matrix](../book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size) lists them.
+
+### How it was built
+
+The owner set the questions, ruled on disputes and approved each scope. Agents wrote the code,
+tests, proofs, specifications and receipts, often several at once, each in a lane that owned its
+files. Five rules held the work together:
+
+1. **Specifications first.** Four pinned documents define EvoIR, EvoMIR, the target description and
+   the verification contract. The gate refuses a changed document without a new revision. When code
+   and a specification disagree, one of them has a defect. ([specifications](../spec/README.md))
+2. **Sealed oracles.** GCC 14.2 and Clang 19.1 run in a sealed AArch64 container with no network.
+   They answer questions about C; they never write the expected result of a hand-written test.
+3. **RED, then GREEN.** A change starts with a failing test in its own commit. Then come the
+   implementation, targeted tests, a replay of the original program, the gate and a receipt.
+4. **Fail-closed gates.** `tools/gate-changed.sh` tests the changed crates and their dependents;
+   `tools/gate-lean.sh` rebuilds the proofs and audits every axiom. A missing result is a failure.
+5. **Receipts and a notebook.** Each claim links to a receipt that names its compiler, inputs and
+   limits. The [notebook](archive/notebook/) keeps the wrong turns.
+
+Besides the Lean proofs, the repository holds over 300,000 lines of Rust and about 67,000 lines of
+Python.
+
+## Part II — EvoCC as a system
+
+**EvoCC: Checked Compilation of C with Explicit Undefined Behavior and Verified Equality Saturation**
+
+### Abstract
+
+Every program trusts the compiler that builds it. Verified compilers remove that trust, but proving
+compiler algorithms is costly. We present EvoCC, a C compiler for AArch64 Linux and macOS that AI
+agents built under the direction of one expert. Its interface is made for agents: stable diagnostic
+codes with tested explanations, JSON records, certificates and receipts. Untrusted components
+propose; small checked components decide. Its IR, EvoIR, makes each C definedness condition an
+explicit obligation, threads memory and observable effects as SSA tokens and gives each pointer a
+provenance. Its equality-saturation optimizer uses 62 rewrite rules that Lean 4 proves for all bit
+widths, and a pinned checker replays each certificate. For the integer subset `core-v1`, five
+compiled Lean checkers inspect each stage of an actual compilation, and one kernel-checked theorem
+states that an accepted output refines its typed Core source to the final assembly text. EvoCC
+compiles every target C file of a Linux 6.18 kernel that boots, and ten of fifteen application lanes
+pass. It checked 107 of 107 pilot entries, with no difference in 14,194 native comparisons. On five
+library units, its code is 2.0 to 2.7 times the size of GCC 14 `-O2` output. In registered
+agent-repair studies, the feedback did not change which defects an agent repaired; on defects that
+GCC warnings and UBSan miss, EvoCC cut a coding agent's steps by 35% to 37% (p < 0.001).
+
+### 1 Introduction
+
+A C compiler is part of the trusted base of each program that it compiles. Random testing finds
+wrong-code bugs in production compilers [10, 11], but it cannot show that none remain. CompCert [1]
+removes the compiler from the trusted base with a proof of its algorithms. Translation validation
+[3, 4] checks each run instead of each algorithm. Equality saturation [6, 7] keeps many equal
+programs instead of one, which makes an optimizer more flexible and harder to trust.
+
+EvoCC adds a second question: can AI agents, which write code fast and can be wrong with confidence,
+build such a compiler? One structure serves both questions: the compiler, its searches and its
+agents propose; sealed oracles, two interpreters and proved checkers decide. Our contributions are:
+
+1. **An IR with explicit undefined behavior and effects:** EvoIR ([revision 2.0.0](../spec/evoir.md)),
+   typed block-argument SSA with obligations, effect tokens and provenance (§3).
+2. **Verified equality saturation:** 62 rules with kernel-only Lean proofs, a separate certificate
+   checker, and composition of each rewrite step into the pipeline theorem (§4).
+3. **A checked compilation path:** five Lean stage checkers and `checkPipeline_sound` give a proved,
+   fail-closed compilation path for the listed Core C-HIR subset and target, with an explicit
+   trusted boundary (§5).
+4. **An evaluation with negative results:** Linux, a fifteen-lane application ladder, a native run
+   of the checked output, and code size against GCC 14 and Clang 19 (§7).
+5. **An auditable agent workflow:** pinned specifications, sealed oracles, RED-first commits,
+   receipts and fail-closed gates over 1,986 commits (§6, [Part I](#how-it-was-built)).
+6. **An agent-facing interface, measured:** numbered diagnostics with a frozen JSON schema and a
+   tested explanation for each code, one command per intent, and a certificate or receipt for each
+   result; on defects that GCC warnings and UBSan miss, it cut a coding agent's steps by about a
+   third in a registered experiment ([Part I](#built-for-agents), §7).
+
+### 2 Design principles
+
+**Propose, then check.** The Rust compiler, the e-graph search and the agents are untrusted. They
+propose a result and, where needed, a correspondence: a certificate, loop cutpoints, allocation or
+frame hints. A small checker accepts or refuses. A proposal can help a check succeed; it cannot make
+a wrong result pass.
+
+**Semantics in the prover first.** For `core-v1`, the Lean definitions are the formal semantics of
+EvoIR, and the specification prose is a reading of them. Each level has a deterministic small-step
+semantics without fuel. Only typed Core C and the AArch64 subset are trusted specifications.
+
+**Prove the checker, not the algorithm.** Each theorem is about a Boolean checker, so it holds for
+each accepted compilation, and the selector, allocator and e-graph can change with no change to a
+proof. The cost is completeness: a checker can refuse a valid program.
+
+**Everything is a value.** Undefined behavior is an instruction, effects are tokens, provenance is
+part of each pointer, machine facts are rows in `targets/aarch64/`, policies are named data and
+results are receipts. A value can be compared, checked and pinned; an implicit assumption cannot.
+
+### 3 The IR stack
+
+Three IRs separate three concerns: what the program means, which equal programs exist, and how the
+machine computes one (Figure 1).
+
+```text
+C source
+  │  evocc-cpp · evocc-lex · evocc-parser
+  ▼
+C-HIR    checked front-end IR ·················· C-HIR interpreter ─┐
+  │  evocc-lower                                                    ├─ agree
+  ▼                                                                 │
+EvoIR    typed SSA, ub.assume, mem and world ··· EvoIR interpreter ─┘
+  │  -Oeq-scalar: e-graph search ──► EVP certificate ──► evocc-checker replays it
+  ▼
+EvoMIR   registers, ABI, frames ················ allocation verifier
+  ▼
+AArch64 assembly ──► platform as and ld ──► native program
+
+Lean 4, offline: rule proofs · stage checkers · checkPipeline_sound
+```
+
+*Figure 1. The pipeline. Each IR has its own interpreter or verifier.*
+
+| IR | Role | Properties |
+|---|---|---|
+| C-HIR (`crates/evocc-chir`) | Checked front-end IR | C types, qualifiers, lvalues and evaluation order; initializedness for each byte and provenance for each pointer; an interpreter with numbered UB diagnostics; the typed Core export for proofs |
+| EvoIR ([spec](../spec/evoir.md)) | Optimization IR | Typed block-argument SSA, in which each cross-block value is an explicit edge argument; total bit-vector operations; UB obligations; `mem` and `world` tokens; effect summaries; provenance `Object`, `Function` or `Null` |
+| EvoMIR ([spec](../spec/evomir.md)) | Machine IR | Virtual registers in classes (`gpr32`, `gpr64`, `simd32`, `simd64`, `simd128`, `flags`) with views (`w`, `x`, `s`, `d`, `q`); sub-width values with unspecified upper bits, normalized only where an operation reads them; ABI locations, call clobbers, spill slots and parallel copies |
+
+The equality judgment of EvoIR, `Γ ⊢ A ≡ B : τ`, holds when `A` and `B` have the same value **and**
+the same observable effects under the facts `Γ` ([EvoIR §7](../spec/evoir.md#7-equality-criterion)).
+Two terms with the same value but different trap conditions are not equal.
+
+**Example.** The function `int f(int x) { return x * 1; }` lowers to the left column. With
+`-Oeq-scalar`, EvoCC emits the right column (entry block only).
+
+```text
+; default                                ; -Oeq-scalar
+%v1 = const.bits<32> 1                   %v1 = const.bits<32> 1
+%v2 = signed_mul_defined %v0, %v1        %v2 = signed_mul_defined %v0, %v1
+ub.assume.signed_overflow %v2            ub.assume.signed_overflow %v2
+%v3 = mul.bits<32> %v0, %v1              ret %v0
+ret %v3
+```
+
+The rule `mul(x, 1) → x` removed the multiply; the obligation stayed. A guard may trap, so it never
+enters an e-graph region, and the rewrite checker refuses any change outside the replaced roots.
+EvoMIR lowers each `ub.assume` to a checked trap. An optimization may remove work, never a fact that
+the program must satisfy. Folding a provably true guard is a separate, opt-in rule family.
+
+### 4 Verified equality saturation
+
+**Registries and rule proofs.** [EvoIR §11.6](../spec/evoir.md#116-what-is-shared-and-what-is-not) pins
+two registries by SHA-256: `p0.scalar.v4` (55 scalar rules) and `g0.ub.v1` (7 guard rules). The Lean
+registries are generated from the same bytes that the Rust producer and checker read. For each rule,
+Lean proves `RuleCovered`: for every width, if the left pattern matches and the side condition
+holds, the right side has the same value. All 62 proofs are kernel-only
+([`Proofs/`](../lean/EvoIR/Proofs/)).
+
+**Admission and search.** Only total, pure scalar regions enter the e-graph; memory, pointer, guard,
+may-trap and poison-dependent instructions stay outside, byte for byte. Equal alternatives stay in
+an e-class until extraction picks one by a cost policy. A failed transaction rolls back everything.
+
+**Certificates.** Each transaction writes an EVP certificate. Before EvoCC emits output,
+`evocc-checker` replays it in a separate process that does not link the optimizer and whose SHA-256
+must match the pin (`--eq-checker-sha256`). The checker takes the rule registry from its own side,
+so a certificate cannot authorize its own rules. A failed replay rejects the whole chain (Figure 2).
+
+```text
+EvoIR ──► e-graph search ──► extraction ──► rewritten EvoIR + EVP certificate
+                                                      │
+                                   evocc-checker replays the certificate
+                                   against the Lean-proved rule tables
+                                                      │
+                                       accept: emit · refuse: reject the chain
+```
+
+*Figure 2. The verified chain of `-Oeq-scalar`.*
+
+**Composition.** In proof-required mode, the stage `rewrite` replays each region against the tables
+`p0Covered` and `g0Covered`, whose entries carry their `RuleCovered` theorems. `checkRewrite`
+rebuilds the program, compares it with the given one and refuses any difference outside the replaced
+roots, a deleted obligation included. `checkRewrite_refines` and `source_rewrite_refines`
+([`Rewrite/Soundness.lean`](../lean/EvoIR/Rewrite/Soundness.lean)) state that an accepted step keeps
+the refinement from the source.
+
+### 5 Checked compilation
+
+**The subset.** `core-v1` ([verification §2](../spec/verification.md#2-the-checked-subset-core-v1))
+covers complete integer C functions on Linux AArch64 with `-O0 -fno-builtin`: `int`, `long`,
+`long long` and their unsigned forms; arithmetic, bitwise, comparison, conversion, conditional and
+short-circuit expressions; structured control with no loop bound; non-escaping scalar locals; and
+direct calls to defined, prototyped, nonvariadic, non-recursive functions. The observations are the
+returned bits, the first diagnostic `E3002` to `E3005`, and divergence.
+
+**Stage checkers.** For each stage, a compiled Lean checker reads the actual input and output:
+
+| Stage | Checker | What it compares | Lean file |
+|---|---|---|---|
+| Source to EvoIR | `checkSourceTargetPair` | Typed Core source and EvoIR: types, order, conversions, diagnostics, loops, calls | [`Core/SourceTargetCheck.lean`](../lean/EvoIR/Core/SourceTargetCheck.lean) |
+| Rewrite steps | `checkRewrite` | Each `-Oeq-scalar` step, against its certificate and the `RuleCovered` tables | [`Rewrite/Soundness.lean`](../lean/EvoIR/Rewrite/Soundness.lean) |
+| Lowering | `checkLowering` | EvoIR, SSA EvoMIR and post-SSA EvoMIR: instruction selection, then edge copies | [`MachineLowering.lean`](../lean/EvoIR/MachineLowering.lean) |
+| Register allocation | `checkAllocation` | Post-SSA and allocated EvoMIR: registers and spill slots | [`Alloc/Soundness.lean`](../lean/EvoIR/Alloc/Soundness.lean) |
+| Frame and emission | `checkAsm`, `printMatches` | Allocated EvoMIR and the assembly AST; the printed AST and `output.s`, byte for byte | [`Asm/Soundness.lean`](../lean/EvoIR/Asm/Soundness.lean) |
+
+**The pipeline theorem.** `checkPipeline` ([`Check.lean`](../lean/EvoIR/Pipeline/Check.lean)) runs the
+five checks in order on the values of one input. One theorem covers the chain
+([`Soundness.lean`](../lean/EvoIR/Pipeline/Soundness.lean)):
+
+```lean
+theorem checkPipeline_sound {input : Input} (accepted : checkPipeline input = true) :
+    input.asm.print = input.text ∧
+    ∃ f, selectEntry input.source = some f ∧
+      ∀ args : List Source.Value, args.map Source.Value.type = f.parameters.map (·.type.type) →
+      ∀ (asmEntry : Asm.State) (E : Nat),
+        Asm.Proof.AbiSourceEntry ⟨input.allocated, input.asm, input.frameHints⟩ f.name args
+          asmEntry E →
+        ∃ sourceEntry, Source.initial input.source f.symbol args = .ok sourceEntry ∧
+          Asm.Proof.SourceToAsmRefines input.source input.asm f.returnType.type sourceEntry
+            asmEntry
+```
+
+- **`accepted`:** the Boolean pipeline check accepted the actual files of this compilation.
+- **Typed arguments:** the argument types match the parameters; the theorem covers every such list.
+- **`AbiSourceEntry`:** the caller obeys AAPCS64 for the low bits of each argument, gives an aligned
+  stack with enough space and returns outside the program. The upper bits of each argument register
+  are free.
+
+Then the printed assembly is the published text, and it *refines* the source: each halted assembly
+state has the observation of a halted source state, if the assembly runs forever so does the source,
+and no reachable assembly state is stuck. No fuel is used. The theorem depends only on `propext`,
+`Classical.choice` and `Quot.sound`, and [`Pipeline/Tests.lean`](../lean/EvoIR/Pipeline/Tests.lean)
+runs `#print axioms` inside `#guard_msgs`, so a new axiom makes `lake build` fail.
+
+**The trusted base** ([verification §8](../spec/verification.md#8-trusted-base)) is: the front end up
+to the typed source export; the Lean kernel, the compiled checker and its compiler, runtime and host
+toolchain; the input readers and the assembly printer; the Lean semantics of typed Core C and of the
+AArch64 subset, and the ABI entry assumption; and the assembler, linker, runtime libraries and
+hardware. EvoCC's Rust code, the snapshots, the hints and the intermediate semantics are not
+trusted.
+
+**The fail-closed driver.** `--proof-required=NEW_DIR` exports the inputs of each stage, runs
+`evoir-sem --check-stage` for each stage and entry, then `evoir-sem --check-pipeline`. Only if all
+accept does it write `output.s` and `record.json`, with the result `CHECKED_TO_FINAL_ASSEMBLY` and a
+digest chain from each stage to the published text. Otherwise it exits nonzero and writes no output.
+A refused rewrite has no fallback, and ordinary output gets no proof label.
+
+### 6 Implementation
+
+EvoCC is a Rust workspace of 18 crates (Table 1).
+
+| Component | Crates | Lines in `src/` |
+|---|---|---:|
+| Front end | `evocc-cpp`, `evocc-lex`, `evocc-parser`, `evocc-types`, `evocc-chir`, `evocc-memory` | 67,550 |
+| Lowering to EvoIR | `evocc-lower` | 20,812 |
+| EvoIR: validator, text form, interpreter | `evocc-evoir` | 15,623 |
+| EqSat and policies | `evocc-egraph`, `evocc-eqopt`, `evocc-policy` | 11,367 |
+| Certificates and the independent checker | `evocc-proof`, `evocc-proofcheck` | 8,004 |
+| Backend: EvoMIR, allocation, verifier, emission | `evocc-mir` | 27,713 |
+| Driver | `evocc` | 4,823 |
+| Randomized gate; validated passes; shared code | `evocc-randgate`, `evocc-passes`, `evocc-common` | 5,519 |
+| Total | 18 crates | 161,411 |
+
+*Table 1. Rust crates on 2026-10-06. Their `tests/` directories add 111,917 lines.*
+
+The Lean project ([`lean/`](../lean/)) has 387 files and 68,216 lines and no dependencies. The source
+and EvoIR levels with `source-to-evoir` take 29,854 lines; the EvoMIR levels with `lowering` 19,626;
+the AArch64 subset with `frame-emission` 6,277; `rewrite` 3,601; `allocation` 3,357; the rule proofs
+1,301; and the pipeline theorem with its tests 747.
+
+**The machine as data.** `targets/aarch64/` holds eight versioned tables (register file, two ABIs,
+instruction facts, encodings, selection patterns, costs, kernel profile) and pinned Arm Sail
+sources. `tools/generate-target.py` generates code facts and the EvoMIR pattern and encoding tables
+from them, and the gate checks that they are current. A new machine fact is a reviewed table row.
+
+**Toolchains and lab.** Rust 1.97.1 and Lean 4.32.2 are pinned. The sealed image has GCC 14.2, Clang
+19.1 and GNU binutils 2.44 and no network. The host is macOS on Apple silicon with the Apple
+Container runtime; kernels run in QEMU. The driver emits only the Linux target.
+
+### 7 Evaluation
+
+We asked six questions. **RQ1:** which real programs does EvoCC build, and do they pass their own
+tests? **RQ2:** what supports ordinary compilations, which carry no proof? **RQ3:** what does the
+proof cover, and does checked output behave on hardware as the theorem says? **RQ4:** what do
+verification and the backend cost or buy in code size? **RQ5:** what does checking cost at compile
+time? **RQ6:** does structured feedback help an agent repair programs? References are GCC 14.2
+and Clang 19.1; the kernel is Linux 6.18.44 ARM64. Each result has a
+receipt in [`tests/contracts/`](../tests/contracts/) or a dated ledger;
+[`docs/evidence.md`](evidence.md) keeps every qualifier.
+
+#### RQ1: Real programs
+
+| Linux scope | Result | Date |
+|---|---|---|
+| Locked configuration | 2,799/2,799 target C objects from EvoCC; complete link, boot and normal shutdown; no GCC target-C fallback | first pass 2026-09-13 |
+| BPF/module configuration | 7,008/7,008 target C objects; 848 modules linked, signed and installed; boot and shutdown | 2026-09-28 |
+| FPU module on both kernels | 1/1 module test and 4,000/4,000 worker checks pass | 2026-09-28 |
+| Selected kselftests, both kernels | 9/9 programs, 125/125 subtests pass | 2026-09-13 |
+| Built-in KUnit, 1,504 cases | EvoCC 1,432 pass / 12 fail / 60 skip; GCC 1,438 / 7 / 59 | 2026-09-22 |
+| KUnit modules, both kernels | 31 modules loaded; 765/765 cases pass | 2026-09-22 |
+
+*Table 2. Linux results ([evidence](evidence.md#linux-boot-kselftest-and-kunit)).*
+
+| 970 kselftest programs | PASS | FAIL | SKIP | TIMEOUT | INVALID_OUTPUT | INCOMPLETE |
+|---|---:|---:|---:|---:|---:|---:|
+| GCC kernel | 532 | 121 | 302 | 11 | 2 | 2 |
+| EvoCC kernel | 529 | 114 | 302 | 19 | 3 | 3 |
+
+*Table 3. The last full kselftest pair, 2026-09-22; one verdict per program.*
+
+| Lane | Status | Recorded result |
+|---|---|---|
+| GCC torture | PROFILE_CLEAN | 1,522/1,692 programs pass; 0 compiler failures |
+| c-testsuite | PASS | 220/220 programs |
+| Csmith | INCOMPLETE | 932/1,000 checksum agreements; 0 mismatches; 68 unusable oracle answers |
+| zlib, zstd, cJSON | PASS | 19/19, 44/44 and 23/23 translation units; original tests |
+| Mbed TLS | PASS | 382/382 translation units; selftest and 148/148 CTest |
+| TinyCC | PASS | 11/11 translation units; original `make test` |
+| toybox | INCOMPLETE | 203/203 translation units; 1,648 pass / 1 fail / 20 skip, as in the reference build |
+| musl + libc-test | INCOMPLETE | 1,271/1,339 translation units in a mixed build |
+| PolyBench/C | PASS | 30/30 kernels; output correctness, not speed |
+| LLVM test-suite | INCOMPLETE | 1,039/1,735 programs pass; 1 unresolved compiler failure |
+| jq | PASS | 69/69 translation units; original `make check` |
+| Lua | PASS | 34/34 translation units; official `all.lua` |
+| SQLite | PASS | 86/86 translation units; Tcl `veryquick`, 329,803 assertions |
+| Doom, separate lane | PASS, bounded profile | 80/80 engine units and one adapter; 12 runs of 350 frames under EvoCC, GCC 14 and Clang 19 with identical framebuffer hashes; `-O2 -fwrapv`; 2026-09-28 |
+
+*Table 4. The application ladder: audit of 2026-09-28, with unchanged-program replays of 2026-09-27
+([evidence](evidence.md#application-benchmarks)).*
+
+*Answer.* EvoCC builds a kernel that boots in two configurations, and ten of fifteen application
+lanes pass their recorded selection. The kernel test campaign is not closed: against the GCC kernel,
+the EvoCC kernel has 3 fewer PASS, 7 fewer FAIL and 8 more TIMEOUT verdicts.
+
+#### RQ2: Evidence for ordinary compilations
+
+| Check | Result | Date |
+|---|---|---|
+| Randomized semantic gate and MIR gate | 21,000 generated IR programs each; 0 mismatches | not dated |
+| Native C corpora | 384/384 on Linux and 384/384 on Darwin | not dated |
+| Csmith differential against GCC 14 and Clang 19 | 1,000/1,000 compile; 0 checksum mismatches | status 2026-09-28 |
+| Rust–Lean correspondence | 1,487,689/1,487,689 comparisons agree: 1,325,045 for rewrite rules, 162,644 for guards | 2026-10-01 |
+| Full Rust workspace gate | 407 suites; 3,102 passed, 0 failed, 5 ignored; Clippy and formatting pass | 2026-10-06 |
+
+*Table 5. Test evidence ([evidence](evidence.md#other-implementation-gates)).*
+
+*Answer.* These populations recorded no checksum mismatch and no interpreter disagreement. They are
+tests, not proofs, and agreement with GCC and Clang cannot reveal a defect that all three share.
+
+#### RQ3: Proof coverage
+
+| Check | Result | Date |
+|---|---|---|
+| Rule proofs | 55/55 `p0.scalar.v4` and 7/7 `g0.ub.v1` rules, kernel-only | 2026-09-09; 2026-10-01 |
+| Core theorem audit | 118 audited Core declarations, all kernel-only | 2026-10-05 |
+| Proof-required sweep, `-O0 -fno-builtin` | 17/17 modules; 107/107 entries `CHECKED_TO_FINAL_ASSEMBLY`; no refusal at any stage | 2026-10-06 |
+| Optimized cases, `-Oeq-scalar` | 2/2 accepted: one guard fold in Doom's `FixedMul`, one scalar rewrite in `control.c` | 2026-10-06 |
+| Native run of the 107 entries | 14,438 vectors; 14,194 compared with the Lean source interpreter; 0 differences; also 0 against gcc-14 `-O0` and against a clang-19 and ld.lld build | 2026-10-06 |
+| Native run of the optimized cases | 328 comparisons; 0 differences | 2026-10-06 |
+| Upper-bits probe | 45,232 calls on 83 entries with nonzero upper bits in each 32-bit argument register; 0 differences | 2026-10-06 |
+
+*Table 6. Proof coverage ([sweep](evidence.md#acceptance-sweep-2026-10-06),
+[native run](../tests/contracts/core-v1-native-run.json)).*
+
+The pilot holds `FixedMul` from doomgeneric, `abs` from musl, and synthetic control-flow, loop, call
+and register-pressure cases. Not compared: 178 vectors with undefined behavior (each trapped
+natively with the source's diagnostic code) and 66 that reached the source interpreter's step limit.
+
+*Answer.* The checked output behaved as the theorem says in every compared native run. The proof
+covers small integer functions; it covers none of the kernel or application objects of RQ1.
+
+#### RQ4: Code size
+
+| Translation unit | EvoCC | GCC 14 `-O2` | Clang 19 `-O2` | EvoCC / GCC |
+|---|---:|---:|---:|---:|
+| `integer-mix.c` (control) | 128 | 96 | 100 | 1.33 |
+| zlib `deflate.c` | 28,668 | 14,432 | 17,300 | 1.99 |
+| zlib `inflate.c` | 26,520 | 9,940 | 11,656 | 2.67 |
+| zstd `zstd_compress.c` | 120,592 | 48,760 | 51,816 | 2.47 |
+| zstd `zstd_decompress.c` | 33,052 | 14,492 | 15,220 | 2.28 |
+| cJSON `cJSON.c` | 29,384 | 14,400 | 17,796 | 2.04 |
+
+*Table 7. Object `.text` bytes; EvoCC with `-Oeq-scalar` and the unchecked UB profile; 2026-10-02
+([receipt](../tests/contracts/codegen-n01-20261002-receipt.json)).*
+
+| Subject, checked profile | EqSat off | EqSat on | Change |
+|---|---:|---:|---:|
+| zlib `deflate.c` + `inflate.c` | 58,920 | 58,448 | −472 (−0.8%) |
+| zstd `zstd_compress.c` + `zstd_decompress.c` | 157,712 | 156,272 | −1,440 (−0.9%) |
+| cJSON `cJSON.c` | 30,228 | 29,496 | −732 (−2.4%) |
+
+*Table 8. The effect of the verified rewrites, 2026-10-01
+([evidence](evidence.md#checked-eqsat-measurements)).*
+
+The certified guard rules saved 256, 984 and 28 bytes in zlib, zstd and cJSON, at most 0.800% of one
+unit (2026-10-01), and the best policy beat the default by at most 4 bytes. The checked UB guards
+take 0.4% to 5.5% of object `.text`. The excess over GCC is mostly prologue and epilogue (44,484
+bytes), constant materialization (23,224), memory access (15,972) and register moves (12,952)
+([TODO](../TODO.md#codegen-quality-track--next-quarter)). Opt-in backend variants reached 1.642 to
+2.478 times GCC and missed the 1.4 target (2026-10-03). A steady-state timing study was inconclusive
+at a 5% floor (2026-09-30), so we make no speed claim.
+
+*Answer.* A negative result. The verified rewrites save 0.8% to 2.4%, and EvoCC's code is 2.0 to 2.7
+times the size of GCC's on the library units. The gap is in instruction selection, register
+allocation, frames and calls, and the absence of an optimizing inliner.
+
+#### RQ5: Compile cost
+
+The compile time of proof-required mode was not measured. One trend observation (2026-10-02)
+compared the checked and unchecked UB profiles on the six units of Table 7: the checked profile took
+0.4% longer on `zstd_compress.c` (2,788.55 against 2,776.47 ms median) and 8.6% longer on
+`integer-mix.c` (20.57 against 18.94 ms)
+([receipt](../tests/contracts/codegen-n05-20261002-receipt.json)). The receipt calls this a baseline,
+not a bound. *Answer.* Open; it is the first missing measurement.
+
+#### RQ6: Agent repairs
+
+A preregistered experiment used DeepSeek V4.1 Flash through OpenRouter on 30 small C
+programs, with three repetitions and at most three repair rounds. The model received the
+same prompt and initial source but different tool feedback. Sealed GCC 14 `-O0` scored every
+replacement against the same hidden inputs.
+
+| Feedback | Passed / attempted | Repair rate | Mean rounds | Mean rounds on success |
+|---|---:|---:|---:|---:|
+| GCC 14 warnings + UBSan | 88/90 | 97.8% | 1.011 | 1.000 |
+| Clang 19 warnings + UBSan | 82/90 | 91.1% | 1.011 | 1.000 |
+| EvoCC check + explain + repair-plan JSON | 87/90 | 96.7% | 1.000 | 1.000 |
+
+All 270 repetitions finished; 13 response errors remain in the denominator. All successful
+repairs passed on their first response. *Answer.* This run did not show an overall repair-rate
+or successful-round advantage over both baselines. Ten items were written for this corpus,
+and provider routing and a 4,096-token output budget limit the result. This compares feedback
+bundles, not JSON formatting alone. See the [method, class tables and limits](../book/src/evaluation-agents.md),
+[receipt](../tests/contracts/agent-repair-20261008.json), and
+[full transcripts](../tests/contracts/agent-repair-transcripts-20261008.tar.gz).
+
+Every successful repair came on the first response, so this corpus did not separate the conditions: the result is a ceiling effect, not evidence that the conditions are equal.
+
+A second registered experiment (30 harder programs, five conditions, two models) did not test its
+predictions. 277 of the 444 repetitions that ran ended in a response error, mostly because a model
+used its whole 16,384-token output budget (DeepSeek V4.1 Flash in 252 calls, Qwen3.5 9B in 206) or
+reached the 300 s deadline (Qwen, 183 calls). The provider key's spending limit then stopped the run
+at 444 of 900 repetitions. Every DeepSeek answer that arrived passed (119 of 119), so the corpus was
+at the ceiling again for that model. The registered rules record all five predictions as not held,
+for an incomplete population. *Answer.* Inconclusive ([Experiment 2](../book/src/evaluation-agents.md#experiment-2),
+[receipt](../tests/contracts/agent-repair-2-20261009.json)).
+
+A registered coding-agent run (Kimi Code CLI, model k3) then compared GCC warnings + UBSan (C1)
+with EvoCC (C3) on 18 defects that C1 does not report (uninitialized read, dangling pointer,
+out-of-bounds access) and six controls that both report. Both repaired 18/18 silent items and 5/6
+controls (exact McNemar p = 1). An analysis chosen after the data showed fewer steps for C3 on the
+silent classes, so a registered replication tested it with 144 new sessions:
+
+| Prediction | Items | Steps or tokens, C1 → C3 | One-sided exact p | Result |
+|---|---:|---|---:|---|
+| Fewer steps, small silent items | 18 | 325 → 206 (−37%) | 0.00004 | held |
+| Fewer tokens, small silent items | 18 | 6.38 M → 3.85 M (−40%) | 0.00005 | held |
+| Fewer steps, 722-line items | 12 | 241 → 156 (−35%) | 0.0005 | held |
+| Saving grows with size | 18 / 12 | 36.6% and 35.3% | — | did not hold |
+
+Repairs: C1 44/48 and C3 47/48 on the small items, 24/24 each on the larger ones. *Answer.* For
+defects that the default GCC toolchain does not report, EvoCC's evidence cut the agent's search
+effort by about a third; it did not change which defects the agent repaired. One agent and model,
+one corpus; the 12 larger items share modules; clang warnings and ASan report some of the defects
+([Experiment 4](../book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior), [Experiment 5](../book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size)).
+
+### 8 Related work
+
+**Verified compilers.** CompCert [1] proves its passes correct in Coq, from Clight [2], a large C
+subset with pointers, structures, unions and loops, down to assembly. CakeML [15] verifies an ML
+implementation down to machine code, and a validated LR(1) parser [16] extends the proved part of a
+C front end. EvoCC proves checkers, not passes, and its proved subset has no pointers and no memory.
+In exchange, the untrusted compiler handles GNU C at Linux scale, and its algorithms can change with
+no change to a proof; the guarantee covers only the compilations that a checker accepts.
+
+**Translation validation and IR semantics.** Pnueli, Siegel and Singerman [3] proposed to validate
+each translation instead of the translator, and Necula [4] applied the idea to the passes of an
+optimizing C compiler. Rideau and Leroy [5] proved in Coq a validator for register allocation with
+spilling; the allocation stage of EvoCC has the same shape, with a Lean proof. Alive2 [8] validates
+LLVM optimizations with an SMT solver and bounded loop unrolling. EvoCC proves its checkers once,
+uses no solver on the checked path, and checks loops at untrusted cutpoints without unrolling.
+Vellvm [9] gives LLVM IR a mechanized semantics; there, flags and poison values carry much of the
+undefined behavior, while EvoIR states each obligation as an instruction.
+
+**Equality saturation, testing and C semantics.** Tate et al. [6] introduced equality saturation and
+noted its use for translation validation; egg [7] made e-graphs fast. The small e-graph of EvoCC
+adds a certificate for each transaction and a Lean proof for each rule. Csmith [10] and EMI [11]
+find wrong-code bugs by random programs and by equivalence modulo inputs; EvoCC runs Csmith.
+Cerberus [12] and the provenance study of Memarian et al. [13] give C an executable semantics with
+pointer provenance. C-HIR and EvoIR use an executable provenance model of the same kind; we did not
+prove it equal to those models. Lean 4 [14] is the proof assistant and the language of the checkers.
+
+### 9 Limitations and threats to validity
+
+- **The checked subset is small.** `core-v1` has no pointers, arrays, aggregates, global memory,
+  floating point, `switch`, `goto`, recursion or external calls. Each kernel and application result
+  of §7 rests on tests, not on the theorem.
+- **The trusted base is explicit, not empty.** Tests exercise each trusted part of §5, but none is
+  proved. The two end semantics are hand-written: neither is derived from the C standard or proved
+  equal to an Arm architecture model.
+- **Size and speed.** The code is 2.0 to 2.7 times the size of GCC's on the measured library units.
+  Run time was not measured on a quiet machine; we make no speed claim.
+- **What the tests cannot show.** Four lanes are INCOMPLETE, and the application rows are an audit
+  of existing receipts, not one fresh campaign. The kernel rows use different configurations, and
+  full kselftest and KUnit reruns after the last repairs are outstanding. Doom uses `-fwrapv`.
+- **The compiler was built by agents.** A reviewer may ask whether anyone understands the code. We
+  do not claim that a human read each line. The claims rest on artifacts that do not need that
+  reading: pinned specifications, sealed oracles, proved checkers and receipts that a stranger can
+  run again. But agents also wrote the trusted parts, and the process found some defects only
+  later, such as a certificate that authorized its own rules. Others can remain.
+
+### 10 Conclusion
+
+EvoCC shows that AI agents, directed by one expert, can build a C compiler that boots Linux and runs
+real programs in 58 days, when untrusted components propose and checked components decide. The same
+structure gives a proved, fail-closed compilation path for the listed Core C-HIR subset and target,
+with an explicit trusted boundary. The results also mark the limits: the proved subset is small, and
+verification did not make the code small. Next, we will extend the checked subset to memory and
+pointers, measure the compile cost of checking, and close the size gap under translation validation.
+
+### References
+
+1. X. Leroy. Formal verification of a realistic compiler. *Communications of the ACM* 52(7):107–115, 2009.
+2. S. Blazy and X. Leroy. Mechanized semantics for the Clight subset of the C language. *Journal of Automated Reasoning* 43(3):263–288, 2009.
+3. A. Pnueli, M. Siegel and E. Singerman. Translation validation. In *TACAS 1998*, LNCS 1384, pp. 151–166, 1998.
+4. G. C. Necula. Translation validation for an optimizing compiler. In *PLDI 2000*, pp. 83–95, 2000.
+5. S. Rideau and X. Leroy. Validating register allocation and spilling. In *Compiler Construction (CC 2010)*, LNCS 6011, pp. 224–243, 2010.
+6. R. Tate, M. Stepp, Z. Tatlock and S. Lerner. Equality saturation: a new approach to optimization. In *POPL 2009*, 2009.
+7. M. Willsey, C. Nandi, Y. R. Wang, O. Flatt, Z. Tatlock and P. Panchekha. egg: fast and extensible equality saturation. *Proc. ACM Program. Lang.* 5(POPL), 2021.
+8. N. P. Lopes, J. Lee, C.-K. Hur, Z. Liu and J. Regehr. Alive2: bounded translation validation for LLVM. In *PLDI 2021*, 2021.
+9. J. Zhao, S. Nagarakatte, M. M. Martin and S. Zdancewic. Formalizing the LLVM intermediate representation for verified program transformations. In *POPL 2012*, pp. 427–440, 2012.
+10. X. Yang, Y. Chen, E. Eide and J. Regehr. Finding and understanding bugs in C compilers. In *PLDI 2011*, 2011.
+11. V. Le, M. Afshari and Z. Su. Compiler validation via equivalence modulo inputs. In *PLDI 2014*, 2014.
+12. K. Memarian, J. Matthiesen, J. Lingard, K. Nienhuis, D. Chisnall, R. N. M. Watson and P. Sewell. Into the depths of C: elaborating the de facto standards. In *PLDI 2016*, 2016.
+13. K. Memarian, V. B. F. Gomes, B. Davis, S. Kell, A. Richardson, R. N. M. Watson and P. Sewell. Exploring C semantics and pointer provenance. *Proc. ACM Program. Lang.* 3(POPL), article 67, 2019.
+14. L. de Moura and S. Ullrich. The Lean 4 theorem prover and programming language. In *Automated Deduction – CADE 28*, LNCS, pp. 625–635, 2021.
+15. R. Kumar, M. O. Myreen, M. Norrish and S. Owens. CakeML: a verified implementation of ML. In *POPL 2014*, pp. 179–191, 2014.
+16. J.-H. Jourdan, F. Pottier and X. Leroy. Validating LR(1) parsers. In *ESOP 2012*, 2012.
+
+## Appendix: reproduce the showcase
+
+
+Each `bench.py` lane builds pinned sources with EvoCC, runs their tests in the sealed lab and writes a receipt.
+
+| Showcase | Command | Record |
+|---|---|---|
+| Doom / Freedoom | `python3 tools/bench.py doom --jobs 2` | [receipt](../tests/contracts/ladder-doom-receipt.json) |
+| TinyCC | `python3 tools/bench.py tinycc --jobs 2` | [receipt](../tests/contracts/ladder-tinycc-receipt.json) |
+| Lua | `python3 tools/bench.py lua --jobs 2` | [receipt](../tests/contracts/ladder-lua-receipt.json) |
+| SQLite | `python3 tools/bench.py sqlite --jobs 2` | [receipt](../tests/contracts/ladder-sqlite-receipt.json) |
+| jq | `python3 tools/bench.py jq --jobs 2` | [receipt](../tests/contracts/ladder-jq-receipt.json) |
+| cJSON | `python3 tools/bench.py cjson --jobs 2` | [receipt](../tests/contracts/ladder-cjson-receipt.json) |
+| Linux FPU | `python3 tools/bench.py kernel-full --jobs 2 --low-disk --allow-qemu-drift` | [FPU run](../tests/fixtures/fpu-worker-verdict.out), [notes](images/showcase/README.md#linux-kernelmodule-demo) |
+| PolyBench | `python3 tools/bench.py polybench --jobs 2` | [receipt](../tests/contracts/ladder-polybench-receipt.json) |
+| Mbed TLS | `python3 tools/bench.py mbedtls --jobs 2` | [receipt](../tests/contracts/ladder-mbedtls-receipt.json) |
+| Zstandard | `python3 tools/bench.py zstd --jobs 2` | [receipt](../tests/contracts/ladder-zstd-receipt.json) |
+| zlib | `python3 tools/bench.py zlib --jobs 2` | [receipt](../tests/contracts/ladder-zlib-receipt.json) |
+| toybox | `python3 tools/bench.py toybox --jobs 2 --budget 45` | [receipt](../tests/contracts/ladder-toybox-receipt.json), [notes](images/showcase/README.md#toybox-build-artifact-demo) |
+| OpenTyrian | `python3 tools/ladder/games.py emit opentyrian` | [notes](images/showcase/README.md#game-reproduction) |
+| Neverball | `python3 tools/ladder/games.py emit neverball` | [notes](images/showcase/README.md#game-reproduction) |
+| Quakespasm | `python3 tools/ladder/games.py emit quakespasm` | [notes](images/showcase/README.md#game-reproduction) |
+
+One capture inside the sealed image runs the ten program demos. One render draws them, with Doom and Linux:
+
+```sh
+container run --rm --platform linux/arm64 --network none --cpus 2 --memory 1G \
+  -v "$PWD:/repo:ro" \
+  -v "$PWD/docs/images/showcase:/repo/docs/images/showcase" \
+  evo-flight-lab:sealed python3 /repo/tools/showcase.py --capture
+python3 tools/showcase.py --render --check
+```
+
+For a game, `games.py prepare` and `emit` run on the host; `link` and `game_capture.py` run in the container.

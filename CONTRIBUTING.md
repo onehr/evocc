@@ -74,6 +74,30 @@ disagree, one of them has a defect. Fix the code, or change the document with a 
   checks the rule registry and the vectors, and audits every axiom. It also rewrites a tracked
   receipt, so commit that receipt with your change.
 
+## Repository layout
+
+| Path | Content |
+|---|---|
+| `crates/` | The compiler: 18 Rust crates, from the preprocessor to the AArch64 emitter |
+| `lean/EvoIR/` | Lean 4 semantics, rule proofs, stage checkers and the pipeline theorem |
+| `spec/`, `targets/aarch64/` | The four pinned specifications; the machine tables |
+| `tools/bench.py`, `tools/ladder/`, `tools/k1/` | The evaluation ladder: program, game and Linux lanes |
+| `tools/gate-changed.sh`, `tools/gate-lean.sh` | The Rust gate and the Lean gate |
+| `tools/experiment/`, `tools/demo/`, `tools/proof-native/` | Agent experiments, demo scripts, native runs of checked output |
+| `tests/contracts/`, `tests/fixtures/` | Receipts and pinned corpora; test inputs |
+| `book/`, `docs/`, `examples/` | The book; the paper, evidence and design; the README examples |
+
+## Project documents
+
+- [The paper](docs/paper.md): the story of the project, the design and the evaluation.
+- [Evidence](docs/evidence.md) and the [status dashboard](docs/status.md): measured results with
+  dates.
+- [TODO.md](TODO.md): the task tracker.
+- [C checker workflow](docs/checker.md) and [verified optimization design](docs/verified-optimization-design.md).
+- [`docs/archive/`](docs/archive/README.md): superseded plans and dated lab notes.
+
+To update the README figures, run `python3 tools/render-readme.py` after a release build.
+
 ## Commit messages
 
 - Write the subject in the imperative mood: "Reject a pointer argument in core-v1", not

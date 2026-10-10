@@ -2889,7 +2889,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   Keep historical ignored tests explicit. Refresh receipts, run
   `python3 tools/render-status.py`, update README/this tracker and commit the
   bounded result. Passing this gate alone does not close B10/K13/K14.
-  [Workflow](README.md#development).
+  [Workflow](CONTRIBUTING.md#the-change-workflow).
   September 28's [post-repair checkpoint](tests/fixtures/compiler-health-20260927.out)
   at compiler source `13082c6` passes **2784 workspace tests**, Clippy/fmt, **563 Python tests**, Ruff,
   54/54 grammar shapes, both frozen layout corpora (**128 + 22**) and **13**

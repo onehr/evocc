@@ -7,6 +7,7 @@ docs/*
 !docs/evidence.md
 !docs/status.md
 !docs/verified-optimization-design.md
+!docs/paper.md
 !docs/images/
 !docs/images/**
 !docs/archive/
