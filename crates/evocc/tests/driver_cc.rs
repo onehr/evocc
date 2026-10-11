@@ -145,7 +145,6 @@ fn an_unknown_f_option_warns_once_and_the_build_continues() {
         "-c",
         "-fno-such-option",
         "-Wall",
-        "-Werror",
         "-pedantic",
         "-pipe",
         "helper.c",
@@ -161,6 +160,214 @@ fn an_unknown_f_option_warns_once_and_the_build_continues() {
     let quiet = work.run(&["-c", "-w", "-mno-such-option", "helper.c"]);
     succeeded(&quiet);
     assert!(quiet.stderr.is_empty());
+}
+
+#[test]
+fn unsupported_options_obey_warning_promotion_in_capability_probes() {
+    let work = Work::new("capability-options");
+    for option in [
+        "-fthis-option-does-not-exist",
+        "-mthis-option-does-not-exist",
+        "--coverage",
+    ] {
+        let output = work.run(&["-Werror", option, "-fsyntax-only", "helper.c"]);
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{option}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stderr).contains("has no effect"));
+        for override_flag in ["-Wno-error", "-w", "--cap-lints=warn", "--cap-lints=allow"] {
+            succeeded(&work.run(&[
+                "-Werror",
+                override_flag,
+                option,
+                "-fsyntax-only",
+                "helper.c",
+            ]));
+        }
+    }
+    succeeded(&work.run(&[
+        "-Werror",
+        "-fno-omit-frame-pointer",
+        "-fsyntax-only",
+        "helper.c",
+    ]));
+}
+
+#[test]
+fn the_basic_stack_protector_uses_the_existing_strong_policy() {
+    let work = Work::new("stack-protector");
+    std::fs::write(
+        work.file("guarded.c"),
+        "extern void use(char *); void guarded(void) { char data[16]; use(data); }\n",
+    )
+    .unwrap();
+    for option in ["-fstack-protector", "-fstack-protector-strong"] {
+        succeeded(&work.run(&["-Werror", option, "-S", "guarded.c"]));
+        let assembly = work.read("guarded.s");
+        assert!(assembly.contains("__stack_chk_fail"), "{assembly}");
+        succeeded(&work.run(&["-Werror", option, "-fno-stack-protector", "-S", "guarded.c"]));
+        assert!(!work.read("guarded.s").contains("__stack_chk_fail"));
+    }
+}
+
+#[test]
+fn assembler_standard_input_works_for_kbuild_instruction_probes() {
+    use std::io::Write;
+    let work = Work::new("assembler-stdin");
+    for language in ["assembler", "assembler-with-cpp"] {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_evocc"))
+            .current_dir(&work.0)
+            .args([
+                "-Werror",
+                "-Wa,--fatal-warnings",
+                "-c",
+                "-x",
+                language,
+                "-o",
+                "probe.o",
+                "-",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let _ = child.stdin.take().unwrap().write_all(b".text\nnop\n");
+        succeeded(&child.wait_with_output().unwrap());
+        nonempty(&work.file("probe.o"));
+    }
+}
+
+#[test]
+fn assembly_preprocessing_keeps_lines_and_assembly_token_pastes() {
+    let work = Work::new("assembly-preprocessor");
+    std::fs::write(work.file("layout.S"), "#ifndef __ASSEMBLER__\n#error assembly language was lost\n#endif\n#define SECTION(name) .hyp##name\n/* retained comment */\nSECTION(.text) : { *(.text) }\nnext_line\n").unwrap();
+    let output = work.run(&["-E", "-P", "-C", "layout.S", "-o", "layout.lds"]);
+    succeeded(&output);
+    let text = work.read("layout.lds");
+    assert!(text.contains(".hyp.text"), "{text}");
+    assert!(text.contains("/* retained comment */"), "{text}");
+    assert!(
+        text.lines().any(|line| line.trim() == "next_line"),
+        "{text}"
+    );
+    std::fs::write(work.file("second.S"), "nop\n").unwrap();
+    let output = work.run(&["-E", "layout.S", "second.S", "-o", "both.s"]);
+    assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
+fn assembly_dependency_files_cover_includes_and_keep_the_requested_target() {
+    let work = Work::new("assembly-dependencies");
+    std::fs::write(work.file("asm.h"), "#define INSTRUCTION nop\n").unwrap();
+    std::fs::write(
+        work.file("probe.S"),
+        "#include \"asm.h\"\n.text\nINSTRUCTION\n",
+    )
+    .unwrap();
+    succeeded(&work.run(&[
+        "-c",
+        "probe.S",
+        "-Wp,-MMD,.probe.o.d",
+        "-MP",
+        "-o",
+        "probe.o",
+    ]));
+    let deps = work.read(".probe.o.d");
+    assert!(deps.starts_with("probe.o:"), "{deps}");
+    assert!(deps.contains("asm.h"), "{deps}");
+    succeeded(&work.run(&[
+        "-E",
+        "-P",
+        "probe.S",
+        "-MMD",
+        "-MF",
+        "layout.d",
+        "-MQ",
+        "out dir/$x.lds",
+        "-o",
+        "layout.lds",
+    ]));
+    let deps = work.read("layout.d");
+    assert!(deps.starts_with("out\\ dir/$$x.lds:"), "{deps}");
+    assert!(deps.contains("asm.h"), "{deps}");
+    assert!(work.read("layout.lds").contains("nop"));
+}
+
+#[test]
+#[cfg(target_os = "macos")]
+fn sealed_preprocessing_mounts_absolute_outputs_and_preserves_standard_input() {
+    use std::os::unix::fs::PermissionsExt;
+    let work = Work::new("sealed-preprocess");
+    let outputs = Work::new("sealed-preprocess-outputs");
+    let dependencies = Work::new("sealed-preprocess-dependencies");
+    std::fs::create_dir_all(work.file("sysroot/usr/include")).unwrap();
+    std::fs::write(work.file("sysroot/usr/include/stdio.h"), "").unwrap();
+    std::fs::create_dir(work.file("bin")).unwrap();
+    // This checks command transport only. Real assembly and preprocessing are
+    // tested above with the host tools and in the retained Linux probe.
+    let tool = work.file("bin/container");
+    std::fs::write(
+        &tool,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$EVOCC_TOOL_ARGS\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .current_dir(&work.0)
+        .env("PATH", work.file("bin"))
+        .env_remove("EVOCC_AS")
+        .env("EVOCC_TOOL_ARGS", work.file("arguments"))
+        .args([
+            "--target=aarch64-unknown-linux-gnu",
+            "--sysroot=sysroot",
+            "-E",
+            "-P",
+            "-MMD",
+            "-x",
+            "assembler-with-cpp",
+            "-",
+            "-o",
+        ])
+        .arg(outputs.file("probe.s"))
+        .arg("-MF")
+        .arg(dependencies.file("probe.d"))
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    succeeded(&output);
+    let args = work.read("arguments");
+    assert!(args.lines().any(|arg| arg == "--interactive"), "{args}");
+    for directory in [&outputs.0, &dependencies.0] {
+        let host = directory.canonicalize().unwrap();
+        let guest = std::path::absolute(directory).unwrap();
+        assert!(
+            args.contains(&format!("-v\n{}:{}\n", host.display(), guest.display())),
+            "{args}"
+        );
+    }
+}
+
+#[test]
+fn compiler_resource_queries_do_not_require_an_input_file() {
+    let work = Work::new("resource-query");
+    let plugin = work.run(&["-print-file-name=plugin"]);
+    succeeded(&plugin);
+    assert_eq!(plugin.stdout, b"plugin\n");
+    assert!(plugin.stderr.is_empty());
+    let output = work.run(&["-print-file-name=include"]);
+    succeeded(&output);
+    let include = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        Path::new(include.trim()).join("stddef.h").is_file(),
+        "{include}"
+    );
+    let output = work.run(&["-print-libgcc-file-name"]);
+    succeeded(&output);
+    assert!(!output.stdout.is_empty());
 }
 
 #[test]

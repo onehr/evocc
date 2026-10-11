@@ -210,6 +210,26 @@ fn darwin_resource_headers() -> Option<PathBuf> {
         .clone()
 }
 
+/// The resource headers that EvoCC itself reads, in the host namespace.
+/// A cross query must not return a path that exists only inside the assembler
+/// container. The bundled Linux root uses the same search as C preprocessing.
+pub(crate) fn resource_headers(
+    target: DriverTarget,
+    root: Option<&str>,
+) -> Result<PathBuf, String> {
+    let headers = match target {
+        DriverTarget::Aarch64AppleDarwin => darwin_resource_headers(),
+        DriverTarget::Aarch64UnknownLinuxGnu => {
+            let root = linux_sysroot(root)?;
+            linux_directories(Path::new(&root))
+                .into_iter()
+                .map(PathBuf::from)
+                .find(|path| path.join("stddef.h").is_file())
+        }
+    };
+    headers.ok_or_else(|| "compiler resource headers are missing".to_owned())
+}
+
 /// The first line of a command's standard output, when the command succeeds.
 fn query(argv: &[&str]) -> Option<String> {
     let output = Command::new(argv[0]).args(&argv[1..]).output().ok()?;
@@ -331,6 +351,7 @@ pub(crate) fn run(
     arguments: &[String],
     mounts: &[PathBuf],
     verbose: bool,
+    stdin: bool,
 ) -> Result<(), ExitCode> {
     let mut argv: Vec<String> = Vec::new();
     if tool.sealed {
@@ -348,13 +369,20 @@ pub(crate) fn run(
             ]
             .map(str::to_owned),
         );
+        if stdin {
+            argv.push("--interactive".to_owned());
+        }
         let mut seen = Vec::new();
         for mount in mounts {
-            let mount = std::fs::canonicalize(mount).unwrap_or_else(|_| mount.clone());
-            if !seen.contains(&mount) {
+            let host = std::fs::canonicalize(mount).unwrap_or_else(|_| mount.clone());
+            // Keep the guest spelling used by the command arguments. On
+            // macOS, /tmp and /var can name /private/tmp and /private/var;
+            // mounting only the canonical spelling loses those inputs/outputs.
+            let guest = std::path::absolute(mount).unwrap_or_else(|_| mount.clone());
+            if !seen.contains(&guest) {
                 argv.push("-v".to_owned());
-                argv.push(format!("{0}:{0}", mount.display()));
-                seen.push(mount);
+                argv.push(format!("{}:{}", host.display(), guest.display()));
+                seen.push(guest);
             }
         }
         if let Some(directory) = seen.first() {

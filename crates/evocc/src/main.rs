@@ -835,7 +835,9 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
                 tls_model = evocc_types::TlsModel::parse(&arg[12..])
                     .ok_or_else(|| format!("unsupported TLS model `{arg}`"))?;
             }
-            "-fstack-protector-strong" => stack_protector = true,
+            // The basic spelling selects the existing strong policy. This
+            // protects at least the requested functions; it is not a no-op.
+            "-fstack-protector" | "-fstack-protector-strong" => stack_protector = true,
             "-fno-stack-protector" => stack_protector = false,
             _ if arg.starts_with("-fmin-function-alignment=") => {
                 let value = &arg["-fmin-function-alignment=".len()..];

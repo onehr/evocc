@@ -164,6 +164,9 @@ enum Query {
     Machine,
     Version,
     Help,
+    Include,
+    Libgcc,
+    Plugin,
 }
 
 struct Command {
@@ -330,6 +333,14 @@ impl Command {
             "--help" => self.query = Some(Query::Help),
             "-dumpmachine" => self.query = Some(Query::Machine),
             "-dumpversion" | "-dumpfullversion" => self.query = Some(Query::Version),
+            "-print-file-name=include" => self.query = Some(Query::Include),
+            "-print-libgcc-file-name" => self.query = Some(Query::Libgcc),
+            "-print-file-name=plugin" => self.query = Some(Query::Plugin),
+            "-P" | "-undef" | "-nostdinc" => {
+                self.compile.push(arg.to_owned());
+                self.preprocessor.push(arg.to_owned());
+            }
+            "-C" | "-CC" => self.preprocessor.push(arg.to_owned()),
             "-pipe" | "-pedantic" | "-pedantic-errors" | "-m64" | "-mlittle-endian" => {}
             "-M" => {
                 self.deps.only = Some(Headers::All);
@@ -549,6 +560,45 @@ pub(crate) fn run(args: &[String]) -> ExitCode {
             print!("{HELP}");
             return ExitCode::SUCCESS;
         }
+        Some(Query::Include) => {
+            return match toolchain::resource_headers(target, command.sysroot.as_deref()) {
+                Ok(path) => {
+                    println!("{}", path.display());
+                    ExitCode::SUCCESS
+                }
+                Err(message) => {
+                    format.usage(&message);
+                    ExitCode::from(1)
+                }
+            };
+        }
+        Some(Query::Libgcc) => {
+            let tools = match toolchain::select(
+                target,
+                command.assembler.as_deref(),
+                command.linker.as_deref(),
+            ) {
+                Ok(tools) => tools,
+                Err(message) => {
+                    format.usage(&message);
+                    return ExitCode::from(1);
+                }
+            };
+            let mut arguments = vec!["-print-libgcc-file-name".to_owned()];
+            if let Some(root) = &command.sysroot {
+                arguments.push(format!("--sysroot={root}"));
+            }
+            return match toolchain::run(&tools.linker, &arguments, &[], command.verbose, false) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(code) => code,
+            };
+        }
+        Some(Query::Plugin) => {
+            // GCC's not-found convention. The companion assembler's plugin
+            // headers do not establish that EvoCC can load GCC plugins.
+            println!("plugin");
+            return ExitCode::SUCCESS;
+        }
         None => {}
     }
     if command.verbose {
@@ -624,8 +674,8 @@ impl Session {
             let kind = match (input.language, named) {
                 (Some(kind), _) => kind,
                 (None, Some(Kind::Linker)) => Kind::Linker,
-                (None, _) if self.command.action == Action::Preprocess => Kind::C,
                 (None, Some(kind)) => kind,
+                (None, _) if self.command.action == Action::Preprocess => Kind::C,
                 (None, None) if stdin => {
                     return Err(self.fail(
                         "-E or -x is required when the input is standard input (`-`)",
@@ -638,10 +688,7 @@ impl Session {
                     )))
                 }
             };
-            if stdin && kind != Kind::C {
-                return Err(self.fail("standard input (`-`) can only be C"));
-            }
-            let path = if stdin {
+            let path = if stdin && kind == Kind::C {
                 "/dev/stdin".to_owned()
             } else {
                 input.path.clone()
@@ -676,7 +723,8 @@ impl Session {
                 Action::Link => false,
                 Action::Object => source.kind != Kind::Linker,
                 Action::SyntaxOnly => false,
-                Action::Assembly | Action::Preprocess => source.kind == Kind::C,
+                Action::Assembly => source.kind == Kind::C,
+                Action::Preprocess => matches!(source.kind, Kind::C | Kind::AssemblyWithCpp),
             })
             .count();
         if per_file > 1
@@ -764,6 +812,15 @@ impl Session {
     /// Check the compilation options once, before any work, and print one
     /// warning for each ignored option.
     fn validate(&self, sources: &[Source]) -> Result<(), ExitCode> {
+        if sources.iter().any(|source| source.kind == Kind::C)
+            && self
+                .command
+                .preprocessor
+                .iter()
+                .any(|arg| matches!(arg.as_str(), "-C" | "-CC"))
+        {
+            return Err(self.fail("-C and -CC are supported only for assembler-with-cpp inputs"));
+        }
         let input = sources
             .iter()
             .find(|source| source.kind == Kind::C)
@@ -771,9 +828,12 @@ impl Session {
         let options = crate::parse_options(&self.compile_arguments(self.mode(), input), true)
             .map_err(|message| self.fail(&message))?;
         for option in options.ignored_options.iter().chain(&self.command.ignored) {
-            self.warn(&format!(
-                "option `{option}` is not supported and has no effect"
-            ));
+            let message = format!("option `{option}` is not supported and has no effect");
+            match options.lints.driver_warning() {
+                crate::lints::Level::Deny => return Err(self.fail(&message)),
+                crate::lints::Level::Warn => self.warn(&message),
+                crate::lints::Level::Allow => {}
+            }
         }
         Ok(())
     }
@@ -865,7 +925,17 @@ impl Session {
         self.write(&path, rule.as_bytes())
     }
 
-    fn preprocess(&self, source: &Source) -> Result<(), ExitCode> {
+    fn preprocess(&mut self, source: &Source) -> Result<(), ExitCode> {
+        if source.kind == Kind::AssemblyWithCpp {
+            return self.preprocess_assembly(source);
+        }
+        if source.kind == Kind::Assembly {
+            self.warn(&format!(
+                "input `{}` is not used because -E stops before assembly",
+                source.path
+            ));
+            return Ok(());
+        }
         let compiled = self.compile(&source.path, "-E")?;
         if self.command.deps.only.is_some() {
             let rule = deps::rule(
@@ -891,6 +961,99 @@ impl Session {
             .unwrap_or_else(|| "-".to_owned());
         self.write(&path, &compiled.output)?;
         self.write_beside_rule(source, &compiled)
+    }
+
+    /// Keep assembly preprocessing with the configured assembler driver, just
+    /// as for .S compilation. C token rendering loses assembler line breaks
+    /// and rejects the token pastes used by Linux linker scripts.
+    fn preprocess_assembly(&mut self, source: &Source) -> Result<(), ExitCode> {
+        let tool = self.tools()?.assembler.clone();
+        if tool.style != Style::Driver {
+            return Err(self.fail(
+                "a .S input needs a C compiler driver as the assembler; set --assembler=cc",
+            ));
+        }
+        let mut arguments = vec!["-E".into(), "-x".into(), "assembler-with-cpp".into()];
+        arguments.extend(self.command.preprocessor.iter().cloned());
+        arguments.extend(self.assembly_dependencies(source));
+        if self.target == DriverTarget::Aarch64UnknownLinuxGnu {
+            if let Some(root) = &self.header_root {
+                arguments.push(format!("--sysroot={root}"));
+            }
+        }
+        arguments.push(source.path.clone());
+        if let Some(output) = &self.command.output {
+            arguments.extend(["-o".into(), output.clone()]);
+        }
+        let mut mounts =
+            vec![std::env::current_dir().map_err(|error| self.fail(&error.to_string()))?];
+        if let Some(parent) = Path::new(&source.path).parent().filter(|p| p.is_absolute()) {
+            mounts.push(parent.to_owned());
+        }
+        if let Some(root) = &self.header_root {
+            mounts.push(PathBuf::from(root));
+        }
+        self.mount_assembly_outputs(&mut mounts);
+        toolchain::run(
+            &tool,
+            &arguments,
+            &mounts,
+            self.command.verbose,
+            source.path == "-",
+        )
+    }
+
+    /// A sealed preprocessor writes directly to the requested output and
+    /// dependency paths. They can be outside the caller's working directory.
+    fn mount_assembly_outputs(&self, mounts: &mut Vec<PathBuf>) {
+        for output in self
+            .command
+            .output
+            .iter()
+            .chain(self.command.deps.file.iter())
+        {
+            if let Some(parent) = Path::new(output).parent().filter(|p| p.is_absolute()) {
+                mounts.push(parent.to_owned());
+            }
+        }
+    }
+
+    /// Give the assembler driver the dependency request, not the temporary
+    /// object path used by a sealed tool. Targets and quoting remain explicit.
+    fn assembly_dependencies(&self, source: &Source) -> Vec<String> {
+        let request = &self.command.deps;
+        let Some(headers) = request.headers() else {
+            return Vec::new();
+        };
+        let mode = match (request.only.is_some(), headers) {
+            (true, Headers::All) => "-M",
+            (true, Headers::User) => "-MM",
+            (false, Headers::All) => "-MD",
+            (false, Headers::User) => "-MMD",
+        };
+        let mut arguments = vec![mode.to_owned()];
+        let file = request.file.clone().or_else(|| {
+            request.only.is_none().then(|| {
+                let output = (self.command.action == Action::Object)
+                    .then_some(self.command.output.as_deref())
+                    .flatten();
+                deps::beside_path(output, &self.command_name(source))
+            })
+        });
+        if let Some(file) = file {
+            arguments.extend(["-MF".into(), file]);
+        }
+        if request.targets.is_empty() {
+            arguments.extend(["-MQ".into(), self.rule_target(source)]);
+        } else {
+            for (target, quote) in &request.targets {
+                arguments.extend([if *quote { "-MQ" } else { "-MT" }.into(), target.clone()]);
+            }
+        }
+        if request.phony {
+            arguments.push("-MP".into());
+        }
+        arguments
     }
 
     fn check(&self, source: &Source) -> Result<(), ExitCode> {
@@ -936,7 +1099,12 @@ impl Session {
             Kind::AssemblyWithCpp => (PathBuf::from(&source.path), true),
             Kind::Linker => unreachable!("linker inputs have no object step"),
         };
-        self.assemble(&assembly, &output, cpp)?;
+        let dependencies = if cpp {
+            self.assembly_dependencies(source)
+        } else {
+            Vec::new()
+        };
+        self.assemble(&assembly, &output, cpp, &dependencies)?;
         Ok(output.to_string_lossy().into_owned())
     }
 
@@ -953,7 +1121,13 @@ impl Session {
         Ok(self.tools.as_ref().expect("the tools are selected"))
     }
 
-    fn assemble(&mut self, input: &Path, output: &Path, cpp: bool) -> Result<(), ExitCode> {
+    fn assemble(
+        &mut self,
+        input: &Path,
+        output: &Path,
+        cpp: bool,
+        dependencies: &[String],
+    ) -> Result<(), ExitCode> {
         let scratch = self
             .scratch
             .directory()
@@ -963,7 +1137,12 @@ impl Session {
         let verbose = self.command.verbose;
         let tool = self.tools()?.assembler.clone();
         let absolute = |path: &Path| std::path::absolute(path).unwrap_or_else(|_| path.to_owned());
-        let input = absolute(input);
+        let stdin = input == Path::new("-");
+        let input = if stdin {
+            input.to_owned()
+        } else {
+            absolute(input)
+        };
         // A tool in the container writes into the mounted scratch directory.
         let produced = if tool.sealed {
             scratch.join(format!("sealed-{}.o", stem(&input.to_string_lossy())))
@@ -985,6 +1164,7 @@ impl Session {
                 );
                 if cpp {
                     arguments.extend(preprocessor);
+                    arguments.extend_from_slice(dependencies);
                     if self.target == DriverTarget::Aarch64UnknownLinuxGnu {
                         if let Some(root) = &self.header_root {
                             arguments.push(format!("--sysroot={root}"));
@@ -1011,19 +1191,22 @@ impl Session {
         arguments.push(input.to_string_lossy().into_owned());
         arguments.push("-o".to_owned());
         arguments.push(produced.to_string_lossy().into_owned());
-        let mut mounts = vec![scratch];
-        if let Ok(directory) = std::env::current_dir() {
-            mounts.push(directory);
-        }
-        if let Some(parent) = input.parent() {
+        // Relative includes and dependency outputs belong to the caller's
+        // working directory, not to the directory of temporary assembly.
+        let mut mounts = vec![
+            std::env::current_dir().map_err(|error| self.fail(&error.to_string()))?,
+            scratch,
+        ];
+        if let Some(parent) = input.parent().filter(|path| path.is_absolute()) {
             mounts.push(parent.to_owned());
         }
         if cpp && tool.sealed {
             if let Some(root) = &self.header_root {
                 mounts.push(PathBuf::from(root));
             }
+            self.mount_assembly_outputs(&mut mounts);
         }
-        toolchain::run(&tool, &arguments, &mounts, verbose)?;
+        toolchain::run(&tool, &arguments, &mounts, verbose, stdin)?;
         if tool.sealed {
             std::fs::copy(&produced, output).map_err(|error| {
                 self.fail(&format!("cannot write `{}`: {error}", output.display()))
@@ -1073,6 +1256,6 @@ impl Session {
                 mounts.push(scratch);
             }
         }
-        toolchain::run(&tool, &arguments, &mounts, verbose)
+        toolchain::run(&tool, &arguments, &mounts, verbose, false)
     }
 }

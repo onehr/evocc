@@ -375,8 +375,9 @@ the `evo fix` command uses `-Wall --cap-lints=warn` to collect repair candidates
 | `-std=gnu11` and other `-std=` values | Select the language standard. |
 | `-O0` to `-O3` | Select the optimization level. `-O0` keeps the control flow of the source. |
 | `-g` | For `aarch64-unknown-linux-gnu`, write debug information about C types (DWARF). EvoCC does not write line tables yet. For `aarch64-apple-darwin`, `-g` has no effect. |
-| An unknown `-f` or `-m` option | EvoCC prints one warning and continues. `-w` turns the warning off. |
-| `-coverage`, `--coverage`, `-fprofile-arcs`, `-ftest-coverage` | Print the unsupported-option warning and continue; `-w` turns it off. No instrumentation or `.gcno`/`.gcda` files are produced. |
+| An unknown `-f` or `-m` option | EvoCC prints one warning and continues. `-Werror` makes this an error so build-system probes do not report unsupported features as available. `-w` turns the warning off. |
+| `-fstack-protector`, `-fstack-protector-strong` | Both enable EvoCC's existing strong stack-protection policy. `-fno-stack-protector` disables it. |
+| `-coverage`, `--coverage`, `-fprofile-arcs`, `-ftest-coverage` | Print the unsupported-option warning; `-Werror` makes it an error and `-w` turns it off. No instrumentation or `.gcno`/`.gcda` files are produced. |
 | `--version`, `-dumpmachine`, `--help` | Print the version and the target, the target only, or a summary of the options. |
 
 EvoCC also has its own options. You meet them in the next chapters:

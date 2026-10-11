@@ -43,7 +43,9 @@ fn evo(args: &[&str]) -> Output {
 fn success(output: &Output) {
     assert!(
         output.status.success(),
-        "{}",
+        "status {:?}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
 }

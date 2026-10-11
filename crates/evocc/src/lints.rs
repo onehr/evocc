@@ -29,6 +29,21 @@ impl Default for Levels {
 }
 
 impl Levels {
+    /// Driver warnings have no source-level lint name. They still obey the
+    /// global warning policy used by compiler capability probes.
+    pub fn driver_warning(&self) -> Level {
+        if self.quiet {
+            Level::Allow
+        } else {
+            (if self.errors {
+                Level::Deny
+            } else {
+                Level::Warn
+            })
+            .min(self.cap)
+        }
+    }
+
     pub fn option(&mut self, flag: &str) -> Result<(), String> {
         match flag {
             "-Wall" | "-Wextra" => self.all = true,
