@@ -1330,6 +1330,16 @@ related Python tests pass. Seven unsupported options remain disclosed.
 close any runtime acceptance item below. [Receipt](tests/contracts/kernel-direct-tiny-receipt.json)
 and [scope/retention record][kernel].
 
+Acceptance preflight (2026-10-11): the exact tinyconfig disables initramfs,
+ELF loading, printk and TTY. It cannot satisfy the `/init` and serial-nonce
+boot predicate. The historical 7,008-unit config (`95853321…`) and matching
+runtime pair are no longer present after retirement of `.build/k7-coverage`.
+No matching config was found among 235 local config candidates or the four
+retained embedded reference configs. QEMU is now 11.1.2, not the contract's
+11.0.3. Restore the original inputs, or obtain approval for a newly frozen
+paired baseline before a replacement campaign. Boot and kselftests remain
+NOT_RUN for the direct build; no historical verdict changes. [Details][kernel].
+
 - [ ] **K01 — Diagnose the intermittent sched_ext kernel NULL fault** — `OPEN`, P1.
   `hotplug` → `reload_loop` reproduces the fault on both EvoCC and GCC; an outer
   runner exit of zero can conceal inner failures. Reduce/trace the static-key and

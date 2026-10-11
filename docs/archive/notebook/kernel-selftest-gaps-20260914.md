@@ -3936,3 +3936,47 @@ Slice disk delta: project `du -xsk` falls from the post-cleanup 25.582 GiB
 checkpoint to 24.231 GiB, about **1.35 GiB less** after this build and cache
 retirement. Host free space is 25.56 GiB; other projects run on the same host,
 so that host-wide number is not attributed to this slice alone.
+
+### Direct-build acceptance preflight — 2026-10-11
+
+The owner requested boot, the historical 7,008-unit configuration and fresh
+kselftests. No build or VM was launched in this preflight. The tinyconfig and
+Image still match the direct-build receipt. That configuration disables
+`BLK_DEV_INITRD`, `BINFMT_ELF`, `PRINTK` and `TTY`; it cannot execute the ELF
+`/init` payload and report the required serial nonce. A changed configuration
+must have its own build and boot result, not inherit a tinyconfig PASS.
+
+The historical full configuration has SHA-256
+`95853321d8dd6ae0b2d779abc094659a327936cb557244bed45b484ccf4c0e09`.
+Its raw config, Images and paired selftest runtimes are absent after the
+October 7 retirement of `.build/k7-coverage`. The separately named
+`.build/floating-targeted/module-uniform-20260928/final-build` backup is also
+absent. Search of 235 config candidates, four embedded reference configs,
+config-named backup payloads and tracked config history found no exact copy.
+The October 4 protected-products manifest keeps the hash, not the config bytes.
+Some fragments remain, but the later 26-fragment merge record is also absent.
+These are missing reproduction inputs, not a compiler or runtime test failure.
+Retaining a config hash without the small raw config was a retention gap.
+
+Installed QEMU is 11.1.2, SHA-256
+`2239f9f1d01b6c06764fada9300c5701990c3f113b1c3533a19c993f08096642`.
+It is neither the contract's 11.0.3 binary nor the September 28 explicit-drift
+binary. The old pinned container image is still available. Restore the config
+and runtime inputs, or freeze a replacement paired baseline with owner approval.
+Do not silently use a smaller configuration or count a new runtime as an exact
+historical replay. Direct-build boot and fresh kselftests remain NOT_RUN.
+The existing historical receipts and unresolved kernel tasks are unchanged.
+
+Preflight details are retained in
+`.evidence/kbuild-direct-20261011/acceptance-preflight.json`. No full workspace
+or Lean gate ran: this checkpoint changes no compiler code or proof and does
+not close acceptance. All eight TODO schedule tests, the generated-status
+check, JSON parsing and diff whitespace checks pass.
+
+Storage: removed only the redundant `.toolchain/artifacts/linux-6.18.44.tar`
+after checking that no process uses it. Its SHA-256 equals the decompressed
+retained `.tar.xz`: `40654bf614336bcbd4af83feb91bb6e9fd2dbe965ad9f47103856638ced58a95`.
+The compressed archive and signature remain; `xz -dk` restores the raw tar.
+This slice removes 1,610,475,520 payload bytes (about 1.50 GiB), less the small
+preflight record and text updates. No kernel tree, current Image, config,
+runtime, receipt, fixture or Lean cache is deleted by this preflight.
