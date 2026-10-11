@@ -93,6 +93,19 @@ verification may resume below 80 GiB, retaining the 25/15 GiB start/stop lines,
 500 MiB capture cap and single two-job `target/frontend` tree. No new kernel
 build, runtime retirement or large disk is authorized by this exception.
 
+October 11 cleanup: remove only unused Cargo dev intermediates (`incremental`,
+`deps`, `build`, `.fingerprint`) and the removed website's `web/node_modules`.
+No Cargo process or open handle used those paths. Keep the running editor's
+debug tools, all release tools, the Linux probe and reference outputs, all
+evidence, sealed fixtures, toolchain images and Lean `.lake`. The 1,943 tracked
+contract/fixture files and 25 retained tool binaries keep their hashes.
+Project host-backed allocation is **33.303 → 25.582 GiB** (net **−7.720 GiB**);
+host free space is **18.764 → 26.381 GiB**, measured separately. The mounted
+case-sensitive tree is not counted again with its backing image. These caches
+were deleted without Trash and must be rebuilt; no historical runtime was
+retired. No build or full gate ran. The previous 80 GiB target remains unmet.
+Local record: `.evidence/storage-cleanup-20261011/summary.json`.
+
 ## Execution order
 
 **Release verification path:** V00 to V08 are complete in the frozen `core-v1`
