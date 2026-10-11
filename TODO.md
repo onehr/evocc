@@ -1310,6 +1310,19 @@ K6 boot is already accepted for the locked 2,799-target-C configuration. The
 6,765-object BPF/module composition also links and boots. Neither establishes
 complete K7/KUnit success; these configurations and their Images are distinct.
 
+Direct Kbuild checkpoint (2026-10-11): Linux 6.18.44 `tinyconfig` builds from
+an empty output tree with `CC=evocc`, fixed compiler `e5bf1a72`, and no seeded
+GCC target objects. The build produces 446 C objects and four C-to-assembly
+helpers; host tools, assembly and linking still use the GNU toolchain.
+Driver capability probes, assembly stdin/preprocessing/dependencies, masked
+asm immediates and inlined pointer assignments are repaired. A clean build
+generates its own EvoCC compiler banner. The full offline gate passes 425
+suites: 3,249 tests, zero failures, five existing ignores; Clippy/fmt and 115
+related Python tests pass. Seven unsupported options remain disclosed.
+**Boot is NOT RUN.** This does not replace the historical 7,008-unit boot or
+close any runtime acceptance item below. [Receipt](tests/contracts/kernel-direct-tiny-receipt.json)
+and [scope/retention record][kernel].
+
 - [ ] **K01 — Diagnose the intermittent sched_ext kernel NULL fault** — `OPEN`, P1.
   `hotplug` → `reload_loop` reproduces the fault on both EvoCC and GCC; an outer
   runner exit of zero can conceal inner failures. Reduce/trace the static-key and

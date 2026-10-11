@@ -1,0 +1,53 @@
+{
+  "mode": "direct-kbuild",
+  "status": "BUILD_PASS",
+  "recordedAt": "2026-10-11T12:09:12Z",
+  "kernelVersion": "6.18.44",
+  "configuration": "tinyconfig",
+  "sourceRoot": ".build/case/kbuild-probe/src",
+  "sourceScope": "Existing case-sensitive source tree, mounted read-only; no new upstream archive audit.",
+  "outputRoot": ".build/case/kbuild-probe/out-tiny",
+  "compilerCommit": "e5bf1a7201afa0e3fa75dfb8800895e6ddfa7245",
+  "compilerSha256": "c2c021983a447c0e5b24388e57a79907fef49f6c315c7897d975b1bbdd86cbc6",
+  "compilerUnchangedDuringBuild": true,
+  "configSha256": "72e935d8452c0f6d692f83d9606425a6b979958a7939f5edc88ef1b33e3e1604",
+  "imageSha256": "5f42cb54bc9ca2ffa2f3b444687ad68ee75f29631723962bb6648cecd58307fe",
+  "imageBytes": 5961736,
+  "vmlinuxSha256": "ae4da68062335d5961de914a7c76aea6ba36492d971fe5687b49e635afd490c9",
+  "vmlinuxBytes": 6840280,
+  "buildExitCode": 0,
+  "buildTimeoutSeconds": 1200,
+  "jobs": 2,
+  "steps": [
+    "make -C /work/src O=/work/out ARCH=arm64 HOSTCC=gcc-14 CC=/work/compiler/evocc mrproper",
+    "check that no .o file remains in /work/out",
+    "make -C /work/src O=/work/out ARCH=arm64 HOSTCC=gcc-14 CC=/work/compiler/evocc tinyconfig",
+    "make -C /work/src O=/work/out ARCH=arm64 HOSTCC=gcc-14 CC=/work/compiler/evocc -j2 V=1 Image"
+  ],
+  "counts": {
+    "evoccCObjects": 446,
+    "evoccCToAssemblyHelpers": 4,
+    "assemblyObjects": 28,
+    "preprocessedLinkerScripts": 2,
+    "gccHostCSourceRecords": 39,
+    "gccTargetCSourceRecords": 0,
+    "seededTargetObjects": 0,
+    "missingRecordedOutputs": 0
+  },
+  "toolchainScope": "EvoCC compiles target C. GCC-14 builds host tools and provides assembly preprocessing/assembly. GNU ld links the kernel.",
+  "unsupportedOptions": [
+    "-fconserve-stack", "-ffixed-x18", "-fno-builtin-wcslen", "-fno-common",
+    "-fno-delete-null-pointer-checks", "-fno-stack-check", "-fverbose-asm"
+  ],
+  "evidence": ".evidence/kbuild-direct-20261011",
+  "buildLog": "direct-clean.log",
+  "buildLogSha256": "76bcb20ce92f3be6383c2be686fb6de04f6e6a9f7fcf0971b8df6b2363eea67a",
+  "captureLimitBytes": 524288000,
+  "gate": {
+    "command": "tools/gate-changed.sh --full-workspace --offline",
+    "exitCode": 0, "suites": 425, "passed": 3249, "failed": 0, "ignored": 5,
+    "clippy": "PASS", "format": "PASS", "relatedPythonTests": 115
+  },
+  "boot": "NOT_RUN",
+  "claimCeiling": "One clean direct tinyconfig build. Not a boot test, not the historical 7008-unit configuration, not full kselftest acceptance, and not a proof of kernel correctness. Unsupported options remain warnings."
+}

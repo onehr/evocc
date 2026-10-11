@@ -36,7 +36,8 @@ The first public version.
 - A drop-in `cc` driver. `evocc` takes several inputs and one action (`-E`, `-S`, `-c`, or a
   link), `-o`, `-x`, the usual preprocessor options and the `-M` family of dependency options. It
   runs the platform assembler and linker and passes `-l`, `-L`, `-Wl,`, `-shared` and `-static` to
-  the linker. An unknown `-f` or `-m` option prints one warning, and the build continues. With
+  the linker. An unknown `-f` or `-m` option prints one warning; `-Werror` makes it an error
+  so compiler probes do not report unsupported features as available. With
   `CC=evocc`, cJSON 1.7.19 and zlib 1.3.2 build and pass their own tests on macOS.
 - The target `aarch64-apple-darwin`, the default on macOS. It emits Mach-O assembly and uses the
   Apple variadic convention: every anonymous argument goes on the stack, and `va_list` is one
@@ -44,6 +45,12 @@ The first public version.
   can assemble Linux objects. Cross-linking requires an explicit `--linker=COMMAND`.
 - `--version`, which prints the version, the commit and the date of the build, and the target.
   `-dumpmachine`, `-dumpversion` and `--help` are also available.
+- Kbuild resource queries, assembly on standard input, and assembly preprocessing with
+  dependency files. The basic stack-protector option enables the existing strong policy.
+- Constant-result assembly operands retain their original calls, volatile reads and UB
+  obligations. Inlined constant pointers remain visible through later local assignments.
+- Application replays reject reference recompilation during tests, including tests that
+  copy their build tree before running make.
 - Two interpreters, one for C-HIR and one for EvoIR, that stop at undefined behavior with a
   numbered diagnostic (`--interpret-c-hir`, `--interpret-evoir`).
 - Source diagnostics with primary and secondary labels, notes and help. Text, short and stable

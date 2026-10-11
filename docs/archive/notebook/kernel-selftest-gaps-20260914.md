@@ -3883,3 +3883,56 @@ old subject TIMEOUT remains, and the small loops still measure a substantial
 subject/reference duration gap. K11f stays OPEN for final-subject validation.
 All flights end normally; the controls use a 2.25 MiB payload and the existing
 scratch disk, and original replays reuse the retained runtime pair.
+
+### Direct Kbuild build, without seeded objects — 2026-10-11
+
+Commits `20d48ff6`, `dbf569c8` and `e5bf1a72` repair driver probes and assembly
+transport, retain evaluation before constant-result asm operands, preserve
+inlined constant pointers through assignments, and detect test-time C object
+replacement in copied application trees. The first full gate exposed cJSON's
+basic stack-protector spelling. It now enables the existing strong policy;
+the original Makefile and its `-Werror` remain unchanged.
+
+The [receipt](../../../tests/contracts/kernel-direct-tiny-receipt.json) records
+one clean Linux 6.18.44 `tinyconfig` build from the existing case-sensitive
+source tree. `mrproper` removes the diagnostic output; no `.o` remains before
+configuration. Kbuild then uses the fixed EvoCC binary through Image linking.
+No target object is copied in, no `.cmd` is rewritten, and no banner is edited.
+The compiler hash is unchanged at the end. `compile.h` names EvoCC `e5bf1a72`.
+
+| Measurement | Result |
+| --- | ---: |
+| EvoCC C object outputs / C-to-assembly helpers | 446 / 4 |
+| Assembly object outputs / preprocessed linker scripts | 28 / 2 |
+| GCC host C source records / GCC target C source records | 39 / 0 |
+| Image bytes / vmlinux bytes | 5,961,736 / 6,840,280 |
+| Full workspace tests | 3,249 PASS / 0 FAIL / 5 existing ignores |
+| Related Python tests | 115 PASS |
+| Clippy / formatting / direct build | PASS / PASS / exit 0 |
+
+The 39 GCC records are host tools: `scripts/`, the declared host `relacheck`,
+and the CRC table generator. GNU tools still preprocess and assemble `.S`
+and link the kernel. Seven ignored options remain in the receipt and log.
+This is **build-only evidence**: boot and kselftests are NOT RUN. It is not
+the old 7,008-unit configuration and does not change its historical verdict.
+No Lean semantics changed; this repair makes no new formal proof claim.
+
+The old probe's 32 seeded outputs and the intermediate Image built by two
+EvoCC versions remain diagnostic history, not acceptance. Their metadata,
+seed lists and logs are retained; their superseded tiny build output is
+replaced by this clean run. The separate BPF member refusal came from compiling
+`bpf_trace.c` without `CONFIG_BPF_EVENTS`; GCC reports the same missing members
+and redefinition. No parser relaxation was made for that invalid configuration.
+
+Retain the final Image, vmlinux and config in the existing output tree and
+the fixed compiler executable. The capture is below 20 MiB, capped at 500 MiB,
+under `.evidence/kbuild-direct-20261011`; no raw capture is committed. Retire
+only closed Cargo intermediates and the aborted gate's three temporary input
+directories. Top-level tool hashes are unchanged by cache cleanup. Caches have
+no Trash copy but can be rebuilt. No source tree, disk image, sealed fixture,
+required evidence or Lean cache is deleted.
+
+Slice disk delta: project `du -xsk` falls from the post-cleanup 25.582 GiB
+checkpoint to 24.231 GiB, about **1.35 GiB less** after this build and cache
+retirement. Host free space is 25.56 GiB; other projects run on the same host,
+so that host-wide number is not attributed to this slice alone.
