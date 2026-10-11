@@ -5435,7 +5435,23 @@ impl<'a> FunctionLowerer<'a> {
                 "I" | "J" | "K" | "L" | "i" | "n"
             );
             if immediate {
-                let constant = self.assembly_constant(operand.expression, &operand.constraint)?;
+                let constant = match self.assembly_constant(operand.expression, &operand.constraint)
+                {
+                    Ok(constant) => constant,
+                    Err(error) => {
+                        let Some(value) = self.result_after_evaluation(operand.expression) else {
+                            return Err(error);
+                        };
+                        if value.ty().bits() > 64 {
+                            return Err(LowerError::WideInteger { span: operand.span });
+                        }
+                        // A unique result need not be a source constant. Keep
+                        // the original evaluation, including calls, volatile
+                        // reads and UB obligations, before using its known bits.
+                        self.lower_expr(operand.expression, &mut state)?;
+                        AssemblyConstant::Integer(value)
+                    }
+                };
                 pending_inputs.push(AssemblyInputSource::Constant(constant));
                 continue;
             }
@@ -5468,7 +5484,7 @@ impl<'a> FunctionLowerer<'a> {
             pending_inputs.push(AssemblyInputSource::Temporary(key));
         }
         for (operand, pending) in source.inputs.iter().zip(pending_inputs) {
-            // Immediate expressions have no execution effects. Define their
+            // Immediate expression effects have already executed. Define their
             // values here, after other operands may have split the block, so
             // machine lowering need not guess constants through edge arguments.
             let mut value = match pending {

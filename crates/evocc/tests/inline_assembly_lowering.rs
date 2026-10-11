@@ -779,6 +779,64 @@ fn symbolic_immediates_do_not_create_runtime_symbol_references() {
 }
 
 #[test]
+fn integer_immediates_can_have_one_result_after_runtime_evaluation() {
+    for (expression, expected) in [
+        ("((choice ? 0x800UL : 0UL) | 0x40UL) & 0x40UL", 64),
+        ("(choice ? 9U : 25U) & 15U", 9),
+        ("(unsigned char)(choice ? 257U : 1U)", 1),
+    ] {
+        let source = format!(
+            "extern volatile int choice; void f(void){{asm volatile(\"// immediate %c0\"::\"i\"({expression}));}}"
+        );
+        let ir = emits(&source);
+        assert!(ir.contains("load volatile"), "{ir}");
+        let output = run(&source, "--emit=asm");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains(&format!("// immediate {expected}"))
+        );
+    }
+    for expression in ["choice ? 1 : 2", "choice & 15", "(choice ? 3 : 7) | 8"] {
+        let source =
+            format!("void f(int choice){{asm volatile(\"// %c0\"::\"i\"({expression}));}}");
+        let output = run(&source, "--emit=asm");
+        assert!(!output.status.success(), "{source}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("E3021"));
+    }
+    // Knowing the result does not discharge a checked arithmetic obligation.
+    let ir = emits("void f(int x){asm volatile(\"// %c0\"::\"i\"((x + 1) ? 7 : 7));}");
+    assert!(ir.contains("signed_add_defined"), "{ir}");
+    assert!(ir.contains("ub.assume"), "{ir}");
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn computed_immediate_evaluates_its_effectful_condition_once() {
+    execute_native_assembly(
+        r#"
+        volatile int choice;
+        int calls;
+        __attribute__((noinline)) int next(void) { ++calls; return choice; }
+        int main(void) {
+            for (int i = 0; i != 2; ++i) {
+                unsigned long result;
+                choice = i;
+                asm volatile("mov %0, %1" : "=r"(result)
+                    : "i"(((next() ? 0x800UL : 0UL) | 0x40UL) & 0x40UL));
+                if (result != 64 || calls != i + 1) return 1;
+            }
+            return 0;
+        }
+        "#,
+        "computed-immediate-effects",
+    );
+}
+
+#[test]
 fn assembly_immediates_rematerialize_after_effectful_operand_control_flow() {
     for source in [
         r#"static int object; int effects; int f(int x){asm volatile("// %c0 %w1"::"i"(&object),"r"(x?++effects:--effects));return effects;}"#,

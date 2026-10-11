@@ -3083,12 +3083,15 @@ impl<'a> Substitution<'a, '_> {
         };
         if canonical.qualifiers.is_volatile
             || canonical.qualifiers.is_atomic
-            || crate::constant::canonical_integer_type(&self.unit.types, ty).is_none()
+            || (crate::constant::canonical_integer_type(&self.unit.types, ty).is_none()
+                && !matches!(canonical.kind, TypeKind::Pointer(_)))
         {
             return;
         }
-        // The real assignment remains. Later writes kill sequential facts
-        // before rewriting the next statement; escaped objects are excluded.
+        // The real assignment remains. This includes pointer assignments;
+        // their repeatable value must retain its typed address, not integer
+        // bits obtained from an interpreter. Later writes kill sequential
+        // facts before rewriting the next statement; escaped objects are excluded.
         let value = if let Some(binary) = op.binary_operation() {
             let Some(previous) = previous else { return };
             self.alloc(CHirExpr::Binary(binary, previous, value, value.span()))
@@ -3558,6 +3561,8 @@ impl<'a> Substitution<'a, '_> {
         // A literal call to a single-return leaf has no parameter addresses,
         // local lifetime or body effects. Fold its substituted return value
         // without introducing a result object that hides the constant again.
+        // This includes numeric pointers: a null return must remain visible
+        // to the caller's branch folding, just like an integer zero.
         if let CHirStmt::Compound(items, _, _) = f.body.unwrap() {
             if let [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))] = items.as_slice() {
                 let mut constants = Context::new(scope);
@@ -3606,6 +3611,13 @@ impl<'a> Substitution<'a, '_> {
                         self.target,
                     )
                     .is_some()
+                        || crate::constant::eval_absolute_address_constant(
+                            converted,
+                            &self.unit.types,
+                            &self.unit.symbols,
+                            self.target,
+                        )
+                        .is_some()
                     {
                         if let Some(value) = self.repeatable_value(converted, return_type) {
                             return Ok(value);

@@ -690,6 +690,59 @@ fn static_value_propagation_preserves_escapes_volatile_reads_and_updates() {
 }
 
 #[test]
+fn inline_constant_pointer_results_prune_unreachable_external_calls() {
+    let source = r#"
+        struct area;
+        extern unsigned long absent_size(const struct area *);
+        static inline struct area *get_area(void *dev) { return (struct area *)0; }
+        int available(void) {
+            struct area *p = get_area((void *)0);
+            if (!p) return 0;
+            return absent_size(p) != 0;
+        }
+        int main(void) { return available(); }
+    "#;
+    let assigned = source.replace("struct area *p =", "struct area *p; p =");
+    for source in [source, assigned.as_str()] {
+        let output = run(source, "--emit=asm");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("absent_size"));
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            assert!(
+                output.status.success(),
+                "{mode}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, b"0\n");
+        }
+    }
+    // The literal-call shortcut must not drop argument evaluation, volatile
+    // parameter initialization, or a different result on another input.
+    for source in [
+        "static inline void*f(int x){return (void*)0;}int main(void){int n=0;void*p=f(++n);return p!=0||n!=1;}",
+        "static inline void*f(int x){return (void*)4096;}int main(void){return f(0)!=(void*)4096;}",
+        "static int object;static inline int*f(int *p){return p;}int main(void){return f(&object)!=&object||f(0)!=0;}",
+        "static inline void*f(volatile int x){return (void*)0;}int main(void){return f(0)!=0;}",
+        "int main(void){int x;int*p;p=0;if(p)return 1;p=&x;return p!=&x;}",
+        "__attribute__((noinline)) void change(int**p,int*q){*p=q;}int main(void){int x;int*p;p=0;change(&p,&x);return p!=&x;}",
+        "int main(void){volatile int c=1;int x;int*p;p=0;if(c)p=&x;return p!=&x;}",
+        "int main(void){int x;int*p=&x;goto done;p=0;done:return p!=&x;}",
+        "int main(void){int*volatile p;p=0;return p!=0;}",
+    ] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, mode);
+            assert!(output.status.success(), "{source}: {mode}: {}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(output.stdout, b"0\n", "{source}: {mode}");
+        }
+    }
+}
+
+#[test]
 fn constant_inline_leaf_results_remove_false_error_calls() {
     let source = include_str!("../../../tests/fixtures/constant-call-results.c");
     let output = run(source, "--emit=evoir");
