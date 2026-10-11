@@ -562,7 +562,7 @@ class InstalledObjectTest(unittest.TestCase):
 
                 with mock.patch.object(ladder, 'relink', side_effect=regenerate), \
                         mock.patch.object(ladder, 'emission_digest', return_value='same' if unchanged else 'changed'), \
-                        mock.patch.object(ladder, 'run_tests', return_value={'passed': True, 'status': 0, 'tail': ''}) as tests:
+                        mock.patch.object(ladder, 'run_tests', return_value={'passed': True, 'status': 0, 'log': '', 'tail': ''}) as tests:
                     result = ladder.trial(
                         subject, tree, ['a.o'], ['a.o'], assembly, pristine, root, 'check',
                         generated_inputs={'a.o': (['evocc', '--emit=asm', 'a.c'], 'same')})
@@ -616,7 +616,7 @@ class InstalledObjectTest(unittest.TestCase):
 
             def reference_rebuild(*_):
                 (tree / 'a.o').write_bytes(b'reference')
-                return {'passed': True, 'tail': 'all tests pass'}
+                return {'passed': True, 'log': 'all tests pass', 'tail': 'all tests pass'}
 
             with mock.patch.object(ladder, 'relink', return_value={'status': 0, 'log': ''}), \
                     mock.patch.object(ladder, 'run_tests', side_effect=reference_rebuild):
@@ -624,6 +624,31 @@ class InstalledObjectTest(unittest.TestCase):
                                       pristine, root, 'check')
             self.assertFalse(result['passed'])
             self.assertEqual(result['stage'], 'rebuilt')
+
+    def test_a_suite_recompiling_in_a_copied_tree_is_not_a_subject_pass(self):
+        subject = ladder.Subject(name='example', rung='test', pin='1', url='',
+                                 sha256='', tree='source', build='', test='', relink='',
+                                 workspace='/copied/source')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tree, assembly, pristine = (root / name for name in ('tree', 'asm', 'pristine'))
+            for path in (tree, assembly, pristine):
+                path.mkdir()
+            for path in (tree, pristine):
+                (path / 'a.o').write_bytes(b'reference')
+            (assembly / 'a.o').write_bytes(b'subject')
+            # A copied build cannot change the installed original. The compile
+            # is also outside the stored tail of the test output.
+            log = 'gcc-14 -c -o a.o a.c\n' + 'test passes\n' * 400
+            with mock.patch.object(ladder, 'relink', return_value={'status': 0, 'log': ''}), \
+                    mock.patch.object(ladder, 'run_tests', return_value={
+                        'status': 0, 'passed': True, 'log': log, 'tail': log[-3000:]}):
+                result = ladder.trial(subject, tree, ['a.o'], ['a.o'], assembly,
+                                      pristine, root, 'copied')
+            self.assertFalse(result['passed'])
+            self.assertEqual(result['stage'], 'rebuilt')
+            self.assertEqual(result['rebuiltUnits'], ['a.o'])
+            self.assertEqual((tree / 'a.o').read_bytes(), b'subject')
 
 
 if __name__ == "__main__":

@@ -483,7 +483,7 @@ def run_tests(subject: Subject, evidence: Path, tag: str) -> dict:
     text = log.read_text(errors="replace") if log.is_file() else ""
     (evidence / f"test-{tag}.log").write_text(text, encoding="utf-8")
     status = _status(completed.stdout, "test-status")
-    return {"status": status, "passed": status == 0, "tail": text[-3000:]}
+    return {"status": status, "passed": status == 0, "log": text, "tail": text[-3000:]}
 
 
 def relink(subject: Subject, evidence: Path, tag: str) -> dict:
@@ -914,7 +914,10 @@ def trial(
                 "rebuiltUnits": rebuilt,
                 "signature": "relink replaced subject objects: " + ", ".join(rebuilt)}
     tested = run_tests(subject, evidence, tag)
-    rebuilt = rebuilt_by_make(tree, subset, asm_root)
+    # Some suites copy the tree before running make. Hashes in the original
+    # tree cannot detect a reference recompile there; inspect the complete log.
+    rebuilt = sorted(set(rebuilt_by_make(tree, subset, asm_root))
+                     | set(recompiled(tested["log"], workspace, subset)))
     if rebuilt:
         return {
             "units": subset,
