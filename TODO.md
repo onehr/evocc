@@ -1246,6 +1246,13 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
 
 ### Remaining verification and application sequence
 
+Documentation checkpoint (2026-10-11): the README's
+[first optimization tutorial](README.md#build-your-first-optimization) follows the existing
+add-zero rule, with runnable C and Lean examples. Native macOS execution passes for 0, 42 and
+UINT32_MAX; the assembly loses one instruction, and both EqSat certificates replay successfully.
+The example theorem checks with only `propext` and `Quot.sound`. No registry, compiler or proof
+profile changes. This is not a new optimization or a new full-workspace acceptance result.
+
 The V00–V06 release dependency above takes priority over starting another codegen
 slice. The following table retains the separate runtime-closure sequence; it is
 not a claim that formal verification replaces those tests.
