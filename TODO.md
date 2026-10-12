@@ -1340,6 +1340,22 @@ retained embedded reference configs. QEMU is now 11.1.2, not the contract's
 paired baseline before a replacement campaign. Boot and kselftests remain
 NOT_RUN for the direct build; no historical verdict changes. [Details][kernel].
 
+Fresh direct-build replay (2026-10-12): the retained arm64 virtconfig input
+now builds with EvoCC `03600f80`. All **2,799 target C objects** and five
+C-to-assembly helpers match this compiler's recorded invocations; no GCC
+target C object is seeded or substituted. The new Image passes **HVF and TCG
+boot**, including `/init`, the current nonce and shutdown. The unchanged nine
+selected upstream kselftests pass on both the GCC reference and this Image:
+**125/125 subtests each, zero failures or skips**. The full offline workspace
+gate passes 425 suites: **3,253 PASS / 0 FAIL / 5 existing ignores**, with
+Clippy/fmt green. This repairs the conflicting-macro capability probe and a
+false missing-return diagnostic for computed goto. Nine ignored compiler
+options and natural olddefconfig capability differences remain disclosed.
+QEMU 11.1.2 is an explicit drift, not the locked 11.0.3 environment. This is
+not the missing 7,008-unit configuration, full 970-program acceptance or
+KUnit, and it closes none of those separate tasks.
+[Receipt](tests/contracts/kernel-direct-virt-receipt.json) and [details][kernel].
+
 - [ ] **K01 — Diagnose the intermittent sched_ext kernel NULL fault** — `OPEN`, P1.
   `hotplug` → `reload_loop` reproduces the fault on both EvoCC and GCC; an outer
   runner exit of zero can conceal inner failures. Reduce/trace the static-key and

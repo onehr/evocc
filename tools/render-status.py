@@ -33,6 +33,7 @@ APPLICATIONS = (
 RECEIPTS = (
     "bench-receipt.json", "kernel-full-receipt.json",
     "kernel-bpf-full-receipt.json", "kernel-selftest-receipt.json",
+    "kernel-direct-virt-receipt.json",
     "kernel-selftest-full-receipt.json", "kernel-kunit-receipt.json",
     "kernel-expanded-kunit-receipt.json", "semantic-gate-contract.json",
     "kernel-kunit-bench-receipt.json",
@@ -416,6 +417,15 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
             repair = receipt.get("incrementalRepair", {})
             lines.append(f"    incremental: {receipt.get('freshCompilations', '?')} rebuilt / "
                          f"{repair.get('unchangedObjects', '?')} unchanged; not a fresh survey")
+    direct = receipts.get("kernel-direct-virt-receipt.json", {})
+    if direct:
+        tests = direct.get("selftests", {})
+        lines.append(f"  Direct Kbuild: {direct.get('status', 'NOT_RUN')}; "
+                     f"{direct.get('counts', {}).get('evoccCObjects', '?')} target-C")
+        lines.append(f"    selected tests={tests.get('status', 'NOT_RUN')}; "
+                     f"programs={tests.get('programCount', '?')}; "
+                     f"subtests={tests.get('subject', {}).get('subtests', {})}")
+        lines.append("    New virtconfig replay; not the historical 7008-unit or full K7 acceptance.")
     modules = bpf.get("moduleLink", {})
     count = record_count(modules.get("modules"))
     module_state = modules.get("status", "NOT_RUN")
@@ -584,6 +594,7 @@ def render_document(receipts: dict[str, dict], *, evoir: str, evomir: str) -> st
         "Sources: [benchmark receipt](../tests/contracts/bench-receipt.json), "
         "[locked K6](../tests/contracts/kernel-full-receipt.json), "
         "[BPF/module K6](../tests/contracts/kernel-bpf-full-receipt.json), "
+        "[direct virtconfig replay](../tests/contracts/kernel-direct-virt-receipt.json), "
         "[selected K7](../tests/contracts/kernel-selftest-receipt.json), "
         "[full K7 checkpoint](../tests/contracts/kernel-selftest-full-receipt.json), "
         "[expanded KUnit](../tests/contracts/kernel-expanded-kunit-receipt.json).\n\n"

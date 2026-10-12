@@ -3980,3 +3980,69 @@ The compressed archive and signature remain; `xz -dk` restores the raw tar.
 This slice removes 1,610,475,520 payload bytes (about 1.50 GiB), less the small
 preflight record and text updates. No kernel tree, current Image, config,
 runtime, receipt, fixture or Lean cache is deleted by this preflight.
+
+### Direct virtconfig build, boot and paired selftests — 2026-10-12
+
+The [new receipt](../../../tests/contracts/kernel-direct-virt-receipt.json)
+uses the tracked `.toolchain/records/frozen-kernel-gcc.config` input and the
+existing case-sensitive Linux 6.18.44 source. All 91,117 regular source files
+and raw symlink targets match the pinned archive. No new source tree or disk
+image was created. This is a new replay, not the missing 7,008-unit population.
+
+Two real Kbuild failures were repaired. `32194938` diagnoses conflicting
+command-line macro definitions under the existing warning policy. This fixes
+Linux's negated `CC_HAS_INT128` probe and restores the PTP VM clock driver
+without manual configuration changes. `03600f80` uses address-taken label
+exits for the missing-return lint; it removes a false W0005 in the original
+BPF interpreter. The original BPF unit passes GCC and EvoCC with unchanged
+flags. `f47febd4` binds selftest compilation and source hashes to one source
+root. No C source, generated assembly, command record or banner was patched.
+
+| Measurement | Result |
+| --- | ---: |
+| EvoCC target C objects / C-to-assembly helpers | 2,799 / 5 |
+| GCC target C objects / seeded target objects | 0 / 0 |
+| Missing outputs / unmatched current-compiler C invocations | 0 / 0 |
+| Image / vmlinux bytes | 58,554,880 / 1,144,363,992 |
+| Fresh GCC reference boot, HVF / TCG | PASS / PASS |
+| Fresh EvoCC boot, HVF / TCG | PASS / PASS |
+| Selected upstream programs, each kernel | 9 PASS / 0 FAIL / 0 SKIP |
+| Selected subtests, each kernel | 125 PASS / 0 FAIL / 0 SKIP |
+| Full offline workspace gate | 425 suites; 3,253 PASS / 0 FAIL / 5 existing ignores |
+| Clippy / formatting | PASS / PASS |
+| Kernel harness / status and TODO tests | 283 PASS + 1 existing SKIP / 72 PASS |
+
+The output tree was cleared before the repaired configuration. After the
+second compiler repair, Kbuild's `CC_VERSION_TEXT` dependency forced C
+recompilation. Every final C output matches an invocation in the unchanged
+compiler's final build log or BPF replay; the retained BPF object hash also
+matches. This is a uniform direct build, not one uninterrupted clean build.
+The compiler hash is `4dbabc30…`; the Image hash is `ce7bd3e3…`.
+Kbuild generated the EvoCC `03600f80` banner itself. GNU tools still build
+47 host C outputs, preprocess one device tree, assemble and link.
+
+The two kernels run identical GCC-built selftest executables, initramfs and
+64 MiB snapshot disk under the unchanged nine-program contract. All programs
+finish with valid TAP and normal shutdown; no timeout, missing result or
+reference PASS-to-SKIP occurs. QEMU 11.1.2 is explicitly admitted as drift from
+11.0.3. The receipt lists olddefconfig capability changes and nine ignored
+options, including `-msign-return-address=non-leaf`. Passing these tests does
+not implement those options or prove kernel correctness. Full 970-program,
+KUnit and historical 7,008-unit acceptance remain separate and unclosed.
+
+Raw captures are about 124 MiB under `.evidence/kbuild-direct-20261012`, below
+the 500 MiB cap. Keep the raw config, Image, vmlinux, object provenance, fixed
+compiler and selftest runtime. The tracked input config plus the recorded
+olddefconfig differences make the configuration recoverable. The old accepted
+tinyconfig compiler is retained as gzip with the same decompressed hash.
+
+After checking open handles, remove Cargo caches, 14 repeated link
+intermediates and selftest header/build intermediates. All 28 retained tool
+files and six retained runtime files keep their hashes. These caches have no
+Trash copy but can be rebuilt. No reference Image, source, contract, fixture
+or Lean cache is removed. The measured paths fall by **12.33 GiB** during
+cleanup; their net slice increase from the starting checkpoint is **2.39 GiB**,
+including the new retained kernel. Host free space is **45.7 GiB** and also
+reflects unrelated activity. The state-renderer tests exposed four pre-existing
+missing-directory errors; three `spec/` directory creation lines restore all
+72 existing checks without changing their assertions.

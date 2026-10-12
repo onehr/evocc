@@ -1,0 +1,397 @@
+{
+  "mode": "direct-kbuild",
+  "status": "BUILD_BOOT_SELECTED_SELFTEST_PASS",
+  "recordedAt": "2026-10-12T05:43:27.669047+00:00",
+  "kernelVersion": "6.18.44",
+  "configuration": "Retained arm64 virtconfig input, olddefconfig with EvoCC; capability changes disclosed below.",
+  "sourceRoot": ".build/case/kbuild-probe/src",
+  "sourceAudit": {
+    "archive": ".toolchain/artifacts/linux-6.18.44.tar.xz",
+    "archiveSha256": "0f72d938f06828e82c90405174fe572287db7bfe089e2fc46572a99a7f240d43",
+    "source": ".build/case/kbuild-probe/src",
+    "regularFilesChecked": 91117,
+    "missing": [],
+    "different": [],
+    "symlinkDifferences": [],
+    "auditCorrection": "The first comparison used str(Path.readlink()), which normalized a dot component in powerpc/primitives/asm/asm-compat.h. os.readlink verified the raw target equals the archive. No source was changed."
+  },
+  "outputRoot": ".build/case/kbuild-probe/out-def",
+  "inputConfig": ".toolchain/records/frozen-kernel-gcc.config",
+  "inputConfigSha256": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d",
+  "subjectConfig": ".evidence/kbuild-direct-20261012/diagnostic/subject.config",
+  "configSha256": "ab7a52cb4ec66016b089f8a7ec4c33ac2e9569ab3ea70925e9d21f0cb71a85b0",
+  "configChanges": {
+    "ARCH_SUPPORTS_SHADOW_CALL_STACK": {
+      "reference": "y",
+      "subject": null
+    },
+    "CC_HAS_AUTO_VAR_INIT_PATTERN": {
+      "reference": "y",
+      "subject": null
+    },
+    "CC_HAS_BRANCH_PROT_PAC_RET": {
+      "reference": "y",
+      "subject": null
+    },
+    "CC_HAS_BRANCH_PROT_PAC_RET_BTI": {
+      "reference": "y",
+      "subject": null
+    },
+    "CC_HAS_KASAN_GENERIC": {
+      "reference": "y",
+      "subject": null
+    },
+    "CC_HAS_KASAN_SW_TAGS": {
+      "reference": "y",
+      "subject": null
+    },
+    "CC_HAS_MULTIDIMENSIONAL_NONSTRING": {
+      "reference": null,
+      "subject": "y"
+    },
+    "CC_HAS_ZERO_CALL_USED_REGS": {
+      "reference": "y",
+      "subject": null
+    },
+    "CC_HAVE_SHADOW_CALL_STACK": {
+      "reference": "y",
+      "subject": null
+    },
+    "CC_VERSION_TEXT": {
+      "reference": "\"gcc-14 (Debian 14.2.0-19) 14.2.0\"",
+      "subject": "\"evocc 0.1.0 (03600f805722 2026-10-12)\""
+    },
+    "HAVE_KCSAN_COMPILER": {
+      "reference": "y",
+      "subject": null
+    },
+    "INIT_STACK_ALL_PATTERN": {
+      "reference": "n",
+      "subject": null
+    },
+    "SHADOW_CALL_STACK": {
+      "reference": "n",
+      "subject": null
+    },
+    "ZERO_CALL_USED_REGS": {
+      "reference": "n",
+      "subject": null
+    }
+  },
+  "compilerCommit": "03600f805722",
+  "compiler": "target/frontend/aarch64-unknown-linux-musl/release/evocc",
+  "compilerSha256": "4dbabc30589a57e7e3e10ed12ea5cc3425921a712ceb464ba276e627a461248a",
+  "compilerUnchangedDuringBuild": true,
+  "hostCompiler": {
+    "path": "target/frontend/release/evocc",
+    "commit": "03600f805722",
+    "sha256": "20b239d4c525971c33ccbf6cee5da13db8ed3fd2886f3f7f6c245c621280315f"
+  },
+  "imageSha256": "ce7bd3e3ba06290b259c6d428daa0b362f58702cbc8e9f957d9dc2a227802e1d",
+  "imageBytes": 58554880,
+  "vmlinuxSha256": "5f1b7874670222df1774a9e032ba56390925113290476378209d7e3c6ae84b41",
+  "vmlinuxBytes": 1144363992,
+  "buildExitCode": 0,
+  "buildTimeoutSeconds": 7200,
+  "jobs": 2,
+  "buildCommand": "make -C /work/src O=/work/out ARCH=arm64 HOSTCC=gcc-14 CC=/work/compiler/evocc -j2 V=1 Image",
+  "buildProvenance": "No seeded target objects after mrproper. Two diagnostic defects were repaired. Kbuild rebuilt C objects after CC_VERSION_TEXT changed; every final C object and C-to-assembly helper matches a current-compiler invocation in the final log or retained BPF replay. This is not a single uninterrupted clean build.",
+  "counts": {
+    "evoccCObjects": 2799,
+    "assemblyObjects": 67,
+    "evoccCToAssemblyHelpers": 5,
+    "preprocessedLinkerScripts": 3,
+    "gccHostCSourceRecords": 47,
+    "gccDeviceTreePreprocessing": 1,
+    "gccTargetCSourceRecords": 0,
+    "seededTargetObjects": 0,
+    "missingRecordedOutputs": 0,
+    "unaccountedCurrentCompilerInvocations": 0
+  },
+  "objectProvenance": ".evidence/kbuild-direct-20261012/object-provenance.json",
+  "objectProvenanceSha256": "277f9ca760a14eb965aaafdde2accea7041dbde6ee0a7d90821a034e5cf004d8",
+  "toolchainScope": "EvoCC compiles target C. GNU tools build host programs, assemble and link; GCC also preprocesses one device-tree source. Userspace test programs are GCC-built.",
+  "buildImage": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+  "unsupportedOptions": [
+    "-fconserve-stack",
+    "-femit-struct-debug-baseonly",
+    "-fno-builtin-wcslen",
+    "-fno-common",
+    "-fno-delete-null-pointer-checks",
+    "-fno-stack-check",
+    "-fno-var-tracking",
+    "-fverbose-asm",
+    "-msign-return-address=non-leaf"
+  ],
+  "evidence": ".evidence/kbuild-direct-20261012",
+  "captureLimitBytes": 524288000,
+  "buildLogs": {
+    "diagnostic/build.log": "c59823b22c64690bc7b2deb07e2bcd3018936981a896c0e816aa0326e37cedb2",
+    "bpf-replay.log": "cd3d32d660a454b71c5646c755aa41b9b3667302ba90659498e593a6f73e3a3a"
+  },
+  "boots": {
+    "reference-boot-hvf": {
+      "verdict": "PASS",
+      "bootLane": "hvf-host",
+      "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
+      "nonce": "k1-20261012T022402Z-2fdf34d3",
+      "serialLogSha256": "af3c279384a2dc9197038207f39243b4fcaf73dcfa5787e365c0debfcbd93ecc",
+      "flownAt": "2026-10-12T02:24:03Z",
+      "receipt": ".evidence/kbuild-direct-20261012/reference-boot-hvf/boot.json"
+    },
+    "reference-boot-tcg": {
+      "verdict": "PASS",
+      "bootLane": "tcg-cortex-a72",
+      "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
+      "nonce": "k1-20261012T022434Z-08830be2",
+      "serialLogSha256": "31864ef562346269017b86fdfd24c2131163f0438923a222fd226ce3fa6cbc11",
+      "flownAt": "2026-10-12T02:24:35Z",
+      "receipt": ".evidence/kbuild-direct-20261012/reference-boot-tcg/boot.json"
+    },
+    "subject-boot-hvf": {
+      "verdict": "PASS",
+      "bootLane": "hvf-host",
+      "imageSha256": "ce7bd3e3ba06290b259c6d428daa0b362f58702cbc8e9f957d9dc2a227802e1d",
+      "nonce": "k1-20261012T052530Z-04b3d553",
+      "serialLogSha256": "6cc861ad4173e28f7922de4396eaa884005b60e8e6ca479aef2bfc518fb42504",
+      "flownAt": "2026-10-12T05:25:31Z",
+      "receipt": ".evidence/kbuild-direct-20261012/subject-boot-hvf/boot.json"
+    },
+    "subject-boot-tcg": {
+      "verdict": "PASS",
+      "bootLane": "tcg-cortex-a72",
+      "imageSha256": "ce7bd3e3ba06290b259c6d428daa0b362f58702cbc8e9f957d9dc2a227802e1d",
+      "nonce": "k1-20261012T052538Z-5d4f1606",
+      "serialLogSha256": "f641158f81b430708d3676cf26cd2b4cd5d712a709b29281884dcb0bc79c2ce1",
+      "flownAt": "2026-10-12T05:25:40Z",
+      "receipt": ".evidence/kbuild-direct-20261012/subject-boot-tcg/boot.json"
+    }
+  },
+  "qemu": {
+    "path": "/opt/homebrew/bin/qemu-system-aarch64",
+    "sha256": "2239f9f1d01b6c06764fada9300c5701990c3f113b1c3533a19c993f08096642",
+    "contractSha256": "af7f6f87c135fa5f08652cda8bc79c01ee560f2ce8e5666c964ad9dda5884232",
+    "matchesContract": false,
+    "version": "11.1.2",
+    "allowDrift": true,
+    "scope": "Explicit QEMU drift, not a replay on the locked 11.0.3 binary."
+  },
+  "selftests": {
+    "status": "PASS",
+    "lane": "hvf-host",
+    "contract": "tests/contracts/kernel-selftest-contract.json",
+    "contractSha256": "3532e08e095527ac8ca62f2630d080634deecdb1ccded8c2556c97d198165cab",
+    "programCount": 9,
+    "payloadCompiler": "gcc-14",
+    "initramfsSha256": "9a783037c335043a846070c6c0d32051c9aac44d4cd727ab30e3a9555a4361e8",
+    "scratchSha256": "20ab27f3cbf3ab0bd4d4d18d09f1db32d8571d5c03e598283e42551010c1c9f7",
+    "reference": {
+      "programs": {
+        "PASS": 9,
+        "FAIL": 0,
+        "SKIP": 0
+      },
+      "subtests": {
+        "PASS": 125,
+        "FAIL": 0,
+        "SKIP": 0
+      }
+    },
+    "subject": {
+      "programs": {
+        "PASS": 9,
+        "FAIL": 0,
+        "SKIP": 0
+      },
+      "subtests": {
+        "PASS": 125,
+        "FAIL": 0,
+        "SKIP": 0
+      }
+    },
+    "programs": [
+      {
+        "id": "mincore.mincore_selftest",
+        "reference": "PASS",
+        "subject": "PASS",
+        "referenceSubtests": {
+          "PASS": 5,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subjectSubtests": {
+          "PASS": 5,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      },
+      {
+        "id": "filesystems.epoll.epoll_wakeup_test",
+        "reference": "PASS",
+        "subject": "PASS",
+        "referenceSubtests": {
+          "PASS": 64,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subjectSubtests": {
+          "PASS": 64,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      },
+      {
+        "id": "pidfd.pidfd_open_test",
+        "reference": "PASS",
+        "subject": "PASS",
+        "referenceSubtests": {
+          "PASS": 4,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subjectSubtests": {
+          "PASS": 4,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      },
+      {
+        "id": "pidfd.pidfd_wait",
+        "reference": "PASS",
+        "subject": "PASS",
+        "referenceSubtests": {
+          "PASS": 3,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subjectSubtests": {
+          "PASS": 3,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      },
+      {
+        "id": "pidfd.pidfd_getfd_test",
+        "reference": "PASS",
+        "subject": "PASS",
+        "referenceSubtests": {
+          "PASS": 5,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subjectSubtests": {
+          "PASS": 5,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      },
+      {
+        "id": "membarrier.membarrier_test_single_thread",
+        "reference": "PASS",
+        "subject": "PASS",
+        "referenceSubtests": {
+          "PASS": 18,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subjectSubtests": {
+          "PASS": 18,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      },
+      {
+        "id": "membarrier.membarrier_test_multi_thread",
+        "reference": "PASS",
+        "subject": "PASS",
+        "referenceSubtests": {
+          "PASS": 16,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subjectSubtests": {
+          "PASS": 16,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      },
+      {
+        "id": "signal.mangle_uc_sigmask",
+        "reference": "PASS",
+        "subject": "PASS",
+        "referenceSubtests": {
+          "PASS": 7,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subjectSubtests": {
+          "PASS": 7,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      },
+      {
+        "id": "signal.sas",
+        "reference": "PASS",
+        "subject": "PASS",
+        "referenceSubtests": {
+          "PASS": 3,
+          "FAIL": 0,
+          "SKIP": 0
+        },
+        "subjectSubtests": {
+          "PASS": 3,
+          "FAIL": 0,
+          "SKIP": 0
+        }
+      }
+    ],
+    "regressions": [],
+    "baselineFailures": [],
+    "summary": ".evidence/kbuild-direct-20261012/selftests/summary.json",
+    "summarySha256": "435b755b7241a4eadb21f3fbed9ba583dee270b51bde0418431b89dba4dfb805",
+    "serialLogSha256": {
+      "reference": "c44ad4acaa3bfee38365e5fbf3598c86094ab3fe9f658e044dcadfd551aa1b23",
+      "subject": "0347f4ef60a4ba5e1f15577be6aace395a9b964bd9aec98397ca8541ca2d082d"
+    }
+  },
+  "gate": {
+    "command": "tools/gate-changed.sh --full-workspace --offline",
+    "exitCode": 0,
+    "suites": 425,
+    "passed": 3253,
+    "failed": 0,
+    "ignored": 5,
+    "clippy": "PASS",
+    "format": "PASS",
+    "statusAndTodoTests": {"run": 72, "passed": 72, "failed": 0},
+    "logSha256": "63827ee2015393d5e897b8e34c9816b72f80a37ec4aae9dca1656064a9d100f2",
+    "kernelHarnessTests": {
+      "run": 284,
+      "passed": 283,
+      "skipped": 1,
+      "failed": 0
+    }
+  },
+  "storage": {
+    "captureLimitBytes": 524288000,
+    "captureAllocatedKiB": 126436,
+    "scopedStartKiB": 727296,
+    "scopedBeforeCleanupKiB": 16157632,
+    "scopedAfterCleanupKiB": 3228552,
+    "scopedNetIncreaseKiB": 2501256,
+    "scopedCleanupReductionKiB": 12929080,
+    "scope": "target/frontend, out-def, selected selftest work, this capture and the preserved old compiler gzip; not a host-wide accounting claim",
+    "hostFreeKiBAfterCleanup": 47882624,
+    "retainedToolsHashChecks": 28,
+    "retainedRuntimeHashChecks": 6,
+    "removed": "Closed Cargo caches, 14 duplicate link intermediates, selftest headers and build intermediates. Rebuildable; no Trash copy.",
+    "retained": "Image, vmlinux, raw config, source, reference runtime, selected selftest payload, fixed compiler, old accepted compiler gzip, contracts, fixtures and Lean cache"
+  },
+  "notRun": [
+    "Historical 7008-unit configuration: raw config and runtime pair remain unavailable.",
+    "Full 970-program kselftest acceptance.",
+    "KUnit: disabled in this configuration."
+  ],
+  "claimCeiling": "Direct build of 2799 target C objects, two boot lanes and nine paired upstream programs. No full Linux acceptance or formal kernel-correctness claim. Unsupported compiler options and configuration differences remain explicit."
+}

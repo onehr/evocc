@@ -221,6 +221,7 @@ class BenchmarkEntryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / 'docs').mkdir()
+            (root / 'spec').mkdir()
             (root / 'spec/evoir.md').write_text('**Revision 1.0.1**')
             (root / 'spec/evomir.md').write_text('**Revision 0.1**')
             contracts = root / 'tests/contracts'
@@ -898,6 +899,7 @@ class StatusAsciiTest(unittest.TestCase):
             with self.subTest(existing=existing), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 (root / "docs").mkdir()
+                (root / "spec").mkdir()
                 (root / "spec/evoir.md").write_text("**Revision 1.9.104**")
                 (root / "spec/evomir.md").write_text("**Revision 0.34**")
                 contracts = root / "tests/contracts"
@@ -923,6 +925,7 @@ class StatusAsciiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "docs").mkdir()
+            (root / "spec").mkdir()
             (root / "spec/evoir.md").write_text("**Revision 1.9.104**")
             (root / "spec/evomir.md").write_text("**Revision 0.34**")
             (root / "tests/contracts").mkdir(parents=True)

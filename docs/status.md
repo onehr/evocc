@@ -36,6 +36,9 @@ KERNEL - configurations and runtime populations remain separate
     run=read-only-storage-20260913
   K6 bpf    PASS        7,008/7,008 target-C; link=PASS; boot=PASS
     run=20260928T075419Z
+  Direct Kbuild: BUILD_BOOT_SELECTED_SELFTEST_PASS; 2799 target-C
+    selected tests=PASS; programs=9; subtests={'PASS': 125, 'FAIL': 0, 'SKIP': 0}
+    New virtconfig replay; not the historical 7008-unit or full K7 acceptance.
   BPF module link/BTF: PASS; 848 modules (not a load-every-driver claim)
   K7 selected PASS: 125 PASS / 0 FAIL / 0 SKIP; run=20260913T144437Z
   K7 targeted replay STALE_IMAGE; run=20260927T223104Z
@@ -119,6 +122,6 @@ Expanded KUnit remaining: Last full-suite/module-tested flight: all 1,504 built-
 
 Full kselftest counts are program-level outer verdicts, not nested assertion counts. SKIP, TIMEOUT, INVALID_OUTPUT, INCOMPLETE and NOT_RUN are not PASS. Reference failures do not excuse a subject regression. A RUNNING receipt means the last recorded campaign state; use its capture/process to confirm liveness.
 
-Sources: [benchmark receipt](../tests/contracts/bench-receipt.json), [locked K6](../tests/contracts/kernel-full-receipt.json), [BPF/module K6](../tests/contracts/kernel-bpf-full-receipt.json), [selected K7](../tests/contracts/kernel-selftest-receipt.json), [full K7 checkpoint](../tests/contracts/kernel-selftest-full-receipt.json), [expanded KUnit](../tests/contracts/kernel-expanded-kunit-receipt.json).
+Sources: [benchmark receipt](../tests/contracts/bench-receipt.json), [locked K6](../tests/contracts/kernel-full-receipt.json), [BPF/module K6](../tests/contracts/kernel-bpf-full-receipt.json), [direct virtconfig replay](../tests/contracts/kernel-direct-virt-receipt.json), [selected K7](../tests/contracts/kernel-selftest-receipt.json), [full K7 checkpoint](../tests/contracts/kernel-selftest-full-receipt.json), [expanded KUnit](../tests/contracts/kernel-expanded-kunit-receipt.json).
 
 Open gate definitions: [launch logic and G2 in the archived roadmap](archive/roadmap.md#launch-logic-re-plan-of-2026-08-25). Runtime diagnoses: [K7 issue ledger](archive/notebook/kernel-selftest-gaps-20260914.md). Historical failures remain in their original receipts; rendering does not rewrite them.
