@@ -1475,10 +1475,32 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
                 if !is_identifier(name) {
                     return Err(format!("invalid macro name in -D: `{name}`"));
                 }
-                pp.define(
-                    name.to_owned(),
-                    decoded_tokens_in_mode(replacement, options.language)?,
-                );
+                let body = decoded_tokens_in_mode(replacement, options.language)?;
+                if pp.macros().get(name).is_some_and(|previous| {
+                    previous.is_function || !same_macro_replacement(&previous.body, &body)
+                }) {
+                    // Kconfig uses conflicting predefined macros under -Werror
+                    // as capability probes. Accept the replacement only under
+                    // the same global warning policy as other driver warnings.
+                    let message = format!("macro `{name}` redefined");
+                    match options.lints.driver_warning() {
+                        lints::Level::Deny => return Err(message),
+                        lints::Level::Warn => {
+                            let mut diagnostic = diagnostics::Diagnostic::command("", &message);
+                            diagnostic.level = "warning";
+                            eprint!(
+                                "{}",
+                                diagnostics::render(
+                                    &diagnostic,
+                                    options.error_format,
+                                    options.color
+                                )
+                            );
+                        }
+                        lints::Level::Allow => {}
+                    }
+                }
+                pp.define(name.to_owned(), body);
             }
             MacroAction::Undefine(name) => {
                 if !is_identifier(name) {
@@ -1489,6 +1511,18 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
         }
     }
     Ok(pp)
+}
+
+fn same_macro_replacement(left: &[evocc_lex::Token], right: &[evocc_lex::Token]) -> bool {
+    // Compare preprocessing tokens, not source locations or evaluated values.
+    // Leading/trailing space is irrelevant; internal whitespace separation is
+    // part of an identical replacement list (comments count as whitespace).
+    left.len() == right.len()
+        && left.iter().zip(right).enumerate().all(|(index, (a, b))| {
+            a.kind == b.kind
+                && a.text.spelling() == b.text.spelling()
+                && (index == 0 || a.preceded_by_whitespace == b.preceded_by_whitespace)
+        })
 }
 
 fn decoded_tokens(source: &str) -> Result<Vec<evocc_lex::Token>, String> {

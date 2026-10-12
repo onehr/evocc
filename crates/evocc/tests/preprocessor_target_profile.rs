@@ -34,19 +34,19 @@ fn stdout(args: &[&str], input: &str) -> String {
 #[test]
 fn command_line_definitions_and_undefinitions_follow_the_target_profile() {
     let common = ["-E", "-P", "--target=aarch64-unknown-linux-gnu"];
-    assert_eq!(
-        stdout(
-            &[
-                common[0],
-                common[1],
-                common[2],
-                "-D__GNUC__=9",
-                "/dev/stdin"
-            ],
-            "__GNUC__\n"
-        ),
-        "9"
+    let replaced = run(
+        &[
+            common[0],
+            common[1],
+            common[2],
+            "-D__GNUC__=9",
+            "/dev/stdin",
+        ],
+        "__GNUC__\n",
     );
+    assert!(replaced.status.success());
+    assert_eq!(String::from_utf8_lossy(&replaced.stdout).trim(), "9");
+    assert!(String::from_utf8_lossy(&replaced.stderr).contains("macro `__GNUC__` redefined"));
     assert_eq!(
         stdout(
             &[common[0], common[1], common[2], "/dev/stdin"],
@@ -61,6 +61,103 @@ fn command_line_definitions_and_undefinitions_follow_the_target_profile() {
         ),
         "n"
     );
+}
+
+#[test]
+fn macro_redefinition_preserves_the_kernel_capability_probe_exit_status() {
+    // Kconfig negates the result: redefining a built-in under -Werror must
+    // fail, or Linux incorrectly concludes that integer-128 is unavailable.
+    for mode in ["-E", "--parse-only", "--emit=evoir", "-S", "-c"] {
+        let mut args = vec![
+            mode,
+            "--target=aarch64-unknown-linux-gnu",
+            "-Werror",
+            "-D__SIZEOF_INT128__=0",
+        ];
+        if matches!(mode, "-S" | "-c") {
+            args.extend(["-x", "c"]);
+        }
+        args.push("/dev/stdin");
+        let result = run(&args, "int main(void) { return 0; }\n");
+        assert!(
+            !result.status.success(),
+            "mode {mode}: accepted a conflicting definition"
+        );
+        assert!(
+            result.stdout.is_empty(),
+            "mode {mode}: emitted output after rejection"
+        );
+        assert!(
+            String::from_utf8_lossy(&result.stderr).contains("macro `__SIZEOF_INT128__` redefined"),
+            "mode {mode}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+}
+
+#[test]
+fn macro_redefinitions_obey_global_warning_controls() {
+    for (control, warned) in [
+        ("-w", false),
+        ("-Wno-error", true),
+        ("--cap-lints=allow", false),
+        ("--cap-lints=warn", true),
+    ] {
+        let result = run(
+            &[
+                "-E",
+                "-P",
+                "-Werror",
+                control,
+                "-D__SIZEOF_INT128__=0",
+                "/dev/stdin",
+            ],
+            "__SIZEOF_INT128__\n",
+        );
+        assert!(
+            result.status.success(),
+            "{control}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&result.stdout).trim(), "0");
+        assert_eq!(!result.stderr.is_empty(), warned, "{control}");
+    }
+}
+
+#[test]
+fn equivalent_macro_definitions_and_explicit_undefinition_are_not_redefinitions() {
+    for definitions in [
+        vec!["-D__SIZEOF_INT128__=16"],
+        vec!["-D__SIZEOF_INT128__=  16  "],
+        vec!["-U__SIZEOF_INT128__", "-D__SIZEOF_INT128__=0"],
+        vec!["-DVALUE=a + b", "-DVALUE= a  +/**/ b "],
+        vec!["-DVALUE=", "-DVALUE= "],
+    ] {
+        let mut args = vec!["-E", "-Werror"];
+        args.extend(definitions);
+        args.push("/dev/stdin");
+        let result = run(&args, "");
+        assert!(
+            result.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(result.stderr.is_empty());
+    }
+    for definitions in [["-DVALUE=1", "-DVALUE=2"], ["-DVALUE=a+b", "-DVALUE=a +b"]] {
+        let result = run(
+            &[
+                "-E",
+                "-Werror",
+                definitions[0],
+                definitions[1],
+                "/dev/stdin",
+            ],
+            "",
+        );
+        assert!(!result.status.success(), "{definitions:?}");
+        assert!(String::from_utf8_lossy(&result.stderr).contains("macro `VALUE` redefined"));
+    }
 }
 
 #[test]
