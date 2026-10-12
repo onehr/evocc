@@ -1,9 +1,12 @@
 """Kernel tests must execute; boot markers alone cannot satisfy the lane."""
 
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
+from unittest import mock
 
 
 PATH = Path(__file__).resolve().parents[1] / "selftest.py"
@@ -17,6 +20,28 @@ if PATH.exists():
 class KernelSelftest(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(lane, "kernel-selftest execution is not implemented")
+
+    def test_payload_uses_selected_source_for_build_and_source_hashes(self):
+        # The default source tree can be retired. Both execution and evidence
+        # must refer to the retained case-sensitive tree selected by the caller.
+        environment = {
+            'buildImage': {'sealedImageTag': 'sealed', 'executionReference': 'digest'},
+            'reproducibility': {'SOURCE_DATE_EPOCH': '1786299935'},
+        }
+        contract = {'programs': ['mincore/mincore_selftest'],
+                    'perProgramTimeoutSeconds': 120, 'hugePages': 1}
+        installed = [{'configuration': {'descriptor': {'digest': 'digest'}}}]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / 'case-sensitive-source'
+            with mock.patch.object(lane, 'read', return_value=environment), \
+                    mock.patch.object(lane.subprocess, 'check_output', return_value=json.dumps(installed)), \
+                    mock.patch.object(lane.subprocess, 'run') as run, \
+                    mock.patch.object(lane, 'sha', side_effect=lambda path: str(path)):
+                result = lane.build_payload(root / 'payload', contract, root, source_root=source)
+            self.assertIn(f'{source}:/work/src:ro', run.call_args_list[0].args[0])
+            self.assertEqual(result['programs'][0]['sourceSha256'], str(
+                source / 'tools/testing/selftests/mincore/mincore_selftest.c'))
 
     def transcript(self, output="1..2\nok 1 memory\nok 2 huge # SKIP unavailable\n", rc=0):
         return ("EVO_BOOT_NONCE flight\nKSELFTEST_BEGIN flight memory\n"

@@ -321,7 +321,9 @@ def compare(reference, subject):
             'outcomes': dict(Counter(r['outcome'] for r in subject))}
 
 
-def build_payload(work, contract, run):
+def build_payload(work, contract, run, *, source_root=None):
+    # Keep the mount and source digests tied to the same retained source tree.
+    source_root = Path(source_root) if source_root is not None else ROOT / '.build/linux-src'
     environment = read(ROOT / 'contracts/build-environment.json')
     image = environment['buildImage']['sealedImageTag']
     installed = json.loads(subprocess.check_output(
@@ -361,7 +363,7 @@ def build_payload(work, contract, run):
     shell += '\n/work/bin/gen_init_cpio -t ' + str(environment['reproducibility']['SOURCE_DATE_EPOCH'])
     shell += ' /work/selftest/spec.txt > /work/selftest/initramfs.cpio\n'
     cmd = ['/usr/local/bin/container', 'run', '--rm', '--platform', 'linux/arm64', '--network', 'none',
-           '-v', f'{ROOT / ".build/linux-src"}:/work/src:ro',
+           '-v', f'{source_root}:/work/src:ro',
            '-v', f'{work}:/work/selftest', '-v', f'{ROOT / "tools/k1"}:/work/harness:ro',
            '-v', f'{ROOT / ".build/reference/gcc-lane-1/usr/gen_init_cpio"}:/work/bin/gen_init_cpio:ro',
            image, 'sh', '-c', shell]
@@ -377,7 +379,7 @@ def build_payload(work, contract, run):
             'filesystemCommand': format_command, 'filesystemToolSha256': sha(formatter),
             'initramfsSha256': sha(work / 'initramfs.cpio'), 'scratchSha256': sha(work / 'scratch.img'),
             'programs': [{'id': ident, 'source': f'tools/testing/selftests/{name}.c',
-                          'sourceSha256': sha(ROOT / f'.build/linux-src/tools/testing/selftests/{name}.c'),
+                          'sourceSha256': sha(source_root / f'tools/testing/selftests/{name}.c'),
                           'binarySha256': sha(ramfs / ident)} for name, ident in zip(programs, ids)]}
 
 
