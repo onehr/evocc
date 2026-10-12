@@ -166,6 +166,24 @@ fn return_analysis_checks_paths_without_warning_on_complete_returns() {
 }
 
 #[test]
+fn indirect_jumps_check_their_label_exits_not_a_synthetic_function_exit() {
+    for source in [
+        "int f(unsigned n) { static void *const table[] = {&&a, &&b}; goto *table[n & 1]; a: return 7; b: return 9; }",
+        "int f(void) { void *p = &&again; again: goto *p; }",
+        "int f(void) { goto *&&done; done: return 2; }",
+    ] {
+        expect(run(&["-Werror=return-type"], source), "W0005", "allow");
+    }
+    for source in [
+        "int f(unsigned n) { static void *const table[] = {&&a, &&b}; goto *table[n & 1]; a: return 7; b:; }",
+        "int f(void *p) { goto *p; }",
+        "int f(void) { goto *({ goto end; &&ok; }); ok: return 1; end:; }",
+    ] {
+        expect(run(&["-Werror=return-type"], source), "W0005", "error");
+    }
+}
+
+#[test]
 fn denied_lint_publishes_no_object_and_warned_build_succeeds() {
     let directory = std::env::temp_dir().join(format!("evocc-lint-output-{}", std::process::id()));
     std::fs::create_dir(&directory).unwrap();

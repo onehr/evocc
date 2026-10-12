@@ -127,6 +127,7 @@ fn falls_through(
         edges: Vec<Vec<usize>>,
         labels: HashMap<String, usize>,
         jumps: Vec<(usize, String)>,
+        indirect_jumps: Vec<usize>,
     }
     impl Flow<'_, '_> {
         fn node(&mut self, successors: Vec<usize>) -> usize {
@@ -224,8 +225,18 @@ fn falls_through(
                     cases.push((id, matches!(s, CHirStmt::Default(..))));
                     id
                 }
-                // Opaque jumps can reach the exit; do not suppress a warning from them.
-                CHirStmt::ComputedGoto(..) => self.node(vec![0]),
+                CHirStmt::ComputedGoto(target, _) => {
+                    // A GNU indirect jump transfers to a function-local label,
+                    // not to the closing brace. Resolve its possible labels
+                    // after visiting the whole body. Keep an unknown exit when
+                    // evaluating the operand itself can contain control flow.
+                    if inline::expression_has_statements(target) {
+                        return self.node(vec![0]);
+                    }
+                    let id = self.node(vec![]);
+                    self.indirect_jumps.push(id);
+                    id
+                }
                 CHirStmt::Asm(a) => {
                     let id = self.node(vec![next]);
                     self.jumps
@@ -243,10 +254,30 @@ fn falls_through(
         edges: vec![vec![]],
         labels: HashMap::new(),
         jumps: Vec::new(),
+        indirect_jumps: Vec::new(),
     };
     let entry = graph.stmt(body, 0, 0, 0, &mut Vec::new());
     for (id, name) in graph.jumps {
         graph.edges[id].push(*graph.labels.get(&name).unwrap_or(&0));
+    }
+    if !graph.indirect_jumps.is_empty() {
+        // Over-approximate every address-taken label in this function. A label
+        // inside unmodeled expression control flow retains the unknown exit;
+        // no target information is not evidence that a jump cannot return.
+        let mut targets: Vec<_> = inline::addressed_label_names(body)
+            .iter()
+            .map(|name| *graph.labels.get(name).unwrap_or(&0))
+            .collect();
+        if targets.is_empty() {
+            targets.push(0);
+        }
+        // Share the target set so many jumps and labels do not create a
+        // quadratic number of edges in a large threaded interpreter.
+        let dispatch = graph.edges.len();
+        graph.edges.push(targets);
+        for id in graph.indirect_jumps {
+            graph.edges[id].push(dispatch);
+        }
     }
     let mut seen = HashSet::new();
     let mut work = vec![entry];

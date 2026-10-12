@@ -168,6 +168,22 @@ pub fn for_each_declaration_ordered<'a>(
     inspect_ordered(unit.iter().map(Node::Decl), &mut visit, &mut |_| {}, true);
 }
 
+/// Include label addresses in local initializers and GNU statement expressions.
+/// A diagnostic consumer must not assume that an unvisited label is absent.
+pub(crate) fn addressed_label_names(body: &CHirStmt<'_>) -> BTreeSet<String> {
+    let mut labels = BTreeSet::new();
+    inspect_with_visitors([Node::Stmt(body)], &mut |_| {}, &mut |expression| {
+        if let CHirExpr::LabelAddress { label, .. } = expression {
+            labels.insert(label.spelling.clone());
+        }
+    });
+    labels
+}
+
+pub(crate) fn expression_has_statements(expression: &CHirExpr<'_>) -> bool {
+    inspect([Node::Expr(expression, false)]).owns_statements
+}
+
 fn inspect_with_declarations<'a>(
     nodes: impl IntoIterator<Item = Node<'a>>,
     visit: &mut impl FnMut(&'a CHirDecl<'a>),
