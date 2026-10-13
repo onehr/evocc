@@ -128,6 +128,10 @@ The first public version.
 - Linux assembly and checked assembly records use the same release version as `evocc --version`.
 - A source-checkout compiler finds its Linux sysroot from the executable's repository root,
   regardless of the current directory. Explicit and installed roots keep their priority.
+- `-mbranch-protection=pac-ret+leaf` now signs return addresses and sets
+  `__ARM_FEATURE_PAC_DEFAULT` to 5, as GCC 14 does. Linux probes this option. Before, the
+  probe failed, the kernel asked for signing through `-msign-return-address`, and the
+  kernel was built without it. As in GCC 14, `-msign-return-address` has no effect.
 
 ### Results at this version
 

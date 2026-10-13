@@ -197,6 +197,53 @@ fn unsupported_options_obey_warning_promotion_in_capability_probes() {
 }
 
 #[test]
+fn return_signing_probes_match_what_the_code_generator_honours() {
+    // Linux probes `-mbranch-protection=pac-ret+leaf`. Without it, the arm64
+    // Makefile falls back to `-msign-return-address=non-leaf`, which GCC 14 and
+    // EvoCC both ignore, so the kernel would ask for signing and not get it.
+    let work = Work::new("return-signing-probes");
+    for option in [
+        "-mbranch-protection=pac-ret",
+        "-mbranch-protection=pac-ret+leaf",
+        "-mbranch-protection=none",
+    ] {
+        let output = work.run(&["-Werror", option, "-fsyntax-only", "helper.c"]);
+        succeeded(&output);
+        assert!(
+            output.stderr.is_empty(),
+            "{option}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    // BTI and the B key are not implemented, so their probes must still fail.
+    for option in [
+        "-msign-return-address=non-leaf",
+        "-msign-return-address=all",
+        "-mbranch-protection=pac-ret+leaf+bti",
+        "-mbranch-protection=pac-ret+bti",
+        "-mbranch-protection=pac-ret+b-key",
+        "-mbranch-protection=standard",
+        "-mbranch-protection=bti",
+    ] {
+        let output = work.run(&["-Werror", option, "-fsyntax-only", "helper.c"]);
+        assert_eq!(output.status.code(), Some(1), "{option}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("has no effect"));
+    }
+    // Without -Werror, the ignored option warns and signs nothing, as in GCC 14.
+    let output = work.run(&[
+        "-S",
+        "-msign-return-address=all",
+        "-o",
+        "ignored.s",
+        "helper.c",
+    ]);
+    succeeded(&output);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("has no effect"));
+    let assembly = std::fs::read_to_string(work.file("ignored.s")).unwrap();
+    assert!(!assembly.contains("paciasp"), "{assembly}");
+}
+
+#[test]
 fn the_basic_stack_protector_uses_the_existing_strong_policy() {
     let work = Work::new("stack-protector");
     std::fs::write(

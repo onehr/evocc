@@ -187,6 +187,8 @@ struct DriverOptions {
     automatic_zero: bool,
     tls_model: evocc_types::TlsModel,
     stack_protector: bool,
+    /// The leaf scope of return signing was requested; see `__ARM_FEATURE_PAC_DEFAULT`.
+    sign_leaf_returns: bool,
     patchable_entry: Option<(u16, u16)>,
     minimum_function_alignment: u32,
     codegen: CodegenOptions,
@@ -560,6 +562,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     let mut automatic_zero = false;
     let mut tls_model = evocc_types::TlsModel::default();
     let mut stack_protector = false;
+    let mut sign_leaf_returns = false;
     let mut patchable_entry = None;
     let mut minimum_function_alignment = 4;
     let mut codegen = CodegenOptions::default();
@@ -864,8 +867,23 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
                     pair.ok_or_else(|| format!("invalid patchable function entry `{value}`"))?,
                 );
             }
-            "-mbranch-protection=pac-ret" => codegen.sign_returns = true,
-            "-mbranch-protection=none" => codegen.sign_returns = false,
+            // Return signing covers every function, leaves included, so the
+            // non-leaf and leaf scopes give the same code. The requested scope
+            // only selects the ACLE `__ARM_FEATURE_PAC_DEFAULT` value. As in
+            // GCC 14, `-msign-return-address` has no effect; BTI and the B key
+            // stay unsupported, so Kbuild probes for them fail.
+            "-mbranch-protection=pac-ret" => {
+                codegen.sign_returns = true;
+                sign_leaf_returns = false;
+            }
+            "-mbranch-protection=pac-ret+leaf" => {
+                codegen.sign_returns = true;
+                sign_leaf_returns = true;
+            }
+            "-mbranch-protection=none" => {
+                codegen.sign_returns = false;
+                sign_leaf_returns = false;
+            }
             "-mgeneral-regs-only" => codegen.general_registers_only = true,
             "-mno-general-regs-only" => codegen.general_registers_only = false,
             "-mstrict-align" => codegen.strict_alignment = true,
@@ -1153,6 +1171,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         automatic_zero,
         tls_model,
         stack_protector,
+        sign_leaf_returns,
         patchable_entry,
         minimum_function_alignment,
         codegen,
@@ -1320,10 +1339,11 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
         ("__NO_INLINE__", options.optimization == 0, "1"),
         ("__SSP_STRONG__", options.stack_protector, "3"),
         ("_REENTRANT", options.pthread, "1"),
+        // ACLE: bit 0 is the A key, bit 2 protects leaf functions.
         (
             "__ARM_FEATURE_PAC_DEFAULT",
             options.codegen.sign_returns,
-            "1",
+            if options.sign_leaf_returns { "5" } else { "1" },
         ),
     ] {
         pp.undefine(name);

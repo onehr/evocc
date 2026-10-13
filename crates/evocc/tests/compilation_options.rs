@@ -918,6 +918,46 @@ fn return_signing_matches_frame_lifetime_and_final_override() {
 }
 
 #[test]
+fn every_return_signing_spelling_signs_each_function_and_sets_the_acle_scope() {
+    let source =
+        "extern int g(int); int f(int n) { return g(n) + 1; } int leaf(int n) { return n & 7; }";
+    for (option, scope) in [
+        ("-mbranch-protection=pac-ret", "1"),
+        ("-mbranch-protection=pac-ret+leaf", "5"),
+    ] {
+        let asm = successful(run(&["--emit=asm", option], source));
+        // Both functions sign, the leaf included, and every return authenticates first.
+        assert_eq!(asm.matches("paciasp").count(), 2, "{option}: {asm}");
+        let lines: Vec<&str> = asm.lines().collect();
+        let returns: Vec<usize> = (1..lines.len())
+            .filter(|&i| lines[i].trim() == "ret")
+            .collect();
+        assert!(!returns.is_empty(), "{option}: {asm}");
+        assert!(
+            returns.iter().all(|&i| lines[i - 1].trim() == "autiasp"),
+            "{option}: {asm}"
+        );
+        let defined = successful(run(&["-E", option], "__ARM_FEATURE_PAC_DEFAULT\n"));
+        assert_eq!(defined.trim(), scope, "{option}");
+    }
+    // A later `none` cancels the request and its macro.
+    let cancel = [
+        "-mbranch-protection=pac-ret+leaf",
+        "-mbranch-protection=none",
+    ];
+    let asm = successful(run(&["--emit=asm", cancel[0], cancel[1]], source));
+    assert!(
+        !asm.contains("paciasp") && !asm.contains("autiasp"),
+        "{asm}"
+    );
+    let defined = successful(run(
+        &["-E", cancel[0], cancel[1]],
+        "__ARM_FEATURE_PAC_DEFAULT\n",
+    ));
+    assert_eq!(defined.trim(), "__ARM_FEATURE_PAC_DEFAULT");
+}
+
+#[test]
 fn general_register_only_varargs_never_save_vector_registers() {
     let source = "long f(int n, ...) { __builtin_va_list a; __builtin_va_start(a,n); long x=__builtin_va_arg(a,long); __builtin_va_end(a); return x; }";
     let asm = successful(run(&["--emit=asm", "-mgeneral-regs-only"], source));
