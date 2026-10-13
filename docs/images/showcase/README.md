@@ -94,7 +94,7 @@ Stage the five pinned archives under `.build/ladder/games/download/`:
 `python3 tools/ladder/games.py prepare` checks the pins, extracts locally and
 applies the disclosed Neverball patch. Use Python 3.12+ for safe tar extraction.
 Mount the repository read-only at `/repo` and `.build/ladder` writable at `/work`
-in `evo-flight-lab:sealed`. Install these additional reference dependencies:
+in `evo-nexlab:sealed`. Install these additional reference dependencies:
 `libsdl2-dev libsdl2-ttf-dev libgl-dev libgl1-mesa-dri libpng-dev libjpeg-dev
 libvorbis-dev libcurl4-openssl-dev xvfb xauth pkg-config`.
 The frozen base uses historical Debian snapshot metadata; package versions from
@@ -171,21 +171,23 @@ exists, it also compares the excerpt with the log.
   Unity test programs run 216 tests: none fails, and upstream marks one as
   ignored. The Unity framework itself is GCC-built.
 - **Linux.** The serial log comes from a kernel that Kbuild built directly
-  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `ce7bd3e3ba06290b…`, on
+  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `16a87d16bc1e6212…`, on
   the host boot lane. Its version banner names `evocc 0.1.0`. All 2,799 target
   C objects come from EvoCC. The receipt ties each object to its compile
   command in the build log, and no GCC target C object remains. GNU tools
   assemble the 67 assembly files, link the kernel, build the host programs and
   preprocess one device-tree source. The configuration is the frozen GCC
   kernel configuration after `olddefconfig` with EvoCC. Only compiler
-  capability probes differ. Nine compiler options have no effect, and the
-  receipt lists them. One of them is `-msign-return-address`: both
-  configurations ask for kernel return-address signing, but EvoCC ignores the
-  option, so this kernel does not sign return addresses. The other hardening
-  features behind the differing probes are off in the GCC configuration too.
-  The kernel also boots on the TCG lane. Nine paired
-  upstream kselftest programs, with 125 subtests, pass on both the GCC and
-  the EvoCC kernel. Both lanes ran QEMU 11.1.2, which differs from the pinned
+  capability probes differ, and the hardening features behind them are off in
+  the GCC configuration too. Both configurations ask for kernel return-address
+  signing. Kbuild passes `-mbranch-protection=pac-ret` to every target C
+  object, and EvoCC signs the return address of every function: the Image has
+  77,584 `paciasp` instructions. The host lane enables pointer
+  authentication, so this boot runs the signed code. Nine compiler options
+  have no effect, and the receipt lists them. The kernel also boots on the TCG
+  lane, whose CPU model has no pointer authentication. Nine paired upstream
+  kselftest programs, with 125 subtests, pass on both the GCC and the EvoCC
+  kernel. Both lanes ran QEMU 11.1.2, which differs from the pinned
   QEMU contract; the receipt allows and records this drift. The console prints
   the kernel's earlier messages late, so the `EVO_*` lines of the test init
   program appear before `Run /init` in the log. The card leaves them out. The
@@ -219,13 +221,13 @@ structured data are presentation, not extra measurements.
 ## Reproduce
 
 From the repository root, with existing `.build/ladder` artifacts and the sealed
-`evo-flight-lab:sealed` image available (no downloads or full rebuilds):
+`evo-nexlab:sealed` image available (no downloads or full rebuilds):
 
 ```sh
 container run --rm --platform linux/arm64 --network none --cpus 2 --memory 1G \
   -v "$PWD:/repo:ro" \
   -v "$PWD/docs/images/showcase:/repo/docs/images/showcase" \
-  evo-flight-lab:sealed python3 /repo/tools/showcase.py --capture
+  evo-nexlab:sealed python3 /repo/tools/showcase.py --capture
 python3 tools/showcase.py --render --check
 ```
 

@@ -86,7 +86,7 @@ class ShowcaseTests(unittest.TestCase):
                 showcase.excerpt(text, segments)
 
     def test_log_card_wraps_a_long_line_without_changing_its_text(self):
-        banner = ("[    0.000000] Linux version 6.18.44 (evo@flightlab) (evocc 0.1.0 (03600f805722 2026-10-12), "
+        banner = ("[    0.000000] Linux version 6.18.44 (evo@nexlab) (evocc 0.1.0 (fb05debf29c4 2026-10-13), "
                   "GNU ld (GNU Binutils for Debian) 2.44) #1 SMP PREEMPT Sun Aug 9 18:25:35 UTC 2026")
         record = {"title": "Linux", "segments": [{"line": 2, "text": [banner]}]}
         root = ET.fromstring(visuals.log_card("linux", record))
@@ -94,9 +94,12 @@ class ShowcaseTests(unittest.TestCase):
         texts = ["".join(node.itertext()) for node in rows]
         self.assertEqual("".join(texts), banner)
         self.assertTrue(all(len(text) <= visuals.LOG_WRAP["linux"] for text in texts))
+        self.assertTrue(all(text.endswith(" ") for text in texts[:-1]), texts)
+        self.assertEqual(visuals.wrap_spans([("abcdefgh", "text", False)], 3),
+                         [[("abc", "text", False)], [("def", "text", False)], [("gh", "text", False)]])
         green = [span.text for row in rows for span in row
                  if span.get("fill") == visuals.TERMINAL["green"] and span.get("font-weight") == "700"]
-        self.assertEqual("".join(green), "evocc 0.1.0 (03600f805722 2026-10-12)")
+        self.assertEqual("".join(green), "evocc 0.1.0 (fb05debf29c4 2026-10-13)")
 
     def test_boot_facts_accept_markers_that_the_console_interleaves(self):
         facts = showcase.read_json(showcase.OUT / "captures.json")["logs"]["linux"]["facts"]

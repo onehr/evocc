@@ -177,17 +177,28 @@ def log_spans(line, rules):
 
 
 def wrap_spans(spans, columns):
-    """Split styled spans into rows of at most ``columns`` characters."""
-    rows, row, used = [], [], 0
-    for text, color, bold in spans:
-        while text:
-            take = columns - used
-            row.append((text[:take], color, bold))
-            used += len(text[:take])
-            text = text[take:]
-            if used == columns:
+    """Split styled spans into rows of at most ``columns`` characters.
+
+    A row ends after its last space, so a word moves to the next row whole.
+    Only a word longer than a row is split. The rows join to the original text.
+    """
+    text = "".join(part for part, _, _ in spans)
+    ends, start = [], 0
+    while len(text) - start > columns:
+        space = text.rfind(" ", start + 1, start + columns)
+        start = space + 1 if space != -1 else start + columns
+        ends.append(start)
+    ends.append(len(text))
+    rows, row, position = [], [], 0
+    for part, color, bold in spans:
+        while part:
+            take = ends[len(rows)] - position
+            row.append((part[:take], color, bold))
+            position += len(part[:take])
+            part = part[take:]
+            if position == ends[len(rows)]:
                 rows.append(row)
-                row, used = [], 0
+                row = []
     if row or not rows:
         rows.append(row)
     return rows

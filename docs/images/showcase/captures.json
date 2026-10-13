@@ -236,7 +236,7 @@
     "cjson.svg": "0cacce847d31a7be0db769a1df4016f296df92e3eef48b2b6ad14958b8912393",
     "doom.png": "224c8586faa473ff4b65ddd3132d9f15066f897c79f29235096f98d65a95f1f7",
     "jq.svg": "edf95d1f85359f794f5ad5d40ed4ed23cd7f9d98f84a3dc92c72330f2bbf64a8",
-    "linux.svg": "c73ed0bff5b50f123c442a96141d1277c816221b9f0853d25777e6570f98d215",
+    "linux.svg": "7c112b16a0692c699c49efd163573cca5c6b562925fac6ffb81171c9981133a2",
     "lua.stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "lua.stdout.txt": "51fbd9fe5eab7406a88e396300338896103f90348193686bbab0e18cf7ffaf05",
     "lua.svg": "57f6d1e81037863cbea4a487f3adf0e93eba19409634caa28e9a58810505e975",
@@ -351,26 +351,26 @@
     "linux": {
       "title": "Linux 6.18.44: serial console",
       "receipt": "tests/contracts/kernel-direct-virt-receipt.json",
-      "source": ".evidence/kbuild-direct-20261012/subject-boot-hvf/boot.log",
-      "sourceSha256": "6cc861ad4173e28f7922de4396eaa884005b60e8e6ca479aef2bfc518fb42504",
+      "source": ".evidence/kbuild-direct-pac-20261013/subject-boot-hvf/boot.log",
+      "sourceSha256": "936effdae23268d72626169e69ce58eb1472556f2af9cb0d1a31a87c2ace9c4b",
       "segments": [
         {
           "line": 2,
           "text": [
-            "[    0.000000] Linux version 6.18.44 (evo@flightlab) (evocc 0.1.0 (03600f805722 2026-10-12), GNU ld (GNU Binutils for Debian) 2.44) #1 SMP PREEMPT Sun Aug 9 18:25:35 UTC 2026"
+            "[    0.000000] Linux version 6.18.44 (evo@nexlab) (evocc 0.1.0 (fb05debf29c4 2026-10-13), GNU ld (GNU Binutils for Debian) 2.44) #1 SMP PREEMPT Sun Aug 9 18:25:35 UTC 2026"
           ]
         },
         {
           "line": 77,
           "text": [
-            "[    0.003615] smp: Brought up 1 node, 4 CPUs"
+            "[    0.004048] smp: Brought up 1 node, 4 CPUs"
           ]
         },
         {
           "line": 243,
           "text": [
-            "[    0.105464] Run /init as init process",
-            "[    0.116070] reboot: Power down"
+            "[    0.091883] Run /init as init process",
+            "[    0.116059] reboot: Power down"
           ]
         }
       ],
@@ -380,29 +380,29 @@
           "line": "[    0.000000] Booting Linux on physical CPU 0x0000000000 [0x610f0000]"
         },
         "cpus": {
-          "seconds": 0.003615,
-          "line": "[    0.003615] smp: Brought up 1 node, 4 CPUs"
+          "seconds": 0.004048,
+          "line": "[    0.004048] smp: Brought up 1 node, 4 CPUs"
         },
         "cpuCount": 4,
         "memory": {
-          "seconds": 0.007473,
-          "line": "[    0.007473] Memory: 1957912K/2097152K available (46976K kernel code, 1374K rwdata, 6440K rodata, 2240K init, 607K bss, 102036K reserved, 32768K cma-reserved)"
+          "seconds": 0.008218,
+          "line": "[    0.008218] Memory: 1956956K/2097152K available (47936K kernel code, 1374K rwdata, 6440K rodata, 2240K init, 607K bss, 102992K reserved, 32768K cma-reserved)"
         },
-        "availableKiB": 1957912,
+        "availableKiB": 1956956,
         "totalKiB": 2097152,
         "devices": {
-          "seconds": 0.00786,
-          "line": "[    0.007860] devtmpfs: initialized"
+          "seconds": 0.008648,
+          "line": "[    0.008648] devtmpfs: initialized"
         },
         "init": {
-          "seconds": 0.105464,
-          "line": "[    0.105464] Run /init as init process"
+          "seconds": 0.091883,
+          "line": "[    0.091883] Run /init as init process"
         },
         "poweroff": {
-          "seconds": 0.11607,
-          "line": "[    0.116070] reboot: Power down"
+          "seconds": 0.116059,
+          "line": "[    0.116059] reboot: Power down"
         },
-        "nonce": "k1-20261012T052530Z-04b3d553"
+        "nonce": "k1-20261013T054437Z-89f7ea8f"
       }
     },
     "toybox": {
