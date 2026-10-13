@@ -8,6 +8,7 @@ docs/*
 !docs/status.md
 !docs/verified-optimization-design.md
 !docs/paper.md
+!docs/release-checklist.md
 !docs/images/
 !docs/images/**
 !docs/archive/

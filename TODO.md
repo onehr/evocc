@@ -137,9 +137,9 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
-| AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
-| ACCEPTANCE | T04, T02, K13, K14, B10, T05 | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R05, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
+| AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D01, D02, D03, D04, D05, D06, D08 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
+| ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05b, R05c, R05d, R05e, R05f, R05g, R05h, R05i, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
 ## Diagnostics and command-line product work
@@ -2929,6 +2929,165 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     with zero failures and four historical ignores; Clippy/fmt also pass.
     [Exact scope and preserved failed attempts](tests/fixtures/return-conversion-constraints.out).
 
+  The 2026-10-13 audit checked 936 clauses of the six documents in `spec/`: 722
+  are tested or consistent with the code, 93 are untested, 94 are contradicted
+  and 27 are unfalsifiable. E4006 and E4008 are errata, not new authority; the
+  code came first. Five findings are silent wrong code: an `asm` clobber of
+  `x19`-`x28` is not saved, three Darwin call shapes disagree with Apple clang,
+  Darwin `long double` has the Linux layout, an `_Atomic` read is a plain load,
+  and a nonconstant range initializer runs once per element. The children T03g
+  to T03z hold every finding.
+  [Audit](docs/archive/notebook/spec-audit-20261013.md).
+
+  - [ ] **T03g — Save the callee-saved registers that `asm` clobbers** — `OPEN`, P1.
+    (A01; the `asm` rule of A13). Probe P1 shows a host caller that loses `x19`.
+    Next action: add P1 as a native regression for both targets. Then add the
+    general callee-saved clobbers to the saved set, and make the allocation
+    verifier clear the clobbers of every `asm`. Exit: the regression returns 42
+    on the macOS host and in the sealed Linux lane. A forged allocation that
+    keeps a value in an `asm`-clobbered register across the `asm` gets E4020.
+
+  - [ ] **T03h — Darwin calls across the compiler boundary** — `OPEN`, P1.
+    (A02, A03, A04). P2 to P5 compute wrong values against Apple clang. Next
+    action: add host tests for P2 to P5, fail closed with a Section 10 code for
+    each shape that the backend cannot place, correct the result rule of EvoMIR
+    §6.2 for Darwin, and correct the scope sentence of D04. Exit: on a macOS
+    host, each of P2 to P5 gives the clang value (9, 9, 10, and the pair in
+    `x1:x2`), or the driver refuses it with E4010 or E4009. No probe compiles to
+    another value.
+
+  - [ ] **T03i — State and test the Darwin target profile of EvoIR** — `OPEN`, P1.
+    (A05, A24). Next action: decide the Darwin `long double` layout and the
+    target identity of EvoIR text. Exit: under `--target=aarch64-apple-darwin`,
+    `sizeof(long double)`, `__SIZEOF_LONG_DOUBLE__` and `offsetof(struct {char
+    c; long double d; int x;}, x)` equal Apple clang (8, 8, 16), or the driver
+    refuses `long double` objects with a stated code. Darwin EvoIR text carries
+    a target mark, or the EvoIR reader and `-Oeq-scalar` refuse it. EvoIR §9.1
+    and §10.5 state the rule.
+
+  - [ ] **T03j — Fail closed for `_Atomic` reads and nonconstant range initializers** — `OPEN`, P1.
+    (A06, A07). Exit: parser tests show `_Atomic int g; int ld(void){return g;}`
+    gives E2702 at `g` (or EvoIR `atomic.load seq_cst` and `ldar`), and `int
+    b[4]={[0 ... 2]=f()};` gives E2917 at `f()`.
+
+  - [ ] **T03k — Keep the division rule of a zero-size pointer difference** — `OPEN`, P2.
+    (A08). Exit: for P9, EvoIR has `divisor_nonzero` and
+    `ub.assume.division_by_zero` before the `sdiv`, or the front end refuses
+    with a stated code. The checked native build traps with `brk #3002`.
+    `--interpret-c-hir` reports a diagnostic instead of a panic. A lowering test
+    covers `struct e {}` and `int (*)[0]`.
+
+  - [ ] **T03l — Closed checker statuses and the certificate rule matrix** — `OPEN`, P2.
+    (A09, A28). Exit: a new test in `crates/evocc-proofcheck/tests` submits six
+    hostile certificates: an out-of-range `class:` reference, extraction class
+    and root class; a witness count and a seed count of `2^64 - 1`; and a
+    50,000-instruction chain. Each exits 2 or 3; the chain exits 0 or 3. One
+    rehashed mutant for each status-2 and status-3 rule of §11.3 exits with its
+    stated status. An `after.evo` that fails validation gives the status that
+    §9.5 and §11.4 both state.
+
+  - [ ] **T03m — Enforce the checks that the specs name** — `OPEN`, P2.
+    (A25, A32, A47). Exit: a Cargo test reads the normal-dependency closure. It
+    fails when `evocc-eqopt` or `evocc-egraph` enters the closure of
+    `evocc-proofcheck`, or `evocc-egraph` enters that of `evocc-evoir`.
+    `tools/gate-changed.sh` (both modes) and CI run
+    `tools/check-textual-grammar.py`, `python3 -m unittest
+    tools.tests.test_generate_target` and `tools/generate-target.py --check`, or
+    each sentence that claims this enforcement is removed. `registry_digests.rs`
+    covers all five registries.
+
+  - [ ] **T03n — Proof-required publication and admission** — `OPEN`, P1.
+    (A10, A11, A35, the compiler digest of A36). Exit: a
+    `crates/evocc/tests/proof_required.rs` test with a checker that blocks
+    `record.json` asserts exit 4, no `output.s` and no `record.json`. `-S -o`
+    and `-c -o` with `--proof-required` give the exit and the files that §7
+    states. A driver test asserts the stated exit for `-fwrapv`,
+    `-frounding-math`, `-fstack-protector-strong` and a zero-initialized object.
+    The record holds a 64-hex compiler digest, or the run exits 4.
+
+  - [ ] **T03o — Report EvoMIR refusals where §10 says** — `OPEN`, P2.
+    (A12, A39). Exit: the driver reports P10 at the refused function with its
+    block, index and Section 10 name. A Darwin function with a section, TLS or a
+    patchable entry gives E4009. UI snapshots pin both. The owner of the n03a
+    receipts updates them.
+
+  - [ ] **T03p — Make the allocation verifier match §9.2** — `OPEN`, P2.
+    (A13, A45). Exit: in
+    `crates/evocc-mir/tests/section7_allocation_verifier.rs`, these forged
+    allocations each get E4020: swapped entry parameters, a reload from the
+    wrong slot, two live slots merged, an early-clobber violation, and a
+    symbolic operand outside `i`.
+
+  - [ ] **T03q — Make EvoMIR validation a gate** — `OPEN`, P2.
+    (A14, A37, A38). Exit: `validate_module` refuses `tst.x %v0, #5` and `tst.x
+    %v0, #0`. The native entry refuses lowered EvoMIR that fails validation.
+    EvoMIR tests cover an invalid indirect target (E3048 in the EvoMIR
+    interpreter) and empty or unsorted indirect successors.
+
+  - [ ] **T03r — Refuse ABI-changing options on the cc path** — `OPEN`, P2.
+    (A15). Exit: `evocc -S -fpack-struct` and `evocc -S -mabi=ilp32` exit 1 with
+    a diagnostic at the option, also under `-w`. A cc-path test pins both.
+
+  - [ ] **T03s — State and test the clean-check scope for pointer relations** — `OPEN`, P2.
+    (A16). Exit: `--check` reports `&x[3]-&y`, `&a<&b` and a non-exact
+    difference as the spec states, or the clean-check text and EvoIR §10.1.3
+    name these unchecked cases. The C-HIR code equals the code that the spec
+    names. A negative test pins each case.
+
+  - [ ] **T03t — Front-end refusals that EvoIR §10.1 and §10.5 name** — `OPEN`, P2.
+    (A17, A18, A40). Exit: parser or driver tests show: a `const` pointee gives
+    E2913 at the third operand; `__has_builtin` is 1 for `__builtin_memset`,
+    `__builtin_clz`, `__builtin_trap` and `__builtin_offsetof`; the `static int
+    memset` example exits 0 or gets a dedicated code, never E3101; an ambiguous
+    `v.x` gives E2906; a goto into a statement expression gives E2918, or the
+    code is withdrawn; `pack` inside a record gives E0107; a cast between record
+    tags gets a dedicated code; the E2203 and E2923 precedence is stated and
+    tested.
+
+  - [ ] **T03u — Make the EvoIR validator match its rules** — `OPEN`, P2.
+    (A19 to A22, A41). Exit: `validate_module` or `parse_section9_module`
+    rejects each of: the P14 module; `const.bits<8> 256`; `global_addr` with
+    `ptr<stack>`; `lifetime.end` of a global; a pointer load with a `[size=4]`
+    or `[align=16]` guard; a load with no guard; a `ptr.offset` with no
+    `pointer_valid`; a token type nested in a `fnptr`; and reordered effect
+    interfaces with `asm`, strict FP and `asm.goto`. Each negative test lives in
+    `crates/evocc-evoir/tests`. `InvalidLifetimeEnd` reports E3018, and the two
+    unit tests assert it. The E3062 tests assert the code.
+
+  - [ ] **T03v — Key persistent e-nodes by result sort** — `OPEN`, P2.
+    (A23). Exit: a test ingests `zext.bits<32> %x` and `zext.bits<64> %x` and
+    asserts two classes. Pointer, `mem` and `world` values stay outside the
+    persistent P0 classes. `day8_persistent_state_contract` and `verified_chain`
+    stay green.
+
+  - [ ] **T03w — EvoIR errata for §4.4, §6.4, §6.5, §7.2, §8, §10.2, §10.3 and §11** — `OPEN`, P2.
+    (A26, A27, the text of A29, A30, A31, A42, A47, A51). Exit: one revision
+    with updated pins. `rg -n "rolls the whole transaction
+    back|saturate_scalar|extract_module|signed_add_associative" spec/evoir.md`
+    finds nothing. §11.7 lists the shared `inst_results` and the renderer. The
+    residual-risk paragraph states the campaign that exists.
+
+  - [ ] **T03x — EvoMIR and `target.md` errata** — `OPEN`, P2.
+    (A34, A48, A50, the text of A44 and A46). Exit: revisions with updated pins.
+    The §5.1 guard rows say that native code relies on the C rule and checks no
+    memory fault. `randomized_semantic_gate.rs` accepts only active Section 10
+    codes, and the EqSat bridge errors stop reusing E4001 and E4002.
+
+  - [ ] **T03y — `verification.md`, receipt binding and `spec/README.md`** — `OPEN`, P2.
+    (A33, A46, A49, A52). Exit: a check (in `tools/render-status.py --check` or
+    a test) fails when `binding.spec_sha256` differs from the `spec/evoir.md`
+    pin. The receipt is refreshed after the in-flux edits land. The README lists
+    five documents. §2.1, §4.6 and §6 match the driver and Lean.
+
+  - [ ] **T03z — Missing negative-test matrices** — `OPEN`, P2.
+    (A29, A36, A43, A44, A45). Exit: these tests exist and pass. Seven refusal
+    fixtures in `lean/EvoIR/Rewrite/Tests.lean`. Table-driven failure cases in
+    `crates/evocc/tests/proof_required.rs`. `evoir-sem --list-stages` equals
+    `STAGES`. Edge taint for `cond_br`, `br.indirect` and `asm.goto` in the
+    checker. One traversal test over all 59 instruction variants for every
+    hand-written traversal. The boundary scan covers `costs.rs`, `encodings.rs`
+    and `patterns.rs`. E4004 and the alias-truth rule each have a test.
+
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed
   configuration; its first launch stopped on the inventory-role defect T04b.
@@ -3529,7 +3688,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   Full x86 kernel support remains a separately declared stretch, not an implied
   consequence of ARM64 boot. [Roadmap][roadmap].
 
-- [ ] **R05 — Release, reproducible bootstrap and proof-claim audit** — `LATER`, P3.
+- [ ] **R05 — Release, reproducible bootstrap and proof-claim audit** — `OPEN`, P1.
   Audit the remaining release deliverables, portable builds, packaged artifacts,
   reproducibility and proof boundaries against the roadmap. Give each missing
   deliverable a child task before release. A Rust compiler compiling a C compiler
@@ -3537,6 +3696,57 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   entire compiler. The October 4 V00–V06 correctness path is a mandatory first-
   public-release dependency, not optional follow-up. Close with the actual release
   checklist and artifacts only after V06. [Roadmap][roadmap].
+  On 2026-10-13 the owner asked to finish every open item, so this task is
+  active. The 2026-10-13 audit is in `docs/release-checklist.md`. The archives
+  now carry the license texts of the bundled Linux headers, and the sysroot
+  contract pins them. The children R05a to R05l hold the missing deliverables.
+
+  - [ ] **R05a — Build and check the Linux archive** — `OPEN`, P1.
+    No Linux archive has been built. Exit: `tools/release.sh --target
+    aarch64-unknown-linux-gnu --with-lean` passes the smoke steps of the
+    release workflow and the static-link check, and
+    `tools/tests/test_sysroot.py` passes on that archive.
+  - [ ] **R05b — Ship the license texts of the runtime code in the binaries** — `OPEN`, P1.
+    Exit: the archives hold the MIT texts of musl and libuv and the LGPL-3.0
+    and GPL-3.0 texts for GMP, and `tools/release.sh` refuses an archive
+    without them.
+  - [ ] **R05c — Pin the sysroot image** — `OPEN`, P2.
+    The contract pins `evo-nexlab:sealed-20260810` (digest `2c23684c…`). The
+    tag `evo-nexlab:sealed` now names `e8d52bdc…`, whose export adds 34
+    headers of `libclang-rt-19-dev`. Exit: an export without
+    `EVOCC_SYSROOT_IMAGE` reproduces the contract byte for byte.
+  - [ ] **R05d — Trim the bundled headers or record why they stay** — `OPEN`, P2.
+    2,319 of the 3,966 headers (40.8 of 52.7 MiB) serve other triples, C++,
+    a duplicate clang directory or Objective-C. Exit: the archive drops them,
+    or the notices say why they stay; zlib and the cross hello still pass.
+  - [ ] **R05e — Build path-independent binaries** — `OPEN`, P2.
+    Exit: `strings` finds no builder home path in the binaries, and builds
+    from two checkout paths are identical.
+  - [ ] **R05f — Document how to reproduce a release archive** — `OPEN`, P2.
+    Exit: a book page gives the commands, and a second build from a clean
+    checkout reproduces the macOS archive digest.
+  - [ ] **R05g — Correct the install text** — `OPEN`, P2.
+    Exit: README.md and book/src/install.md name the four programs, use
+    `--locked`, say how a source build gets the sysroot, and give a checksum
+    step.
+  - [ ] **R05h — State the glibc floor of the Linux archive** — `OPEN`, P2.
+    The bundled glibc 2.41 headers redirect `strtol` and similar functions to
+    `__isoc23_*` symbols when `_GNU_SOURCE` is set. Exit: a `_GNU_SOURCE`
+    `strtol` program links on Debian 12 with the archive, or the book states
+    that glibc 2.38 or later is required.
+  - [ ] **R05i — State how macOS treats a downloaded archive** — `OPEN`, P2.
+    Exit: the binaries are notarized, or the book documents the quarantine
+    attribute that a browser download gets and how to clear it.
+  - [ ] **R05j — Print versions from every binary** — `OPEN`, P3.
+    Exit: `evocc-checker --version` and `evoir-sem --version` print the
+    release version.
+  - [ ] **R05k — Date, tag and publish 0.1.0** — `OPEN`, P1.
+    The owner tags and pushes. Exit: CHANGELOG dates 0.1.0, tag `v0.1.0`
+    exists, one merged `SHA256SUMS` is published, and the README download
+    URLs resolve.
+  - [ ] **R05l — Name the proof profile in the README** — `OPEN`, P2.
+    Exit: the README names `core-v1` where it states what the proofs cover,
+    as the owner decides.
 
 - [x] **R06 — Pinned Doom integration** — `DONE`, 2026-09-28, bounded headless profile.
   doomgeneric `dcb7a8db...` plus Freedoom 0.13.0 Phase 1: all 80 engine units
@@ -4273,8 +4483,10 @@ refusal; changing the P13 demo does not close it.
   (`.evidence/builtin-probes/20260905-b6/b6-darwin-abi.out`). Thus a call
   across the boundary to Darwin-compiled code can pass wrong values; calls
   between EvoCC functions agree. `spec/evomir.md` section 6.5 records this in
-  its conformance note. The C driver emits the Linux ABI profile, so only the
-  Darwin profile of the backend library is affected. Next action: decide if
+  its conformance note. The 2026-10-13 audit found that this scope note is
+  stale: since EvoMIR 1.0.1 the C driver emits the Darwin profile, and Darwin
+  is the default target on macOS, so C programs are affected. T03h covers it
+  with the other Darwin boundary shapes. Next action: decide if
   the Darwin profile follows the platform or keeps the even pair as an
   intended difference. Exit: the decision in section 6.5 and a test: the
   test shows the platform placement, or the section documents the difference
@@ -4366,6 +4578,22 @@ refusal; changing the P13 demo does not close it.
   after retaining the source, object hash and proof. Measured target/frontend
   plus capture growth is 4,067,496 KiB (about 3.88 GiB), mostly reusable build
   cache; the retained capture is 784 KiB and free space remains above 133 GiB.
+
+- [ ] **D08 — Compile fortified C library calls** — `OPEN`, P1.
+  Found on 2026-10-13 by the release review. Both macOS SDKs on the host
+  define `_FORTIFY_SOURCE` as 2 by default. The macOS 15 SDK guards its
+  fortified macros with `__has_builtin(...) || defined(__GNUC__)`, so calls
+  such as `snprintf`, `vsnprintf`, `memcpy` and `strcpy` become
+  `__builtin___*_chk` calls. EvoCC does not implement them. The reproducer
+  `.evidence/fortify-20261013/f.c` fails with four W0003 errors at -O0 and
+  -O2. The 26.x SDK checks only `__has_builtin`, which hides the defect.
+  glibc with `-O2 -D_FORTIFY_SOURCE=2` fails the same way, with E2202. Both
+  diagnostics point at the wrong construct. GitHub's macOS 14 runner failed
+  `darwin_variadic_calls_agree_with_the_c_library` for the same reason.
+  Next action: implement the builtins with GCC semantics, keep every check,
+  and name an unknown builtin at its own location. Exit: the reproducer runs
+  with the 15.4 SDK at -O0 and -O2, and glibc fortify levels 2 and 3 match
+  gcc-14, the overflow abort included.
 
 ## Codegen quality track — next quarter
 
