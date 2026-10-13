@@ -134,7 +134,7 @@ was found in the read-only process check at this planning checkpoint.
 <!-- closure-queues:start -->
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
-| KERNEL | K01, K02, K03, K04, K07, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
+| KERNEL | K01, K02, K03, K04, K07, K10, K11, K11f, K12, N08, N09, N10, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L10, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D01, D02, D03, D04, D05, D06, D08 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
@@ -1497,6 +1497,17 @@ KUnit, and it closes none of those separate tasks.
   this round's matching GCC reaches 7/10 and also times out. Both enter the
   next mode and shut down normally. Retain this new common deadline failure
   rather than importing the older GCC PASS; no runtime speedup is established.
+  October 13's [TCG instruction
+  profile](tests/fixtures/kernel-tcg-instruction-profile.out) uses the retained
+  virtconfig pair, because the 7,008-object pair was deleted on October 7. For
+  the same 65,687 stage-2 faults, EvoCC executes 5.25 times GCC's instructions
+  (kernel code 5.60 times). At least 36 percent of the excess is block-argument
+  transport through stack slots: such copy runs are 29.6 percent of EvoCC's
+  executed kernel instructions and 1.6 percent of GCC's. `user_mem_abort` runs
+  3,649 instructions per fault (GCC 159). About 23 percent of the excess is
+  time-scaled waiting that the slowdown amplifies. The
+  [reductions](tests/fixtures/kernel-codegen-reductions/) isolate the causes;
+  N08 to N11 hold the repairs. Replay the unchanged original after them.
 
   - [x] **K02a — Remove redundant negated-truth materialization**, 2026-09-23.
     [Minimal C case](tests/fixtures/negated-truth-branch.c) went RED → GREEN;
@@ -1631,6 +1642,11 @@ KUnit, and it closes none of those separate tasks.
   reference **7/10 TIMEOUT**, with orderly shutdown on both. The current
   original remains unclosed; smaller current-image profiles are diagnostic,
   not substitutes for the unchanged full workload.
+  October 13's [TCG instruction
+  profile](tests/fixtures/kernel-tcg-instruction-profile.out): for the same 256
+  MiB of work EvoCC executes 5.43 times GCC's instructions, with K02's ranking.
+  Memslot code is under 1 percent of the excess, so K03 shares K02's fault,
+  allocate and unmap cause. It stays open until the unchanged original passes.
 
   - [x] **K03a — Substitute bounded private leaf helpers**, 2026-09-23.
     The [small C case](tests/fixtures/private-leaf-substitution.c) goes RED → GREEN
@@ -1811,6 +1827,13 @@ KUnit, and it closes none of those separate tasks.
   source-bound dispositions below. The 300-second whole-program timeout remains.
   Close with complete nested accounting on both sides after repair, not the
   earlier selected 10-group/51-subtest controls. [Evidence][kernel].
+  October 13's [TCG instruction
+  profile](tests/fixtures/kernel-tcg-instruction-profile.out): no retained Image
+  has BTF, so `test_progs` cannot run. The retained logs show GCC using over 285
+  of its 300 seconds, and EvoCC reaching group 482 1.13 to 1.26 times later: a
+  spread-out slowdown, not one stuck test. A raw-BPF proxy workload runs 3.75
+  times GCC's kernel instructions for the same work (verifier about 3 times,
+  hash-map updates 13 times). It needs N08 to N11 and a BTF-capable pair.
 
   - [x] **K10a — Reject incomplete BPF summaries and label selected replays**.
     A [small TAP fixture](tests/fixtures/kselftest-bpf-truncated.tap) and malformed,
@@ -1918,6 +1941,13 @@ KUnit, and it closes none of those separate tasks.
     remain intact. This updates current-image evidence but does not prove a
     performance repair or a complete-campaign margin. It excludes K02j's later
     compiler change. [Current capture](tests/fixtures/pidfd-recycle-progress.out).
+    October 13's [TCG instruction
+    profile](tests/fixtures/kernel-tcg-instruction-profile.out): per fork/exit
+    cycle EvoCC executes 11.6 times GCC's kernel instructions. `copy_pte_range`
+    alone runs 206 times GCC's count and holds 36.5 percent of the excess: EvoCC
+    builds it as one 1,329,200-byte function that runs about 1,700 instructions
+    per page-table slot. It stays open until N08 to N11 land and the final pair
+    passes.
 
   - [x] **K11g — Attribute delayed dying-memcg release** — `DONE`, P1, 2026-09-26.
     The [small frozen-workload control](tests/fixtures/cgroup-stock-displacement.c)
@@ -5135,6 +5165,53 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   PASS. [Receipt](tests/contracts/codegen-n07-e3-20261003-receipt.json).
   Scoped retained disk increment +503,808 bytes, shared frontend cache unchanged;
   about 64 GiB free. No B1/B6 proof acceptance.
+
+- [ ] **N08 — Keep values in registers across block joins** — `OPEN`, P1.
+  Found on 2026-10-13 by the kernel TCG instruction profile. At each if/else,
+  switch, `asm goto` or loop back edge, EvoCC passes every live value as a
+  block argument and moves it through stack slots, sometimes into the same
+  slot. On the K02 workload, such copy runs are 29.6 percent of EvoCC's
+  executed kernel instructions and 1.6 percent of GCC's: at least 36 percent
+  of the excess. `tests/fixtures/kernel-codegen-reductions/loop-carried-transport.c`
+  runs 179,135 instructions per call (GCC 14: 8,236), and
+  `asm-goto-live-transport.c` runs 488 (GCC 14: 67). Next action: coalesce
+  block arguments with their sources in out-of-SSA, share the spill slots of
+  values that do not interfere, and keep loop-invariant values in
+  callee-saved registers, with the allocation validation unchanged. Exit:
+  both reductions run within twice GCC 14's count at -O2; the workspace gate,
+  the allocation verifier and the proof-required path pass; the K02 profile
+  is rerun.
+
+- [ ] **N09 — Inline small static helpers by default** — `OPEN`, P1.
+  The K02 fault path makes about 204 calls to small helpers that GCC
+  inlines; each call pays a frame and a return-signing pair.
+  `tests/fixtures/kernel-codegen-reductions/leaf-helper-call.c` runs 85
+  instructions per call (GCC 14: 9). N03b's bounded TU-local slice was
+  negative, and the kernel flags turn the opt-in quality flags off
+  (`protects_codegen()`). Next action: inline small `static` and `static
+  inline` functions within a size budget, by default and for the kernel
+  flags, with the existing translation validation. Exit: the reduction runs
+  within twice GCC 14's count; the ladder programs keep their results, and
+  their total code size does not grow.
+
+- [ ] **N10 — Keep one-word records and small arrays in registers** — `OPEN`, P1.
+  `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to
+  slot and guarded by a stack canary.
+  `tests/fixtures/kernel-codegen-reductions/struct-value-through-stack.c`
+  runs 115 instructions per call (GCC 14: 23). Small local arrays indexed
+  only by constants also stay in memory: `local-array-constant-index.c` runs
+  329 (GCC 14: 94). Next action: replace records of one machine word and
+  small arrays indexed only by constants with scalars. Exit: both reductions
+  run within twice GCC 14's count, and the workspace gate passes.
+
+- [ ] **N11 — Sign only the returns that need a signature** — `OPEN`, P2.
+  K15 signs every function, leaves included, for `-mbranch-protection=pac-ret`.
+  GCC 14 signs only non-leaf functions for that option. The K02 fault path
+  runs 1,337 return-signing instructions per fault (GCC 14: 321). Next
+  action: sign every function that stores its return address, and leave out
+  the signature only where the return address never leaves `x30`; keep
+  signing every function for `pac-ret+leaf`. Exit: driver tests pin both
+  options, and a function that stores `x30` is always signed.
 
 ## Benchmark coverage index
 

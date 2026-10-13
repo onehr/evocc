@@ -1,0 +1,224 @@
+2026-10-13: executed-instruction attribution for K02, K03, K10, K11f and K01b.
+Diagnostic only. No kernel, Image, contract, timeout or verdict changes.
+K02, K03, K10, K11f and K01b stay OPEN.
+
+Retention gap. The pinned 7,008-object pair (EvoCC 18b36fee, GCC 22a87df2,
+config 95853321) was deleted with .build/k7-coverage on October 7, with its
+payloads and BPF/BTF inputs. This profile uses the retained direct
+virtconfig pair from the same pinned source and input config:
+  GCC   .build/reference/gcc-lane-1        Image b6f206de  config 4245f8e6
+  EvoCC .build/case/kbuild-probe/out-k16   Image add1c487  config 14679920
+        (K16/K17 build, compiler 820bfa29; olddefconfig capability changes)
+Both sign returns. EvoCC signs every function, GCC only non-leaf ones.
+These numbers are not results for the 7,008-object composition.
+
+Lane. The QEMU argv of tools/k1/lib.sh k1_boot on tcg-neoverse-n2-el2
+(virt-11.0, EL2, GICv3, 4 vCPUs, 4 GiB), plus two diagnostic changes: the
+tbprof plugin and `nokaslr`. QEMU is Homebrew 11.1.2 (2239f9f1), an
+explicit drift from the contract's 11.0.3 (af7f6f87). Host load average was
+26-90 from other jobs, so all wall-clock values are load-bound.
+
+Method. tools/k1/perf/tbprof.c (QEMU plugin API 7) counts entries of each
+translation block per vCPU with an inline add and keeps its code words;
+instructions = entries x block length. A block that faults counts in full.
+Marker PCs write snapshots: kvm_arch_init_vm/kvm_arch_destroy_vm bound one
+guest VM; __arm64_sys_unshare/__arm64_sys_reboot bound the pidfd loop;
+__arm64_sys_arm64_personality brackets the BPF proxy. attribute.py maps each
+instruction to its vmlinux FUNC symbol. With --right-inline, GCC code goes to
+the innermost DWARF inline frame that EvoCC also ran as a function, so an
+inlined GCC helper is compared with EvoCC's out-of-line copy. No block was
+dropped or irregular in any run. The first two four-vCPU validation boots
+per Image used an earlier build without discon=off (cc7f4b36); all other
+runs used the build below. Plugin build (Apple clang 21.0.0):
+  clang -O2 -shared -fPIC -undefined dynamic_lookup -I/opt/homebrew/include \
+    $(pkg-config --cflags glib-2.0) -Wall -Wextra -Werror tbprof.c -o tbprof.dylib
+Validation, same boot twice on one vCPU: GCC 259,827,973 / 260,105,274
+(0.11%), EvoCC 1,197,435,354 / 1,196,509,572 (0.08%); user space 848,436 /
+848,422 and 2,002,306 / 2,002,287. Four-vCPU totals vary by up to 27% from
+spin loops, so four-vCPU phases are compared only for equal work.
+QEMU 11.1.2 aborts at start (arm_mmu_idx_el) when a plugin with per-vCPU
+inline counters runs under thread=single; an empty plugin does not. -icount
+therefore cannot be used (reproducer: qemu-thread-single/inlineonly.c).
+
+K02 demand_paging_test.
+Original, no arguments, 120-s limit, plugin on: GCC completes 2 of 10 modes
+(4K: 2,964,387,135 instructions, 262,679 faults, 78.0 s), EvoCC 0 (97,442
+faults in 127.6 s). Per fault, EvoCC executes 6.45x GCC.
+Equal work (-m 3 -b 256M: one 4K mode, 65,687 faults on each Image):
+  VM phase 4,786,096,631 / 910,942,978 = 5.25x (kernel 5.60x)
+  plugin wall time 107.6 / 49.4 s (2.18x); guest time 102.0 / 47.9 s
+function (GCC inline-attributed)  EvoCC          GCC    ratio share Evo/fault
+ktime_get                     559,407,301  106,825,044    5.2  11.7%   8,516
+queued_spin_lock_slowpath     294,221,186   39,021,666    7.5   6.6%   4,479
+user_mem_abort                239,699,677   10,444,084   23.0   5.9%   3,649
+rmqueue_bulk                  217,935,024   11,007,003   19.8   5.3%   3,318
+__handle_mm_fault             164,741,649    7,290,193   22.6   4.1%   2,508
+do_anonymous_page             115,978,595    7,304,559   15.9   2.8%   1,766
+zap_present_ptes              110,224,477    4,424,856   24.9   2.7%   1,678
+__free_one_page               108,762,209   12,586,010    8.6   2.5%   1,656
+free_unref_folios              70,795,384    6,477,322   10.9   1.7%   1,078
+___pte_offset_map              74,828,692   12,721,682    5.9   1.6%   1,139
+__kvm_pgtable_walk             81,680,260   23,500,120    3.5   1.5%   1,243
+zap_pte_range                  52,771,676    1,475,655   35.8   1.3%     803
+mod_memcg_lruvec_state         62,657,478   20,089,575    3.1   1.1%     954
+get_page_from_freelist         41,968,868    6,466,824    6.5   0.9%     639
+Total excess 3,875,153,653. clear_page (assembly) matches: 17,412,648 /
+17,415,024. Guest plus user space: 78.6 M / 70.6 M.
+
+K03 memslot_modification_stress_test.
+Original, plugin on: neither Image finishes mode 1 in 120 s (GCC 188,605
+faults, EvoCC 78,448); per fault EvoCC executes 5.61x GCC.
+Equal work (-m 3 -b 256M, default 10 memslot changes, 65,687 faults each):
+  VM phase 4,698,438,640 / 865,915,212 = 5.43x (kernel 5.81x)
+  plugin wall time 81.6 / 34.2 s (2.39x)
+The ranking repeats K02's: ktime_get 19.2%, user_mem_abort 6.0%,
+rmqueue_bulk 4.4%, __handle_mm_fault 4.1%. user_mem_abort runs exactly the
+same 239,699,677 instructions as in K02; __handle_mm_fault,
+do_anonymous_page and zap_present_ptes differ by less than 0.02%.
+Memslot code (stage2_unmap_*, srcu, gfn_to_memslot, kvm_set_*) totals
+29.3 M / 10.0 M, under 1% of the 3.83 G excess. K02 and K03 share one
+measured cause: the per-fault populate, allocate and unmap path.
+
+K11f pidfd_test, unchanged, 45-s limit, plugin on. The minimal payload
+adds /bin/sleep (tools/k1/perf/sleep.c), which the poll-exec case needs.
+Both Images pass 7 cases and time out in the recycled-PID loop (exit 124).
+In that loop GCC completes 4,211 fork/exit cycles in 32.8 s and EvoCC 998
+in 32.4 s. Per cycle (EvoCC scaled to equal cycles):
+  kernel 3,809,962 / 329,169 = 11.6x; 56.8% of EvoCC kernel instructions
+  sit in transport runs (cause 1 below), 2.3% for GCC
+  copy_pte_range  1,275,372 /  6,193  206x  36.5% of the excess
+  zap_pte_range     249,930 /  6,126   41x   7.0%
+  ktime_get         235,662 / 24,308   9.7x  6.1%
+  zap_present_ptes  193,258 /  8,361   23x   5.3%
+  set_pte_range      95,033 /  5,770   16x   2.6%
+EvoCC's copy_pte_range is one 1,329,200-byte function with a 2.5 KiB
+frame; about 1,700 instructions run per PTE slot, most slots empty.
+
+K10 test_progs. No retained Image has vmlinux BTF or a matching test_progs
+build, so the original cannot run. Two measurements stand in:
+1. Retained serial logs (.evidence/kselftest-full/20260923T124453Z, hvf-host,
+   old pair f2d59e05/8fa43fb4): printk timestamps bracket group 482 at
+   238.4-261.5 s for GCC and 295.2-300.8 s for EvoCC (1.13-1.26x). GCC
+   finishes after 285.1 s of its 300-s budget: under 5% margin. The gap
+   is a distributed slowdown, not one stalled group.
+2. tools/k1/perf/bpf-load-proxy.c, same work on both Images (40 loads of a
+   300-iteration bounded-loop socket filter with JIT, 400 test runs, 2,000
+   hash-map update/lookup/delete; checksum 31920200 on both):
+   kernel 726,601,174 / 193,576,304 = 3.75x. Verifier functions run about
+   3x (backtrack_insn 2.8x, __mark_chain_precision 3.1x, is_state_visited
+   3.2x, do_check 3.0x); htab_map_update_elem 13x and __kvmalloc_node 19x;
+   Waits in ktime_get, mutex_spin_on_owner, smp_call_function_many_cond
+   and queued_spin_lock_slowpath take 34% of the excess. Transport runs:
+   10.3% versus 1.4% of kernel instructions.
+
+K01b sched_ext full program (retained logs, 20260927T223104Z, TCG
+cortex-a72, older pair 62c29ae4/13bd4d0b): GCC passes 23/23 in 52-56 s
+(printk brackets); EvoCC passes only tests 1-8 before the 120-s limit.
+Its next tests (init_enable_count, reload_loop, prog_run) fork tasks and
+load BPF, the paths measured in K11f and the K10 proxy. No sched_ext Image
+remains.
+
+Machine-code causes, demand 256 MiB (frame = ldr/str based on sp or x29):
+  class   EvoCC          GCC          ratio
+  frame   987,316,870    97,030,811   10.2
+  move    974,111,266    59,279,182   16.4
+  branch  460,060,753   193,125,749    2.4
+  call     45,617,973    20,624,157    2.2
+  pac      87,825,255    21,075,295    4.2
+1. Block-argument transport. Runs of six or more frame loads/stores and
+   register moves hold 1,395,735,604 EvoCC kernel instructions (29.6%)
+   versus 13,804,604 (1.6%): at least 36% of the excess. Every join
+   (if/else, switch, asm goto, loop back edge) passes all live values as
+   block arguments. Out-of-SSA copies are made before allocation; spilled
+   values reload and store through their own slots, so each edge loads,
+   moves and stores them again, sometimes into the same slot. In-run
+   share: user_mem_abort 86%, rmqueue_bulk 87%, zap_pte_range 87%,
+   __handle_mm_fault 82%, zap_present_ptes 76%. Code size follows:
+   rmqueue_bulk 52,656 bytes versus GCC's whole __rmqueue_pcplist 3,880.
+2. Time- and contention-scaled work, about 23% of the excess: functions
+   whose call counts exceed GCC's by over 1.5x for the same faults.
+   ktime_get runs about 1,040 times per second on both Images (tick-bound)
+   and spends 2,077 (GCC) or 4,975 (EvoCC) instructions per call in
+   seqcount retries; spinlock waits and scheduler load balancing follow.
+   They grow with elapsed time, so they amplify cause 1.
+3. Small helpers stay out of line: 204 calls per fault to 364 helpers that
+   GCC inlines (const_folio_flags 41.6 per fault, rcu_preempt_read_enter
+   and _exit 14.5, kvm_pte_table 13.1, folio_flags 10.1). The callees alone
+   run 211 M instructions (5.4% of the excess); each has a PAC pair and a
+   frame record. Constant index code ("mov #0; and; lsl; add") and
+   constant shift-count guards stay unfolded.
+4. One-word structs (pte_t, pmd_t) live in stack slots: zero-filled for
+   -ftrivial-auto-var-init=zero, copied slot to slot for each by-value
+   helper, with a canary; boolean results are set, masked and tested again.
+5. Return signing on every function: 1,337 PAC instructions per fault
+   versus 321; each is a TCG helper call on the IMPDEF PAuth lane.
+6. --ub-checks=checked (the default) leaves 25,595 trap sites in EvoCC
+   .text (14,398 shift-count, 4,212 division, 1,780 remainder, 1,274
+   signed-overflow, 3,289 unreachable, 642 bit-builtin); GCC has none.
+   Executed guards in the top 60 functions are about 0.6% of the excess.
+Compiler facts: the kernel build passes none of EvoCC's opt-in
+--frame-opt, --isel-opt or --regalloc-opt variants (paired saves, leaf
+frames, Boolean controls, copy hints, reload reuse); all are off by default.
+CodegenOptions::protects_codegen() would also force them off, because the
+kernel uses -fno-omit-frame-pointer, -mgeneral-regs-only and the sysreg
+stack guard. With all of them on and that protection lifted, the reductions
+shrink by only 10-20% in static instruction lines (asm-goto 982 to 787,
+loop 395 to 319), so they do not remove cause 1.
+Boot alone (one vCPU) runs 4.61x GCC: keccakf (jitterentropy) 259 M with
+its local array in memory, and __free_pages_ok 215 M versus 8 M.
+
+Reductions: tests/fixtures/kernel-codegen-reductions/. Frozen EvoCC
+366fd796 (host, --target) versus sealed gcc-14 -O2, both with the kernel's
+code-generation flags; each measured object is linked with one GCC-built
+driver, booted on the GCC Image (one vCPU) and counted with tbprof.
+Checksums match for every pair. Instructions per call:
+  reduction                     function         EvoCC     GCC  ratio
+  loop-carried-transport.c      free_ok        179,135   8,236   21.7
+     (per loop iteration about 175 versus 8)
+  asm-goto-live-transport.c     fault              488      67    7.3
+  leaf-helper-call.c            folio_state   55+3x10=85     9    9.4
+  struct-value-through-stack.c  pte_offset_map     115      23    5.0
+  local-array-constant-index.c  theta              329      94    3.5
+Reproduce: tools/k1/perf/reduction-counts.py --plugin TBPROF --work NEW
+  --source FILE.c:FUNCTION ... (counts.json keeps every number).
+
+QEMU drift. No QEMU 11.0.3 executable (af7f6f87) exists on this machine.
+A search of /opt, /usr/local, /Applications, /private/tmp, /private/var/tmp
+and the home caches, downloads and dev trees finds only 11.1.2; Homebrew's
+cache has only the 11.1.2 bottle; there is no local APFS snapshot; the
+private 11.1.1 builds under .build/floating-targeted were retired. No 11.0.3
+comparison is possible without an install, and none was made. The existing
+records already separate drift from the GCC 7/10 result: on 2026-09-28 one
+drifted binary, QEMU 11.1.1 (45d74da5), gave GCC 10/10 on the uniform pair
+and 7/10 on the pinned pair. Today, unchanged boot.sh on 11.1.2 with load
+47-57 gives GCC demand 1/10 and memslot 1/10, EvoCC 0/10 and 0/10 (all
+TIMEOUT 124; baseline-original/runtime.json). The 120-s wall-clock lane is
+load-sensitive on both Images; the emulator version is not the measured
+variable that moves GCC's count.
+
+Evidence: .evidence/kernel-tcg-profile-20261013/ (72 MiB): profiles/*
+(result.json with argv, nonce, input hashes and uptime; serial log;
+gzip block and snapshot files), payloads/*, analysis/ (tables, JSON,
+annotated listings), reductions/, baseline-original/, setup-failures/
+(first pidfd payload without /bin/sleep, BPF proxy delete-attribute bug,
+wrong personality marker), qemu-thread-single/.
+Identities (SHA-256):
+  tbprof.c        3cef87419b67acb8faacee0c62b1ffc9efb30c0ef24fece40005819c6f1430bb
+  tbprof.dylib    f8c86df28f06157919458905d2eb4b2cab8e3516f303ef1a61c0b7a7b8109bb4
+  QEMU            2239f9f1d01b6c06764fada9300c5701990c3f113b1c3533a19c993f08096642
+  GCC Image       b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35
+  GCC vmlinux     ba1939e1eba5ddc173d6ebc3783db7a91646a71e5a560f1b92f6286941e5ccdd
+  EvoCC Image     add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f
+  EvoCC vmlinux   f679dbd2b542b1b54960132c8d6f679afc4d46674c9c1d2fcd312d86bc77c09d
+  KVM payload     48b694f1ba0a35cbe741f2ccdd1dc6c49011e9b9b28d86f9dc62014b72c88c7a
+  KVM fixed       0ea44075e9c793eaa920d22dc15ccb6ca251fb47db76fa4c2cc34bb26aecc519
+  pidfd/BPF       9fc1da06e4f17a47925f5d987342ec5c46de85bcb91def21a54f8ba1c40b5f32
+                  (payload-pidfd-bpf3 and -bpf4 initramfs are identical)
+  demand ELF      0657ead635ab3e47bd7f65bdd6f45a77c353fd555f749b1b2da0f0a556c45f7f
+  memslot ELF     21fbfd4df15bc405ff51acec9ca9f8251495fa2f1c73b983f3f4912511c437f3
+  pidfd ELF       fd0355e0c94439f88f6daadd7629994fab0da17465ad6efadaae509d1365fe7b
+Payload ELFs are gcc-14 -static builds of the pinned source in the sealed
+image; two separate builds give identical KVM ELFs. tbprof.dylib differs
+between builds only by its embedded install path (same function sizes).
+Every run reports its Image, System.map, initramfs, scratch, plugin and
+QEMU hashes unchanged before and after the flight.
