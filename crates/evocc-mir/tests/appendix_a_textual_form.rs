@@ -367,3 +367,85 @@ fn a_function_returns_up_to_eight_results() {
     let text = render_module(&every_form());
     assert!(text.contains("    ret %v2, %v0\n"), "{text}");
 }
+
+/// The frame-slot forms and the zero-register assembly operand of every
+/// class. The writer prints each of them, so the parser must read each of
+/// them back: write, parse and write again give the same bytes.
+#[test]
+fn spill_argument_and_zero_operand_forms_round_trip_byte_for_byte() {
+    use evocc_mir::{AsmBody, AsmConstraint, AsmOperand, AsmValue};
+    let v0 = VReg::new(0, RegClass::Gpr64);
+    let v1 = VReg::new(1, RegClass::Gpr64);
+    let v2 = VReg::new(2, RegClass::Gpr32);
+    let v3 = VReg::new(3, RegClass::Simd128);
+    let zero = |class| AsmOperand {
+        constraint: AsmConstraint::RegisterOrZero,
+        fixed_register: None,
+        name: None,
+        value: AsmValue::Zero(class),
+    };
+    let module = MModule {
+        globals: Vec::new(),
+        functions: vec![MFunction {
+            name: "frame".to_owned(),
+            blocks: vec![MBlock {
+                id: 0,
+                args: vec![v0],
+                insts: vec![
+                    MInst::SpillStore { src: v0, slot: 0 },
+                    MInst::SpillReload { dst: v1, slot: 0 },
+                    MInst::IncomingArg { dst: v2, slot: 1 },
+                    MInst::OutgoingArg {
+                        src: v2,
+                        slot: 4_294_967_295,
+                    },
+                    MInst::IncomingArg { dst: v3, slot: 2 },
+                    MInst::Asm(AsmBody {
+                        template: "".to_owned(),
+                        volatile: true,
+                        outputs: Vec::new(),
+                        inputs: [
+                            RegClass::Gpr32,
+                            RegClass::Gpr64,
+                            RegClass::Simd32,
+                            RegClass::Simd64,
+                            RegClass::Simd128,
+                            RegClass::Flags,
+                        ]
+                        .into_iter()
+                        .map(zero)
+                        .collect(),
+                        clobbers: Vec::new(),
+                    }),
+                ],
+                term: MTerm::Ret { values: vec![v1] },
+            }],
+        }],
+    };
+    let text = render_module(&module);
+    for form in [
+        "    spill.store %v0, [slot #0]\n",
+        "    %v1:gpr64 = spill.reload [slot #0]\n",
+        "    %v2:gpr32 = arg.incoming [slot #1]\n",
+        "    arg.outgoing %v2, [slot #4294967295]\n",
+        "    %v3:simd128 = arg.incoming [slot #2]\n",
+        "#zero:gpr32",
+        "#zero:gpr64",
+        "#zero:simd32",
+        "#zero:simd64",
+        "#zero:simd128",
+        "#zero:flags",
+    ] {
+        assert!(text.contains(form), "{form}\n{text}");
+    }
+    let parsed = parse_module(&text).unwrap_or_else(|error| panic!("{error}\n{text}"));
+    assert_eq!(parsed, module);
+    assert_eq!(render_module(&parsed), text);
+    for malformed in [
+        text.replace("[slot #0]\n", "[slot 0]\n"),
+        text.replace("[slot #4294967295]", "[slot #4294967296]"),
+        text.replace("#zero:simd32", "#zero:simd16"),
+    ] {
+        assert!(parse_module(&malformed).is_err(), "{malformed}");
+    }
+}

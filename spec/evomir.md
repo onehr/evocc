@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.0.1** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
+**Revision 1.1.0** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
 
 ## Status and scope
 
@@ -1448,6 +1448,8 @@ W               := ".w" | ".x"
 instruction     := def " = " value-form
                  | def " = frame.slot [origin=" int ", size=" int ", align=" int "]"
                  | def " = stack.alloc " use ", [origin=" int ", align=" int "]"
+                 | def " = " ("spill.reload" | "arg.incoming") " [slot #" int "]"
+                 | ("spill.store" | "arg.outgoing") " " use ", [slot #" int "]"
                  | def ", " def " = " ("adds" | "subs") W " " use ", " use
                  | def ", " def " = ldp" [" volatile"] " [" use ", #" int "]" ["!"]
                  | "stp" [" volatile"] " " use ", " use ", [" use ", #" int "]" ["!"]
@@ -1517,9 +1519,9 @@ asm-symbol      := "@" ident ["^b" int] ("+" | "-") int
 
 `fp-op` is the mnemonic of an EvoIR floating operation (EvoIR Section 3.13).
 A register output of an `asm` is a result of the instruction; a memory output
-is not, so the output list names its address register. The parser reads
-`#zero:` operands of `gpr32` and `gpr64` only. `spill.*` and `arg.*` exist
-only after allocation; the canonical text has no production for them.
+is not, so the output list names its address register. A `#zero:` operand
+names any class. Only the allocator inserts the `spill.*` and `arg.*` forms
+(Section 6.6), and the parser reads them as the writer prints them.
 
 **Example.**
 
@@ -1585,10 +1587,11 @@ and the checked UB-check profile; each exporter refuses other forms.
 
 ## Revision
 
-**Revision 1.0.1, 2026-10-07.** The C driver emits both ABI profiles. Section
-6.12 specifies the Apple variadic convention: the opt-in backend option
-`anonymous_on_stack`, which the driver enables for `aarch64-apple-darwin`
-(Sections 1.3, 6.1 and 6.12).
+**Revision 1.1.0, 2026-10-13.** Appendix A adds the productions of the
+`spill.store`, `spill.reload`, `arg.incoming` and `arg.outgoing` forms and
+admits a `#zero:` assembly operand of every class. The parser now reads every
+form that the writer prints. Revision 1.0.1 of 2026-10-07 specified the Apple
+variadic convention (Sections 1.3, 6.1 and 6.12).
 
 **Revision 1.0.0, 2026-10-06.** This revision is the pinned ground truth of
 EvoMIR. It specifies the same machine IR and backend as revision 0.64 of

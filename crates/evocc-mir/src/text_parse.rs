@@ -210,16 +210,22 @@ fn parse_definition(text: &str) -> Result<VReg, String> {
         .strip_prefix("%v")
         .and_then(|digits| digits.parse::<u32>().ok())
         .ok_or_else(|| format!("not a virtual register: '{name}'"))?;
-    let class = match class {
-        "gpr32" => RegClass::Gpr32,
-        "gpr64" => RegClass::Gpr64,
-        "simd64" => RegClass::Simd64,
-        "simd32" => RegClass::Simd32,
-        "simd128" => RegClass::Simd128,
-        "flags" => RegClass::Flags,
-        other => return Err(format!("unknown register class '{other}'")),
-    };
+    let class = register_class(class).ok_or_else(|| format!("unknown register class '{class}'"))?;
     Ok(VReg::new(id, class))
+}
+
+/// The register class with this Appendix A spelling.
+fn register_class(text: &str) -> Option<RegClass> {
+    [
+        RegClass::Gpr32,
+        RegClass::Gpr64,
+        RegClass::Simd32,
+        RegClass::Simd64,
+        RegClass::Simd128,
+        RegClass::Flags,
+    ]
+    .into_iter()
+    .find(|class| class.mnemonic() == text)
 }
 
 enum Parsed {
@@ -284,6 +290,14 @@ impl<'a> Scan<'a> {
             .copied()
             .ok_or_else(|| format!("%v{id} is used without a definition"))?;
         Ok(VReg::new(id, class))
+    }
+
+    /// A frame slot reference, `[slot #N]`.
+    fn slot(&mut self) -> Result<u32, String> {
+        self.expect("[slot ")?;
+        let slot = self.immediate()?;
+        self.expect("]")?;
+        u32::try_from(slot).map_err(|_| format!("slot #{slot} is out of range"))
     }
 
     fn immediate(&mut self) -> Result<u64, String> {
@@ -635,11 +649,9 @@ fn parse_operand_value(text: &str, classes: &HashMap<u32, RegClass>) -> Result<A
         });
     }
     if let Some(class) = text.strip_prefix("#zero:") {
-        return match class {
-            "gpr32" => Ok(AsmValue::Zero(RegClass::Gpr32)),
-            "gpr64" => Ok(AsmValue::Zero(RegClass::Gpr64)),
-            other => Err(format!("not a register class: '{other}'")),
-        };
+        return register_class(class)
+            .map(AsmValue::Zero)
+            .ok_or_else(|| format!("not a register class: '{class}'"));
     }
     if let Some(value) = text.strip_prefix('#') {
         return value
@@ -963,6 +975,19 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 volatile,
             }));
         }
+        // A spill store and an outgoing stack argument name a register and a
+        // frame slot, and define nothing.
+        if matches!(mnemonic, "spill.store" | "arg.outgoing") {
+            let src = scan.use_of()?;
+            scan.expect(", ")?;
+            let slot = scan.slot()?;
+            scan.finish()?;
+            return Ok(Parsed::Inst(if mnemonic == "spill.store" {
+                MInst::SpillStore { src, slot }
+            } else {
+                MInst::OutgoingArg { src, slot }
+            }));
+        }
         // Section 6 (revision 0.18): the `x8` marker carries no operand.
         if mnemonic == "indirect.result" {
             scan.finish()?;
@@ -1064,6 +1089,15 @@ fn parse_defining(
             size,
             origin,
             align,
+        });
+    }
+    if matches!(mnemonic, "spill.reload" | "arg.incoming") {
+        let slot = scan.slot()?;
+        scan.finish()?;
+        return Ok(if mnemonic == "spill.reload" {
+            MInst::SpillReload { dst, slot }
+        } else {
+            MInst::IncomingArg { dst, slot }
         });
     }
     if mnemonic == "frame.slot" {
