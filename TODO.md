@@ -135,10 +135,10 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K07, K10, K11, K11f, K12, N08, N09, N10, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L10, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D01, D02, D03, D04, D05, D06, D08 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
-| ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05b, R05c, R05d, R05e, R05f, R05g, R05h, R05i, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| ACCEPTANCE | T04, T02, K13, K14, B10, B10a, T05, R05, R05a, R05b, R05c, R05d, R05e, R05f, R05g, R05h, R05i, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -2227,6 +2227,7 @@ KUnit, and it closes none of those separate tasks.
   All 44 original failure identities now have a [case-level mapping](tests/fixtures/llvm-failure-reconciliation.out):
   8 targeted original-program PASS (including September 24 B02), 30 named FP
   deferrals, 5 evidenced not-applicable and 1 OPEN (integer-vector `pr23135` L10).
+  On 2026-10-13, L10 classified `pr23135` as not-applicable, so no identity stays OPEN.
   The existing adapter validates all 35 reviews against exact source/argv and
   evidence. Eight obsolete scalar-FP waivers are removed with a RED/GREEN test.
   This closes reconciliation only: L02–L05/L10 remain open, and the frozen
@@ -2745,6 +2746,15 @@ KUnit, and it closes none of those separate tasks.
   The subsequent complete cJSON replay adds a seventh fresh lane. The eight
   remaining lanes still retain their earlier measurements; this is not B10 closure.
 
+  - [ ] **B10a — Restore the evidence that the disposition rows cite** — `OPEN`, P1.
+    Found on 2026-10-13 by the L10 work. 92 rows of
+    `tests/contracts/benchmark-program-dispositions.json` (8 LLVM, 77 torture
+    and 7 c-testsuite) cite evidence paths that no longer exist. A replay
+    would turn each of them into a compiler failure. Next action: restore
+    each path from its retained source, or record the evidence again from the
+    pinned original and command. Exit: `program_disposition` validates every
+    row against existing evidence before B10 starts.
+
 ## Remaining numerical and language contracts
 
 These are not proposals to redo scalar f32/f64, integer vectors, TLS,
@@ -2941,7 +2951,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   as GCC does. [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l09-ancestor-return-address.md).
 
-- [ ] **L10 — LLVM pr23135 source-definedness decision** — `OPEN`, P1.
+- [x] **L10 — LLVM pr23135 source-definedness decision** — `DONE`, P1, 2026-10-13.
   GCC UBSan reports vector signed overflow while Clang instrumentation is silent.
   Analyze the unchanged source and effective flags and establish an adequate
   evidence threshold. Close with either an approved case-bound disposition or a
@@ -2953,7 +2963,19 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   dispositions; no compiler change.
   [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l10-pr23135-definedness.md).
-
+  Closed with the approved case-bound disposition, not a PASS. The
+  [record](tests/fixtures/llvm-pr23135-definedness.out) meets all six points:
+  lane 0 overflows at line 131 (`75840000 * 156`) and line 133 expects the
+  wrapped products; GCC 14 UBSan reports 131:25 at -O0, -O2 and the recorded -O3
+  options; Clang 19's silence has a cited cause (`EmitMul` checks no vector
+  type), and its scalar control reports; both EvoCC interpreters stop with E3004
+  at 131:7; native code traps at `brk #3004`. The labeled `-fwrapv` control
+  exits 0 in both interpreters and in native code. The source- and argv-bound
+  row in `tests/contracts/benchmark-program-dispositions.json` validates through
+  `program_disposition` on runs `20260919T230110Z` and `20260927T085137Z`. The
+  six-point rule is in the [B01
+  notebook](docs/archive/notebook/benchmark-evaluation-20260915.md#october-13-source-ub-evidence-threshold-for-b01-l10).
+  No compiler change; historical numerators and receipts are unchanged.
 - [x] **L11 — Inventory additional atomic scope before extending it** — `DONE`, P2, 2026-09-23.
   The [source/command inventory](tests/fixtures/atomic-scope-boundaries.out)
   distinguishes SQLite's supported scalar accesses from TinyCC's uncaptured

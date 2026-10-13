@@ -2,6 +2,7 @@
 from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
+import re
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -68,10 +69,13 @@ class TodoScheduleTests(unittest.TestCase):
                 status.render_todo(changed)
 
     def test_real_tracker_accounts_for_every_open_entry(self):
-        output = status.render_todo((status.ROOT / "TODO.md").read_text())
-        self.assertIn("K01b", output)
-        self.assertIn("B08d10", output)
-        self.assertIn("L11c", output)
+        source = (status.ROOT / "TODO.md").read_text()
+        output = status.render_todo(source)
+        opened = re.findall(r"^\s*- \[ \] \*\*([A-Z]\d{2}(?:[a-z]\d*)?) \u2014 ", source, re.M)
+        # Nested children count as entries, so the tracker must list some.
+        self.assertTrue(any(re.fullmatch(r"[A-Z]\d{2}[a-z]\d*", name) for name in opened))
+        for name in opened:
+            self.assertRegex(output, rf"\n  {name} +[A-Z_]+ ")
 
     def test_cli_only_reads_tracker_no_receipts_or_writes(self):
         with patch.object(status, "load_receipts", side_effect=AssertionError("must not read receipts")), \

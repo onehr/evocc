@@ -32,6 +32,24 @@ class ProgramDispositionTest(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertNotIn('llvm-test-suite:SingleSource/' + source, programs)
 
+    def test_pr23135_source_ub_review_binds_the_unchanged_original_command(self):
+        # L10 under the B01 source-UB rule: the recorded command has no -fwrapv.
+        # A -fwrapv replay is a labeled control, never the original's PASS.
+        root = Path(__file__).resolve().parents[3]
+        programs = json.loads((root / 'tests/contracts/benchmark-program-dispositions.json').read_text())['programs']
+        rule = programs['llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/pr23135.c']
+        self.assertEqual(rule['disposition'], 'not-applicable')
+        self.assertEqual(rule['sourceSha256'], '55b64d3f85e48564b7275634e277d9c3a86bb9ba9181ebb9aed0e64f64295693')
+        self.assertEqual(rule['originalArguments'][:12], [
+            '/usr/bin/clang-19', '-DNDEBUG', '-O3', '-DNDEBUG', '-w', '-Werror=date-time',
+            '-Wno-implicit-int', '-Wno-int-conversion', '-Wno-implicit-function-declaration',
+            '-w', '-Wno-psabi', '-Wno-error=incompatible-pointer-types'])
+        self.assertNotIn('-fwrapv', rule['originalArguments'])
+        self.assertIn('tests/fixtures/llvm-pr23135-definedness.out', rule['evidence'])
+        for path in rule['evidence']:
+            with self.subTest(path=path):
+                self.assertTrue((root / path).is_file())
+
     def measure(self, rule=None, *, evidence=True, raw='fail', emission='emitted'):
         source = 'float declaration_only; int main(void){return 1;}\n'
         with tempfile.TemporaryDirectory() as directory:

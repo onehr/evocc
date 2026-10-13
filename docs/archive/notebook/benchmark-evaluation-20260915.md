@@ -4,6 +4,52 @@ Status: **fifteen application lanes measured; overall INCOMPLETE**.
 The latest complete campaign includes PolyBench. The dated checkpoints below
 retain their original readings; they are not the current scoreboard.
 
+### October 13: source-UB evidence threshold for B01 (L10)
+
+The owner's rule decision of 2026-10-13
+([DECISIONS.md](rules-20261013/DECISIONS.md), row L10) accepts the six-point
+threshold of the [L10 packet](rules-20261013/l10-pr23135-definedness.md) as
+the B01 rule. The rule governs every later `not-applicable` disposition on the
+grounds of source undefined behavior in
+`tests/contracts/benchmark-program-dispositions.json`. The evidence of such a
+row gives all six points:
+
+1. The first undefined operation of the unchanged original under its recorded
+   command, with source location and operand values.
+2. The clause that makes it undefined in EvoCC's dialect: the C standard and
+   the EvoIR rule.
+3. At least one independent instrumented reference report on the unchanged
+   original, at the same location and operands.
+4. A cited implementation reason for every silent reference. Silence never
+   counts as evidence of definedness.
+5. Both EvoCC interpreters report the same operation and kind.
+6. Upstream acknowledgment, when it exists, as supporting evidence only.
+
+A run with a changed command, for example with `-fwrapv`, is a labeled
+control. It never counts as the original's PASS. The disposition explains a
+raw failure; the run's results keep the raw outcome. For later rows, the six
+points take the place of the reviewed dual-instrumentation waiver that kept
+`pr23135` open. Two positive reports still meet points 3 and 4. One positive
+report is enough only when point 4 explains each silent reference. Earlier
+rows keep their recorded evidence; the rule does not reopen or relabel them.
+`classify_program` in `tools/ladder/e0.py` checks the source hash and that
+the evidence files exist. For LLVM rows, `program_disposition` in
+`tools/ladder/llvm-test-suite.py` also checks the original arguments. Neither
+checks the six points. Review does.
+
+`pr23135` is the first row under this rule. Its
+[record](../../../tests/fixtures/llvm-pr23135-definedness.out) gives the six
+points. Lane 0 computes `75840000 * 156` at line 131, and line 133 expects the
+wrapped products. GCC-14 UBSan reports that product at 131:25. Clang-19 UBSan
+is silent because its `EmitMul` does not check vector types; its scalar
+control reports the same operands. Both EvoCC interpreters report E3004 at
+131:7. GCC added `-fwrapv` to its copy "to avoid undefined behavior". The
+`-fwrapv` runs exit 0 in both interpreters and in native code, as labeled
+controls. The row validates through `program_disposition` on the frozen rows
+of runs `20260919T230110Z` and `20260927T085137Z` with the hash-verified
+original. Both runs keep their recorded counts and verdicts; no LLVM campaign
+ran. The next replay records the new disposition.
+
 ### September 28: explicitly patched musl dependency supplement
 
 The user approved a **separate patched-dependency lane**, not replacement of

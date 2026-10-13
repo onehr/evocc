@@ -7,6 +7,34 @@
   },
   "programs": {
     "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/20090113-1.c": {"disposition":"not-applicable","reason":"R01: the original reads uninitialized automatic adata[9] in msum_i4 before any store. Both independently compiled GCC-14/Clang-19 UBSan-instrumented originals give positive Memcheck initializedness errors at line 43; plain Memcheck controls alone do not. See the exact diagnostic qualification, not a claim that UBSan alone detects uninitialized data.","sourceSha256":"95564445bb0083c9904587014c8d5ec3ef1f61c96c7f498dbf8cc8d7382243b0","originalArguments":["/usr/bin/clang-19","-DNDEBUG","-O3","-DNDEBUG","-w","-Werror=date-time","-Wno-implicit-int","-Wno-int-conversion","-Wno-implicit-function-declaration","-w","-Wno-error=incompatible-pointer-types","-o","CMakeFiles/GCC-C-execute-20090113-1.dir/20090113-1.c.o","-c","/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20090113-1.c"],"evidence":["tests/fixtures/llvm-uninitialized-original.out"]},
+    "llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/pr23135.c": {
+      "disposition": "not-applicable",
+      "reason": "L10, B01 source-UB rule: the unchanged original executes signed int overflow in GNU vector lane 0 at line 131 (75840000 * 156; lane 1 overflows in the same product), and line 133 expects the wrapped products. GCC-14 UBSan reports this product at 131:25 on the unchanged original at O0, O2 and the recorded O3 options. Clang-19 UBSan is silent: EmitMul checks only signed integer types, not vectors (CGExprScalar.cpp, llvmorg-19.1.7, lines 739-786), and its scalar control reports the same operands. GCC upstream added -fwrapv to its copy to avoid undefined behavior (ca2b8c08). Both EvoCC interpreters report E3004 at 131:7. The -fwrapv runs are labeled controls, not the original's PASS.",
+      "sourceSha256": "55b64d3f85e48564b7275634e277d9c3a86bb9ba9181ebb9aed0e64f64295693",
+      "originalArguments": [
+        "/usr/bin/clang-19",
+        "-DNDEBUG",
+        "-O3",
+        "-DNDEBUG",
+        "-w",
+        "-Werror=date-time",
+        "-Wno-implicit-int",
+        "-Wno-int-conversion",
+        "-Wno-implicit-function-declaration",
+        "-w",
+        "-Wno-psabi",
+        "-Wno-error=incompatible-pointer-types",
+        "-o",
+        "CMakeFiles/GCC-C-execute-pr23135.dir/pr23135.c.o",
+        "-c",
+        "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/pr23135.c"
+      ],
+      "evidence": [
+        "tests/fixtures/llvm-pr23135-definedness.out",
+        "tests/fixtures/llvm-vector-overflow-reduction.out",
+        "docs/archive/notebook/rules-20261013/DECISIONS.md"
+      ]
+    },
     "torture:pr39501": {
       "disposition": "not-applicable",
       "reason": "The original dg-options requires -ffast-math, outside the approved noncontracting RNE scalar-FP profile. Both fixed ARM64 oracles execute the unchanged program at O0/O2; the subject explicitly refuses the semantic option rather than ignoring it. This is not a blanket float/double deferral or PASS.",

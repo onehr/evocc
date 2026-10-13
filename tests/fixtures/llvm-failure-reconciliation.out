@@ -94,3 +94,8 @@ UnitTests/Vector/simple.c | FP-deferred floating-vector | F / L05
 UnitTests/Vector/sumarray.c | FP-deferred floating-vector | F / L05
 UnitTests/Vector/sumarray-dbl.c | FP-deferred floating-vector | F / L05
 UnitTests/Vector/AArch64/aarch64_neon_intrinsics.c | FP-deferred floating-vector | F,S / L05
+
+2026-10-13 (TODO L10): pr23135 is now a source/argv-bound not-applicable
+disposition (source undefined behavior) under the B01 source-UB threshold.
+Evidence: llvm-pr23135-definedness.out. None of the 44 identities remains
+OPEN. Its OPEN table row and every historical total stay as recorded.
