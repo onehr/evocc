@@ -932,6 +932,16 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   separately from hidden-test correctness. Any new model requests need a new
   registration; do not tune or rerun failed cells of P17. This is an untested
   improvement proposal, not an observed compiler defect or an active campaign.
+  October 13: the [trace
+  analysis](docs/archive/notebook/agent-feedback-20261013/p17a-trace-analysis.md)
+  finds that all three failures spent the 4,096-token budget on reasoning after
+  a correct repair appeared in the first 4 to 21 percent of it. Every delivered
+  response on the overflow items passed the hidden test (37/37). Provider
+  routing was not controlled. Shorter guidance might save one or two of the
+  three; a larger budget would most likely save all three. [Protocol
+  A](docs/archive/notebook/agent-feedback-20261013/protocols.md) waits for the
+  owner's approval: a 10-call pilot capped at USD 0.30, then 400 calls capped at
+  USD 3.50. Do not rerun P17.
 
 - [x] **P21 — Replicate repair effort and test larger programs** — `DONE`, P1.
   Keep experiment 4 repetition 1 descriptive. Register two new repetitions
@@ -1086,6 +1096,15 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   1,077,325 versus 1,120,150 tokens in C3 versus C1. The aggregate penalty
   did not repeat. Do not infer a causal feedback-length effect from either
   experiment. No implementation work starts in this package.
+  October 13: the
+  [design](docs/archive/notebook/agent-feedback-20261013/p22-feedback-design.md)
+  measures 217 feedback blocks from experiments 4 and 5 and proposes an opt-in
+  `concise-1` form: 74.3 percent fewer feedback bytes, about 1.8 percent of
+  session tokens. `full-1` stays the default and byte-identical for replays. The
+  Rust lane implements it. [Protocol
+  B](docs/archive/notebook/agent-feedback-20261013/protocols.md), 96 sessions
+  and about 7 percent of the weekly Kimi quota, waits for the owner's approval;
+  it cannot detect effort changes below about 16 percent.
 
 - [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`, P1.
   All 24 items qualify: six each of E3001/E3010/E3011 and two each of
