@@ -34,10 +34,11 @@ On Linux, use the name with `aarch64-unknown-linux-gnu`, and use `sha256sum -c -
 `shasum -a 256 -c -`.
 
 The archive holds one directory. The root holds the README, the files `LICENSE`, `NOTICE` and
-`THIRD-PARTY-NOTICES.md`, and its own `SHA256SUMS`. Its `sysroot/` directory holds the Linux
-headers for `--target=aarch64-unknown-linux-gnu`, and `sysroot/licenses/` holds the license texts
-of the Debian packages that the headers come from. Its `bin/` directory holds the four programs of
-EvoCC:
+`THIRD-PARTY-NOTICES.md`, and its own `SHA256SUMS`. Its `licenses/runtime/` directory holds the
+license texts of the code from other projects inside the programs. Its `sysroot/` directory holds
+the Linux headers for `--target=aarch64-unknown-linux-gnu`, and `sysroot/licenses/` holds the
+license texts of the Debian packages that the headers come from. Its `bin/` directory holds the
+four programs of EvoCC:
 
 | Program | What it does |
 |---|---|
@@ -60,6 +61,34 @@ the build. The second line gives the target that `evocc` makes code for by defau
 
 The `export` line lasts until you close the shell. To keep it, add the line to your shell profile,
 for example `~/.zshrc`, with the full path of the directory.
+
+### A browser download on macOS
+
+Apple has not notarized the programs. A browser download gets the attribute
+`com.apple.quarantine`, and macOS can then refuse to run the programs. `tar` copies the attribute
+to each file that it unpacks. `curl` does not set the attribute. `xattr -l` shows the attributes of
+a file.
+
+Clear the attribute from the archive before you unpack it:
+
+```console
+$ xattr -d com.apple.quarantine evocc-0.1.0-aarch64-apple-darwin.tar.gz
+```
+
+If you unpacked the archive already, clear the attribute from the whole directory:
+
+```console
+$ xattr -dr com.apple.quarantine evocc-0.1.0-aarch64-apple-darwin
+```
+
+### glibc on Linux
+
+The Linux headers in the archive come from glibc 2.41. When a program that you compile with them
+defines `_GNU_SOURCE`, these headers change the names of `strtol`, `scanf` and related functions to
+new names, such as `__isoc23_strtol`. Only glibc 2.38 or later has these names. Such a program
+needs glibc 2.38 or later to link and to run. On Debian 12, with glibc 2.36, the link stops with
+``undefined reference to `__isoc23_strtol'``. [Hello, World!](hello.md) shows how to give
+another header root with `--sysroot`.
 
 ## Nightly builds
 
@@ -88,16 +117,17 @@ To build EvoCC from source, you need:
   file `lean/lean-toolchain` selects the right version;
 - 25 GiB of free disk space. Check it with `df -h .` before you build.
 
-Clone the repository and build the compiler and the certificate checker:
+Clone the repository and build the command program, the compiler and the certificate checker:
 
 ```console
 $ git clone https://github.com/onehr/evocc.git
 $ cd evocc
-$ CARGO_TARGET_DIR=target/frontend cargo build --release --offline -j 2 -p evocc -p evocc-proofcheck
+$ CARGO_TARGET_DIR=target/frontend cargo build --release --offline --locked -j 2 -p evocc -p evocc-proofcheck
 ```
 
 The build is offline: the three Rust libraries that EvoCC uses are in the repository, in `vendor/`.
-Cargo writes `evocc` and `evocc-checker` to `target/frontend/release/`.
+`--locked` makes Cargo use the versions in `Cargo.lock`, as the release build does. Cargo writes
+`evo`, `evocc` and `evocc-checker` to `target/frontend/release/`.
 
 Then build the Lean checker. Run Lake from inside the `lean` directory. The first build takes a
 long time:
@@ -123,5 +153,22 @@ Target: aarch64-apple-darwin
 
 Your build prints the commit and the date of your checkout.
 
-The rest of this book calls the three programs by their names, `evocc`, `evocc-checker` and
+### Linux headers for a source build
+
+A source build looks for Linux headers in `sysroot/aarch64-unknown-linux-gnu/` of the checkout. On
+Linux, when that directory is absent, `evocc` reads the headers of your system. On macOS,
+`--target=aarch64-unknown-linux-gnu` needs that directory or another root that `--sysroot` names.
+`tools/export-sysroot.sh` writes the directory from the sealed build image. The script needs Apple `container` and the image
+`evo-nexlab:sealed-20260810`. It stops when the image has another digest than
+[the contract](https://github.com/onehr/evocc/blob/main/contracts/sysroot-aarch64-unknown-linux-gnu.json)
+pins:
+
+```console
+$ tools/export-sysroot.sh
+```
+
+Without that image, copy the headers from a release archive of the same version: unpack the
+archive and move its `sysroot/` directory into the checkout.
+
+The rest of this book calls the four programs by their names, `evo`, `evocc`, `evocc-checker` and
 `evoir-sem`, and expects them on your `PATH`.

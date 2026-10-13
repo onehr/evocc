@@ -42,16 +42,26 @@ the reason. EvoCC can also prove, with Lean 4, that a compilation is correct.
 
 ## Install
 
-On macOS with Apple silicon:
+On macOS with Apple silicon, download the archive and the checksum file, check the archive and
+unpack it:
 
 ```sh
 curl -LO https://github.com/onehr/evocc/releases/download/v0.1.0/evocc-0.1.0-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/onehr/evocc/releases/download/v0.1.0/SHA256SUMS
+grep evocc-0.1.0-aarch64-apple-darwin.tar.gz SHA256SUMS | shasum -a 256 -c -
 tar xzf evocc-0.1.0-aarch64-apple-darwin.tar.gz
 export PATH="$PWD/evocc-0.1.0-aarch64-apple-darwin/bin:$PATH"
 ```
 
-On Linux (AArch64), use `aarch64-unknown-linux-gnu` in the file name. To build from source, see
-[Installation](book/src/install.md).
+On Linux (AArch64), use `aarch64-unknown-linux-gnu` in the file name and `sha256sum -c -` to check
+the archive. The `bin/` directory of each archive holds four programs: `evo` (the commands),
+`evocc` (the compiler), `evocc-checker` (the certificate checker) and `evoir-sem` (the Lean
+checker).
+
+To build from source, run `cargo build --release --offline --locked -p evocc -p evocc-proofcheck`
+and `(cd lean && lake build)`. For a cross compile from macOS, `tools/export-sysroot.sh` exports the
+Linux headers. [Installation](book/src/install.md) gives the details. It also shows how to clear
+the quarantine attribute of a browser download on macOS.
 
 ## Quick start
 

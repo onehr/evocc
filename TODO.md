@@ -138,7 +138,7 @@ was found in the read-only process check at this planning checkpoint.
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D04, D05, D06, D09 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
-| ACCEPTANCE | T04, T04g, T02, K13, K14, B10, T05, R05, R05a, R05b, R05c, R05d, R05e, R05f, R05g, R05h, R05i, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| ACCEPTANCE | T04, T04g, T02, K13, K14, B10, T05, R05, R05a, R05e, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -3976,37 +3976,69 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     aarch64-unknown-linux-gnu --with-lean` passes the smoke steps of the
     release workflow and the static-link check, and
     `tools/tests/test_sysroot.py` passes on that archive.
-  - [ ] **R05b — Ship the license texts of the runtime code in the binaries** — `OPEN`, P1.
+  - [x] **R05b — Ship the license texts of the runtime code in the binaries** — `DONE`, P1, 2026-10-14.
     Exit: the archives hold the MIT texts of musl and libuv and the LGPL-3.0
     and GPL-3.0 texts for GMP, and `tools/release.sh` refuses an archive
     without them.
-  - [ ] **R05c — Pin the sysroot image** — `OPEN`, P2.
+    Closed on 2026-10-14. `licenses/runtime/` holds musl's COPYRIGHT, libuv's
+    LICENSE, LICENSE-extra and the `tree.h` and `inet.c` notices, and the GNU
+    LGPL-3.0 and GPL-3.0 texts, each pinned in `tools/release.sh` with its
+    upstream URL and SHA-256 in THIRD-PARTY-NOTICES.md. A changed or missing
+    text stops packaging with no archive. The musl version (1.2.5) is inferred
+    from the functions in the Rust target's `libc.a`.
+  - [x] **R05c — Pin the sysroot image** — `DONE`, P2, 2026-10-14.
     The contract pins `evo-nexlab:sealed-20260810` (digest `2c23684c…`). The
     tag `evo-nexlab:sealed` now names `e8d52bdc…`, whose export adds 34
     headers of `libclang-rt-19-dev`. Exit: an export without
     `EVOCC_SYSROOT_IMAGE` reproduces the contract byte for byte.
-  - [ ] **R05d — Trim the bundled headers or record why they stay** — `OPEN`, P2.
+    Closed on 2026-10-14. The exporter defaults to `evo-nexlab:sealed-20260810`
+    and stops on any other digest; Apple `container` cannot run a local image by
+    digest, so the exporter checks it. Default exports at several paths rewrote
+    the contract byte for byte.
+  - [x] **R05d — Trim the bundled headers or record why they stay** — `DONE`, P2, 2026-10-14.
     2,319 of the 3,966 headers (40.8 of 52.7 MiB) serve other triples, C++,
     a duplicate clang directory or Objective-C. Exit: the archive drops them,
     or the notices say why they stay; zlib and the cross hello still pass.
+    Closed on 2026-10-14. The bundle drops 2,309 headers (40.7 MiB): C++ (825),
+    both Clang copies (482) and the `asm/` headers of 21 other architectures
+    (1,002). 1,657 headers (12.1 MiB) from 11 packages stay; the 10 Objective-C
+    headers stay because they are on the search path, as the notices say. No
+    kept header includes a dropped file. zlib 1.3.2's `example` and the cross
+    hello link and pass in the sealed container.
   - [ ] **R05e — Build path-independent binaries** — `OPEN`, P2.
     Exit: `strings` finds no builder home path in the binaries, and builds
-    from two checkout paths are identical.
-  - [ ] **R05f — Document how to reproduce a release archive** — `OPEN`, P2.
+    from two checkout paths are identical, so a rebuild from a clean checkout
+    reproduces the macOS archive digest (the rebuild half of R05f).
+  - [x] **R05f — Document how to reproduce a release archive** — `DONE`, P2, 2026-10-14.
     Exit: a book page gives the commands, and a second build from a clean
     checkout reproduces the macOS archive digest.
-  - [ ] **R05g — Correct the install text** — `OPEN`, P2.
+    Packaging half closed on 2026-10-14: `book/src/release.md` gives the
+    commands, and three checkouts of `34d81cbf` at three paths, with the same
+    programs, gave the same archive digest. The rebuild half moves to R05e's
+    exit.
+  - [x] **R05g — Correct the install text** — `DONE`, P2, 2026-10-14.
     Exit: README.md and book/src/install.md name the four programs, use
     `--locked`, say how a source build gets the sysroot, and give a checksum
     step.
-  - [ ] **R05h — State the glibc floor of the Linux archive** — `OPEN`, P2.
+    Closed on 2026-10-14. README.md and book/src/install.md name the four
+    programs, use `--locked`, say how a source build gets the Linux headers, and
+    give a checksum step.
+  - [x] **R05h — State the glibc floor of the Linux archive** — `DONE`, P2, 2026-10-14.
     The bundled glibc 2.41 headers redirect `strtol` and similar functions to
     `__isoc23_*` symbols when `_GNU_SOURCE` is set. Exit: a `_GNU_SOURCE`
     `strtol` program links on Debian 12 with the archive, or the book states
     that glibc 2.38 or later is required.
-  - [ ] **R05i — State how macOS treats a downloaded archive** — `OPEN`, P2.
+    Closed on 2026-10-14 by stating the floor. On Debian 12 (glibc 2.36), a
+    `_GNU_SOURCE` `strtol` program built with the bundled headers fails to link
+    (`__isoc23_strtol`), so book/src/install.md states that glibc 2.38 or later
+    is required. `--sysroot=/` with the host's own headers is the documented
+    alternative.
+  - [x] **R05i — State how macOS treats a downloaded archive** — `DONE`, P2, 2026-10-14.
     Exit: the binaries are notarized, or the book documents the quarantine
     attribute that a browser download gets and how to clear it.
+    Closed on 2026-10-14. book/src/install.md documents the quarantine attribute
+    of a browser download, says that the programs are not notarized, and gives
+    the `xattr` commands that clear it.
   - [ ] **R05j — Print versions from every binary** — `OPEN`, P3.
     Exit: `evocc-checker --version` and `evoir-sem --version` print the
     release version.

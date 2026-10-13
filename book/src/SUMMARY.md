@@ -14,4 +14,5 @@
 - [Evaluating EvoCC](evaluate.md)
 - [Agent Repair Experiment](evaluation-agents.md)
 - [Retained Compatibility](compatibility.md)
+- [Reproducing a Release](release.md)
 - [Contributing](contributing.md)
