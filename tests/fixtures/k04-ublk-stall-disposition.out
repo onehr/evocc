@@ -1,0 +1,91 @@
+2026-10-13 — K04: replay blocked; source-bound narrowing, NOT closure.
+
+Replay status. The original stress_04 pair cannot run on any retained
+kernel. Its GCC/EvoCC Images (13bd4d0b..., 62c29ae4..., and the later
+22a87df2... / 18b36fee... composition), runtime disks and kselftest payloads
+lived under .build/k7-coverage, which was retired on October 7. A search of
+.build, .build/case and .evidence finds no copy. The two current Images
+(GCC b6f206dea584..., EvoCC add1c4874e28...) are virtconfig builds with
+"# CONFIG_BLK_DEV_UBLK is not set". This slice may not build a kernel, so
+the original pair, its repeated replays and their load records are NOT_RUN.
+No timeout, watchdog, workload or verdict is changed.
+
+Retained full-campaign captures of the unchanged stress_04 (hvf-host,
+.evidence/kselftest-full/RUN/{reference,subject}/ublk/test_stress_04.sh/):
+  run                          GCC reference          EvoCC subject
+  20260914T121718Z             TIMEOUT (2dde028e)     PASS (df7ca716)
+  20260922T033617Z             PASS (8fa43fb4)        TIMEOUT (1d4890fa)
+  seven-differences-serial-0923 PASS (8fa43fb4)       TIMEOUT (f2d59e05)
+  20260927T223104Z             TIMEOUT (13bd4d0b)     PASS (62c29ae4)
+Each TIMEOUT is "not ok 1 ... # TIMEOUT 45 seconds", then EVO_INIT_DONE and
+no power-off before the boot watchdog. The 20260914T015846Z pair is SKIP on
+both sides and is not counted. GCC and EvoCC each time out in 2 of 4.
+ublk-blocked-observer.out (September 28, GCC) adds the blocked path:
+writeback workers for 259:5 and 259:8 wait in blk_mq_get_tag at 25 s, 40 s
+and before the shutdown sync, and fio/io_uring readers wait for folios.
+Its other 24 observed original invocations (12 per kernel, September
+27-28) all pass.
+
+Source path (Linux 6.18.44, the pinned tree; hashes below):
+  test_stress_04.sh starts 11 background jobs on null, loop and stripe
+  targets; 7 of them use -z or --auto_zc. Each job runs buffered fio
+  (libaio and io_uring, randrw, depth 256, numjobs=nproc), sleeps 2 s, then
+  test_common.sh:244 __ublk_kill_daemon sends kill -9 and polls the state
+  once a second, up to 50 times, until it reads DEAD.
+  ublk_drv.c:1726 ublk_ch_release_work_fn runs after the daemon closes the
+  char device. For zero-copy and auto-buffer devices, 1746 reschedules the
+  work every jiffy while ublk_check_and_reset_active_ref sees a live I/O
+  buffer reference; those drop only when the daemon's io_uring frees its
+  registered buffers. The work then aborts server-owned requests, sets
+  force_abort and calls ublk_stop_dev_unlocked (1804). That calls
+  del_gendisk at 2109; only after it returns does ublk_detach_disk (2084)
+  set state DEAD and ublksrv_pid -1 (2092).
+  Therefore a device whose release work keeps waiting for a buffer
+  reference, or whose del_gendisk cannot finish, never reads DEAD. The kill
+  loop then runs into the 45-second limit, and the dirty pages of that disk
+  keep the final sync waiting. The captured flush workers in
+  blk_mq_get_tag fit this path: the queue's tags are held by requests that
+  never complete. Which request stays incomplete, and why, is NOT captured.
+
+kublk's 10-second close fallback is not on this path:
+  kublk.c:1092 ublk_stop_io_daemon returns at 1099 when ublksrv_pid < 0.
+  stress_04 calls "kublk del" only after the kill loop has read DEAD, and
+  DEAD comes with ublksrv_pid = -1, so the IN_CLOSE wait at 1113 is skipped.
+  The fallback can run only when del starts before DEAD. Then kill(pid, 0)
+  at 1103 still succeeds for a zombie: kublk double-forks (1276-1288), the
+  killed daemon is reparented to PID 1, and tools/k1/selftest-init.c reaps
+  only its direct child until a program ends. So a deletion that starts
+  before DEAD can wait 10 s. The shared-backing GCC deadline in
+  ublk-kill-cancel.out had no trace, so its path stays unknown. The
+  fallback cannot explain the original 45-second TIMEOUT or the shutdown
+  stall.
+
+Upstream, checked 2026-10-13: no report of a stress_04 hang or a
+blk_mq_get_tag stall after a killed ublk server was found. Mainline ublk
+fixes since 6.18 (for example 0842186d2c4e, 845db023a8ae, f7700a4415af,
+1133b93fc7f6, 432a9b2780c0, 8a14be55bdc6) address recovery, fetch and
+cancel races or use-after-free; none describes this path, and none is tested
+here. The 6.18 stable branch after 6.18.44 (through 2026-10-11) has ublk,
+blk-mq and io_uring fixes, none of which names this hang.
+
+Disposition: the stall is NOT EvoCC-specific. The GCC reference shows it as
+often as the EvoCC subject, and its path runs through ublk teardown,
+del_gendisk and blk-mq tag waits. This classifies the observed failure as
+shared; it does not demonstrate a kernel cause.
+K04's exit (the original workload with clean shutdown, or a source-bound
+disposition) is NOT met: the incomplete request and the holder of the
+missing buffer reference or tag are not identified.
+
+Next evidence needed, after the owner restores or approves a ublk-enabled
+pair: on a stalled run, sample the exit_work state (scheduled delayed work),
+each ublk_io's flags and reference count, io_uring io_ring_exit_work stacks
+and the per-hctx tag owners, before and after the kill loop. The original
+45-second limit stays unchanged.
+
+Pinned sources (SHA-256):
+  drivers/block/ublk_drv.c  23b9e6a8ad3084737e6debf4098d5571cd65756e30dc7bfcb929d8143a7d6779
+  ublk/kublk.c              ca60a520616828fe0378e87388b8bb672129cb75f159b6903b491451c7877320
+  ublk/test_common.sh       a26a36c865ae1fc4adaec13caa2feed0cba1dda001f37aa63c9a4114bbd46b04
+  ublk/test_stress_04.sh    0bb735ff31c1f9ceb5f15f0b3cafa1298fa2a52a83e122f8db03d081c1627d4e
+Source tree: .build/case/kbuild-probe/src, Linux 6.18.44; the direct-build
+receipt records its 91,117-file match against the signed archive.

@@ -1,0 +1,166 @@
+2026-10-13 — K01b: shared upstream QEMU MT-TCG disposition, classification only.
+
+This record classifies the concurrent instruction-publication failure. It is
+not the unchanged sched_ext replay, a cause of the original NULL fault, an
+emulator repair, or K13. The installed emulator and the locked lanes are
+unchanged; MT-TCG and HVF use the locked lanes, and the single-thread controls
+use a diagnostic contract copy that only adds lanes.
+
+Installed emulator: /opt/homebrew/bin/qemu-system-aarch64, QEMU 11.1.2,
+SHA-256 2239f9f1d01b6c06764fada9300c5701990c3f113b1c3533a19c993f08096642.
+Its Homebrew formula builds download.qemu.org/qemu-11.1.2.tar.xz with no
+source patch. That tarball has SHA-256
+731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016 and a good
+signature from release key CEACC9E15534EBABB82D3FA03353C9CEF108B584
+(Michael Roth), fetched from keyserver.ubuntu.com into a scratch keyring.
+The September 11.1.1 private builds and their captures were deleted with
+.build/floating-targeted; their two patches remain in tests/fixtures.
+
+Source path in QEMU 11.1.2 (system mode, a store to a page with code):
+  accel/tcg/cputlb.c:2724 do_st4_mmu -> mmu_lookup -> 1691 mmu_watch_or_dirty
+    -> 1337 notdirty_write -> 1345 tb_invalidate_phys_range_fast.
+  accel/tcg/tb-maint.c:1210 takes the page lock at 1217, invalidates the
+    overlapping blocks, and releases the lock at 1221.
+  accel/tcg/cputlb.c:2733 do_st_4 -> 2665 store_atom_4 then writes the new
+    word. This store comes after the unlock and holds no page lock.
+  On another vCPU, accel/tcg/translate-all.c:261 tb_gen_code takes the
+    page lock at 315 (it waits for that unlock), translates the OLD word at
+    324, and links the block at 528. tb-maint.c:699 tb_page_add -> 715
+    tlb_protect_code re-arms write detection. The pending store then lands.
+    Nothing invalidates the new block until a later write to that page.
+  Guest maintenance does not repair it. target/arm/helper.c:3534, 3539 and
+    3544 define IC IALLUIS, IC IALLU and IC IVAU as ARM_CP_NOP in system
+    mode; the 3471 ic_ivau_write invalidation is user-mode only.
+    target/arm/tcg/translate-a64.c:2362 DSB emits a host barrier, and 2391
+    ISB only ends the block, so the next lookup finds the stale block. The
+    sync-core IPI and exception return also invalidate nothing.
+  Commit deba78709ae8 (2023, "accel/tcg: Always lock pages before
+  translation") closed the read-before-lock window. It does not cover this
+  invalidate-then-store window.
+  Single-thread TCG (accel/tcg/tcg-accel-ops-rr.c:181) runs one vCPU at a
+  time and switches only between blocks, so a store helper finishes before
+  another vCPU translates.
+  HVF executes the guest's real cache maintenance.
+
+The path is the same in the versions that produced earlier results:
+tb-maint.c, translate-all.c, translator.c, helper.c and translate-a64.c are
+byte-identical in v11.1.1 and 11.1.2. cputlb.c differs only in
+probe_access_internal and the plugin lookup, and cpu-exec.c only in
+cpu_exec_step_atomic. Both older patches,
+qemu-instruction-publication.patch and qemu-cache-maintenance.patch, apply
+to 11.1.2 with no offset or fuzz (patch --dry-run). The September results
+of those private experiments therefore bind to the same source lines.
+
+Upstream, checked 2026-10-13:
+  master 615ece3c406b (2026-10-09): cputlb.c, tb-maint.c and
+    translate-all.c are byte-identical to 11.1.2, and IC IVAU is still
+    ARM_CP_NOP in system mode. No fix exists to test.
+  QEMU issue #4669, opened 2026-10-10 and still open: "accel/tcg: MTTCG can
+    run stale code after another vCPU's store to a code page". It names the
+    same notdirty_write / tb_gen_code window for x86 ftrace text_poke_bp and
+    shows memory holding the new byte while the stale block runs. Its one
+    reply, from QEMU developer stsquad on 2026-10-13, asks whether the
+    problem is x86-specific. No patch or merge request is linked. It cites
+    the June 2025 LKML thread on x86 int3 oopses under QEMU 10.0 TCG, where
+    the kernel side called it a QEMU bug.
+  Mailing list: lore.kernel.org refused automated queries; a patchew subject
+    search ("notdirty") and a web search found no 2026 qemu-devel patch for
+    this window. The newest notdirty series is from 2023.
+  This AArch64 evidence answers the x86-only question. The reduction
+  replaces only an aligned direct B, an Arm-permitted concurrent
+  modification, and runs DC CVAU, IC IVAU, DSB, ISB and a sync-core
+  membarrier. The old branch still runs. Nothing was posted upstream from
+  this project.
+
+Reduced reproducer, unchanged instruction-publish-alias.c
+(aea98940002005de23cd2071f61b0415d640a6d355b96c5a75d6534f9a3e576b).
+Sealed evo-nexlab:sealed image e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93,
+network none: gcc-14 / clang-19 -static -O2 -Wall -Wextra -Werror -pthread.
+Both ELFs are byte-identical to the September 26 build:
+  GCC 2ae439ae6ffca08b62ce4595ad67b53f9364ac52b9b3ca47e197295f5e015d1a
+  Clang f230b17d75c4365c7705cd681870a5e311928fced746c895aa5daf358218996c
+Six modes per compiler: concurrent B on one mapping, on RW/RX aliases, and
+on aliases with a reader ISB; atomic memory gate; MOV under the write lock;
+and a handshake run. 512 rounds, four CPUs, the source's 20-second alarm.
+The 7,008-unit Images are retired (see K01). This uses the current pair:
+  GCC virtconfig reference b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35
+  EvoCC K16/K17 direct     add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f
+
+                                     GCC kernel          EvoCC kernel
+  MT-TCG, locked tcg-cortex-a72      6 PASS / 6 FAIL     6 PASS / 6 FAIL
+  HVF, locked hvf-host               12 PASS / 0 FAIL    12 PASS / 0 FAIL
+  ST-TCG, fixed instruction clock    12 PASS / 0 FAIL    12 PASS / 0 FAIL
+  ST-TCG, host clock                 INVALID (alarm)     INVALID (alarm)
+
+On MT-TCG the six failures per kernel are exactly the three concurrent-B
+modes for each compiler. Misses (GCC kernel / EvoCC kernel):
+  GCC one mapping            1751872 / 592192
+  GCC aliases                1244800 / 412736
+  GCC aliases plus ISB       1399104 / 314496
+  Clang one mapping          1083136 / 672064
+  Clang aliases               742400 / 610624
+  Clang aliases plus ISB     1833216 / 737152
+Every first bad snapshot returned 1 while memory held 14000001, the branch
+to the return-zero pair. Memory-gate, locked-MOV and handshake controls have
+zero misses on both kernels. On HVF and the fixed-clock ST control each
+concurrent-B mode runs 8 to 50 million enabled calls with no miss.
+
+The host-clock ST control is not evidence either way. Every program on both
+kernels was killed by its own 20-second alarm (exit 142) before its summary;
+load averages were 41 to 55 and the guest logged a 290 ms hrtimer interrupt.
+The September 26 run of this control passed 12/12 per kernel. The fixed
+clock lane (-accel tcg,thread=single -icount shift=0,sleep=off) keeps the
+same single-thread scheduling, but guest time follows executed instructions,
+so the alarm no longer measures host load. No program, alarm or assertion
+changed. Load before each flight (1-minute average): MT 61.6/61.0,
+HVF 48.3/47.0, host-clock ST 41.1/46.4, fixed-clock ST 55.4/60.6.
+A host-clock ST retry started at load 23.4 (63.2 for the second kernel)
+completed 2 of 24 programs, both PASS with zero misses; the other 22 hit the
+alarm again (smc-retry/, results
+1203ddccb6bcbd8ff07f1494fe394044dee26c13df4caccf2f87dfac7661ca7f).
+Counts above are miss counts, not timing results.
+
+Conclusion: the discrepancy is a shared upstream QEMU MT-TCG defect in
+system-mode code publication, present in the installed 11.1.2 and current
+master, affecting the GCC and EvoCC kernels alike. It is not an EvoCC
+code-generation defect.
+
+What remains:
+  - The unchanged sched_ext hotplug -> reload_loop sequence and the complete
+    23-test program are not replayed: their Images and payloads are retired
+    (K01). A stale static-key branch under this defect is a plausible route
+    to the old NULL fault; it is not proven.
+  - There is no upstream fix. The private IC IVAU candidate covers only code
+    that runs that maintenance; it is not a complete QEMU repair and was not
+    rebuilt for 11.1.2.
+  - The host-clock ST control needs a quiet host to be repeated; under this
+    load its wall-clock alarm, not the code, decides the outcome.
+
+Evidence: .evidence/k1-dispositions-20261013/smc/, about 0.3 MiB.
+  results-tcg-cortex-a72-reference+subject.json
+    8cc6fa950fcb77d1f1f8594ac48e45c7af5994b139776e12cc58d2bf8380c868
+  results-hvf-host-reference+subject.json
+    00a8db0859b632cc764ab3ef8209dff6494efe4e0af263b3016b77e781b1d035
+  results-tcg-single-icount-cortex-a72-reference+subject.json
+    78d5049a5e638bdbd634b0709eaf1059019151206c7e02f72aad6b30ceb8d87c
+  results-tcg-single-cortex-a72-reference+subject.json
+    19cbfa22b725fb0afc7789324ce009a5f8dacba73a486355d10978d58600ac26
+Each result binds the Image, nonce, serial log hash, QEMU hash, load and
+free space before and after each flight. Inputs: initramfs
+5bd2454b807b38e9b0b94ad96005b91bc571e676f7395f7e0b669f47e2abe7a0, init
+69068d9d5a20114d48106f54432c7c79ef678e436733245a860acd4049dcad22, 64 MiB
+ext4 scratch 7ef6deb8b823f35da2697f0b9f1c4fb82c06212d7e4141ec256e239e3623d720
+(snapshot-only, unchanged after every flight).
+The scripts ran from .build/case/kbuild-probe/scratch/k1-dispositions/ and
+are copied, with the build log, under .evidence/k1-dispositions-20261013/scripts/.
+To replay, restore smc-build.sh as smc/build.sh and the scripts/ files in that
+scratch layout, run smc/build.sh in the sealed image (mounts as in its
+header), create the scratch disk with mke2fs -t ext4 -b 1024 ... 65536, then:
+  python3 .build/case/kbuild-probe/scratch/k1-dispositions/scripts/smc_flights.py CAPTURE LANE
+with LANE tcg-cortex-a72, hvf-host, tcg-single-cortex-a72 or
+tcg-single-icount-cortex-a72. The MT-TCG, HVF and host-clock ST runs used
+driver 8fcd34193f3a68ed739b7f4e23d38141fa922113e3029ae28a355904a62aa0d7.
+The fixed-clock run used the retained
+25873451ad575e666bd9115aef994243fcc4f9933e3059b3a25a9d8e9904744b, which
+adds only that lane name. Later lanes in the copied diagnostic contract
+serve the K01 proxy (k01-sched-ext-timeout-diagnosis.out).

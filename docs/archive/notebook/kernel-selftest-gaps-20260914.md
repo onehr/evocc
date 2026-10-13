@@ -4046,3 +4046,58 @@ including the new retained kernel. Host free space is **45.7 GiB** and also
 reflects unrelated activity. The state-renderer tests exposed four pre-existing
 missing-directory errors; three `spec/` directory creation lines restore all
 72 existing checks without changing their assertions.
+
+### K01, K01b and K04 dispositions — 2026-10-13
+
+The original sched_ext and ublk replays are NOT_RUN. Their 7,008-unit
+Images, configuration, runtime disks and payloads were retired with
+`.build/k7-coverage` on October 7, and no copy exists under `.build`,
+`.build/case` or `.evidence`. The current GCC virtconfig Image
+(`b6f206de…`) and EvoCC K16/K17 Image (`add1c487…`) enable neither
+`SCHED_CLASS_EXT` nor `BLK_DEV_UBLK`. No kernel was built in this slice.
+
+**K01b.** The [QEMU disposition](../../../tests/fixtures/k01b-qemu-mttcg-disposition.out)
+binds the failure to the signed QEMU 11.1.2 source that Homebrew builds.
+`notdirty_write` invalidates the overlapping blocks under the page lock and
+returns; the store lands after the unlock. Another vCPU can translate the
+old word in that window, and system-mode IC IVAU is a no-op, so the guest's
+maintenance cannot remove the stale block. Upstream master (`615ece3c`) is
+unchanged, and QEMU issue #4669 (open, no patch) reports the same window for
+x86. The unchanged reduction, byte-identical to the September build, fails
+6 of 12 modes on MT-TCG on both current Images, exactly the concurrent-B
+modes. HVF and a fixed-instruction-clock single-thread control pass 12/12 on
+both. The host-clock single-thread control hit its own 20-second alarm under
+load twice and counts as neither PASS nor FAIL. This classifies a shared
+emulator defect; it does not prove the NULL fault's cause.
+
+**K01.** The [timeout diagnosis](../../../tests/fixtures/k01-sched-ext-timeout-diagnosis.out)
+finds a slowdown, not a hang. Retained EvoCC timeouts stop at different
+tests, report no stall or lockup, and the September 23 show-state finds the
+runner waiting for sleeping children after two fork phases of about 59 s.
+The September 28 cache-maintenance QEMU also timed out. On the current pair,
+the 1024-child fork/exit/wait pattern of `init_enable_count` executes 9.1-10.3
+times as many guest instructions on EvoCC (fixed instruction clock and an
+MT-TCG plugin count; the user-loop control matches). A 1,329,200-byte EvoCC
+`copy_pte_range` accounts for 2.06 G of 9.04 G instructions; GCC's whole
+inlined `copy_page_range` uses 17.3 M. This is a code-generation cost of the
+K02/K03 kind on the current compiler; the retired September compositions
+were not measured.
+
+**K04.** The [stall record](../../../tests/fixtures/k04-ublk-stall-disposition.out)
+narrows the source path. Retained campaigns show the 45-second TIMEOUT in 2
+of 4 GCC and 2 of 4 EvoCC captures, so the stall is not EvoCC-specific.
+stress_04 deletes only after the device reads DEAD, which also sets
+`ublksrv_pid` to -1, so kublk's 10-second close fallback is skipped. DEAD
+needs `del_gendisk` to return; a disk whose requests never complete keeps
+the kill loop polling into the 45-second limit and the final sync waiting,
+which fits the captured `blk_mq_get_tag` writeback. The incomplete request
+is not identified and no upstream fix was found. K04 stays OPEN.
+
+Captures: `.evidence/k1-dispositions-20261013/` (about 3 MiB), with scripts,
+plugin sources and the diagnostic contract copy. Each flight records its
+nonce, serial hash, QEMU hash, 1-minute load (23-91) and free space. Free
+space on `/` moved between 50 and 22 GiB during the slice because of other
+work. The slice keeps about 40 MiB: 16 MiB of payload scratch on the case
+volume, 20 MiB of extracted QEMU source in the session scratch, and the
+3 MiB capture. The 135 MiB QEMU tarball was removed after its hash and
+signature were checked.

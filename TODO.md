@@ -134,7 +134,7 @@ was found in the read-only process check at this planning checkpoint.
 <!-- closure-queues:start -->
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
-| KERNEL | K01, K01b, K02, K03, K04, K07, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
+| KERNEL | K01, K02, K03, K04, K07, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L10, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D01, D02, D03, D04, D05, D06, D08 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
@@ -1377,6 +1377,16 @@ KUnit, and it closes none of those separate tasks.
   September 26's identical-payload MT-TCG `-d nochain` control still fails the
   static and preemption-disabled modes on both Images (memory controls pass).
   Direct-block chaining is not a necessary cause; the control is not a repair.
+  October 13: the unchanged replay is NOT_RUN. Its 7,008-unit Images,
+  configuration and payloads were deleted on October 7 with
+  `.build/k7-coverage`, and the current virtconfig pair lacks `SCHED_CLASS_EXT`.
+  The [timeout diagnosis](tests/fixtures/k01-sched-ext-timeout-diagnosis.out)
+  finds a slowdown, not a hang and not the MT-TCG defect: the cache-maintenance
+  QEMU that cures the reductions still times out. On the current pair, the
+  `init_enable_count` fork/exit/wait pattern executes 9.1 to 10.3 times GCC's
+  instructions. EvoCC's `copy_pte_range` is one 1,329,200-byte function and
+  takes 2.06 G of 9.04 G instructions; GCC's whole `copy_page_range` is 8,992
+  bytes. Replay on the T04 composition with `SCHED_CLASS_EXT` before closing.
 
   - [x] **K01a — Fail closed on truncated sched_ext result summaries**.
     [Minimal fixture](tests/fixtures/kselftest-scheduler-truncated.tap) reproduced
@@ -1385,7 +1395,7 @@ KUnit, and it closes none of those separate tasks.
     All 219 K1 Python regressions and targeted Ruff/diff checks pass. This closes the verdict subcase,
     **not** the kernel NULL fault or the fresh paired run.
 
-  - [ ] **K01b — Resolve the concurrent instruction-publication runtime discrepancy** — `OPEN`, P1.
+  - [x] **K01b — Resolve the concurrent instruction-publication runtime discrepancy** — `DONE`, P1, 2026-10-13, classification only.
     The [userspace C reduction](tests/fixtures/instruction-publish-alias.c)
     removes kernel static keys, RCU, hotplug and EvoCC-generated test code.
     The first MOV probe exceeded Arm's concurrent-modification boundary; its
@@ -1427,6 +1437,21 @@ KUnit, and it closes none of those separate tasks.
     GCC but times out on the retained old EvoCC Image with BOTH pristine and
     candidate QEMU; neither pair reproduces the NULL fault. New-composition
     runtime validation and the remaining emulator paths are still required.
+
+    October 13's [upstream
+    disposition](tests/fixtures/k01b-qemu-mttcg-disposition.out) binds the
+    failure to the signed QEMU 11.1.2 source. `notdirty_write` invalidates the
+    old blocks under the page lock, and the new instruction is stored after the
+    unlock. In that gap, another vCPU can translate the old word and keep it.
+    System-mode IC IVAU, IALLU and IALLUIS do nothing, and ISB drops no
+    translation. Upstream master `615ece3c` is unchanged, and QEMU issue #4669
+    reports the same window (open, no patch). The byte-identical reduction fails
+    exactly the six concurrent-branch modes on MT-TCG on both current Images;
+    HVF and single-thread TCG with a fixed instruction clock pass 12/12 on each.
+    Host-clock single-thread TCG hit its own alarm under load and counts as
+    neither PASS nor FAIL. This is a shared emulator defect, not an EvoCC
+    defect. The unchanged sched_ext replay and the cause of the NULL fault stay
+    under K01.
 
 - [ ] **K02 — KVM demand_paging_test timeout** — `OPEN`, P1.
   The subject reaches the original 120-second limit after three guest modes;
@@ -1651,6 +1676,17 @@ KUnit, and it closes none of those separate tasks.
   bound. That observation alone cannot prove a kernel latency bug; retain the
   historical failure and use the source-qualified syscall control. Do not waive
   K04 or lengthen the upstream watchdog.
+  October 13's [stall record](tests/fixtures/k04-ublk-stall-disposition.out):
+  the original pair is NOT_RUN, because its inputs were deleted on October 7 and
+  virtconfig lacks `BLK_DEV_UBLK`. The retained campaigns time out in 2 of 4 GCC
+  and 2 of 4 EvoCC captures, so the stall is shared. stress_04 deletes a device
+  only after it reads DEAD, which sets `ublksrv_pid` to -1, so kublk's 10-second
+  fallback is not on this path. DEAD needs `del_gendisk` to return. A request
+  that never completes keeps the kill loop polling into the 45-second limit and
+  blocks the final sync, as the writeback threads in `blk_mq_get_tag` show. The
+  incomplete request is not identified, and no upstream fix exists. Replay on
+  the T04 composition with `BLK_DEV_UBLK`, and capture the request and reference
+  holders at the stall.
 
   - [x] **K04b — Isolate ublk completion-order assertions** — `DONE`, P1, 2026-09-28, classification only.
     Newly exposed generic_01 fails on both kernels; generic_02 fails on GCC

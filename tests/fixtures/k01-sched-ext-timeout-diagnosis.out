@@ -1,0 +1,132 @@
+2026-10-13 — K01: original replay blocked; the EvoCC-only timeout is a slowdown.
+
+This is a diagnosis record, not the unchanged sched_ext replay and not K13.
+No kernel, test, assertion, budget or lane is changed.
+
+Replay status: NOT_RUN. The pinned 7,008-unit composition (EvoCC Image
+18b36fee4bb0265719f59df8db1da7098374df3c5e245071dc8f0662ea6a7032, GCC
+22a87df276887cc6454053dee56ea96742ab9cf24043b00fd1a21accf93a0fa6), its
+config 95853321..., the older retained pairs (f2d59e05.../8fa43fb4...,
+62c29ae4.../13bd4d0b...), the matched runtime disks and the sched_ext
+payloads were under .build/k7-coverage, retired on October 7. A search of
+every Image file under .build, .build/case and .evidence finds none of these
+hashes. The two current Images, GCC virtconfig b6f206dea584... and EvoCC
+K16/K17 add1c4874e28..., do not enable CONFIG_SCHED_CLASS_EXT. This slice
+may not build a kernel. The hotplug -> reload_loop sequence and the complete
+23-test program therefore wait for restored inputs or an owner-approved new
+pair, as the October 11 preflight already records.
+
+Retained event evidence: the unchanged full-program pairs on tcg-cortex-a72
+(.evidence/kselftest-full/RUN/{reference,subject}/sched_ext/runner/, plus
+the deleted September 28 captures summarized in qemu-cache-maintenance.out).
+Reference times are the guest power-off times:
+  run                            GCC reference    EvoCC subject
+  20260922T033617Z               23/23, 48.8 s    TIMEOUT, select_cpu_dfl
+  seven-differences-serial-0923  23/23, 49.0 s    NULL fault, reload_loop
+  sched-blocked-stacks-0923      not run          TIMEOUT, init_enable_count
+  20260927T223104Z               23/23, 56.9 s    TIMEOUT, init_enable_count
+  qemu-cache-maintenance 0928    23/23, twice     TIMEOUT, reload_loop;
+                                                  candidate: TIMEOUT, prog_run
+The timeout point moves between runs of the same old subject Image
+f2d59e05...: reload_loop (test 16), init_enable_count (test 9) and
+prog_run (test 15). A deterministic hang would stop at one place.
+
+Not a hang. The three retained EvoCC timeout captures contain no RCU stall,
+soft lockup, hung task or oops report. In sched-blocked-stacks-20260923
+(console level 7, PID 1 requests SysRq show-state at the limit):
+  21.4 s   hotplug ends
+  80.69 s  init_enable_count attaches (global): 59.3 s after hotplug
+  81.72 s  detaches after the 1024 pre-forked children exit
+  82.38 s  second global attach/detach ends
+  140.93 s partial run attaches: 58.6 s after 82.38 s
+  141.20 s show-state: the runner (pid 130) waits in wait4; its children
+           2199-2207 sleep in hrtimer_nanosleep; no task waits in D state.
+Both phases run open/load plus 1024 forks and take about 59 s each. The
+test was progressing at the limit. It needed two such phases.
+
+Not explained by the MT-TCG defect. The September 28 cache-maintenance QEMU
+removes all reduced publication failures, yet the same old subject still
+times out (prog_run). The show-state above has only ordinary sleeping and
+waiting tasks. The defect remains the open candidate for the NULL fault in
+reload_loop, not for the timeout (k01b-qemu-mttcg-disposition.out).
+
+A slowdown: instruction counts on the current pair (a proxy, not sched_ext).
+fork-window.c repeats init_enable_count's pre-attach pattern: 1024 fork()
+children that exit, then waitpid for each. A 10M-iteration user loop is the
+control. GCC 14.2 static, sealed image; identical initramfs on both kernels.
+  Fixed instruction clock, ST-TCG (-icount shift=0,sleep=off; 1 ns = one
+  executed instruction on any vCPU, plus skipped all-idle time):
+                          GCC kernel        EvoCC kernel      ratio
+    user-loop control     60.3 M / 63.3 M   60.9 M / 71.8 M   1.01-1.13
+    1024 fork+exit+wait   241-247 M         2,224-2,252 M     9.1-9.3
+  MT-TCG (locked lane) with the instruction-window plugin, which counts
+  executed instructions on all vCPUs between two HINT markers:
+    user-loop control     60.4 M / 60.5 M   61.0 M / 65.0 M   1.0-1.1
+    1024 fork+exit+wait   269-281 M         2,720-2,891 M     9.9-10.3
+    same, children sleep  287-316 M         2,712-2,876 M     9.1-9.5
+  The counts do not depend on host load. Three rounds per program agree
+  within 10%.
+A per-block plugin attributes 92-97% of three fork windows to functions:
+  EvoCC copy_pte_range  2,063 M; GCC's whole copy_page_range is 17.3 M.
+    EvoCC's copy_pte_range symbol is 1,329,200 bytes (0x144830) and runs
+    630 distinct hot blocks; GCC inlines this path into a 9,000-byte
+    copy_page_range. The EvoCC fork page-table copy path costs about 120x.
+  PTE zap at exit: EvoCC zap_pte_range + zap_present_ptes + unmap_page_range
+    1,037 M (34 KiB + 33 KiB + 10 KiB of code); GCC's 4.7 KiB
+    unmap_page_range, with this path inlined, 48.8 M.
+  ktime_get + ktime_get_update_offsets_now: 1,060 M vs 63 M; one ktime_get
+    block alone retires 565 M, consistent with sequence-count spinning.
+  queued_spin_lock_slowpath: 346 M vs 28 M.
+EvoCC total 9,040 M vs GCC 884 M (10.2x). At the logged load the EvoCC
+rounds take 26-36 s of guest time against 5-14 s for GCC; the September
+59-second phases (open, load and 1024 forks of the larger runner) fit this.
+
+Conclusion: the EvoCC-only full-program timeout is a slowdown. It is not a
+hang, and the MT-TCG defect does not cause it. The retained September runs
+spend about 59 s in each init_enable_count fork phase, and host load moves
+the stopping point within the fixed 120-second budget. On the current pair
+the same fork pattern runs about ten times more kernel instructions on
+EvoCC, concentrated in compiler output (a 1.3 MB copy_pte_range and
+un-inlined PTE loops). This points to a code-generation performance cause
+of the K02/K03 kind, not an emulator or test cause. The counts come from
+the current compiler (820bfa29) on the virtconfig pair; the September
+compositions are retired and were not measured.
+
+What remains for K01:
+  - Unchanged paired replay of hotplug -> reload_loop and the 23-test program
+    on a restored or owner-approved sched_ext pair. A subject PASS within the
+    unchanged 120 s budget likely needs the fork-path code size repaired.
+  - The NULL fault's cause. The MT-TCG stale-block defect is the candidate;
+    no causal link is proven.
+
+Tooling notes. The first plugin attempt used -accel tcg,thread=single with a
+plugin: QEMU 11.1.2 aborts at once with "target/arm/helper.c:10170:
+arm_mmu_idx_el: code should not be reached" (both Images, QEMU_EXIT_134).
+That is why the plugin runs use MT-TCG. qemu_plugin_outs prints only with
+"-d plugin"; one MT run without it has no counts and is kept as such.
+
+Evidence: .evidence/k1-dispositions-20261013/forkcount/ (about 2.6 MiB).
+  results-tcg-single-icount-cortex-a72-reference+subject.json
+    44b328077350519a23f6266c38fec15b0848c4c4036e354d8ff3af7ac4441945
+  results-tcg-insn-log-cortex-a72-reference+subject.json
+    5200cbee81554013a9ab28505cd69981e21dfb14b9bc0c38bdc90e4142b4ed57
+  results-tcg-hot5k-log-cortex-a72-reference+subject.json
+    15f0d2060f47d8eb1137298788d65c6647c03cfe74d0abbfef385e86521189d4
+  hot-compare-windows-2-4.txt
+    03acf1b822772098204256fcf00cd60ee9b1a08d86832ed56a111dab5f9eaaba
+  symbol-sizes.txt (llvm-nm -S of both vmlinux files)
+    9dd3025c3fb19488314af0ab2797c18285321a4db80c722c5d8945c29860c210
+  Also kept: results-tcg-insn-cortex-a72 (no plugin output),
+  results-tcg-hot-log-cortex-a72 (top 60 blocks only) and
+  results-tcg-single-icount-insn-cortex-a72 (the aborted plugin start).
+Inputs: fork-window.c 47b92b480eed48c9d2c29a6c096f89dd33827c0f902fdc51968ad407b2d86b98,
+ELF ebb5a096c48e1915f5cce2afd36289dafaa3ca66452cb03b845c99f96e5fd1d7,
+initramfs 0c5c1fa4b57331e42f283301f9ad9dacc3fd14b0532e713a1fc29e180ee26be1,
+plugins libinsnwindow 35870e55622ad51ba031a18bf429cdc11d74363513e3deb81cfda6007e0ce69b,
+libhotwindow5k 377d6c0e203ccc73a56428a70911fc651daa38e046bb2a737fe939aca911adfa
+(Apple clang 21, -undefined dynamic_lookup, QEMU 11.1.2 qemu-plugin.h v7).
+vmlinux: GCC ba1939e1eba5ddc173d6ebc3783db7a91646a71e5a560f1b92f6286941e5ccdd,
+EvoCC f679dbd2b542b1b54960132c8d6f679afc4d46674c9c1d2fcd312d86bc77c09d.
+Each result binds Image, nonce, serial hash, QEMU hash, load and free space.
+Load (1-minute) was 66-85 during these flights; no wall-clock value is
+used as evidence. Scripts and sources are copied under the capture's scripts/.
