@@ -38,11 +38,13 @@ LOGS = {
                [(r"^splitting work across ", 2), (r"^02:13 tcl\(", 6)]),
     "jq": ("jq 1.8.2: make check", "ladder-jq-receipt.json", [(r"^PASS: tests/mantest$", 11)]),
     "cjson": ("cJSON 1.7.19: ./cJSON_test", "ladder-cjson-receipt.json", [(r"^Version: 1\.7\.19$", 11)]),
-    "linux": ("Linux 6.18.44: serial console", "kernel-bpf-full-receipt.json",
-              [(r"\] Booting Linux on physical CPU ", 1), (r"\] smp: Brought up ", 1),
-               (r"\] Run /init as init process$", 5)]),
+    "linux": ("Linux 6.18.44: serial console", "kernel-direct-virt-receipt.json",
+              [(r"\] Linux version ", 1), (r"\] smp: Brought up ", 1),
+               (r"\] Run /init as init process$", 2)]),
     "toybox": ("Toybox 0.8.14: make tests", "ladder-toybox-receipt.json", [(r"^PASS: xxd -r long$", 10)]),
 }
+# The Linux card quotes the EvoCC kernel that Kbuild built with CC=evocc, on the host boot lane.
+LINUX_LANE = "subject-boot-hvf"
 
 
 def digest(path):
@@ -92,10 +94,15 @@ def boot_facts(log, nonce):
             facts["cpuCount"] = int(match[2])
         elif key == "memory":
             facts["availableKiB"], facts["totalKiB"] = int(match[2]), int(match[3])
-    alive = log.find("\nEVO_INIT_ALIVE\n")
-    bound_nonce = log.find(f"\nEVO_BOOT_NONCE {nonce}\n")
-    done = log.find("\nEVO_INIT_DONE\n")
-    if positions != sorted(positions) or not positions[-2] < alive < bound_nonce < done < positions[-1]:
+    # Each marker starts a line, but the console may print the kernel's earlier
+    # messages after it, even on the same line. So the markers are ordered among
+    # themselves and before power-off, not after "Run /init".
+    def marker(text):
+        match = re.search(rf"^{re.escape(text)}(?![\w-])", log, re.M)
+        return match.start() if match else -1
+    alive, bound_nonce, done = (marker("EVO_INIT_ALIVE"), marker(f"EVO_BOOT_NONCE {nonce}"),
+                                marker("EVO_INIT_DONE"))
+    if positions != sorted(positions) or not 0 <= alive < bound_nonce < done < positions[-1]:
         raise ValueError("boot milestones or nonce are missing/out of order")
     facts["nonce"] = nonce
     return facts
@@ -277,11 +284,15 @@ def relative(path):
 def source_log(name, receipt):
     """Return an accepted run's recorded log and the hash its receipt pins, if any."""
     if name == "linux":
-        boot = receipt["boot"]
-        if (boot["verdict"] != "PASS" or not receipt["completeComposition"]
-                or receipt["counts"]["substituted"] != receipt["requestedUnits"]):
-            raise ValueError("Linux boot or EvoCC composition did not pass")
-        return Path(boot["serialLog"]), boot["serialLogSha256"]
+        lane, counts = receipt["boots"][LINUX_LANE], receipt["counts"]
+        boot = read_json(ROOT / lane["receipt"])
+        if (receipt["mode"] != "direct-kbuild" or lane["verdict"] != "PASS" or boot["verdict"] != "PASS"
+                or counts["evoccCObjects"] <= 0 or counts["gccTargetCSourceRecords"]
+                or counts["seededTargetObjects"] or counts["missingRecordedOutputs"]
+                or boot["imageSha256"] != receipt["imageSha256"]
+                or boot["serialLogSha256"] != lane["serialLogSha256"]):
+            raise ValueError("Linux direct build, object provenance or boot did not pass")
+        return ROOT / boot["serialLog"], lane["serialLogSha256"]
     evidence = ROOT / receipt["evidence"]
     if name == "toybox":
         test = receipt["substitutedTest"]
@@ -317,7 +328,7 @@ def render_logs(records):
         record = {"title": title, "receipt": f"tests/contracts/{receipt_name}", "source": relative(path),
                   "sourceSha256": digest(path), "segments": excerpt(text, segments)}
         if name == "linux":
-            record["facts"] = boot_facts(text.replace("\r", ""), receipt["boot"]["nonce"])
+            record["facts"] = boot_facts(text.replace("\r", ""), receipt["boots"][LINUX_LANE]["nonce"])
         records["logs"][name] = record
         (OUT / f"{name}.svg").write_text(visuals.log_card(name, record))
 

@@ -85,6 +85,29 @@ class ShowcaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing or ambiguous"):
                 showcase.excerpt(text, segments)
 
+    def test_log_card_wraps_a_long_line_without_changing_its_text(self):
+        banner = ("[    0.000000] Linux version 6.18.44 (evo@flightlab) (evocc 0.1.0 (03600f805722 2026-10-12), "
+                  "GNU ld (GNU Binutils for Debian) 2.44) #1 SMP PREEMPT Sun Aug 9 18:25:35 UTC 2026")
+        record = {"title": "Linux", "segments": [{"line": 2, "text": [banner]}]}
+        root = ET.fromstring(visuals.log_card("linux", record))
+        rows = [node for node in root.iter() if node.tag.endswith("}text")][1:]
+        texts = ["".join(node.itertext()) for node in rows]
+        self.assertEqual("".join(texts), banner)
+        self.assertTrue(all(len(text) <= visuals.LOG_WRAP["linux"] for text in texts))
+        green = [span.text for row in rows for span in row
+                 if span.get("fill") == visuals.TERMINAL["green"] and span.get("font-weight") == "700"]
+        self.assertEqual("".join(green), "evocc 0.1.0 (03600f805722 2026-10-12)")
+
+    def test_boot_facts_accept_markers_that_the_console_interleaves(self):
+        facts = showcase.read_json(showcase.OUT / "captures.json")["logs"]["linux"]["facts"]
+        nonce = facts["nonce"]
+        early = [facts[k]["line"] for k in ("reset", "cpus", "memory", "devices")]
+        log = "\n".join(early + ["EVO_INIT_ALIVE[    0.09] driver line", f"EVO_BOOT_NONCE {nonce}[    0.10] more",
+                                 "EVO_INIT_DONE[    0.11] last", facts["init"]["line"], facts["poweroff"]["line"]]) + "\n"
+        self.assertEqual(showcase.boot_facts(log, nonce), facts)
+        with self.assertRaisesRegex(ValueError, "missing/out of order"):
+            showcase.boot_facts(log.replace(f"NONCE {nonce}[", f"NONCE {nonce}x["), nonce)
+
     def test_changed_log_excerpt_is_rejected(self):
         records = showcase.read_json(showcase.OUT / "captures.json")
         records["logs"]["sqlite"]["segments"][1]["text"][-1] = "1 errors out of 329803 tests"

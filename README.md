@@ -28,7 +28,7 @@ the reason. EvoCC can also prove, with Lean 4, that a compilation is correct.
 - **A drop-in `cc`.** Existing Makefiles build with `CC=evocc`. CMake projects use
   [`cmake/evocc.cmake`](cmake/evocc.cmake).
 - **Real software.** EvoCC builds zlib, SQLite, Lua, jq, Mbed TLS, Doom, three games and a Linux
-  kernel that boots.
+  kernel. Kbuild builds that kernel with `make CC=evocc`, and the kernel boots.
 - **Undefined behavior, with evidence.** `evo check` runs your program on the rules of C. It stops
   at the first operation that breaks one and shows the line.
 - **Catches what UBSan misses.** Uninitialized reads, dangling pointers and out-of-bounds accesses
@@ -161,7 +161,7 @@ record.
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/cjson.svg"><img src="docs/images/showcase/cjson.svg" alt="cJSON test program output: the example JSON, parsed and printed" width="320"></a><br><b>cJSON</b><br>216 unit tests, 0 failures<br><a href="tests/contracts/ladder-cjson-receipt.json">results</a></td>
   </tr>
   <tr>
-    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/linux.svg"><img src="docs/images/showcase/linux.svg" alt="Serial console of the EvoCC-built Linux kernel: it starts 4 CPUs, runs init and powers down" width="320"></a><br><b>Linux 6.18</b><br>7,008 C files; boots on 4 CPUs<br><a href="tests/contracts/kernel-bpf-full-receipt.json">results</a></td>
+    <td width="33%" align="center" valign="top"><a href="docs/images/showcase/linux.svg"><img src="docs/images/showcase/linux.svg" alt="Serial console of a Linux kernel that Kbuild built with make CC=evocc: the version banner names evocc 0.1.0, 4 CPUs start, init runs and the kernel powers down" width="320"></a><br><b>Linux 6.18</b><br>make CC=evocc; boots on 4 CPUs<br><a href="tests/contracts/kernel-direct-virt-receipt.json">results</a></td>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/toybox.svg"><img src="docs/images/showcase/toybox.svg" alt="End of the Toybox test log: PASS lines for xxd and zcat" width="320"></a><br><b>Toybox</b><br>1,669 tests, same results as GCC<br><a href="tests/contracts/ladder-toybox-receipt.json">results</a></td>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/mbedtls.svg"><img src="docs/images/showcase/mbedtls.svg" alt="Actual AES-GCM plaintext and ciphertext bytes with verified recovery and tamper rejection" width="320"></a><br><b>Mbed TLS seals pixels</b><br>Encrypt, restore, reject<br><a href="tests/contracts/ladder-mbedtls-receipt.json">results</a></td>
   </tr>

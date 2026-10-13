@@ -14,7 +14,7 @@ no kernel rebuild or large disk image is needed.
 | SQLite tests | The accepted EvoCC build of `testfixture` ran SQLite's own `veryquick` suite: 0 errors out of 329,803 tests | [86 C units](../../../tests/contracts/ladder-sqlite-receipt.json); Tcl is reference-built; see [test-log cards](#test-log-cards) |
 | jq tests | `make check` ran jq's 9 test programs and Oniguruma's 21, and all passed | [70 C units](../../../tests/contracts/ladder-jq-receipt.json); the build creates a missing version stamp; see [test-log cards](#test-log-cards) |
 | cJSON tests | `./cJSON_test` parses and prints the example JSON; 26 Unity programs then ran 216 tests with 0 failures | [23 C units](../../../tests/contracts/ladder-cjson-receipt.json); the Unity framework is GCC-built |
-| Linux boot | The recorded kernel boots on 4 CPUs, runs `/init` and powers down | [7,008 target C units](../../../tests/contracts/kernel-bpf-full-receipt.json); assembly, linking and the version banner come from the GCC toolchain |
+| Linux boot | Kbuild builds the kernel with `make CC=evocc`. It boots on 4 CPUs, runs `/init` and powers down | [2,799 target C units](../../../tests/contracts/kernel-direct-virt-receipt.json); GNU tools assemble, link and build host programs; see [test-log cards](#test-log-cards) |
 | PolyBench field | Existing EvoCC FDTD-2D executable runs 20 steps and dumps a 20×30 magnetic field | [Original kernel](../../../tests/contracts/ladder-polybench-receipt.json); exact output matches retained GCC dump; reference-built allocation harness; field colors normalized to observed min/max |
 | Mbed TLS pixels | EvoCC-built crypto archive encrypts/decrypts a pixel message with AES-GCM and rejects a changed ciphertext | [Library build](../../../tests/contracts/ladder-mbedtls-receipt.json); GCC-built adapter, public fixed test key/nonce, never production; first 256 ciphertext bytes displayed, tag not pictured |
 | Zstandard fractal | The real Lua RGB image is compressed and restored with byte equality | [44 C units](../../../tests/contracts/ladder-zstd-receipt.json); measured raw-RGB sizes, not PNG sizes or a speed benchmark |
@@ -170,15 +170,28 @@ exists, it also compares the excerpt with the log.
 - **cJSON.** `./cJSON_test` prints the examples from the cJSON README. Then 26
   Unity test programs run 216 tests: none fails, and upstream marks one as
   ignored. The Unity framework itself is GCC-built.
-- **Linux.** The serial log of the accepted 7,008-unit build, Image
-  `18b36fee4bb02657…`. The kernel boots on 4 CPUs, runs `/init` and powers down.
-  The `EVO_*` lines come from the test init program. The excerpt leaves out the
-  version banner. The banner names gcc-14, because Kbuild ran with gcc-14 as its
-  configured compiler before EvoCC compiled all 7,008 target C units. Assembly
-  files, the linker and host tools come from the GCC toolchain. This boot used
-  the **HVF host lane with a recorded QEMU contract mismatch**, not the
-  locked-QEMU lane. Full kselftest and expanded KUnit remain separate open
-  milestones.
+- **Linux.** The serial log comes from a kernel that Kbuild built directly
+  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `ce7bd3e3ba06290b…`, on
+  the host boot lane. Its version banner names `evocc 0.1.0`. All 2,799 target
+  C objects come from EvoCC. The receipt ties each object to its compile
+  command in the build log, and no GCC target C object remains. GNU tools
+  assemble the 67 assembly files, link the kernel, build the host programs and
+  preprocess one device-tree source. The configuration is the frozen GCC
+  kernel configuration after `olddefconfig` with EvoCC. Only compiler
+  capability probes differ. Nine compiler options have no effect, and the
+  receipt lists them. One of them is `-msign-return-address`: both
+  configurations ask for kernel return-address signing, but EvoCC ignores the
+  option, so this kernel does not sign return addresses. The other hardening
+  features behind the differing probes are off in the GCC configuration too.
+  The kernel also boots on the TCG lane. Nine paired
+  upstream kselftest programs, with 125 subtests, pass on both the GCC and
+  the EvoCC kernel. Both lanes ran QEMU 11.1.2, which differs from the pinned
+  QEMU contract; the receipt allows and records this drift. The console prints
+  the kernel's earlier messages late, so the `EVO_*` lines of the test init
+  program appear before `Run /init` in the log. The card leaves them out. The
+  older 7,008-unit build used object substitution after a GCC Kbuild run; it
+  keeps its own receipt, but its raw configuration is no longer available.
+  Full kselftest and KUnit runs remain open.
 - **Toybox.** The original `make tests` recipe ran 1,669 tests: 1,648 pass, 1
   fails and 20 skip. The PASS, FAIL and SKIP lines are identical to those of the
   GCC build. The one failure, `tar ownership`, fails in both builds.

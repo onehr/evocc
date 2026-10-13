@@ -42,7 +42,7 @@ The README keeps short captions. These are the full caption facts of each image:
 | SQLite | Its own `veryquick` suite: 0 errors in 329,803 tests. |
 | jq | `make check`: 9 of 9 jq test programs pass; 70 of 70 C units by EvoCC. |
 | cJSON | `cJSON_test` prints the example JSON; 216 unit tests, 0 failures. |
-| Linux 6.18 | 7,008 EvoCC C units; boots on 4 CPUs, runs init, powers down. |
+| Linux 6.18 | `make CC=evocc` builds 2,799 EvoCC C units; boots on 4 CPUs, runs init, powers down. |
 | Toybox | 1,669 tests; PASS, FAIL and SKIP lines identical to the GCC build. |
 | Mbed TLS seals pixels | Encrypt → restore → reject tampering. |
 | Zstandard packs a fractal | Smaller bytes; identical pixels. |
@@ -118,6 +118,7 @@ counted separately.
 
 | Scope | Verified result | Limit |
 |---|---|---|
+| Direct Kbuild, K6 locked configuration | **2,799/2,799 target-C** compiled through Kbuild itself with `make CC=evocc`; the banner names EvoCC; boot PASS on HVF and TCG; 9/9 programs and 125/125 subtests PASS on both the GCC and the EvoCC kernel | GNU tools assemble, link and build host programs; nine options without effect are listed, including return-address signing; QEMU drift recorded; full kselftest and KUnit not rerun |
 | K6 locked configuration | **2,799/2,799 target-C**, complete link, real boot and normal shutdown PASS; uniform EvoCC rebuild, zero GCC target-C fallback | Not every Linux configuration or subsystem |
 | BPF/module configuration | **7,008/7,008 target-C**, pinned current compiler, generated-input fixed point, complete link/boot PASS; 848 modules linked/BTF/signed/installed | Not all installed modules runtime-tested; fresh full kselftest/KUnit still pending; QEMU drift explicitly recorded |
 | Current FPU and connector follow-up | Both kernels: FPU **1/1 + 4,000/4,000 workers PASS**; bounded connector controls **20/20 each** | Actual signed FPU module loaded; unchanged persistent connector listener still times out under its original 45-second runner, not counted PASS |

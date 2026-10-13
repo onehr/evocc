@@ -151,31 +151,58 @@ LOG_STYLES = {
     "sqlite": [(r"^0 errors out of \d+ tests", "green", True), (r"^\d\d:\d\d tcl\(.*", "dim", False)],
     "jq": [(r"^PASS", "green", True), (r"^=+$", "dim", False)],
     "cjson": [(r"^Version: .*", "dim", False)],
-    "linux": [(r"^\[ *\d+\.\d+\]", "dim", False), (r"^EVO_.*", "dim", False)],
+    "linux": [(r"^\[ *\d+\.\d+\]", "dim", False), (r"^EVO_.*", "dim", False),
+              (r"evocc \d+\.\d+\.\d+ \([0-9a-f]+ \d{4}-\d{2}-\d{2}\)", "green", True)],
     "toybox": [(r"^PASS", "green", True), (r"^SKIP", "yellow", True), (r"^FAIL", "red", True)],
 }
 LOG_ROWS = 11
+# A card listed here wraps long lines at this column, as a terminal does,
+# instead of clipping them. The Linux banner must stay readable in full.
+LOG_WRAP = {"linux": 45}
 
 
 def log_spans(line, rules):
-    """Color one part of a line. The text does not change."""
-    for pattern, color, bold in rules:
-        match = re.search(pattern, line)
-        if match:
-            parts = [(line[:match.start()], "text", False), (match.group(0), color, bold),
-                     (line[match.end():], "text", False)]
-            return [part for part in parts if part[0]]
-    return [(line, "text", False)]
+    """Color the parts of a line that the rules match. The text does not change."""
+    matches = sorted((match.start(), index, match.end(), color, bold)
+                     for index, (pattern, color, bold) in enumerate(rules)
+                     for match in re.finditer(pattern, line) if match.end() > match.start())
+    parts, position = [], 0
+    for start, _, end, color, bold in matches:
+        if start < position:
+            continue
+        parts += [(line[position:start], "text", False), (line[start:end], color, bold)]
+        position = end
+    parts.append((line[position:], "text", False))
+    return [part for part in parts if part[0]]
+
+
+def wrap_spans(spans, columns):
+    """Split styled spans into rows of at most ``columns`` characters."""
+    rows, row, used = [], [], 0
+    for text, color, bold in spans:
+        while text:
+            take = columns - used
+            row.append((text[:take], color, bold))
+            used += len(text[:take])
+            text = text[take:]
+            if used == columns:
+                rows.append(row)
+                row, used = [], 0
+    if row or not rows:
+        rows.append(row)
+    return rows
 
 
 def log_card(name, record):
     """Draw a terminal window that shows verbatim excerpts of a recorded log."""
-    lines = []
+    rows = []
     for segment in record["segments"]:
-        if lines:
-            lines.append(None)
-        lines += segment["text"]
-    if not lines or len(lines) > LOG_ROWS:
+        if rows:
+            rows.append([("\u2026", "dim", False)])
+        for line in segment["text"]:
+            spans = log_spans(line.expandtabs(), LOG_STYLES[name])
+            rows += wrap_spans(spans, LOG_WRAP[name]) if name in LOG_WRAP else [spans]
+    if not rows or len(rows) > LOG_ROWS:
         raise ValueError(f"log excerpt does not fit the card: {name}")
     mono = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
     sans = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
@@ -194,8 +221,7 @@ def log_card(name, record):
            f'font-weight="600" text-anchor="middle">{title}</text>',
            '<g clip-path="url(#body)">']
     bold_attr = ' font-weight="700"'
-    for row, line in enumerate(lines):
-        parts = [("\u2026", "dim", False)] if line is None else log_spans(line.expandtabs(), LOG_STYLES[name])
+    for row, parts in enumerate(rows):
         spans = "".join(f'<tspan fill="{TERMINAL[color]}"{bold_attr if bold else ""}>{html.escape(text)}</tspan>'
                         for text, color, bold in parts)
         out.append(f'<text x="34" y="{100 + 35 * row}" font-family="{mono}" font-size="26" '

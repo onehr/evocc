@@ -134,7 +134,7 @@ was found in the read-only process check at this planning checkpoint.
 <!-- closure-queues:start -->
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
-| KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
+| KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12, K15 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
@@ -2067,6 +2067,20 @@ KUnit, and it closes none of those separate tasks.
   duplicate-case multiplicity, the upstream switch-entry XFAIL and config limits.
   Later filtered FORTIFY results cannot rewrite the old full totals or inherit
   module acceptance from another Image. [Historical receipt][kunit-receipt].
+
+- [ ] **K15 — Sign kernel return addresses when Kbuild asks for it** — `OPEN`, P2.
+  Found on 2026-10-13, when the README gallery moved to the direct Kbuild
+  receipt. Linux 6.18 enables `ARM64_PTR_AUTH_KERNEL` by default. Without the
+  `-mbranch-protection=pac-ret` capability, `arch/arm64/Makefile` passes
+  `-msign-return-address=non-leaf` without a probe. EvoCC reports that option
+  as having no effect. So the direct-build kernel does not sign return
+  addresses, although its configuration asks for it; the GCC reference kernel
+  signs them. Next action: add a small regression, then emit PAC return-address
+  signing for `-msign-return-address` and `-mbranch-protection=pac-ret`.
+  Turning off `ARM64_PTR_AUTH_KERNEL` in the subject configuration is a
+  separate owner decision. Exit: the direct Kbuild receipt lists no ignored
+  signing option, and both boot lanes and the paired kselftests pass again.
+  [Receipt](tests/contracts/kernel-direct-virt-receipt.json).
 
 ## Application failures, accounting and replays
 
