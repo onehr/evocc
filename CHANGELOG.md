@@ -100,7 +100,7 @@ The first public version.
   `checkPipeline_sound` covers the chain from typed Core source to the final assembly text. A
   refusal writes no output.
 - Five pinned specifications in `spec/`: EvoIR 2.1.0, EvoMIR 1.0.1, the target description 1.0.0,
-  the verification contract 1.0.0 and the diagnostic format 1.2.0.
+  the verification contract 1.0.0 and the diagnostic format 1.3.0.
 - The evaluation ladder, `tools/bench.py`: conformance suites, fifteen application lanes and Linux
   build, boot, kselftest and KUnit lanes. Each lane writes a receipt.
 - The EvoCC Book in `book/`: installation, a first program, undefined behavior, compiling with
@@ -140,6 +140,10 @@ The first public version.
   omit such an object when it had no `section`, and `-Wall` reported it as an unused
   variable, 13,601 times in one Linux build. `unused` on the pointer next to a variable's
   name also prevents that warning. EvoIR revision 2.1.0 states the rule.
+- A warning for an ignored option labels that option, not the whole command line. In the
+  text form, a command line longer than 80 bytes shows only the labelled argument. One
+  Linux build log had 74.5 MiB of such warnings. `-ffixed-x18` no longer warns: x18 is
+  never assigned. Diagnostic format revision 1.3.0 states the rule.
 
 ### Results at this version
 

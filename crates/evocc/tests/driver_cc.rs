@@ -197,6 +197,68 @@ fn unsupported_options_obey_warning_promotion_in_capability_probes() {
 }
 
 #[test]
+fn an_ignored_option_warning_labels_only_that_option() {
+    // Kbuild passes about a hundred options to each compile. A warning that
+    // repeats and underlines all of them fills the build log.
+    let work = Work::new("ignored-option-label");
+    let run = |format: &str, extra: &[&str]| {
+        let mut args = vec![format!("--error-format={format}")];
+        args.extend(extra.iter().map(|arg| arg.to_string()));
+        args.extend((0..12).map(|n| format!("-DPADDING_{n}=1")));
+        args.extend(["-fno-common", "-fsyntax-only", "helper.c"].map(str::to_owned));
+        let column = args
+            .iter()
+            .take_while(|arg| *arg != "-fno-common")
+            .map(|arg| arg.len() + 1)
+            .sum::<usize>()
+            + 1;
+        let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+            .current_dir(&work.0)
+            .args(&args)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        (output, column)
+    };
+    let message = "option `-fno-common` is not supported and has no effect";
+    let (output, column) = run("text", &[]);
+    succeeded(&output);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        format!(
+            "warning: {message}\n  --> <command-line>:1:{column}\n   |\n 1 | ... -fno-common ...\n   |     ^^^^^^^^^^^ {message}\n   |\n"
+        )
+    );
+    let (output, column) = run("json", &[]);
+    succeeded(&output);
+    let json = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        json.contains(&format!(
+            "\"spans\":[{{\"file\":\"<command-line>\",\"line_start\":1,\"column_start\":{column},\"line_end\":1,\"column_end\":{}",
+            column + "-fno-common".len()
+        )),
+        "{json}"
+    );
+    let (output, column) = run("text", &["-Werror"]);
+    assert_eq!(output.status.code(), Some(1));
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        text.starts_with(&format!(
+            "error: {message}\n  --> <command-line>:1:{column}\n"
+        )),
+        "{text}"
+    );
+    // The code generator never assigns x18, so the option is always in effect.
+    let output = work.run(&["-Werror", "-ffixed-x18", "-fsyntax-only", "helper.c"]);
+    succeeded(&output);
+    assert!(
+        output.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn return_signing_probes_match_what_the_code_generator_honours() {
     // Linux probes `-mbranch-protection=pac-ret+leaf`. Without it, the arm64
     // Makefile falls back to `-msign-return-address=non-leaf`, which GCC 14 and

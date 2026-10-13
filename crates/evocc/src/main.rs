@@ -788,6 +788,10 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             "-mno-omit-leaf-frame-pointer" => codegen.leaf_frame_pointer_required = true,
             // No sibling-call transform exists in this backend.
             "-fno-optimize-sibling-calls" => {}
+            // x18 is reserved and never assigned on either target (EvoMIR
+            // Section 2.5), so generated code already keeps it fixed. Other
+            // `-ffixed-` registers stay unsupported.
+            "-ffixed-x18" => {}
             // There is no optional function/branch padding, automatic array
             // prefetch, loop-header copying or loop-to-libcall transform.
             // These disabling options select that existing contract; source

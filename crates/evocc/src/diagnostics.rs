@@ -34,12 +34,21 @@ impl Format {
     }
 
     pub fn usage(self, message: &str) {
+        self.usage_at(message, None);
+    }
+
+    /// Report a command error with a label on `argument`, when given.
+    pub fn usage_at(self, message: &str, argument: Option<&str>) {
         if self == Self::Short {
             eprintln!("evocc: {message}");
         } else {
             eprint!(
                 "{}",
-                render(&Diagnostic::command("", message), self, command_color())
+                render(
+                    &Diagnostic::argument("", message, argument),
+                    self,
+                    command_color()
+                )
             );
         }
     }
@@ -56,6 +65,11 @@ impl Format {
         }
     }
 }
+
+/// The source name of command-line diagnostics. It is not a C file.
+const COMMAND_LINE: &str = "<command-line>";
+/// A longer command line shows only the labelled bytes in text.
+const LONG_COMMAND_LINE: usize = 80;
 
 /// The scope of a completed check. It is not a correctness claim.
 const CHECK_SCOPE: &str =
@@ -233,7 +247,7 @@ impl Diagnostic {
         Self::new(
             code,
             &header,
-            Span::source("<command-line>", source.as_bytes(), span, message),
+            Span::source(COMMAND_LINE, source.as_bytes(), span, message),
         )
     }
 }
@@ -326,26 +340,44 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
         writeln!(out, " {:width$} |", "").unwrap();
         let lines = span.source.split(|byte| *byte == b'\n').collect::<Vec<_>>();
         for line in span.line_start..=span.line_end {
-            let source = lines.get((line - 1) as usize).copied().unwrap_or_default();
-            let start = if line == span.line_start {
+            let mut source = lines.get((line - 1) as usize).copied().unwrap_or_default();
+            let mut start = if line == span.line_start {
                 span.column_start as usize - 1
             } else {
                 0
             }
             .min(source.len());
-            let end = if line == span.line_end {
+            let mut end = if line == span.line_end {
                 span.column_end as usize - 1
             } else {
                 source.len()
             }
             .min(source.len());
+            // A long command line shows only the labelled bytes. The location
+            // above keeps the column in the complete line.
+            let (mut before, mut after) = ("", "");
+            if span.file == COMMAND_LINE
+                && span.line_start == span.line_end
+                && source.len() > LONG_COMMAND_LINE
+                && (start > 0 || end < source.len())
+            {
+                before = if start > 0 { "... " } else { "" };
+                after = if end < source.len() { " ..." } else { "" };
+                source = &source[start..end];
+                (start, end) = (0, end - start);
+            }
             let indent = displayed(&source[..start]).chars().count();
             let length = displayed(&source[..end])
                 .chars()
                 .count()
                 .saturating_sub(indent)
                 .max(1);
-            writeln!(out, " {line:>width$} | {}", displayed(source)).unwrap();
+            writeln!(
+                out,
+                " {line:>width$} | {before}{}{after}",
+                displayed(source)
+            )
+            .unwrap();
             let marker = if span.primary { "^" } else { "-" };
             let label = if line == span.line_end {
                 span.label.as_str()
@@ -356,7 +388,7 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
                 out,
                 " {:width$} | {}{red}{}{reset}{}{}",
                 "",
-                " ".repeat(indent),
+                " ".repeat(before.len() + indent),
                 marker.repeat(length),
                 if label.is_empty() { "" } else { " " },
                 label
@@ -542,6 +574,65 @@ mod tests {
             text.contains("2 | efgh\n   | ^^ expression ends here\n"),
             "{text}"
         );
+    }
+
+    #[test]
+    fn long_command_lines_show_only_the_labelled_argument() {
+        let line = format!("{} -fno-common -c x.c", "-DA=1 ".repeat(20).trim_end());
+        let start = line.find("-fno-common").unwrap();
+        let span = |from: usize, to: usize| {
+            evocc_common::SourceSpan::new(
+                evocc_common::FileId::DUMMY,
+                from as u32,
+                to as u32,
+                1,
+                from as u32 + 1,
+            )
+        };
+        let text = |file: &str, source: &[u8], from, to| {
+            let diagnostic = Diagnostic::new(
+                "",
+                "message",
+                Span::source(file, source, span(from, to), "label"),
+            );
+            render(&diagnostic, Format::Text, Color::Never)
+        };
+        // The location keeps the column in the complete command line.
+        assert_eq!(
+            text("<command-line>", line.as_bytes(), start, start + 11),
+            format!(
+                "error: message\n  --> <command-line>:1:{}\n   |\n 1 | ... -fno-common ...\n   |     ^^^^^^^^^^^ label\n   |\n",
+                start + 1
+            )
+        );
+        // A side without omitted bytes has no ellipsis.
+        let first = text("<command-line>", line.as_bytes(), 0, 5);
+        assert!(
+            first.contains(" 1 | -DA=1 ...\n   | ^^^^^ label\n"),
+            "{first}"
+        );
+        let last = text(
+            "<command-line>",
+            line.as_bytes(),
+            line.len() - 3,
+            line.len(),
+        );
+        assert!(
+            last.contains(" 1 | ... x.c\n   |     ^^^ label\n"),
+            "{last}"
+        );
+        // The complete invocation, a short command line and a C source line
+        // keep the whole line.
+        let whole = text("<command-line>", line.as_bytes(), 0, line.len());
+        assert!(whole.contains(&format!(" 1 | {line}\n")), "{whole}");
+        let short = text("<command-line>", b"-fno-common -c x.c", 0, 11);
+        assert!(
+            short.contains(" 1 | -fno-common -c x.c\n   | ^^^^^^^^^^^ label\n"),
+            "{short}"
+        );
+        let source = format!("int x = {}1;", "1 + ".repeat(40));
+        let c = text("long.c", source.as_bytes(), 4, 5);
+        assert!(c.contains(&format!(" 1 | {source}\n")), "{c}");
     }
 
     #[test]

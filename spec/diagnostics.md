@@ -1,6 +1,6 @@
 # Diagnostic Presentation
 
-**Revision 1.2.0** | **Pinned ground truth** | **2026-10-09**
+**Revision 1.3.0** | **Pinned ground truth** | **2026-10-13**
 
 ## 1. Scope
 
@@ -44,8 +44,11 @@ state that the function is shown, not an exact expression position. Source
 positions must not survive an IR transformation unless their correspondence
 is preserved or checked.
 
-An input or command-line error uses the affected argument in the command-line
-source, named `<command-line>`. This is not a position in the C file. A
+An input or command-line diagnostic uses the affected argument in the
+command-line source, named `<command-line>`. This source is one line: the
+arguments after the program name, separated by spaces. It is not a position in
+the C file. An ignored option is the affected argument of its warning. A
+diagnostic without one affected argument covers the complete invocation. A
 translation-unit error can refer to the complete source unit. Labels and notes
 must make this distinction clear.
 
@@ -69,6 +72,14 @@ location and numbered source lines. Primary spans use `-->` and `^`.
 Secondary spans use `:::` and `-`. A multiline span marks each covered line.
 Its label follows the last marker. An insertion point has one marker.
 Notes follow the spans. Help lines follow the notes. Absent sections are omitted.
+
+A build can pass a hundred arguments to each compiler call. When the
+`<command-line>` line is longer than 80 bytes and a span covers only part of
+it, the text form shows only the bytes of that span. `...` stands for the
+omitted bytes before and after them, and the markers stay under the shown
+bytes. The location line and the JSON coordinates still count from the start
+of the complete line. Source files are always shown in full. Revision 1.3.0
+adds this rule.
 
 `--error-format=short` prints the legacy single-line diagnostic form.
 `--color=auto` uses color only when standard error is a terminal.

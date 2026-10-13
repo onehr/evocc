@@ -627,17 +627,27 @@ pub(crate) fn run(args: &[String]) -> ExitCode {
 
 impl Session {
     fn fail(&self, message: &str) -> ExitCode {
-        self.format.usage(message);
+        self.fail_at(message, None)
+    }
+
+    /// Fail with a label on `argument` when the command line contains it.
+    fn fail_at(&self, message: &str, argument: Option<&str>) -> ExitCode {
+        self.format.usage_at(message, argument);
         ExitCode::from(1)
     }
 
     fn warn(&self, message: &str) {
+        self.warn_at(message, None);
+    }
+
+    /// Warn with a label on `argument` when the command line contains it.
+    fn warn_at(&self, message: &str, argument: Option<&str>) {
         if !self.command.quiet {
             if self.format == crate::diagnostics::Format::Short {
                 eprintln!("evocc: warning: {message}");
                 return;
             }
-            let mut diagnostic = crate::diagnostics::Diagnostic::command("", message);
+            let mut diagnostic = crate::diagnostics::Diagnostic::argument("", message, argument);
             diagnostic.level = "warning";
             eprint!(
                 "{}",
@@ -830,8 +840,8 @@ impl Session {
         for option in options.ignored_options.iter().chain(&self.command.ignored) {
             let message = format!("option `{option}` is not supported and has no effect");
             match options.lints.driver_warning() {
-                crate::lints::Level::Deny => return Err(self.fail(&message)),
-                crate::lints::Level::Warn => self.warn(&message),
+                crate::lints::Level::Deny => return Err(self.fail_at(&message, Some(option))),
+                crate::lints::Level::Warn => self.warn_at(&message, Some(option)),
                 crate::lints::Level::Allow => {}
             }
         }

@@ -2106,19 +2106,22 @@ KUnit, and it closes none of those separate tasks.
   configuration with this compiler. Exit: its log has no W0001 from these
   macros.
 
-- [ ] **K17 — Name the affected option in unsupported-option warnings** — `OPEN`, P2.
+- [ ] **K17 — Name the affected option in unsupported-option warnings** — `RETEST`, P2.
   Found on 2026-10-13 in the K15 Kbuild log. Each "option is not supported and
-  has no effect" warning prints and underlines the complete command line. In
-  one Kbuild run, 19,634 such warnings fill 74.5 MiB of the 83.4 MiB build log.
+  has no effect" warning printed and underlined the complete command line. In
+  one Kbuild run, 19,634 such warnings filled 74.5 MiB of the 83.4 MiB build log.
   Diagnostic format section 2 asks for the affected argument, not the complete
   invocation. Also, the code generator never allocates `x18`, so
-  `-ffixed-x18` is always in effect, but the vDSO compile still reports it as
-  having no effect. Next action: a RED test that the warning labels only the
-  ignored option, then pass that option to the diagnostic and measure the log
-  again. The text form still prints the whole command-line source line; a
-  shorter form changes the frozen format and needs an owner decision. Exit:
-  the warning labels only the ignored option, and `-ffixed-x18` is accepted
-  without a warning.
+  `-ffixed-x18` is always in effect, but the vDSO compile still reported it as
+  having no effect.
+  On 2026-10-13 the owner asked to finish K17, including the shorter text
+  form. The warning and its `-Werror` error now label the ignored option.
+  Diagnostic format 1.3.0 shows only the labelled bytes of a `<command-line>`
+  line longer than 80 bytes; the location and the JSON coordinates do not
+  change. `-ffixed-x18` is accepted without a warning (EvoMIR Section 2.5).
+  Next action: rebuild the K15 configuration and measure the log. Exit: the
+  warnings label only the ignored option, and the log has no `-ffixed-x18`
+  warning.
 
 ## Application failures, accounting and replays
 
