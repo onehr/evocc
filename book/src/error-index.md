@@ -1316,6 +1316,23 @@ static inline __attribute__((always_inline)) int forward(int n, ...) {
 int main(void) { return forward(0); }
 ```
 
+### E2951: builtin-argument-type
+
+A floating comparison or classification builtin received an operand of the wrong type.
+The comparison builtins need two real operands with a floating type after the usual arithmetic conversions.
+
+`__builtin_isgreater` and its family compare floating values without signaling on a quiet NaN.
+Classification builtins such as `__builtin_isnan` inspect a floating representation.
+Convert an integer operand to a floating type, or use an ordinary integer comparison.
+
+```c
+int main(void) { return __builtin_isgreater(1, 2); }
+```
+
+```c
+int main(void) { return __builtin_isgreater(1.0, 2.0); }
+```
+
 ## E3xxx
 
 ### E3001: read-of-uninitialized-object

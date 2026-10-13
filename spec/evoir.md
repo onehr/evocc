@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.2.0** | **Pinned ground truth** | Added the object-size checked builtins and the GNU argument pack on 2026-10-13
+**Revision 2.3.0** | **Pinned ground truth** | Gave `builtin-argument-type` its own code on 2026-10-13
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -1630,7 +1630,10 @@ status before representation classification. Baseline forms remain pure.
 `islessgreater` and `isunordered` take two real arithmetic operands, at least
 one floating, apply the usual arithmetic conversions, evaluate each operand once
 in source order and return `int` 0 or 1; only `isunordered` is true for
-unordered operands. Wrong arity is `E2909` and a wrong operand type is `E2911`.
+unordered operands. Wrong arity is `E2909`. An operand pair without a floating
+type after the usual arithmetic conversions is `E2951` (`builtin-argument-type`),
+and so is a classification builtin of this section with an operand that is
+not floating.
 
 Integer conversions still truncate toward zero regardless of dynamic rounding;
 nonrepresentable C conversions retain E3063 and the distinct pure guard. An
@@ -2541,6 +2544,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2948` | `integer-complex-division-oracle-conflict` | front end |
 | `E2949` | `unknown-builtin` | front end |
 | `E2950` | `invalid-va-arg-pack` | front end; lowering, for a body that keeps the pack |
+| `E2951` | `builtin-argument-type` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -4809,6 +4813,7 @@ compound literals, and a front end must not emit it.
 | `E2946` | a nonliteral `__builtin_strcmp` with a visible same-named `static` function |
 | `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_` (10.1.14) |
 | `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
+| `E2951` | a floating comparison or classification builtin with an operand of the wrong type (3.13.1) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -7364,16 +7369,14 @@ to the signature spelling.
 
 ## Revision
 
-**Revision 2.2.0, 2026-10-13.** Section 10.1.14 adds the object-size checked
-builtins that the fortified headers of glibc and of the macOS SDK select,
-the GNU argument pack, and `E2949` (`unknown-builtin`) for a call of an
-unknown `__builtin_`, `__atomic_` or `__sync_` name. Section 10.1.9 substitutes an `always_inline`
-variadic callee that forwards its arguments through the pack. The
-interpreters execute the checked memory entry points and report `E3066`
-(`object-size-check-failed`). Section 10.5 makes `__has_builtin` answer
-exactly for the implemented builtins. Section 6.3 adds `E2949`, `E2950` and
-`E3066`. Revision 2.1.0 of 2026-10-13 attached `used` and `retain` after a
-pointer `*` (Section 10.1.9). Revision 2.0.1 of
+**Revision 2.3.0, 2026-10-13.** `builtin-argument-type` has its own code,
+`E2951`, in Section 6.3. Before, it shared `E2911` with
+`static-assertion-failed`, and Section 3.13.1 named `E2911` for a wrong
+operand type of a floating comparison builtin. Revision 2.2.0 of 2026-10-13
+added the object-size checked builtins, the GNU argument pack, `E2949`,
+`E2950` and `E3066` (Sections 6.3, 10.1.9, 10.1.14 and 10.5). Revision 2.1.0
+of 2026-10-13 attached `used` and `retain` after a pointer `*` (Section
+10.1.9). Revision 2.0.1 of
 2026-10-07 added the front-end warning levels (Section 6.3). Revision 2.0.0 of
 2026-10-06 folded revision 1.9.116 and its rulings into one pinned text; the
 review transcript is archived, not normative, in

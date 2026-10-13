@@ -144,7 +144,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let right = self.expression_type(operands[1])?.ty;
             let Some(InferredType::Real(kind)) = self.usual_arithmetic_expression_type(left, right)
             else {
-                self.report("E2911", "builtin-argument-type", span);
+                self.report("E2951", "builtin-argument-type", span);
                 return None;
             };
             let common = self.intern(TypeKind::Float(kind), Qualifiers::default());
@@ -165,7 +165,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.expression_type(operands[0])?.ty,
                 InferredType::Canonical(t) if matches!(self.types.get(t)?.kind, TypeKind::Float(_)))
             {
-                self.report("E2911", "builtin-argument-type", span);
+                self.report("E2951", "builtin-argument-type", span);
                 return None;
             }
         }

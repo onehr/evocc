@@ -165,8 +165,8 @@ fn benchmark_frontier_floating_comparisons() {
     check("floating-comparison-builtins.c", EXECUTION);
     for (source, code) in [
         ("int f(void){return __builtin_isless(1.0);}", "E2909"),
-        ("int f(void){return __builtin_isless(1, 2);}", "E2911"),
-        ("int f(int *p){return __builtin_isless(p, 1.0);}", "E2911"),
+        ("int f(void){return __builtin_isless(1, 2);}", "E2951"),
+        ("int f(int *p){return __builtin_isless(p, 1.0);}", "E2951"),
     ] {
         let file = evocc_common::FileId::new(0);
         let arena = evocc_common::Arena::default();

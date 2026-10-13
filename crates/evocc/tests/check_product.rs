@@ -370,3 +370,47 @@ fn input_failures_have_no_fabricated_source_position() {
         "assert len(rows)==1 and rows[0]['spans'][0]['file']=='<command-line>'\nassert 'input file: tests/ui/check/missing\"雪\\n.c' in rows[0]['notes']",
     );
 }
+
+#[test]
+fn builtin_argument_type_and_static_assertion_failure_have_distinct_codes() {
+    for (source, code, message) in [
+        (
+            "int main(void) { return __builtin_isgreater(1, 2); }",
+            "E2951",
+            "builtin-argument-type",
+        ),
+        (
+            "int main(void) { return __builtin_isnan(1); }",
+            "E2951",
+            "builtin-argument-type",
+        ),
+        (
+            "_Static_assert(0, \"fails\");\nint main(void) { return 0; }",
+            "E2911",
+            "static-assertion-failed",
+        ),
+    ] {
+        let out = run(
+            &["--check", "--error-format=json", "/dev/stdin"],
+            Some(source),
+        );
+        assert_eq!(out.status.code(), Some(1), "{source}");
+        json_assert(
+            &out.stderr,
+            &format!(
+                "assert len(rows)==1 and rows[0]['code']=={code:?}\nassert rows[0]['message'].startswith({message:?})"
+            ),
+        );
+    }
+    for (code, title) in [
+        ("E2951", "# E2951: builtin-argument-type\n"),
+        ("E2911", "# E2911: static-assertion-failed\n"),
+    ] {
+        let out = run(&["--explain", code], None);
+        assert!(out.status.success(), "{code}");
+        assert!(
+            String::from_utf8_lossy(&out.stdout).starts_with(title),
+            "{code}"
+        );
+    }
+}
