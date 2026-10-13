@@ -3,7 +3,7 @@ name = "evocc"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Equality-native, self-contained C compiler (nexlab scaffold)"
+description = "A C compiler for AArch64 Linux and macOS"
 default-run = "evocc"
 
 [[bin]]
