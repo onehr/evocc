@@ -19,7 +19,7 @@ inventory authority. Counts below overlap where a row is a subcategory.
 objects come from EvoCC, remain installed after the complete link, and reach
 the unchanged nonce-bound init/powerdown predicate. No reference-compiler C
 object, stub, configuration reduction or timeout increase was used.
-The current [boot record](../../../.evidence/k1/read-only-storage-20260913/boot/boot.json)
+The current boot record (`.evidence/k1/read-only-storage-20260913/boot/boot.json`)
 binds Image `eaab6181ec27692a977c957ac3ad8e90b63b4a83fc3aefd305afc7f5e9fac6fd`
 to nonce `k1-20260913T143932Z-54e48f74` on the HVF-host lane. The installed
 QEMU digest differs from the frozen tool digest; that explicitly authorized
@@ -82,14 +82,14 @@ correctness and unselected runtime tests remain separate gates.
 
 | ID / priority | Observed blocker or unmeasured gate | Owner / next tailored check | Closure |
 |---|---|---|---|
-| K-R01 / P0 | Only `arch/arm64/kernel/cpuinfo.o` substituted formerly caused an Oops in `kfree` via `kobject_set_name_vargs` and `cpuid_cpu_online`. [Original capture](../../../.evidence/k1/measure-20260910T160033Z/bisection-1/round-014/boot/boot.json). | C-HIR linkage: adjacent strings in `section(".data..percpu" "")` were decoded as a section name containing quotes/spaces. Fixed by `9d889fa`, RED `a7af1a6`. | Original single-unit relink **0**, boot **PASS**, installed object preserved: [replay](../../../.evidence/k1/attributes-cpuinfo-20260912/boot/boot.json). Final combination still OPEN. |
-| K-R02 / P0 | Only `arch/arm64/kernel/hw_breakpoint.o` substituted formerly timed out without useful serial output. [Original capture](../../../.evidence/k1/measure-20260910T160033Z/bisection-2/round-014/boot/boot.json). | Same malformed per-CPU section as K-R01; shared string-fragment decoding fixed by `9d889fa`. No timeout change. | Original single-unit relink **0**, boot **PASS**, installed object preserved: [replay](../../../.evidence/k1/attributes-hw-breakpoint-20260912/boot/boot.json). Final combination still OPEN. |
-| K-L01 / P0 | `arch/arm64/kernel/irq.o` formerly failed linking with undefined `irq_shadow_call_stack_ptr`. [Original log](../../../.evidence/k1/measure-20260910T160033Z/bisection-3/round-013/substitution/relink.log). | A no-argument internal inline configuration function returned false, but the unreachable reference survived. RED `bddc65f`; `a4009fd` exposes only proved constant leaf returns, retaining return conversions and effectful calls. | Original single-unit link **0**, boot **PASS**: [replay](../../../.evidence/k1/constant-inline-irq-20260912/boot/boot.json); affected gate **1,425 passed / 0 failed / 3 existing ignored**, Clippy and fmt PASS. Full combination still OPEN. |
-| K-L02 / original replay PASS | Large combination failed building nVHE `hyp-reloc.S`: `Unexpected RELA type 311`. [Link log](../../../.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/relink.log). | Kbuild replay dropped `-fno-PIE`; RED `144a83e`, repair `0719ce5` preserves explicit address modes and macros, weak GOT and default PIE. | HYPREL and nVHE sub-link passed in `nvhe-addresses-20260912`; the subsequent distinct K-L04 failure is below. Final eleven-object relink **0**, boot **PASS** in [the repaired replay](../../../.evidence/k1/nvhe-configuration-20260912/boot/boot.json). Mode gate: **648/0**, Clippy/fmt; K1 Python **100/100**, Ruff. |
-| K-L03 / original replay PASS | Earlier September 9 reductions isolated link failures in `debug-monitors.o` and `entry-common.o`. [Prior report](benchmark-evaluation.md#native-replay-on-33bc3d4). | Their old undefined references are absent with the current compiler; both original objects were included in the five-object combined check below. No duplicate compiler repair was needed. | Combined relink **0**, boot **PASS**, all five installed objects retained: [replay](../../../.evidence/k1/known-failures-20260912/boot/boot.json). Full required-C combination still OPEN. |
-| K-L04 / original replay PASS | After K-L02, nVHE linked with undefined `__kvm_nvhe_kvm_vcpu_apply_reg_masks`: an unreachable call survived `vcpu_has_nv(vcpu)`, which returns false in this build. [Original log](../../../.evidence/k1/nvhe-addresses-20260912/relink.log). | RED `550ff80`, repair `29704aa`: use a proved internal inline return only after evaluating the real call and arguments; preserve effectful/unproved calls and source constant-expression rules. | Eleven original objects assembled, retained, relink **0**, boot **PASS**; affected gate **1,431 passed / 0 failed / 3 existing ignored**, Clippy/fmt. Final full composition remains OPEN. |
+| K-R01 / P0 | Only `arch/arm64/kernel/cpuinfo.o` substituted formerly caused an Oops in `kfree` via `kobject_set_name_vargs` and `cpuid_cpu_online`. Original capture (`.evidence/k1/measure-20260910T160033Z/bisection-1/round-014/boot/boot.json`). | C-HIR linkage: adjacent strings in `section(".data..percpu" "")` were decoded as a section name containing quotes/spaces. Fixed by `9d889fa`, RED `a7af1a6`. | Original single-unit relink **0**, boot **PASS**, installed object preserved: replay (`.evidence/k1/attributes-cpuinfo-20260912/boot/boot.json`). Final combination still OPEN. |
+| K-R02 / P0 | Only `arch/arm64/kernel/hw_breakpoint.o` substituted formerly timed out without useful serial output. Original capture (`.evidence/k1/measure-20260910T160033Z/bisection-2/round-014/boot/boot.json`). | Same malformed per-CPU section as K-R01; shared string-fragment decoding fixed by `9d889fa`. No timeout change. | Original single-unit relink **0**, boot **PASS**, installed object preserved: replay (`.evidence/k1/attributes-hw-breakpoint-20260912/boot/boot.json`). Final combination still OPEN. |
+| K-L01 / P0 | `arch/arm64/kernel/irq.o` formerly failed linking with undefined `irq_shadow_call_stack_ptr`. Original log (`.evidence/k1/measure-20260910T160033Z/bisection-3/round-013/substitution/relink.log`). | A no-argument internal inline configuration function returned false, but the unreachable reference survived. RED `bddc65f`; `a4009fd` exposes only proved constant leaf returns, retaining return conversions and effectful calls. | Original single-unit link **0**, boot **PASS**: replay (`.evidence/k1/constant-inline-irq-20260912/boot/boot.json`); affected gate **1,425 passed / 0 failed / 3 existing ignored**, Clippy and fmt PASS. Full combination still OPEN. |
+| K-L02 / original replay PASS | Large combination failed building nVHE `hyp-reloc.S`: `Unexpected RELA type 311`. Link log (`.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/relink.log`). | Kbuild replay dropped `-fno-PIE`; RED `144a83e`, repair `0719ce5` preserves explicit address modes and macros, weak GOT and default PIE. | HYPREL and nVHE sub-link passed in `nvhe-addresses-20260912`; the subsequent distinct K-L04 failure is below. Final eleven-object relink **0**, boot **PASS** in the repaired replay (`.evidence/k1/nvhe-configuration-20260912/boot/boot.json`). Mode gate: **648/0**, Clippy/fmt; K1 Python **100/100**, Ruff. |
+| K-L03 / original replay PASS | Earlier September 9 reductions isolated link failures in `debug-monitors.o` and `entry-common.o`. [Prior report](benchmark-evaluation.md#native-replay-on-33bc3d4). | Their old undefined references are absent with the current compiler; both original objects were included in the five-object combined check below. No duplicate compiler repair was needed. | Combined relink **0**, boot **PASS**, all five installed objects retained: replay (`.evidence/k1/known-failures-20260912/boot/boot.json`). Full required-C combination still OPEN. |
+| K-L04 / original replay PASS | After K-L02, nVHE linked with undefined `__kvm_nvhe_kvm_vcpu_apply_reg_masks`: an unreachable call survived `vcpu_has_nv(vcpu)`, which returns false in this build. Original log (`.evidence/k1/nvhe-addresses-20260912/relink.log`). | RED `550ff80`, repair `29704aa`: use a proved internal inline return only after evaluating the real call and arguments; preserve effectful/unproved calls and source constant-expression rules. | Eleven original objects assembled, retained, relink **0**, boot **PASS**; affected gate **1,431 passed / 0 failed / 3 existing ignored**, Clippy/fmt. Final full composition remains OPEN. |
 | K-L05 / tailored and original object replay PASS, full link OPEN | `20260913T024049Z` installed all 2,799 objects, then `ld -r` found duplicate `bpf_arch_text_copy`, `bpf_int_jit_compile`, `arch_alloc_bpf_trampoline`, `execmem_arch_setup`. Each fallback writes `* __weak name`, whose attribute was stranded on a pointer layer instead of reaching symbol linkage. | RED `bec1deb`; move only symbol-only `weak`/`alias` marks into the owning named declaration's inventory, preserving their spelling/position once and leaving pointer layout attributes unchanged. | 73 targeted tests and Clippy/fmt PASS; both oracles O0/O2 and native EvoCC with both oracle overrides plus its own override return zero. Original core.o / trampoline.o / execmem.o emit and assemble in 6.471 / 5.643 / 2.426 seconds. Complete relink and boot remain OPEN. |
-| K-B01 / original group link and boot PASS | Kbuild replaced `alternative.o`, `signal32.o`, `vdso.o` after regenerating `vdso-offsets.h`. | RED `39e48d7`; prepare, recompile the selected objects against the actual build headers, install, verify content stability, then link. [Five-object replay](../../../.evidence/k1/prepared-headers-20260912-v2/substitution.json): no overwritten object; the three consumers are byte-proven through vmlinux (allowing relocations). | [Boot PASS](../../../.evidence/k1/prepared-headers-20260912-v2/boot/boot.json), Image `af053a63...`; this closes the reproduced three-object overwrite, not the unmeasured full-composition lineage audit. |
+| K-B01 / original group link and boot PASS | Kbuild replaced `alternative.o`, `signal32.o`, `vdso.o` after regenerating `vdso-offsets.h`. | RED `39e48d7`; prepare, recompile the selected objects against the actual build headers, install, verify content stability, then link. Five-object replay (`.evidence/k1/prepared-headers-20260912-v2/substitution.json`): no overwritten object; the three consumers are byte-proven through vmlinux (allowing relocations). | Boot PASS (`.evidence/k1/prepared-headers-20260912-v2/boot/boot.json`), Image `af053a63...`; this closes the reproduced three-object overwrite, not the unmeasured full-composition lineage audit. |
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
 | K-G01 / K6 CLOSED 2026-09-13 | Full run `20260913T075423Z` compiled/installed all 2,799 and passed the generated-input fixed point and complete link; its boot exposed K-R06. | `aad1657` repaired physical spill reuse; 76 original units were recompiled. Both compiler identities are explicit, with zero reference target-C fallback. | `20260913T090822Z-incremental`: all 2,799 object hashes retained, complete link **0**, standard boot **PASS**; [receipt](../../../tests/contracts/kernel-full-receipt.json). K7 is a later separate measurement below. |
 | K-S01 / tailored GREEN, full link OPEN | Kernel min/max needs optimization-time `constant_p` on proved local values; authorized September 13, §10.1.14 revision 1.9.93. Later consumers exposed assignment facts, finite SSA joins, immutable representation reads and a private constant-table reduction. | Shared C-HIR facts serve both interpreters and lowering; bounded SSA propagation preserves evaluated calls, poison and obligations. 39 query regressions and 448 C-HIR/lower tests PASS; the composed fixture links and exits zero with both sealed oracles and native EvoCC. | Original test_run.o, filter.o and skbuff.o now emit without assertion calls. Full combination still requires fresh compile/link/boot; K-S02 is a separate explicit profile conflict. |
@@ -106,7 +106,7 @@ correctness and unselected runtime tests remain separate gates.
 
 Command: `python3 -u tools/bench.py kernel-selftest --allow-qemu-drift`.
 Run `20260913T100557Z`, adapter commit `fe69b20`,
-[capture](../../../.evidence/kselftest/20260913T100557Z/summary.json).
+capture (`.evidence/kselftest/20260913T100557Z/summary.json`).
 The [selection contract](../../../tests/contracts/kernel-selftest-contract.json)
 names nine unchanged upstream Linux 6.18.44 test programs before execution:
 
@@ -173,14 +173,14 @@ program denominator.
 | GCC reference | 1 | 934 | `acct:acct_syscall` executes and passes |
 | EvoCC kernel | 0 | 935 | kernel stack overflow before test BEGIN |
 
-The [subject serial log](../../../.evidence/kselftest-full/20260913T111521Z/subject/acct/acct_syscall/boot.log)
+The subject serial log (`.evidence/kselftest-full/20260913T111521Z/subject/acct/acct_syscall/boot.log`)
 records a 16 KiB task stack and `Comm: sh`, followed by
 `Kernel panic - not syncing: kernel stack overflow`. Its call chain includes
 `load_elf_binary`, `filemap_fault`, virtio block dispatch, `___slab_alloc`, and
 `get_page_from_freelist`. The installed page-allocation object's latter
 function reserves 608 bytes plus the saved frame pair; the defect is not
 established to be that one frame alone. A
-[serial replay with the exact registered selector](../../../.evidence/kselftest-full/serial-valid-selector/subject/boot.log)
+serial replay with the exact registered selector (`.evidence/kselftest-full/serial-valid-selector/subject/boot.log`)
 repeats the failure, ruling out concurrent-VM load as its necessary trigger.
 Both Images retain their K6/selected-K7 hashes. No kernel, compiler or
 configuration was changed by this measurement.
@@ -205,7 +205,7 @@ approximately **3.8 MiB** (`du -sh`); no workspace clone or new kernel build.
 The failing chain contained twelve objects still built before `aad1657`.
 Recompiling them with that already-tested compiler, using their original
 commands and the actual prepared headers, reduced cumulative stack demand.
-The [frame comparison](../../../.evidence/k1/exec-stack-20260913/frame-comparison.json)
+The frame comparison (`.evidence/k1/exec-stack-20260913/frame-comparison.json`)
 counts 59 matched C prologues, not a complete dynamic stack high-water mark.
 All 2,799 installed object hashes survived the incremental full link, and
 header preparation reached a content fixed point. The unchanged disk-backed
@@ -213,8 +213,8 @@ payload now runs `acct:acct_syscall` and powers off normally. This is the
 original failing workload turning green, not another minimal-init boot.
 
 The uniform rebuild is now complete:
-[result](../../../.evidence/k1/uniform-stack-20260913/result.json),
-[boot](../../../.evidence/k1/uniform-stack-20260913/boot/boot.json).
+result (`.evidence/k1/uniform-stack-20260913/result.json`),
+boot (`.evidence/k1/uniform-stack-20260913/boot/boot.json`).
 All **2,799/2,799** target-C objects were recompiled with the same tested
 compiler, assembled, installed and retained through the final link. Header
 preparation reached a fixed point; no reference target-C object was substituted.
@@ -228,7 +228,7 @@ measurement records the subsequent runtime tests separately from that boot.
 
 #### Completed original full run and string-storage repair
 
-Run [`20260913T120409Z`](../../../.evidence/kselftest-full/20260913T120409Z/summary.json)
+Run `20260913T120409Z` (`.evidence/kselftest-full/20260913T120409Z/summary.json`)
 completed every one of the **935 installed programs**, each in its own fresh VM,
 on both unchanged Images. The 128-collection build inventory above is unchanged.
 These are outer program outcomes, not counts of nested assertions:
@@ -256,16 +256,16 @@ and skipped tests remain explicit coverage limits, not passes.
 
 Repair `782272f` selects read-only storage for string literals. Its complete
 2,799-object replacement build is recorded in
-[`read-only-storage-20260913`](../../../.evidence/k1/read-only-storage-20260913/preparation.json).
+`read-only-storage-20260913` (`.evidence/k1/read-only-storage-20260913/preparation.json`).
 The source and instruction text are unchanged: every assembly difference is
 limited to section-selection directives and blank lines. Before linking,
 readelf confirms the actual `__evocc.string.695` (`"none"`) in
 `fs/namespace.o` is in allocatable, non-writable `.rodata`.
 
-The [complete link](../../../.evidence/k1/read-only-storage-20260913/link.json)
+The complete link (`.evidence/k1/read-only-storage-20260913/link.json`)
 retains all 2,799 EvoCC objects, with no Kbuild overwrite and unchanged generated
 headers/export source. The new Image `eaab6181ec27` boots and powers off normally.
-The [targeted replay](../../../.evidence/k1/read-only-storage-20260913/replay/summary.json)
+The targeted replay (`.evidence/k1/read-only-storage-20260913/replay/summary.json`)
 then passes **all seven reference-PASS regressions**. Overlayfs no longer crashes
 the kernel; its ordinary failure due to unavailable overlayfs support remains,
 matching the reference failure. These are actual kernel replays, not inferred
@@ -291,7 +291,7 @@ The startup now moves the mounted filesystem onto `/` using `MS_MOVE` before
 setting the process root and working directory, matching the root transition
 in the frozen kernel's `init/do_mounts.c`. No kernel code, configuration, test
 binary, disk image or timeout changes. Only the small reference-built initramfs
-was rebuilt. The [original-test replay](../../../.evidence/kselftest-full/root-switch-20260913/summary.json)
+was rebuilt. The original-test replay (`.evidence/kselftest-full/root-switch-20260913/summary.json`)
 passes `filesystems/statmount:statmount_test` and
 `filesystems/mount-notify:mount-notify_test_ns` on both unchanged Images.
 `statmount_test_ns` also gets past namespace creation and passes its first
@@ -323,7 +323,7 @@ The original classifier reported FAIL before checking that upstream marker.
 Reparsing all **1,870 original transcripts**, checking their recorded hashes,
 changes exactly those two outcomes from FAIL to TIMEOUT. No PASS count changed,
 no execution was repeated, no budget changed, and the
-[original summary](../../../.evidence/kselftest-full/20260913T145405Z/summary.json)
+original summary (`.evidence/kselftest-full/20260913T145405Z/summary.json`)
 and raw logs remain unchanged. The receipt identifies the original summary and
 corrected classifier; it is the authority for the corrected table.
 
@@ -395,9 +395,9 @@ The fuller mm runtime exposes two independent compiler defects:
 | K-R09 / targeted PASS | `release_pages(mr->pages, nr)` passes a pointer to a transparent-union parameter. Old lowering copied from the pointer's pointee, passing a page pointer instead of the page-pointer array. RED `7c155c7`, fix `b13af54` constructs the matching union member through existing checked initialization. | Sealed GCC/Clang O0/O2 and both mixed-ABI directions pass. One repaired EvoCC object links with all 2,799 target hashes retained. `mm:run_vmtests.sh -t gup_test` on both kernels: 6 wrapper programs PASS; longterm subtests 8 PASS / 62 SKIP / 0 FAIL. The other five programs have one skipped inner test each. No `release_pages` crash. |
 | K-R10 / targeted PASS | `cow` alone overflows the unchanged 16 KiB stack, independently of GUP. Block-local nonescaping temporary objects unnecessarily keep separate physical storage. RED `08c5e14`, fix `3b2a446` reuses only equal-size/alignment objects with disjoint direct access intervals, retaining escaped, cross-block and volatile objects. | `try_to_migrate_one` 3184→2288 B, `__split_huge_pmd_locked` 3120→1984 B, `madvise_cold_or_pageout_pte_range` 1952→992 B. After these three object replays, `-t cow` completes on Image `25fa46a4d45f`: **285 PASS / 4 XFAIL / 523 SKIP / 0 FAIL**, identical to GCC. No stack-size or test-budget change. |
 
-Captures: [GUP comparison](../../../.evidence/kselftest-full/transparent-union-20260914/),
-[independent original cow failure/control](../../../.evidence/kselftest-full/cow-isolated-20260914/),
-[cow repair and complete object-hash audit](../../../.evidence/kselftest-full/private-frame-reuse-20260914/).
+Captures: GUP comparison (`.evidence/kselftest-full/transparent-union-20260914/`),
+independent original cow failure/control (`.evidence/kselftest-full/cow-isolated-20260914/`),
+cow repair and complete object-hash audit (`.evidence/kselftest-full/private-frame-reuse-20260914/`).
 The original K6 Image `eaab6181ec27` and receipt are unchanged. These are targeted
 repair compositions, not a fresh complete 935-program or uniform-compiler run.
 Changed-crate gate against `b13af54`, Clippy `-D warnings`, fmt and 130 K1 Python
@@ -581,7 +581,7 @@ their original boot results and refusing absent init-only rerun interfaces.
 ### Execution order and update rules
 
 September 13 complete-composition diagnostic retry
-[`symbol-linkage-20260913`](../../../.evidence/k1/symbol-linkage-20260913/result.json)
+`symbol-linkage-20260913` (`.evidence/k1/symbol-linkage-20260913/result.json`)
 gets past duplicate definitions and modpost, but not final linking. This is a
 mixed **EvoCC revision** diagnostic composition, not a new compiler-bound K6
 measurement; no reference target-C object was intentionally restored. Kbuild
@@ -597,7 +597,7 @@ did regenerate `.vmlinux.export.o`, caught by the installed-object audit.
 | K-B03 | `modpost` generates the final `.vmlinux.export.c` after ordinary preparation, and final make recompiles it with GCC. | `e03f564` RED, `fb7a5b6` invokes the real producer before compiling this original target-C record with EvoCC and checks content after final make. K1 Python 109/109; complete diagnostic link passes with the generated source stable and all 2,799 installed target-C objects retained. |
 
 The complete diagnostic composition now **links successfully**:
-[`complete-link-20260913/result.json`](../../../.evidence/k1/complete-link-20260913/result.json).
+`.evidence/k1/complete-link-20260913/result.json`.
 All 2,799 original target-C records retain their EvoCC object identity, including
 the export table compiled after modpost; its generated source remains stable.
 The initial audit used the short spelling `virt/kvm/vfio.o` for a repair whose
@@ -625,7 +625,7 @@ Targeted tests are green; all 40 original records that force-include `hidden.h`
 were recompiled and assembled with three workers. The bad GOT reference count
 is zero; all 2,799 EvoCC objects remain installed. The next link stopped at
 K-L10 before boot, recorded in
-[`visibility-boot-20260913/result.json`](../../../.evidence/k1/visibility-boot-20260913/result.json).
+`.evidence/k1/visibility-boot-20260913/result.json`.
 
 The targeted gate also exposed a dead-computation regression: retaining an
 `adds` arithmetic result could remove its mandatory, unused flags consumer.
@@ -635,7 +635,7 @@ external-symbol, attribute, wide-integer and allocator suites pass 182/182;
 these tests do not establish a successful boot.
 
 The visibility and unused-declaration fixes now pass the actual complete link
-in [`visibility-references-20260913`](../../../.evidence/k1/visibility-references-20260913/result.json):
+in `visibility-references-20260913` (`.evidence/k1/visibility-references-20260913/result.json`):
 40 original commands, 31 identical objects reused, nine reassembled, all 2,799
 installed objects retained, export source stable. Boot still times out before
 console on Image `7cfa16a1b3d548dac0f897f0eb05d584410fc855fa7402ecd3cf33f256bf05bb`.
@@ -651,7 +651,7 @@ visited subobjects even when sparse initialization emits no scalar action. The
 and native execution. Original `idreg-override.o` replay takes 1.805 seconds;
 all seven descriptor sizes now match the reference object. The complete link
 retains all 2,799 EvoCC objects with stable generated export source, recorded in
-[`flexible-sentinel-20260913`](../../../.evidence/k1/flexible-sentinel-20260913/result.json).
+`flexible-sentinel-20260913` (`.evidence/k1/flexible-sentinel-20260913/result.json`).
 Boot remains TIMEOUT, but the diagnostic flight gets through MMU and memory
 setup to IRQ initialization; the shift guard is unchanged.
 
@@ -679,7 +679,7 @@ multi-return native/interpreter RED reproduces it; `379790c` keeps private
 callback label lookup local to each emission without changing concrete CFG edges.
 All 17 original IRQ units now emit and assemble. The complete diagnostic link
 retains 2,799/2,799 objects, with stable export input, in
-[`scope-cleanup-20260913`](../../../.evidence/k1/scope-cleanup-20260913/result.json).
+`scope-cleanup-20260913` (`.evidence/k1/scope-cleanup-20260913/result.json`).
 Image `611b2f69975c03788340ca479844491e98e57f3fbe9e32d659cbf53aa9a8270e`
 still records standard boot TIMEOUT. A separate bounded early-console snapshot
 now passes IRQ setup, GICv2m and clock initialization; CPU0 waits for
@@ -705,14 +705,14 @@ exposes the same defect in the allocator/slab call chain. Replaying all 75
 remaining units whose old maximum frame is at least 2,048 bytes reduces, for
 example, `mm/page_alloc.o` from 4,944 to 624 and `lib/maple_tree.o` from 12,080
 to 1,248. This threshold selects replays; it changes no language or stack-size
-rule. The final [composition](../../../.evidence/k1/large-frames-20260913/result.json)
+rule. The final composition (`.evidence/k1/large-frames-20260913/result.json`)
 retains every installed target-C object and the generated export source.
 The standard 60-second flight reports **PASS**, with exactly one ordered
 `EVO_INIT_ALIVE`, current `EVO_BOOT_NONCE`, `EVO_INIT_DONE`, then
 `reboot: Power down`. Boot is the measured claim, not KUnit/kselftest coverage.
 
 The eleven focused original-command replays are recorded in
-[`constant-linkage-20260913/objects.json`](../../../.evidence/k1/constant-linkage-20260913/objects.json):
+`.evidence/k1/constant-linkage-20260913/objects.json`:
 all eleven emitted and assembled, with three compiler workers. The associated
 configuration/machine regression gate passes 63 tests, zero failures; Clippy
 for lower/MIR all targets and fmt pass. These are not a new full survey or boot.
@@ -867,8 +867,8 @@ rewrite unrelated rules or weaken executed access checks.
 
 Command: `python3 tools/bench.py kernel --survey-only --evocc
 /Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --jobs 6`.
-Run `survey-20260912T092730.260925Z`; [capture summary](../../../.evidence/k1/survey-20260912T092730.260925Z/substitution.json),
-[per-unit results](../../../.evidence/k1/survey-20260912T092730.260925Z/units.jsonl),
+Run `survey-20260912T092730.260925Z`; capture summary (`.evidence/k1/survey-20260912T092730.260925Z/substitution.json`),
+per-unit results (`.evidence/k1/survey-20260912T092730.260925Z/units.jsonl`),
 and [bench receipt](../../../tests/contracts/bench-receipt.json).
 The measured checkout was `8f6cf84` with pre-existing receipt/status edits;
 the frozen driver SHA-256 was
@@ -916,17 +916,17 @@ units, not diagnostic occurrences or predictions of the next run.
 | ID / state | Units | Code | First-error family | Example unit | Next tailored check / owner |
 |---|---:|---|---|---|---|
 | K-C01 / original compile replay PASS | 78 | E3101 | Goto destination discarded; `fb05c80` | `arch/arm64/kernel/signal.o` | All 78 affected originals compile/assemble in `initializer-and-goto-20260912`; runtime/full composition remains separate. |
-| K-C02 / original compile replay PASS | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | `d387e65` passed 27 originals; `29704aa` passes the final `drivers/tty/sysrq.o` and `net/core/neighbour.o` in [the two-object replay](../../../.evidence/k1/absolute-place-addresses-20260912/substitution.json), with no access provenance invented. Combined runtime remains separate. |
+| K-C02 / original compile replay PASS | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | `d387e65` passed 27 originals; `29704aa` passes the final `drivers/tty/sysrq.o` and `net/core/neighbour.o` in the two-object replay (`.evidence/k1/absolute-place-addresses-20260912/substitution.json`), with no access provenance invented. Combined runtime remains separate. |
 | K-C03 / original compile replay PASS | 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` | `d387e65`: all 21 affected originals compile/assemble; both interpreters and native fixtures pass, with static exposure and a non-exposure negative case. |
-| K-C04 / original compile replay PASS | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | RED `f312954`: the netfilter `__builtin_constant_p` guard was false, but lowering still visited its short-circuited right operand. Evaluate the left operand and retain its obligations, omit only a skipped right operand with no incoming label edge. All six originals assemble and match symbols in [the replay](../../../.evidence/k1/guarded-immediates-20260912/substitution.json). No immediate constraint is weakened. |
+| K-C04 / original compile replay PASS | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | RED `f312954`: the netfilter `__builtin_constant_p` guard was false, but lowering still visited its short-circuited right operand. Evaluate the left operand and retain its obligations, omit only a skipped right operand with no incoming label edge. All six originals assemble and match symbols in the replay (`.evidence/k1/guarded-immediates-20260912/substitution.json`). No immediate constraint is weakened. |
 | K-C05 / original compile replay PASS | 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` | RED `fabe30a`: register operands transfer the complete four-/eight-byte object representation using ordinary guarded loads/stores and existing assembly effects. Both oracle and subject native fixtures pass; all five originals assemble and match symbols in `aggregate-and-case-20260912`. |
-| K-C06 / original compile replay PASS | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | RED `7f152a4`, fix `7e79813`: both interpreters preserve evaluated indices, pointer identity and E3001. Both oracles O0/O2 and subject native fixtures agree; gate **1,433/0**, Clippy/fmt PASS. All five original units assemble and match symbols in [the replay](../../../.evidence/k1/zero-sized-pointer-offsets-20260912/substitution.json). |
+| K-C06 / original compile replay PASS | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | RED `7f152a4`, fix `7e79813`: both interpreters preserve evaluated indices, pointer identity and E3001. Both oracles O0/O2 and subject native fixtures agree; gate **1,433/0**, Clippy/fmt PASS. All five original units assemble and match symbols in the replay (`.evidence/k1/zero-sized-pointer-offsets-20260912/substitution.json`). |
 | K-C07 / original compile replay PASS | 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` | Bounded declared-base direct-shift profile, preserving the other E2939 categories. Both interpreters and native value tests pass; all four originals compile/assemble with symbol parity in `wide-field-shift-20260913`. GCC/Clang disagreement is recorded, not called consensus. |
-| K-C08 / original compile replay PASS | 2 | E2202 | EFI wide-character initializer type | `drivers/firmware/efi/libstub/file.o` | Replay omitted supported `-fshort-wchar`; RED `6c11a5c`, fix `54d265a`. Both original EFI units assemble and match symbols in [the replay](../../../.evidence/k1/efi-characters-20260912/substitution.json); K1 Python **101/101**, Ruff PASS. No parser acceptance rule changed. |
-| K-C09 / original compile replay PASS | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | RED `67ad4cf`: pin x30 only at explicit asm operands; ordinary allocation still excludes it and every prologue/epilogue saves/restores the return address. Four sealed O0/O2 runs and native read-write/tied/asm-goto/call tests pass. Both original units assemble and match symbols in [the replay](../../../.evidence/k1/link-register-20260912/substitution.json). |
-| K-C10 / original compile replay PASS | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | RED `2d375a0`; ordinary anonymous operands carry byval shape and aggregate va_arg copies a list entry into a destination object. Both interpreters pass; eight GCC/Clang O0/O2 mixed-call directions pass. Both originals assemble with symbol parity in [the replay](../../../.evidence/k1/aggregate-variadic-20260912/substitution.json), compiler `ac5eaf9f...`; no install/boot claim. |
+| K-C08 / original compile replay PASS | 2 | E2202 | EFI wide-character initializer type | `drivers/firmware/efi/libstub/file.o` | Replay omitted supported `-fshort-wchar`; RED `6c11a5c`, fix `54d265a`. Both original EFI units assemble and match symbols in the replay (`.evidence/k1/efi-characters-20260912/substitution.json`); K1 Python **101/101**, Ruff PASS. No parser acceptance rule changed. |
+| K-C09 / original compile replay PASS | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | RED `67ad4cf`: pin x30 only at explicit asm operands; ordinary allocation still excludes it and every prologue/epilogue saves/restores the return address. Four sealed O0/O2 runs and native read-write/tied/asm-goto/call tests pass. Both original units assemble and match symbols in the replay (`.evidence/k1/link-register-20260912/substitution.json`). |
+| K-C10 / original compile replay PASS | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | RED `2d375a0`; ordinary anonymous operands carry byval shape and aggregate va_arg copies a list entry into a destination object. Both interpreters pass; eight GCC/Clang O0/O2 mixed-call directions pass. Both originals assemble with symbol parity in the replay (`.evidence/k1/aggregate-variadic-20260912/substitution.json`), compiler `ac5eaf9f...`; no install/boot claim. |
 | K-C11 / original compile replay PASS | 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` | Byte arithmetic uses the existing exposed-address conversions; reached calls still check target/signature. Both BPF originals compile/assemble with symbol parity in `function-addresses-20260913`. |
-| K-C12 / original compile replay PASS | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | RED `3d8f6c1`; user-authorized Section 2.1 correction in revision 1.9.91. Validator and shared memory separate pointer width from access alignment. Both interpreters, sealed oracles and subject native fixtures pass; both original ACPICA units assemble and match symbols in [the replay](../../../.evidence/k1/packed-relocations-20260912/substitution.json). Bounds, nonoverlap and provenance remain checked. |
+| K-C12 / original compile replay PASS | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | RED `3d8f6c1`; user-authorized Section 2.1 correction in revision 1.9.91. Validator and shared memory separate pointer width from access alignment. Both interpreters, sealed oracles and subject native fixtures pass; both original ACPICA units assemble and match symbols in the replay (`.evidence/k1/packed-relocations-20260912/substitution.json`). Bounds, nonoverlap and provenance remain checked. |
 | K-C13 / original compile replay PASS | 1 | E3029 → E3034 → assembled | Computed goto | `kernel/bpf/core.o` | Explicit storage/effect edges pass C-HIR, EvoIR, MIR, proof replay and native tests. After the shared function-address fix, the original compiles/assembles with symbol parity in `function-addresses-20260913`. |
 | K-C14 / original compile replay PASS | 1 | E3101 | Numeric pointer round trip in a case constant | `kernel/signal.o` | RED `fabe30a`: permit numeric pointer casts in the shared iterative static evaluator, preserving its fuel and forbidden-expression checks. Both interpreters/oracles/native fixtures pass; the original assembles and matches symbols in `aggregate-and-case-20260912`. |
 | K-C15 / TARGETED PASS | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | Exact-width representation copy preserves initializedness, pointer fragments and independent read/write events; original replay `volatile-union-20260913`: 1/1 assembled, not installed or booted. |
@@ -1320,7 +1320,7 @@ the 128 originals from K-C01/02/03 using release SHA-256
 **126 assembled, 2 refused (E3026), zero timeout/panic/assembler failures**.
 Breakdown: goto **78/78**, integer relocations **21/21**, numeric addresses
 **27/29**. It installs nothing and performs no relink; its records are in
-[the targeted capture](../../../.evidence/k1/initializer-and-goto-20260912/substitution.json),
+the targeted capture (`.evidence/k1/initializer-and-goto-20260912/substitution.json`),
 with per-unit SHA-256 `cf7413ac7a33b4d48e43c480bdf844e5d13d7458d02c6441145abbf920c4ca0a`.
 `d387e65` passes the affected gate (**1,801 passed, 0 failed, 4 existing
 ignored**, Clippy/fmt) and the final updated Section 9 sentinel separately.
