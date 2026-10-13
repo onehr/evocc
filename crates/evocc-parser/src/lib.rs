@@ -7960,15 +7960,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let qualifiers = self.parse_qualifiers();
             let attributes = self.parse_attribute_specifiers(AttributePlacement::PointerDeclarator);
             self.validate_pointer_attributes(&attributes);
-            // Linkage and placement marks describe the declared symbol, never its pointer
-            // type. Keep their written position/span, but put them in the
-            // declaration inventory shared by linkage and attribute queries.
-            // Other pointer attributes remain on the written pointer layer.
+            // Linkage, placement and retention marks describe the declared symbol,
+            // never its pointer type. Keep their written position/span, but put
+            // them in the declaration inventory shared by linkage and attribute
+            // queries. Other pointer attributes remain on the written pointer layer.
             let (linkage, attributes): (Vec<_>, Vec<_>) =
                 attributes.into_iter().partition(|attribute| {
                     matches!(
                         attribute.semantic_name(),
-                        Some("weak" | "alias" | "section")
+                        Some("weak" | "alias" | "section" | "used" | "retain")
                     )
                 });
             symbol_attributes.extend(linkage);

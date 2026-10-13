@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.0.1** | **Pinned ground truth** | Added front-end warning levels on 2026-10-07
+**Revision 2.1.0** | **Pinned ground truth** | Attached `used` and `retain` after a pointer `*` on 2026-10-13
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -4548,7 +4548,7 @@ accepts them, and each position fixes what the attribute attaches to:
 | among the declaration specifiers | every declarator of that declaration |
 | immediately after a declarator | that declarator alone |
 | immediately before a declarator that follows a comma in a declarator list | that declarator alone |
-| after `*` (and its qualifiers) inside a pointer declarator, before the rest of the declarator | the pointer type formed by that `*`; preserved, never applied (10.1.14), except that `weak`, `alias` and `section` in a named declarator mark the declared object or function (Section 5.2) |
+| after `*` (and its qualifiers) inside a pointer declarator, before the rest of the declarator | the pointer type formed by that `*`; preserved, never applied (10.1.14), except that `weak`, `alias`, `section`, `used` and `retain` in a named declarator mark the declared object or function (Section 5.2), and that the `unused-variable` lint (Section 6.3) reads `unused` on the pointer next to a variable's name, as GCC 14 does |
 | after `struct`, `union` or `enum` keyword, or after the closing brace | the tag type |
 | after a member declarator | that member |
 | after a parameter declarator | that parameter |
@@ -7284,13 +7284,14 @@ to the signature spelling.
 
 ## Revision
 
-**Revision 2.0.0, 2026-10-06.** This revision is the pinned ground truth of
-EvoIR. It specifies the same language as revision 1.9.116 of 2026-10-01, as
-one text: the development addenda are folded into the sections that they
-amend, the rulings that only the review transcript stated are folded into
-their sections, and the revision history and the review transcript are
-removed. Prose that disagreed with the implementation is corrected (Sections
-1.7, 3.5, 3.7, 3.8, 5.2, 5.3, 6.3, 9.3, 11.1 to 11.4 and Appendix A). The
+**Revision 2.1.0, 2026-10-13.** Section 10.1.9 attaches `used` and `retain`
+written after a pointer `*` in a named declarator to the declared object or
+function, as it already attached `weak`, `alias` and `section`. Before, they
+stayed on the pointer type without effect, so an optimized build could omit
+a `used` object that GCC 14 keeps. The `unused-variable` lint also reads
+`unused` on the pointer next to a variable's name. Revision 2.0.1 of
+2026-10-07 added the front-end warning levels (Section 6.3). Revision 2.0.0 of
+2026-10-06 folded revision 1.9.116 and its rulings into one pinned text; the
 review transcript is archived, not normative, in
 `docs/archive/notebook/evoir-spec-review-20261001.md`. No registry byte changes.
 

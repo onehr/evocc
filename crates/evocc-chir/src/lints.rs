@@ -65,9 +65,17 @@ pub fn check(
                 .iter()
                 .any(|a| matches!(a.semantic_name(), Some("unused" | "used")))
     };
+    // As in GCC 14, `unused` on the pointer next to a variable's name, as in
+    // `int * __attribute__((unused)) p;`, marks the variable. On a farther
+    // pointer or on a parameter's pointer it does not.
+    let pointer_marks_unused = |written: &WrittenDeclarator| {
+        matches!(written.layers.first(), Some(WrittenDeclaratorLayer::Pointer { attributes, .. })
+            if attributes.iter().any(|a| a.semantic_name() == Some("unused")))
+    };
     inline::for_each_declaration(unit, |declaration| match declaration {
         CHirDecl::Object(o)
             if unused(o.symbol, &o.attributes)
+                && !pointer_marks_unused(&o.written)
                 && o.cleanup.is_none()
                 && o.storage != StorageClass::Extern
                 && unit

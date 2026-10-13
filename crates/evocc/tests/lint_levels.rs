@@ -143,6 +143,38 @@ fn explicit_use_and_nonreturning_calls_do_not_warn() {
 }
 
 #[test]
+fn symbol_attributes_after_a_pointer_star_mark_the_declared_variable() {
+    // Linux writes `static void * __used __section(...) name = &sym;`. As in
+    // GCC 14, `used` there marks the declaration, and `unused` on the pointer
+    // next to the name marks the variable.
+    for source in [
+        "extern int sym; static void * __attribute__((__used__)) kept = &sym;",
+        "static int * __attribute__((unused)) quiet;",
+        "static int (* __attribute__((unused)) rows)[2];",
+        "int f(void) { int * __attribute__((unused)) local; return 0; }",
+    ] {
+        expect(run(&["-Wall", "-Werror"], source), "W0001", "allow");
+    }
+    // GCC 14 still warns when `unused` marks a pointer farther from the name,
+    // an array element type or a parameter.
+    for source in [
+        "static int * __attribute__((unused)) * outer;",
+        "static int * __attribute__((unused)) elements[2];",
+        "int f(void) { int * __attribute__((unused)) * local; return 0; }",
+    ] {
+        expect(run(&["-Wall"], source), "W0001", "warning");
+    }
+    expect(
+        run(
+            &["-Wall"],
+            "int f(int * __attribute__((unused)) p) { return 0; }",
+        ),
+        "W0002",
+        "warning",
+    );
+}
+
+#[test]
 fn return_analysis_checks_paths_without_warning_on_complete_returns() {
     for source in [
         "int f(int x) { if (x) return 1; else return 2; }",

@@ -99,8 +99,8 @@ The first public version.
   checkers in `evoir-sem` check each stage of the actual compilation, and the theorem
   `checkPipeline_sound` covers the chain from typed Core source to the final assembly text. A
   refusal writes no output.
-- Five pinned specifications in `spec/`: EvoIR 2.0.1, EvoMIR 1.0.1, the target description 1.0.0,
-  the verification contract 1.0.0 and the diagnostic format 1.0.0.
+- Five pinned specifications in `spec/`: EvoIR 2.1.0, EvoMIR 1.0.1, the target description 1.0.0,
+  the verification contract 1.0.0 and the diagnostic format 1.2.0.
 - The evaluation ladder, `tools/bench.py`: conformance suites, fifteen application lanes and Linux
   build, boot, kselftest and KUnit lanes. Each lane writes a receipt.
 - The EvoCC Book in `book/`: installation, a first program, undefined behavior, compiling with
@@ -135,6 +135,11 @@ The first public version.
   `__ARM_FEATURE_PAC_DEFAULT` to 5, as GCC 14 does. Linux probes this option. Before, the
   probe failed, the kernel asked for signing through `-msign-return-address`, and the
   kernel was built without it. As in GCC 14, `-msign-return-address` has no effect.
+- `used` and `retain` written after a pointer `*`, as in Linux's `static void * __used
+  __section(...) name`, now mark the declared object, as in GCC 14. Before, `-O2` could
+  omit such an object when it had no `section`, and `-Wall` reported it as an unused
+  variable, 13,601 times in one Linux build. `unused` on the pointer next to a variable's
+  name also prevents that warning. EvoIR revision 2.1.0 states the rule.
 
 ### Results at this version
 

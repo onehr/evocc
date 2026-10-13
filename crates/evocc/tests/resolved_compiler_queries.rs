@@ -1275,11 +1275,33 @@ fn internal_roots_include_relocations_aliases_assembly_and_used_definitions() {
         "static int keep(void){return 1;}static int(*p)(void)=keep;asm(\".quad p\");int main(void){return 0;}",
         "static int keep(void){return 1;}static int(*p)(void)=keep;extern int(*alias)(void)__attribute__((alias(\"p\")));int main(void){return alias()!=1;}",
         "static int keep(void){return 1;}int f(void){static int(*p)(void)__attribute__((used))=keep;return 0;}int main(void){return f();}",
+        // `used` and `retain` after a pointer `*` mark the declared object.
+        "static int keep(void){return 1;}static int(* __attribute__((used)) p)(void)=keep;int main(void){return 0;}",
+        "static int keep(void){return 1;}static int(* __attribute__((retain)) p)(void)=keep;int main(void){return 0;}",
+        "static int keep(void){return 1;}static void * __attribute__((__used__)) p=(void*)keep;int main(void){return 0;}",
     ] {
         let output=run(source,"--emit=evoir");
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         assert!(String::from_utf8_lossy(&output.stdout).contains("func @keep"));
     }
+}
+
+#[test]
+fn used_objects_after_a_pointer_star_stay_in_optimized_assembly() {
+    let source = "static int x;static int * __attribute__((used)) kept=&x;static int * __attribute__((retain)) held=&x;static int *dropped=&x;int main(void){return 0;}";
+    let output = run(source, "--emit=asm");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    let defined = |name: &str| {
+        text.lines()
+            .any(|line| line.trim_end().ends_with(&format!("{name}:")))
+    };
+    assert!(defined("kept") && defined("held"), "{text}");
+    assert!(!defined("dropped"), "{text}");
 }
 
 #[test]
