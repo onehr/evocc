@@ -87,7 +87,7 @@ The first public version.
   nightly prerelease workflow, and an exact-version changelog check before packaging.
   The nightly workflow reuses the release build and smoke tests; it has not run on GitHub.
 - A bundled AArch64 Linux header sysroot. Releases find it beside `bin/` without `--sysroot`.
-  The file-hash contract records 3,966 headers and eight unsupported netfilter headers that
+  The file-hash contract records 1,657 headers and eight unsupported netfilter headers that
   collide by case. The bundle supports the default macOS volume. It contains no linker, libc
   or C runtime. The driver does not change include lookup for excluded names.
 - Undefined behavior as data in EvoIR: each definedness condition is an explicit

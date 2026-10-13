@@ -29,7 +29,7 @@ jobs:
       - name: Export sealed Linux headers
         run: |
           docker build --platform linux/arm64 -t evo-nexlab:sealed -f .toolchain/Dockerfile.nexlab .toolchain
-          tools/export-sysroot.sh
+          EVOCC_SYSROOT_IMAGE=evo-nexlab:sealed tools/export-sysroot.sh
           tar -czf linux-headers.tar.gz sysroot contracts/sysroot-aarch64-unknown-linux-gnu.json
       - uses: actions/upload-artifact@v4
         with: {name: linux-headers, path: linux-headers.tar.gz, if-no-files-found: error}

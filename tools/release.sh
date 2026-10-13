@@ -22,9 +22,12 @@
 #
 # The output is DIR/evocc-<version>-<target>.tar.gz. The archive holds one
 # directory of the same name: bin/ with the four binaries, LICENSE, NOTICE,
-# THIRD-PARTY-NOTICES.md, README.md and SHA256SUMS for those files. The archive
-# also includes sysroot/ when the exported Linux headers exist: the headers, the
-# license texts of their Debian packages in sysroot/licenses/ and the contract.
+# THIRD-PARTY-NOTICES.md, README.md and SHA256SUMS for those files. It also
+# holds licenses/runtime/: the license texts of musl, libuv and GMP, which the
+# binaries contain. Each text must have the SHA-256 that this script pins, or
+# no archive is written. The archive also includes sysroot/ when the exported
+# Linux headers exist: the headers, the license texts of their Debian packages
+# in sysroot/licenses/ and the contract.
 # Every header and license text must match the tracked contract and is listed
 # in SHA256SUMS. The archive is deterministic. Entries are sorted, owner and
 # group are 0, and every mtime is SOURCE_DATE_EPOCH, else the commit time of
@@ -166,6 +169,24 @@ entries = []
 for spec in sys.argv[4:]:
     arcname, mode, path = spec.split("=", 2)
     entries.append((arcname, int(mode, 8), Path(path).read_bytes()))
+# The license texts of the third-party code inside the binaries.
+# THIRD-PARTY-NOTICES.md, section 1, gives the source of each text.
+runtime = {
+    "gmp/gpl-3.0.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "gmp/lgpl-3.0.txt": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
+    "libuv/LICENSE": "16de0c32b265cb7d46a6d3bd614f259dd4d693a5e26b3407b04aae8d73041f0c",
+    "libuv/LICENSE-extra": "262c44bd2cdba037e6d2a82fba15f5800d292bc993a6f5d6b6ea487744d02836",
+    "libuv/inet.c-notice": "94c9ea5ff8756fbd01e307e0a3d44f2a0369df9d7ddc86abb278790e4a63ba0d",
+    "libuv/tree.h-notice": "05504284dee75c47d712644e7b06c6c1b1ebbaee5d03dd660646716c8be3e5c3",
+    "musl/COPYRIGHT": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+}
+tree = Path("licenses/runtime")
+found = {path.relative_to(tree).as_posix(): path.read_bytes()
+         for path in tree.rglob("*") if path.is_file()}
+if {path: hashlib.sha256(data).hexdigest() for path, data in found.items()} != runtime:
+    raise SystemExit("release: licenses/runtime/ differs from the pinned license texts; "
+                     "no archive written")
+entries.extend((f"licenses/runtime/{path}", 0o644, data) for path, data in sorted(found.items()))
 sysroot = Path("sysroot/aarch64-unknown-linux-gnu")
 if sysroot.exists():
     contract_path = Path("contracts/sysroot-aarch64-unknown-linux-gnu.json")
@@ -178,7 +199,8 @@ if sysroot.exists():
                  for path in tree.rglob("*") if path.is_file()}
         actual = {name: hashlib.sha256(data).hexdigest() for name, data in found.items()}
         if not pinned or actual != pinned:
-            raise SystemExit(f"release: Linux {kind} differ from their contract; no archive written")
+            raise SystemExit(f"release: Linux {kind} differ from their contract; no archive written. "
+                             "Run tools/export-sysroot.sh again into an empty directory")
         entries.extend((f"{tree.as_posix()}/{path}", 0o644, data)
                        for path, data in sorted(found.items()))
     entries.append(("sysroot/aarch64-unknown-linux-gnu.json", 0o644, contract_path.read_bytes()))

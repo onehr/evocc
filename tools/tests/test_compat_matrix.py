@@ -145,6 +145,8 @@ class ReleaseChangelogTests(unittest.TestCase):
             shutil.copyfile(ROOT / "tools/release.sh", root / "tools/release.sh")
             for name in ("README.md", "LICENSE", "NOTICE", "THIRD-PARTY-NOTICES.md"):
                 (root / name).write_text("Synthetic packaging fixture.\n")
+            # release.sh pins the runtime license texts and refuses an archive without them.
+            shutil.copytree(ROOT / "licenses/runtime", root / "licenses/runtime")
             (root / "CHANGELOG.md").write_text(changelog)
             manifest = root / "crates/evocc/Cargo.toml"
             manifest.parent.mkdir(parents=True)

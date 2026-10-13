@@ -37,14 +37,32 @@ The build also links code that is not in this repository:
 | Component | Where it comes from | In which binaries | License |
 |---|---|---|---|
 | Rust standard library | The pinned Rust toolchain (`rust-toolchain.toml`) | `evo`, `evocc`, `evocc-checker` | MIT OR Apache-2.0 |
-| musl libc | The Rust target `aarch64-unknown-linux-musl`, when a Linux release is built for it | `evo`, `evocc`, `evocc-checker` on Linux | MIT |
+| musl libc 1.2.5 | The Rust target `aarch64-unknown-linux-musl`, when a Linux release is built for it | `evo`, `evocc`, `evocc-checker` on Linux | MIT |
 | Lean 4 runtime and core library | The pinned Lean toolchain (`lean/lean-toolchain`, v4.32.2) | `evoir-sem` | Apache-2.0 |
-| GNU MP (GMP) | The Lean toolchain, which links it into compiled Lean programs | `evoir-sem` | GNU LGPL version 3, as the toolchain's `LICENSES` file states |
-| libuv | The Lean toolchain, which links it into compiled Lean programs | `evoir-sem` | MIT |
+| GNU MP (GMP) 6.3.0 | The Lean toolchain, which links it into compiled Lean programs | `evoir-sem` | GNU LGPL version 3, as the toolchain's `LICENSES` file states |
+| libuv 1.52.1 | The Lean toolchain, which links it into compiled Lean programs | `evoir-sem` | MIT. Two parts have other terms: `tree.h` (BSD-2-Clause) and `src/inet.c` (ISC). |
 
-The Lean toolchain installs the full texts of these licenses in its `LICENSE` and `LICENSES`
-files. The source of `evoir-sem` is [`lean/`](lean/). `(cd lean && lake build)` builds it again
-and links it with the libraries of the toolchain, so you can link it with a changed GMP.
+Each release archive holds the license texts of musl, libuv and GMP in `licenses/runtime/`. Both
+archives hold all of them, so the macOS archive also holds the musl text. `tools/release.sh` pins
+the SHA-256 of each text, and it writes no archive when a text is absent or different. The texts
+come from these upstream sources:
+
+| File in `licenses/runtime/` | Source | SHA-256 |
+|---|---|---|
+| [`musl/COPYRIGHT`](licenses/runtime/musl/COPYRIGHT) | <https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT?h=v1.2.5> | `f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af` |
+| [`libuv/LICENSE`](licenses/runtime/libuv/LICENSE) | <https://raw.githubusercontent.com/libuv/libuv/v1.52.1/LICENSE> | `16de0c32b265cb7d46a6d3bd614f259dd4d693a5e26b3407b04aae8d73041f0c` |
+| [`libuv/LICENSE-extra`](licenses/runtime/libuv/LICENSE-extra) | <https://raw.githubusercontent.com/libuv/libuv/v1.52.1/LICENSE-extra> | `262c44bd2cdba037e6d2a82fba15f5800d292bc993a6f5d6b6ea487744d02836` |
+| [`libuv/tree.h-notice`](licenses/runtime/libuv/tree.h-notice) | Lines 1 to 24 of <https://raw.githubusercontent.com/libuv/libuv/v1.52.1/include/uv/tree.h> | `05504284dee75c47d712644e7b06c6c1b1ebbaee5d03dd660646716c8be3e5c3` |
+| [`libuv/inet.c-notice`](licenses/runtime/libuv/inet.c-notice) | Lines 1 to 16 of <https://raw.githubusercontent.com/libuv/libuv/v1.52.1/src/inet.c> | `94c9ea5ff8756fbd01e307e0a3d44f2a0369df9d7ddc86abb278790e4a63ba0d` |
+| [`gmp/lgpl-3.0.txt`](licenses/runtime/gmp/lgpl-3.0.txt) | <https://www.gnu.org/licenses/lgpl-3.0.txt> | `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118` |
+| [`gmp/gpl-3.0.txt`](licenses/runtime/gmp/gpl-3.0.txt) | <https://www.gnu.org/licenses/gpl-3.0.txt> | `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986` |
+
+The LGPL version 3 adds permissions to the GNU GPL version 3, so the archives hold both texts. The
+two GNU texts have the same bytes as `common-licenses/LGPL-3` and `common-licenses/GPL-3` of the
+sealed image. The `LICENSES` file of the Lean toolchain holds the LGPL text, but not the GPL text
+and not the libuv text. The source of `evoir-sem` is [`lean/`](lean/). `(cd lean && lake build)`
+builds it again and links it with the libraries of the toolchain, so you can link it with a
+changed GMP.
 
 ## 2. Linux headers in the release archives
 
@@ -52,12 +70,31 @@ and links it with the libraries of the toolchain, so you can link it with a chan
 `tools/export-sysroot.sh` exports them from the sealed build image, and `tools/release.sh` adds
 them to an archive when the export exists. The binaries do not contain them.
 
-The headers are in `sysroot/aarch64-unknown-linux-gnu/` of the archive: 3,966 files from 13
-packages of Debian 13. They come from the image `evo-nexlab:sealed-20260810`, digest
-`sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2`.
+The headers are in `sysroot/aarch64-unknown-linux-gnu/` of the archive: 1,657 files (12.1 MiB)
+from 11 packages of Debian 13. They come from the image `evo-nexlab:sealed-20260810`, digest
+`sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2`. The exporter uses this
+image by default, and it stops when the image has another digest.
 [`contracts/sysroot-aarch64-unknown-linux-gnu.json`](contracts/sysroot-aarch64-unknown-linux-gnu.json)
 records the SHA-256 of each header and each license text, and the version of each package. The
 archive also includes that file as `sysroot/aarch64-unknown-linux-gnu.json`.
+
+The export leaves out 24 directories of the image: 2,309 files, 40.7 MiB. The contract lists them
+in `excluded_directories`. EvoCC compiles C for AArch64 Linux. Its search path is GCC's header
+directory, `usr/include/aarch64-linux-gnu/` and `usr/include/`. These files are under that path
+only by names that C code for this target does not use:
+
+- the C++ headers of `libstdc++-14-dev`, in `usr/include/c++/` and
+  `usr/include/aarch64-linux-gnu/c++/`: 825 files;
+- the Clang 19 resource headers of `libclang-common-19-dev`, in `usr/include/clang/19/` and
+  `usr/include/clang/19.1.7/`: 482 files, the same 241 files in each. EvoCC uses GCC's resource
+  headers;
+- the `asm/` headers that `linux-libc-dev` installs for 21 other architectures, in
+  `usr/include/<triple>/`, for example `x86_64-linux-gnu`: 1,002 files.
+
+No kept header includes a file of these directories, and no EvoCC tool or test reads them. The
+Objective-C headers of `libobjc-14-dev` stay: 10 files. They are in GCC's header directory, which
+is on the search path, and C code can include the runtime interface `<objc/runtime.h>` by that
+name.
 
 The archive holds the Debian copyright file of each package in
 `sysroot/licenses/aarch64-unknown-linux-gnu/<package>/copyright`. The copyright file gives the
@@ -67,16 +104,14 @@ that the copyright files cite from `/usr/share/common-licenses/` are in
 
 | Package | Version | Headers | Directories in `sysroot/aarch64-unknown-linux-gnu/` | License of the headers | Copyright file in `sysroot/licenses/aarch64-unknown-linux-gnu/` |
 |---|---|---|---|---|---|
-| `libc6-dev` (GNU C Library) | 2.41-12+deb13u3 | 471 | 107 files in `usr/include/`; `usr/include/aarch64-linux-gnu/` except `asm/`, `c++/` and `openssl/`; `arpa/`, `finclude/`, `net/`, `netinet/` and the other `net*/` directories, `nfs/`, `protocols/`, `rpc/`, three files in `scsi/` | LGPL-2.1-or-later. Some files have other terms. | `libc6-dev/copyright` |
-| `libclang-common-19-dev` (Clang 19) | 1:19.1.7-3+b1 | 482 | `usr/include/clang/19/` and `usr/include/clang/19.1.7/`: the same 241 files in each | Apache-2.0 WITH LLVM-exception. 15 files in each directory carry an MIT license text. | `libclang-common-19-dev/copyright` |
+| `libc6-dev` (GNU C Library) | 2.41-12+deb13u3 | 471 | 107 files in `usr/include/`; `usr/include/aarch64-linux-gnu/` except `asm/` and `openssl/`; `arpa/`, `finclude/`, `net/`, `netinet/` and the other `net*/` directories, `nfs/`, `protocols/`, `rpc/`, three files in `scsi/` | LGPL-2.1-or-later. Some files have other terms. | `libc6-dev/copyright` |
 | `libcrypt-dev` (libxcrypt) | 1:4.4.38-1 | 1 | `usr/include/crypt.h` | LGPL-2.1-or-later | `libcrypt-dev/copyright` |
 | `libelf-dev` (elfutils) | 0.192-4 | 5 | `usr/include/libelf.h`, `gelf.h`, `nlist.h` and `elfutils/` | LGPL-3.0-or-later OR GPL-2.0-or-later | `libelf-dev/copyright` |
 | `libgcc-14-dev` (GCC 14) | 14.2.0-19 | 34 | `usr/lib/gcc/aarch64-linux-gnu/14/include/` except `objc/` | GPL-3.0-or-later WITH GCC-exception-3.1. The five files in `sanitizer/` are Apache-2.0 WITH LLVM-exception. | `libgcc-14-dev/copyright` |
 | `libobjc-14-dev` (GCC 14) | 14.2.0-19 | 10 | `usr/lib/gcc/aarch64-linux-gnu/14/include/objc/` | GPL-3.0-or-later WITH GCC-exception-3.1 | `libobjc-14-dev/copyright` |
 | `libssl-dev` (OpenSSL 3.5) | 3.5.6-1~deb13u2 | 142 | `usr/include/openssl/` and `usr/include/aarch64-linux-gnu/openssl/` | Apache-2.0 | `libssl-dev/copyright` |
-| `libstdc++-14-dev` (GCC 14) | 14.2.0-19 | 825 | `usr/include/c++/14/` and `usr/include/aarch64-linux-gnu/c++/` | GPL-3.0-or-later WITH GCC-exception-3.1. The 23 files in `pstl/` are Apache-2.0 WITH LLVM-exception. | `libstdc++-14-dev/copyright` |
 | `libzstd-dev` (Zstandard) | 1.5.7+dfsg-1 | 3 | `usr/include/zstd.h`, `zdict.h` and `zstd_errors.h` | BSD-3-Clause OR GPL-2.0-only | `libzstd-dev/copyright` |
-| `linux-libc-dev` (Linux 6.12 UAPI) | 6.12.101-1 | 1,966 | `usr/include/linux/`, `asm-generic/`, `drm/`, `misc/`, `mtd/`, `rdma/`, `regulator/`, `sound/`, `video/`, `xen/`, ten files in `scsi/`, and the `asm/` directory of 22 multiarch triples, `aarch64-linux-gnu` among them | GPL-2.0 WITH Linux-syscall-note, as most SPDX lines state. Some files have other or dual terms. | `linux-libc-dev/copyright` |
+| `linux-libc-dev` (Linux 6.12 UAPI) | 6.12.101-1 | 964 | `usr/include/linux/`, `asm-generic/`, `drm/`, `misc/`, `mtd/`, `rdma/`, `regulator/`, `sound/`, `video/`, `xen/`, ten files in `scsi/`, and `usr/include/aarch64-linux-gnu/asm/` | GPL-2.0 WITH Linux-syscall-note, as most SPDX lines state. Some files have other or dual terms. | `linux-libc-dev/copyright` |
 | `make` (GNU Make) | 4.4.1-2 | 1 | `usr/include/gnumake.h` | GPL-3.0-or-later | `make/copyright` |
 | `rpcsvc-proto` | 1.4.3-1+b1 | 24 | `usr/include/rpcsvc/` | BSD-3-Clause | `rpcsvc-proto/copyright` |
 | `zlib1g-dev` (zlib) | 1:1.3.dfsg+really1.3.1-1+b1 | 2 | `usr/include/zlib.h` and `zconf.h` | Zlib | `zlib1g-dev/copyright` |
