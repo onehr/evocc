@@ -405,6 +405,11 @@ fn parse_region(lines: &[&str]) -> Result<(EvpRegion, usize), EvpParseError> {
         let line = lines[position];
         if line.starts_with("epoch ") {
             let epoch = canonical_u64(fields(line, 2, "epoch")?[1])?;
+            // Section 11.3 numbers the epochs from 1, so a marker 0 names no
+            // epoch and the certificate is malformed.
+            if epoch == 0 {
+                return Err(EvpParseError::new("epoch markers are numbered from 1"));
+            }
             if previous_epoch.is_some_and(|previous| previous >= epoch) {
                 return Err(EvpParseError::new("epoch markers are not increasing"));
             }

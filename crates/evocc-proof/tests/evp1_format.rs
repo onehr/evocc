@@ -73,3 +73,29 @@ fn rejects_noncanonical_or_structurally_malformed_evp1() {
         );
     }
 }
+
+/// A sealed `evp2` certificate whose first region opens with `epoch 1`.
+fn sealed_evp2() -> String {
+    std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/certificates/tier-b-known-bits/proof.evp"
+    ))
+    .expect("read the sealed tier-b certificate")
+}
+
+#[test]
+fn an_epoch_marker_zero_is_malformed() {
+    // Section 11.3 numbers the epochs from 1. The certificate below differs
+    // from a valid one only in its first marker.
+    let valid = sealed_evp2();
+    assert!(valid.starts_with("evp2\n"));
+    let certificate = parse_evp1(valid.as_bytes()).expect("the sealed certificate is valid");
+    assert_eq!(render_evp1(&certificate), valid);
+    let marker = valid
+        .find("\nepoch 1\n")
+        .expect("the first region has an epoch 1");
+    let mut zero = valid.clone();
+    zero.replace_range(marker..marker + "\nepoch 1\n".len(), "\nepoch 0\n");
+    let error = parse_evp1(zero.as_bytes()).expect_err("epoch 0 is malformed");
+    assert!(error.to_string().contains("numbered from 1"), "{error}");
+}

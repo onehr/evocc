@@ -280,6 +280,39 @@ fn current_producer_recreates_sealed_semantics_and_correct_region_local_fuel() {
 }
 
 #[test]
+fn an_epoch_marker_zero_is_malformed_for_the_standalone_checker() {
+    // The triple is valid. Its first epoch marker set to 0, which Section
+    // 11.3 calls malformed, must give status 2 and not a verdict.
+    let triple = certificates().join("tier-b-known-bits");
+    let valid = read(&triple.join("proof.evp"));
+    let marker = valid
+        .find("\nepoch 1\n")
+        .expect("the first region has an epoch 1");
+    let mut zero = valid.clone();
+    zero.replace_range(marker..marker + "\nepoch 1\n".len(), "\nepoch 0\n");
+    let scratch = std::env::temp_dir().join(format!("evocc-epoch-zero-{}", std::process::id()));
+    fs::create_dir_all(&scratch).unwrap();
+    let proof = scratch.join("proof.evp");
+    for (bytes, expected) in [(&valid, 0), (&zero, 2)] {
+        fs::File::create(&proof)
+            .and_then(|mut file| file.write_all(bytes.as_bytes()))
+            .unwrap();
+        let output = run_checker(
+            &triple.join("before.evo"),
+            &triple.join("after.evo"),
+            &proof,
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    fs::remove_dir_all(&scratch).unwrap();
+}
+
+#[test]
 fn the_sealed_corpus_covers_both_tiers_of_the_registry() {
     let mut tier_a = 0;
     let mut tier_b = 0;
