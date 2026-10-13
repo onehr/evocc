@@ -13,14 +13,14 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 HARNESS_SCRIPT_DIR="$SCRIPT_DIR"
 HARNESS_PROJECT_ROOT="$PROJECT_ROOT"
 FOUNDATION="$SCRIPT_DIR/foundation-conformance.sh"
-FLIGHT_LAB="$SCRIPT_DIR/flight-lab/run.sh"
+NEXLAB="$SCRIPT_DIR/nexlab/run.sh"
 VERIFIER="$SCRIPT_DIR/verify-foundation-evidence.sh"
 REQUIRED_IDS="$PROJECT_ROOT/tests/contracts/foundation-required-ids.txt"
 CPP_REQUIRED="$PROJECT_ROOT/tests/contracts/cpp-required-fixtures.txt"
 JQ="${C30_JQ:-/opt/homebrew/bin/jq}"
 SHASUM="${C30_SHASUM:-/usr/bin/shasum}"
 
-if [ ! -r "$FOUNDATION" ] || [ ! -r "$FLIGHT_LAB" ] || \
+if [ ! -r "$FOUNDATION" ] || [ ! -r "$NEXLAB" ] || \
    [ ! -r "$VERIFIER" ] || [ ! -r "$REQUIRED_IDS" ] || \
    [ ! -r "$CPP_REQUIRED" ] || \
    [ ! -x "$JQ" ] || [ ! -x "$SHASUM" ]; then
@@ -53,10 +53,10 @@ extract_function() {
   ' "$FOUNDATION"
 }
 
-FLIGHT_FUNCTION="$(extract_function test_flight_lab_acceptance)"
+NEXLAB_FUNCTION="$(extract_function test_nexlab_acceptance)"
 CPP_FUNCTION="$(extract_function test_isolated_cpp_differential)"
 TAG_FUNCTION="$(extract_function test_floating_tag_rejection)"
-if [ -z "$FLIGHT_FUNCTION" ] || [ -z "$CPP_FUNCTION" ] || [ -z "$TAG_FUNCTION" ]; then
+if [ -z "$NEXLAB_FUNCTION" ] || [ -z "$CPP_FUNCTION" ] || [ -z "$TAG_FUNCTION" ]; then
   printf 'foundation self-test could not extract subject functions\n' >&2
   exit 2
 fi
@@ -67,8 +67,8 @@ make_child() {
   printf '%s\n' \
     '#!/bin/bash' \
     'set -u' \
-    'if [ "${C30_FAKE_KIND:-}" = flight ]; then' \
-    '  output="${C30_FAKE_ROOT:?}/.evidence/flight-lab/current"' \
+    'if [ "${C30_FAKE_KIND:-}" = nexlab ]; then' \
+    '  output="${C30_FAKE_ROOT:?}/.evidence/nexlab/current"' \
     'else' \
     '  output="${C30_FAKE_ROOT:?}/.evidence/cpp-differential/current"' \
     'fi' \
@@ -170,20 +170,20 @@ run_child_case() {
   local summary_variant="${7:-exact}"
   local root="$SCRATCH/$case_id"
 
-  mkdir -p "$root/tests/acceptance/flight-lab" "$root/raw"
-  make_child "$root/tests/acceptance/flight-lab/run.sh"
+  mkdir -p "$root/tests/acceptance/nexlab" "$root/raw"
+  make_child "$root/tests/acceptance/nexlab/run.sh"
   make_child "$root/tests/acceptance/cpp-differential.sh"
-  if [ "$kind" = flight ]; then
+  if [ "$kind" = nexlab ]; then
     printf '%s\n' '{"runId":"current","overall":"PASS","results":[]}' >"$root/template.json"
   else
     write_cpp_summary "$root/template.json" "$summary_variant"
   fi
 
   if [ "$stale_pass" -eq 1 ]; then
-    if [ "$kind" = flight ]; then
-      mkdir -p "$root/.evidence/flight-lab/old"
+    if [ "$kind" = nexlab ]; then
+      mkdir -p "$root/.evidence/nexlab/old"
       printf '%s\n' '{"runId":"old","overall":"PASS","results":[]}' \
-        >"$root/.evidence/flight-lab/old/summary.json"
+        >"$root/.evidence/nexlab/old/summary.json"
     else
       mkdir -p "$root/.evidence/cpp-differential/old"
       write_cpp_summary "$root/.evidence/cpp-differential/old/summary.json" exact
@@ -205,9 +205,9 @@ run_child_case() {
     printf '%s\t%s\n' "$1" "$2" >>"$RESULTS"
   }
 
-  if [ "$kind" = flight ]; then
-    eval "$FLIGHT_FUNCTION"
-    test_flight_lab_acceptance
+  if [ "$kind" = nexlab ]; then
+    eval "$NEXLAB_FUNCTION"
+    test_nexlab_acceptance
   else
     eval "$CPP_FUNCTION"
     test_isolated_cpp_differential
@@ -225,15 +225,15 @@ run_child_case() {
 }
 
 # Positive controls prove that the extracted checked-in functions are live.
-run_child_case flight_fresh_pass flight 1 0 0 PASS
+run_child_case nexlab_fresh_pass nexlab 1 0 0 PASS
 run_child_case cpp_fresh_pass cpp 1 0 0 PASS
 
 # A successful process without a current-run result is not evidence.
-run_child_case flight_zero_without_summary flight 0 0 0 FAIL
+run_child_case nexlab_zero_without_summary nexlab 0 0 0 FAIL
 run_child_case cpp_zero_without_summary cpp 0 0 0 FAIL
 
 # A failed process must not borrow an older PASS summary from a shared tree.
-run_child_case flight_failure_with_stale_pass flight 0 1 1 FAIL
+run_child_case nexlab_failure_with_stale_pass nexlab 0 1 1 FAIL
 run_child_case cpp_failure_with_stale_pass cpp 0 1 1 FAIL
 
 # The CPP denominator is an exact filename set, not a producer-declared count.
@@ -283,7 +283,7 @@ fi
 
 # The official result vocabulary is closed: only PASS and FAIL are legal.
 if grep -E 'record_result.*(BLOCKED|SKIPPED|SKIP|KNOWN_GAP|DIFFER)' \
-    "$FOUNDATION" "$FLIGHT_LAB" >/dev/null; then
+    "$FOUNDATION" "$NEXLAB" >/dev/null; then
   fail result_status_vocabulary 'official harness can emit a non-PASS/FAIL status'
 else
   pass result_status_vocabulary
@@ -331,7 +331,7 @@ run_tag_case observed_image_id_mismatch \
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
   'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc' FAIL
 run_tag_case floating_execution_reference \
-  'evo-flight-lab:sealed' \
+  'evo-nexlab:sealed' \
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' FAIL
 
 # High-level convenience gates may not erase the normative G1-G8 denominator.

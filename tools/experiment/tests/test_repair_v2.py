@@ -574,7 +574,7 @@ class V2Tests(unittest.TestCase):
             "tests/fixtures/agent-repair-2/bitstream/program.c")}
         provenance = dict(commit="old-commit", corpus_tag="agent-repair-experiment-2",
                           hashes=hashes, evo_sha256="same-evo", evocc_sha256="same-evocc",
-                          version="fixture-version", image="evo-flight-lab:sealed",
+                          version="fixture-version", image=repair.IMAGE,
                           image_inspect='[{"configuration":{"descriptor":{"digest":"sealed"}}}]')
         rows = []
         for index, slot in enumerate(order[:4]):

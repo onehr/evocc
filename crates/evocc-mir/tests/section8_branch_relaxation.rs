@@ -22,7 +22,7 @@ use evocc_mir::{compile_module_for, Target};
 
 /// The runtime and image the build-environment contract seals.
 const CONTAINER_BIN: &str = "/usr/local/bin/container";
-const IMAGE: &str = "evo-flight-lab:sealed";
+const IMAGE: &str = "evo-nexlab:sealed";
 
 /// Filler instructions between the branch and its target.
 ///
@@ -115,7 +115,7 @@ fn container() -> Result<(), String> {
     if !listed.status.success() {
         return Err("the container runtime is not started".to_owned());
     }
-    if !String::from_utf8_lossy(&listed.stdout).contains("evo-flight-lab") {
+    if !String::from_utf8_lossy(&listed.stdout).contains("evo-nexlab") {
         return Err(format!("{IMAGE} is not present"));
     }
     Ok(())

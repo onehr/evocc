@@ -559,7 +559,7 @@ static void check_stack_arguments(void) {
 #[test]
 fn the_wide_integer_forms_agree_with_gcc_in_the_sealed_container() {
     const CONTAINER_BIN: &str = "/usr/local/bin/container";
-    const IMAGE: &str = "evo-flight-lab:sealed";
+    const IMAGE: &str = "evo-nexlab:sealed";
 
     if !std::path::Path::new(CONTAINER_BIN).exists() {
         println!("skipped={CONTAINER_BIN} is absent");
@@ -572,7 +572,7 @@ fn the_wide_integer_forms_agree_with_gcc_in_the_sealed_container() {
             return;
         }
     };
-    if !String::from_utf8_lossy(&listed.stdout).contains("evo-flight-lab") {
+    if !String::from_utf8_lossy(&listed.stdout).contains("evo-nexlab") {
         println!("skipped={IMAGE} is not present");
         return;
     }

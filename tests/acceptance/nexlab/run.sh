@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Fail-closed acceptance harness for the ARM64 Linux flight lab.
+# Fail-closed acceptance harness for the ARM64 Linux nexlab.
 #
 # The harness has a closed PASS/FAIL result vocabulary across all gates
 # instead of stopping at the first missing dependency. Day-1 done condition:
@@ -21,7 +21,7 @@ CONTRACT_DIR="$PROJECT_ROOT/contracts"
 BUILD_ENV_CONTRACT="${C30_BUILD_ENV_CONTRACT:-$CONTRACT_DIR/build-environment.json}"
 ORACLE_CONTRACT="${C30_ORACLE_CONTRACT:-$CONTRACT_DIR/oracle-policy.json}"
 KERNEL_CONTRACT="${C30_KERNEL_CONTRACT:-$CONTRACT_DIR/kernel-target.json}"
-EVIDENCE_ROOT="${C30_FLIGHT_LAB_EVIDENCE_ROOT:-$PROJECT_ROOT/.evidence/flight-lab}"
+EVIDENCE_ROOT="${C30_NEXLAB_EVIDENCE_ROOT:-$PROJECT_ROOT/.evidence/nexlab}"
 RUN_ID="$(date -u '+%Y%m%dT%H%M%SZ')-$$"
 RUN_DIR="$EVIDENCE_ROOT/$RUN_ID"
 RAW_DIR="$RUN_DIR/raw"
@@ -281,7 +281,7 @@ test_reference_kernel_boots_fresh() {
     empty_ramfs="$RAW_DIR/empty.cpio"
     printf 'TRAILER!!!' > "$RAW_DIR/trailer-entry"
     ( cd "$RAW_DIR" && printf 'trailer-entry\n' | container run --rm --platform linux/arm64 --network none -i \
-        -v "$RAW_DIR:/work/raw" evo-flight-lab:sealed \
+        -v "$RAW_DIR:/work/raw" evo-nexlab:sealed \
         sh -c 'cd /work/raw && printf "trailer-entry\n" | cpio -o -H newc --quiet > /work/raw/empty.cpio' \
         >/dev/null 2>&1 )
     if [ -s "$empty_ramfs" ]; then
@@ -451,12 +451,12 @@ test_artifact_set_is_exact() {
 test_reset_is_clean() {
   clean_ok=1
 
-  # No flight-lab QEMU processes may survive a run.
+  # No nexlab QEMU processes may survive a run.
   if ps -axo command= | grep -F 'qemu-system-aarch64' | grep -F 'evo_nonce=' >/dev/null 2>&1; then
     clean_ok=0
   fi
 
-  # No flight-lab containers may survive. buildkit is classified builder
+  # No nexlab containers may survive. buildkit is classified builder
   # infrastructure (the sealed image was built with it and it persists by
   # design, like the vminit image in the bootstrap contract); anything else
   # is workload residue.

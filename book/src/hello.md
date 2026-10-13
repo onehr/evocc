@@ -90,7 +90,7 @@ To use another root, give `--sysroot=DIR` or set `EVOCC_SYSROOT`. The explicit
 option takes priority. `-v` prints the selected root.
 
 These commands also need an AArch64 Linux assembler. On the tested macOS host,
-the default assembler runs in the existing `evo-flight-lab:sealed` container.
+the default assembler runs in the existing `evo-nexlab:sealed` container.
 Use `--assembler=COMMAND` to select another assembler. The header bundle
 contains no linker, libc or runtime. Linux linking on a non-Linux host requires
 an explicit `--linker=COMMAND`; without it, stop at `-c`.

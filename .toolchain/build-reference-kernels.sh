@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Reference kernel builder for the flight lab.
+# Reference kernel builder for the nexlab.
 #
 # Builds the pinned kernel with two independent toolchains, twice each, inside
 # the sealed --network=none image. Each lane must produce byte-identical

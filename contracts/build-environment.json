@@ -27,7 +27,8 @@
       "packageCount": 201,
       "amendments": [
         "2026-08-10: added lld-19 after seal verification found ld.lld-19 missing; a Clang reference lane without the LLVM linker is not an LLVM lane. Image re-sealed and re-verified before any reference build.",
-        "2026-10-08: owner approved adding libclang-rt-19-dev 1:19.1.7-3+b1 for the agent repair experiment. The other 200 packages and both compiler binary hashes are unchanged. GCC and Clang UBSan probes both report signed overflow and exit 1. The old image remains at evo-flight-lab:sealed-20260810; historical receipts retain their original identity."
+        "2026-10-08: owner approved adding libclang-rt-19-dev 1:19.1.7-3+b1 for the agent repair experiment. The other 200 packages and both compiler binary hashes are unchanged. GCC and Clang UBSan probes both report signed overflow and exit 1. The old image remains at evo-flight-lab:sealed-20260810; historical receipts retain their original identity.",
+        "2026-10-13: the image tags were renamed from evo-flight-lab to evo-nexlab. The digests are unchanged. The old tags remain, and historical receipts keep the old names. The Dockerfile is now .toolchain/Dockerfile.nexlab, with changes to comments only. KBUILD_BUILD_HOST is now nexlab; kernels built before this date report evo@flightlab."
       ]
     },
     "postSealNetwork": "none",
@@ -35,9 +36,9 @@
     "observedImageId": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
     "executionReference": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
     "previousSealedImageId": "sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2",
-    "previousSealedImageTag": "evo-flight-lab:sealed-20260810",
-    "sealedImageTag": "evo-flight-lab:sealed",
-    "dockerfileSha256": "ba64bc365c0bd96c4c684224131a8c7fcbcab2d75310603fe31510adefb67cc8"
+    "previousSealedImageTag": "evo-nexlab:sealed-20260810",
+    "sealedImageTag": "evo-nexlab:sealed",
+    "dockerfileSha256": "42cba25a1d5277ed2f1bd0482fe62fc97652c6d9dc8a83eb4314306062d0cf98"
   },
   "toolchain": {
     "gcc": {
@@ -112,7 +113,7 @@
     "SOURCE_DATE_EPOCH": "1786299935",
     "timestampRationale": "Both frozen to the kernel.org releases.json released.timestamp for 6.18.44 (2026-08-09), so the frozen value is itself a fact of the release authority.",
     "KBUILD_BUILD_USER": "evo",
-    "KBUILD_BUILD_HOST": "flightlab",
+    "KBUILD_BUILD_HOST": "nexlab",
     "LC_ALL": "C",
     "TZ": "UTC",
     "umask": "022",

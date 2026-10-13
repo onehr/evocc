@@ -1,6 +1,6 @@
 #!/bin/bash
 # Assemble, link and run one case of tools/proof-native/proof_native.py in the
-# existing sealed Linux AArch64 image (evo-flight-lab:sealed, Apple Container
+# existing sealed Linux AArch64 image (evo-nexlab:sealed, Apple Container
 # runtime), as the native tests in crates/evocc/tests/n03d_*.rs do.
 #
 # Run:  bash tools/proof-native/run-module.sh WORK_DIR/run/CASE
@@ -18,7 +18,7 @@ if [ "$free_gib" -lt 25 ]; then
     exit 3
 fi
 exec /usr/local/bin/container run --rm --platform linux/arm64 --network none \
-    --cpus 4 --memory 2G --volume "$work:/work" evo-flight-lab:sealed bash -c '
+    --cpus 4 --memory 2G --volume "$work:/work" evo-nexlab:sealed bash -c '
 set -euo pipefail
 cd /work
 entries=$(sed -n "s/^ENTRIES //p" symbols.txt)

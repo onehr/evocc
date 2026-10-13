@@ -24,7 +24,7 @@ use frame_variants::compile_module_for;
 
 /// The runtime and image the build-environment contract seals.
 const CONTAINER_BIN: &str = "/usr/local/bin/container";
-const IMAGE: &str = "evo-flight-lab:sealed";
+const IMAGE: &str = "evo-nexlab:sealed";
 
 /// One program: the unit EvoCC compiles, and the unit the reference compiler
 /// supplies on both sides.
@@ -284,7 +284,7 @@ fn container() -> Result<String, String> {
             String::from_utf8_lossy(&listed.stderr).trim()
         ));
     }
-    if !String::from_utf8_lossy(&listed.stdout).contains("evo-flight-lab") {
+    if !String::from_utf8_lossy(&listed.stdout).contains("evo-nexlab") {
         return Err(format!("{IMAGE} is not present"));
     }
     Ok(IMAGE.to_owned())

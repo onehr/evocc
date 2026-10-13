@@ -26,7 +26,7 @@ JQ="${C30_JQ:-/opt/homebrew/Cellar/jq/1.8.2/bin/jq}"
 SHASUM="${C30_SHASUM:-/usr/bin/shasum}"
 CONTAINER_BIN="${C30_CONTAINER_BIN:-/usr/local/bin/container}"
 TIMEOUT_BIN="${C30_TIMEOUT:-/opt/homebrew/Cellar/coreutils/9.11/bin/gtimeout}"
-ORACLE_TAG="evo-flight-lab:sealed"
+ORACLE_TAG="evo-nexlab:sealed"
 
 usage() {
   printf 'usage: %s --oracles-only | --measure | --subject\n' "$0" >&2

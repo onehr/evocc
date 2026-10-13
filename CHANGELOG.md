@@ -118,6 +118,9 @@ The first public version.
   stay in `docs/archive/notebook/`.
 - Darwin stack-protector lowering uses Mach-O symbols and relocations. Angle includes honor
   supplied include paths; quoted includes still search the source file's directory first.
+- The sealed build environment is now named nexlab. Its image tags are `evo-nexlab:sealed`
+  and `evo-nexlab:sealed-20260810`, with unchanged digests, and new kernel builds use the
+  build host `nexlab`. The old tags stay, and historical receipts keep the old names.
 
 ### Fixed
 

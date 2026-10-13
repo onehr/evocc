@@ -9,7 +9,7 @@ use crate::{DriverOptions, DriverTarget};
 
 /// The image whose GCC assembles and links for the Linux target when the host
 /// is not Linux. `tools/ladder/subject.py` assembles with the same image.
-const SEALED_IMAGE: &str = "evo-flight-lab:sealed";
+const SEALED_IMAGE: &str = "evo-nexlab:sealed";
 
 /// The multiarch directory of AArch64 Debian and Ubuntu systems.
 const LINUX_MULTIARCH: &str = "aarch64-linux-gnu";

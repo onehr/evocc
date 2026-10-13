@@ -1,5 +1,5 @@
 #!/bin/sh
-# Export only the header directories of evo-flight-lab:sealed.
+# Export only the header directories of evo-nexlab:sealed.
 # Usage: tools/export-sysroot.sh [DESTINATION]
 # The default is sysroot/aarch64-unknown-linux-gnu, on any host volume.
 set -eu
@@ -10,7 +10,7 @@ from pathlib import Path
 script = Path(sys.argv[1]).resolve()
 repo = script.parent.parent
 target = "aarch64-unknown-linux-gnu"
-image = "evo-flight-lab:sealed"
+image = "evo-nexlab:sealed"
 args = sys.argv[2:]
 
 def fail(message):
@@ -87,7 +87,7 @@ if args[:1] == ["--inside"]:
 
 if args in (["--help"], ["-h"]):
     print("usage: tools/export-sysroot.sh [DESTINATION]\n"
-          "Export headers from evo-flight-lab:sealed, excluding uppercase case collisions.")
+          "Export headers from evo-nexlab:sealed, excluding uppercase case collisions.")
     sys.exit(0)
 if len(args) > 1 or (args and args[0].startswith("-")):
     fail("use --help or one destination directory")

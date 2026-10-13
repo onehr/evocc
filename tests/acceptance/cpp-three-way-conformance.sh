@@ -33,7 +33,7 @@ SOURCE_DATE_EPOCH="${C30_SOURCE_DATE_EPOCH:-1786492800}"
 PROD_HASH_FILES='crates/evocc-common/src/lib.rs crates/evocc-types/src/lib.rs crates/evocc-chir/src/lib.rs crates/evocc-lex/src/lib.rs crates/evocc-cpp/src/lib.rs crates/evocc-parser/src/lib.rs crates/evocc-egraph/src/lib.rs crates/evocc-proof/src/lib.rs crates/evocc-evoir/src/lib.rs crates/evocc-lower/src/lib.rs crates/evocc/src/main.rs Cargo.toml Cargo.lock'
 SUBJECT_REF='docker.io/library/debian@sha256:c94f5ddd41327aa2d4a7cfba7889056c02936182fd76a513fec6160c97181fc0'
 SUBJECT_MANIFEST='sha256:c94f5ddd41327aa2d4a7cfba7889056c02936182fd76a513fec6160c97181fc0'
-ORACLE_REF='evo-flight-lab:sealed'
+ORACLE_REF='evo-nexlab:sealed'
 
 mkdir -p "$RUN_DIR" "$RUN_DIR/evocc" "$RUN_DIR/gcc" "$RUN_DIR/clang" "$RUN_DIR/hand"
 : >"$RESULTS"

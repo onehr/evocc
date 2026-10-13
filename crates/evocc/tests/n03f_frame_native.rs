@@ -201,7 +201,7 @@ fn run(linux: bool) {
                 let output=Command::new("/usr/local/bin/container")
                     .args(["run","--rm","--platform","linux/arm64","--network","none","-v"])
                     .arg(format!("{}:/work",scratch.0.display()))
-                    .args(["evo-flight-lab:sealed","bash","-c",
+                    .args(["evo-nexlab:sealed","bash","-c",
                         "set -eu; cd /work; gcc-14 -O2 -fno-stack-protector -funwind-tables harness.c subject.s -o probe; ./probe; set +e; ./probe corrupt; code=$?; test \"$code\" -eq 77"])
                     .output().unwrap();
                 success(output);

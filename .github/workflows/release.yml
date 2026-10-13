@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v5
       - name: Export sealed Linux headers
         run: |
-          docker build --platform linux/arm64 -t evo-flight-lab:sealed -f .toolchain/Dockerfile.flight-lab .toolchain
+          docker build --platform linux/arm64 -t evo-nexlab:sealed -f .toolchain/Dockerfile.nexlab .toolchain
           tools/export-sysroot.sh
           tar -czf linux-headers.tar.gz sysroot contracts/sysroot-aarch64-unknown-linux-gnu.json
       - uses: actions/upload-artifact@v4

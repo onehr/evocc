@@ -17,7 +17,7 @@ def plan(root):
         tools={k: dict(path='/unit/'+k, sha256='0'*64) for k in
                ('compiler', 'checker', 'ir_backend', 'container', 'collector_python', 'census', 'lean')},
         guest_tools={k: '0'*64 for k in GUEST_TOOLS},
-        image=dict(name='evo-flight-lab:sealed', digest='0'*64), host={},
+        image=dict(name='evo-nexlab:sealed', digest='0'*64), host={},
         trees={k: dict(path=v, sha256='0'*64, files=1) for k, v in ROOTS.items()},
         files={k: '0'*64 for k in files},
         controls=dict(optimization=2, native_profiles=['checked', 'unchecked'], variants=['A', 'B'],
@@ -76,11 +76,18 @@ class PilotTests(unittest.TestCase):
                 lambda v: v['cases'][1]['flags'].append('-fwrapv'),
                 lambda v: v['guest_tools'].pop('/usr/bin/as'),
                 lambda v: v['files'].pop('tools/bench.py'),
+                lambda v: v['image'].update(name='evo-unregistered:sealed'),
             ):
                 changed = copy.deepcopy(m)
                 mutate(changed)
                 with self.assertRaises((ValueError, KeyError)):
                     validate_plan(changed, root)
+
+    def test_plans_frozen_before_the_tag_rename_still_validate(self):
+        with tempfile.TemporaryDirectory() as root:
+            m = plan(root)
+            m['image']['name'] = 'evo-flight-lab:sealed'
+            validate_plan(m, root)
 
     def test_source_tree_identity_ignores_products_not_headers(self):
         with tempfile.TemporaryDirectory() as root:

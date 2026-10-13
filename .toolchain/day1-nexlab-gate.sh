@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# End-to-end Day-1 flight gate: reconstruct, build, boot, and accept.
+# End-to-end Day-1 nexlab gate: reconstruct, build, boot, and accept.
 #
 # This orchestrator is what the different-absolute-path gate runs on a fresh
 # clone. Every step fails closed; a green result means the whole pipeline
@@ -22,8 +22,8 @@ bash .toolchain/bootstrap-workspace.sh
 printf '== 2/5 reference kernel builds (4 clean lanes) ==\n'
 bash .toolchain/build-reference-kernels.sh
 
-printf '== 3/5 flight initramfs ==\n'
-bash .toolchain/build-flight-initramfs.sh
+printf '== 3/5 nexlab initramfs ==\n'
+bash .toolchain/build-nexlab-initramfs.sh
 
 printf '== 4/5 boot flights (2 compilers x 2 CPU lanes) ==\n'
 boot_flight() {
@@ -44,4 +44,4 @@ find gcc-lane-1 gcc-lane-2 clang-lane-1 clang-lane-2 -type f \
   | sort | xargs /usr/bin/shasum -a 256 > artifact-manifest.sha256
 cd "$PROJECT_ROOT"
 
-bash tests/acceptance/flight-lab/run.sh
+bash tests/acceptance/nexlab/run.sh

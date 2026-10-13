@@ -199,7 +199,7 @@ def sealed_image() -> str:
 def verify_image(expected: str) -> None:
     # The local runtime takes a name, not a bare digest. Verify its resolution
     # around execution; the cache key is the immutable descriptor, never the tag.
-    result = subprocess.run([CONTAINER_BIN, "image", "inspect", "evo-flight-lab:sealed"],
+    result = subprocess.run([CONTAINER_BIN, "image", "inspect", "evo-nexlab:sealed"],
                             capture_output=True, text=True, check=True)
     actual = json.loads(result.stdout)[0]["configuration"]["descriptor"]["digest"]
     if actual != expected:
@@ -449,7 +449,7 @@ def assemble_batch(
             CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
             "-v", f"{asm_root}:/work/asm",
             "-v", f"{pristine}:/work/build:ro",
-            "evo-flight-lab:sealed", "/work/asm/assemble.sh",
+            "evo-nexlab:sealed", "/work/asm/assemble.sh",
         ],
         capture_output=True,
         text=True,
@@ -545,7 +545,7 @@ def defined_symbols(objects: list[tuple[str, Path]], work: Path) -> dict[str, li
     completed = subprocess.run(
         [
             CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
-            "-v", f"{work}:/work/nm", "evo-flight-lab:sealed", "/work/nm/symbols.sh",
+            "-v", f"{work}:/work/nm", "evo-nexlab:sealed", "/work/nm/symbols.sh",
         ],
         capture_output=True,
         text=True,
@@ -835,7 +835,7 @@ audit()
         '--cpus', str(jobs), '--memory', f'{max(4, 2 * jobs)}G',
         '-v', f'{src_root}:/work/src:ro', '-v', f'{out_root}:/work/out',
         '-v', f'{run_dir}:/work/evidence:ro', '-w', '/work/out',
-        'evo-flight-lab:sealed', 'python3', '-c', worker,
+        'evo-nexlab:sealed', 'python3', '-c', worker,
         '/work/evidence/' + path.name], capture_output=True, text=True, check=False)
     (run_dir / (prefix + '.log')).write_text(done.stdout + '\n--- stderr ---\n' + done.stderr)
     verify_image(image)
@@ -868,6 +868,27 @@ def save_state(k1_root: Path, units: list[str]) -> None:
     state_path(k1_root).write_text(json.dumps(sorted(units), indent=2) + "\n", encoding="utf-8")
 
 
+def reference_compile_identity(pristine: Path, reproducibility: dict) -> tuple[str, str]:
+    """Return the build user and host that the reference tree was built with.
+
+    A relink extends that tree. A different user or host regenerates compile.h,
+    and Kbuild then rebuilds init/version.o with GCC. The 2026-10-13 contract
+    changed the host from flightlab to nexlab; older reference trees keep
+    flightlab. A tree without compile.h uses the contract values.
+    """
+    header = pristine / "include/generated/compile.h"
+    if not header.is_file():
+        return reproducibility["KBUILD_BUILD_USER"], reproducibility["KBUILD_BUILD_HOST"]
+    text = header.read_text()
+    found = []
+    for macro in ("LINUX_COMPILE_BY", "LINUX_COMPILE_HOST"):
+        match = re.search(rf'^#define {macro}\s+"([^"\\\']+)"$', text, re.M)
+        if match is None:
+            raise ValueError(f"reference compile.h has no plain {macro}")
+        found.append(match[1])
+    return found[0], found[1]
+
+
 def relink(src_root: Path, out_root: Path, log: Path, jobs: int,
            targets: tuple[str, ...] = ("Image", "vmlinux")) -> int:
     """Run the reference make invocation, including its preparation target."""
@@ -878,13 +899,14 @@ def relink(src_root: Path, out_root: Path, log: Path, jobs: int,
     version = re.search(r'^#define UTS_VERSION "#([0-9]+) ', version_header.read_text(), re.M)
     if version is None:
         raise ValueError("reference UTS_VERSION has no build number")
+    user, host = reference_compile_identity(out_root.parent / "pristine", reproducibility)
     script = (
         "set -eu\n"
         "umask 022\n"
         f"export KBUILD_BUILD_TIMESTAMP='{reproducibility['KBUILD_BUILD_TIMESTAMP']}' "
         f"SOURCE_DATE_EPOCH='{reproducibility['SOURCE_DATE_EPOCH']}' "
-        f"KBUILD_BUILD_USER='{reproducibility['KBUILD_BUILD_USER']}' "
-        f"KBUILD_BUILD_HOST='{reproducibility['KBUILD_BUILD_HOST']}' "
+        f"KBUILD_BUILD_USER='{user}' "
+        f"KBUILD_BUILD_HOST='{host}' "
         f"KBUILD_BUILD_VERSION='{version[1]}'\n"
         f"make -C /work/src O=/work/out ARCH=arm64 -j{jobs} CC=gcc-14 "
         + ('KBUILD_MODULES=1 ' if ('modpost' in targets or 'modules.order' in targets)

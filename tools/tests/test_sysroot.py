@@ -35,7 +35,7 @@ class HeaderExportTests(unittest.TestCase):
         result = subprocess.run(["sh", str(SCRIPT), "--help"], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("DESTINATION", result.stdout)
-        self.assertIn("evo-flight-lab:sealed", result.stdout)
+        self.assertIn("evo-nexlab:sealed", result.stdout)
 
     def test_missing_header_and_changed_bytes_fail_the_contract(self):
         with tempfile.TemporaryDirectory() as directory:

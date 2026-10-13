@@ -28,7 +28,7 @@ use object_capture::{memory_case_ids, CaptureConfig, ObjectCapture};
 
 /// The runtime and image the build-environment contract seals.
 const CONTAINER_BIN: &str = "/usr/local/bin/container";
-const IMAGE: &str = "evo-flight-lab:sealed";
+const IMAGE: &str = "evo-nexlab:sealed";
 
 fn workspace() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -58,7 +58,7 @@ fn container() -> Result<String, String> {
         ));
     }
     let text = String::from_utf8_lossy(&listed.stdout).into_owned();
-    if !text.contains("evo-flight-lab") {
+    if !text.contains("evo-nexlab") {
         return Err(format!("{IMAGE} is not present"));
     }
     Ok(IMAGE.to_owned())

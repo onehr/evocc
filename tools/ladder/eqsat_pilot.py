@@ -47,6 +47,9 @@ LEAN_IMPORTS = tuple('lean/.lake/build/lib/lean/'+p[len('lean/'):-len('.lean')]+
 GUEST_TOOLS = ('/usr/bin/gcc-14', '/usr/bin/clang-19', '/usr/bin/as', '/usr/bin/ld',
                '/usr/bin/python3', '/usr/bin/opt-19', '/usr/bin/strip',
                '/usr/lib/aarch64-linux-gnu/libc.so.6')
+# A plan records the image tag and its digest. The digest identifies the image.
+# Plans frozen before the 2026-10-13 tag rename record the old tag.
+SEALED_IMAGES = ('evo-nexlab:sealed', 'evo-flight-lab:sealed')
 ZLIB = 'adler32.c crc32.c deflate.c infback.c inffast.c inflate.c inftrees.c trees.c zutil.c compress.c uncompr.c'.split()
 
 
@@ -105,7 +108,7 @@ def validate_plan(m, root):
     for value in m['guest_tools'].values():
         sha256_identity(value)
     keys(m['image'], 'name digest')
-    require(m['image']['name'] == 'evo-flight-lab:sealed', 'unregistered image')
+    require(m['image']['name'] in SEALED_IMAGES, 'unregistered image')
     sha256_identity(m['image']['digest'])
     keys(m['trees'], ' '.join(ROOTS))
     for name, item in m['trees'].items():

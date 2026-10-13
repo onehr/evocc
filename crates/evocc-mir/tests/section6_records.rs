@@ -798,7 +798,7 @@ fn records_cross_the_boundary_on_darwin() {
 // ---------------------------------------------------------------------------
 
 const CONTAINER_BIN: &str = "/usr/local/bin/container";
-const IMAGE: &str = "evo-flight-lab:sealed";
+const IMAGE: &str = "evo-nexlab:sealed";
 
 fn container_available() -> bool {
     if !std::path::Path::new(CONTAINER_BIN).exists() {
@@ -812,7 +812,7 @@ fn container_available() -> bool {
             return false;
         }
     };
-    if !String::from_utf8_lossy(&listed.stdout).contains("evo-flight-lab") {
+    if !String::from_utf8_lossy(&listed.stdout).contains("evo-nexlab") {
         println!("skipped={IMAGE} is not present");
         return false;
     }

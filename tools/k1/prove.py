@@ -78,7 +78,7 @@ def container_readelf(mounts: dict[str, Path], paths: list[str]) -> str:
     )
     completed = subprocess.run(
         [CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
-         *volumes, "evo-flight-lab:sealed", "sh", "-c", script],
+         *volumes, "evo-nexlab:sealed", "sh", "-c", script],
         capture_output=True,
         text=True,
         check=False,
@@ -221,7 +221,7 @@ def main() -> int:
 
     membership = subprocess.run(
         [CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
-         "-v", f"{out_root}:/work/out:ro", "evo-flight-lab:sealed",
+         "-v", f"{out_root}:/work/out:ro", "evo-nexlab:sealed",
          "sh", "-c", "cd /work/out && ar t vmlinux.a"],
         capture_output=True, text=True, check=False,
     )
@@ -230,7 +230,7 @@ def main() -> int:
     ident_probe = subprocess.run(
         [CONTAINER_BIN, "run", "--rm", "--platform", "linux/arm64", "--network", "none",
          "-v", f"{out_root}:/work/out:ro", "-v", f"{pristine}:/work/ref:ro",
-         "evo-flight-lab:sealed", "sh", "-c",
+         "evo-nexlab:sealed", "sh", "-c",
          "readelf -p .comment /work/out/vmlinux; echo '@@REF'; readelf -p .comment /work/ref/vmlinux"],
         capture_output=True, text=True, check=False,
     )

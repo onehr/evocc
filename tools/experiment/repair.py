@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 URL = "https://openrouter.ai/api/v1/chat/completions"
-CONTAINER, IMAGE = "/usr/local/bin/container", "evo-flight-lab:sealed"
+CONTAINER, IMAGE = "/usr/local/bin/container", "evo-nexlab:sealed"
 EVO = ROOT / "target/frontend/release/evo"
 ENV = {"PATH": "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", "TMPDIR": tempfile.gettempdir()}
 LIMIT, MAX_TOKENS = 131072, 4096

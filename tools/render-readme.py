@@ -7,7 +7,7 @@ Run from the repository root after a release build:
 
 The highlights figure runs four short terminal sessions and draws their real output. Each
 session runs in one shell, in a temporary directory. The GCC session runs in the sealed
-`evo-flight-lab:sealed` container. The pipeline figure and the paper's agent-effort chart have
+`evo-nexlab:sealed` container. The pipeline figure and the paper's agent-effort chart have
 a light and a dark variant.
 """
 import html
@@ -24,7 +24,7 @@ OUT = ROOT / "docs" / "images" / "readme"
 EXAMPLES = ROOT / "examples"
 BIN = ROOT / "target" / "frontend" / "release"
 ZLIB = ROOT / ".build" / "ladder" / "zlib" / "zlib-1.3.2.tar.gz"
-GCC_IMAGE = "evo-flight-lab:sealed"
+GCC_IMAGE = "evo-nexlab:sealed"
 
 MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"

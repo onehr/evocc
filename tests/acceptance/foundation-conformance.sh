@@ -50,7 +50,7 @@ SCRIPT_REQUIRED_IDS='kernel_contract_has_no_placeholders
 production_source_root_hash_matches
 workspace_tests_clippy_fmt_pass
 arena_miri_conformance
-flight_lab_acceptance
+nexlab_acceptance
 compiler_capabilities_are_red
 oracle_independence_no_compilers
 floating_tag_rejection
@@ -229,52 +229,52 @@ test_arena_miri_conformance() {
 }
 
 # ---------------------------------------------------------------------------
-# Gate 5: Flight-lab acceptance
+# Gate 5: Nexlab acceptance
 # ---------------------------------------------------------------------------
 
-test_flight_lab_acceptance() {
-  local flight_script="$SCRIPT_DIR/flight-lab/run.sh"
-  if [ ! -x "$flight_script" ]; then
-    record_result flight_lab_acceptance FAIL \
-      "flight-lab/run.sh is missing or not executable" ''
+test_nexlab_acceptance() {
+  local nexlab_script="$SCRIPT_DIR/nexlab/run.sh"
+  if [ ! -x "$nexlab_script" ]; then
+    record_result nexlab_acceptance FAIL \
+      "nexlab/run.sh is missing or not executable" ''
     return
   fi
 
-  local flight_evidence="$PROJECT_ROOT/.evidence/flight-lab"
-  local before="$RAW_DIR/gate5-flight-before.txt"
-  local after="$RAW_DIR/gate5-flight-after.txt"
-  local created="$RAW_DIR/gate5-flight-created.txt"
-  find "$flight_evidence" -mindepth 2 -maxdepth 2 -name summary.json -type f \
+  local nexlab_evidence="$PROJECT_ROOT/.evidence/nexlab"
+  local before="$RAW_DIR/gate5-nexlab-before.txt"
+  local after="$RAW_DIR/gate5-nexlab-after.txt"
+  local created="$RAW_DIR/gate5-nexlab-created.txt"
+  find "$nexlab_evidence" -mindepth 2 -maxdepth 2 -name summary.json -type f \
     2>/dev/null | sort >"$before"
 
-  bash "$flight_script" >"$RAW_DIR/gate5-flight.stdout" 2>"$RAW_DIR/gate5-flight.stderr"
-  local flight_rc=$?
-  find "$flight_evidence" -mindepth 2 -maxdepth 2 -name summary.json -type f \
+  bash "$nexlab_script" >"$RAW_DIR/gate5-nexlab.stdout" 2>"$RAW_DIR/gate5-nexlab.stderr"
+  local nexlab_rc=$?
+  find "$nexlab_evidence" -mindepth 2 -maxdepth 2 -name summary.json -type f \
     2>/dev/null | sort >"$after"
   comm -13 "$before" "$after" >"$created"
 
   local created_count
   created_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$created")"
-  local flight_summary=''
+  local nexlab_summary=''
   if [ "$created_count" -eq 1 ]; then
-    flight_summary="$(sed -n '1p' "$created")"
+    nexlab_summary="$(sed -n '1p' "$created")"
   fi
 
-  if [ "$flight_rc" -ne 0 ] || [ "$created_count" -ne 1 ] || \
-     [ ! -f "$flight_summary" ] || \
+  if [ "$nexlab_rc" -ne 0 ] || [ "$created_count" -ne 1 ] || \
+     [ ! -f "$nexlab_summary" ] || \
      ! "$JQ" -e '
        type == "object" and
        (.runId | type == "string" and length > 0) and
        .overall == "PASS" and
        (.results | type == "array") and
        all(.results[]; .status == "PASS")
-     ' "$flight_summary" >/dev/null 2>&1; then
-    record_result flight_lab_acceptance FAIL \
-      "flight-lab must return zero and create exactly one current PASS summary; rc=$flight_rc created=$created_count" \
-      "raw/gate5-flight-created.txt"
+     ' "$nexlab_summary" >/dev/null 2>&1; then
+    record_result nexlab_acceptance FAIL \
+      "nexlab must return zero and create exactly one current PASS summary; rc=$nexlab_rc created=$created_count" \
+      "raw/gate5-nexlab-created.txt"
   else
-    record_result flight_lab_acceptance PASS \
-      "flight-lab created one causally joined PASS summary" "$flight_summary"
+    record_result nexlab_acceptance PASS \
+      "nexlab created one causally joined PASS summary" "$nexlab_summary"
   fi
 }
 
@@ -328,7 +328,7 @@ test_compiler_capabilities_are_red() {
 
 test_oracle_independence_no_compilers() {
   # The SUBJECT lane uses the base debian:13-slim image (compiler-free).
-  # The ORACLE lane (evo-flight-lab:sealed) has gcc/clang — that's expected.
+  # The ORACLE lane (evo-nexlab:sealed) has gcc/clang — that's expected.
   local base_image_ref="docker.io/library/debian@sha256:c94f5ddd41327aa2d4a7cfba7889056c02936182fd76a513fec6160c97181fc0"
   local scan_output
   scan_output="$("$CONTAINER_BIN" run --rm --platform linux/arm64 --network none "$base_image_ref" \
@@ -1273,7 +1273,7 @@ test_kernel_contract_has_no_placeholders
 test_production_source_root_hash_matches
 test_workspace_tests_clippy_fmt_pass
 test_arena_miri_conformance
-test_flight_lab_acceptance
+test_nexlab_acceptance
 test_compiler_capabilities_are_red
 test_oracle_independence_no_compilers
 test_floating_tag_rejection

@@ -370,7 +370,7 @@ stay trusted: the native run tests them but does not prove them. Receipt:
 
 The script also cross-checks each entry with gcc-14 `-O0` and scans the output statically for reads
 of the upper 32 bits of 32-bit arguments. `WORK_DIR` must be outside the repository. The run needs
-the sealed image `evo-flight-lab:sealed` and the Apple Container runtime. Without `--evocc` and
+the sealed image `evo-nexlab:sealed` and the Apple Container runtime. Without `--evocc` and
 `--evocc-checker`, it uses the debug builds `target/frontend/debug/evocc` and
 `target/frontend/debug/evocc-checker`.
 
@@ -683,7 +683,7 @@ The script references existing evidence; it does not copy it into another archiv
 that the selected gates are PASS or evidenced PROFILE_CLEAN, **not necessarily that every original
 passed**. Exit 1 means measured gaps/failures. Exit 2 means a runner, usage or evidence error.
 
-Native lanes require the sealed flight-lab image and the pinned source/build inputs. Do not run
+Native lanes require the sealed nexlab image and the pinned source/build inputs. Do not run
 legacy lane scripts at the same time against the same build directories. For kernel work, use the
 existing trees and `--low-disk`; do not make duplicate workspaces. Partial mixed-link coverage or
 reduced `--programs` experiments do not close a full milestone.

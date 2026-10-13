@@ -140,7 +140,7 @@ fn selected_c_shapes_execute_against_gcc_and_clang_on_linux() {
     let output = Command::new("/usr/local/bin/container")
         .args(["run", "--rm", "--platform", "linux/arm64", "--network", "none", "--cpus", "2", "--memory", "3G", "--volume"])
         .arg(format!("{}:/work", dir.canonicalize().unwrap().display()))
-        .args(["evo-flight-lab:sealed", "sh", "-c", "set -eu; cd /work; for cc in gcc-14 clang-19; do $cc --version | head -n 1; $cc -O2 off.s controls.s combined.s reference.c harness.c -o probe; ./probe; done"])
+        .args(["evo-nexlab:sealed", "sh", "-c", "set -eu; cd /work; for cc in gcc-14 clang-19; do $cc --version | head -n 1; $cc -O2 off.s controls.s combined.s reference.c harness.c -o probe; ./probe; done"])
         .output().unwrap();
     println!("{}", String::from_utf8_lossy(&output.stdout));
     assert!(

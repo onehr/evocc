@@ -60,7 +60,7 @@ BUILD = ROOT / ".build" / "ladder"
 EVIDENCE = ROOT / ".evidence" / "ladder" / "csmith"
 RECEIPT = ROOT / "tests" / "contracts" / "ladder-csmith-receipt.json"
 REDUCTIONS = ROOT / "tests" / "fixtures" / "csmith-reductions"
-IMAGE = "evo-flight-lab:sealed"
+IMAGE = "evo-nexlab:sealed"
 TARGET = "aarch64-unknown-linux-gnu"
 
 PIN = {

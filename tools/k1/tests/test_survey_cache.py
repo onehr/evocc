@@ -745,6 +745,32 @@ class CacheKeyTest(unittest.TestCase):
             self.assertIn('obj=init include/generated/utsversion.h init/utsversion-tmp.h', script)
             self.assertNotIn('modpost', script, 'generated module C follows final subject inputs')
 
+    def test_relinks_keep_the_reference_build_user_and_host(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            out = root / "out"
+            out.mkdir()
+            generated = root / "pristine/include/generated"
+            generated.mkdir(parents=True)
+            (generated / "utsversion.h").write_text('#define UTS_VERSION "#1 SMP PREEMPT fixed date"\n')
+            completed = SimpleNamespace(returncode=0, stdout="", stderr="")
+            contract = json.loads((substitute.REPO_ROOT / "contracts/build-environment.json").read_text())
+            host = contract["reproducibility"]["KBUILD_BUILD_HOST"]
+            with patch.object(substitute.subprocess, "run", return_value=completed) as run:
+                self.assertEqual(substitute.relink(root / "src", out, root / "link.log", 2), 0)
+            self.assertIn(f"KBUILD_BUILD_HOST='{host}'", run.call_args.args[0][-1],
+                          'a tree without compile.h uses the contract')
+            # A reference tree built before the 2026-10-13 rename keeps its host.
+            header = generated / "compile.h"
+            header.write_text('#define LINUX_COMPILE_BY\t"evo"\n#define LINUX_COMPILE_HOST\t"flightlab"\n')
+            with patch.object(substitute.subprocess, "run", return_value=completed) as run:
+                self.assertEqual(substitute.relink(root / "src", out, root / "link.log", 2), 0)
+            self.assertIn("KBUILD_BUILD_USER='evo' KBUILD_BUILD_HOST='flightlab'",
+                          run.call_args.args[0][-1])
+            header.write_text('#define LINUX_COMPILE_BY\t"evo"\n#define LINUX_COMPILE_HOST\t"lab\'s"\n')
+            with self.assertRaisesRegex(ValueError, "LINUX_COMPILE_HOST"):
+                substitute.relink(root / "src", out, root / "link.log", 2)
+
     def test_prepare_fixed_point_ignores_only_metadata_not_changed_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

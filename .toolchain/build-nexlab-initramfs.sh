@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build the flight-lab initramfs: static reference init plus the minimal
+# Build the nexlab initramfs: static reference init plus the minimal
 # device and mount-point skeleton, packed deterministically with the kernel's
 # own gen_init_cpio and the frozen timestamp.
 
@@ -33,7 +33,7 @@ nod /dev/null 666 0 0 c 1 3
 EOF
 
 container run --rm --platform linux/arm64 --network none \
-  -v "$PROJECT_ROOT/.toolchain/flight-lab-init.c:/work/init.c:ro" \
+  -v "$PROJECT_ROOT/.toolchain/nexlab-init.c:/work/init.c:ro" \
   -v "$RAMFS:/work/ramfs" \
   -v "$GEN_INIT_CPIO:/work/bin/gen_init_cpio:ro" \
   -w /work "$sealed_image" sh -c "

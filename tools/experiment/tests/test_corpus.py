@@ -126,7 +126,7 @@ class CorpusExecutionTests(unittest.TestCase):
             p = subprocess.run(["container", "run", "--rm", "--platform", "linux/arm64",
                                 "--network", "none", "--cpus", "2", "--memory", "1G",
                                 "-v", f"{ITEMS}:/corpus:ro", "-v", f"{work}:/check:ro",
-                                "evo-flight-lab:sealed", "python3", "/check/check.py"],
+                                "evo-nexlab:sealed", "python3", "/check/check.py"],
                                capture_output=True, text=True, timeout=300)
         self.assertEqual(p.returncode, 0, p.stderr)
         native = json.loads(p.stdout)

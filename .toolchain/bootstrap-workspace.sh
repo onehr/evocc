@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Reconstruct the flight-lab workspace from the tracked contracts on a fresh
+# Reconstruct the nexlab workspace from the tracked contracts on a fresh
 # checkout. Everything fetched here is verified against contract digests
 # before use; nothing is trusted because it "looks right".
 #
@@ -84,7 +84,7 @@ if ! container image list --format json 2>/dev/null | \
      >/dev/null 2>&1; then
   printf 'bootstrap: sealed image absent, rebuilding from the tracked Dockerfile\n'
   container build --platform linux/arm64 --progress plain --no-cache \
-    -f "$PROJECT_ROOT/.toolchain/Dockerfile.flight-lab" \
+    -f "$PROJECT_ROOT/.toolchain/Dockerfile.nexlab" \
     -t "$sealed_tag" "$PROJECT_ROOT/.toolchain" >/dev/null
 fi
 printf 'bootstrap: sealed image present\n'

@@ -1,4 +1,4 @@
-// Flight-lab reference init.
+// Nexlab reference init.
 //
 // This is the PID 1 payload for Day-1 reference kernel boot flights. It is
 // compiled with the sealed GCC toolchain and packed into a minimal initramfs;

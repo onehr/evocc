@@ -2,9 +2,9 @@
 
 # Shared helpers for the mixed-link measurement scripts.
 #
-# The QEMU recipe and the boot predicate are the ones the day-one flight lab
+# The QEMU recipe and the boot predicate are the ones the day-one nexlab
 # harness pinned (.toolchain/boot-reference-kernel.sh and
-# tests/acceptance/flight-lab/run.sh). They are reproduced here rather than
+# tests/acceptance/nexlab/run.sh). They are reproduced here rather than
 # reused because the original appends a receipt into .build/reference, which
 # is protected evidence this lane must never write into.
 

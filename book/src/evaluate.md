@@ -20,7 +20,7 @@ A program lane downloads a pinned release of the program and checks its digest. 
 program with EvoCC and runs the program's own tests. A lane does not change the tests of the
 program to make them pass.
 
-The lanes run the tests in a sealed Linux image, `evo-flight-lab:sealed`, with no network. GCC 14.2
+The lanes run the tests in a sealed Linux image, `evo-nexlab:sealed`, with no network. GCC 14.2
 and Clang 19.1 in the same image are the reference compilers. On macOS, the image runs in the Apple
 container runtime. `contracts/build-environment.json` pins the image, and `.toolchain/` holds the
 files that describe and check it.
