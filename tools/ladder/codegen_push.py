@@ -86,7 +86,8 @@ def run(root, plan, updates, *, execute=True):
                       coverage(r)['status'] == 'OBSERVED']
         current = candidates[0]
         for retry in candidates[1:]:
-            sizes = lambda row: [{k: v for k, v in unit.items() if k != 'compile_wall_ns'} for unit in row['units']]
+            def sizes(row):
+                return [{k: v for k, v in unit.items() if k != 'compile_wall_ns'} for unit in row['units']]
             require(sizes(retry) == sizes(current) and retry['steps'] == current['steps'],
                     'inconsistent repeated push measurements; select an explicit disposition')
         ancestors = git(root, 'rev-list', '--first-parent', commit).splitlines()[1:]

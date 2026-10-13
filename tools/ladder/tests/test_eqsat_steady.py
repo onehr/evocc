@@ -29,7 +29,8 @@ def synthetic(mode='AA'):
         protocol=PROTOCOL, pmu='NOT_MEASURED', comparisons=[], probes=[], admissions=[], attempts=[])
     streams = {}
     def execution(t, v, p, n, stage):
-        i = len(g['attempts']); program = t['variants'][v][p]
+        i = len(g['attempts'])
+        program = t['variants'][v][p]
         value = dict(result='validated', work=t['work'], iterations=n, elapsed_ns=2000000000)
         raw = canonical(value)+b'\n'
         identity = native_identity(program['binding'], p, 'linux-aarch64', request['backend_digest'],
@@ -40,12 +41,14 @@ def synthetic(mode='AA'):
             storage_watch='BATCH_BOUNDARIES_ONLY_PREDECLARED_CHILD_ENVELOPE', result_contract='STEADY_TYPED_RESULT_V1',
             resources=dict(user_ns=1, system_ns=1, peak_rss_bytes=1024, peak_rss_raw=1, rss_unit='bytes',
                 scope='wait4-direct-child-including-waited-descendants', wall_scope='spawn-to-stdio-drain'))
-        streams['guest/'+row['stdout']] = raw; streams['guest/'+row['stderr']] = b''
+        streams['guest/'+row['stdout']] = raw
+        streams['guest/'+row['stderr']] = b''
         g['attempts'].append(row)
         return dict(attempt=i, value=value, identity=identity)
     def admit(t, v, n, stage):
         checked = execution(t, v, 'checked', n, stage)
-        row = g['attempts'][checked['attempt']]; p = t['variants'][v]['unchecked']
+        row = g['attempts'][checked['attempt']]
+        p = t['variants'][v]['unchecked']
         identity = native_identity(p['binding'], 'unchecked', 'linux-aarch64', request['backend_digest'],
                                   p['executable_digest'], checked['identity']['input_digest'])
         a = admit_unchecked(checked['identity'], identity, row,
@@ -88,8 +91,11 @@ class SteadyCaptureHeaderTests(unittest.TestCase):
         from pathlib import Path
         from tempfile import TemporaryDirectory
         with TemporaryDirectory() as temp:
-            root = Path(temp); directory = root/'capture'; directory.mkdir()
-            contracts = root/'tests/contracts'; contracts.mkdir(parents=True)
+            root = Path(temp)
+            directory = root/'capture'
+            directory.mkdir()
+            contracts = root/'tests/contracts'
+            contracts.mkdir(parents=True)
             raw = canonical(dict(mode=mode))+b'\n'
             (contracts/'steady.json').write_bytes(raw)
             (directory/'manifest.json').write_bytes(raw)
@@ -134,8 +140,11 @@ class SteadyProtocolTests(unittest.TestCase):
         from tempfile import TemporaryDirectory
         from tools.ladder.eqsat_pilot import ROOTS
         with TemporaryDirectory() as temp:
-            root = Path(temp); complete = root/'complete'; complete.mkdir()
-            historical = root/'historical'; historical.mkdir()
+            root = Path(temp)
+            complete = root/'complete'
+            complete.mkdir()
+            historical = root/'historical'
+            historical.mkdir()
             tools = {k: dict(path='tool', sha256='0'*64) for k in
                 ('container', 'collector_python', 'checker', 'historical_checker', 'ir_backend', 'census')}
             (complete/'manifest.json').write_bytes(canonical(dict(source=dict(directory='historical'),
@@ -153,7 +162,9 @@ class SteadyProtocolTests(unittest.TestCase):
                     units=[dict(chains=dict(A=chain), objects=dict(A=objects))]))
                 inputs.extend([chain+'/output.evo', reference, *objects.values(), ROOTS[case]+'/public.h'])
             for name in (*FILES, *inputs):
-                p = root/name; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(name.encode())
+                p = root/name
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(name.encode())
             with patch('tools.ladder.eqsat_steady_plan.build_population', return_value=programs), \
                  patch('tools.ladder.eqsat_steady_plan.subprocess.check_output', return_value='0'*40), \
                  patch('tools.ladder.eqsat_steady_plan.host_identity', return_value={'host': 'test'}), \
@@ -169,16 +180,22 @@ class SteadyProtocolTests(unittest.TestCase):
         from pathlib import Path
         from tempfile import TemporaryDirectory
         with TemporaryDirectory() as temp:
-            root = Path(temp); complete = root/'complete'; complete.mkdir()
-            historical = root/'historical'; historical.mkdir()
+            root = Path(temp)
+            complete = root/'complete'
+            complete.mkdir()
+            historical = root/'historical'
+            historical.mkdir()
             (complete/'manifest.json').write_bytes(canonical(dict(source=dict(directory='historical'))))
             (complete/'audit.json').write_bytes(canonical(dict(status='DETERMINISTIC_CAPTURE_CONSISTENT',
                 policy_evaluations=1024, verified_chains=6144, unattempted_templates=0)))
             code, cases = {}, []
             for case in ('zlib', 'zstd', 'cjson'):
-                source = case+'.c'; cases.append(dict(id=case, sources=[source], subject_sources=[source]))
-                chain = historical/case/'00-A-chain'; chain.mkdir(parents=True)
-                ir = case.encode(); identity = digest(ir)
+                source = case+'.c'
+                cases.append(dict(id=case, sources=[source], subject_sources=[source]))
+                chain = historical/case/'00-A-chain'
+                chain.mkdir(parents=True)
+                ir = case.encode()
+                identity = digest(ir)
                 record = dict(schema='evocc-identity-chain-v1', mode='eqsat-off',
                     publication='IDENTITY_VERIFIED', attempted_transactions=0, transactions=[],
                     input_digest=identity, output_digest=identity,
@@ -188,7 +205,8 @@ class SteadyProtocolTests(unittest.TestCase):
                     (chain/name).write_bytes(ir)
                 binding = bind_bundle(chain)
                 for profile in ('checked', 'unchecked'):
-                    obj = complete/(case+'-'+profile+'.o'); obj.write_bytes(b'synthetic object')
+                    obj = complete/(case+'-'+profile+'.o')
+                    obj.write_bytes(b'synthetic object')
                     key = digest(canonical((binding['ir_digest'], profile)))
                     code[key] = dict(ir_digest=binding['ir_digest'], profile=profile,
                                      object=obj.name, object_digest=digest(obj.read_bytes()))
@@ -222,7 +240,9 @@ class SteadyProtocolTests(unittest.TestCase):
             paths = ('complete/manifest.json', 'complete/receipt.json', 'complete/audit.json', 'historical/manifest.json',
                      'ref.o', 'chain/output.evo', 'subject.o', 'include/public.h')
             for p in paths:
-                file = root/p; file.parent.mkdir(exist_ok=True); file.write_bytes(p.encode())
+                file = root/p
+                file.parent.mkdir(exist_ok=True)
+                file.write_bytes(p.encode())
             (root/'complete/manifest.json').write_bytes(canonical(dict(source=dict(directory='historical'))))
             m = dict(source=dict(directory='complete', files={p: digest((root/p).read_bytes()) for p in paths}))
             programs = [dict(case='cjson', reference_objects=['ref.o'], units=[dict(
@@ -230,7 +250,8 @@ class SteadyProtocolTests(unittest.TestCase):
             with patch('tools.ladder.eqsat_steady.ROOTS', dict(cjson='include')):
                 check_build_inputs(m, root, programs)
                 for p in paths:
-                    changed = copy.deepcopy(m); changed['source']['files'].pop(p)
+                    changed = copy.deepcopy(m)
+                    changed['source']['files'].pop(p)
                     with self.subTest(path=p), self.assertRaisesRegex(ValueError, 'unbound'):
                         check_build_inputs(changed, root, programs)
 
@@ -238,7 +259,9 @@ class SteadyProtocolTests(unittest.TestCase):
         from pathlib import Path
         from tempfile import TemporaryDirectory
         with TemporaryDirectory() as temp:
-            root = Path(temp); source = root/'capture'; source.mkdir()
+            root = Path(temp)
+            source = root/'capture'
+            source.mkdir()
             (source/'receipt.json').write_bytes(b'complete\n')
             self.assertEqual(owned_files(source, root), {'capture/receipt.json': digest(b'complete\n')})
             (source/'receipt.json.pending').write_bytes(b'incomplete\n')
@@ -270,7 +293,8 @@ class SteadyProtocolTests(unittest.TestCase):
         for mutate in (lambda x: x['comparisons'].pop(),
                        lambda x: x['comparisons'][0].update(status='INCONCLUSIVE_AA'),
                        lambda x: x.update(status='FAILED')):
-            changed = copy.deepcopy(g); mutate(changed)
+            changed = copy.deepcopy(g)
+            mutate(changed)
             with self.assertRaises(ValueError):
                 admitted_calibration(changed)
 
@@ -291,7 +315,8 @@ class SteadyProtocolTests(unittest.TestCase):
                        lambda x: x['optimizer']['cost_weights'].__setitem__(2, 2),
                        lambda x: x['optimizer']['schedule'].update(max_transactions=1),
                        lambda x: x['tools'].pop('census')):
-            changed = copy.deepcopy(m); mutate(changed)
+            changed = copy.deepcopy(m)
+            mutate(changed)
             with self.assertRaises(ValueError):
                 validate_plan(changed, 'AA')
 
@@ -336,7 +361,8 @@ class SteadyAuditMutationTests(unittest.TestCase):
             lambda x: x['probes'][0].update(iterations=4096),
             lambda x: x['attempts'].append(copy.deepcopy(x['attempts'][0])),
         ):
-            changed = copy.deepcopy(g); mutate(changed)
+            changed = copy.deepcopy(g)
+            mutate(changed)
             with self.subTest(mutate=mutate), self.assertRaises((ValueError, KeyError)):
                 audit_guest(changed, request, streams.__getitem__)
 

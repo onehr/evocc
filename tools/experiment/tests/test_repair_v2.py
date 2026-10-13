@@ -272,7 +272,8 @@ class V2Tests(unittest.TestCase):
 
     def test_scoring_timeout_is_recorded_and_the_run_continues(self):
         def score(source, item):
-            if item.name == "item-00": raise repair.Failure("infrastructure_timeout", [dict(argv=["container"], exit_code=None)])
+            if item.name == "item-00":
+                raise repair.Failure("infrastructure_timeout", [dict(argv=["container"], exit_code=None)])
             return True, []
         def request(payload, key, events, **kwargs):
             events.append(dict(http_status=200, response="{}"))
@@ -293,10 +294,12 @@ class V2Tests(unittest.TestCase):
         lock, active, peak, started = repair.threading.Lock(), [0], [0], []
         def request(payload, key, events, **kwargs):
             with lock:
-                active[0] += 1; peak[0] = max(peak[0], active[0])
+                active[0] += 1
+                peak[0] = max(peak[0], active[0])
                 started.append(payload["messages"][1]["content"].split("```c\n")[1].split("*/")[0])
             repair.time.sleep(0.1)
-            with lock: active[0] -= 1
+            with lock:
+                active[0] -= 1
             events.append(dict(http_status=200, response="{}"))
             return self.response()
         result, receipt, names = self.run_many(8, request, parallel=4)
@@ -559,7 +562,8 @@ class V2Tests(unittest.TestCase):
 
     def resume_fixture(self, root):
         previous, output = root / "previous", root / "output"
-        previous.mkdir(); output.mkdir()
+        previous.mkdir()
+        output.mkdir()
         order = [dict(item=item, model=model, repetition=rep, condition="c0")
                  for rep in (1, 2, 3) for item in ("adler", "bitstream")
                  for model in ("first", "second")]

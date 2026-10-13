@@ -79,21 +79,28 @@ class ReauditContractTests(unittest.TestCase):
                 return subprocess.check_output(['git', '-c', 'user.name=Fixture', '-c',
                     'user.email=fixture@example.invalid', *args], cwd=root, stderr=subprocess.DEVNULL)
             def commit():
-                git('add', '.'); git('commit', '-qm', 'fixture')
+                git('add', '.')
+                git('commit', '-qm', 'fixture')
                 return git('rev-parse', 'HEAD').decode().strip()
             git('init', '-q')
-            m = plan(); raw = b'original manifest'; receipt = b'original receipt'
+            m = plan()
+            raw = b'original manifest'
+            receipt = b'original receipt'
             for name in REAUDIT_FILES:
-                path = root/name; path.parent.mkdir(parents=True, exist_ok=True)
+                path = root/name
+                path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b'original code')
                 m['files'][name] = digest(path.read_bytes())
             m['implementation_commit'] = commit()
             for name in REAUDIT_FILES:
                 (root/name).write_bytes(b'repaired code')
             revision = commit()
-            capture = root/'.evidence/original'; capture.mkdir(parents=True)
-            (capture/'manifest.json').write_bytes(raw); (capture/'receipt.json').write_bytes(receipt)
-            path = root/'tests/contracts/reaudit.json'; path.parent.mkdir(parents=True)
+            capture = root/'.evidence/original'
+            capture.mkdir(parents=True)
+            (capture/'manifest.json').write_bytes(raw)
+            (capture/'receipt.json').write_bytes(receipt)
+            path = root/'tests/contracts/reaudit.json'
+            path.parent.mkdir(parents=True)
             s = dict(schema='evocc-r02-completion-reaudit-v1', purpose=REAUDIT_PURPOSE,
                 implementation_commit=revision, manifest_sha256=digest(raw),
                 capture=dict(directory='.evidence/original', receipt_sha256=digest(receipt)),
@@ -114,7 +121,8 @@ class ReauditContractTests(unittest.TestCase):
                 reaudit_files(path, root, m, raw, capture)
             (capture/'manifest.json').write_bytes(raw)
             s['implementation_commit'] = m['implementation_commit']
-            path.write_text(json.dumps(s)); commit()
+            path.write_text(json.dumps(s))
+            commit()
             with self.assertRaisesRegex(ValueError, 'declared commit'):
                 reaudit_files(path, root, m, raw, capture)
 
@@ -139,7 +147,8 @@ class ReauditContractTests(unittest.TestCase):
             lambda x: x['repairs'][REAUDIT_FILES[0]].update(after_sha256='0'*64),
             lambda x: x['repairs'][REAUDIT_FILES[0]].update(after_sha256='not-a-digest'),
         ):
-            changed = copy.deepcopy(s); mutate(changed)
+            changed = copy.deepcopy(s)
+            mutate(changed)
             with self.assertRaises(ValueError):
                 validate_reaudit(changed, m, '2'*64, '.evidence/original', '3'*64)
 
@@ -147,8 +156,11 @@ class ReauditContractTests(unittest.TestCase):
 class ContentAddressedEvidenceTests(unittest.TestCase):
     def test_equal_artifacts_keep_all_names_and_exact_bytes_without_copies(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp); bundle = root/'bundle'; store = root/'store'
-            bundle.mkdir(); store.mkdir()
+            root = Path(temp)
+            bundle = root/'bundle'
+            store = root/'store'
+            bundle.mkdir()
+            store.mkdir()
             for name in ('input.evo', 'output.evo', '000.before.evo'):
                 (bundle/name).write_bytes(b'canonical IR\n')
             (bundle/'chain.json').write_bytes(b'chain identity\n')
@@ -165,17 +177,24 @@ class ContentAddressedEvidenceTests(unittest.TestCase):
 
     def test_corrupt_store_does_not_replace_the_original_evidence(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp); store = root/'store'; store.mkdir()
-            file = root/'output.evo'; file.write_bytes(b'canonical')
-            target = store/digest(b'canonical'); target.write_bytes(b'tampered')
+            root = Path(temp)
+            store = root/'store'
+            store.mkdir()
+            file = root/'output.evo'
+            file.write_bytes(b'canonical')
+            target = store/digest(b'canonical')
+            target.write_bytes(b'tampered')
             with self.assertRaisesRegex(ValueError, 'mutation'):
                 deduplicate_one(file, store)
             self.assertEqual(file.read_bytes(), b'canonical')
 
     def test_a_symbolic_link_is_not_an_owned_bundle_file(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp); bundle = root/'bundle'; store = root/'store'
-            bundle.mkdir(); store.mkdir()
+            root = Path(temp)
+            bundle = root/'bundle'
+            store = root/'store'
+            bundle.mkdir()
+            store.mkdir()
             (root/'external').write_bytes(b'external')
             os.symlink(root/'external', bundle/'aliased')
             with self.assertRaisesRegex(ValueError, 'unowned'):

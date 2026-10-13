@@ -18,7 +18,8 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(result['status'], 'ENUM_COMPLETE')
         self.assertEqual({tuple(c['signature']) for c in result['candidates']}, expected)
         for candidate in result['candidates']:
-            values = dict(zip(AXES, candidate['weights'])); values[None] = 0
+            values = dict(zip(AXES, candidate['weights']))
+            values[None] = 0
             self.assertEqual(tuple(values[x] > values[y] for x, y in ordered), tuple(candidate['signature']))
 
     def test_zero_weight_quota_choices_are_not_deleted(self):

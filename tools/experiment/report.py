@@ -20,7 +20,8 @@ def statistics_for(rows, version=1):
         "mean_success_rounds": statistics.mean(row["rounds"] for row in passed) if passed else None,
     }
     if version == 2:
-        median = lambda values: statistics.median(values) if values else None
+        def median(values):
+            return statistics.median(values) if values else None
         known = [r for r in passed if all(c["tokens_in"] is not None and c["tokens_out"] is not None for c in r["calls"])]
         tokens = [r["tokens_in"] + r["tokens_out"] for r in known]
         response_errors = sum(r["status"] == "response_error" for r in rows)
@@ -63,7 +64,8 @@ def key_limit_stop(receipt):
 
 
 def summarize(receipt):
-    if receipt["schema"] == "agent-repair.v4": return paired_results(receipt)
+    if receipt["schema"] == "agent-repair.v4":
+        return paired_results(receipt)
     if receipt["schema"] not in ("agent-repair.v1", "agent-repair.v2"):
         raise ValueError("unsupported receipt schema")
     receipt = key_limit_stop(receipt)
@@ -118,13 +120,19 @@ def predictions(receipt):
             reasons, observed = [], []
             for better, worse, field in comparisons:
                 x, y = groups.get(better, {}).get(field), groups.get(worse, {}).get(field)
-                shown = lambda value: "none" if value is None else round(value, 3)
+                def shown(value):
+                    return "none" if value is None else round(value, 3)
                 observed.append(f"{field} {better}={shown(x)} (n={sample(better, field)}) vs {worse}={shown(y)} (n={sample(worse, field)})")
-                if field in MISSING and any(groups.get(c, {}).get(MISSING[field]) for c in (better, worse)): reasons.append("missing data: " + MISSING[field])
-                elif x is None or y is None: reasons.append("no measured success in " + (better if x is None else worse))
-                elif x == y: reasons.append("tie in " + field)
-                elif (x < y) != (field in ("all_spans_share", "inside_span_ratio")): continue
-                else: reasons.append("opposite direction in " + field)
+                if field in MISSING and any(groups.get(c, {}).get(MISSING[field]) for c in (better, worse)):
+                    reasons.append("missing data: " + MISSING[field])
+                elif x is None or y is None:
+                    reasons.append("no measured success in " + (better if x is None else worse))
+                elif x == y:
+                    reasons.append("tie in " + field)
+                elif (x < y) != (field in ("all_spans_share", "inside_span_ratio")):
+                    continue
+                else:
+                    reasons.append("opposite direction in " + field)
             reasons = ([] if complete else ["incomplete population"]) + list(dict.fromkeys(reasons))
             evidence = ("complete" if complete else "incomplete") + f" ({population} items): " + "; ".join(observed) + (". Reasons: " + ", ".join(reasons) if reasons else "")
             results.append(dict(model=model, prediction=number, held=not reasons, reasons=reasons, evidence=evidence))
@@ -133,7 +141,8 @@ def predictions(receipt):
 
 def render_v2(receipt):
     receipt = key_limit_stop(receipt)
-    fmt = lambda value: "NOT OBSERVED" if value is None else f"{value:.3f}".rstrip("0").rstrip(".") if isinstance(value, float) else json.dumps(value)
+    def fmt(value):
+        return "NOT OBSERVED" if value is None else f"{value:.3f}".rstrip("0").rstrip(".") if isinstance(value, float) else json.dumps(value)
     rows, lines = summarize(receipt), []
     titles = {"all": "All items", "hard": "Items hard for that model in preflight (prediction population)"}
     for group in dict.fromkeys(r["group"] for r in rows):
@@ -157,9 +166,12 @@ def render_v2(receipt):
 
 
 def render(receipt):
-    if receipt["schema"] == "agent-repair.v4": return json.dumps(paired_results(receipt), indent=2) + "\n"
-    if receipt["schema"] == "agent-repair.v2": return render_v2(receipt)
-    fmt = lambda value: "NOT RUN" if value is None else f"{value:.3f}"
+    if receipt["schema"] == "agent-repair.v4":
+        return json.dumps(paired_results(receipt), indent=2) + "\n"
+    if receipt["schema"] == "agent-repair.v2":
+        return render_v2(receipt)
+    def fmt(value):
+        return "NOT RUN" if value is None else f"{value:.3f}"
     lines = ["| Model | Condition | Class | Pass / attempted | Repair rate | Mean rounds | Mean rounds (success) | Rate range | Rounds range | Attempts / planned by repetition | Synthetic attempts | Errors/stops |",
              "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- | ---: | ---: |"]
     for row in summarize(receipt):
@@ -187,7 +199,8 @@ def render(receipt):
 
 def exact_mcnemar(c1_only, c3_only):
     """Two-sided exact conditional test; ties are not discordant observations."""
-    if any(type(n) is not int or n < 0 for n in (c1_only, c3_only)): raise ValueError("invalid pair count")
+    if any(type(n) is not int or n < 0 for n in (c1_only, c3_only)):
+        raise ValueError("invalid pair count")
     n = c1_only + c3_only
     return min(1.0, 2 * sum(math.comb(n, k) for k in range(min(c1_only, c3_only) + 1)) / 2**n)
 
@@ -229,23 +242,29 @@ def exact_wilcoxon(differences):
     ranks = [ordered.index(abs(d)) + len(ordered) - ordered[::-1].index(abs(d)) + 1 for d in values]
     observed = sum(r for r, d in zip(ranks, values) if d > 0)  # twice the midrank; integers preserve ties
     sums = [0]
-    for rank in ranks: sums += [s + rank for s in sums]
+    for rank in ranks:
+        sums += [s + rank for s in sums]
     return dict(nonzero=len(values), positive_rank=observed / 2, p=sum(s >= observed for s in sums) / len(sums))
 
 
 def effort_results(part_a, part_b):
     """Exclude the exploratory run. Average only complete C1/C3 repetition pairs within each item."""
     result, populations = dict(tables=[]), {}
-    usable = lambda r: r and r.get("status") in ("completed", "timeout", "step_limit") and not r.get("score_error") and not r.get("escapes")
-    repaired = lambda r: usable(r) and r["status"] == "completed" and r.get("passed") is True
+    def usable(r):
+        return r and r.get("status") in ("completed", "timeout", "step_limit") and not r.get("score_error") and not r.get("escapes")
+    def repaired(r):
+        return usable(r) and r["status"] == "completed" and r.get("passed") is True
     for part, receipt, allowed in (("A", part_a, {2, 3}), ("B", part_b, {1, 2})):
         classes, selected = receipt["plan"]["classes"], {}
         plan = {(r["item"], r["condition"], r["repetition"]) for r in receipt["plan"]["order"]}
-        if any(r not in allowed for _, _, r in plan): raise ValueError("unregistered repetition")
+        if any(r not in allowed for _, _, r in plan):
+            raise ValueError("unregistered repetition")
         for row in sorted(receipt["runs"], key=lambda r: r["index"]):
             key = row["item"], row["condition"], row["repetition"]
-            if key not in plan: raise ValueError("unregistered repetition")
-            if key in selected and row.get("retry_of") != selected[key]["index"]: raise ValueError("duplicate repetition")
+            if key not in plan:
+                raise ValueError("unregistered repetition")
+            if key in selected and row.get("retry_of") != selected[key]["index"]:
+                raise ValueError("duplicate repetition")
             selected[key] = row
         pairs, means = {}, {}
         for item in classes:
@@ -286,7 +305,9 @@ def main():
     parser.add_argument("--part-b", type=Path, help="registered effort comparison; positional receipt is Part A")
     args = parser.parse_args()
     receipt = json.loads(args.receipt.read_text())
-    if args.part_b: print(json.dumps(effort_results(receipt, json.loads(args.part_b.read_text())), indent=2)); return
+    if args.part_b:
+        print(json.dumps(effort_results(receipt, json.loads(args.part_b.read_text())), indent=2))
+        return
     print(json.dumps(summarize(receipt), indent=2) if args.json else render(receipt), end="\n" if args.json else "")
 
 

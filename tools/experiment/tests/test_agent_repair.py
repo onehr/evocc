@@ -94,7 +94,8 @@ class Base(unittest.TestCase):
                     max_wait=5, dry_run=False)
         base.update(kw)
         args = types.SimpleNamespace(**base)
-        args.wroot = (self.tmp / "wroot").resolve(); args.base = args.wroot / "env"
+        args.wroot = (self.tmp / "wroot").resolve()
+        args.base = args.wroot / "env"
         (args.base / "skills").mkdir(parents=True, exist_ok=True)
         (args.base / "agent.md").write_text(agent.AGENT_FILE)
         agent.executable(args.base / "login-shell", agent.LOGIN_SHELL)
@@ -282,9 +283,11 @@ class HarnessTests(Base):
     def test_package_absolute_cap_is_not_reset_between_parts(self):
         for initial in (0.20, 0.24, 0.40):
             args = self.ns(max_week_ratio=0.45, max_week_increase=0.25)
-            read = lambda *unused: {"data": {"quota": {"usages": {"limit7d": {"usedRatio": initial}}}}}
+            def read(*unused):
+                return {"data": {"quota": {"usages": {"limit7d": {"usedRatio": initial}}}}}
             self.assertEqual(agent.pace(args, "part", read=read)[1], "ok")
-            at_cap = lambda *unused: {"data": {"quota": {"usages": {"limit7d": {"usedRatio": 0.45}}}}}
+            def at_cap(*unused):
+                return {"data": {"quota": {"usages": {"limit7d": {"usedRatio": 0.45}}}}}
             self.assertEqual(agent.pace(args, "next", read=at_cap)[1], "stop_week")
 
     def test_rate_limit_notice_stops_the_session(self):
@@ -308,7 +311,8 @@ class HarnessTests(Base):
     def test_one_failing_build_rejects_the_repair(self):
         original = self.score
         def score(source, item):
-            rows = original(source, item); rows["clang-19-O2"]["passed"] = False
+            rows = original(source, item)
+            rows["clang-19-O2"]["passed"] = False
             return rows
         with patch.object(self, "score", side_effect=score):
             row = self.session([["edit", FIXED]])
@@ -316,7 +320,8 @@ class HarnessTests(Base):
 
     def test_quota_increase_and_missing_read_stop(self):
         args = self.ns(max_week_ratio=0.85)
-        read = lambda ratio: lambda *unused: {"data": {"quota": {"usages": {"limit7d": {"usedRatio": ratio}}}}}
+        def read(ratio):
+            return lambda *unused: {"data": {"quota": {"usages": {"limit7d": {"usedRatio": ratio}}}}}
         self.assertEqual(agent.pace(args, "first", read=read(0.2))[1], "ok")
         self.assertEqual(agent.pace(args, "last", read=read(0.5))[1], "stop_week")
         self.assertEqual(agent.pace(args, "missing", read=lambda *unused: {"error": "timeout"})[1], "quota_unavailable")
@@ -342,7 +347,7 @@ class HarnessTests(Base):
         self.assertIn("provider.auth_error", row["stop"])
 
     def test_clean_environment_and_controls(self):
-        row = self.session([["bash", "echo PATH=$PATH; echo HOME=$HOME; echo KCH=$KIMI_CODE_HOME; echo EFF=$KIMI_MODEL_THINKING_EFFORT"], ["text", "ok"]])
+        self.session([["bash", "echo PATH=$PATH; echo HOME=$HOME; echo KCH=$KIMI_CODE_HOME; echo EFF=$KIMI_MODEL_THINKING_EFFORT"], ["text", "ok"]])
         notes = json.loads((self.tmp / "notes.json").read_text())
         env, argv = notes["env"], notes["argv"]
         self.assertEqual(env["PATH"], str(self.tmp / "wroot/01/bin"))
@@ -427,7 +432,8 @@ class HarnessTests(Base):
             q, decision = agent.pace(args, "before", read=lambda *a: next(reads))
         self.assertEqual(decision, "ok")
         self.assertTrue(sleep.called)
-        stop_read = lambda *a: {"data": {"quota": {"usages": {"limit5h": {"usedRatio": 0.1}, "limit7d": {"usedRatio": 0.7}}}}}
+        def stop_read(*a):
+            return {"data": {"quota": {"usages": {"limit5h": {"usedRatio": 0.1}, "limit7d": {"usedRatio": 0.7}}}}}
         q, decision = agent.pace(args, "before", read=stop_read)
         self.assertEqual(decision, "stop_week")
 

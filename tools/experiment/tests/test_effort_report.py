@@ -39,7 +39,8 @@ class EffortTests(unittest.TestCase):
         self.assertEqual((row["attempted"], row["passed"], row["steps"], row["censored"]), (2, 0, 16, 2))
 
     def test_provider_unknown_is_not_a_failed_or_zero_effort_pair(self):
-        a = receipt([2, 3]); a["runs"][0]["status"] = "provider_overloaded"
+        a = receipt([2, 3])
+        a["runs"][0]["status"] = "provider_overloaded"
         r = report.effort_results(a, receipt([1]))
         self.assertEqual(r["P1"]["items"], 1)
         self.assertTrue(r["P1"]["incomplete"])

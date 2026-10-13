@@ -1,5 +1,4 @@
 """Native measurement primitives: failed/mutated attempts never become samples."""
-import io
 import copy
 import fcntl
 import json

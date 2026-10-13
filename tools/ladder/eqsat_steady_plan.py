@@ -10,7 +10,6 @@ from .eqsat_chain import digest, require
 from .eqsat_native import host_identity
 from .eqsat_steady import (DEFAULT_CONTROL, FILES, PROTOCOL, RESOURCES, admitted_calibration,
                           build_population, check_build_inputs, load, validate_plan)
-from .eqsat_twins import canonical
 
 
 def owned_files(directory, root):
@@ -83,7 +82,8 @@ def make_plan(root, mode, source):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('build', 'AA', 'AB')); parser.add_argument('source', type=Path)
+    parser.add_argument('mode', choices=('build', 'AA', 'AB'))
+    parser.add_argument('source', type=Path)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[2])
     args = parser.parse_args()
     print(json.dumps(make_plan(args.root, args.mode, args.source), sort_keys=True, indent=2))

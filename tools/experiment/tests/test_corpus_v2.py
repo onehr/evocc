@@ -1,6 +1,5 @@
 """Qualify the second study's inputs before any model difficulty trials."""
 import collections
-import difflib
 import hashlib
 import json
 import os

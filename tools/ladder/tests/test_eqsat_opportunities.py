@@ -59,7 +59,8 @@ class OpportunityTests(unittest.TestCase):
             input_digest='0'*64, eligible=1, excluded={}, roots=[row])
         result = diagnostic_expressions(census)
         self.assertEqual(result['mapping_exclusions'], {'LLVM_SHIFT_DOMAIN_NOT_TOTAL': 1})
-        row['op'] = 'add'; row['operands'][1]['width'] = 32
+        row['op'] = 'add'
+        row['operands'][1]['width'] = 32
         result = diagnostic_expressions(census)
         ident, entry = next(iter(result['expressions'].items()))
         llvm = llvm_function(ident, entry['expression'])

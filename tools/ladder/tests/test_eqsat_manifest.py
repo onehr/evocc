@@ -11,7 +11,8 @@ from tools.ladder.eqsat_manifest import validate_manifest, audit_manifest
 
 
 def manifest():
-    artifact = lambda name: dict(path='inputs/' + name, sha256=digest(name.encode()))
+    def artifact(name):
+        return dict(path='inputs/' + name, sha256=digest(name.encode()))
     return dict(
         schema='evocc-performance-plan-v1', scope='r02-plan-not-admission',
         implementation_commit='a' * 40,

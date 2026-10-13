@@ -9,17 +9,18 @@ from __future__ import annotations
 
 # Direct execution puts tools/ on sys.path. Keep the standard-library bisect
 # interface available when statistics imports this same-named entry point.
-from _bisect import bisect_left, bisect_right, insort_left, insort_right
+# The other imports follow this interface on purpose.
+from _bisect import bisect_left, bisect_right, insort_left, insort_right  # noqa: F401
 
 bisect = bisect_right
 insort = insort_right
 
-import argparse
-import importlib
-import json
-from pathlib import Path
-import subprocess
-import sys
+import argparse  # noqa: E402
+import importlib  # noqa: E402
+import json  # noqa: E402
+from pathlib import Path  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
 
 
 def main(argv=None):

@@ -193,8 +193,8 @@ def pill(x, y, text, color):
 
 def pipeline(theme):
     t = THEMES[theme]
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="888" height="216" '
-           f'viewBox="0 0 888 216" role="img" aria-label="The EvoCC pipeline">']
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" width="888" height="216" '
+           'viewBox="0 0 888 216" role="img" aria-label="The EvoCC pipeline">']
     for i, (name, sub) in enumerate(STAGES):
         x = LEFT + STEP * i
         mid = x + BOX // 2
@@ -246,8 +246,8 @@ def effort_chart(theme):
     rows = effort_totals()
     peak = max(max(a, b) for _, _, a, b in rows)
     scale, x0 = 400 / peak, 300
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="820" height="300" viewBox="0 0 820 300" '
-           f'role="img" aria-label="Agent steps to repair, GCC and UBSan against EvoCC">']
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" width="820" height="300" viewBox="0 0 820 300" '
+           'role="img" aria-label="Agent steps to repair, GCC and UBSan against EvoCC">']
     for i, (label, sub, c1, c3) in enumerate(rows):
         y = 20 + 82 * i
         out.append(f'<text x="0" y="{y + 20}" fill="{t["title"]}" font-family="{SANS}" font-size="14" '

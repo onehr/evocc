@@ -1,0 +1,34 @@
+# Ruff keeps its default rules. These files are not checked because experiment
+# records pin them by SHA-256. A style edit would change the pinned bytes, or
+# hide the real changes of a registered tool behind a rewrite.
+extend-exclude = [
+    # The current bytes: harness_sha256 and scorer_sha256 in
+    # tests/contracts/agent-repair-5-{pilot,replication,scale}-20261010.json.
+    "tools/experiment/agent_repair.py",
+    "tools/experiment/qualify_silent.py",
+    # The current bytes: tests/contracts/eqsat-completion-reaudit-20260930.json.
+    "tools/ladder/eqsat_completion_audit.py",
+    # The current bytes: tests/contracts/eqsat-linux-pilot-20260930*.json and
+    # tests/contracts/eqsat-preflight-completion-20260930*.json.
+    "tools/ladder/eqsat_guest.py",
+    "tools/ladder/eqsat_opportunities.py",
+    "tools/ladder/eqsat_preflight.py",
+    # The current bytes: tests/contracts/eqsat-preflight-completion-20260930*.json
+    # and tests/contracts/eqsat-steady-{aa,ab,build}-20260930.json.
+    "tools/ladder/eqsat_pilot_audit.py",
+    # The current bytes: tests/contracts/eqsat-preflight-completion-20260930*.json.
+    "tools/ladder/eqsat_preflight_run.py",
+    # The current bytes: tests/contracts/eqsat-steady-{aa,ab,build}-20260930.json.
+    "tools/ladder/eqsat_steady_audit.py",
+    "tools/ladder/eqsat_steady_guest.py",
+    # Registered tools whose records hold an earlier SHA-256:
+    # tests/contracts/agent-repair-2*.json and agent-repair-20261008.json.
+    "tools/experiment/repair.py",
+    # tests/contracts/eqsat-completion-reaudit-20260930.json and
+    # tests/contracts/eqsat-preflight-completion-20260930*.json.
+    "tools/ladder/eqsat_completion.py",
+    # tests/contracts/eqsat-size-*-20261001.json.
+    "tools/ladder/eqsat_size.py",
+    # tests/contracts/eqsat-steady-{aa,ab,build}-20260930.json.
+    "tools/ladder/eqsat_steady.py",
+]
