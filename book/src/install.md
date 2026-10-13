@@ -33,8 +33,11 @@ $ tar xzf evocc-0.1.0-aarch64-apple-darwin.tar.gz
 On Linux, use the name with `aarch64-unknown-linux-gnu`, and use `sha256sum -c -` in place of
 `shasum -a 256 -c -`.
 
-The archive holds one directory. Its `bin/` directory holds the four programs of EvoCC. The root holds the README, the
-files `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES.md`, and its own `SHA256SUMS`:
+The archive holds one directory. The root holds the README, the files `LICENSE`, `NOTICE` and
+`THIRD-PARTY-NOTICES.md`, and its own `SHA256SUMS`. Its `sysroot/` directory holds the Linux
+headers for `--target=aarch64-unknown-linux-gnu`, and `sysroot/licenses/` holds the license texts
+of the Debian packages that the headers come from. Its `bin/` directory holds the four programs of
+EvoCC:
 
 | Program | What it does |
 |---|---|

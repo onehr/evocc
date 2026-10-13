@@ -3,18 +3,28 @@
 EvoCC is licensed under the Apache License 2.0. Copyright 2026 Haoran Wang, NexRidge. See
 [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-Some files in this repository, and some code in the release binaries, come from other projects.
-This file lists them. For each, it gives the path, the origin and the license. The license of the
-other project applies to that material, not the license of EvoCC.
+Some files in this repository, some code in the release binaries and the Linux headers in the
+release archives come from other projects. This file lists them. For each, it gives the path, the
+origin and the license. The license of the other project applies to that material, not the
+license of EvoCC.
 
-The release archives hold three binaries: `evocc`, `evocc-checker` and `evoir-sem`. Section 1
-lists the third-party code inside them. Sections 2 to 5 list material that stays in the
-repository and is not part of any binary.
+The release archives hold four binaries: `evo`, `evocc`, `evocc-checker` and `evoir-sem`. An
+archive can also hold Linux headers. Section 1 lists the third-party code inside the binaries.
+Section 2 lists the Linux headers. Sections 3 to 6 list material that stays in the repository and
+is not part of any binary or release archive.
 
 ## 1. Code in the release binaries
 
-`evocc` and `evocc-checker` are Rust programs. Three crates are vendored in `vendor/`, and Cargo
-builds them offline from there (`.cargo/config.toml`). Both binaries contain all three crates.
+`evo`, `evocc` and `evocc-checker` are Rust programs. All three are binaries of the `evocc`
+package in [`crates/evocc/`](crates/evocc/). Three crates are vendored in `vendor/`, and Cargo
+builds them offline from there (`.cargo/config.toml`). Cargo links all three crates into `evocc`
+and `evocc-checker`, through the `evocc-types` crate.
+
+`evo` is the command program: `evo run`, `evo check`, `evo prove` and the other commands. It starts
+`evocc` and `evoir-sem` to do the work. Its source is
+[`crates/evocc/src/bin/evo.rs`](crates/evocc/src/bin/evo.rs) and the modules in
+[`crates/evocc/src/bin/evo/`](crates/evocc/src/bin/evo/). It uses one other crate, `evocc-proof`,
+which is EvoCC code. It contains none of the vendored crates.
 
 | Component | Path | Origin | License |
 |---|---|---|---|
@@ -26,8 +36,8 @@ The build also links code that is not in this repository:
 
 | Component | Where it comes from | In which binaries | License |
 |---|---|---|---|
-| Rust standard library | The pinned Rust toolchain (`rust-toolchain.toml`) | `evocc`, `evocc-checker` | MIT OR Apache-2.0 |
-| musl libc | The Rust target `aarch64-unknown-linux-musl`, when a Linux release is built for it | `evocc`, `evocc-checker` on Linux | MIT |
+| Rust standard library | The pinned Rust toolchain (`rust-toolchain.toml`) | `evo`, `evocc`, `evocc-checker` | MIT OR Apache-2.0 |
+| musl libc | The Rust target `aarch64-unknown-linux-musl`, when a Linux release is built for it | `evo`, `evocc`, `evocc-checker` on Linux | MIT |
 | Lean 4 runtime and core library | The pinned Lean toolchain (`lean/lean-toolchain`, v4.32.2) | `evoir-sem` | Apache-2.0 |
 | GNU MP (GMP) | The Lean toolchain, which links it into compiled Lean programs | `evoir-sem` | GNU LGPL version 3, as the toolchain's `LICENSES` file states |
 | libuv | The Lean toolchain, which links it into compiled Lean programs | `evoir-sem` | MIT |
@@ -36,7 +46,42 @@ The Lean toolchain installs the full texts of these licenses in its `LICENSE` an
 files. The source of `evoir-sem` is [`lean/`](lean/). `(cd lean && lake build)` builds it again
 and links it with the libraries of the toolchain, so you can link it with a changed GMP.
 
-## 2. Arm instruction model
+## 2. Linux headers in the release archives
+
+`evocc --target=aarch64-unknown-linux-gnu` reads the C headers of a Linux system.
+`tools/export-sysroot.sh` exports them from the sealed build image, and `tools/release.sh` adds
+them to an archive when the export exists. The binaries do not contain them.
+
+The headers are in `sysroot/aarch64-unknown-linux-gnu/` of the archive: 3,966 files from 13
+packages of Debian 13. They come from the image `evo-nexlab:sealed-20260810`, digest
+`sha256:2c23684c9cc5ef5899073b59844fa47cc3c1d894f2316e21f25d5d85be5a10e2`.
+[`contracts/sysroot-aarch64-unknown-linux-gnu.json`](contracts/sysroot-aarch64-unknown-linux-gnu.json)
+records the SHA-256 of each header and each license text, and the version of each package. The
+archive also includes that file as `sysroot/aarch64-unknown-linux-gnu.json`.
+
+The archive holds the Debian copyright file of each package in
+`sysroot/licenses/aarch64-unknown-linux-gnu/<package>/copyright`. The copyright file gives the
+full terms. Some files of a package have a license other than the main one. The license texts
+that the copyright files cite from `/usr/share/common-licenses/` are in
+`sysroot/licenses/aarch64-unknown-linux-gnu/common-licenses/`.
+
+| Package | Version | Headers | Directories in `sysroot/aarch64-unknown-linux-gnu/` | License of the headers | Copyright file in `sysroot/licenses/aarch64-unknown-linux-gnu/` |
+|---|---|---|---|---|---|
+| `libc6-dev` (GNU C Library) | 2.41-12+deb13u3 | 471 | 107 files in `usr/include/`; `usr/include/aarch64-linux-gnu/` except `asm/`, `c++/` and `openssl/`; `arpa/`, `finclude/`, `net/`, `netinet/` and the other `net*/` directories, `nfs/`, `protocols/`, `rpc/`, three files in `scsi/` | LGPL-2.1-or-later. Some files have other terms. | `libc6-dev/copyright` |
+| `libclang-common-19-dev` (Clang 19) | 1:19.1.7-3+b1 | 482 | `usr/include/clang/19/` and `usr/include/clang/19.1.7/`: the same 241 files in each | Apache-2.0 WITH LLVM-exception. 15 files in each directory carry an MIT license text. | `libclang-common-19-dev/copyright` |
+| `libcrypt-dev` (libxcrypt) | 1:4.4.38-1 | 1 | `usr/include/crypt.h` | LGPL-2.1-or-later | `libcrypt-dev/copyright` |
+| `libelf-dev` (elfutils) | 0.192-4 | 5 | `usr/include/libelf.h`, `gelf.h`, `nlist.h` and `elfutils/` | LGPL-3.0-or-later OR GPL-2.0-or-later | `libelf-dev/copyright` |
+| `libgcc-14-dev` (GCC 14) | 14.2.0-19 | 34 | `usr/lib/gcc/aarch64-linux-gnu/14/include/` except `objc/` | GPL-3.0-or-later WITH GCC-exception-3.1. The five files in `sanitizer/` are Apache-2.0 WITH LLVM-exception. | `libgcc-14-dev/copyright` |
+| `libobjc-14-dev` (GCC 14) | 14.2.0-19 | 10 | `usr/lib/gcc/aarch64-linux-gnu/14/include/objc/` | GPL-3.0-or-later WITH GCC-exception-3.1 | `libobjc-14-dev/copyright` |
+| `libssl-dev` (OpenSSL 3.5) | 3.5.6-1~deb13u2 | 142 | `usr/include/openssl/` and `usr/include/aarch64-linux-gnu/openssl/` | Apache-2.0 | `libssl-dev/copyright` |
+| `libstdc++-14-dev` (GCC 14) | 14.2.0-19 | 825 | `usr/include/c++/14/` and `usr/include/aarch64-linux-gnu/c++/` | GPL-3.0-or-later WITH GCC-exception-3.1. The 23 files in `pstl/` are Apache-2.0 WITH LLVM-exception. | `libstdc++-14-dev/copyright` |
+| `libzstd-dev` (Zstandard) | 1.5.7+dfsg-1 | 3 | `usr/include/zstd.h`, `zdict.h` and `zstd_errors.h` | BSD-3-Clause OR GPL-2.0-only | `libzstd-dev/copyright` |
+| `linux-libc-dev` (Linux 6.12 UAPI) | 6.12.101-1 | 1,966 | `usr/include/linux/`, `asm-generic/`, `drm/`, `misc/`, `mtd/`, `rdma/`, `regulator/`, `sound/`, `video/`, `xen/`, ten files in `scsi/`, and the `asm/` directory of 22 multiarch triples, `aarch64-linux-gnu` among them | GPL-2.0 WITH Linux-syscall-note, as most SPDX lines state. Some files have other or dual terms. | `linux-libc-dev/copyright` |
+| `make` (GNU Make) | 4.4.1-2 | 1 | `usr/include/gnumake.h` | GPL-3.0-or-later | `make/copyright` |
+| `rpcsvc-proto` | 1.4.3-1+b1 | 24 | `usr/include/rpcsvc/` | BSD-3-Clause | `rpcsvc-proto/copyright` |
+| `zlib1g-dev` (zlib) | 1:1.3.dfsg+really1.3.1-1+b1 | 2 | `usr/include/zlib.h` and `zconf.h` | Zlib | `zlib1g-dev/copyright` |
+
+## 3. Arm instruction model
 
 | Path | Origin | License |
 |---|---|---|
@@ -45,7 +90,7 @@ and links it with the libraries of the toolchain, so you can link it with a chan
 `boundary.sail` and `runtime.sail` in the same directory are EvoCC code. `tools/isa_model_slice.py`
 and its tests read these files. No binary contains them.
 
-## 3. Showcase images
+## 4. Showcase images
 
 The showcase in the README shows output of programs that EvoCC built. Three images show game data
 from other projects. [`docs/images/showcase/README.md`](docs/images/showcase/README.md#artwork)
@@ -61,12 +106,12 @@ describes each capture.
 The other images in `docs/images/` and the text captures beside them are EvoCC material. The names
 of the games and projects belong to their owners. The captures do not imply an endorsement.
 
-## 4. Test inputs
+## 5. Test inputs
 
 Files in `tests/fixtures/` and `tests/contracts/` are test inputs and records. They are not part of
 the compiler binaries, and the release archives do not contain them.
 
-### 4.1 Functions quoted with their license notice
+### 5.1 Functions quoted with their license notice
 
 | Path | Origin | License |
 |---|---|---|
@@ -79,7 +124,7 @@ source, EvoIR, EvoMIR and assembly) are in `tests/fixtures/verification/pipeline
 `tests/fixtures/verification/asm/` and `tests/fixtures/verification/rewrite/`, and some Lean test
 fixtures in `lean/EvoIR/` contain them too. They derive from the same two functions.
 
-### 4.2 Linux kernel test code
+### 5.2 Linux kernel test code
 
 | Path | Origin | License |
 |---|---|---|
@@ -88,7 +133,7 @@ fixtures in `lean/EvoIR/` contain them too. They derive from the same two functi
 | `tests/fixtures/ublk-background-exit.sh` | A reduction of the Linux kselftest `tools/testing/selftests/ublk/test_stress_04.sh` | GPL-2.0, as its SPDX line states |
 | `tests/fixtures/day5-kernel-reductions/overlay/candidates/` | Line-level reductions of Linux 6.18.44 sources (`include/linux/compiler-version.h`, `compiler_types.h`, `kconfig.h`, `lib/bitrev.c` and preprocessed parser inputs). `overlay.json` records the source line of each kept line. | GPL-2.0, the license of the Linux kernel |
 
-### 4.3 Other reductions
+### 5.3 Other reductions
 
 Many other fixtures are short reductions of an upstream test or program. The header comment of
 each file names its source. Where such a file keeps upstream text, that text stays under the
@@ -108,14 +153,14 @@ license of the upstream project:
 `tests/fixtures/musl-powf-rounding-reduction.c` and `tests/fixtures/doom-headless.c` include
 upstream headers or sources from a pinned upstream tree at build time. They do not copy them.
 
-### 4.4 Toolchain records
+### 5.4 Toolchain records
 
 `.toolchain/records/frozen-kernel-gcc.config` and `frozen-kernel-clang.config` are Linux kernel
 configurations that the Linux 6.18.44 build generated. `sealed-package-manifest.tsv` and
 `qemu-11.0.3-dylib-closure.txt` list package and library names, versions and digests. The other
 files in `.toolchain/` are EvoCC code.
 
-## 5. Programs that the evaluation downloads
+## 6. Programs that the evaluation downloads
 
 `tools/bench.py` and `tools/ladder/` download pinned releases of zlib, zstd, cJSON, Mbed TLS,
 TinyCC, toybox, musl, PolyBench/C, the LLVM test-suite, jq, Lua, SQLite, doomgeneric, Freedoom,

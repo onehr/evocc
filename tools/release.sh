@@ -23,11 +23,13 @@
 # The output is DIR/evocc-<version>-<target>.tar.gz. The archive holds one
 # directory of the same name: bin/ with the four binaries, LICENSE, NOTICE,
 # THIRD-PARTY-NOTICES.md, README.md and SHA256SUMS for those files. The archive
-# also includes sysroot/ when the exported Linux headers exist. Every header
-# must match its tracked contract and is listed in SHA256SUMS.
-# is deterministic. Entries are sorted, owner and group are 0, and every mtime
-# is SOURCE_DATE_EPOCH, else the commit time of HEAD. The gzip header has no
-# name and no time. The script also merges the archive digest into DIR/SHA256SUMS.
+# also includes sysroot/ when the exported Linux headers exist: the headers, the
+# license texts of their Debian packages in sysroot/licenses/ and the contract.
+# Every header and license text must match the tracked contract and is listed
+# in SHA256SUMS. The archive is deterministic. Entries are sorted, owner and
+# group are 0, and every mtime is SOURCE_DATE_EPOCH, else the commit time of
+# HEAD. The gzip header has no name and no time. The script also merges the
+# archive digest into DIR/SHA256SUMS.
 set -eu
 START="$PWD"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -168,13 +170,17 @@ sysroot = Path("sysroot/aarch64-unknown-linux-gnu")
 if sysroot.exists():
     contract_path = Path("contracts/sysroot-aarch64-unknown-linux-gnu.json")
     contract = json.loads(contract_path.read_text())
-    headers = {path.relative_to(sysroot).as_posix(): path.read_bytes()
-               for path in sysroot.rglob("*") if path.is_file()}
-    actual = {name: hashlib.sha256(data).hexdigest() for name, data in headers.items()}
-    if actual != contract["files"]:
-        raise SystemExit("release: Linux headers differ from their contract; no archive written")
-    entries.extend((f"{sysroot.as_posix()}/{path}", 0o644, data)
-                   for path, data in sorted(headers.items()))
+    # The headers, and the license texts of the Debian packages that own them.
+    for tree, pinned, kind in ((sysroot, contract["files"], "headers"),
+                               (Path("sysroot/licenses/aarch64-unknown-linux-gnu"),
+                                contract.get("licenses"), "header licenses")):
+        found = {path.relative_to(tree).as_posix(): path.read_bytes()
+                 for path in tree.rglob("*") if path.is_file()}
+        actual = {name: hashlib.sha256(data).hexdigest() for name, data in found.items()}
+        if not pinned or actual != pinned:
+            raise SystemExit(f"release: Linux {kind} differ from their contract; no archive written")
+        entries.extend((f"{tree.as_posix()}/{path}", 0o644, data)
+                       for path, data in sorted(found.items()))
     entries.append(("sysroot/aarch64-unknown-linux-gnu.json", 0o644, contract_path.read_bytes()))
 sums = "".join(f"{hashlib.sha256(data).hexdigest()}  {arc}\n"
                for arc, _, data in sorted(entries))
