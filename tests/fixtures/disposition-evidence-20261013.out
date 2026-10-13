@@ -1,0 +1,604 @@
+B10a — Restored evidence of 92 reviewed disposition rows
+========================================================
+
+Found on 2026-10-13 by the L10 work. Restored on 2026-10-14 (+0800).
+
+Scope: the evidence paths of tests/contracts/benchmark-program-dispositions.json.
+92 rows (8 LLVM, 77 GCC torture, 7 c-testsuite) cited 82 files that no longer
+existed, in 152 citations. classify_program makes such a row a compiler
+failure, even when the original program passes. Each cited file now has a
+retained copy, and only the 152 path strings changed. No disposition, reason,
+source hash, original command, outcome, receipt or historical count changes.
+No row needed a new measurement, so no compiler ran.
+
+Where the evidence went:
+  docs/notebook/benchmark-applicability.md (61 rows): commit 5d8a1522 moved
+    the dated notes to docs/archive/notebook on 2026-10-06 without a change of
+    content. Commit 1c11c0d3 then deepened 17 relative links by one level.
+  docs/evoir-spec.md (4 rows): commit 652340da renamed it to spec/evoir.md on
+    2026-10-06. Commit 598ec28c archived its Appendix D, which holds the cited
+    review rulings, as docs/archive/notebook/evoir-spec-review-20261001.md.
+    Commit 55d5bd58 (Revision 2.0.0) then removed that appendix.
+  .build/ladder/torture/... and .build/ladder/ctest/... (80 files, 87
+    citations in 85 rows): the pinned checkouts that e0.fetch makes. The
+    runs of 2026-09-27 still used them. The present .build/ladder directory
+    was created on 2026-10-06 18:41 +0800 (its birth time). The old torture,
+    c-testsuite and LLVM trees are gone.
+    The cleanup records .evidence/storage-cleanup-20261004 and
+    .evidence/storage-cleanup-20261011 do not list them. No local copy
+    remains in the repository, the home directory or the temporary
+    directories.
+
+Methods (the word in parentheses in the row list):
+  archive   Cite the tracked moved file
+            docs/archive/notebook/benchmark-applicability.md, blob 4a40145c4571,
+            SHA256 28ed76a29293999dc94ec7c86fd3aceaf9de00fe1d7dfe0f1e9039bc9e6d6f3b.
+            It equals the pre-move blob 60e93b69f41d apart from 17 link
+            prefixes (../../ to ../../../). The note names all 61 citing
+            programs. docs/archive/README.md says that tools and receipts
+            can still name an archived path.
+  history   Restore the last version at the cited path from Git:
+            git show 20363d8e:docs/evoir-spec.md (the parent of 652340da),
+            EvoIR Revision 1.9.116 of 2026-10-01, 616,844 bytes.
+            It equals 652340da:spec/evoir.md. Its Appendix D equals the
+            archived review note byte for byte. The current spec/evoir.md
+            (Revision 2.3.0) has no Appendix D, but its body still makes an
+            argument other than 0 to __builtin_return_address E2913 and
+            integer-complex division E2948.
+  upstream  Restore the pinned original source byte for byte, with
+            git cat-file blob COMMIT:PATH in a fresh clone:
+              torture  gcc-mirror/gcc tag releases/gcc-16.2.0, commit
+                       78d4ac73dd391005b895a6148cd9831e28e1208b
+                       (sourceCommits.torture; 1,692 execute programs)
+              ctest    c-testsuite/c-testsuite commit
+                       5c7275656d751de0e68b2d340a95b5681858ed07
+                       (sourceCommits.ctest)
+            A program's own source equals the sourceSha256 of its torture or
+            ctest row. LLVM rows cite the source of their reviewed equivalent
+            torture program. The two included gcc.dg/tree-ssa files equal the
+            blob ids of the pinned tree.
+
+New evidence directory .evidence/disposition-evidence-20261013/ (untracked,
+like all of .evidence/):
+  torture/gcc/testsuite/  73 GCC sources: 71 execute, 2 gcc.dg/tree-ssa
+  ctest/tests/single-exec/  7 c-testsuite sources
+  docs/evoir-spec.md      the restored specification
+  manifest.json           each old path, new path, method and identity
+  tools/                  the restore, source, validation and record scripts
+  logs/                   their outputs and the unit test log
+  SHA256SUMS              every other file of the directory
+The scratch clones and the LLVM tree are not kept. The commands below make
+them again.
+
+Commands (B is a scratch directory, R the repository root,
+N = R/.evidence/disposition-evidence-20261013,
+C = 2919e55176a572ee085cb46b291c47b7092c363e and L = B/llvm/llvm-test-suite-C):
+  git -c http.version=HTTP/1.1 clone -q --filter=blob:none --sparse \
+    --depth 1 --branch releases/gcc-16.2.0 \
+    https://github.com/gcc-mirror/gcc.git B/gcc
+  git -C B/gcc sparse-checkout set gcc/testsuite/gcc.c-torture/execute
+  git -c http.version=HTTP/1.1 clone -q --depth 1 \
+    https://github.com/c-testsuite/c-testsuite.git B/ctest
+  curl -sSL --http1.1 --fail https://codeload.github.com/llvm/llvm-test-suite/tar.gz/C \
+    | tee >(shasum -a 256) | tar -xzf - -C B/llvm llvm-test-suite-C/SingleSource
+    The stream SHA256 is
+    415106c9962e07a24326ad9173bbecd4215f6dee49bce9aec5181d75d07db770,
+    the pin of tools/ladder/llvm-test-suite.py.
+  python3 -I N/tools/restore_evidence.py R B/gcc B/ctest manifest.json --apply
+  python3 -I N/tools/verify_sources.py R B/gcc B/ctest L
+  python3 -I N/tools/validate_rows.py R B/gcc B/ctest L
+  python3 -m unittest discover -s tools/ladder/tests
+
+Source identity: the sourceSha256 of all 1,068 rows equals the SHA256 of the
+re-fetched pinned source (838 LLVM, 223 torture, 7 c-testsuite).
+
+Validation: validate_rows.py runs the adapters' own code on every row. LLVM
+rows go through program_disposition of tools/ladder/llvm-test-suite.py.
+Torture and c-testsuite rows go through e0.classify_program, which
+program_disposition also calls. Outcomes and original commands come from the
+latest retained full runs: .evidence/ladder/llvm-test-suite/20260927T085137Z,
+.evidence/ladder/e0/20260927T082713Z (ctest) and
+.evidence/ladder/e0/20260927T084053Z (torture). This checks the evidence,
+source and command binding. It is not a new replay.
+  Before: 92 rows return dispositionError "reviewed disposition has missing
+    evidence, changed source or invalid label" and compiler-failure.
+  After: no row returns dispositionError. 1,067 dispositions equal those of
+    the retained runs. The other row, LLVM pr23135, is not-applicable under
+    the L10 rule of commit 2de32fcf; its run recorded compiler-failure.
+  After, by suite:
+    llvm-test-suite  PASS 143, not-applicable 665, FP-deferred 30
+    torture          PASS 114, not-applicable 85, FP-deferred 21,
+                     oracle-unusable 3
+    ctest            PASS 7
+  16 of the 92 rows are FP-deferred but name no still-deferred feature: no
+  deferredFeatures (ctest 00113, 00119, 00123, 00174, 00175, 00195, torture
+  20000603-1, 20000731-1, 20001017-1, stdarg-4, LLVM stdarg-4) or binary128
+  only (torture and LLVM 20040709-1 and 20040709-2, ctest 00204). Their
+  originals passed in the retained runs, so the validator returns PASS for
+  them. If a replay does not pass one of them, it returns compiler-failure.
+  The B10 replay decides them.
+  python3 -m unittest discover -s tools/ladder/tests: 575 tests, OK, 9
+  skipped. The new test test_every_reviewed_row_cites_existing_evidence
+  failed with 152 missing citations before the restore. It passes after it.
+
+Restored files (81; SHA256, git blob prefix, path under .evidence/disposition-evidence-20261013/):
+  d12643c2a0f7204727d317604e4cb96124e2e96d5e78039f451bb579b34c113f  578386823949  ctest/tests/single-exec/00113.c
+  f9547c4ff49b462dd3b255c407499447f76f5c425fc074e96a4d40e1ca33369e  c879aab2449d  ctest/tests/single-exec/00119.c
+  08de725058f8cf389e5aa5f87d53ff3c4570d92df8eeafeb29b871d722ead304  eb7f28294bc2  ctest/tests/single-exec/00123.c
+  179432fa8f0ffd84d95e44c410d6203fede9a8cb439ddd0e5710d413e30ae80b  e3491f5c6827  ctest/tests/single-exec/00174.c
+  9140671105335599b144512673237a8ce1faf1e251840708a8c1999c9601dcee  1fcc33519c88  ctest/tests/single-exec/00175.c
+  7ce62ef70e5360efcad044f5342f90d16bd1b7f8b2b17e4ee27106c1f0904c9b  0cbe57d625a8  ctest/tests/single-exec/00195.c
+  cfa12d12c391f845fbc18176b14ae8f169cd680e1971902b10a4ac6f556530ea  8de61b38847f  ctest/tests/single-exec/00204.c
+  00d512ae35df695b95a85167f29ca6ad8b06c267748329325bf26192af8cd802  a778274195c0  docs/evoir-spec.md
+  bb432b670b6713008c4bd880e5efdd5c7944334d52a92caaf13b11ca462875d0  97317b4fb05e  torture/gcc/testsuite/gcc.c-torture/execute/20000603-1.c
+  476361fed8a09c4236a8f1513a036c4c9f9318ff00374adc98af3c6041eb2cd0  d1ccb5aedcae  torture/gcc/testsuite/gcc.c-torture/execute/20000731-1.c
+  b532f760520f824ef53089d9a518e2ea10519c6e075db4cf7635afd5b117e98c  66fa14f096db  torture/gcc/testsuite/gcc.c-torture/execute/20000822-1.c
+  24686eb61a08cb232ae4b2c232eed5a54cd754fec9f8ffd69667219359ae8bd2  5ca98081cadb  torture/gcc/testsuite/gcc.c-torture/execute/20001017-1.c
+  dbd0e52c97a8d5e0a7a59761d577080645619cc7c4f480c15a31e20604c34441  30c8558efbaa  torture/gcc/testsuite/gcc.c-torture/execute/20001111-1.c
+  074bf806fb86c21a68309e68c74379237b55e0e70f8bd392353e0d00e0e40add  ca52c908c9f6  torture/gcc/testsuite/gcc.c-torture/execute/20010209-1.c
+  24eb43d6a6424e606d170655e938851a29a7e38019971797f491acf198980a8b  c777af5bdc4e  torture/gcc/testsuite/gcc.c-torture/execute/20010605-1.c
+  22863853a7e0bbad256eaa0e42f32684ff4fd585c1cc37d10d0a6b14c6db1388  04931e6d0612  torture/gcc/testsuite/gcc.c-torture/execute/20020227-1.c
+  fffe831c2eba4bc557ea7c8d048dcd56f5b6ad0cdb49f9b90ac4aa7cfd8e03d8  89e2bae703bc  torture/gcc/testsuite/gcc.c-torture/execute/20020411-1.c
+  e3ba27c686930bd2109700edb3c66a7d8b0d643f08be3cb89ae809aac6985c82  df0efe008ad2  torture/gcc/testsuite/gcc.c-torture/execute/20020412-1.c
+  ef20fce8426213d6db7242d01d48269a021fa3e9b0f59884531e7c3d32cf7d3a  f54a51e1397a  torture/gcc/testsuite/gcc.c-torture/execute/20030501-1.c
+  883a9834b19af31a0abfe2993267430c91aff10bd6a825857297fdedcc508d81  4c63535e7f7c  torture/gcc/testsuite/gcc.c-torture/execute/20040308-1.c
+  5e8ac68ddf0eba3acc9dd1ea5f3bcc1ed66e2f947f1c42f94eee2c562703738c  bc666e5351e9  torture/gcc/testsuite/gcc.c-torture/execute/20040423-1.c
+  a115ba3f50ac8addcdf338a582a1e1aa88c8f67b2bae821945fc18572653846f  b42483714375  torture/gcc/testsuite/gcc.c-torture/execute/20040520-1.c
+  847815685fbf49bfa25f2a5c3fcd71f7a5b791f855138b2fe582b377bc5c592a  52de67d48700  torture/gcc/testsuite/gcc.c-torture/execute/20040709-1.c
+  e7053c30dcf6effda4a98f7060d3587aea9a6433289236a4c1d661620331c849  925050d77bbd  torture/gcc/testsuite/gcc.c-torture/execute/20040709-2.c
+  4bdf83943b8a243caccf7324ffb30302f599bec398b95cf92983a51a990c6dbd  d44b54db9a04  torture/gcc/testsuite/gcc.c-torture/execute/20041218-2.c
+  2bde09609c3dc80d48f3fd66240d501dbdb54de6780007dfe31dd9e7512f743b  b33efc6e6dba  torture/gcc/testsuite/gcc.c-torture/execute/20061220-1.c
+  3a7888c44aadb10322fd4926464b368eccc9947a82378509e47036b6c7ab437b  ade3d7e8e112  torture/gcc/testsuite/gcc.c-torture/execute/20070919-1.c
+  12a3f071f2d81472787b706133cf560ecd15ea7549a910dceebd61a6192bf417  a5f973f68652  torture/gcc/testsuite/gcc.c-torture/execute/20090219-1.c
+  741a7c0ecb88f178c77f75342aa7affe51a61274b3c587e8b5113c04795e02ec  1090edd9c7cf  torture/gcc/testsuite/gcc.c-torture/execute/20241029-1.c
+  1ff3990eb697e49dd27ced9cffbf004d690ad6fae06302fb9ac19f92ad97dd79  f8c559912022  torture/gcc/testsuite/gcc.c-torture/execute/920415-1.c
+  c0ddca64fe1f6fe4eab7b6fca86b9c2ea99059603a5f4b8c62daf93e028884c2  9f84a15de465  torture/gcc/testsuite/gcc.c-torture/execute/920428-2.c
+  df14915c8b0b4105ffb49478832aeedb1f998e166a7668cd636c3557ccfcab3e  a4baa6a11727  torture/gcc/testsuite/gcc.c-torture/execute/920501-1.c
+  7876deb7c4099cb42525a80cda21a55f8cc48e6cfaf4e92b5aeee8c2e469e493  a9ccc6d4875b  torture/gcc/testsuite/gcc.c-torture/execute/920501-7.c
+  ab7f6234ace1b05a0f6769b5a722b457a101fc87c3614ce133940dc3e205404d  900300396629  torture/gcc/testsuite/gcc.c-torture/execute/920612-2.c
+  28e3a6297ea77cde685cdf7cf1bb4148953e8e97d6acdab667f703693398f896  a4cb074ad69e  torture/gcc/testsuite/gcc.c-torture/execute/920721-4.c
+  52bbcf77bf1add905c831943db52325b2c2137a92a50066abf86e3a1bed1d99b  81ad7b92be3b  torture/gcc/testsuite/gcc.c-torture/execute/920728-1.c
+  908450e7aa4c14d25ff1c34bd88daeac4a8f062baf2dd46c0fd7eaac3391be84  1aee660da34b  torture/gcc/testsuite/gcc.c-torture/execute/921017-1.c
+  8d8c9b3b3e76ab53191f9324c806197cc69bbab401af84a3026cea1bf05ea729  3ad0db969a39  torture/gcc/testsuite/gcc.c-torture/execute/921202-1.c
+  03179974f370e0da1678f8a7a56150291aeb9f1443fa1344aaea59feea0eceec  077683b6bacf  torture/gcc/testsuite/gcc.c-torture/execute/921208-2.c
+  20bfe032a4e19a7ecfe0e61d88e27ed16c3c2930395843dad9687d8f11b3f294  6d2f9b4aa804  torture/gcc/testsuite/gcc.c-torture/execute/921215-1.c
+  3ea01f673de9d5ab1e8a48e39a1efaae085e036c83eefc3aa7fc00a144c5d655  ce5027b322c7  torture/gcc/testsuite/gcc.c-torture/execute/931002-1.c
+  0ba045de14f9208e1ec847d39fb4712a943f00ac2b9ad1e45abf5735852b2699  928cb42bad67  torture/gcc/testsuite/gcc.c-torture/execute/960512-1.c
+  3d984273ae4ce7de1aecf84972af15ddb2202a4197dfde878dfdfd454ee393f0  ab0c17038ea0  torture/gcc/testsuite/gcc.c-torture/execute/991014-1.c
+  d54d5d6a5e8bb26474d0d2776b3a56c2659a6729a13a08a330bf44b7402087f5  4b237f0e6f72  torture/gcc/testsuite/gcc.c-torture/execute/align-nest.c
+  d2487c4a7733f29b51ab3db27fd7918589b4da586360772c994b53f88497497e  bfaaeefb2909  torture/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c
+  c4d167ef0d171e1831ca6c9e009ab3d16e618fa7d0add19fbffdf55b0f5c983b  7c5da19620e4  torture/gcc/testsuite/gcc.c-torture/execute/comp-goto-2.c
+  99a3c0dc6d77331614eb2c3d7720b09c5edd87444a18de4e29e1bf95dc1415c7  73c0f6470db2  torture/gcc/testsuite/gcc.c-torture/execute/nest-align-1.c
+  e0d3ed0f10cba7cbbdada1e966e991a13ac72e905d3abd08b2f1d33948ac1456  6d9fbb7b461f  torture/gcc/testsuite/gcc.c-torture/execute/nest-stdar-1.c
+  67883bbf9ee372c6c60659e5ba28f1d218f8df07a70d00e43d22ca77a8158858  af9137381136  torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-1.c
+  4378b96e756ef4d0f2cfeb8db9864311916f01361610a7ed522967cc8875bb6a  d5c5280a27e1  torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-2.c
+  36e09b03bf4fb33aff71bf3b149530a02194a8f3955e5d7b210548e1aeb1c8e6  5f37376485f1  torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-3.c
+  a265a5198feb2d7e9c379cb1864f674e8f30bf0ebe05cf1b0cfc1395f059a36b  fc9ad955a9f2  torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-5.c
+  de7c400d4e0050ae86a7b3818b1ba13ab8c9df88d0943de5855d365534f619ec  fad729aaba3b  torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-6.c
+  d0b668626de9fa3c999777ed0a74c7bcf7f767e85bcd8d3294e5efc4fd49be22  5b3d34b8dce9  torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-7.c
+  a27e72a0d30107d9cd7c3d5002cf4d03cb082be4ebe1defcd0061999ef9e2f1c  bef8674a43c7  torture/gcc/testsuite/gcc.c-torture/execute/pr103052.c
+  1a3ac630f7827560249fcaa53e346d45ed7fbb649836a4cc15686f9ca7c11d61  f6005dc2983d  torture/gcc/testsuite/gcc.c-torture/execute/pr103405.c
+  5bdf72e2be7dce010c9c8a11d77d6a884bd1b20c31d48f324ff359b90bb5d7f2  4a217509e94c  torture/gcc/testsuite/gcc.c-torture/execute/pr105777.c
+  7045416e06cd49df5d922b31027d12147502373dccce5d25a780020474281dcb  9143b3d3e7ed  torture/gcc/testsuite/gcc.c-torture/execute/pr105984.c
+  74b9fdb37a0200d3bc693e5edfbfef811db197ed0e700e9079b472d6a9da1ee4  3e79367d401c  torture/gcc/testsuite/gcc.c-torture/execute/pr115033.c
+  358d4a6891006ad25eb04f99e55096f70dba93ef0056a8a30f1da268b73025af  9f39a93355f4  torture/gcc/testsuite/gcc.c-torture/execute/pr117432.c
+  7a5499e1afefc89136bd1756451a723b1c47e8633cae3d31bc83d8a90bfa8cd6  c70d1ca823f3  torture/gcc/testsuite/gcc.c-torture/execute/pr123864.c
+  4bfac3671278712097cedc58d0c1524f1bec0b73bb30895d10b947b0103806b5  81bf6a29d7c9  torture/gcc/testsuite/gcc.c-torture/execute/pr124358.c
+  381762a13f59559ad0cdd9c341010a83e2b9923a1e520627b64faa4989e072bf  2a2d7ff1bb97  torture/gcc/testsuite/gcc.c-torture/execute/pr22061-3.c
+  e8366e3541c00a8b9bd99723c50ef3aa49246bf0423f71f3f4f28a6129db89d5  8f0d1b85c4b9  torture/gcc/testsuite/gcc.c-torture/execute/pr22061-4.c
+  27672b21b01966d4a1759f20f756df6ee0f566a7e847962cd7f20364f97c5f4d  f1d12983ef34  torture/gcc/testsuite/gcc.c-torture/execute/pr24135.c
+  067897649784f6d96b597ab986dbb0cc026d69061717e4a230a775bc4003ab70  e1d71e2a0db1  torture/gcc/testsuite/gcc.c-torture/execute/pr30314.c
+  9aff21d405a2044acd737d24d37128b16147249a8ff89bf61ad0cdda44df2633  aa2d12ec73f3  torture/gcc/testsuite/gcc.c-torture/execute/pr38969.c
+  c44599de1ebebc023e84611d0202e97c6fdd92132176a1f706e4f918304c607d  ef8d08ce0239  torture/gcc/testsuite/gcc.c-torture/execute/pr41935.c
+  82ab9b38b0f835c76d19bcd6f536d372226739a0373f2a5bf0bbc8d256f5fe80  bbb91b343b12  torture/gcc/testsuite/gcc.c-torture/execute/pr42248.c
+  47ff0df11587f7443d78ae36eb756353bbdf62d330de2af86ac54c4d546478c4  d5942b7cedbe  torture/gcc/testsuite/gcc.c-torture/execute/pr47237.c
+  5defc96b0d7221a3457c93e047c824623dd12c43199dc9a6c5e8e365563b9c9a  1d00953af3aa  torture/gcc/testsuite/gcc.c-torture/execute/pr51447.c
+  ac63868a2fe72338f0c5a4f616799d9fbe3f5b8bcbc19d053149f61875ec3689  92bcc5659807  torture/gcc/testsuite/gcc.c-torture/execute/pr60003.c
+  4684cadf19a1718f3f85d9b16f90d8efc70c8e030f215d1559dd5830fe75c0c2  5151f6eef839  torture/gcc/testsuite/gcc.c-torture/execute/pr64242.c
+  d8a034c18c5df17b9cd31850a3d95362d40142de8ece62fd48bc811944a73b37  cee407dc86e0  torture/gcc/testsuite/gcc.c-torture/execute/pr71494.c
+  eb4c0972344f92877788bacc00e6171a74834dfb51e0647fdc9e0c6afb1daec8  48fb715570ad  torture/gcc/testsuite/gcc.c-torture/execute/pr82210.c
+  d33772251fbc170de4fea0464aa8f90aa3b929407613ed3d59193c14b7fccc15  3ad68522e71d  torture/gcc/testsuite/gcc.c-torture/execute/pr86714.c
+  df92949fcdfbb1dec3c0d7fdad72e494a01ab6d678bd237196fa300234673e54  f820bcee4aa8  torture/gcc/testsuite/gcc.c-torture/execute/stdarg-4.c
+  89833d58fc9113ca04e2a8a163f08d42755507f542236a58ea0fbbd0119c2f41  baefe8758219  torture/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c
+  6fbbc2681a834c531d94a5e7c2d29fc13ce41857d726387ab0c7ef6e0f7e7dad  1e1dae8e8aaa  torture/gcc/testsuite/gcc.c-torture/execute/va-arg-trap-1.c
+  f5704f1cd609881e65cb317595cd79598f4271ff36f25e6f758892d8777aea48  418708b8b926  torture/gcc/testsuite/gcc.dg/tree-ssa/pr105777.c
+  169f3fea01449e3b2ea0128f0278d1be78626558342d0fcfd6c660881f45e325  10b0b8587368  torture/gcc/testsuite/gcc.dg/tree-ssa/pr30314.c
+
+Rows (92; row and disposition, then each replaced citation as the
+old path and "-> new path (method)"; other citations of the row are unchanged):
+  llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/20020411-1.c (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20020411-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20020411-1.c (upstream)
+  llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/20030323-1.c (not-applicable)
+    docs/evoir-spec.md
+      -> .evidence/disposition-evidence-20261013/docs/evoir-spec.md (history)
+  llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/20040709-1.c (FP-deferred)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040709-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20040709-1.c (upstream)
+  llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/20040709-2.c (FP-deferred)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040709-2.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20040709-2.c (upstream)
+  llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/pr42248.c (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr42248.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr42248.c (upstream)
+  llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/pr86714.c (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr86714.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr86714.c (upstream)
+  llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/stdarg-4.c (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/stdarg-4.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/stdarg-4.c (upstream)
+  llvm-test-suite:SingleSource/Regression/C/gcc-c-torture/execute/va-arg-trap-1.c (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/va-arg-trap-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/va-arg-trap-1.c (upstream)
+  torture:20010122-1 (not-applicable)
+    docs/evoir-spec.md
+      -> .evidence/disposition-evidence-20261013/docs/evoir-spec.md (history)
+  torture:20030323-1 (not-applicable)
+    docs/evoir-spec.md
+      -> .evidence/disposition-evidence-20261013/docs/evoir-spec.md (history)
+  torture:pr104604 (not-applicable)
+    docs/evoir-spec.md
+      -> .evidence/disposition-evidence-20261013/docs/evoir-spec.md (history)
+  torture:920501-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920501-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/920501-1.c (upstream)
+  torture:921202-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/921202-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/921202-1.c (upstream)
+  torture:921208-2 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/921208-2.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/921208-2.c (upstream)
+  torture:920728-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920728-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/920728-1.c (upstream)
+  torture:20010209-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20010209-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20010209-1.c (upstream)
+  torture:20020412-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20020412-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20020412-1.c (upstream)
+  torture:20040308-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040308-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20040308-1.c (upstream)
+  torture:20040423-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040423-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20040423-1.c (upstream)
+  torture:20041218-2 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20041218-2.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20041218-2.c (upstream)
+  torture:20070919-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20070919-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20070919-1.c (upstream)
+  torture:align-nest (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/align-nest.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/align-nest.c (upstream)
+  torture:pr22061-3 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr22061-3.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr22061-3.c (upstream)
+  torture:pr22061-4 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr22061-4.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr22061-4.c (upstream)
+  torture:921017-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/921017-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/921017-1.c (upstream)
+  torture:pr41935 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr41935.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr41935.c (upstream)
+  torture:pr82210 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr82210.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr82210.c (upstream)
+  torture:920501-7 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920501-7.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/920501-7.c (upstream)
+  torture:comp-goto-2 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/comp-goto-2.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/comp-goto-2.c (upstream)
+  torture:pr117432 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr117432.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr117432.c (upstream)
+  torture:pr123864 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr123864.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr123864.c (upstream)
+  torture:20241029-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20241029-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20241029-1.c (upstream)
+  torture:20040709-1 (FP-deferred)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040709-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20040709-1.c (upstream)
+  torture:20040709-2 (FP-deferred)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040709-2.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20040709-2.c (upstream)
+  torture:20000603-1 (FP-deferred)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20000603-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20000603-1.c (upstream)
+  torture:20000731-1 (FP-deferred)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20000731-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20000731-1.c (upstream)
+  torture:20001017-1 (FP-deferred)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20001017-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20001017-1.c (upstream)
+  torture:pr115033 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr115033.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr115033.c (upstream)
+  torture:pr124358 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr124358.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr124358.c (upstream)
+  torture:stdarg-4 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/stdarg-4.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/stdarg-4.c (upstream)
+  ctest:00113 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/ctest/tests/single-exec/00113.c
+      -> .evidence/disposition-evidence-20261013/ctest/tests/single-exec/00113.c (upstream)
+  ctest:00119 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/ctest/tests/single-exec/00119.c
+      -> .evidence/disposition-evidence-20261013/ctest/tests/single-exec/00119.c (upstream)
+  ctest:00123 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/ctest/tests/single-exec/00123.c
+      -> .evidence/disposition-evidence-20261013/ctest/tests/single-exec/00123.c (upstream)
+  ctest:00174 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/ctest/tests/single-exec/00174.c
+      -> .evidence/disposition-evidence-20261013/ctest/tests/single-exec/00174.c (upstream)
+  ctest:00175 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/ctest/tests/single-exec/00175.c
+      -> .evidence/disposition-evidence-20261013/ctest/tests/single-exec/00175.c (upstream)
+  ctest:00195 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/ctest/tests/single-exec/00195.c
+      -> .evidence/disposition-evidence-20261013/ctest/tests/single-exec/00195.c (upstream)
+  ctest:00204 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/ctest/tests/single-exec/00204.c
+      -> .evidence/disposition-evidence-20261013/ctest/tests/single-exec/00204.c (upstream)
+  torture:20020227-1 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20020227-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20020227-1.c (upstream)
+  torture:20020411-1 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20020411-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20020411-1.c (upstream)
+  torture:960512-1 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/960512-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/960512-1.c (upstream)
+  torture:pr38969 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr38969.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr38969.c (upstream)
+  torture:pr42248 (FP-deferred)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr42248.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr42248.c (upstream)
+  torture:20000822-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20000822-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20000822-1.c (upstream)
+  torture:20001111-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20001111-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20001111-1.c (upstream)
+  torture:20010605-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20010605-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20010605-1.c (upstream)
+  torture:20030501-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20030501-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20030501-1.c (upstream)
+  torture:20040520-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20040520-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20040520-1.c (upstream)
+  torture:20061220-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20061220-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20061220-1.c (upstream)
+  torture:20090219-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/20090219-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/20090219-1.c (upstream)
+  torture:920415-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920415-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/920415-1.c (upstream)
+  torture:920428-2 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920428-2.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/920428-2.c (upstream)
+  torture:920612-2 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920612-2.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/920612-2.c (upstream)
+  torture:920721-4 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/920721-4.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/920721-4.c (upstream)
+  torture:921215-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/921215-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/921215-1.c (upstream)
+  torture:931002-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/931002-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/931002-1.c (upstream)
+  torture:991014-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/991014-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/991014-1.c (upstream)
+  torture:built-in-setjmp (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c (upstream)
+  torture:nest-align-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nest-align-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/nest-align-1.c (upstream)
+  torture:nest-stdar-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nest-stdar-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/nest-stdar-1.c (upstream)
+  torture:nestfunc-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-1.c (upstream)
+  torture:nestfunc-2 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-2.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-2.c (upstream)
+  torture:nestfunc-3 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-3.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-3.c (upstream)
+  torture:nestfunc-5 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-5.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-5.c (upstream)
+  torture:nestfunc-6 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-6.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-6.c (upstream)
+  torture:nestfunc-7 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-7.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/nestfunc-7.c (upstream)
+  torture:pr103052 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr103052.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr103052.c (upstream)
+  torture:pr103405 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr103405.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr103405.c (upstream)
+  torture:pr105777 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr105777.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr105777.c (upstream)
+    .build/ladder/torture/gcc/testsuite/gcc.dg/tree-ssa/pr105777.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.dg/tree-ssa/pr105777.c (upstream)
+  torture:pr105984 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr105984.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr105984.c (upstream)
+  torture:pr24135 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr24135.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr24135.c (upstream)
+  torture:pr30314 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr30314.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr30314.c (upstream)
+    .build/ladder/torture/gcc/testsuite/gcc.dg/tree-ssa/pr30314.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.dg/tree-ssa/pr30314.c (upstream)
+  torture:pr47237 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr47237.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr47237.c (upstream)
+  torture:pr51447 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr51447.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr51447.c (upstream)
+  torture:pr60003 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr60003.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr60003.c (upstream)
+  torture:pr64242 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr64242.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr64242.c (upstream)
+  torture:pr71494 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr71494.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr71494.c (upstream)
+  torture:va-arg-pack-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c (upstream)
+  torture:pr86714 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/pr86714.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/pr86714.c (upstream)
+  torture:pr86659-1 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+  torture:pr86659-2 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+  torture:pr87623 (not-applicable)
+    docs/notebook/benchmark-applicability.md
+      -> docs/archive/notebook/benchmark-applicability.md (archive)
+  torture:va-arg-trap-1 (not-applicable)
+    .build/ladder/torture/gcc/testsuite/gcc.c-torture/execute/va-arg-trap-1.c
+      -> .evidence/disposition-evidence-20261013/torture/gcc/testsuite/gcc.c-torture/execute/va-arg-trap-1.c (upstream)

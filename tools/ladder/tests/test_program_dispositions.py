@@ -50,6 +50,29 @@ class ProgramDispositionTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue((root / path).is_file())
 
+    def test_every_reviewed_row_cites_existing_evidence(self):
+        # B10a: classify_program makes a row with a missing evidence file a
+        # compiler failure, even when the original program passes. A moved
+        # document or a deleted ladder checkout must fail here, before a replay.
+        # Files under .evidence/ are local captures that Git does not track. A
+        # clean checkout checks only the tracked citations.
+        root = Path(__file__).resolve().parents[3]
+        local = (root / '.evidence').is_dir()
+        programs = json.loads((root / 'tests/contracts/benchmark-program-dispositions.json').read_text())['programs']
+        unsupported = []
+        for key, rule in programs.items():
+            evidence = rule.get('evidence') if isinstance(rule, dict) else None
+            if not isinstance(evidence, list) or not evidence:
+                unsupported.append(f'{key}: no evidence list')
+                continue
+            unsupported.extend(f'{key}: {path}' for path in evidence
+                               if not isinstance(path, str)
+                               or ((local or not path.startswith('.evidence/'))
+                                   and not (root / path).is_file()))
+        if unsupported:
+            self.fail('\n'.join([f'{len(unsupported)} evidence citations are missing or invalid:',
+                                 *unsupported]))
+
     def measure(self, rule=None, *, evidence=True, raw='fail', emission='emitted'):
         source = 'float declaration_only; int main(void){return 1;}\n'
         with tempfile.TemporaryDirectory() as directory:
