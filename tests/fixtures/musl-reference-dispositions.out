@@ -1,0 +1,125 @@
+B08d — dispositions of the 17 reference libc-test failures, 2026-10-13
+====================================================================
+
+Scope: the 17 cases that failed in the GCC reference baseline of run
+20260927T110110Z. Each case has one source-bound disposition below. A
+disposition explains a failure. It does not turn a failure into a PASS. The
+original static lane keeps every remaining failure in its failing set and in
+its count. No test source, assertion, watchdog, stack limit or descriptor
+limit was changed.
+
+Pins and identities:
+  musl 1.2.6 tarball SHA256
+    d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a
+  libc-test 7b95dfa5f5d5ca4d949221e0228ccc290bacc14e (repo.or.cz HEAD)
+  EvoCC .build/frozen/366fd796/evocc-darwin, evocc 0.1.0 (366fd796613e)
+    SHA256 93eacee4e6e917049d041346c9ecbeff1266f8b17dd26bc684eeeed1a53c4c04
+  Sealed image evo-nexlab:sealed
+    sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93
+    GCC 14.2.0-19, Clang 19.1.7, dash 0.5.12-12, bash 5.2.37
+  Reference archive SHA256, equal to the 2026-09-27 reference archive:
+    e762ee14a81c002c2f58f17d158e585c4b656ad3d9a33e02585829d05b18bd9a
+  Mixed archive SHA256 (1,271 EvoCC units, 68 E3049 refusals), both runs:
+    b377004d1d9347327b25eb4ea292974cb4c8952c80765367bc55800cb78a62a9
+
+Two fresh lane runs:
+  python3 tools/ladder/musl.py --evocc .build/frozen/366fd796/evocc-darwin \
+    --jobs 4 --budget 8 --build .build/case/m1 --no-receipt
+  .evidence/ladder/musl/20261013T135849Z (summary SHA256 4475cbf932b7f6fa...)
+  .evidence/ladder/musl/20261013T143422Z (summary SHA256 a28e7a44b254bb47...)
+Each GCC reference baseline has 13 failing cases, not 17: the case
+environment runs the two atfork and the two daemon cases correctly. Each
+EvoCC mixed library survives two complete replays with the same 13 cases and
+no added failure. All six REPORT files of the two runs are identical except
+for the crashing tls_get_new-dtv case, which prints 7 to 10 dlsym lines
+before its segfault. The shared-loader supplement PASSES in both runs. The
+second summary records 13 dispositions and an empty undispositioned list.
+It labels the two strptime cases test-expectation; the lane now spells that
+category test-defect. Nothing else in the table changed after that run.
+tests/contracts/ladder-musl-receipt.json is unchanged.
+
+Dispositions (category: reason; evidence):
+
+api/main (1)
+  musl defect: pinned include/unistd.h (SHA256 ab2782955f7f5cd2...) lacks
+  _PC_TIMESTAMP_RESOLUTION and _SC_XOPEN_UUCP. The POSIX.1-2024 <unistd.h>
+  lists both. api/unistd.c does not compile (lines 117 and 238), so main does
+  not link. musl master has not changed include/unistd.h since 2024-05-07.
+  Evidence: baseline REPORT; musl-reference-boundaries.out; the patched conf
+  supplement links and runs the original api/main 12/12.
+
+dlopen, tls_align, tls_align_dlopen, tls_init_dlopen, tls_get_new-dtv (5)
+  environment limit: the static-only lane (--disable-shared, -static) has no
+  dynamic loader: "Dynamic loading not supported", "attempted static link of
+  dynamic object". Evidence: the genuine loader lane runs all five unchanged
+  programs, 5/5 with the GCC reference libc.so and 5/5 with the EvoCC
+  candidate libc.so, each as PT_INTERP; musl-shared-loader.out.
+
+strptime, strptime-static (2)
+  test defect: the two checks sit under the test's "Glibc" comment. They
+  expect %s to set the date and %z to accept -06. POSIX.1-2024 leaves the
+  effect of %s unspecified and gives %z as +hhmm or -hhmm. The pinned source
+  parses %s without an effect (lines 133-139) and requires four %z digits
+  (lines 199-208). Evidence: baseline REPORT; musl-reference-boundaries.out;
+  the patched time extension passes 12 x 45/45 and 24/24 original entries.
+
+strtold, strtold-static (2)
+  musl defect: hexfloat keeps one hex digit too few for binary128, so both
+  inputs round to ...1112. musl master fixes it in 50979c5bc89a (2026-05-21);
+  its message names both inputs. Evidence: musl-hex-tail-reduction.out; the
+  patched numerics pass 12 x 5920/5920 and 180/180 original entries.
+
+wordexp, wordexp-static (2)
+  musl defect and environment limit: the library leaks shell stderr, exposes
+  its helper arguments, misparses WRDE_NOCMD input and ignores WRDE_UNDEF; the
+  pinned dash 0.5.12 has no dollar-single-quotes. musl master now has three of
+  the library fixes. Evidence: musl-patched-wordexp.out; the patched library
+  passes 12 x 133/133 probe checks and 24/24 original entries.
+
+powf (1)
+  musl defect: upward powf(0x1.fffffep+127, 1) raises INEXACT|OVERFLOW for an
+  exact result. It is the only counted line; the 79 X-prefixed lines are
+  upstream expected failures. powf.c has not changed in musl master since
+  2019. Evidence: musl-powf-rounding-reduction.out; patched numerics PASS.
+
+daemon-failure, daemon-failure-static (2)
+  environment limit: with stdout on a host virtiofs file, exit waits after
+  descriptor exhaustion. The case wrapper spools only these two supervisors
+  to guest-local storage. Evidence: both fresh baselines PASS;
+  descriptor-exit-filesystem.out; controls below.
+
+pthread_atfork-errno-clobber, pthread_atfork-errno-clobber-static (2)
+  environment limit: RLIMIT_NPROC does not constrain uid 0. The wrapper runs
+  only these two cases as uid/gid 65534. Evidence: both fresh baselines PASS;
+  musl-reference-boundaries.out; controls below.
+
+Compiler defect: none. The EvoCC mixed replays reproduce the reference
+failing set exactly. Every patched supplement passes equally for GCC14,
+Clang19 and EvoCC at O0 and O2 against both archives.
+
+Environment controls, .evidence/ladder/musl-environment/20261013/:
+The unchanged test objects are linked against the reference archive. Three
+rounds; only the execution environment changes.
+  atfork as uid 0 without the wrapper: 3/3 FAIL, "fork succeeded despite
+  rlimit". Through the wrapper as uid 65534: 3/3 PASS.
+  daemon with stdout on a host-mounted file: 3/3 time out at 5.0 s. With
+  guest-local stdout: 3/3 PASS in about 0.19 s. Through the wrapper: 3/3
+  PASS in about 0.2 s. The load average was 72 to 78, so these timeouts only
+  corroborate the B08d6 reduction; they are not independent evidence.
+
+Patched dependency supplements, rerun with the frozen compiler,
+.evidence/ladder/musl-patched/20261013-final/ (GCC14/Clang19/EvoCC x O0/O2 x
+reference/mixed archives; executions.json SHA256 prefix):
+  numerics        12 x 5920/5920 probe, 180/180 originals  6b2ced6c32bf9596
+  time            12 x 45/45 probe, 24/24 originals        acf762317f00b500
+  conf            12 x 27/27 probe, 12/12 api/main         487c4b9460045adb
+  wordexp         12 x 133/133 probe, 24/24 originals      d452516b3ff00f9a
+  wordexp-memory  12 x 192/192 probe                       d81536417415c261
+  RED controls: unpatched wordexp 24/24 FAIL (107 diagnostics each);
+  previous wordexp patch 24/24 FAIL (71 diagnostics each).
+
+Claim ceiling: each of the 17 reference failures has a disposition and
+evidence. The original static lane still has 13 failing cases: 8 library or
+test cases and 5 static-only loader cases. No all-tests PASS, full-musl,
+all-EvoCC or B10 claim follows. The patched supplements are a separate
+configuration. They never update the original receipt.

@@ -60,3 +60,28 @@ static failures and receipts remain unchanged. No full campaign was launched.
 
 Changed gate: 284 ladder tests PASS, including shared-population mutation and
 common-bench identity checks; changed-file Ruff and git diff --check PASS.
+
+Replay with the frozen compiler, 2026-10-13
+-------------------------------------------
+Two fresh complete lane runs rebuilt the pinned sources from scratch:
+.evidence/ladder/musl/20261013T135849Z and 20261013T143422Z, each with
+python3 tools/ladder/musl.py --evocc .build/frozen/366fd796/evocc-darwin
+--jobs 4 --budget 8 --build .build/case/m1 --no-receipt.
+EvoCC SHA256 93eacee4e6e917049d041346c9ecbeff1266f8b17dd26bc684eeeed1a53c4c04.
+Image evo-nexlab:sealed
+sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93.
+
+Each run accepted 1,271 EvoCC static units after two complete replays, then
+ran this supplement. Both runs: 5/5 GCC reference and 5/5 EvoCC candidate
+PASS. Each executable requests its own libc.so as PT_INTERP. The composition
+is again 1,270 EvoCC C objects (1,268 accepted + 2 loader units) and 81
+reference objects (68 complex C + 13 assembly).
+  reference libc.so d6f868e2370b902c1a27ec8fdca044f655f3bbb722ad9f813cab5844646ea305
+    (equal to the 2026-09-27 reference library)
+  candidate libc.so c23a46f01e958e5ec5243eae7720a0149620781150aded6fd65c4c6b76166822
+  candidate-build.json c66ea6c88b54d5202b94d47061cd0dffe14c5d5014df1e79e7707c06810bedd9
+  executions.json 273d27b01d9d3a85c098efc2371945a478d6adacfaf150cd1532cf0c139f9211
+  loader-units.json 15f46faa2d4f6f9e488a3b75fbdea45e16b0c78402b877a65061f99c3f69c94c
+The two runs produce byte-identical composition and execution records.
+The static lane still reports the same five cases as failures. The second
+run's summary gives them the environment-limit disposition, not a PASS.

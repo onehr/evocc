@@ -31,6 +31,12 @@ disable the watchdog that is supposed to report that very failure.
 
 Usage:
   python3 tools/ladder/musl.py [--evocc PATH] [--jobs N] [--budget N]
+                               [--build DIR] [--no-receipt]
+
+``--build`` selects a work root that holds ``musl`` and ``libc-test`` copies of
+the pinned sources, for example on a case-sensitive volume. ``--no-receipt`` is
+a diagnostic replay: its summary stays in the evidence directory and the
+tracked contract receipt is not rewritten.
 """
 
 from __future__ import annotations
@@ -116,6 +122,49 @@ echo tests-done
 
 
 FAILED_CASE = re.compile(r"^(?:FAIL|BUILDERROR) (\S+)", re.M)
+
+#: Source-bound dispositions of the reference failures for the pinned musl
+#: and libc-test sources. A disposition explains a failure. It never removes
+#: the case from the failing set, the count or the receipt. A failing case
+#: without an entry is reported as undispositioned, including the four
+#: cases that the case environment is expected to make pass.
+DSO_LIMIT = ("environment-limit",), (
+    "the static-only lane (--disable-shared, -static) has no dynamic loader; "
+    "the shared-loader supplement executes this program"), "musl-shared-loader.out"
+REFERENCE_DISPOSITIONS = {
+    "src/api/main.exe": (("musl-defect",), (
+        "pinned include/unistd.h lacks the POSIX.1-2024 names _PC_TIMESTAMP_RESOLUTION "
+        "and _SC_XOPEN_UUCP, so api/unistd.c does not compile"), "musl-reference-boundaries.out"),
+    "src/functional/dlopen.exe": DSO_LIMIT,
+    "src/functional/tls_align.exe": DSO_LIMIT,
+    "src/functional/tls_align_dlopen.exe": DSO_LIMIT,
+    "src/functional/tls_init_dlopen.exe": DSO_LIMIT,
+    "src/regression/tls_get_new-dtv.exe": DSO_LIMIT,
+    **dict.fromkeys(("src/functional/strptime.exe", "src/functional/strptime-static.exe"), (
+        ("test-defect",), (
+            "the test asserts glibc %s and two-digit %z behavior; POSIX.1-2024 leaves the "
+            "effect of %s unspecified and specifies +hhmm or -hhmm"), "musl-reference-boundaries.out")),
+    **dict.fromkeys(("src/functional/strtold.exe", "src/functional/strtold-static.exe"), (
+        ("musl-defect",), (
+            "hexfloat keeps one hex digit too few for binary128 rounding; upstream "
+            "fix 50979c5bc89a"), "musl-hex-tail-reduction.out")),
+    **dict.fromkeys(("src/functional/wordexp.exe", "src/functional/wordexp-static.exe"), (
+        ("musl-defect", "environment-limit"), (
+            "stderr and positional-parameter transport, WRDE_NOCMD grammar and ignored "
+            "WRDE_UNDEF in the library; the pinned dash 0.5.12 lacks POSIX.1-2024 "
+            "dollar-single-quotes"), "musl-patched-wordexp.out")),
+    "src/math/powf.exe": (("musl-defect",), (
+        "upward powf(0x1.fffffep+127, 1) returns infinity with INEXACT|OVERFLOW; "
+        "the result is exact"), "musl-powf-rounding-reduction.out"),
+}
+
+
+def dispositions(cases: set[str]) -> dict:
+    """The recorded disposition of each failing case, and the unexplained rest."""
+    known = {case: {"categories": list(entry[0]), "reason": entry[1],
+                    "record": "tests/fixtures/" + entry[2]}
+             for case, entry in sorted(REFERENCE_DISPOSITIONS.items()) if case in cases}
+    return {"dispositions": known, "undispositioned": sorted(cases - known.keys())}
 
 
 def report_failures(report: Path) -> set[str]:
@@ -229,9 +278,18 @@ def main() -> int:
     parser.add_argument("--jobs", type=int, default=6)
     parser.add_argument("--budget", type=int, default=40, help="bisection probes allowed")
     parser.add_argument("--skip-reference", action="store_true")
+    parser.add_argument(
+        "--build", type=Path, default=mixed.BUILD,
+        help="work root that holds the pinned musl and libc-test sources",
+    )
+    parser.add_argument(
+        "--no-receipt", action="store_true",
+        help="diagnostic replay: keep summary.json in the evidence directory and "
+             "leave the tracked contract receipt unchanged",
+    )
     arguments = parser.parse_args()
 
-    build = mixed.BUILD
+    build = arguments.build.resolve()
     source, test_source = build / "musl", build / "libc-test"
     for path in (source, test_source):
         if not path.is_dir():
@@ -259,6 +317,11 @@ def main() -> int:
     print(f"musl: baseline has {len(baseline)} failing libc-test cases")
     if (tests / "src" / "REPORT").exists():
         shutil.copyfile(tests / "src" / "REPORT", evidence / "baseline-REPORT")
+    reference_archive = None
+    if not arguments.skip_reference:
+        # The dependency supplements link before this exact reference archive.
+        shutil.copyfile(tree / "lib/libc.a", build / "libc-reference.a")
+        reference_archive = mixed.sha256(build / "libc-reference.a")
 
     units = mixed.parse_commands(tree / "commands.log", CONTAINER_ROOT)
     by_name = {unit.name: unit for unit in units}
@@ -365,6 +428,8 @@ def main() -> int:
         "baselineTest": {
             "libcTestFailingCases": len(baseline),
             "cases": sorted(baseline),
+            **dispositions(baseline),
+            "referenceArchiveSha256": reference_archive,
         },
         "units": len(units),
         "unitsCompiledByEvocc": sum(
@@ -410,7 +475,10 @@ def main() -> int:
         (evidence / "bisect.json").write_text(
             json.dumps(bisection, indent=1) + "\n", encoding="utf-8"
         )
-    path = mixed.write_receipt("musl", receipt)
+    if arguments.no_receipt:
+        path = evidence / "summary.json"
+    else:
+        path = mixed.write_receipt("musl", receipt)
     print(mixed.summary_line("musl", len(substituted), len(units), refusals))
     print(
         f"musl: {len(assembled)} units compiled and assembled by EvoCC; "

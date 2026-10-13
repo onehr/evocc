@@ -152,7 +152,8 @@ class SupervisorTest(unittest.TestCase):
                         (objects / 'a.lo.o').write_bytes(b'evocc-object')
                     return [{'unit': 'a.lo', 'outcome': 'emitted', 'omitted': []}]
 
-                options = SimpleNamespace(evocc=compiler, jobs=1, budget=2, skip_reference=True)
+                options = SimpleNamespace(evocc=compiler, jobs=1, budget=2, skip_reference=True,
+                                          build=build, no_receipt=False)
                 cached = {'passingSet': ['a.lo'], 'failingUnits': [], 'budgetExhausted': False}
                 with patch.object(musl.argparse.ArgumentParser, 'parse_args', return_value=options), \
                         patch.object(musl.mixed, 'BUILD', build), \
@@ -174,6 +175,64 @@ class SupervisorTest(unittest.TestCase):
                 self.assertEqual(len(calls), 1 if mode == 'missing-object' else 2)
                 self.assertEqual(shared.call_count, 1 if mode == 'pass' else 0)
                 self.assertEqual((tree / 'a.lo').read_bytes(), b'reference-object')
+
+    def test_a_diagnostic_replay_keeps_the_contract_receipt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build = Path(tmp) / 'work'
+            build.mkdir()
+            tree, tests = self.completed_tree(tmp)
+            tree.rename(build / 'musl-work')
+            tests.rename(build / 'libc-test-work')
+            (build / 'musl').mkdir()
+            (build / 'libc-test').mkdir()
+            compiler = build / 'evocc'
+            compiler.write_bytes(b'compiler-identity')
+            options = SimpleNamespace(evocc=compiler, jobs=1, budget=2, skip_reference=True,
+                                      build=build, no_receipt=True)
+            with patch.object(musl.argparse.ArgumentParser, 'parse_args', return_value=options), \
+                    patch.object(musl.mixed, 'EVIDENCE', Path(tmp) / 'evidence'), \
+                    patch.object(musl.mixed, 'container', return_value=
+                                 subprocess.CompletedProcess([], 0, 'tests-done\n', '')), \
+                    patch.object(musl.mixed, 'parse_commands', return_value=[]), \
+                    patch.object(musl.mixed, 'emit_all', return_value=[]), \
+                    patch.object(musl.mixed, 'assemble', return_value={}), \
+                    patch.object(musl.mixed, 'symbol_parity', return_value={}), \
+                    patch.object(musl.mixed, 'compatible_units', return_value=([], {})), \
+                    patch.object(musl.mixed, 'write_receipt') as publish:
+                self.assertEqual(musl.main(), 0)
+            publish.assert_not_called()
+            summaries = list((Path(tmp) / 'evidence/musl').glob('*/summary.json'))
+            self.assertEqual(len(summaries), 1)
+            receipt = musl.json.loads(summaries[0].read_text())
+            self.assertEqual(receipt['baselineTest']['cases'], ['src/sample/two.exe'])
+            self.assertEqual(receipt['baselineTest']['undispositioned'], ['src/sample/two.exe'])
+
+    def test_dispositions_explain_failures_without_removing_them(self):
+        fresh = {'src/api/main.exe', 'src/functional/dlopen.exe',
+                 'src/functional/strptime-static.exe', 'src/functional/strptime.exe',
+                 'src/functional/strtold-static.exe', 'src/functional/strtold.exe',
+                 'src/functional/tls_align.exe', 'src/functional/tls_align_dlopen.exe',
+                 'src/functional/tls_init_dlopen.exe', 'src/functional/wordexp-static.exe',
+                 'src/functional/wordexp.exe', 'src/math/powf.exe',
+                 'src/regression/tls_get_new-dtv.exe'}
+        result = musl.dispositions(fresh)
+        self.assertEqual(set(result['dispositions']), fresh)
+        self.assertEqual(result['undispositioned'], [])
+        allowed = {'musl-defect', 'test-defect', 'environment-limit'}
+        root = Path(__file__).resolve().parents[3]
+        for case, entry in result['dispositions'].items():
+            with self.subTest(case=case):
+                self.assertTrue(entry['categories'] and set(entry['categories']) <= allowed)
+                self.assertTrue((root / entry['record']).is_file())
+        # Environment prerequisites must pass; their failure stays unexplained.
+        prerequisites = {'src/regression/daemon-failure.exe',
+                         'src/regression/daemon-failure-static.exe',
+                         'src/regression/pthread_atfork-errno-clobber.exe',
+                         'src/regression/pthread_atfork-errno-clobber-static.exe'}
+        self.assertFalse(prerequisites & set(musl.REFERENCE_DISPOSITIONS))
+        result = musl.dispositions(fresh | prerequisites | {'src/new/case.exe'})
+        self.assertEqual(result['undispositioned'], sorted(prerequisites | {'src/new/case.exe'}))
+        self.assertEqual(musl.dispositions(set()), {'dispositions': {}, 'undispositioned': []})
 
     def test_missing_report_is_not_an_empty_failure_set(self):
         with tempfile.TemporaryDirectory() as directory:
