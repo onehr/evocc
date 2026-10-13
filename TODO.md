@@ -134,7 +134,7 @@ was found in the read-only process check at this planning checkpoint.
 <!-- closure-queues:start -->
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
-| KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12, K16, K17 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
+| KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, B08d, B08d10, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, D01, D02, D03, D04, D05, D06 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
@@ -2088,7 +2088,7 @@ KUnit, and it closes none of those separate tasks.
   programs pass on both kernels with 125/125 subtests.
   [Receipt](tests/contracts/kernel-direct-virt-receipt.json).
 
-- [ ] **K16 — Apply `used` written after a pointer `*` as GCC does** — `RETEST`, P2.
+- [x] **K16 — Apply `used` written after a pointer `*` as GCC does** — `DONE`, P2, 2026-10-13.
   Found on 2026-10-13 in the K15 Kbuild log. Linux's `__ADDRESSABLE` declares
   `static void * __used __section(...) name = &sym;`. EvoIR 10.1.9 moved only
   `weak`, `alias` and `section` from that position to the declaration, so the
@@ -2097,16 +2097,20 @@ KUnit, and it closes none of those separate tasks.
   These kernel objects carry `section`, so they stayed in the output. Without
   `section`, `-O2` dropped such an object; GCC 14 keeps it. GCC 14 also accepts
   `unused` in that position without a warning.
-  The owner approved the rule on 2026-10-13. EvoIR 2.1.0 attaches `used` and
-  `retain` after a pointer `*` in a named declarator to the declaration, as it
-  attaches `weak`, `alias` and `section`. The lint reads `unused` on the
-  pointer next to a variable's name. Tests cover the warning, `-O2` retention
-  of objects and functions, and the GCC 14 cases that still warn: a farther
-  pointer, an array element and a parameter. Next action: rebuild the K15
-  configuration with this compiler. Exit: its log has no W0001 from these
-  macros.
+  Closed by `ce3ab5e9`, after the owner approved the rule on 2026-10-13.
+  EvoIR 2.1.0 attaches `used` and `retain` after a pointer `*` in a named
+  declarator to the declaration, as it attaches `weak`, `alias` and
+  `section`. The lint reads `unused` on the pointer next to a variable's name.
+  Tests cover the warning, `-O2` retention of objects and functions, and the
+  GCC 14 cases that still warn: a farther pointer, an array element and a
+  parameter. A direct Kbuild run of the K15 configuration with `820bfa29`
+  printed no W0001 warning. Of its 2,922 recorded build outputs, 3 differ from
+  the K15 run: `init/version.o`, `init/version-timestamp.o` and
+  `kernel/configs.o`. They embed the compiler version text. The Image boots on
+  both lanes, and the nine paired programs pass with 125/125 subtests.
+  [Receipt](tests/contracts/kernel-direct-virt-receipt.json).
 
-- [ ] **K17 — Name the affected option in unsupported-option warnings** — `RETEST`, P2.
+- [x] **K17 — Name the affected option in unsupported-option warnings** — `DONE`, P2, 2026-10-13.
   Found on 2026-10-13 in the K15 Kbuild log. Each "option is not supported and
   has no effect" warning printed and underlined the complete command line. In
   one Kbuild run, 19,634 such warnings filled 74.5 MiB of the 83.4 MiB build log.
@@ -2114,14 +2118,16 @@ KUnit, and it closes none of those separate tasks.
   invocation. Also, the code generator never allocates `x18`, so
   `-ffixed-x18` is always in effect, but the vDSO compile still reported it as
   having no effect.
-  On 2026-10-13 the owner asked to finish K17, including the shorter text
-  form. The warning and its `-Werror` error now label the ignored option.
-  Diagnostic format 1.3.0 shows only the labelled bytes of a `<command-line>`
-  line longer than 80 bytes; the location and the JSON coordinates do not
-  change. `-ffixed-x18` is accepted without a warning (EvoMIR Section 2.5).
-  Next action: rebuild the K15 configuration and measure the log. Exit: the
-  warnings label only the ignored option, and the log has no `-ffixed-x18`
-  warning.
+  Closed by `820bfa29`. On 2026-10-13 the owner asked to finish K17,
+  including the shorter text form. The warning and its `-Werror` error now
+  label the ignored option. Diagnostic format 1.3.0 shows only the labelled
+  bytes of a `<command-line>` line longer than 80 bytes; the location and the
+  JSON coordinates do not change. `-ffixed-x18` is accepted without a warning
+  (EvoMIR Section 2.5). In the direct Kbuild run with `820bfa29`, 19,632 such
+  warnings fill 4.5 MiB of the 10.2 MiB build log. Each one labels only the
+  ignored option. The two fewer warnings are the vDSO `-ffixed-x18` warnings,
+  and the receipt lists eight options without effect.
+  [Receipt](tests/contracts/kernel-direct-virt-receipt.json).
 
 ## Application failures, accounting and replays
 

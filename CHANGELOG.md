@@ -138,12 +138,13 @@ The first public version.
 - `used` and `retain` written after a pointer `*`, as in Linux's `static void * __used
   __section(...) name`, now mark the declared object, as in GCC 14. Before, `-O2` could
   omit such an object when it had no `section`, and `-Wall` reported it as an unused
-  variable, 13,601 times in one Linux build. `unused` on the pointer next to a variable's
-  name also prevents that warning. EvoIR revision 2.1.0 states the rule.
+  variable, 13,601 times in one Linux build. The rebuilt kernel reports none. `unused` on
+  the pointer next to a variable's name also prevents that warning. EvoIR revision 2.1.0
+  states the rule.
 - A warning for an ignored option labels that option, not the whole command line. In the
-  text form, a command line longer than 80 bytes shows only the labelled argument. One
-  Linux build log had 74.5 MiB of such warnings. `-ffixed-x18` no longer warns: x18 is
-  never assigned. Diagnostic format revision 1.3.0 states the rule.
+  text form, a command line longer than 80 bytes shows only the labelled argument. In one
+  Linux build log, these warnings fell from 74.5 MiB to 4.5 MiB. `-ffixed-x18` no longer
+  warns: x18 is never assigned. Diagnostic format revision 1.3.0 states the rule.
 
 ### Results at this version
 

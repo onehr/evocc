@@ -171,7 +171,7 @@ exists, it also compares the excerpt with the log.
   Unity test programs run 216 tests: none fails, and upstream marks one as
   ignored. The Unity framework itself is GCC-built.
 - **Linux.** The serial log comes from a kernel that Kbuild built directly
-  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `16a87d16bc1e6212…`, on
+  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `add1c4874e28d2f1…`, on
   the host boot lane. Its version banner names `evocc 0.1.0`. All 2,799 target
   C objects come from EvoCC. The receipt ties each object to its compile
   command in the build log, and no GCC target C object remains. GNU tools
@@ -183,7 +183,7 @@ exists, it also compares the excerpt with the log.
   signing. Kbuild passes `-mbranch-protection=pac-ret` to every target C
   object, and EvoCC signs the return address of every function: the Image has
   77,584 `paciasp` instructions. The host lane enables pointer
-  authentication, so this boot runs the signed code. Nine compiler options
+  authentication, so this boot runs the signed code. Eight compiler options
   have no effect, and the receipt lists them. The kernel also boots on the TCG
   lane, whose CPU model has no pointer authentication. Nine paired upstream
   kselftest programs, with 125 subtests, pass on both the GCC and the EvoCC

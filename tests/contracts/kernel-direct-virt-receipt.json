@@ -1,7 +1,7 @@
 {
   "mode": "direct-kbuild",
   "status": "BUILD_BOOT_SELECTED_SELFTEST_PASS",
-  "recordedAt": "2026-10-13T05:48:06.544190+00:00",
+  "recordedAt": "2026-10-13T09:41:53.556350+00:00",
   "kernelVersion": "6.18.44",
   "configuration": "Retained arm64 virtconfig input, olddefconfig with EvoCC; capability changes disclosed below.",
   "returnSigning": {
@@ -15,7 +15,7 @@
       }
     },
     "subjectImage": {
-      "imageSha256": "16a87d16bc1e621247d84c207e7a50dfb7c6a65076e339f25ca872fc291fd191",
+      "imageSha256": "add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f",
       "paciasp": 77584,
       "autiasp": 158196
     },
@@ -24,7 +24,12 @@
       "paciasp": 46775,
       "autiasp": 60282
     },
-    "previousDirectImage": {
+    "k15Image": {
+      "imageSha256": "16a87d16bc1e621247d84c207e7a50dfb7c6a65076e339f25ca872fc291fd191",
+      "paciasp": 77584,
+      "autiasp": 158196
+    },
+    "unsignedDirectImage": {
       "imageSha256": "ce7bd3e3ba06290b259c6d428daa0b362f58702cbc8e9f957d9dc2a227802e1d",
       "paciasp": 0,
       "autiasp": 0
@@ -44,11 +49,11 @@
     "different": [],
     "symlinkDifferences": []
   },
-  "outputRoot": ".build/case/kbuild-probe/out-pac",
+  "outputRoot": ".build/case/kbuild-probe/out-k16",
   "inputConfig": ".toolchain/records/frozen-kernel-gcc.config",
   "inputConfigSha256": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d",
-  "subjectConfig": ".evidence/kbuild-direct-pac-20261013/subject.config",
-  "configSha256": "46fa95ab9cd0e89f21b7de231ad09195df9a14ae21d32ef149569ed8e613c97f",
+  "subjectConfig": ".evidence/kbuild-direct-k16k17-20261013/subject.config",
+  "configSha256": "14679920b47d26bb697d209f48331a10b2e908f886bc309f8cad6eaf815b576a",
   "configChanges": {
     "ARCH_SUPPORTS_SHADOW_CALL_STACK": {
       "reference": "y",
@@ -84,7 +89,7 @@
     },
     "CC_VERSION_TEXT": {
       "reference": "\"gcc-14 (Debian 14.2.0-19) 14.2.0\"",
-      "subject": "\"evocc 0.1.0 (fb05debf29c4 2026-10-13)\""
+      "subject": "\"evocc 0.1.0 (820bfa2964b2 2026-10-13)\""
     },
     "HAVE_KCSAN_COMPILER": {
       "reference": "y",
@@ -103,18 +108,18 @@
       "subject": null
     }
   },
-  "compilerCommit": "fb05debf29c4",
+  "compilerCommit": "820bfa2964b2",
   "compiler": "target/frontend/aarch64-unknown-linux-musl/release/evocc",
-  "compilerSha256": "4e879e50deae39dd5b533219ffaca894226f7c03a58552008321f5418e912c1d",
+  "compilerSha256": "f2c378a288a71f1d325008002a994dcc32e2100a713eefa46e4f3cf042d17305",
   "compilerUnchangedDuringBuild": true,
   "hostCompiler": {
     "path": "target/frontend/release/evocc",
-    "commit": "fb05debf29c4",
-    "sha256": "e795bd8d9c61988f9772ea8c44a96dd0eeebe5be6802d0b3ec6f281887f7ca9b"
+    "commit": "820bfa2964b2",
+    "sha256": "a8894f7342534d2bc5577b1c7af7f88f2af802c5b243c4989ca375092e561df2"
   },
-  "imageSha256": "16a87d16bc1e621247d84c207e7a50dfb7c6a65076e339f25ca872fc291fd191",
+  "imageSha256": "add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f",
   "imageBytes": 59537920,
-  "vmlinuxSha256": "ab93caba33bd016ac49ec2c5a94680aa82c7a55665a1b5f2e92765322754ff21",
+  "vmlinuxSha256": "f679dbd2b542b1b54960132c8d6f679afc4d46674c9c1d2fcd312d86bc77c09d",
   "vmlinuxBytes": 1145347032,
   "buildExitCode": 0,
   "buildTimeoutSeconds": 7200,
@@ -133,14 +138,68 @@
     "missingRecordedOutputs": 0,
     "unaccountedCurrentCompilerInvocations": 0
   },
-  "objectProvenance": ".evidence/kbuild-direct-pac-20261013/object-provenance.json",
-  "objectProvenanceSha256": "d0e305adeff26e0613d05f3d0c9a457c62b9c3652c8251717cd385e10cf15523",
+  "objectProvenance": ".evidence/kbuild-direct-k16k17-20261013/object-provenance.json",
+  "objectProvenanceSha256": "9dca2f3e47fbdce8f5fd4ca2a584fb9674cc4e105b77690c71c943fd9000bd29",
   "toolchainScope": "EvoCC compiles target C. GNU tools build host programs, assemble and link; GCC also preprocesses one device-tree source. Userspace test programs are GCC-built.",
   "buildImage": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+  "buildLogWarnings": {
+    "scope": "Warnings in build.log that K16 (used after a pointer star) and K17 (ignored-option labels) address, measured the same way in the K15 log of the same configuration.",
+    "k15Log": ".evidence/kbuild-direct-pac-20261013/build.log",
+    "k15LogSha256": "fd71cb63efa5c4a25db7416efb13e7acbd596f4eac5dad8935ae042c906063d2",
+    "k15": {
+      "logBytes": 87412452,
+      "unusedVariableWarnings": 13601,
+      "ignoredOptionWarnings": 19634,
+      "ignoredOptionWarningBytes": 78084182,
+      "fixedX18Warnings": 2,
+      "unusedVariableDistinctLines": 13577,
+      "unusedVariableExamples": [
+        "ACPI_EXPORT_SYMBOL(acpi_acquire_mutex)",
+        "ACPI_EXPORT_SYMBOL(acpi_attach_data)",
+        "ACPI_EXPORT_SYMBOL(acpi_bios_error)",
+        "ACPI_EXPORT_SYMBOL(acpi_bios_exception)",
+        "ACPI_EXPORT_SYMBOL(acpi_bios_warning)",
+        "ACPI_EXPORT_SYMBOL(acpi_buffer_to_resource)",
+        "ACPI_EXPORT_SYMBOL(acpi_check_address_range)",
+        "ACPI_EXPORT_SYMBOL(acpi_current_gpe_count)",
+        "ACPI_EXPORT_SYMBOL(acpi_dbg_layer)",
+        "ACPI_EXPORT_SYMBOL(acpi_dbg_level)",
+        "ACPI_EXPORT_SYMBOL(acpi_debug_print)",
+        "ACPI_EXPORT_SYMBOL(acpi_debug_print_raw)",
+        "ACPI_EXPORT_SYMBOL(acpi_decode_pld_buffer)",
+        "ACPI_EXPORT_SYMBOL(acpi_detach_data)",
+        "ACPI_EXPORT_SYMBOL(acpi_enter_sleep_state)",
+        "ACPI_EXPORT_SYMBOL(acpi_enter_sleep_state_prep)",
+        "ACPI_EXPORT_SYMBOL(acpi_error)",
+        "ACPI_EXPORT_SYMBOL(acpi_evaluate_object)",
+        "ACPI_EXPORT_SYMBOL(acpi_evaluate_object_typed)",
+        "ACPI_EXPORT_SYMBOL(acpi_exception)"
+      ]
+    },
+    "subject": {
+      "logBytes": 10696552,
+      "unusedVariableWarnings": 0,
+      "ignoredOptionWarnings": 19632,
+      "ignoredOptionWarningBytes": 4694538,
+      "fixedX18Warnings": 0,
+      "unusedVariableDistinctLines": 0,
+      "unusedVariableExamples": []
+    }
+  },
+  "changedObjectsSinceK15": {
+    "scope": "Recorded build outputs whose bytes differ from the K15 run of the same configuration. The comparison covers every output in object-provenance.json.",
+    "k15ObjectProvenance": ".evidence/kbuild-direct-pac-20261013/object-provenance.json",
+    "compared": 2922,
+    "count": 3,
+    "units": [
+      "init/version-timestamp.o",
+      "init/version.o",
+      "kernel/configs.o"
+    ]
+  },
   "unsupportedOptions": [
     "-fconserve-stack",
     "-femit-struct-debug-baseonly",
-    "-ffixed-x18",
     "-fno-builtin-wcslen",
     "-fno-common",
     "-fno-delete-null-pointer-checks",
@@ -148,50 +207,50 @@
     "-fno-var-tracking",
     "-fverbose-asm"
   ],
-  "evidence": ".evidence/kbuild-direct-pac-20261013",
+  "evidence": ".evidence/kbuild-direct-k16k17-20261013",
   "captureLimitBytes": 524288000,
   "buildLogs": {
-    "build.log": "fd71cb63efa5c4a25db7416efb13e7acbd596f4eac5dad8935ae042c906063d2"
+    "build.log": "331acefb2322f9c50b9895716d9044d1e55c96a97e1c8d8e0968c9d4f7a44391"
   },
   "boots": {
     "reference-boot-hvf": {
       "verdict": "PASS",
       "bootLane": "hvf-host",
       "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
-      "nonce": "k1-20261013T050159Z-1d60f505",
-      "serialLogSha256": "dfc946e1af439f9cc5b4a6689823c8f5677c4a330ab4091a3033d22a08e44ec7",
-      "flownAt": "2026-10-13T05:02:00Z",
-      "receipt": ".evidence/kbuild-direct-pac-20261013/reference-boot-hvf/boot.json",
+      "nonce": "k1-20261013T074539Z-5554c204",
+      "serialLogSha256": "4365d2123a8354443db3c899a9162e2754d15f2274579f8153487efc8c1e9e35",
+      "flownAt": "2026-10-13T07:45:39Z",
+      "receipt": ".evidence/kbuild-direct-k16k17-20261013/reference-boot-hvf/boot.json",
       "pointerAuthentication": true
     },
     "reference-boot-tcg": {
       "verdict": "PASS",
       "bootLane": "tcg-cortex-a72",
       "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
-      "nonce": "k1-20261013T050200Z-ecf5a2b8",
-      "serialLogSha256": "ab2592893da03638e78eb84ed4f195a81b4727812bd4c1dd2f15da54e08ff5b8",
-      "flownAt": "2026-10-13T05:02:01Z",
-      "receipt": ".evidence/kbuild-direct-pac-20261013/reference-boot-tcg/boot.json",
+      "nonce": "k1-20261013T074539Z-fa7f1053",
+      "serialLogSha256": "d7183a0ccd267f155a2dee9dbe18ca9ede0bf0566a99e857e4eb8902db7f1d5e",
+      "flownAt": "2026-10-13T07:45:41Z",
+      "receipt": ".evidence/kbuild-direct-k16k17-20261013/reference-boot-tcg/boot.json",
       "pointerAuthentication": false
     },
     "subject-boot-hvf": {
       "verdict": "PASS",
       "bootLane": "hvf-host",
-      "imageSha256": "16a87d16bc1e621247d84c207e7a50dfb7c6a65076e339f25ca872fc291fd191",
-      "nonce": "k1-20261013T054437Z-89f7ea8f",
-      "serialLogSha256": "936effdae23268d72626169e69ce58eb1472556f2af9cb0d1a31a87c2ace9c4b",
-      "flownAt": "2026-10-13T05:44:37Z",
-      "receipt": ".evidence/kbuild-direct-pac-20261013/subject-boot-hvf/boot.json",
+      "imageSha256": "add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f",
+      "nonce": "k1-20261013T093903Z-3ffb52ab",
+      "serialLogSha256": "be87a34a72d32e8cef34b12d2a603d02e4ffd6940d173c67e5bd499a79e4e5d4",
+      "flownAt": "2026-10-13T09:39:04Z",
+      "receipt": ".evidence/kbuild-direct-k16k17-20261013/subject-boot-hvf/boot.json",
       "pointerAuthentication": true
     },
     "subject-boot-tcg": {
       "verdict": "PASS",
       "bootLane": "tcg-cortex-a72",
-      "imageSha256": "16a87d16bc1e621247d84c207e7a50dfb7c6a65076e339f25ca872fc291fd191",
-      "nonce": "k1-20261013T054437Z-0ce5401d",
-      "serialLogSha256": "0f14e64779c52ca0184771d3057536324828fffe9300a2560a8bd49595a77ea0",
-      "flownAt": "2026-10-13T05:44:40Z",
-      "receipt": ".evidence/kbuild-direct-pac-20261013/subject-boot-tcg/boot.json",
+      "imageSha256": "add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f",
+      "nonce": "k1-20261013T093908Z-823ef12c",
+      "serialLogSha256": "aa3a7bb29b5964de94799121db8636eaff055e1b382f27cc847030b94da1e831",
+      "flownAt": "2026-10-13T09:39:10Z",
+      "receipt": ".evidence/kbuild-direct-k16k17-20261013/subject-boot-tcg/boot.json",
       "pointerAuthentication": false
     }
   },
@@ -212,7 +271,7 @@
     "programCount": 9,
     "payloadCompiler": "gcc-14",
     "initramfsSha256": "9a783037c335043a846070c6c0d32051c9aac44d4cd727ab30e3a9555a4361e8",
-    "scratchSha256": "de2c7df05cc5c39b4fa14b59a1bef7f023e4b71e2f1a9c1699a1a8deb41f86f2",
+    "scratchSha256": "fdc5bea1306f5d8582f0763e9f5e4e86b00686cf230ae33818fa301b34b86c09",
     "reference": {
       "programs": {
         "PASS": 9,
@@ -376,30 +435,30 @@
     ],
     "regressions": [],
     "baselineFailures": [],
-    "summary": ".evidence/kbuild-direct-pac-20261013/selftests/summary.json",
-    "summarySha256": "573fbdbfb34c3f80421e8abf00463b9942fc4d751f8dc39044cc43d0fe1e89c7",
+    "summary": ".evidence/kbuild-direct-k16k17-20261013/selftests/summary.json",
+    "summarySha256": "bf187dd97d4d1f26d55384fa832b5e5e674ae55cf0a3fb6c21dedfe2b1f39ab6",
     "serialLogSha256": {
-      "reference": "0f37b377397df6c456df5b3201e77aefb3f445fd8745eec29872560473474612",
-      "subject": "5c33073c012f7ca87117fce29f551759f8b6bbf49c0f79c043573a6491b87b7a"
+      "reference": "5d8547ac24fc17e3bdd643bf2625cc7e696063cedab5ab6c885c10b9eacc1e18",
+      "subject": "e2e0513835857f07c9b0a4fdeca8048817a969dedf33b950590c1475dbb33c78"
     }
   },
   "gate": {
     "command": "tools/gate-changed.sh --full-workspace --offline",
     "exitCode": 0,
     "suites": 425,
-    "passed": 3255,
+    "passed": 3259,
     "failed": 0,
     "ignored": 5,
-    "logSha256": "0e41a733c73e4b2c5ebd3ca41357b9a71147495a8e73317516d8fa34347116aa"
+    "logSha256": "d374289beb6ed3462fe964c5f32036e4522705bd5c4e09739b520381ce3be24e"
   },
   "storage": {
     "captureLimitBytes": 524288000,
-    "captureAllocatedKiB": 199380,
-    "outputTreeAllocatedKiB": 5095200,
-    "hostFreeKiB": 32164916,
-    "caseVolumeFreeKiB": 10988888,
-    "removed": "The trial output tree .build/case/kbuild-probe/out-pac-trial (4.8 GiB). Its compiler changed during that build, so it is not evidence. Its logs and HVF boot record stay in trial/.",
-    "retained": "Image, vmlinux and objects in the output tree, raw config, source, reference runtime, selected selftest payload, the previous direct build tree and both compilers."
+    "captureAllocatedKiB": 13476,
+    "outputTreeAllocatedKiB": 5094092,
+    "hostFreeKiB": 28749160,
+    "caseVolumeFreeKiB": 5879380,
+    "removed": "No tree was removed for this run.",
+    "retained": "Image, vmlinux and objects in the output tree, raw config, source, reference runtime, selected selftest payload, the K15 and earlier direct build trees and both compilers."
   },
   "notRun": [
     "Historical 7008-unit configuration: raw config and runtime pair remain unavailable.",
