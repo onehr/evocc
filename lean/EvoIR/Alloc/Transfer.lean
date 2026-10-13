@@ -266,7 +266,7 @@ theorem width_eq_of_class {loc loc' : Loc} (general : loc ≠ .flags) (general' 
   cases h : loc.width <;> cases h' : loc'.width <;> simp_all [Machine.Width.class]
 
 /-- A matched call enters the callee at its checked entry block. -/
-theorem call_case (checked : checkAllocation pre post hints = true)
+theorem call_case (checked : checkHinted pre post hints = true)
     {s s₁ : Machine.State} {t t' : State} {a : Machine.Activation} {b : Activation}
     {E E' X : Equations} {f : Machine.Function} {g : Function} {block : Machine.Block}
     {block' : Block} {fuel : Nat} {symbol symbol' : String} {args results : List VReg}
@@ -394,7 +394,7 @@ theorem edgeOK_parts {hint : Nat → Equations} {fb : List Machine.Block} {gb : 
   exact ⟨edge.1.1, edge.1.2, edge.2⟩
 
 /-- Both machines jump to the same checked block. -/
-theorem jump_case (checked : checkAllocation pre post hints = true)
+theorem jump_case (checked : checkHinted pre post hints = true)
     {s s₁ : Machine.State} {t t' : State} {a : Machine.Activation} {b : Activation}
     {X : Equations} {f : Machine.Function} {g : Function} {target : Nat}
     (reach : Reaches (PreStep pre) entry s) (path : Reaches (PreStep pre) s s₁)
@@ -548,7 +548,7 @@ variable {type : Core.Source.IntType}
 
 /-- A terminator step. The pre-allocation activation is at the end of its
 block after the renamed moves. -/
-theorem terminator_case (checked : checkAllocation pre post hints = true)
+theorem terminator_case (checked : checkHinted pre post hints = true)
     (progress : Machine.ObservedProgress .postSSA pre type entry)
     {s s₁ : Machine.State} {t t' : State} {a : Machine.Activation} {b : Activation}
     {X : Equations} {f : Machine.Function} {g : Function} {block : Machine.Block} {block' : Block}
@@ -730,7 +730,7 @@ theorem terminator_case (checked : checkAllocation pre post hints = true)
 
 /-- Each allocated step matches a positive number of steps before allocation,
 or it is an inserted copy that decreases the rank. -/
-theorem transfer (checked : checkAllocation pre post hints = true)
+theorem transfer (checked : checkHinted pre post hints = true)
     (progress : Machine.ObservedProgress .postSSA pre type entry)
     {s : Machine.State} {t t' : State} (rel : Related pre post hints entry s t)
     (stepped : step post t = some t') :

@@ -93,13 +93,13 @@ theorem find_name' {fs : List Function} {name : String} {g : Function}
     (found : fs.find? (·.name == name) = some g) : g.name = name := by
   simpa using List.find?_some found
 
-theorem checked_function (checked : checkAllocation pre post hints = true) {name : String}
+theorem checked_function (checked : checkHinted pre post hints = true) {name : String}
     {f : Machine.Function} (found : pre.functions.find? (·.name == name) = some f) :
     checkFunction pre post hints f = true :=
   List.all_eq_true.mp checked f (List.mem_of_find?_eq_some found)
 
 /-- Each block of a checked function is accepted from its hint. -/
-theorem block_entry (checked : checkAllocation pre post hints = true)
+theorem block_entry (checked : checkHinted pre post hints = true)
     {name : String} {id : Nat} {f : Machine.Function} {block : Machine.Block}
     (foundF : pre.functions.find? (·.name == name) = some f)
     (foundB : f.blocks.find? (·.id == id) = some block) :
@@ -128,7 +128,7 @@ theorem block_entry (checked : checkAllocation pre post hints = true)
       · simp at all
   · simp at fn
 
-theorem entry_facts (checked : checkAllocation pre post hints = true)
+theorem entry_facts (checked : checkHinted pre post hints = true)
     {name : String} {f : Machine.Function} {entry : Machine.Block}
     (foundF : pre.functions.find? (·.name == name) = some f)
     (foundE : f.blocks.find? (·.id == 0) = some entry) :
@@ -146,7 +146,7 @@ theorem entry_facts (checked : checkAllocation pre post hints = true)
     exact ⟨fn.1.1.1, fn.1.1.2, fn.1.2⟩
   · simp at fn
 
-theorem cursor_entry (checked : checkAllocation pre post hints = true)
+theorem cursor_entry (checked : checkHinted pre post hints = true)
     {f : Machine.Function} {block : Machine.Block} (a : Machine.Activation) (b : Activation)
     (foundF : pre.functions.find? (·.name == a.function) = some f)
     (foundB : f.blocks.find? (·.id == a.block) = some block)

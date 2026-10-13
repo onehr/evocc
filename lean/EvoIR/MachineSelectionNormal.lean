@@ -126,12 +126,87 @@ theorem canonical_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat} (term : Ter
     denoteTerm σ (canonical term) = denoteTerm σ term := by
   rw [canonical, Term.normalize_value_sound, scalar_normal_sound]
 
+/-- The bitwise operators. Each result bit reads only the same bit of the
+two operands. -/
+def bitwiseOp : BinOp → Bool
+  | .and | .or | .xor => true
+  | .add | .sub | .mul => false
+
+/-- Zero extension and truncation both denote `setWidth`. -/
+theorem cast_set_width (op : CastOp) (notSigned : op ≠ .sext) {w : Nat} (n : Nat)
+    (value : BitVec w) : denoteOp (.cast op w n) value = value.setWidth n := by
+  cases op <;> simp_all [denoteOp, BitVec.truncate_eq_setWidth]
+
+/-- A width change commutes with a bitwise operator. The law holds for every
+pair of widths, so it needs no width fact. -/
+theorem set_width_bitwise (op : BinOp) (bitwise : bitwiseOp op = true)
+    {k : Nat} (n : Nat) (a b : BitVec k) :
+    denoteOp (.bin op n) (a.setWidth n, b.setWidth n) =
+      (denoteOp (.bin op k) (a, b)).setWidth n := by
+  cases op <;> simp only [bitwiseOp, Bool.false_eq_true] at bitwise <;>
+    simp only [denoteOp, Op.res, BitVec.setWidth_and, BitVec.setWidth_or, BitVec.setWidth_xor]
+
+/-- A bitwise operator over two unsigned width changes from one width becomes
+one unsigned width change of the operator at that width. For example, the
+32-bit OR of two zero-extended one-bit comparisons becomes the zero-extended
+one-bit OR. Other shapes stay unchanged. -/
+def liftBitwise {Γ : Var → Nat} {n : Nat} (op : BinOp) (left right : Term Γ n) : Term Γ n :=
+  match left, right with
+  | .cast (w := k) first _ a, .cast (w := m) second _ b =>
+    if same : bitwiseOp op = true ∧ first ≠ .sext ∧ second ≠ .sext ∧ m = k then
+      simplifyCast .zext n (.bin op a (same.2.2.2 ▸ b))
+    else .bin op left right
+  | _, _ => .bin op left right
+
+theorem lift_bitwise_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat} (op : BinOp)
+    (left right : Term Γ n) :
+    denoteTerm σ (liftBitwise op left right) = denoteTerm σ (.bin op left right) := by
+  unfold liftBitwise
+  split
+  · rename_i first k a second m b
+    split
+    · rename_i same
+      obtain ⟨bitwise, firstUnsigned, secondUnsigned, rfl⟩ := same
+      rw [simplify_cast_sound]
+      simp only [denoteTerm, cast_set_width first firstUnsigned,
+        cast_set_width second secondUnsigned, set_width_bitwise op bitwise,
+        cast_set_width CastOp.zext (by decide), Op.res]
+    · rfl
+  · rfl
+
+/-- Apply `liftBitwise` at every operator node and compose each width change
+again. -/
+def liftCasts {Γ : Var → Nat} : {n : Nat} → Term Γ n → Term Γ n
+  | _, .var v n h => .var v n h
+  | _, .const n c => .const n c
+  | _, .bin op a b => liftBitwise op (liftCasts a) (liftCasts b)
+  | _, .cmp op a b => .cmp op (liftCasts a) (liftCasts b)
+  | _, .shift op a b => .shift op (liftCasts a) (liftCasts b)
+  | _, .cast op n a => simplifyCast op n (liftCasts a)
+  | _, .guard op a b => .guard op (liftCasts a) (liftCasts b)
+  | _, .nonzero a => .nonzero (liftCasts a)
+  | _, .count s a b => .count s (liftCasts a) (liftCasts b)
+  | _, .division s r a b => .division s r (liftCasts a) (liftCasts b)
+
+theorem lift_casts_sound {Γ : Var → Nat} (σ : Subst Γ) {n : Nat} (term : Term Γ n) :
+    denoteTerm σ (liftCasts term) = denoteTerm σ term := by
+  induction term <;> simp_all only [liftCasts, lift_bitwise_sound, simplify_cast_sound, denoteTerm]
+
+/-- Equal canonical terms are equal. If the canonical terms differ, a second
+proved pass lifts width changes out of bitwise operators and compares again.
+The second pass runs only after the first comparison fails, so every pair
+that the first comparison accepts stays accepted. -/
 def checkTerm {Γ : Var → Nat} {n : Nat} (source target : Term Γ n) :
     Option (PLift (∀ σ, denoteTerm σ source = denoteTerm σ target)) :=
   if same : canonical source = canonical target then some ⟨by
     intro σ
     exact (canonical_sound σ source).symm.trans
       ((congrArg (denoteTerm σ) same).trans (canonical_sound σ target))⟩
+  else if lifted : liftCasts (canonical source) = liftCasts (canonical target) then some ⟨by
+    intro σ
+    have equal := congrArg (denoteTerm σ) lifted
+    rw [lift_casts_sound, lift_casts_sound, canonical_sound, canonical_sound] at equal
+    exact equal⟩
   else none
 
 def checkWord {Γ : Var → Nat} (source : Word Γ) (target : WordExpr Γ) :

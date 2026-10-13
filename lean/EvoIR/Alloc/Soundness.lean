@@ -35,7 +35,7 @@ section
 variable {pre : Machine.Program} {post : Program} {hints : Hints} {type : Core.Source.IntType}
   {entry : Machine.State}
 
-theorem simulation (checked : checkAllocation pre post hints = true)
+theorem simulation (checked : checkHinted pre post hints = true)
     (progress : Machine.ObservedProgress .postSSA pre type entry) :
     RankedSimulation (Machine.step .postSSA pre) (step post) (Machine.observe type) (observe type)
       (Related pre post hints entry) (rank post) where
@@ -74,7 +74,7 @@ theorem EntryAgrees.refl (pre : Machine.Program) (name : String) (args : List Ma
 /-- The initial state before allocation with the arguments `preArgs` and the
 initial allocated state with the arguments `args` are related when the two
 lists agree at the entry. -/
-theorem initial_related_args (checked : checkAllocation pre post hints = true) {name : String}
+theorem initial_related_args (checked : checkHinted pre post hints = true) {name : String}
     {preArgs args : List Machine.Value} {memory : Machine.Memory} {preEntry : Machine.State}
     (started : Machine.initial pre name preArgs memory = .ok preEntry)
     (agrees : EntryAgrees pre name preArgs args) :
@@ -134,12 +134,22 @@ theorem initial_related_args (checked : checkAllocation pre post hints = true) {
           cases loc <;> simp_all [readLoc, Loc.width]
         · exact .nil _
 
-theorem initial_related (checked : checkAllocation pre post hints = true) {name : String}
+theorem initial_related (checked : checkHinted pre post hints = true) {name : String}
     {args : List Machine.Value} {memory : Machine.Memory} {preEntry : Machine.State}
     (started : Machine.initial pre name args memory = .ok preEntry) :
     ∃ postEntry, initial post name args memory = .ok postEntry ∧
       Related pre post hints preEntry preEntry postEntry :=
   initial_related_args checked started (.refl pre name args)
+
+/-- An accepted allocation passes the check of some hints: the given hints or
+the hints of `entryHints`. -/
+theorem checkHinted_of_accepted (accepted : checkAllocation pre post hints = true) :
+    ∃ checkedHints, checkHinted pre post checkedHints = true := by
+  unfold checkAllocation at accepted
+  cases given : checkHinted pre post hints
+  · simp only [given, Bool.false_or, Bool.and_eq_true] at accepted
+    exact ⟨_, accepted.2⟩
+  · exact ⟨_, given⟩
 
 end
 
@@ -159,8 +169,9 @@ theorem checkAllocation_sound (pre : Machine.Program) (post : Program) (hints : 
     (progress : Machine.ObservedProgress .postSSA pre type preEntry) :
     ∃ postEntry, initial post name args memory = .ok postEntry ∧
       AllocationRefines pre post type preEntry postEntry := by
-  obtain ⟨postEntry, init, related⟩ := initial_related accepted started
-  exact ⟨postEntry, init, (simulation accepted progress).sound related⟩
+  obtain ⟨_, checked⟩ := checkHinted_of_accepted accepted
+  obtain ⟨postEntry, init, related⟩ := initial_related checked started
+  exact ⟨postEntry, init, (simulation checked progress).sound related⟩
 
 /-- `checkAllocation_sound` with two argument lists. The allocated program
 starts with `args`. The program before allocation starts with `preArgs`. The
@@ -174,8 +185,9 @@ theorem checkAllocation_sound_args (pre : Machine.Program) (post : Program) (hin
     (progress : Machine.ObservedProgress .postSSA pre type preEntry) :
     ∃ postEntry, initial post name args memory = .ok postEntry ∧
       AllocationRefines pre post type preEntry postEntry := by
-  obtain ⟨postEntry, init, related⟩ := initial_related_args accepted started agrees
-  exact ⟨postEntry, init, (simulation accepted progress).sound related⟩
+  obtain ⟨_, checked⟩ := checkHinted_of_accepted accepted
+  obtain ⟨postEntry, init, related⟩ := initial_related_args checked started agrees
+  exact ⟨postEntry, init, (simulation checked progress).sound related⟩
 
 /-- Composition with `Machine.source_machine_refines`: typed Core source to
 allocated EvoMIR. The progress hypothesis of the allocation theorem is the

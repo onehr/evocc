@@ -39,6 +39,7 @@ import EvoIR.Alloc.Check
 import EvoIR.Alloc.Reader
 import EvoIR.Alloc.Soundness
 import EvoIR.Alloc.AcceptanceTests
+import EvoIR.MachineSelectionDivisionTests
 import EvoIR.Asm.Baseline
 import EvoIR.Asm.CheckTests
 import EvoIR.Asm.PrintTests

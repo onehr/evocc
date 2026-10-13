@@ -23,6 +23,11 @@ The checker walks the two instruction lists of each block in lockstep:
 At each edge, the hint of the target block must be a subset of the state.
 The entry hint must be a subset of the ABI entry state. No step trusts the
 hints; the soundness theorem is in `Alloc/Soundness.lean`.
+
+If the check with the given hints fails, the checker runs the same check
+again with the full ABI entry state as the hint of each entry block. Thus an
+inserted copy at the entry can read the register of a dead parameter. The
+given entry hints must still be subsets of the ABI entry state.
 -/
 set_option linter.constructorNameAsVariable false
 
@@ -330,9 +335,30 @@ def checkFunction (pre : Machine.Program) (post : Program) (hints : Hints)
       f.blocks.all (checkBlock pre post hint f g)
   | _, _ => false
 
-/-- The allocation checker. `checkAllocation_sound` proves that acceptance
-implies refinement of the program before allocation. -/
-def checkAllocation (pre : Machine.Program) (post : Program) (hints : Hints) : Bool :=
+/-- The check with the given hints. The soundness theorems in
+`Alloc/Soundness.lean` hold for all hints. -/
+def checkHinted (pre : Machine.Program) (post : Program) (hints : Hints) : Bool :=
   pre.functions.all (checkFunction pre post hints)
+
+/-- The hints with the full ABI entry state as the hint of each entry block.
+The hints of the other blocks do not change. -/
+def entryHints (pre : Machine.Program) (hints : Hints) : Hints :=
+  pre.functions.filterMap fun f =>
+    (f.blocks.find? (·.id == 0)).map fun entry =>
+      (f.name, (0, entryState entry.args) :: (hints.lookup f.name).getD [])
+
+/-- Each given entry hint is a subset of the ABI entry state. -/
+def entryHintsHold (pre : Machine.Program) (hints : Hints) : Bool :=
+  pre.functions.all fun f =>
+    (f.blocks.find? (·.id == 0)).all fun entry =>
+      (hintOf hints f.name 0).all (entryState entry.args).contains
+
+/-- The allocation checker. It checks the given hints first. If that check
+fails, it checks the entry hints of `entryHints`. `checkAllocation_sound`
+proves that acceptance implies refinement of the program before
+allocation. -/
+def checkAllocation (pre : Machine.Program) (post : Program) (hints : Hints) : Bool :=
+  checkHinted pre post hints ||
+    (entryHintsHold pre hints && checkHinted pre post (entryHints pre hints))
 
 end EvoIR.Alloc

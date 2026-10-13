@@ -311,4 +311,40 @@ theorem twice_refines (type : Core.Source.IntType) (args : List Machine.Value)
 
 #print axioms twice_refines
 
+/-! The entry shape of D06: the allocator moves the live parameter to `x2`
+and the dead parameter to `x0`. The given entry hint names only the live
+parameter, so the copy from `x1` needs the full ABI entry state. -/
+
+/-- `first(x, unused) = x + x`. The second parameter is dead. -/
+private def deadBefore : Machine.Program := ⟨[⟨"first", [⟨0, [r 0, r 1],
+  [.binary .add (r 2) (r 0) (r 0) .w], .ret [r 2]⟩]⟩]⟩
+
+private def deadAfter (copied : Nat := 1) (used : Nat := 2) : Program := ⟨[⟨"first", [⟨0,
+  [.mov (.gpr 2 .w) (.gpr 0 .w), .mov (.gpr 0 .w) (.gpr copied .w),
+   .binary .add (.gpr 0 .w) (.gpr used .w) (.gpr used .w) .w], .ret [.gpr 0 .w]⟩]⟩]⟩
+
+private def deadHints : Hints := [("first", [(0, [(.gpr 0, r 0)])])]
+
+example : checkHinted deadBefore (deadAfter) deadHints = false := by decide
+example : checkAllocation deadBefore (deadAfter) deadHints = true := by decide
+-- A copy from a register that holds no argument is still refused.
+example : checkAllocation deadBefore (deadAfter 3) deadHints = false := by decide
+-- A read of the dead parameter as the live one is still refused.
+example : checkAllocation deadBefore (deadAfter 1 0) deadHints = false := by decide
+-- A false entry hint is still refused.
+example : checkAllocation deadBefore (deadAfter) [("first", [(0, [(.gpr 1, r 0)])])] = false := by
+  decide
+
+/-- The accepted D06 entry shape refines its source for every argument
+vector. -/
+theorem dead_parameter_refines (type : Core.Source.IntType) (args : List Machine.Value)
+    (preEntry : Machine.State) (started : Machine.initial deadBefore "first" args = .ok preEntry)
+    (progress : Machine.ObservedProgress .postSSA deadBefore type preEntry) :
+    ∃ postEntry, initial (deadAfter) "first" args = .ok postEntry ∧
+      AllocationRefines deadBefore (deadAfter) type preEntry postEntry :=
+  checkAllocation_sound deadBefore (deadAfter) deadHints (by decide) type "first" args _ preEntry
+    started progress
+
+#print axioms dead_parameter_refines
+
 end EvoIR.Alloc.AcceptanceTests
