@@ -134,9 +134,9 @@ was found in the read-only process check at this planning checkpoint.
 <!-- closure-queues:start -->
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
-| KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
-| REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
+| KERNEL | K01, K01b, K02, K03, K04, K07, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
+| APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L10, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D01, D02, D03, D04, D05, D06, D08 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05b, R05c, R05d, R05e, R05f, R05g, R05h, R05i, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
@@ -1714,13 +1714,20 @@ KUnit, and it closes none of those separate tasks.
   not K13/K14 or untested IOMMU hardware.
   [Identities and scope](tests/fixtures/iopf-enabled-reference.out), [run ledger][kernel].
 
-- [ ] **K07 — Define and implement nonliteral strlen ICE admission** — `NEEDS_RULE`, P1.
+- [ ] **K07 — Define and implement nonliteral strlen ICE admission** — `OPEN`, P1.
   Filtered FORTIFY is 25/26 PASS with two assertions left; current §10.1.18 grants
   ICE only to literal operands. Use the existing [19-line fixture][strlen] and
   [oracle record][strlen-out] to define a bounded static-constant-object rule,
   preserving ordinary-call effects and negative controls. Close with reviewed
   wording, shared classification tests and the unchanged 26-case kernel suite;
   K14 remains separate. [Decision request][semantics].
+  Rule decided on 2026-10-13, under the owner's instruction to finish every
+  item: `__builtin_strlen` of an immutable file-scope character array with
+  static storage, or of a `T *const` file-scope pointer into one, is an extended
+  integer constant expression on both targets and at every `-O`; automatic and
+  block-scope objects stay ordinary calls.
+  [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+  [packet](docs/archive/notebook/rules-20261013/k07-nonliteral-strlen-ice.md).
 
 - [x] **K08 — Disposition the seven shared EL1 breakpoint failures** — `DONE`, P1, 2026-09-23.
   All seven cases are mapped to their first task-bound kernel-address allocation.
@@ -2733,7 +2740,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   including c-testsuite's remaining case and torture's 18 binary128 deferrals.
   Binary64 substitution is forbidden. [Brief §B][semantics].
 
-- [ ] **L03 — Binary16/bfloat16 executable boundaries** — `NEEDS_RULE`, P2.
+- [ ] **L03 — Binary16/bfloat16 executable boundaries** — `OPEN`, P2.
   Bind each requested type/operation to the existing named LLVM/application
   refusal; specify its numerical and ABI contract independently. Implement only
   the approved scope and retain explicit refusals elsewhere. Close with
@@ -2748,8 +2755,13 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   September 28's [T01b repair](tests/fixtures/typed-call-requirements.out) gives
   those signatures the existing E3049 classification; all eight original
   command replays retain refusal. This does not implement L03.
+  Rule decided on 2026-10-13, under the owner's instruction to finish every
+  item: the half formats are storage formats; each operation evaluates in
+  binary32 and rounds once; AAPCS64 scalars and HFAs pass, and `__bf16` HFAs are
+  refused. [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+  [packet](docs/archive/notebook/rules-20261013/l03-half-bfloat.md).
 
-- [ ] **L04 — Floating complex execution** — `NEEDS_RULE`, P2.
+- [ ] **L04 — Floating complex execution** — `OPEN`, P2.
   Torture retains 15 floating-complex originals. Specify complex arithmetic,
   exceptional values, conversions and ABI, with required runtime helpers and
   fenv interactions. Implement shared semantics and close with tailored numerical
@@ -2763,48 +2775,99 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   sealed references. All 68 current musl refusals and their original argv/source
   identities are indexed in the [batch packet][closure-batch]. Do not replace
   this numerical/helper decision with merely enabling complex signatures.
+  Rule decided on 2026-10-13, under the owner's instruction to finish every
+  item: complex values are HFA pairs; native multiply and divide call each
+  target's runtime helper; the interpreters and constant folding share one model
+  of the Linux helpers, and refuse Darwin multiply and divide until the
+  compiler-rt sequence is modeled; the binary128 special-value grid runs before
+  long double complex is admitted.
+  [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+  [packet](docs/archive/notebook/rules-20261013/l04-floating-complex.md).
 
-- [ ] **L05 — Floating vector execution and intrinsics** — `NEEDS_RULE`, P2.
+- [ ] **L05 — Floating vector execution and intrinsics** — `OPEN`, P2.
   Six torture originals and other named LLVM paths remain deferred. Define lane
   FP semantics, conversion/mask operations and required intrinsics while preserving
   `-mgeneral-regs-only` boundaries. Close through interpreter/native/ABI tests
   and affected originals; integer SIMD and scalar FP passes are not sufficient.
   [Brief][semantics], [classifications][apps].
+  Rule decided on 2026-10-13, under the owner's instruction to finish every
+  item: GNU `float` and `double` vectors use per-lane scalar rules with no
+  implicit contraction and pass as HVAs by vector size; floating vectors are
+  refused under `-mgeneral-regs-only`; until this lands, records of floating
+  vectors are refused, because they now pass by reference; `arm_neon.h`
+  intrinsics move to L05b.
+  [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+  [packet](docs/archive/notebook/rules-20261013/l05-floating-vectors.md).
 
-- [ ] **L06 — Sub-8-byte integer-vector external ABI** — `NEEDS_RULE`, P2.
+- [ ] **L05b — `arm_neon.h` intrinsics for the NEON original** — `OPEN`, P3.
+  The 2026-10-13 decision on L05 keeps intrinsics out of L05. The torture and
+  LLVM originals that include `arm_neon.h` need the intrinsics they use. Next
+  action: list the intrinsics those originals call, and implement them on the
+  L05 vector types. Exit: those originals compile and pass on both targets,
+  and each intrinsic has a crossed test against GCC 14 on Linux and Apple
+  clang on Darwin.
+
+- [ ] **L06 — Sub-8-byte integer-vector external ABI** — `OPEN`, P2.
   GCC GPR and Clang SIMD conventions disagree and crossed controls fail.
   Choose/document a bounded ABI from the actual target contract; do not invent
   interoperability from self-calls. Close with explicit mode identity, both
   caller/callee directions for each supported reference and negative controls;
   otherwise retain the named refusal and incompatibility. [Brief §C][semantics].
+  Rule decided on 2026-10-13, under the owner's instruction to finish every
+  item: on Linux, 1-, 2- and 4-byte integer vectors pass and return as integers
+  in general registers, as GCC does, and Clang-compiled results stay a recorded
+  incompatibility; on Darwin the result follows Apple clang's widened `v0`.
+  [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+  [packet](docs/archive/notebook/rules-20261013/l06-tiny-vector-abi.md).
 
-- [ ] **L07 — Integer-complex division** — `NEEDS_RULE`, P2.
+- [ ] **L07 — Integer-complex division** — `OPEN`, P2.
   `(9+7i)/(2+1i)` yields GCC `4+3i` and Clang `5+1i`; current refusal is E2948.
   Specify the algorithm, promotions, truncation, overflow and zero-divisor
   contract, then implement shared evaluation/lowering. Close with boundary and
   compound-assignment tests plus affected originals, not one selected result.
   [Brief §C][semantics].
+  Rule decided on 2026-10-13, under the owner's instruction to finish every
+  item: GCC's wide (Smith) algorithm in the component type, with E3002 and E3004
+  at each step, on both targets.
+  [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+  [packet](docs/archive/notebook/rules-20261013/l07-integer-complex-division.md).
 
-- [ ] **L08 — Pointer-to-VLA typeof operand evaluation** — `NEEDS_RULE`, P2.
+- [ ] **L08 — Pointer-to-VLA typeof operand evaluation** — `OPEN`, P2.
   Oracles disagree on a side-effect counter (GCC 0, Clang 1); agreed array forms,
   bound capture and allocation/lifetime cases already work. Decide expression
   categories and evaluation/capture rules, then close with scope, side-effect and
   lifetime controls and original replays. Do not reopen all VLA support.
   [Existing fixtures](tests/fixtures/variable-array-typeof-profile.c), [brief][semantics].
+  Rule decided on 2026-10-13, under the owner's instruction to finish every
+  item: a `typeof` operand is evaluated exactly when its type is variably
+  modified (C23 6.7.3.6p4; GCC 15 fixes GCC 14's skip, bug c/114831).
+  [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+  [packet](docs/archive/notebook/rules-20261013/l08-pointer-vla-typeof.md).
 
-- [ ] **L09 — Nonzero-depth return-address support boundary** — `NEEDS_RULE`, P2.
+- [ ] **L09 — Nonzero-depth return-address support boundary** — `OPEN`, P2.
   GCC returns zero while Clang reads an ancestor LR in the retained probe.
   Define target frame/PAC/optimization assumptions and distinguish reached-only
   unsupported execution from UB. Close with native and interpreter boundary
   tests plus original replays; never fabricate a valid ancestor address.
   [Fixture](tests/fixtures/ancestor-return-address.c), [brief][semantics].
+  Rule decided on 2026-10-13, under the owner's instruction to finish every
+  item: `__builtin_return_address(n)` and `__builtin_frame_address(n)` with `n`
+  from 1 to 65535 give a null pointer on both targets and in both interpreters,
+  as GCC does. [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+  [packet](docs/archive/notebook/rules-20261013/l09-ancestor-return-address.md).
 
-- [ ] **L10 — LLVM pr23135 source-definedness decision** — `NEEDS_RULE`, P1.
+- [ ] **L10 — LLVM pr23135 source-definedness decision** — `OPEN`, P1.
   GCC UBSan reports vector signed overflow while Clang instrumentation is silent.
   Analyze the unchanged source and effective flags and establish an adequate
   evidence threshold. Close with either an approved case-bound disposition or a
   compiler RED/fix/replay; silence from one oracle is not proof of definedness.
   Feed the result into B01, not directly into a historical numerator. [Brief §C][semantics].
+  Rule decided on 2026-10-13, under the owner's instruction to finish every
+  item: `pr23135` is source undefined behavior (`not-applicable`), and the
+  packet's six-point evidence threshold is the B01 rule for later source-UB
+  dispositions; no compiler change.
+  [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+  [packet](docs/archive/notebook/rules-20261013/l10-pr23135-definedness.md).
 
 - [x] **L11 — Inventory additional atomic scope before extending it** — `DONE`, P2, 2026-09-23.
   The [source/command inventory](tests/fixtures/atomic-scope-boundaries.out)
@@ -2815,22 +2878,43 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   No new current-lane target-object blocker was found. This closes the inventory,
   **not** additional atomic support; the explicit capability tasks below remain.
 
-  - [ ] **L11a — General `_Atomic` objects and updates** — `NEEDS_RULE`, P2.
+  - [ ] **L11a — General `_Atomic` objects and updates** — `OPEN`, P2.
     TinyCC's bounds-checking runtime and C11 atomic test configuration expose
     this scope; fixture CASE=0 currently refuses E2702. Define object operations,
     widths, orders, volatile/provenance and library/lock-free boundaries; implement
     shared paths and verify the actual runtime configuration, not just 11/11
     compiler objects. zlib's optional dynamic-table atomic_flag is also separate.
-  - [ ] **L11b — Additional `__atomic` RMW/CAS/exchange** — `NEEDS_RULE`, P2.
+    Rule decided on 2026-10-13, under the owner's instruction to finish every
+    item: `_Atomic` objects use the GCC layout on Linux and the Apple layout on
+    Darwin; reads and stores are `seq_cst`; compound assignment, `++` and `--`
+    are one `seq_cst` read-modify-write; floating compound assignment is refused
+    in this slice.
+    [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+    [packet](docs/archive/notebook/rules-20261013/l11a-general-atomic-objects.md).
+  - [ ] **L11b — Additional `__atomic` RMW/CAS/exchange** — `OPEN`, P2.
     CASE=1 refuses E2001. Specify success/failure orders, weak/strong CAS,
     expected-value updates, dynamic orders and width limits before extending the
     existing legacy RMW representation. Require native crossed-compiler tests;
     single-thread interpreter success is not concurrent-memory-model proof.
-  - [ ] **L11c — Generic aggregate atomics** — `NEEDS_RULE`, P2.
+    Rule decided on 2026-10-13, under the owner's instruction to finish every
+    item: the GNU fetch-op, op-fetch, exchange, compare-exchange, test-and-set,
+    clear, fence and lock-free forms on 1-, 2-, 4- and 8-byte scalars, inline;
+    E2947 for exactly the order pairs GCC warns about; `__atomic_*` on pointers
+    adds bytes, unscaled; unadmitted `__atomic_*` and `__sync_*` names are
+    refused, never implicit calls.
+    [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+    [packet](docs/archive/notebook/rules-20261013/l11b-atomic-rmw-cas.md).
+  - [ ] **L11c — Generic aggregate atomics** — `OPEN`, P2.
     CASE=2 refuses E2001 for a naturally aligned eight-byte record. Specify
     representation/initializedness/provenance and lock-free versus runtime-helper
     obligations; qualify target runtime/ABI support. Scalar builtin acceptance
     must not silently admit arbitrary size/alignment or unimplemented helpers.
+    Rule decided on 2026-10-13, under the owner's instruction to finish every
+    item: naturally aligned 1-, 2-, 4- and 8-byte records through the
+    memory-to-memory forms, with byte transfer, byte comparison and E3001 on an
+    uninitialized byte; 16-byte records are refused in this slice.
+    [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
+    [packet](docs/archive/notebook/rules-20261013/l11c-aggregate-atomics.md).
 
 ## Cross-cutting verification and tooling
 
