@@ -317,6 +317,9 @@ impl<'unit, 'arena> Projection<'unit, 'arena> {
                 );
                 format!("builtin_varargs({op:?},{first},{second})")
             }
+            CHirExpr::BuiltinVarArgPack { length, .. } => {
+                format!("builtin_va_arg_pack(length={length})")
+            }
             CHirExpr::Cast(ty, child, _) => {
                 let ty = self.type_fingerprint(*ty);
                 let child = self.expression(&format!("{path}.operand"), child);

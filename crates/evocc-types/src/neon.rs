@@ -25,6 +25,13 @@ pub fn signature(name: &str) -> Option<&'static [&'static str]> {
         .map(Vec::as_slice)
 }
 
+/// Every name that [`signature`] knows, in table order.
+pub fn names() -> impl Iterator<Item = &'static str> {
+    include_str!("neon-signatures.tsv")
+        .lines()
+        .filter_map(|line| line.split('\t').next())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operation {
     Reinterpret,

@@ -354,6 +354,7 @@ fn canonical_expr(expr: &CHirExpr<'_>, types: &TypeInterner) -> String {
         CHirExpr::BuiltinTrap { .. } => "builtin_trap".into(),
         CHirExpr::BuiltinReturnAddress { .. } => "builtin_return_address".into(),
         CHirExpr::BuiltinFrameAddress { .. } => "builtin_frame_address".into(),
+        CHirExpr::BuiltinVarArgPack { length, .. } => format!("builtin_va_arg_pack({length})"),
         CHirExpr::BuiltinVarArgs {
             op, first, second, ..
         } => format!(

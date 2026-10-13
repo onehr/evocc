@@ -16,6 +16,7 @@ pub mod allocation;
 pub mod constant;
 pub mod core_profile;
 pub mod floating;
+pub mod fortify;
 pub mod function_definitions;
 pub mod initializer;
 pub mod inline;
@@ -871,6 +872,17 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
+    /// The anonymous arguments of the enclosing variadic function, for a
+    /// body that is substituted at each call. Without `length` this is GNU
+    /// `__builtin_va_arg_pack ()`, which occurs only as the last argument of
+    /// a call to a variadic function. With `length` it is the `int` count
+    /// `__builtin_va_arg_pack_len ()`. Substitution replaces it with the
+    /// arguments of the call site; a body that keeps it cannot execute.
+    BuiltinVarArgPack {
+        length: bool,
+        facts: ExprFacts,
+        span: SourceSpan,
+    },
     Cast(TypeId, &'arena CHirExpr<'arena>, SourceSpan),
     /// A front-end boundary that evaluates its operand exactly once even when
     /// nested inside generated arithmetic. It is erased before EvoIR.
@@ -1030,6 +1042,7 @@ impl CHirExpr<'_> {
             | Self::BuiltinReturnAddress { span, .. }
             | Self::BuiltinFrameAddress { span, .. }
             | Self::BuiltinVarArgs { span, .. }
+            | Self::BuiltinVarArgPack { span, .. }
             | Self::Cast(_, _, span)
             | Self::EvaluateOnce(_, span)
             | Self::SizeOf(_, span)
@@ -2445,7 +2458,8 @@ fn inventory_of_expression(expression: &CHirExpr<'_>, inventory: &mut AttributeI
         | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
-        | CHirExpr::BuiltinFrameAddress { .. } => {}
+        | CHirExpr::BuiltinFrameAddress { .. }
+        | CHirExpr::BuiltinVarArgPack { .. } => {}
     }
 }
 
@@ -2691,7 +2705,8 @@ pub fn render_unit_summary(unit: &CHirUnit<'_>) -> String {
             | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
-            | CHirExpr::BuiltinFrameAddress { .. } => {}
+            | CHirExpr::BuiltinFrameAddress { .. }
+            | CHirExpr::BuiltinVarArgPack { .. } => {}
         }
     }
 

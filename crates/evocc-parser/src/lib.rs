@@ -1,5 +1,6 @@
 //! C declarator, expression, and statement parser producing C-HIR
 
+pub mod builtins;
 mod complex;
 mod floating;
 mod neon;
@@ -458,99 +459,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     Some("__int128" | "__int128_t" | "__uint128_t") => TokenKind::GnuInt128,
                     Some("__alignof" | "__alignof__") => TokenKind::GnuAlignof,
-                    Some("__builtin_expect") => TokenKind::BuiltinExpect,
-                    Some("__atomic_load_n" | "__atomic_store_n") => TokenKind::BuiltinAtomic,
-                    Some(name) if legacy_atomic(name).is_some() => TokenKind::BuiltinAtomic,
-                    Some("__builtin_constant_p") => TokenKind::BuiltinConstantP,
-                    Some("__builtin_choose_expr") => TokenKind::BuiltinChooseExpr,
-                    Some("__builtin_types_compatible_p") => TokenKind::BuiltinTypesCompatibleP,
-                    Some("__builtin_classify_type") => TokenKind::BuiltinClassifyType,
-                    Some("__builtin_offsetof") => TokenKind::BuiltinOffsetof,
-                    Some("__builtin_object_size" | "__builtin_dynamic_object_size") => {
-                        TokenKind::BuiltinObjectSize
-                    }
-                    Some("__builtin_has_attribute") => TokenKind::BuiltinHasAttribute,
-                    Some("__builtin_strlen") => TokenKind::BuiltinStrlen,
-                    Some(name) if floating::is_builtin(name) => TokenKind::BuiltinLibrary,
-                    Some(
-                        "__builtin_memset"
-                        | "__builtin_nan"
-                        | "__builtin_nanf"
-                        | "__builtin_nanl"
-                        | "__builtin_memcpy"
-                        | "__builtin_memcmp"
-                        | "__builtin_strcmp"
-                        | "__builtin_strncmp"
-                        | "__builtin_alloca"
-                        | "__builtin_memmove"
-                        | "__builtin_printf"
-                        | "__builtin_sprintf"
-                        | "__builtin_snprintf"
-                        | "__builtin_puts"
-                        | "__builtin_strchr"
-                        | "__builtin_strncpy"
-                        | "__builtin_strcat"
-                        | "__builtin_strncat"
-                        | "__builtin_memchr"
-                        | "__builtin_malloc"
-                        | "__builtin_free"
-                        | "__builtin_abs"
-                        | "__builtin_labs"
-                        | "__builtin_llabs"
-                        | "__builtin_fabs"
-                        | "__builtin_fabsf"
-                        | "__builtin_fabsl"
-                        | "__builtin_strcpy"
-                        | "__builtin_abort"
-                        | "__builtin_exit"
-                        | "__builtin__Exit"
-                        | "__builtin_prefetch"
-                        | "__sync_synchronize"
-                        | "__builtin_extract_return_addr",
-                    ) => TokenKind::BuiltinLibrary,
-                    Some(
-                        "__builtin_isdigit" | "__builtin_isalpha" | "__builtin_isspace"
-                        | "__builtin_toupper" | "__builtin_tolower",
-                    ) => TokenKind::BuiltinCtype,
-                    Some("__builtin_va_start") => TokenKind::BuiltinVaStart,
-                    Some("__builtin_va_end") => TokenKind::BuiltinVaEnd,
-                    Some("__builtin_va_copy") => TokenKind::BuiltinVaCopy,
-                    Some("__builtin_va_arg") => TokenKind::BuiltinVaArg,
-                    Some(
-                        "__builtin_ffs"
-                        | "__builtin_ffsl"
-                        | "__builtin_ffsll"
-                        | "__builtin_clz"
-                        | "__builtin_clzl"
-                        | "__builtin_clzll"
-                        | "__builtin_ctz"
-                        | "__builtin_ctzl"
-                        | "__builtin_ctzll"
-                        | "__builtin_popcount"
-                        | "__builtin_popcountl"
-                        | "__builtin_popcountll"
-                        | "__builtin_clrsb"
-                        | "__builtin_clrsbl"
-                        | "__builtin_clrsbll"
-                        | "__builtin_parity"
-                        | "__builtin_parityl"
-                        | "__builtin_parityll"
-                        | "__builtin_bswap16"
-                        | "__builtin_bswap32"
-                        | "__builtin_bswap64",
-                    ) => TokenKind::BuiltinBit,
-                    Some("__builtin_unreachable") => TokenKind::BuiltinUnreachable,
-                    Some("__builtin_trap") => TokenKind::BuiltinTrap,
-                    Some("__builtin_return_address") => TokenKind::BuiltinReturnAddress,
-                    Some("__builtin_frame_address") => TokenKind::BuiltinFrameAddress,
                     Some("__auto_type") => TokenKind::AutoType,
                     Some("__label__") => TokenKind::LocalLabel,
-                    Some("__builtin_add_overflow") => TokenKind::BuiltinAddOverflow,
-                    Some("__builtin_sub_overflow") => TokenKind::BuiltinSubOverflow,
-                    Some("__builtin_mul_overflow") => TokenKind::BuiltinMulOverflow,
                     Some("asm" | "__asm" | "__asm__") => TokenKind::Asm,
                     Some("__volatile" | "__volatile__") => TokenKind::Volatile,
-                    _ => TokenKind::Identifier,
+                    Some(name) => builtins::token_kind(name).unwrap_or(TokenKind::Identifier),
+                    None => TokenKind::Identifier,
                 };
             }
         }
@@ -3196,6 +3110,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. }
             | CHirExpr::BuiltinVarArgs { .. }
+            | CHirExpr::BuiltinVarArgPack { .. }
             | CHirExpr::Assign { .. }
             | CHirExpr::MemoryAssign { .. }
             | CHirExpr::Update { .. }
@@ -7205,6 +7120,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. }
             | CHirExpr::BuiltinVarArgs { .. }
+            | CHirExpr::BuiltinVarArgPack { .. }
             | CHirExpr::Member(_, _, _)
             | CHirExpr::PtrMember(_, _, _)
             | CHirExpr::Index(_, _, _)
@@ -7223,6 +7139,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// while preserving C's unevaluated/dead operand rules.
     fn integer_expression_type(&self, expression: &CHirExpr<'_>) -> Result<CIntegerType, ()> {
         match expression {
+            CHirExpr::BuiltinVarArgPack { length: true, .. } => Ok(CIntegerType::INT),
+            CHirExpr::BuiltinVarArgPack { .. } => Err(()),
             CHirExpr::Floating(operation) => self.canonical_integer_type(operation.facts.ty()),
             CHirExpr::Vector(operation) => self.canonical_integer_type(operation.facts.ty()),
             CHirExpr::Complex(operation) => self.canonical_integer_type(operation.facts.ty()),
@@ -9758,6 +9676,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::BuiltinReturnAddress { .. }
             | CHirExpr::BuiltinFrameAddress { .. }
             | CHirExpr::BuiltinVarArgs { .. }
+            | CHirExpr::BuiltinVarArgPack { .. }
             | CHirExpr::Cast(_, _, _)
             | CHirExpr::EvaluateOnce(_, _)
             | CHirExpr::SizeOf(_, _)
@@ -10563,6 +10482,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | CHirExpr::BuiltinReturnAddress { facts, .. }
             | CHirExpr::BuiltinFrameAddress { facts, .. }
             | CHirExpr::BuiltinVarArgs { facts, .. }
+            | CHirExpr::BuiltinVarArgPack { facts, .. }
             | CHirExpr::LabelAddress { facts, .. } => {
                 (InferredType::Canonical(facts.ty()), ExprCategory::Value)
             }
@@ -12222,21 +12142,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 }
                             });
                     self.advance();
-                    let mut arguments = Vec::new();
-                    if self.peek_kind() != Some(TokenKind::RParen) {
-                        loop {
-                            arguments.push(self.parse_argument_expression()?);
-                            if !self.match_kind(TokenKind::Comma) {
-                                break;
-                            }
-                        }
-                    }
+                    let (mut arguments, pack) = self.parse_call_arguments()?;
                     let end = self
                         .peek()
                         .map(|token| token.span)
                         .unwrap_or_else(|| self.span());
                     self.expect(TokenKind::RParen)?;
                     let span = self.merge_span(expression.span(), end);
+                    if let Some(pack) = pack {
+                        // GNU forwards the pack only to a variadic prototype,
+                        // in the position of its anonymous arguments.
+                        let forwards = matches!(&parameters,
+                            Some(FunctionParameters::Prototype { types, variadic: true })
+                                if types.len() <= arguments.len());
+                        if !forwards {
+                            self.report("E2950", "invalid-va-arg-pack", pack.span());
+                            return None;
+                        }
+                    }
                     if let Some(symbol) = self.standard_allocation_target(expression) {
                         self.standard_allocation_calls
                             .push((symbol, expression.span()));
@@ -12300,6 +12223,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     } else if let Some(name) = self.standard_floating_builtin(expression) {
                         self.resolve_floating_builtin(name, arguments, span)?
                     } else {
+                        arguments.extend(pack);
                         self.alloc_node(CHirExpr::Call(expression, arguments, span))
                     };
                 }
@@ -12440,16 +12364,32 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ) {
                     return self.parse_vector_builtin(&spelling, tok);
                 }
+                if matches!(
+                    spelling.as_str(),
+                    "__builtin_va_arg_pack" | "__builtin_va_arg_pack_len"
+                ) {
+                    return self.parse_builtin_va_arg_pack_length(&spelling, tok);
+                }
                 let resolved_spelling = implicit_function_name(&spelling).unwrap_or(&spelling);
-                let Some(symbol) = self
+                let resolved = self
                     .resolve_expression_symbol(resolved_spelling)
-                    .or_else(|| self.resolve_neon_builtin(resolved_spelling, tok.span))
-                    .or_else(|| {
-                        ((self.legacy_declarations || self.lint_declarations)
-                            && self.peek_kind() == Some(TokenKind::LParen))
-                        .then(|| self.declare_implicit_called_function(resolved_spelling, tok.span))
-                    })
-                else {
+                    .or_else(|| self.resolve_neon_builtin(resolved_spelling, tok.span));
+                if resolved.is_none()
+                    && reserved_builtin_spelling(resolved_spelling)
+                    && self.peek_kind() == Some(TokenKind::LParen)
+                {
+                    // An implicit declaration cannot supply a builtin. Name
+                    // the builtin where it is spelled, before any lint about
+                    // the call that it would have declared; `-w` and the
+                    // language mode do not change this.
+                    self.report("E2949", format!("unknown-builtin: {spelling}"), tok.span);
+                    return None;
+                }
+                let Some(symbol) = resolved.or_else(|| {
+                    ((self.legacy_declarations || self.lint_declarations)
+                        && self.peek_kind() == Some(TokenKind::LParen))
+                    .then(|| self.declare_implicit_called_function(resolved_spelling, tok.span))
+                }) else {
                     self.report(
                         "E2001",
                         format!("undeclared-identifier: {spelling}"),
@@ -13215,14 +13155,112 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         self.advance();
-        let mut arguments = Vec::new();
+        let (arguments, pack) = self.parse_call_arguments()?;
         if self.peek_kind() != Some(TokenKind::RParen) {
-            loop {
-                arguments.push(self.parse_argument_expression()?);
-                if !self.match_kind(TokenKind::Comma) {
-                    break;
-                }
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance().expect("peeked builtin closing parenthesis");
+        let span = self.merge_span(keyword.span, close.span);
+        if let Some(checked) = evocc_chir::fortify::builtin(&builtin) {
+            return self.resolve_checked_builtin(checked, arguments, pack, span, keyword.span);
+        }
+        let variadic = matches!(
+            builtin.as_str(),
+            "__builtin_printf" | "__builtin_sprintf" | "__builtin_snprintf"
+        );
+        let Some(pack) = pack.filter(|_| variadic) else {
+            if let Some(pack) = pack {
+                self.report("E2950", "invalid-va-arg-pack", pack.span());
+                return None;
             }
+            return self.resolve_builtin_library_call(&builtin, arguments, span, keyword.span);
+        };
+        // The pack takes the place of anonymous arguments; resolve the named
+        // ones as usual and forward the pack after them.
+        let call = self.resolve_builtin_library_call(&builtin, arguments, span, keyword.span)?;
+        let CHirExpr::Call(callee, arguments, span) = call else {
+            self.report("E2950", "invalid-va-arg-pack", pack.span());
+            return None;
+        };
+        let mut arguments = arguments.clone();
+        arguments.push(pack);
+        Some(self.alloc_node(CHirExpr::Call(callee, arguments, *span)))
+    }
+
+    /// Parse the arguments of a call up to its closing parenthesis. A last
+    /// argument `__builtin_va_arg_pack ()` forwards the anonymous arguments
+    /// of the enclosing variadic function; it is returned separately.
+    fn parse_call_arguments(
+        &mut self,
+    ) -> Option<(
+        Vec<&'arena CHirExpr<'arena>>,
+        Option<&'arena CHirExpr<'arena>>,
+    )> {
+        let mut arguments = Vec::new();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            return Some((arguments, None));
+        }
+        loop {
+            if let Some(pack) = self.parse_forwarded_pack()? {
+                return Some((arguments, Some(pack)));
+            }
+            arguments.push(self.parse_argument_expression()?);
+            if !self.match_kind(TokenKind::Comma) {
+                return Some((arguments, None));
+            }
+        }
+    }
+
+    /// `__builtin_va_arg_pack ()` directly before the closing parenthesis of
+    /// a call. Any other position reaches the expression parser, which
+    /// reports it.
+    fn parse_forwarded_pack(&mut self) -> Option<Option<&'arena CHirExpr<'arena>>> {
+        let forwarded = matches!(
+            self.tokens.get(self.pos..self.pos + 4),
+            Some([name, open, close, end])
+                if name.kind == TokenKind::Identifier
+                    && name.text.spelling() == Some("__builtin_va_arg_pack")
+                    && open.kind == TokenKind::LParen
+                    && close.kind == TokenKind::RParen
+                    && end.kind == TokenKind::RParen
+        );
+        if !forwarded {
+            return Some(None);
+        }
+        let name = self.advance().expect("peeked argument pack");
+        self.advance();
+        let close = self.advance().expect("peeked argument pack parenthesis");
+        let span = self.merge_span(name.span, close.span);
+        if !self.in_variadic_function() {
+            self.report("E2950", "invalid-va-arg-pack", span);
+            return None;
+        }
+        let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
+        Some(Some(self.alloc_node(CHirExpr::BuiltinVarArgPack {
+            length: false,
+            facts: ExprFacts::value(void_ty),
+            span,
+        })))
+    }
+
+    fn in_variadic_function(&self) -> bool {
+        matches!(
+            self.current_function_parameters,
+            Some(ParameterSyntax::Prototype { variadic: true, .. })
+        )
+    }
+
+    /// `__builtin_va_arg_pack_len ()`, or `__builtin_va_arg_pack ()` in a
+    /// position other than the last argument of a call, which is invalid.
+    fn parse_builtin_va_arg_pack_length(
+        &mut self,
+        spelling: &str,
+        keyword: Token,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        if !self.match_kind(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
         }
         if self.peek_kind() != Some(TokenKind::RParen) {
             self.report("E2909", "builtin-arity", keyword.span);
@@ -13230,8 +13268,134 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let close = self.advance().expect("peeked builtin closing parenthesis");
         let span = self.merge_span(keyword.span, close.span);
+        if spelling != "__builtin_va_arg_pack_len" || !self.in_variadic_function() {
+            self.report("E2950", "invalid-va-arg-pack", span);
+            return None;
+        }
+        let int_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        Some(self.alloc_node(CHirExpr::BuiltinVarArgPack {
+            length: true,
+            facts: ExprFacts::value(int_ty),
+            span,
+        }))
+    }
 
-        self.resolve_builtin_library_call(&builtin, arguments, span, keyword.span)
+    /// `__builtin___memcpy_chk` and its family. The call keeps the checked
+    /// entry point unless constant arguments show that the check cannot
+    /// fail. Substitution applies the same rule after it resolves
+    /// object-size queries.
+    fn resolve_checked_builtin(
+        &mut self,
+        builtin: &'static evocc_chir::fortify::CheckedBuiltin,
+        mut arguments: Vec<&'arena CHirExpr<'arena>>,
+        pack: Option<&'arena CHirExpr<'arena>>,
+        span: SourceSpan,
+        designator_span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let parameters: Vec<_> = builtin
+            .parameters
+            .iter()
+            .map(|parameter| self.checked_parameter_type(*parameter))
+            .collect();
+        let named = parameters.len();
+        if arguments.len() < named || (!builtin.variadic && arguments.len() != named) {
+            self.report("E2909", "builtin-arity", designator_span);
+            return None;
+        }
+        if let Some(pack) = pack.filter(|_| !builtin.variadic) {
+            self.report("E2950", "invalid-va-arg-pack", pack.span());
+            return None;
+        }
+        self.validate_builtin_argument_types(&arguments, &parameters)?;
+        self.promote_call_arguments(&mut arguments[named..])?;
+        let result = self.checked_parameter_type(builtin.result);
+        let plain_parameters = builtin
+            .plain_parameters()
+            .into_iter()
+            .map(|parameter| self.checked_parameter_type(parameter))
+            .collect();
+        let mut function_type = |types| {
+            self.intern(
+                TypeKind::Function {
+                    return_type: result,
+                    parameters: FunctionParameters::Prototype {
+                        types,
+                        variadic: builtin.variadic,
+                    },
+                },
+                Qualifiers::default(),
+            )
+        };
+        let checked_ty = function_type(parameters);
+        let plain_ty = function_type(plain_parameters);
+        let checked = self.resolve_builtin_library_function(
+            builtin.checked,
+            checked_ty,
+            result,
+            designator_span,
+        )?;
+        let plain = self.resolve_builtin_library_function(
+            builtin.plain,
+            plain_ty,
+            result,
+            designator_span,
+        )?;
+        let redundant = builtin.check_is_redundant(|index| {
+            let ty = match builtin.parameters.get(index)? {
+                evocc_chir::fortify::Param::Size => CIntegerType::ULONG,
+                evocc_chir::fortify::Param::Int => CIntegerType::INT,
+                _ => return None,
+            };
+            let argument = arguments.get(index)?;
+            // A query that substitution can still answer differently, such as
+            // the object size of a parameter, is not yet a constant.
+            if !settled_constant_operand(argument) {
+                return None;
+            }
+            let value = self.eval_integer_constant_expression(argument).ok()?;
+            u64::try_from(value.cast(ty).raw_bits()).ok()
+        });
+        let (symbol, spelling) = if redundant {
+            arguments = arguments
+                .into_iter()
+                .enumerate()
+                .filter(|(index, _)| builtin.keeps(*index))
+                .map(|(_, argument)| argument)
+                .collect();
+            (plain, builtin.plain)
+        } else {
+            (checked, builtin.checked)
+        };
+        arguments.extend(pack);
+        let facts = self.facts_for_symbol(symbol);
+        let callee = self.alloc_node(CHirExpr::Ident {
+            symbol,
+            spelling: spelling.to_owned(),
+            facts,
+            span: designator_span,
+        });
+        Some(self.alloc_node(CHirExpr::Call(callee, arguments, span)))
+    }
+
+    fn checked_parameter_type(&mut self, parameter: evocc_chir::fortify::Param) -> TypeId {
+        use evocc_chir::fortify::Param;
+        let qualified = |is_const| Qualifiers {
+            is_const,
+            ..Qualifiers::default()
+        };
+        let pointer = |parser: &mut Self, kind, is_const| {
+            let pointee = parser.intern(kind, qualified(is_const));
+            parser.intern(TypeKind::Pointer(pointee), Qualifiers::default())
+        };
+        match parameter {
+            Param::Pointer => pointer(self, TypeKind::Void, false),
+            Param::ConstPointer => pointer(self, TypeKind::Void, true),
+            Param::Chars => pointer(self, TypeKind::Int(IntRank::Char), false),
+            Param::ConstChars => pointer(self, TypeKind::Int(IntRank::Char), true),
+            Param::Size => self.intern(TypeKind::Int(IntRank::ULong), Qualifiers::default()),
+            Param::Int => self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default()),
+            Param::VaList => self.intern(TypeKind::BuiltinVaList, Qualifiers::default()),
+        }
     }
 
     fn resolve_builtin_library_call(
@@ -14631,6 +14795,38 @@ fn floating_kind(class: OperandTypeClass) -> Option<FloatKind> {
     }
 }
 
+/// The GNU builtin namespaces. A call of an undeclared name in them is
+/// never an implicit declaration.
+fn reserved_builtin_spelling(spelling: &str) -> bool {
+    ["__builtin_", "__atomic_", "__sync_"]
+        .iter()
+        .any(|prefix| spelling.starts_with(prefix))
+}
+
+/// Whether a constant operand keeps its value through substitution: it
+/// contains no object-size or constant query that the front end deferred.
+fn settled_constant_operand(expression: &CHirExpr<'_>) -> bool {
+    match expression {
+        CHirExpr::Lit(..)
+        | CHirExpr::CharLit(..)
+        | CHirExpr::SizeOf(..)
+        | CHirExpr::SizeOfExpr(..)
+        | CHirExpr::AlignOf(..) => true,
+        CHirExpr::Cast(_, operand, _)
+        | CHirExpr::Unary(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _) => settled_constant_operand(operand),
+        CHirExpr::Binary(_, left, right, _) | CHirExpr::Comma(left, right, _) => {
+            settled_constant_operand(left) && settled_constant_operand(right)
+        }
+        CHirExpr::Ternary(condition, when_true, when_false, _) => {
+            settled_constant_operand(condition)
+                && settled_constant_operand(when_true)
+                && settled_constant_operand(when_false)
+        }
+        _ => false,
+    }
+}
+
 fn implicit_function_name(spelling: &str) -> Option<&'static str> {
     matches!(
         spelling,
@@ -15151,6 +15347,7 @@ fn collect_jump_regions_expr(
             collect_jump_regions_expr(rhs, regions, next_region, labels, gotos);
             collect_jump_regions_expr(target, regions, next_region, labels, gotos);
         }
+        CHirExpr::BuiltinVarArgPack { .. } => {}
         CHirExpr::BuiltinVarArgs { first, second, .. } => {
             collect_jump_regions_expr(first, regions, next_region, labels, gotos);
             if let Some(second) = second {
@@ -15404,6 +15601,7 @@ fn expression_references_symbol(expression: &CHirExpr<'_>, symbol: SymbolId) -> 
                 || expression_references_symbol(rhs, symbol)
                 || expression_references_symbol(target, symbol)
         }
+        CHirExpr::BuiltinVarArgPack { .. } => false,
         CHirExpr::BuiltinVarArgs { first, second, .. } => {
             expression_references_symbol(first, symbol)
                 || second.is_some_and(|second| expression_references_symbol(second, symbol))
@@ -15909,6 +16107,11 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
         },
         CHirExpr::BuiltinFrameAddress { depth, facts, .. } => CHirExpr::BuiltinFrameAddress {
             depth: *depth,
+            facts: *facts,
+            span: paren_span,
+        },
+        CHirExpr::BuiltinVarArgPack { length, facts, .. } => CHirExpr::BuiltinVarArgPack {
+            length: *length,
             facts: *facts,
             span: paren_span,
         },

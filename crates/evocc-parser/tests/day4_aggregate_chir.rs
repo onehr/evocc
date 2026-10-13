@@ -102,7 +102,8 @@ fn assert_expr_owned(arena: &Arena, expression: &CHirExpr<'_>) {
         | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
-        | CHirExpr::BuiltinFrameAddress { .. } => {}
+        | CHirExpr::BuiltinFrameAddress { .. }
+        | CHirExpr::BuiltinVarArgPack { .. } => {}
         CHirExpr::BuiltinVarArgs { first, second, .. } => {
             assert_expr_owned(arena, first);
             if let Some(second) = second {

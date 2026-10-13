@@ -1271,6 +1271,51 @@ Fix: none
 Choose an explicit arithmetic contract before replacing integer-complex division.
 Converting to floating complex changes the operation and is not a general fix.
 
+### E2949: unknown-builtin
+
+A call names a `__builtin_`, `__atomic_` or `__sync_` function that EvoCC does not implement.
+An implicit declaration cannot supply a compiler builtin, with or without `-w`.
+
+The diagnostic names the builtin where it is spelled.
+When a macro supplies the name, the location is the macro use.
+Test `__has_builtin` before you call a builtin that a compiler can lack.
+
+```c
+int main(void) { return __builtin_not_implemented(0); }
+```
+
+```c
+#if __has_builtin(__builtin_not_implemented)
+#define VALUE() __builtin_not_implemented(0)
+#else
+#define VALUE() 0
+#endif
+int main(void) { return VALUE(); }
+```
+
+### E2950: invalid-va-arg-pack
+
+`__builtin_va_arg_pack ()` or `__builtin_va_arg_pack_len ()` has no arguments to forward.
+They stand for the anonymous arguments of a variadic function at a substituted call.
+
+The pack must be the last argument of a call to a variadic function.
+An `always_inline` variadic function is substituted at each direct call, so its body can forward the pack.
+A body that stays an ordinary function, for example for its address, cannot forward it.
+
+```c
+static int count(int n, ...) { return n; }
+int forward(int n) { return count(n, __builtin_va_arg_pack()); }
+int main(void) { return forward(0); }
+```
+
+```c
+static int count(int n, ...) { return n; }
+static inline __attribute__((always_inline)) int forward(int n, ...) {
+    return count(n, __builtin_va_arg_pack()) + __builtin_va_arg_pack_len();
+}
+int main(void) { return forward(0); }
+```
+
 ## E3xxx
 
 ### E3001: read-of-uninitialized-object
@@ -2152,6 +2197,32 @@ Reason: the C front end rejects unsupported atomic forms before this internal ac
 
 C operand and order errors report E2913 or E2947.
 Ordinary pointer faults retain their memory diagnostic codes.
+
+### E3066: object-size-check-failed
+
+A checked C library call received a length larger than the size of its destination.
+The C library stops the program at this call instead of writing past the object.
+
+Fortified headers turn calls such as `memcpy` into `__builtin___memcpy_chk` with the destination size.
+The check runs when a constant length does not prove that the destination is large enough.
+Write no more bytes than the destination holds.
+
+```c
+static unsigned long length(void) { return 12; }
+int main(void) {
+    char buffer[8];
+    __builtin___memset_chk(buffer, 0, length(), __builtin_object_size(buffer, 0));
+    return buffer[0];
+}
+```
+
+```c
+int main(void) {
+    char buffer[8];
+    __builtin___memset_chk(buffer, 0, sizeof buffer, __builtin_object_size(buffer, 0));
+    return buffer[0];
+}
+```
 
 ### E3101: evoir-lowering-failed
 

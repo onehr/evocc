@@ -777,6 +777,7 @@ pub enum MemoryFaultKind {
     IntegerWidthUnsupported,
     InvalidPointerRepresentation,
     OverlappingCopy,
+    ObjectSizeCheckFailed,
     VolatileEventLimitExceeded,
     VolatileSequenceExhausted,
 }
@@ -919,6 +920,14 @@ pub enum MemoryFault {
         source: Pointer,
         size_bytes: u64,
     },
+    /// A checked C library entry point, such as `__memcpy_chk`, received a
+    /// length larger than its destination size. The library stops the
+    /// program instead of writing.
+    ObjectSizeCheckFailed {
+        name: String,
+        length: u64,
+        object_size: u64,
+    },
     VolatileEventLimitExceeded {
         max_events: u64,
     },
@@ -973,6 +982,7 @@ impl MemoryFault {
                 MemoryFaultKind::InvalidPointerRepresentation
             }
             Self::OverlappingCopy { .. } => MemoryFaultKind::OverlappingCopy,
+            Self::ObjectSizeCheckFailed { .. } => MemoryFaultKind::ObjectSizeCheckFailed,
             Self::VolatileEventLimitExceeded { .. } => MemoryFaultKind::VolatileEventLimitExceeded,
             Self::VolatileSequenceExhausted => MemoryFaultKind::VolatileSequenceExhausted,
         }
@@ -1041,6 +1051,10 @@ impl MemoryFault {
             Self::OverlappingCopy { .. } => MemoryDiagnostic {
                 code: "E3027",
                 message: "overlapping-copy",
+            },
+            Self::ObjectSizeCheckFailed { .. } => MemoryDiagnostic {
+                code: "E3066",
+                message: "object-size-check-failed",
             },
             _ => return None,
         };
@@ -2003,6 +2017,23 @@ impl MemoryState {
                 .load_bytes(address.checked_offset(offset)?, AccessLayout::new(1, 1))?
                 .bytes()[0])
         };
+        // A checked entry point performs the plain operation after its check.
+        // A failed check stops the program before the operation writes.
+        if let (
+            "__memset_chk" | "__memcpy_chk" | "__memmove_chk",
+            [_, _, Integer(length), Integer(object_size)],
+        ) = (name, arguments)
+        {
+            if length > object_size {
+                return Err(MemoryFault::ObjectSizeCheckFailed {
+                    name: name.to_owned(),
+                    length: *length,
+                    object_size: *object_size,
+                });
+            }
+            let plain = &name[2..name.len() - 4];
+            return self.call_library(plain, &arguments[..3]);
+        }
         match (name, arguments) {
             ("memset", [Address(destination), Integer(value), Integer(size)]) => {
                 if *size == 0 {

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.1.0** | **Pinned ground truth** | Attached `used` and `retain` after a pointer `*` on 2026-10-13
+**Revision 2.2.0** | **Pinned ground truth** | Added the object-size checked builtins and the GNU argument pack on 2026-10-13
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2539,6 +2539,8 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2946` | `builtin-local-binding-conflict` | front end |
 | `E2947` | `invalid-atomic-memory-order` | front end |
 | `E2948` | `integer-complex-division-oracle-conflict` | front end |
+| `E2949` | `unknown-builtin` | front end |
+| `E2950` | `invalid-va-arg-pack` | front end; lowering, for a body that keeps the pack |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -2589,6 +2591,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E3060` | `weak-internal-symbol` | module validation |
 | `E3061` | `alias-target-not-defined` | module validation |
 | `E3062` | `invalid-atomic-access` | validation / interpreter access contract |
+| `E3066` | `object-size-check-failed` | runtime |
 | `E3101` | `evoir-lowering-failed` | lowering |
 | `W0001` | `unused variable` | front-end lint |
 | `W0002` | `unused parameter` | front-end lint |
@@ -4144,7 +4147,12 @@ external function only for the library set of 10.1.14 (`memset`, `memcpy`,
 on the byte-and-initializedness model (`memset` initializes the bytes it
 writes, `memcpy` and `memmove` transfer initializedness exactly as `copy`,
 the readers require initialized bytes up to the last one they examine and
-report `E3001` otherwise); every other external call is `E3039`
+report `E3001` otherwise), and for the checked entry points `__memset_chk`,
+`__memcpy_chk` and `__memmove_chk` of 10.1.14. A checked entry point compares
+its length with its last argument, the destination size. A larger length is
+`E3066` (`object-size-check-failed`), because the C library stops the
+program there; otherwise the call is the plain function. Every other
+external call is `E3039`
 (`external-call-not-executable`) when reached. `global_addr` of an external
 object is a distinct, stable provenance that may be compared and passed;
 a `load` or `store` through it is `E3040` (`external-object-not-executable`)
@@ -4695,7 +4703,15 @@ inside an inlined body is substituted too. Taking the function's address does
 not prohibit direct-call substitution or give an inline-only body an address.
 A variadic callee and a cycle of `always_inline` calls are not
 substituted: the former is lowered as an ordinary call, the cycle is
-`E2932` (`always-inline-cycle`). After substitution the front end folds constants again, so an
+`E2932` (`always-inline-cycle`). The exception is a variadic callee whose
+body forwards its anonymous arguments only through the GNU argument pack
+and uses no `va_start`, `va_arg`, `va_end` or `va_copy`; it is substituted
+like a fixed callee. Each anonymous argument of the call, after the default
+argument promotions, becomes a fresh automatic object of its promoted type,
+initialized after the named parameters in argument order. Each
+`__builtin_va_arg_pack ()` in the body becomes those objects, in order, and
+each `__builtin_va_arg_pack_len ()` becomes their count as an `int`
+constant. After substitution the front end folds constants again, so an
 `asm` operand under an immediate constraint (`i`, `n`, `I`, `J`, `K`, `L`)
 whose expression was a parameter now bound to an integer constant
 expression is a constant, and 3.11 admits it; the operand that is still
@@ -4791,6 +4807,8 @@ compound literals, and a front end must not emit it.
 | `E2944` | a recognized ordinary `alloca` call whose name the unit defines or renames |
 | `E2945` | a jump into the scope of a variably modified declaration |
 | `E2946` | a nonliteral `__builtin_strcmp` with a visible same-named `static` function |
+| `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_` (10.1.14) |
+| `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -5194,6 +5212,64 @@ Wrong arity is `E2909`; the existing type and alignment diagnostics apply.
 `__builtin_memchr` (`void *(const void *, int, size_t)`) are library builtins:
 each is an external call through the unit's builtin namespace with each
 argument evaluated once, and `E2909`, `E2913` and `E2927` apply.
+
+**Object-size checked builtins.** The fortified headers of glibc and of the
+macOS SDK select the GCC 14 checked builtins for a GNU compiler. Each one
+names a C library function and its checked entry point, and has the
+prototype of that entry point:
+
+| Builtin | Checked entry point prototype |
+|---|---|
+| `__builtin___memcpy_chk`, `__builtin___memmove_chk`, `__builtin___mempcpy_chk` | `void *(void *, const void *, size_t len, size_t size)` |
+| `__builtin___memset_chk` | `void *(void *, int, size_t len, size_t size)` |
+| `__builtin___strcpy_chk`, `__builtin___stpcpy_chk`, `__builtin___strcat_chk` | `char *(char *, const char *, size_t size)` |
+| `__builtin___strncpy_chk`, `__builtin___stpncpy_chk` | `char *(char *, const char *, size_t len, size_t size)` |
+| `__builtin___strncat_chk` | `char *(char *, const char *, size_t, size_t size)` |
+| `__builtin___sprintf_chk` | `int (char *, int flag, size_t size, const char *, ...)` |
+| `__builtin___vsprintf_chk` | `int (char *, int flag, size_t size, const char *, va_list)` |
+| `__builtin___snprintf_chk` | `int (char *, size_t len, int flag, size_t size, const char *, ...)` |
+| `__builtin___vsnprintf_chk` | `int (char *, size_t len, int flag, size_t size, const char *, va_list)` |
+
+The checked entry point is `__X_chk` for the builtin `__builtin___X_chk`, and
+the plain function is `X`. Its prototype is the checked one without `flag`
+and `size`. A call evaluates each argument once and is an external call
+through the unit's builtin namespace: of the plain function when the check
+cannot fail, otherwise of the checked entry point, which stops the program
+when the destination is too small. The check cannot fail when `size` is the
+constant `(size_t)-1`, which means that no size is known, or when the
+constant `len` is no greater than the constant `size`. A formatting builtin
+also needs the constant `flag` 0, because a nonzero flag asks the C library
+for format checks as well. The plain call drops the constant `flag` and
+`size` arguments. The front end applies this rule to source constants. An
+object-size query of 10.1.17 that substitution can still answer, such as the
+size behind a parameter, is not yet a constant, and substitution applies the
+rule again after it resolves the query. `E2909`, `E2913` and `E2927` apply
+to both prototypes. Example: in `char b[8];`,
+`__builtin___memcpy_chk(b, s, 8, __builtin_object_size(b, 0))` calls
+`memcpy`, and `__builtin___memcpy_chk(b, s, n, __builtin_object_size(b, 0))`
+calls `__memcpy_chk(b, s, n, 8)`. `__builtin___memccpy_chk`,
+`__builtin___strlcpy_chk` and `__builtin___strlcat_chk` are not GCC 14
+builtins and are not implemented; `__has_builtin` reports them as absent
+(10.5), so the macOS SDK keeps the plain functions for them.
+
+**GNU argument pack.** `__builtin_va_arg_pack ()` stands for the anonymous
+arguments of the enclosing variadic function. It is valid only as the last
+argument of a call to a function with a variadic prototype, after at least
+as many arguments as that prototype names. `__builtin_va_arg_pack_len ()` is
+the `int` count of those arguments, valid only in a variadic function. Both
+have meaning only where the `always_inline` substitution of 10.1.9 replaces
+them; glibc's fortified `printf` family uses them in this way. Any other
+position is `E2950` (`invalid-va-arg-pack`), and so is a body that keeps them
+when it is lowered, for example because the unit takes its address. The
+interpreters report `E2950` when they reach one.
+
+**Unknown builtins.** `__builtin_`, `__atomic_` and `__sync_` begin the GNU
+builtin namespaces. A call of an undeclared identifier that begins with one of
+them is `E2949` (`unknown-builtin`) at that identifier, in every language mode
+and at every warning level, `-w` included. An implicit declaration cannot
+supply a compiler builtin, so such a call is never an external call. For an
+identifier from a macro expansion, the location is the macro use, as for every
+expanded token.
 
 **Integer complex.** GNU integer `_Complex T` has two adjacent components of
 integer type `T`, real then imaginary. Arithmetic works per component at
@@ -6263,11 +6339,15 @@ else is `E0106` (`feature-query-malformed`).
   for `aligned`, `alloc_size`, `always_inline`, `assume_aligned`, `cleanup`, `cold`, `const`, `copy`, `designated_init`, `error`, `externally_visible`, `format`, `gnu_inline`, `malloc`, `no_instrument_function`, `no_profile_instrument_function`, `no_sanitize_coverage`, `no_stack_protector`, `noclone`, `noinline`, `noipa`, `nonnull`, `nonstring`, `packed`, `pure`, `retain`, `section`, `uninitialized`, `unused`, `used`, `warn_unused_result`, `warning`, `weak`; `0` for `btf_type_tag`, `diagnose_as_builtin`, `disable_sanitizer_instrumentation`, `no_caller_saved_registers`, `overloadable`, `pass_dynamic_object_size`, `pass_object_size`, `preserve_most`;
   `0` for any name not in that table. The table is data, not code, and
   `crates/evocc-cpp/tests/target_profile.rs` checks its digest.
-- `__has_builtin(name)`: `1` when the front end resolves `name` (10.1.14,
-  10.1.15, 10.1.17 and `__builtin_va_list`) or
-  `crates/evocc-cpp/predefined/has-builtin.txt` lists it
-  (`__builtin_dynamic_object_size`, `__builtin_has_attribute`,
-  `__builtin_isdigit`); `0` otherwise (`__builtin_alloca_uninitialized`).
+- `__has_builtin(name)`: `1` exactly for the builtins that the front end
+  implements (10.1.14, 10.1.15, 10.1.17 and `__builtin_va_list`), as
+  `crates/evocc-cpp/predefined/has-builtin.txt` lists them; `0` otherwise
+  (`__builtin_alloca_uninitialized`). The refused `__builtin_puts`,
+  `__builtin_exit` and `__builtin__Exit` answer `0`. An AArch64 target
+  intrinsic answers `1` when it lowers to a target operation and its
+  prototype needs no tuple type of the `arm_neon.h` pragma.
+  `crates/evocc-parser/tests/builtin_inventory.rs` checks the list against
+  the front end in both directions.
 - `__has_feature(name)`: `0` for every name, as in GCC 14.
 - `__has_include(<h>)` and `__has_include("h")`: `1` when the include search
   the directive would perform finds the file, else `0`.
@@ -7284,12 +7364,16 @@ to the signature spelling.
 
 ## Revision
 
-**Revision 2.1.0, 2026-10-13.** Section 10.1.9 attaches `used` and `retain`
-written after a pointer `*` in a named declarator to the declared object or
-function, as it already attached `weak`, `alias` and `section`. Before, they
-stayed on the pointer type without effect, so an optimized build could omit
-a `used` object that GCC 14 keeps. The `unused-variable` lint also reads
-`unused` on the pointer next to a variable's name. Revision 2.0.1 of
+**Revision 2.2.0, 2026-10-13.** Section 10.1.14 adds the object-size checked
+builtins that the fortified headers of glibc and of the macOS SDK select,
+the GNU argument pack, and `E2949` (`unknown-builtin`) for a call of an
+unknown `__builtin_`, `__atomic_` or `__sync_` name. Section 10.1.9 substitutes an `always_inline`
+variadic callee that forwards its arguments through the pack. The
+interpreters execute the checked memory entry points and report `E3066`
+(`object-size-check-failed`). Section 10.5 makes `__has_builtin` answer
+exactly for the implemented builtins. Section 6.3 adds `E2949`, `E2950` and
+`E3066`. Revision 2.1.0 of 2026-10-13 attached `used` and `retain` after a
+pointer `*` (Section 10.1.9). Revision 2.0.1 of
 2026-10-07 added the front-end warning levels (Section 6.3). Revision 2.0.0 of
 2026-10-06 folded revision 1.9.116 and its rulings into one pinned text; the
 review transcript is archived, not normative, in

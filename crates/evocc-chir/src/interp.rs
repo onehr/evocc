@@ -188,6 +188,10 @@ pub enum InterpreterError {
     VarArgs {
         span: SourceSpan,
     },
+    /// The GNU argument pack of a variadic body that was not substituted.
+    VarArgPack {
+        span: SourceSpan,
+    },
     WideInteger {
         span: SourceSpan,
     },
@@ -318,6 +322,7 @@ impl InterpreterError {
             Self::ComputedGoto { .. } => "E3029",
             Self::InvalidIndirectBranchTarget { .. } => "E3048",
             Self::VarArgs { .. } => "E3030",
+            Self::VarArgPack { .. } => "E2950",
             Self::WideInteger { .. } => "E3033",
             Self::FrameAddressUnavailable { .. } => "E3031",
             Self::Memory { error, .. } => match error.runtime_diagnostic() {
@@ -425,6 +430,7 @@ impl InterpreterError {
             Self::ComputedGoto { .. } => "not-lowered: computed-goto".to_owned(),
             Self::InvalidIndirectBranchTarget { .. } => "invalid-indirect-branch-target".to_owned(),
             Self::VarArgs { .. } => "not-lowered: varargs".to_owned(),
+            Self::VarArgPack { .. } => "invalid-va-arg-pack".to_owned(),
             Self::WideInteger { .. } => "not-executed: wide-integer".to_owned(),
             Self::FrameAddressUnavailable { .. } => "not-executed: frame-address".to_owned(),
             Self::UnsupportedDeclaration { feature, .. } => {
@@ -476,6 +482,7 @@ impl InterpreterError {
             | Self::ComputedGoto { span }
             | Self::InvalidIndirectBranchTarget { span }
             | Self::VarArgs { span }
+            | Self::VarArgPack { span }
             | Self::WideInteger { span }
             | Self::FrameAddressUnavailable { span }
             | Self::UnsupportedDeclaration { span, .. }
@@ -4763,6 +4770,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 return Err(InterpreterError::FrameAddressUnavailable { span });
             }
             CHirExpr::BuiltinVarArgs { .. } => self.schedule_varargs(expression, tasks)?,
+            CHirExpr::BuiltinVarArgPack { .. } => {
+                return Err(InterpreterError::VarArgPack { span });
+            }
             CHirExpr::LabelAddress { .. } => {
                 values.push(self.label_address_value(expression)?);
             }
@@ -9500,7 +9510,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 | CHirExpr::BuiltinTrap { .. }
                 | CHirExpr::BuiltinUnreachable { .. }
                 | CHirExpr::BuiltinReturnAddress { .. }
-                | CHirExpr::BuiltinFrameAddress { .. } => {}
+                | CHirExpr::BuiltinFrameAddress { .. }
+                | CHirExpr::BuiltinVarArgPack { .. } => {}
             }
         }
         Ok(())
@@ -9885,6 +9896,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             }),
             CHirExpr::BuiltinVarArgs { .. } => Err(InterpreterError::VarArgs { span }),
+            CHirExpr::BuiltinVarArgPack { .. } => Err(InterpreterError::VarArgPack { span }),
             CHirExpr::LabelAddress { .. } => Err(InterpreterError::ComputedGoto { span }),
             CHirExpr::CharLit(literal, _) => Ok(literal.integer_value()),
             CHirExpr::Cast(ty, value, _) => {
@@ -10150,6 +10162,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     feature: "non-integer expression type",
                     span,
                 }),
+                CHirExpr::BuiltinVarArgPack { .. } => Err(InterpreterError::VarArgPack { span }),
             }?;
             values.push(immediate);
         }
@@ -10862,7 +10875,8 @@ fn collect_expression_symbols<'arena>(
         | CHirExpr::BuiltinTrap { .. }
         | CHirExpr::BuiltinUnreachable { .. }
         | CHirExpr::BuiltinReturnAddress { .. }
-        | CHirExpr::BuiltinFrameAddress { .. } => {}
+        | CHirExpr::BuiltinFrameAddress { .. }
+        | CHirExpr::BuiltinVarArgPack { .. } => {}
     }
 }
 
@@ -10970,7 +10984,9 @@ fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) ->
         // floating literal/cast. Use the typed task machine even if no object
         // is read, so invalid conversions retain their E3063 obligation.
         | CHirExpr::FloatLit(_, _) => true,
-        CHirExpr::BuiltinConstantP { .. } | CHirExpr::BuiltinObjectSize { .. } => false,
+        CHirExpr::BuiltinConstantP { .. }
+        | CHirExpr::BuiltinObjectSize { .. }
+        | CHirExpr::BuiltinVarArgPack { .. } => false,
         // A file-scope *object* has static storage and therefore lives in
         // memory. A parameter can never legitimately be declared at file scope,
         // so it is left to the signature validator instead of silently forcing

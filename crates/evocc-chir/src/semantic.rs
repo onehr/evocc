@@ -552,6 +552,12 @@ impl SymbolTable {
             .is_ok_and(|entry| self.builtin_functions.get(entry.spelling()) == Some(&symbol))
     }
 
+    /// The library prototype in the builtin namespace with this spelling.
+    #[must_use]
+    pub fn builtin_function(&self, spelling: &str) -> Option<SymbolId> {
+        self.builtin_functions.get(spelling).copied()
+    }
+
     /// Make an already-declared linked entity visible in another lexical
     /// scope without allocating a second semantic identity.
     ///

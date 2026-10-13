@@ -1628,7 +1628,8 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             | CHirExpr::BuiltinTrap { .. }
             | CHirExpr::BuiltinUnreachable { .. }
             | CHirExpr::BuiltinReturnAddress { .. }
-            | CHirExpr::BuiltinFrameAddress { .. } => {}
+            | CHirExpr::BuiltinFrameAddress { .. }
+            | CHirExpr::BuiltinVarArgPack { .. } => {}
         }
         Ok(())
     }

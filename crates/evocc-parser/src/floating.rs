@@ -1,36 +1,38 @@
 use super::*;
 use evocc_chir::floating::{FloatingBuiltin, FloatingExpr};
 
+/// The floating builtins that the front end resolves.
+pub(super) const BUILTINS: &[&str] = &[
+    "__builtin_isnan",
+    "__builtin_isgreater",
+    "__builtin_isgreaterequal",
+    "__builtin_isless",
+    "__builtin_islessequal",
+    "__builtin_islessgreater",
+    "__builtin_isunordered",
+    "__builtin_isinf",
+    "__builtin_isinf_sign",
+    "__builtin_isfinite",
+    "__builtin_isnormal",
+    "__builtin_signbit",
+    "__builtin_signbitf",
+    "__builtin_signbitl",
+    "__builtin_fabs",
+    "__builtin_fabsf",
+    "__builtin_fabsl",
+    "__builtin_copysign",
+    "__builtin_copysignf",
+    "__builtin_copysignl",
+    "__builtin_inf",
+    "__builtin_inff",
+    "__builtin_infl",
+    "__builtin_huge_val",
+    "__builtin_huge_valf",
+    "__builtin_huge_vall",
+];
+
 pub(super) fn is_builtin(name: &str) -> bool {
-    matches!(
-        name,
-        "__builtin_isnan"
-            | "__builtin_isgreater"
-            | "__builtin_isgreaterequal"
-            | "__builtin_isless"
-            | "__builtin_islessequal"
-            | "__builtin_islessgreater"
-            | "__builtin_isunordered"
-            | "__builtin_isinf"
-            | "__builtin_isinf_sign"
-            | "__builtin_isfinite"
-            | "__builtin_isnormal"
-            | "__builtin_signbit"
-            | "__builtin_signbitf"
-            | "__builtin_signbitl"
-            | "__builtin_fabs"
-            | "__builtin_fabsf"
-            | "__builtin_fabsl"
-            | "__builtin_copysign"
-            | "__builtin_copysignf"
-            | "__builtin_copysignl"
-            | "__builtin_inf"
-            | "__builtin_inff"
-            | "__builtin_infl"
-            | "__builtin_huge_val"
-            | "__builtin_huge_valf"
-            | "__builtin_huge_vall"
-    )
+    BUILTINS.contains(&name)
 }
 
 impl<'src, 'arena> Parser<'src, 'arena> {

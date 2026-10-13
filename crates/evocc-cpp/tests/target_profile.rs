@@ -11,17 +11,10 @@ use evocc_proof::sha256_hex;
 const PROFILE_SHA256: &str = "74801974f845be4d198bbedc2f20130ddd98645550c05e3453d0294d47bc5a95";
 const ATTRIBUTE_TABLE_SHA256: &str =
     "6429082232ca76ee2c7ff5593decea43b4cf6f97a87cccd81192e27173abc8dd";
-const BUILTIN_NAMES: &str = concat!(
-    "__builtin_add_overflow\n",
-    "__builtin_constant_p\n",
-    "__builtin_dynamic_object_size\n",
-    "__builtin_expect\n",
-    "__builtin_has_attribute\n",
-    "__builtin_isdigit\n",
-    "__builtin_mul_overflow\n",
-    "__builtin_sub_overflow\n",
-    "__builtin_va_list\n",
-);
+/// `crates/evocc-parser/tests/builtin_inventory.rs` checks that this table
+/// lists exactly the builtins that the front end implements.
+const BUILTIN_TABLE_SHA256: &str =
+    "ad8d7ba1fd96ac26fb192ec32b81cbf1324968bda6dea227661143dff5447486";
 
 static NEXT_TEMP_TREE: AtomicU64 = AtomicU64::new(0);
 
@@ -306,7 +299,8 @@ fn feature_query_tables_are_digest_checked_data() {
         "/predefined/has-builtin.txt"
     ))
     .expect("read builtin answer table");
-    assert_eq!(builtins, BUILTIN_NAMES);
+    assert_eq!(sha256_hex(builtins.as_bytes()), BUILTIN_TABLE_SHA256);
+    assert_eq!(builtins.lines().count(), 279);
 }
 
 #[test]

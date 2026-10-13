@@ -1,0 +1,43 @@
+Manual check of D08 (F1): fortified C library calls with the macOS 15.4 SDK
+=============================================================================
+
+The 15.x SDK guards its fortified macros with
+`__has_builtin(__builtin___X_chk) || defined(__GNUC__)`. EvoCC defines
+`__GNUC__`, so this SDK selects the checked builtins whatever `__has_builtin`
+answers. The automated tests cannot assume this SDK, so this record keeps the
+check with the real headers.
+
+Date:     2026-10-13
+Host:     macOS 26.6 (25G72), arm64
+SDK:      /Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk
+          (SDKSettings.json Version 15.4)
+Source:   .evidence/fortify-20261013/f.c
+          SHA-256 0d93764f8bc4afed2439f2fbe8a40ae843b93daaa6b18530ede9c64f00904791
+Compiler: evocc 0.1.0 (6b1e0f106159 2026-10-13), the debug build of the working
+          tree with this change
+Reference: Apple clang version 21.0.0 (clang-2100.1.1.101)
+
+Before the change, both commands below stopped with four `error[W0003]:
+function has no declaration` diagnostics, at the vsnprintf, snprintf, memcpy
+and strcpy macro uses.
+
+$ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk \
+    evocc -O0 .evidence/fortify-20261013/f.c -o f-O0 && ./f-O0
+x=42!
+exit status 0
+
+$ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk \
+    evocc -O2 .evidence/fortify-20261013/f.c -o f-O2 && ./f-O2
+x=42!
+exit status 0
+
+The calls in the assembly (`-S`) are the same at -O0 and -O2:
+
+    _vsnprintf _snprintf _memcpy ___strcpy_chk _format _puts
+
+`vsnprintf` writes through a parameter of unknown size, so its check is
+dropped as GCC drops it. The `snprintf` and `memcpy` lengths fit their
+destinations. The `strcpy` source length is not known, so the call keeps
+`__strcpy_chk`. Apple clang -O2 with the same SDK calls `_vsnprintf`,
+`_snprintf`, `___strcpy_chk`, `_format` and `_puts`, and expands `memcpy`
+inline.

@@ -171,6 +171,10 @@ pub enum LowerError {
     VarArgs {
         span: SourceSpan,
     },
+    /// A body that forwards the GNU argument pack was not substituted.
+    VarArgPack {
+        span: SourceSpan,
+    },
     MalformedFunction {
         function: String,
         span: SourceSpan,
@@ -228,6 +232,7 @@ impl fmt::Display for LowerError {
             Self::Asm { .. } => formatter.write_str("not-lowered: asm"),
             Self::AsmOperand { reason, .. } => write!(formatter, "not-lowered: asm: {reason}"),
             Self::VarArgs { .. } => formatter.write_str("not-lowered: varargs"),
+            Self::VarArgPack { .. } => formatter.write_str("invalid-va-arg-pack"),
             Self::MalformedFunction {
                 function, reason, ..
             } => write!(formatter, "malformed function {function}: {reason}"),
@@ -259,6 +264,7 @@ impl LowerError {
             Self::StaticRelocation { .. } => "E3026",
             Self::ComputedGoto { .. } => "E3029",
             Self::VarArgs { .. } => "E3030",
+            Self::VarArgPack { .. } => "E2950",
             Self::FrameAddress { .. } => "E3031",
             Self::WideInteger { .. } => "E3033",
             Self::FunctionPointerArithmetic { .. } => "E3034",
@@ -299,6 +305,7 @@ impl LowerError {
             | Self::Asm { span }
             | Self::AsmOperand { span, .. }
             | Self::VarArgs { span }
+            | Self::VarArgPack { span }
             | Self::MalformedFunction { span, .. }
             | Self::InvalidControlFlow { span, .. }
             | Self::Layout { span, .. } => Some(*span),
@@ -1374,6 +1381,7 @@ fn collect_memory_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {
                     expression(unit, second, out);
                 }
             }
+            CHirExpr::BuiltinVarArgPack { .. } => {}
             CHirExpr::Assign { target, value, .. } => {
                 expression(unit, target, out);
                 expression(unit, value, out);
@@ -2964,6 +2972,9 @@ fn prevalidate_expr_for_lowering(
             }
             Ok(())
         }
+        // Substitution replaces the pack at each call site. A body that
+        // keeps it has no anonymous arguments to forward.
+        CHirExpr::BuiltinVarArgPack { span, .. } => Err(LowerError::VarArgPack { span: *span }),
         CHirExpr::BuiltinReturnAddress { .. } => Ok(()),
         CHirExpr::BuiltinFrameAddress { depth, .. } if u16::try_from(*depth).is_ok() => Ok(()),
         CHirExpr::BuiltinFrameAddress { span, .. } => Err(LowerError::FrameAddress { span: *span }),
@@ -10367,6 +10378,7 @@ impl<'a> FunctionLowerer<'a> {
                 ..
             } => self.lower_checked(*op, lhs, rhs, target, *target_ty, *span, state),
             CHirExpr::BitBuiltin { op, operand, .. } => self.lower_bit(*op, operand, state),
+            CHirExpr::BuiltinVarArgPack { span, .. } => Err(LowerError::VarArgPack { span: *span }),
             CHirExpr::BuiltinVarArgs {
                 op,
                 first,
@@ -15461,6 +15473,7 @@ fn collect_references_expr(expression: &CHirExpr<'_>, calls: &mut FunctionRefere
             collect_references_expr(rhs, calls);
             collect_references_expr(target, calls);
         }
+        CHirExpr::BuiltinVarArgPack { .. } => {}
         CHirExpr::BuiltinVarArgs { first, second, .. } => {
             if let CHirExpr::Ident { symbol, .. } = first {
                 calls.frame_addresses.insert(*symbol);
@@ -15810,6 +15823,7 @@ fn live_before_expr(expression: &CHirExpr<'_>, live: &mut BTreeSet<SymbolId>) {
             }
             live_before_expr(first, live);
         }
+        CHirExpr::BuiltinVarArgPack { .. } => {}
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions().iter().rev() {
                 if let InitAction::StoreScalar { value, .. }
@@ -16030,6 +16044,7 @@ fn collect_symbols_expr(expression: &CHirExpr<'_>, symbols: &mut BTreeSet<Symbol
                 collect_symbols_expr(second, symbols);
             }
         }
+        CHirExpr::BuiltinVarArgPack { .. } => {}
         CHirExpr::CompoundLit(_, initializer, _) => {
             for action in initializer.plan().actions() {
                 if let InitAction::StoreScalar { value, .. }

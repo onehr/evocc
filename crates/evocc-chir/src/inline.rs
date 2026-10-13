@@ -39,6 +39,10 @@ struct Uses<'a> {
     has_calls: bool,
     has_local_objects: bool,
     activation_sensitive: bool,
+    /// The body uses `va_start`, `va_arg`, `va_end` or `va_copy`.
+    variable_arguments: bool,
+    /// The body forwards or counts its anonymous arguments.
+    argument_pack: bool,
     unknown_memory: bool,
     writes: BTreeSet<SymbolId>,
     entry_labels: bool,
@@ -368,8 +372,11 @@ fn inspect_ordered<'a>(
                     CHirExpr::BuiltinReturnAddress { .. }
                         | CHirExpr::BuiltinFrameAddress { .. }
                         | CHirExpr::BuiltinVarArgs { .. }
+                        | CHirExpr::BuiltinVarArgPack { .. }
                         | CHirExpr::CompoundLit(..)
                 );
+                uses.variable_arguments |= matches!(e, CHirExpr::BuiltinVarArgs { .. });
+                uses.argument_pack |= matches!(e, CHirExpr::BuiltinVarArgPack { .. });
                 uses.owns_statements |= matches!(e, CHirExpr::StatementExpr { .. });
                 uses.addressed_labels |= matches!(e, CHirExpr::LabelAddress { .. });
                 uses.constant_queries |= matches!(
@@ -509,7 +516,8 @@ fn inspect_ordered<'a>(
                     | CHirExpr::BuiltinTrap { .. }
                     | CHirExpr::BuiltinUnreachable { .. }
                     | CHirExpr::BuiltinReturnAddress { .. }
-                    | CHirExpr::BuiltinFrameAddress { .. } => {}
+                    | CHirExpr::BuiltinFrameAddress { .. }
+                    | CHirExpr::BuiltinVarArgPack { .. } => {}
                 }
             }
         }
@@ -994,6 +1002,16 @@ pub(crate) fn substitute_for_execution<'a>(
             && body.assembly.is_empty()
             && !no_optional_substitution.contains(&function.symbol)
     };
+    // A variadic callee is substituted only when it must be, and only when
+    // its body reaches its anonymous arguments through the GNU argument pack
+    // alone. Each call site supplies the pack; a `va_list` over the absent
+    // activation would have no arguments to read.
+    let forwards_argument_pack = |function: &FunctionDecl<'_>| {
+        let body = &bodies[&function.symbol];
+        roles.always_inline.contains(&function.symbol)
+            && body.argument_pack
+            && !body.variable_arguments
+    };
     let mut candidates = roles.definitions.clone();
     candidates.extend(
         roles
@@ -1020,10 +1038,10 @@ pub(crate) fn substitute_for_execution<'a>(
                                 && bodies[&f.symbol].nodes <= 128
                                 && !sensitive_control_flow(f.symbol)))))
                 && (!uses.addresses.contains(&f.symbol) || roles.always_inline.contains(&f.symbol))
-                && !matches!(
+                && (!matches!(
                     f.parameters,
                     ParameterSyntax::Prototype { variadic: true, .. }
-                )
+                ) || forwards_argument_pack(f))
         })
         .collect();
     // A runtime call-graph cycle need not be a substitution cycle: an inline
@@ -1405,6 +1423,9 @@ struct Context<'a> {
     return_count: usize,
     return_value: Option<&'a CHirExpr<'a>>,
     end: Option<SpannedName>,
+    /// The objects that hold the anonymous arguments of a substituted
+    /// variadic call, in order, with their promoted types.
+    anonymous: Option<Vec<(SymbolId, TypeId)>>,
 }
 
 impl Context<'_> {
@@ -1436,6 +1457,7 @@ impl Context<'_> {
             return_count: 0,
             return_value: None,
             end: None,
+            anonymous: None,
         }
     }
 }
@@ -1503,6 +1525,62 @@ impl<'a> Substitution<'a, '_> {
             n.spelling = format!("__evocc_inline_{p}_{}", n.spelling);
         }
         n
+    }
+    /// Call the plain library function in place of a checked entry point
+    /// when the substituted arguments show that the check cannot fail, as
+    /// the parser does for source constants. The removed size and flag
+    /// arguments are constants, so dropping them drops no evaluation.
+    fn drop_redundant_check(&self, f: &mut &'a CHirExpr<'a>, args: &mut Vec<&'a CHirExpr<'a>>) {
+        let CHirExpr::Ident {
+            symbol,
+            spelling,
+            span,
+            ..
+        } = *f
+        else {
+            return;
+        };
+        let Some(builtin) = crate::fortify::checked_entry(spelling) else {
+            return;
+        };
+        if !self.unit.symbols.is_builtin_function(*symbol) {
+            return;
+        }
+        let Some(plain) = self.unit.symbols.builtin_function(builtin.plain) else {
+            return;
+        };
+        let constant = |index: usize| {
+            let value = crate::constant::eval_integer_constant(
+                args.get(index)?,
+                &self.unit.types,
+                &self.unit.symbols,
+                self.target,
+            )?;
+            let ty = match builtin.parameters.get(index)? {
+                crate::fortify::Param::Size => crate::integer::CIntegerType::ULONG,
+                crate::fortify::Param::Int => crate::integer::CIntegerType::INT,
+                _ => return None,
+            };
+            u64::try_from(value.cast(ty).raw_bits()).ok()
+        };
+        if !builtin.check_is_redundant(constant) {
+            return;
+        }
+        let Ok(entry) = self.unit.symbols.symbol(plain) else {
+            return;
+        };
+        *f = self.alloc(CHirExpr::Ident {
+            symbol: plain,
+            spelling: builtin.plain.to_owned(),
+            facts: ExprFacts::function_designator(entry.ty()),
+            span: *span,
+        });
+        *args = args
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| builtin.keeps(*index))
+            .map(|(_, argument)| *argument)
+            .collect();
     }
     fn ident(&self, s: SymbolId, span: SourceSpan) -> &'a CHirExpr<'a> {
         let symbol = self.unit.symbols.symbol(s).unwrap();
@@ -2839,9 +2917,28 @@ impl<'a> Substitution<'a, '_> {
                 }
             }
             CHirExpr::Call(f, args, span) => {
+                // The parser admits the pack only as the last argument of a
+                // call. A substituted variadic call evaluated its anonymous
+                // arguments once, into the objects that the pack names.
+                let pack = matches!(
+                    args.last(),
+                    Some(CHirExpr::BuiltinVarArgPack { length: false, .. })
+                )
+                .then(|| c.anonymous.clone())
+                .flatten();
+                if pack.is_some() {
+                    args.pop();
+                }
                 for a in args.iter_mut() {
                     *a = self.expr(a, c)?;
                 }
+                for (symbol, ty) in pack.into_iter().flatten() {
+                    let value = self.ident(symbol, *span);
+                    args.push(self.alloc(CHirExpr::Cast(ty, value, *span)));
+                }
+                // Outside a substituted call the pack has no arguments. Keep
+                // this call, so that lowering refuses the body if it remains.
+                let unexpanded = matches!(args.last(), Some(CHirExpr::BuiltinVarArgPack { .. }));
                 if c.expand_calls && !c.byte_objects.is_empty() {
                     c.byte_objects.clear();
                     c.memo.clear();
@@ -2856,7 +2953,7 @@ impl<'a> Substitution<'a, '_> {
                         .eligible
                         .get(symbol)
                         .copied()
-                        .filter(|_| c.expand_calls)
+                        .filter(|_| c.expand_calls && !unexpanded)
                     {
                         let argument_bounds = args
                             .iter()
@@ -2881,6 +2978,7 @@ impl<'a> Substitution<'a, '_> {
                 }
                 self.invalidate_memory_write(c);
                 *f = self.expr(f, c)?;
+                self.drop_redundant_check(f, args);
                 if let Some(bounds) = bounds {
                     let result = self.alloc(out);
                     self.extent_calls
@@ -2896,6 +2994,23 @@ impl<'a> Substitution<'a, '_> {
                 *rhs = self.expr(rhs, c)?;
                 *target = self.expr(target, c)?;
             }
+            CHirExpr::BuiltinVarArgPack {
+                length: true, span, ..
+            } => {
+                if let Some(pack) = &c.anonymous {
+                    let count = self.alloc(CHirExpr::Lit(
+                        IntLit {
+                            value: pack.len() as u64,
+                            suffix: IntSuffix::None,
+                            base: IntBase::Dec,
+                        },
+                        *span,
+                    ));
+                    c.memo.insert(key, count);
+                    return Ok(count);
+                }
+            }
+            CHirExpr::BuiltinVarArgPack { .. } => {}
             CHirExpr::BuiltinVarArgs {
                 first,
                 second,
@@ -3571,7 +3686,13 @@ impl<'a> Substitution<'a, '_> {
             | ParameterSyntax::IdentifierList { parameters } => parameters.as_slice(),
             ParameterSyntax::Unspecified => &[],
         };
-        if parameters.len() != args.len() {
+        // Eligibility admits a variadic callee only when its body forwards
+        // the anonymous arguments through the argument pack.
+        let variadic = matches!(
+            f.parameters,
+            ParameterSyntax::Prototype { variadic: true, .. }
+        );
+        if parameters.len() > args.len() || (!variadic && parameters.len() != args.len()) {
             return Err(self.error(span, "inline argument arity mismatch"));
         }
         // A literal call to a single-return leaf has no parameter addresses,
@@ -3579,7 +3700,7 @@ impl<'a> Substitution<'a, '_> {
         // without introducing a result object that hides the constant again.
         // This includes numeric pointers: a null return must remain visible
         // to the caller's branch folding, just like an integer zero.
-        if let CHirStmt::Compound(items, _, _) = f.body.unwrap() {
+        if let (CHirStmt::Compound(items, _, _), false) = (f.body.unwrap(), variadic) {
             if let [CHirBlockItem::Statement(CHirStmt::Return(Some(value), _))] = items.as_slice() {
                 let mut constants = Context::new(scope);
                 constants.expand_calls = false;
@@ -3642,7 +3763,7 @@ impl<'a> Substitution<'a, '_> {
                 }
             }
         }
-        if args.is_empty() {
+        if args.is_empty() && !variadic {
             if let Some(value) = self.pure_constants.get(&f.symbol).copied() {
                 let literal = self.alloc(CHirExpr::Lit(
                     IntLit {
@@ -3792,6 +3913,33 @@ impl<'a> Substitution<'a, '_> {
                     }
                 }
             }
+        }
+        if variadic {
+            // Each anonymous argument is evaluated once, after the named
+            // arguments, into an object of its promoted type.
+            let mut pack = Vec::new();
+            for &arg in &args[parameters.len()..] {
+                let CHirExpr::Cast(ty, operand, _) = arg else {
+                    return Err(
+                        self.error(arg.span(), "anonymous argument lacks default promotion")
+                    );
+                };
+                // The caller already substituted the argument and its type.
+                let ty = *ty;
+                let fresh = self.fresh(inline_scope, ty, StorageClass::None, span)?;
+                let value = if self.complete_object_value(ty) {
+                    *operand
+                } else {
+                    arg
+                };
+                items.push(CHirBlockItem::Declaration(self.object(
+                    fresh,
+                    Some(value),
+                    span,
+                )));
+                pack.push((fresh, ty));
+            }
+            c.anonymous = Some(pack);
         }
         self.active.push(f.symbol);
         let body = self.stmt(body, &mut c)?;

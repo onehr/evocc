@@ -129,7 +129,13 @@ fn atomic_type_order_and_constant_context_errors_are_not_silent() {
 #[test]
 fn broader_atomic_interfaces_are_not_mistaken_for_implemented_scalar_access() {
     let source = include_str!("../../../tests/fixtures/atomic-scope-boundaries.c");
-    for (case, code) in [(0, "E2702"), (1, "error[W0003]"), (2, "error[W0003]")] {
+    // An unknown `__atomic_` name is refused as a builtin, never declared
+    // implicitly: E2949 names it at the call.
+    for (case, code) in [
+        (0, "E2702"),
+        (1, "error[E2949]: unknown-builtin: __atomic_fetch_add"),
+        (2, "error[E2949]: unknown-builtin: __atomic_load"),
+    ] {
         let source = format!("#define CASE {case}\n{source}");
         for mode in ["--interpret-c-hir", "--emit=evoir", "--emit=asm"] {
             let output = run(&source, mode);

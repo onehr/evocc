@@ -606,7 +606,7 @@ fn expression_contains_declaration(
         CHirExpr::Atomic(access) => access
             .operands()
             .any(|operand| expression_contains_declaration(operand, target, attribute)),
-        CHirExpr::BuiltinObjectSize { .. } => false,
+        CHirExpr::BuiltinObjectSize { .. } | CHirExpr::BuiltinVarArgPack { .. } => false,
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
         | CHirExpr::Cast(_, operand, _)
@@ -992,7 +992,7 @@ fn eval_integer_constant_in(
             builtin_object_size(operand, *mode, types, symbols, target),
             CIntegerType::ULONG,
         )),
-        CHirExpr::BuiltinObjectSize { .. } => None,
+        CHirExpr::BuiltinObjectSize { .. } | CHirExpr::BuiltinVarArgPack { .. } => None,
         CHirExpr::BuiltinConstantP { operand, .. } => Some(CInteger::int(i32::from(
             builtin_constant_p(operand, types, symbols, target),
         ))),
@@ -1211,6 +1211,7 @@ pub fn integer_expression_type(
         | CHirExpr::MemoryAssign { facts, .. }
         | CHirExpr::Update { facts, .. }
         | CHirExpr::MemoryUpdate { facts, .. }
+        | CHirExpr::BuiltinVarArgPack { facts, .. }
         | CHirExpr::StatementExpr { facts, .. } => canonical_integer_type(types, facts.ty()),
         CHirExpr::Unary(operator, operand, _) => match operator {
             crate::UnaryOp::Not => Some(CIntegerType::INT),

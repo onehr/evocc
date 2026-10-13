@@ -1021,6 +1021,7 @@ fn pointer_expression_type(
             conditional_pointer_type(symbols, types, operand, fallback)
         }
         CHirExpr::BuiltinVarArgs { facts, .. }
+        | CHirExpr::BuiltinVarArgPack { facts, .. }
         | CHirExpr::BuiltinConstantP { facts, .. }
         | CHirExpr::BuiltinObjectSize { facts, .. }
         | CHirExpr::LabelAddress { facts, .. }
