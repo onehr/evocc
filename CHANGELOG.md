@@ -99,7 +99,7 @@ The first public version.
   checkers in `evoir-sem` check each stage of the actual compilation, and the theorem
   `checkPipeline_sound` covers the chain from typed Core source to the final assembly text. A
   refusal writes no output.
-- Five pinned specifications in `spec/`: EvoIR 2.1.0, EvoMIR 1.0.1, the target description 1.0.0,
+- Five pinned specifications in `spec/`: EvoIR 2.3.0, EvoMIR 1.1.0, the target description 1.0.0,
   the verification contract 1.0.0 and the diagnostic format 1.3.0.
 - The evaluation ladder, `tools/bench.py`: conformance suites, fifteen application lanes and Linux
   build, boot, kselftest and KUnit lanes. Each lane writes a receipt.
@@ -145,6 +145,16 @@ The first public version.
   text form, a command line longer than 80 bytes shows only the labelled argument. In one
   Linux build log, these warnings fell from 74.5 MiB to 4.5 MiB. `-ffixed-x18` no longer
   warns: x18 is never assigned. Diagnostic format revision 1.3.0 states the rule.
+- Fortified C library calls compile. The macOS 15 SDK and glibc at `_FORTIFY_SOURCE` levels 1 to
+  3 turn calls such as `memcpy` and `snprintf` into `__builtin___X_chk` calls. EvoCC implements
+  the 14 checked builtins of GCC 14 and keeps each check unless the object size is unknown or a
+  constant length fits. An overflow stops the program, as with Apple clang and gcc-14.
+  `__has_builtin` reports exactly the implemented builtins.
+- A call to an unknown `__builtin_`, `__atomic_` or `__sync_` name is E2949 at that name, with or
+  without `-w`. Before, `-w` turned it into an implicit call.
+- `builtin-argument-type` has its own code, E2951; E2911 named two diagnostics.
+- The EVP certificate reader refuses the epoch marker 0.
+- The EvoMIR text parser reads every form that the writer prints.
 
 ### Results at this version
 

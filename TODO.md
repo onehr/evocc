@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K07, K10, K11, K11f, K12, N08, N09, N10, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D01, D02, D03, D04, D05, D06, D08 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
+| AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D04, D05, D06, D09 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, B10a, T05, R05, R05a, R05b, R05c, R05d, R05e, R05f, R05g, R05h, R05i, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -4689,7 +4689,7 @@ parser, the EvoMIR text parser or the Darwin ABI profile, and floating
 builtins are outside `core-v1`. D06 is the separate October 7 proof-replay
 refusal; changing the P13 demo does not close it.
 
-- [ ] **D01 — Give builtin-argument-type its own diagnostic code** — `OPEN`, P2.
+- [x] **D01 — Give builtin-argument-type its own diagnostic code** — `DONE`, P2, 2026-10-14.
   `E2911` names two diagnostics: `static-assertion-failed` and
   `builtin-argument-type`. The parser reports `builtin-argument-type` for a
   wrong operand type of a quiet floating comparison builtin
@@ -4701,16 +4701,19 @@ refusal; changing the P13 demo does not close it.
   add it to the section 6.3 table and correct section 3.13.1. Exit: one code
   per diagnostic, the section 6.3 table updated, and
   `crates/evocc/tests/check_product.rs` extended to check the new code.
-
-- [ ] **D02 — Refuse the EVP epoch marker 0** — `OPEN`, P2.
+  Closed by `09831b5f`. `builtin-argument-type` is now E2951. EvoIR 2.3.0 lists
+  it in the Section 6.3 table and corrects Section 3.13.1, and
+  `check_product.rs` checks the code.
+- [x] **D02 — Refuse the EVP epoch marker 0** — `DONE`, P2, 2026-10-14.
   `parse_evp1` in `crates/evocc-proof/src/evp1.rs` accepts an `epoch 0`
   marker. `spec/evoir.md` section 11.3 numbers the epochs from 1 and says
   that a marker `0` is malformed (status 2). No test covers the marker `0`.
   Next action: make the reader refuse `epoch 0` as malformed, and add a test
   with an `evp2` certificate that is valid except for this marker. Exit: the
   reader refuses `epoch 0`, and a test shows the refusal.
-
-- [ ] **D03 — Read every EvoMIR text form that the writer prints** — `OPEN`, P2.
+  Closed by `363d1ebf`. The EVP reader refuses `epoch 0` with status 2, and a
+  test submits an `evp2` certificate that is valid except for this marker.
+- [x] **D03 — Read every EvoMIR text form that the writer prints** — `DONE`, P2, 2026-10-14.
   The EvoMIR writer `crates/evocc-mir/src/text.rs` prints `spill.store`,
   `spill.reload`, `arg.incoming` and `arg.outgoing`, and a `#zero:` asm
   operand of each register class. The parser
@@ -4720,7 +4723,9 @@ refusal; changing the P13 demo does not close it.
   parser production for each form that the writer prints, then remove the
   limits from Appendix A. Exit: the parser reads every form that the writer
   prints, and a round-trip test (write, parse, write) gives the same text.
-
+  Closed by `16ba5757`. The parser reads every form that the writer prints, and
+  a write-parse-write test gives the same text. EvoMIR 1.1.0 removes the two
+  limits from Appendix A.
 - [ ] **D04 — Darwin profile: 128-bit argument pairs** — `OPEN`, P2.
   Under the Darwin ABI profile, `record_plan` in
   `crates/evocc-mir/src/lower.rs` rounds a `bits<128>` argument to an even
@@ -4825,7 +4830,7 @@ refusal; changing the P13 demo does not close it.
   plus capture growth is 4,067,496 KiB (about 3.88 GiB), mostly reusable build
   cache; the retained capture is 784 KiB and free space remains above 133 GiB.
 
-- [ ] **D08 — Compile fortified C library calls** — `OPEN`, P1.
+- [x] **D08 — Compile fortified C library calls** — `DONE`, P1, 2026-10-14.
   Found on 2026-10-13 by the release review. Both macOS SDKs on the host
   define `_FORTIFY_SOURCE` as 2 by default. The macOS 15 SDK guards its
   fortified macros with `__has_builtin(...) || defined(__GNUC__)`, so calls
@@ -4840,6 +4845,26 @@ refusal; changing the P13 demo does not close it.
   and name an unknown builtin at its own location. Exit: the reproducer runs
   with the 15.4 SDK at -O0 and -O2, and glibc fortify levels 2 and 3 match
   gcc-14, the overflow abort included.
+  Closed by `224f5b8d`. All 14 checked builtins of GCC 14 work: a call becomes
+  the plain function only when the object size is unknown or a constant length
+  fits, and otherwise calls the C library's checking function.
+  `__builtin_va_arg_pack` works through always-inline substitution, and
+  `__has_builtin` reports exactly the 279 implemented builtins. An unknown
+  `__builtin_`, `__atomic_` or `__sync_` call is E2949 at that name, with or
+  without `-w`. The reproducer runs with the 15.4 SDK at -O0 and -O2. With glibc
+  levels 2 and 3, string, stdio and unistd programs print what gcc-14's do, and
+  overflows abort with glibc's message. The full workspace gate passes: 429
+  suites, 3,281 passed, 0 failed, 6 ignored. D09 holds the builtins that remain.
+
+- [ ] **D09 — Check the remaining fortified builtins** — `OPEN`, P2.
+  D08 leaves out the clang-only `__builtin___memccpy_chk`,
+  `__builtin___strlcpy_chk` and `__builtin___strlcat_chk`, so the macOS 26
+  SDK leaves those calls unchecked where Apple clang checks them. GCC's
+  `__builtin___printf_chk` family and `__builtin___clear_cache` are also
+  missing, and `strcpy` and `stpcpy` with a literal source keep the check
+  that GCC drops. Next action: implement them with the D08 rules. Exit: each
+  builtin has a crossed test against Apple clang or gcc-14, and
+  `__has_builtin` reports it.
 
 ## Codegen quality track — next quarter
 
