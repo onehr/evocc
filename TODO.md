@@ -139,7 +139,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D04, D05, D06, D09 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
 ## Diagnostics and command-line product work
@@ -5271,6 +5271,47 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   dead code, alias-aware forwarding) needs a state and effect model and its
   own proof design. Reopen only after the N03 slices land, with a separate
   design and owner decision.
+  The 2026-10-13
+  [design](docs/archive/notebook/n06-eqsat-memory-design-20261013.md) makes a
+  memory snapshot an e-graph value of sort `mem<all>`, with Kleene equality over
+  partial values. A memory transaction only deletes instructions and renames
+  their results; token chains stay linear, and an instruction is deleted only
+  when its class holds a defined, available representative, so no trap or
+  diagnostic disappears. Alias facts stay local (one SSA root with an exact
+  offset, distinct globals, fresh unexposed allocas); calls that write, `asm`,
+  volatile and atomic accesses and fences are barriers. A new Lean byte-level
+  model `EvoIR.Mem` proves each memory rule, the Rust checker recomputes every
+  fact, and the proof-required path refuses `-Oeq-mem`. The lead's provisional
+  answers to the design's open decisions: keep strict trap preservation, keep
+  volatile accesses as full barriers, add the definition seeds as a new policy
+  version without changing the frozen `p0.scalar.v4`, keep `max_transactions` at
+  8 until a measurement justifies more, and leave forwarding through `copy` to
+  N10. T03v is a precondition.
+
+  - [ ] **N06a — Definition seeds for loads, divisions and UB predicates** — `LATER`, P3.
+    About 450 Rust, 650 test, 300 Lean and 150 spec lines, with a stop rule
+    against the S4 ceiling. Exit: the new seeds pass the randomized gate and the
+    certificate replay, and the frozen policy is unchanged.
+
+  - [ ] **N06b — Merge straight-line block chains with a certified step** — `LATER`, P3.
+    About 500 Rust, 450 test, 450 Lean and 120 spec lines (`c0.chain.v1`). Exit:
+    a chain-merge refinement theorem over `Core.IR` and checked replays of the
+    merged chains.
+
+  - [ ] **N06c — Memory-aware equality saturation** — `LATER`, P3.
+    A diagnostic preflight with a stop rule, then `m0.mem.v1` with `evp3` and
+    the Lean memory model: about 4,650 Rust, 2,600 test, 2,700 Lean and 650 spec
+    lines. Exit: every memory rule has its `MRuleCovered` theorem, differential
+    vectors agree with `evocc-memory`, and the randomized gate also compares
+    diagnostics and volatile traces.
+
+  - [ ] **N06d — Dead-store elimination by a checked scan** — `LATER`, P3.
+    About 800 Rust, 600 test, 700 Lean and 150 spec lines (`m1.dead.v1`). Exit:
+    the dead-store insensitivity lemma and negative tests for each barrier.
+
+  - [ ] **N06e — Measure the benefit by counts** — `LATER`, P3.
+    Exit: EvoIR counts, interpreter steps, S1 bytes, the reductions' instruction
+    counts and a K02 rerun show the change; no timing claim is made.
 
 - [x] **N07 — Target description and ISA-model oracles** — `DONE`, P3;
   bounded migration/differential closed, SMT qualification closed negative,
