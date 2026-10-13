@@ -71,3 +71,14 @@ deliberately does not link injected replacement objects). All 304 ladder Python
 tests and targeted Ruff pass; a new negative verdict test rejects relabeling
 the 12 allocation probes as full wordexp acceptance. No compiler source changed
 in this batch, so the prior full Rust health checkpoint is not a new run here.
+
+Follow-up, 2026-10-13: the B08d10 completion extends the same patch file
+(SHA256 1e71eb1650fa9a9372933089e331c631f8f688598508965ddffa91a52835aad6).
+This fixture still passes 12 x 192/192 = 2304/2304 checks with the frozen
+EvoCC 366fd796 and the current sealed image. The new scanner, rewrite and
+WRDE_UNDEF paths add no allocation for this fixture's input. Evidence:
+.evidence/ladder/musl-patched/20261013-final/wordexp-memory-green/
+  plan 0d812933f9b24068fd991f70824a8777aae9916c5f96272e4c9dd22b6fbe7c88
+  executions d81536417415c261c51fcd6e16e435ebb5c58a04b08122e36b50c405686a25c9
+The original wordexp entries now PASS in that patched configuration; see
+musl-patched-wordexp.out. The original lane still FAILS them.

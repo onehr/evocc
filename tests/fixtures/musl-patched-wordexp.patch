@@ -1,7 +1,20 @@
 diff --git a/src/misc/wordexp.c b/src/misc/wordexp.c
 --- a/src/misc/wordexp.c
 +++ b/src/misc/wordexp.c
-@@ -21,7 +21,11 @@ static void reap(pid_t pid)
+@@ -11,76 +11,450 @@
+ #include <fcntl.h>
+ #include "pthread_impl.h"
+ 
+-static void reap(pid_t pid)
++static int reap(pid_t pid)
+ {
+-	int status;
+-	while (waitpid(pid, &status, 0) < 0 && errno == EINTR);
++	int status, r;
++	while ((r = waitpid(pid, &status, 0)) < 0 && errno == EINTR);
++	return r < 0 ? -1 : status;
+ }
+ 
  static char *getword(FILE *f)
  {
  	char *s = 0;
@@ -11,39 +24,519 @@ diff --git a/src/misc/wordexp.c b/src/misc/wordexp.c
 +		return 0;
 +	}
 +	return s;
++}
++
++static const char *next(const char *s)
++{
++	s++;
++	while (s[0]=='\\' && s[1]=='\n')
++		s += 2;
++	return s;
++}
++
++static int alnum(int c)
++{
++	return (unsigned)c-'0' < 10 || ((unsigned)c|32)-'a' < 26;
++}
++
++/* $c.. is a parameter expansion */
++static int varchar(int c)
++{
++	if (alnum(c)) return 1;
++	switch (c) {
++	case '_':
++	case '@':
++	case '*':
++	case '#':
++	case '?':
++	case '-':
++	case '$':
++	case '!':
++		return 1;
++	}
++	return 0;
++}
++
++static const char *skipvarname(const char *s)
++{
++	while (alnum(*s) || *s=='_')
++		s = next(s);
++	return s;
++}
++
++static int hexdigit(int c)
++{
++	if ((unsigned)c-'0' < 10) return c-'0';
++	if (((unsigned)c|32)-'a' < 6) return (c|32)-'a'+10;
++	return -1;
++}
++
++/* Process a POSIX.1-2024 dollar-single-quote body that starts after $'.
++ * Return its terminating quote, or 0 when it is unterminated or uses an
++ * escape whose result is unspecified. With o, append the yielded bytes as
++ * one single-quoted string, which every POSIX shell reads the same way.
++ * A yielded null byte discards the rest of the body, one of the two
++ * permitted behaviors. */
++static const char *dollar_quote(const char *s, char **o)
++{
++	int c, d, n, nul = 0;
++	char *p = o ? *o : 0;
++
++	if (p) *p++ = '\'';
++	for (;; s++) {
++		c = (unsigned char)*s;
++		if (!c) return 0;
++		if (c == '\'') break;
++		if (c == '\\') switch ((c = (unsigned char)*++s)) {
++		case '"':
++		case '\'':
++		case '\\':
++			break;
++		case 'a': c = '\a'; break;
++		case 'b': c = '\b'; break;
++		case 'e': c = 033; break;
++		case 'f': c = '\f'; break;
++		case 'n': c = '\n'; break;
++		case 'r': c = '\r'; break;
++		case 't': c = '\t'; break;
++		case 'v': c = '\v'; break;
++		case 'c':
++			c = (unsigned char)*++s;
++			if (c == '\\' && s[1] == '\\') s++, c = 034;
++			else if (c == '?') c = 0177;
++			else if ((unsigned)c-'A' <= '_'-'A' && c != '\\') c &= 037;
++			else if ((unsigned)c-'a' < 26) c &= 037;
++			else return 0;
++			break;
++		case 'x':
++			for (n=c=0; n<3 && (d = hexdigit(s[1])) >= 0; n++, s++)
++				c = 16*c + d;
++			if (n < 1 || n > 2) return 0;
++			break;
++		case '0': case '1': case '2': case '3':
++		case '4': case '5': case '6': case '7':
++			c -= '0';
++			for (n=1; n<3 && (unsigned)s[1]-'0' < 8; n++, s++)
++				c = 8*c + s[1]-'0';
++			if (c > 255) return 0;
++			break;
++		default:
++			return 0;
++		}
++		if (!c) nul = 1;
++		if (!p || nul) continue;
++		if (c == '\'') {
++			memcpy(p, "'\\''", 4);
++			p += 4;
++		} else {
++			*p++ = c;
++		}
++	}
++	if (p) {
++		*p++ = '\'';
++		*o = p;
++	}
++	return s;
++}
++
++/* Track enough of the shell's quoting state to find each command
++ * substitution. This is the WRDE_NOCMD scanner posted to the musl list on
++ * 2026-06-30 (https://www.openwall.com/lists/musl/2026/06/30/1), changed
++ * for dollar-single-quotes: at the top level they are accepted and
++ * rewritten as single quotes, for shells that predate them; inside "..."
++ * they are literal text; elsewhere their meaning depends on the shell, so
++ * they are rejected.
++ *
++ * With strict set, return 0 or the WRDE_NOCMD verdict. Otherwise stop at
++ * the first construct that strict mode rejects, and leave the rest for the
++ * shell to read unchanged. A malformed top-level dollar-single-quote is
++ * WRDE_SYNTAX in both modes. With out, store a rewritten copy there when
++ * top-level dollar-single-quotes were rewritten. */
++static int scan(const char *s, int strict, char **out)
++{
++	enum {
++		INIT=0,    /* initial state */
++		QUOTE=4,   /* in ".." */
++		BRACE=8,   /* in ${..} */
++		PAREN=12,  /* in $((..)) */
++
++		XSQ_ESC=0,  /* ' escapes in ${..} */
++		XSQ_BAD=16, /* ' is rejected in ${..} */
++		XD_OK=32,   /* ' has no effect, "..$" is ok  */
++		XD_BAD=48,  /* ' has no effect, "..$" is rejected */
++		XMASK=48
++	};
++	enum {ROK=1, RCMD, RBAD, RSYN, ESC, SQ, SQE, DQ, D, LP, RP, POP, WS, H};
++	static const unsigned short T[256]={
++#define C(c,opi,opq,opb,opp) [c] = opi<<INIT|opq<<QUOTE|opb<<BRACE|opp<<PAREN,
++	/*  C   INIT  QUOTE BRACE PAREN */
++	C(  0 , ROK,  RSYN, RSYN, RSYN )
++	C( '`', RCMD, RCMD, RCMD, RCMD )
++	C( '$', D,    D,    D,    D    )
++	C('\\', ESC,  ESC,  ESC,  ESC  )
++	C( '"', DQ,   POP,  DQ,   RSYN )
++	C('\'', SQE,  0,    SQ,   RSYN )
++	C( '#', H,    0,    0,    RSYN )
++	C( ' ', WS,   0,    0,    0    )
++	C('\t', WS,   0,    0,    0    )
++	C('\n', RBAD, 0,    0,    0    )
++	C( '|', RBAD, 0,    0,    0    )
++	C( '&', RBAD, 0,    0,    0    )
++	C( ';', RBAD, 0,    0,    RBAD )
++	C( '<', RBAD, 0,    0,    0    )
++	C( '>', RBAD, 0,    0,    0    )
++	C( '(', RBAD, 0,    0,    LP   )
++	C( ')', RBAD, 0,    0,    RP   )
++	C( '{', RBAD, 0,    0,    RBAD )
++	C( '}', RBAD, 0,    POP,  RBAD )
++#undef C
++	};
++	const char *start = s, *wstart = s, *copied = s, *d, *q;
++	enum {MAXSP=1024}; /* limit on #QUOTE+#BRACE+5*#PAREN nesting depth */
++	unsigned char stack[MAXSP];
++	/* note: ( depth in a $((..)) is limited by 32bit np and ARG_MAX */
++	unsigned np=0, sp=0, st=INIT, stx=XSQ_ESC, newst, newstx;
++	char *buf = 0, *o = 0;
++	int r;
++
++	for (;;s++) switch (T[(unsigned char)*s]>>st & 15) {
++	case 0: break;
++	case ROK: goto done;
++	case RCMD: r = WRDE_CMDSUB; goto stop;
++	case RBAD: r = WRDE_BADCHAR; goto stop;
++	case RSYN: r = WRDE_SYNTAX; goto stop;
++	case ESC:
++		if (*++s) break;
++		r = WRDE_SYNTAX;
++		goto stop;
++	case SQ:
++		r = WRDE_SYNTAX;
++		if (stx == XSQ_BAD) goto stop;
++		if (stx == XSQ_ESC) {
++	case SQE:
++			r = WRDE_SYNTAX;
++			q = strchr(s+1, '\'');
++			if (!q) goto stop;
++			s = q;
++		}
++		break;
++	case DQ:
++		newst = QUOTE;
++		newstx = stx == XSQ_ESC ? XD_OK : XD_BAD;
++push:
++		r = WRDE_SYNTAX;
++		if (sp > MAXSP-1) goto stop;
++		stack[sp++] = st | stx;
++		st = newst;
++		stx = newstx;
++		if (st != PAREN) break;
++		if (sp > MAXSP-4) goto stop;
++		stack[sp++] = np;
++		stack[sp++] = np>>8;
++		stack[sp++] = np>>16;
++		stack[sp++] = np>>24;
++		np = 1; /* (( counts as 1, deal with the extra at the end */
++		break;
++	case D:
++		d = s;
++		s = next(s);
++		if (*s=='{') {
++			s = next(s);
++			r = WRDE_SYNTAX;
++			if (!varchar(*s)) goto stop;
++			s = skipvarname(s+1);
++			switch (*s) {
++			case ':':
++			case '-':
++			case '+':
++			case '=':
++			case '?':
++				newstx = stx;
++				break;
++			case '#':
++			case '%':
++				newstx = XSQ_ESC;
++				break;
++			default: /* extension, simple ${var}, eof */
++				s--;
++				newstx = XSQ_BAD;
++			}
++			newst = BRACE;
++			goto push;
++		}
++		if (*s=='(') {
++			s = next(s);
++			r = WRDE_CMDSUB;
++			if (*s!='(') goto stop;
++			newstx = XSQ_BAD; /* $((${v-'})) */
++			newst = PAREN;
++			goto push;
++		}
++		if (*s=='\'' && st==INIT) {
++			q = dollar_quote(s+1, 0);
++			if (!q) {
++				free(buf);
++				return WRDE_SYNTAX;
++			}
++			if (out) {
++				if (!buf) {
++					buf = malloc(2*strlen(start)+1);
++					if (!buf) return WRDE_NOSPACE;
++					o = buf;
++				}
++				memcpy(o, copied, d-copied);
++				o += d-copied;
++				dollar_quote(s+1, &o);
++				copied = q+1;
++			}
++			s = q;
++			break;
++		}
++		if (*s=='\'' && st==QUOTE && stx==XD_OK) {
++			s--; /* $' is not special in ".." */
++			break;
++		}
++		r = WRDE_SYNTAX;
++		if (*s=='\'' || (*s=='"' && st==QUOTE && stx==XD_BAD))
++			/* reject nested $' and deal with "${x-"$"y}" */
++			goto stop;
++		if (!varchar(*s))
++			s--; /* assume $c is not special. */
++		break;
++	case LP:
++		np++;
++		r = WRDE_SYNTAX;
++		if (!np) goto stop;
++		break;
++	case RP:
++		np--;
++		if (np) break;
++		s = next(s);
++		r = WRDE_CMDSUB;
++		if (*s != ')') goto stop; /* )) mismatch */
++		np = (unsigned)stack[--sp]<<24;
++		np |= stack[--sp]<<16;
++		np |= stack[--sp]<<8;
++		np |= stack[--sp];
++		/* fallthrough */
++	case POP:
++		stx = stack[--sp];
++		st = stx&15;
++		stx &= XMASK;
++		break;
++	case WS:
++		wstart = s = next(s);
++		s--;
++		break;
++	case H:
++		if (s != wstart) break;
++		r = WRDE_BADCHAR;
++		if (strchr(s, '\n')) goto stop;
++		goto done;
++	}
++stop:
++	if (strict) {
++		free(buf);
++		return r;
++	}
++done:
++	if (buf) {
++		strcpy(o, copied);
++		*out = buf;
++	}
++	return 0;
  }
  
++static pid_t spawn(char *const argv[], int quiet, int *fd)
++{
++	int p[2], null = -1;
++	pid_t pid;
++	sigset_t set;
++
++	if (pipe2(p, O_CLOEXEC) < 0) return -1;
++	if (quiet) {
++		/* Opened after the pipe, so it cannot be descriptor 1. */
++		null = open("/dev/null", O_WRONLY|O_CLOEXEC);
++		if (null < 0) {
++			close(p[0]);
++			close(p[1]);
++			return -1;
++		}
++	}
++	__block_all_sigs(&set);
++	pid = fork();
++	__restore_sigs(&set);
++	if (pid < 0) {
++		close(p[0]);
++		close(p[1]);
++		if (null >= 0) close(null);
++		return -1;
++	}
++	if (!pid) {
++		if (p[1] == 1) fcntl(1, F_SETFD, 0);
++		else dup2(p[1], 1);
++		if (null == 2) fcntl(2, F_SETFD, 0);
++		else if (null >= 0) dup2(null, 2);
++		execv("/bin/sh", argv);
++		_exit(1);
++	}
++	close(p[1]);
++	if (null >= 0) close(null);
++	*fd = p[0];
++	return pid;
++}
++
++/* The shell prints a sentinel word and then every expanded word. */
++static pid_t expand(const char *s, int undef, int quiet, int *fd)
++{
++	char *argv[] = { "sh", undef ? "-cu" : "-c",
++		"eval \"set --;printf %s\\\\\\\\0 x $1\"",
++		"sh", (char *)s, 0 };
++	return spawn(argv, quiet, fd);
++}
++
++/* The expansion under set -u failed. Report WRDE_BADVAL only when set -u
++ * caused it. Without command substitution, repeating the expansion without
++ * set -u cannot repeat a side effect. Otherwise only parse the same command
++ * (sh -n), so a command substitution never runs twice. */
++static int undef_error(const char *s, const char *t)
++{
++	static const char prefix[] = "set --;printf %s\\\\0 x ";
++	char *cmd, *w;
++	FILE *f;
++	int fd, r;
++	pid_t pid;
++
++	if (!scan(s, 1, 0)) {
++		pid = expand(t, 0, 1, &fd);
++		if (pid < 0) return WRDE_NOSPACE;
++		f = fdopen(fd, "r");
++		if (!f) {
++			close(fd);
++			kill(pid, SIGKILL);
++			reap(pid);
++			return WRDE_NOSPACE;
++		}
++		w = getword(f);
++		r = w ? WRDE_BADVAL : feof(f) ? WRDE_SYNTAX : WRDE_NOSPACE;
++		free(w);
++		fclose(f);
++		reap(pid);
++		return r;
++	}
++	cmd = malloc(sizeof prefix + strlen(t));
++	if (!cmd) return WRDE_NOSPACE;
++	memcpy(cmd, prefix, sizeof prefix - 1);
++	strcpy(cmd + sizeof prefix - 1, t);
++	pid = spawn((char *[]){ "sh", "-nc", cmd, 0 }, 1, &fd);
++	free(cmd);
++	if (pid < 0) return WRDE_NOSPACE;
++	close(fd);
++	r = reap(pid);
++	return r >= 0 && WIFEXITED(r) && !WEXITSTATUS(r) ? WRDE_BADVAL : WRDE_SYNTAX;
++}
++
  static int do_wordexp(const char *s, wordexp_t *we, int flags)
-@@ -30,7 +30,6 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
- 	int sq=0, dq=0;
- 	size_t np=0;
+ {
+ 	size_t i, l;
+-	int sq=0, dq=0;
+-	size_t np=0;
  	char *w, **tmp;
 -	char *redir = (flags & WRDE_SHOWERR) ? "" : "2>/dev/null";
++	char *t = 0;
  	int err = 0;
  	FILE *f;
  	size_t wc = 0;
-@@ -106,8 +105,18 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
- 	if (!pid) {
- 		if (p[1] == 1) fcntl(1, F_SETFD, 0);
- 		else dup2(p[1], 1);
-+		/* Redirect before the shell parses or expands the expression, not
-+		   just on printf after command substitutions have already run. */
-+		if (!(flags & WRDE_SHOWERR)) {
-+			int fd = open("/dev/null", O_WRONLY);
-+			if (fd < 0) _exit(1);
-+			if (fd != 2) {
-+				if (dup2(fd, 2) < 0) _exit(1);
-+				close(fd);
-+			}
-+		}
- 		execl("/bin/sh", "sh", "-c",
+ 	char **wv = 0;
+-	int p[2];
++	int fd;
+ 	pid_t pid;
+-	sigset_t set;
+ 
+ 	if (flags & WRDE_REUSE) wordfree(we);
+ 
+-	if (flags & WRDE_NOCMD) for (i=0; s[i]; i++) switch (s[i]) {
+-	case '\\':
+-		if (!sq && !s[++i]) return WRDE_SYNTAX;
+-		break;
+-	case '\'':
+-		if (!dq) sq^=1;
+-		break;
+-	case '"':
+-		if (!sq) dq^=1;
+-		break;
+-	case '(':
+-		if (np) {
+-			np++;
+-			break;
+-		}
+-	case ')':
+-		if (np) {
+-			np--;
+-			break;
+-		}
+-	case '\n':
+-	case '|':
+-	case '&':
+-	case ';':
+-	case '<':
+-	case '>':
+-	case '{':
+-	case '}':
+-		if (!(sq|dq|np)) return WRDE_BADCHAR;
+-		break;
+-	case '$':
+-		if (sq) break;
+-		if (s[i+1]=='(' && s[i+2]=='(') {
+-			i += 2;
+-			np += 2;
+-			break;
+-		} else if (s[i+1] != '(') break;
+-	case '`':
+-		if (sq) break;
+-		return WRDE_CMDSUB;
+-	}
++	err = scan(s, flags & WRDE_NOCMD, &t);
++	if (err == WRDE_NOSPACE) goto nospace;
++	if (err) return err;
+ 
+ 	if (flags & WRDE_APPEND) {
+ 		wc = we->we_wordc;
+@@ -96,28 +470,12 @@
+ 		we->we_offs = 0;
+ 	}
+ 
+-	if (pipe2(p, O_CLOEXEC) < 0) goto nospace;
+-	__block_all_sigs(&set);
+-	pid = fork();
+-	__restore_sigs(&set);
+-	if (pid < 0) {
+-		close(p[0]);
+-		close(p[1]);
+-		goto nospace;
+-	}
+-	if (!pid) {
+-		if (p[1] == 1) fcntl(1, F_SETFD, 0);
+-		else dup2(p[1], 1);
+-		execl("/bin/sh", "sh", "-c",
 -			"eval \"printf %s\\\\\\\\0 x $1 $2\"",
 -			"sh", s, redir, (char *)0);
-+			"eval \"set --; printf %s\\\\\\\\0 x $1\"",
-+			"sh", s, (char *)0);
- 		_exit(1);
- 	}
-@@ -125,12 +138,15 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
+-		_exit(1);
+-	}
+-	close(p[1]);
+-	
+-	f = fdopen(p[0], "r");
++	pid = expand(t ? t : s, flags & WRDE_UNDEF, !(flags & WRDE_SHOWERR), &fd);
++	if (pid < 0) goto nospace;
++
++	f = fdopen(fd, "r");
+ 	if (!f) {
+-		close(p[0]);
++		close(fd);
+ 		kill(pid, SIGKILL);
+ 		reap(pid);
+ 		goto nospace;
+@@ -125,18 +483,27 @@
  
  	l = wv ? i+1 : 0;
  
@@ -55,14 +548,16 @@ diff --git a/src/misc/wordexp.c b/src/misc/wordexp.c
  		fclose(f);
  		reap(pid);
 -		return WRDE_SYNTAX;
-+		if (end) return WRDE_SYNTAX;
-+		goto nospace;
++		err = !end ? WRDE_NOSPACE : !(flags & WRDE_UNDEF) ? WRDE_SYNTAX
++			: undef_error(s, t ? t : s);
++		if (err == WRDE_NOSPACE) goto nospace;
++		free(t);
++		return err;
  	}
 +	free(w);
  
  	while ((w = getword(f))) {
  		if (i+1 >= l) {
-@@ -138,7 +154,10 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
  			l += l/2+10;
  			tmp = realloc(wv, l*sizeof(char *));
 -			if (!tmp) break;
@@ -73,12 +568,22 @@ diff --git a/src/misc/wordexp.c b/src/misc/wordexp.c
  			wv = tmp;
  		}
  		wv[i++] = w;
- 		wv[i] = 0;
-@@ -152,6 +171,7 @@ static int do_wordexp(const char *s, wordexp_t *we, int flags)
+@@ -146,8 +513,10 @@
+ 
+ 	fclose(f);
  	reap(pid);
++	free(t);
  
  	if (!wv) wv = calloc(i+1, sizeof *wv);
 +	if (!wv) err = WRDE_NOSPACE;
  
  	we->we_wordv = wv;
  	we->we_wordc = i;
+@@ -160,6 +529,7 @@
+ 	return err;
+ 
+ nospace:
++	free(t);
+ 	if (!(flags & WRDE_APPEND)) {
+ 		we->we_wordc = 0;
+ 		we->we_wordv = 0;

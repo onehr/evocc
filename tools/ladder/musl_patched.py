@@ -41,7 +41,7 @@ SUITES = {
     'wordexp': dict(sources={'src/misc/wordexp.c':
         '018c97c999cb60966a0376b71f2c8c187179ef31cf5ddde47b959e8f440e08f8'},
         subjects=('functional/wordexp', 'functional/wordexp-static'),
-        fixture='musl-patched-wordexp.c', checks=48),
+        fixture='musl-patched-wordexp.c', checks=133),
     'wordexp-memory': dict(sources={'src/misc/wordexp.c':
         '018c97c999cb60966a0376b71f2c8c187179ef31cf5ddde47b959e8f440e08f8'},
         subjects=(), fixture='musl-wordexp-memory.c', checks=192,
@@ -118,7 +118,7 @@ def inside(output: Path) -> int:
     includes = ['-I/work/musl/' + p for p in PRIVATE]
     if suite.get('headers'):
         includes.insert(0, '-I' + str(sources / 'include'))
-    libraries = {'reference': Path('/work/reference/libc-reference.a'),
+    libraries = {'reference': Path('/work/reference') / plan.get('referenceArchive', 'libc-reference.a'),
                  'mixed': Path('/work/musl/lib/libc.a')}
     identities = {str(p): digest(p) for p in libraries.values()}
     data = {'rows': rows, 'libraryHashes': identities, 'patched': plan['patched'], 'suite': plan['suite']}
@@ -203,6 +203,12 @@ def main() -> int:
     parser.add_argument('--output', type=Path)
     parser.add_argument('--unpatched-control', action='store_true')
     parser.add_argument('--suite', choices=SUITES, default='numerics')
+    parser.add_argument('--build', type=Path, default=ROOT / '.build/ladder',
+                        help='musl lane work root (musl-work, libc-test-work, musl-pristine)')
+    parser.add_argument('--reference-archive', type=Path,
+                        help='reference libc archive (default: BUILD/libc-reference.a)')
+    parser.add_argument('--patch', type=Path,
+                        help='retained patch for a RED replay (default: the suite patch)')
     args = parser.parse_args()
     if args.inside:
         return inside(args.inside)
@@ -211,15 +217,18 @@ def main() -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import mixed
     suite = SUITES[args.suite]
-    tree = ROOT / '.build/ladder/musl-work'
-    tests = ROOT / '.build/ladder/libc-test-work'
-    reference = ROOT / '.build/floating-targeted/strict-20260927/musl-thread-ssa'
-    patch = ROOT / 'tests/fixtures' / suite.get('patch', Path(suite['fixture']).with_suffix('.patch'))
+    build = args.build.resolve()
+    tree = build / 'musl-work'
+    tests = build / 'libc-test-work'
+    archive = (args.reference_archive or build / 'libc-reference.a').resolve()
+    reference = archive.parent
+    patch = args.patch.resolve() if args.patch else (
+        ROOT / 'tests/fixtures' / suite.get('patch', Path(suite['fixture']).with_suffix('.patch')))
     compiler = args.evocc.resolve()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
     paths = [compiler, Path(__file__).resolve(), patch, ROOT / 'tests/fixtures' / suite['fixture'],
-             tree / 'lib/libc.a', reference / 'libc-reference.a', tests / 'reference-runtest',
+             tree / 'lib/libc.a', archive, tests / 'reference-runtest',
              tests / 'src/common/libtest.a', *(tree / name for name in suite['sources']),
              *(tests / 'src' / (name.removesuffix('-static') + '.o') for name in suite['subjects'])]
     if 'api/main' in suite['subjects']:
@@ -240,6 +249,7 @@ def main() -> int:
         raise ValueError('dependency patch failed')
     plan = dict(configuration='musl-1.2.6-' + args.suite + '-repair-supplement', suite=args.suite,
                 patched=not args.unpatched_control, image=mixed.IMAGE,
+                referenceArchive=archive.name,
                 originalBenchmarkUnchanged=True, identity=identity,
                 patchedSources={name: digest(out / 'source' / name)
                     for name in suite['sources'] | suite.get('headers', {})},
@@ -268,7 +278,7 @@ def main() -> int:
                 print(row['stderr'], file=sys.stderr)
                 return 1
     mounts = {'out': out, 'musl': tree, 'tests': tests, 'reference': reference,
-              'pristine': ROOT / '.build/ladder/musl-pristine',
+              'pristine': build / 'musl-pristine',
               'fixtures': ROOT / 'tests/fixtures', 'tools': ROOT / 'tools/ladder'}
     result = mixed.container(mounts, 'python3 /work/tools/musl_patched.py --inside /work/out', timeout=600)
     (out / 'container.json').write_text(json.dumps(dict(exit=result.returncode,

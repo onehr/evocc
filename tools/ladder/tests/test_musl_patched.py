@@ -64,6 +64,35 @@ class SupplementVerdict(unittest.TestCase):
         data['rows'][0]['run']['stdout'] = 'checks=192 failures=1\n'
         self.assertFalse(module.passed(data))
 
+    def test_wordexp_suite_needs_the_grammar_probe_and_both_original_entries(self):
+        suite = module.SUITES['wordexp']
+        self.assertEqual(suite['checks'], 133)
+        self.assertEqual(suite['subjects'], ('functional/wordexp', 'functional/wordexp-static'))
+        data = {'inputsUnchanged': True, 'patched': True, 'suite': 'wordexp', 'rows': [
+            dict(compiler=cc, opt=opt, library=lib, subject=name,
+                 build={'exit': 0}, link={'exit': 0},
+                 run={'exit': 0, 'stdout': 'checks=133 failures=0\n' if name == 'probe' else ''},
+                 binarySha256='binary', objectSha256='object', linkMapVerified=True,
+                 replacementObjects={'wordexp': 'object'})
+            for cc in ('gcc-14', 'clang-19', 'evocc') for opt in ('0', '2')
+            for lib in ('reference', 'mixed') for name in ('probe', *suite['subjects'])]}
+        self.assertEqual(len(data['rows']), 36)
+        self.assertTrue(module.passed(data))
+        # The historical transport-only probe is not the current contract.
+        transport = copy.deepcopy(data)
+        for row in transport['rows']:
+            if row['subject'] == 'probe':
+                row['run']['stdout'] = 'checks=48 failures=0\n'
+        self.assertFalse(module.passed(transport))
+        # One unchanged original entry that still fails keeps the supplement at FAIL.
+        failing = copy.deepcopy(data)
+        next(row for row in failing['rows']
+             if row['subject'] == 'functional/wordexp-static')['run']['exit'] = 1
+        self.assertFalse(module.passed(failing))
+        missing = copy.deepcopy(data)
+        missing['rows'] = [row for row in missing['rows'] if row['subject'] != 'functional/wordexp']
+        self.assertFalse(module.passed(missing))
+
     def test_missing_duplicate_failing_or_changed_inputs_never_pass(self):
         for change in ('missing', 'duplicate', 'extra', 'build', 'link', 'run',
                        'timeout', 'missing-hash', 'inputs-changed', 'probe-count', 'probe-errors',

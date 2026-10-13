@@ -135,7 +135,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K01b, K02, K03, K04, K10, K11, K11f, K12 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, B08d, B08d10, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW | K07, L03, L04, L05, L06, L07, L08, L09, L10, L11a, L11b, L11c | Existing K07/L10 and L04 decisions stay separate; use the bounded decision packet, not new broad FP research. The owner resolved P13's demo choice without extending the proof profile. |
 | AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D01, D02, D03, D04, D05, D06, D08 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05b, R05c, R05d, R05e, R05f, R05g, R05h, R05i, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -2321,8 +2321,9 @@ KUnit, and it closes none of those separate tasks.
   1,271 compile/assemble with exact symbol parity and survive two complete
   libc-test replays without additional failures or replaced objects. This
   supersedes the old 0/1,339 flag refusal, but remains a mixed build. All 68
-  remaining refusals are floating-complex interfaces (E3049, L04). The 17
-  reference failures (B08d) and explicit command omissions (B08b) remain open;
+  remaining refusals are floating-complex interfaces (E3049, L04). The 13
+  dispositioned reference failures (B08d) stay failures, and the explicit
+  command omissions (B08b) remain open;
   no full-library or all-tests-PASS claim follows from the clean relative result.
   [Receipt](tests/contracts/ladder-musl-receipt.json).
 
@@ -2446,7 +2447,7 @@ KUnit, and it closes none of those separate tasks.
     historical ignores, plus Clippy/fmt; 271 ladder tests pass separately.
     [Reduction and final acceptance](tests/fixtures/assembly-exclusive-window.out).
 
-  - [ ] **B08d — Resolve the reference libc-test failures and static/DSO coverage gap** — `OPEN`, P2.
+  - [x] **B08d — Resolve the reference libc-test failures and static/DSO coverage gap** — `DONE`, P2, 2026-10-13.
     The fresh reference baseline still has 17 failing cases, not waived PASS:
     one API/header mismatch, five DSO/TLS cases in the static-only build, two
     strptime cases, two strtold rounding cases, two shell/wordexp cases, one powf
@@ -2457,6 +2458,16 @@ KUnit, and it closes none of those separate tasks.
     relabel those static-lane failures as compiler passes. Diagnose the remaining
     common failures against pinned source and environment without weakening the
     original assertions or increasing watchdogs to conceal a progress defect.
+    Closed on 2026-10-13. Each of the 17 cases has a source-bound disposition,
+    and none is relabeled PASS. Two fresh runs with the frozen compiler
+    `366fd796` fail 13 reference cases: the case environment now runs the two
+    atfork and the two daemon cases correctly. The EvoCC mixed library fails
+    exactly those 13 cases in four complete replays. The genuine loader lane
+    passes 5/5 with the GCC library and 5/5 with the EvoCC library. The 13
+    remaining failures are 5 static-only loader cases (environment), api/main,
+    strtold ×2, wordexp ×2 and powf (musl defects), and strptime ×2 (glibc
+    expectations in the test). No compiler defect was found. The lane summary
+    records each disposition. [Ledger](tests/fixtures/musl-reference-dispositions.out).
 
     - [x] **B08d1 — Supply the atfork limit test's unprivileged environment** — `DONE`, 2026-09-27.
       The isolated fork probe and unchanged atfork program fail to induce a
@@ -2563,7 +2574,7 @@ KUnit, and it closes none of those separate tasks.
       PASS. The numerical supplement's 192 executions remain green after sharing
       suite selection. [Bounded contract and evidence](tests/fixtures/musl-patched-time.out).
 
-    - [ ] **B08d10 — Complete patched wordexp behavior** — `OPEN`, P2.
+    - [x] **B08d10 — Complete patched wordexp behavior** — `DONE`, P2, 2026-10-13.
       Child stderr is now redirected before shell parsing/expansion, and helper
       positional arguments are cleared before expanding user words. These two
       repairs pass **576/576** focused checks across the paired 12-way matrix.
@@ -2572,6 +2583,14 @@ KUnit, and it closes none of those separate tasks.
       UNDEF and pinned dash dollar-quote compatibility remain; the overall
       supplement deliberately reports FAIL. No parser safety is inferred from
       transport tests. [Patch and exact remaining boundary](tests/fixtures/musl-patched-wordexp.out).
+      Closed on 2026-10-13. The patch adds the NOCMD scanner proposed upstream,
+      runs UNDEF with `sh -u` and classifies a failure without running a
+      command substitution twice, and rewrites a top-level `$'...'` into single
+      quotes for the pinned dash. With GCC, Clang and EvoCC at -O0 and -O2, 12
+      × 133/133 probe checks and 24/24 unchanged original entries pass. The
+      previous patch and the original library stay RED. 4,000,000 random NOCMD
+      inputs never ran a command. The patched configuration passes; the
+      original lane still fails its two wordexp cases (B08d).
 
     - [x] **B08d11 — Repair the missing API names in the patched dependency lane**, 2026-09-28.
       Added real UUCP-unavailable and bounded tmpfs timestamp-resolution

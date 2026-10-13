@@ -56,3 +56,115 @@ allocation-fault checks and repeats the uninstrumented 576/576 transport checks.
 Original entries still fail 24/24 with 71 assertion diagnostics each. The hashes
 above identify the historical transport-only result; the follow-up record binds
 the expanded patch and newer compiler binary without rewriting that history.
+
+B08d10 completion — grammar, WRDE_UNDEF and dollar-single-quotes, 2026-10-13
+==========================================================================
+
+The same patch file now also replaces the WRDE_NOCMD scanner, implements
+WRDE_UNDEF and rewrites top-level dollar-single-quotes for the pinned shell.
+It stays in the separately approved dependency supplement. The original
+source, both archives, the test objects and all receipts are unchanged.
+The pinned /bin/sh stays dash 0.5.12-12 in the same sealed image.
+
+Upstream basis:
+  - musl master now has the transport and vector fixes: 235f72897aa4 (stderr
+    to /dev/null before sh starts), 331cf27023e2 (set -- clears positional
+    parameters) and 38e044472edc (free the word when the vector cannot grow).
+    The patch now follows 235f7289: /dev/null opens in the parent, after the
+    pipe, so it cannot be descriptor 1. Unlike 235f7289, a failed open also
+    closes both pipe descriptors.
+  - WRDE_NOCMD uses the scanner of the 2026-06-30 musl proposal, patch 4/4
+    (https://www.openwall.com/lists/musl/2026/06/30/1). It tracks "...",
+    ${...} and $((...)) state, finds each $( and backquote, rejects a )) that
+    does not close $(( and rejects shell-specific quote forms.
+  - WRDE_UNDEF runs the expansion with sh -u, as in proposal patch 3/4.
+  - libc-test cbc95567 (2026-07-18) expects $'x' to give x and $'$' to give $
+    under WRDE_NOCMD. dash 0.5.12 has no $'...'. The library decodes each
+    top-level $'...' by POSIX.1-2024 XCU 2.2.4 and passes the bytes as one
+    single-quoted string. In "..." the $' is literal text. In ${...} and
+    $((...)) it is WRDE_SYNTAX under WRDE_NOCMD, as the test requires.
+
+Decisions and recorded boundaries; probe checks pin each one:
+  1. An unterminated top-level $'...' is WRDE_SYNTAX in every mode. So is an
+     escape that POSIX leaves unspecified: \q, \x with no digit or with more
+     than two, an octal value above 255, \c@.
+  2. A yielded null byte discards the rest of that body. POSIX permits this.
+  3. Without WRDE_NOCMD, rewriting stops at the first construct that strict
+     mode rejects, for example a command substitution. The rest keeps the
+     pinned shell's meaning: "$'a' $(printf b) $'c'" gives a|b|$c, and
+     "${X-$'a'}" gives $a. Before this patch both gave dash's meaning too.
+  4. WRDE_UNDEF: when the sh -u run fails and the input has no command
+     substitution, the same words expand again without -u, with stderr sent
+     to /dev/null. Success gives WRDE_BADVAL. Failure gives WRDE_SYNTAX, so
+     $((1/0)) and ${UNSET:?m} keep their non-UNDEF result. With a command
+     substitution, sh -n only parses the same command, so no command runs
+     twice. A parse error gives WRDE_SYNTAX, otherwise WRDE_BADVAL. Thus
+     "$(printf a) $((1/0))" gives WRDE_BADVAL.
+  5. A command substitution inherits set -u. An undefined variable inside it
+     fails that command, not wordexp. The upstream test keeps this case
+     disabled; the policy question is open there.
+  6. If waitpid cannot report the sh -n status (SIGCHLD ignored), the result
+     is WRDE_SYNTAX.
+
+The focused probe grows from 16 to 42 inputs, three checks each, plus one
+single-message check and two side-effect inputs with three checks each:
+133 checks. The side-effect inputs prove that a classified command
+substitution writes its file once, and that a syntax error writes nothing.
+
+Evidence, GCC14/Clang19/EvoCC x O0/O2 x reference/mixed archives:
+  GREEN: 12 x 133/133 = 1596/1596 probe checks; 24/24 unchanged original-entry
+         replays (functional/wordexp, functional/wordexp-static) PASS.
+  RED, previous patch 9466ac75 replayed with --patch: each of the 12 probes
+         fails 31 of 133 checks; each original entry FAILS with 71
+         diagnostics (24/24).
+  RED, --unpatched-control: each probe fails 48 of 133 checks; each original
+         entry FAILS with 107 diagnostics (24/24).
+  wordexp-memory suite with this patch: 12 x 192/192 = 2304/2304 PASS.
+  Standalone timing: an original entry takes about 0.07 s under the unchanged
+  five-second supervisor; 15 repeated runs PASS at load average about 90.
+Extra adversarial checks against the pinned dash, outside the suite:
+  NOCMD safety: 4,000,000 random inputs (200 seeds, half with WRDE_UNDEF)
+  over shell metacharacters and $'...' fragments. 411,450 were accepted and
+  expanded; a marker command on PATH never ran. A control without WRDE_NOCMD
+  runs it at once (`x`).
+  Rewrite differential against bash 5.2: 36,852 accepted inputs with $'...'.
+  The only differences are $0 (sh versus bash) and bash's ~N extension; no
+  decoded byte differs.
+
+Claim ceiling: this closes B08d10 for the patched dependency configuration.
+The original musl lane still FAILS both wordexp entries. The NOCMD scanner
+safety rests on the upstream design and the checks above, not on a proof.
+
+Identities:
+  Pinned wordexp.c SHA256 018c97c999cb60966a0376b71f2c8c187179ef31cf5ddde47b959e8f440e08f8
+  Patch SHA256 1e71eb1650fa9a9372933089e331c631f8f688598508965ddffa91a52835aad6
+  Patched wordexp.c SHA256 a4d65cdf1cabaddd74469162c17acdda1ba1dd35d70d2e4ade73107c8f3d500e
+  Probe SHA256 b227b0c7d8f25ba3b42ff5ebd75f6eb5f3a97426c19d3234bb0747a43783046f
+  Original test wordexp.c SHA256 e3e310de1a73bc30273ac5f4711492817a2f26a5750795c9a3f0be42645871c9
+  Original test object SHA256
+    bb94e557c63be80b8bff8b02c6bae3d6e14ed9548fe1bfdcfda57bc73a5a4d88
+  EvoCC .build/frozen/366fd796/evocc-darwin SHA256
+    93eacee4e6e917049d041346c9ecbeff1266f8b17dd26bc684eeeed1a53c4c04
+  Image evo-nexlab:sealed
+    sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93
+  Reference archive e762ee14a81c002c2f58f17d158e585c4b656ad3d9a33e02585829d05b18bd9a
+  Mixed archive b377004d1d9347327b25eb4ea292974cb4c8952c80765367bc55800cb78a62a9
+
+Raw evidence .evidence/ladder/musl-patched/20261013-final/:
+  wordexp-green/         plan 3fb1c2843473605b2fe93ffb319d5628f9baa85996a6ce88c35f8fa1c7fea5b6
+                         executions d452516b3ff00f9ab99a414c6b226c17a063e05092a1208e8599543f361c2d3d
+  wordexp-previous-red/  plan 797451226beba9972027de319dbd775953cbb2a0b8c48f6407d84c6e27f315b6
+                         executions 227c4119769d9ca841abccab316ae809756f91879d6b6834b3d7568913ed5783
+  wordexp-unpatched-red/ plan 10e22917eaf3fe5c50d212771698b172bb65d61e7d4a4b565f7dc62bbc970b3d
+                         executions 51d2cde916fba9329be0449e495a948adae348100347626770a3deba759c508a
+  wordexp-memory-green/  plan 0d812933f9b24068fd991f70824a8777aae9916c5f96272e4c9dd22b6fbe7c88
+                         executions d81536417415c261c51fcd6e16e435ebb5c58a04b08122e36b50c405686a25c9
+  adversarial/           harness sources, logs and SHA256SUMS
+
+Recipe (case-sensitive work root; the lane writes libc-reference.a there):
+  python3 tools/ladder/musl.py --evocc EVOCC --build .build/case/m1 --no-receipt
+  python3 tools/ladder/musl_patched.py --suite wordexp --evocc EVOCC \
+    --build .build/case/m1 --output OUT
+Add --patch PREVIOUS.patch or --unpatched-control for the two RED replays.
+The NOCMD and differential harnesses run in the sealed image against the
+patched wordexp.c; adversarial/run.sh shows the exact commands.
