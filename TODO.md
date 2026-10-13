@@ -139,7 +139,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D01, D02, D03, D04, D05, D06, D08 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, B10a, T05, R05, R05a, R05b, R05c, R05d, R05e, R05f, R05g, R05h, R05i, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
+| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
 ## Diagnostics and command-line product work
@@ -3897,6 +3897,42 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   retaining shared IR semantics. Close with native userspace ABI/corpus evidence.
   Full x86 kernel support remains a separately declared stretch, not an implied
   consequence of ARM64 boot. [Roadmap][roadmap].
+  The 2026-10-13 [design](docs/archive/notebook/r04-x86-64-design-20261013.md)
+  makes x86-64 a third target of the shared EvoMIR instruction set, so the
+  lowering, the EvoMIR interpreter, SSA destruction, the allocator, the verifier
+  and the frame layout stay shared. Each EvoMIR form emits a fixed AT&T
+  sequence; a per-form clobber table carries the fixed registers of shifts,
+  division and string moves. The proof-required path refuses x86-64.
+  `linux/amd64` containers run on this host through Rosetta and QEMU; bit-exact
+  floating-point tests must use QEMU, because Rosetta differs from x86 for some
+  NaN results. Every milestone keeps the AArch64 output byte-identical.
+
+  - [ ] **R04a — Prepare the shared code for a third target** — `LATER`, P3.
+    Target predicates, ordered argument and result register lists, the generator
+    and the layout plumbing, about 830 lines and 300 test lines. Exit: the
+    AArch64 output of the workspace tests and the ladder programs is
+    byte-identical.
+
+  - [ ] **R04b — Compile integer-only functions and calls** — `LATER`, P3.
+    About 3,400 lines and 1,800 test lines. Exit: integer unit tests per EvoMIR
+    form pass under QEMU in the amd64 container, and integer ABI calls agree
+    with GCC 14 in both directions.
+
+  - [ ] **R04c — Memory, records, globals and the full SysV convention** — `LATER`, P3.
+    About 2,300 lines and 1,400 test lines, including the SysV record classes in
+    the `byval` mark. Exit: every argument class crosses to and from GCC 14 with
+    the GCC value.
+
+  - [ ] **R04d — SSE2 floating point and variadic calls** — `LATER`, P3.
+    About 2,100 lines and 1,200 test lines, with the register save area and
+    `%al`. Exit: bit-exact floating-point tests under QEMU, and variadic calls
+    in both directions with GCC 14.
+
+  - [ ] **R04e — Run the corpus on x86-64** — `LATER`, P3.
+    About 950 lines, 400 test lines and room for defects, with the small `rdtsc`
+    inline-assembly subset that SQLite's test build needs. Exit: c-testsuite,
+    cJSON, zlib, Lua and SQLite pass their own tests with `CC=evocc` in the
+    amd64 container.
 
 - [ ] **R05 — Release, reproducible bootstrap and proof-claim audit** — `OPEN`, P1.
   Audit the remaining release deliverables, portable builds, packaged artifacts,
