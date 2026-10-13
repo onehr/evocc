@@ -17,9 +17,9 @@
       "registry_rules": 51,
       "relation": "byte prefix of p0.scalar.v4: the first 51 rules and their exact bytes are the same, so a certificate naming p0.scalar.v3 fires only rules this receipt covers"
     },
-    "spec_revision": "**Revision 2.0.1** | **Pinned ground truth** | Added front-end warning levels on 2026-10-07",
-    "spec_sha256": "9d0f3c3cc0a9084ff20b896040d051e4f3a5ad5c79c2749967abe5cd95dfe9bc",
-    "lean_commit": "1f6d1a4b33b3bbad3ca913d8134e5095056a7e21",
+    "spec_revision": "**Revision 2.3.0** | **Pinned ground truth** | Gave `builtin-argument-type` its own code on 2026-10-13",
+    "spec_sha256": "41cefe2faefe1bcab5c5643e5171fc47f2b53f9371174f763740d01d713beae1",
+    "lean_commit": "34d81cbfbf7b73ab3c89f714a4feb9c0f87c2930",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
@@ -329,6 +329,7 @@
       "lean/EvoIR/MachineSelectionDemandCaller.lean",
       "lean/EvoIR/MachineSelectionDemandCallerTests.lean",
       "lean/EvoIR/MachineSelectionDemandModule.lean",
+      "lean/EvoIR/MachineSelectionDivisionTests.lean",
       "lean/EvoIR/MachineSelectionEdges.lean",
       "lean/EvoIR/MachineSelectionEntry.lean",
       "lean/EvoIR/MachineSelectionFunction.lean",
@@ -455,6 +456,7 @@
         "EvoIR.Alloc.Reader",
         "EvoIR.Alloc.Soundness",
         "EvoIR.Alloc.AcceptanceTests",
+        "EvoIR.MachineSelectionDivisionTests",
         "EvoIR.Asm.Baseline",
         "EvoIR.Asm.CheckTests",
         "EvoIR.Asm.PrintTests",
@@ -1656,6 +1658,9 @@
         "EvoIR.MachineSelectionModule",
         "EvoIR.MachineSelectionDemandCaller",
         "EvoIR.MachineTransportProposal"
+      ],
+      "lean/EvoIR/MachineSelectionDivisionTests.lean": [
+        "EvoIR.MachineSelectionConditional"
       ],
       "lean/EvoIR/MachineSelectionEdges.lean": [
         "EvoIR.MachineSelectionSourceSpan",
