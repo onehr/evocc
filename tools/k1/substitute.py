@@ -1183,6 +1183,11 @@ def main() -> int:
 
     if not args.allowlist and not args.all:
         parser.error("one of --allowlist or --all is required")
+    # The default source is the K6 tree on the case-insensitive volume. Another
+    # configuration must name its own (case-sensitive) source explicitly.
+    if (args.k1_root.resolve() != (REPO_ROOT / ".build/k1").resolve()
+            and args.src_root.resolve() == (REPO_ROOT / ".build/linux-src").resolve()):
+        parser.error("a separate --k1-root needs its own --src-root")
     if args.require_all and (not args.all or args.allowlist or args.no_install or args.no_relink):
         parser.error("--require-all needs --all and an actual full link")
     if args.boot and not args.require_all:

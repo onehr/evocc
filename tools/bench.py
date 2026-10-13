@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 import fcntl
 import hashlib
 import importlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -27,6 +28,9 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 RECEIPT = Path("tests/contracts/bench-receipt.json")
+# A targeted kselftest replay is written beside the complete receipt
+# (tools/k1/selftest_full.py, SELECTED_RECEIPT), never over it.
+SELECTED_SELFTEST_RECEIPT = Path('tests/contracts/kernel-selftest-selected-receipt.json')
 # name: (roadmap rung, existing adapter, measurement limitation)
 CATALOG = {
     "ctest": ("E0b", "e0", "self-checking programs and expected stdout"),
@@ -99,7 +103,9 @@ def parser():
     p.add_argument('--selftest-headers-root', type=Path, help='exported headers for that selftest source')
     p.add_argument('--selftest-kernel-build-root', type=Path, help='configured reference output supplying BTF and test-module build inputs')
     p.add_argument('--refresh-selftest-runtime', action='store_true', help='repair full-suite runtime dependencies without rebuilding test programs')
-    p.add_argument('--selftest-select', action='append', default=[], help='replay one collection or collection:program; other full-suite programs remain NOT_RUN')
+    p.add_argument('--selftest-select', action='append', default=[],
+                   help='replay one collection or collection:program; other full-suite programs remain NOT_RUN; '
+                        'the replay has its own receipt, beside the complete one')
     p.add_argument("--reuse-selftest-reference", type=Path,
                    help="reuse a completed unchanged GCC reference summary and payload; still execute every program on the current EvoCC kernel")
     for option in ('source-root', 'kernel-receipt', 'reference-boot', 'reference-runtime',
@@ -134,6 +140,9 @@ def command(name, args, binary):
     env["PYTHONUNBUFFERED"] = "1"
     if args.resume_kernel_prepared and name != 'kernel-full':
         raise ValueError('--resume-kernel-prepared requires kernel-full')
+    if name in ('kernel', 'kernel-full') and args.kernel_work_root and not args.kernel_source_root:
+        # The adapter's default source is the K6 tree on the case-insensitive volume.
+        raise ValueError('a supplemental --kernel-work-root needs its own --kernel-source-root')
     if name == 'kernel-kunit':
         if args.reuse_kernel_survey or args.reuse_selftest_reference or args.selftest_select:
             raise ValueError('kernel-kunit requires a fresh complete pair, not a survey, reference reuse or selection')
@@ -239,6 +248,8 @@ def lane_receipt(name, args=None):
     if name == 'kernel-kunit':
         return ROOT / 'tests/contracts/kernel-kunit-bench-receipt.json'
     if name == "kernel-selftest-all":
+        if args is not None and args.selftest_select:
+            return ROOT / SELECTED_SELFTEST_RECEIPT
         return ROOT / "tests/contracts/kernel-selftest-full-receipt.json"
     if name == "kernel-selftest":
         return ROOT / "tests/contracts/kernel-selftest-receipt.json"
@@ -543,6 +554,116 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def retained_e0_summary(name):
+    """ctest and torture share one lane receipt, which keeps only the last e0 suite.
+
+    The aggregate receipt keeps the row of each suite and its evidence
+    directory. Read that run's own summary; never borrow the other suite.
+    """
+    aggregate = ROOT / RECEIPT
+    row = json.loads(aggregate.read_text()).get('benchmarks', {}).get(name, {}) if aggregate.is_file() else {}
+    if not row.get('evidence'):
+        return None, None
+    evidence = ROOT / row['evidence']
+    if not evidence.resolve().is_relative_to((ROOT / '.evidence/ladder/e0').resolve()):
+        raise ValueError(f'{name} evidence is outside the e0 lane')
+    path = evidence / 'summary.json'
+    summary = json.loads(path.read_text())
+    if summary.get('run') != row.get('run') or name not in summary.get('suites', {}):
+        raise ValueError(f'{path.relative_to(ROOT)} is not the retained {name} run')
+    recorded = (row.get('measurement') or {}).get('driverSha256')
+    if recorded and summary.get('driverSha256') != recorded:
+        raise ValueError(f'{path.relative_to(ROOT)} names another compiler')
+    return summary, path.relative_to(ROOT)
+
+
+def status_line(name, args):
+    """One retained result; nothing is built, run or revalidated."""
+    path = lane_receipt(name, args)
+    if not path.exists():
+        return f'{name}: NOT_RUN (no receipt)'
+    data = json.loads(path.read_text())
+    data = data.get('latest', data)
+    origin = ''
+    if name in ('ctest', 'torture') and name not in data.get('suites', {}):
+        summary, source = retained_e0_summary(name)
+        if summary is None:
+            held = ', '.join(sorted(data.get('suites', {}))) or 'no suite'
+            return f'{name}: NOT_RUN (the shared e0 receipt holds {held})'
+        data, origin = summary, f'; from {source}'
+    row = metrics(name, data)
+    return (f'{name}: retained {row["status"]} {row["passed"]}/{row["total"]}; '
+            f'run={row.get("run")}; artifacts not revalidated{origin}')
+
+
+def k1_layout():
+    """The default roots of the kernel adapters (tools/k1/layout.py)."""
+    spec = importlib.util.spec_from_file_location('k1_layout', Path(__file__).resolve().parent / 'k1/layout.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def lane_inputs(name, args, binary):
+    """Existing artifacts that a planned lane reads. Outputs are not listed.
+
+    None marks a required input without a default. A dry run reports the
+    absent ones; earlier campaign steps create some of them.
+    """
+    def at(path):
+        path = Path(path)
+        return path if path.is_absolute() else ROOT / path
+
+    layout = k1_layout()
+    runtime = ('build.json', 'initramfs.cpio', 'scratch.img')
+    if name == 'kernel-selftest':
+        return [('kernel receipt', ROOT / 'tests/contracts/kernel-full-receipt.json'),
+                ('reference Image', ROOT / '.build/reference/gcc-lane-1/arch/arm64/boot/Image')]
+    if name == 'kernel-kunit':
+        source = at(args.kunit_source_root or layout.SOURCE)
+        rows = [('KUnit parser', source / 'tools/testing/kunit/kunit_parser.py'),
+                ('kernel receipt', at(args.kunit_kernel_receipt
+                                      or 'tests/contracts/kernel-expanded-kunit-full-receipt.json')),
+                ('reference boot', at(args.kunit_reference_boot) if args.kunit_reference_boot else None),
+                ('built-in initramfs', at(args.kunit_builtin_initramfs or '.build/initramfs/initramfs.cpio'))]
+        for label in ('reference', 'subject'):
+            folder = at(getattr(args, f'kunit_{label}_runtime') or layout.KUNIT_RUNTIME / label)
+            rows += [(f'{label} KUnit runtime', folder / item) for item in runtime]
+        return rows
+    if name == 'kernel-selftest-all':
+        receipt = args.selftest_kernel_receipt or ('tests/contracts/kernel-kunit-receipt.json'
+                                                   if args.expanded_selftest_kernel
+                                                   else 'tests/contracts/kernel-full-receipt.json')
+        rows = [('kernel receipt', at(receipt)), ('source', at(args.selftest_source_root or layout.SOURCE))]
+        if args.selftest_reference_boot:
+            rows.append(('reference boot', at(args.selftest_reference_boot)))
+        if not args.refresh_selftest_runtime and (args.reuse_selftest_build or args.reuse_selftest_reference):
+            rows.append(('selftest build', at(args.selftest_build_root or layout.SELFTEST_WORK) / 'build.json'))
+        else:
+            rows += [('headers', at(args.selftest_headers_root or layout.SELFTEST_HEADERS)),
+                     ('gen_init_cpio', layout.GEN_INIT_CPIO)]
+        if args.selftest_kernel_build_root:
+            rows.append(('kernel build', at(args.selftest_kernel_build_root) / 'vmlinux'))
+        if args.selftest_runtime:
+            rows += [(f'{label} selftest runtime', at(args.selftest_runtime) / label / item)
+                     for label in ('reference', 'subject') for item in runtime]
+        if args.reuse_selftest_reference:
+            rows.append(('reference run', at(args.reuse_selftest_reference)))
+        return rows
+    rows = [('compiler', binary)]
+    if name == 'kernel-full' or (name == 'kernel' and args.survey_only):
+        work = at(args.kernel_work_root or '.build/k1')
+        rows += [('reference tree', work / 'pristine/.config'),
+                 ('source', at(args.kernel_source_root or '.build/linux-src') / 'Makefile')]
+        if name == 'kernel-full':
+            rows.append(('working tree', work / 'out/.config'))
+        if args.resume_kernel_prepared:
+            rows.append(('prepared run', at(args.resume_kernel_prepared) / 'units.jsonl'))
+    elif name == 'kernel':
+        rows.append(('reference Image', ROOT / '.build/reference/gcc-lane-1/arch/arm64/boot/Image'))
+    return rows
+
+
 def execute(cmd, env):
     """Stream the existing lane; keep only a small error tail, not another log."""
     print("+ " + shlex.join(cmd), flush=True)
@@ -742,20 +863,14 @@ def main(argv=None):
         parser().print_help()
         return 2
     if args.status:
+        invalid = False
         for name in selected:
-            path = lane_receipt(name, args)
-            if not path.exists():
-                print(f'{name}: NOT_RUN (no receipt)')
-                continue
             try:
-                data = json.loads(path.read_text())
-                row = metrics(name, data.get('latest', data))
-                print(f'{name}: retained {row["status"]} {row["passed"]}/{row["total"]}; '
-                      f'run={row.get("run")}; artifacts not revalidated')
+                print(status_line(name, args))
             except (OSError, KeyError, TypeError, ValueError) as error:
                 print(f'{name}: INVALID_RECEIPT {error}')
-                return 2
-        return 0
+                invalid = True
+        return 2 if invalid else 0
     if args.survey_only and (selected != ["kernel"] or args.reuse_kernel_survey):
         print("--survey-only requires kernel alone and cannot reuse a prior survey", file=sys.stderr)
         return 2
@@ -763,9 +878,22 @@ def main(argv=None):
     binary = (args.evocc or target / "release/evocc").resolve()
     needs_compiler = any(name not in ('kernel-selftest', 'kernel-selftest-all', 'kernel-kunit') and CATALOG[name][1] for name in selected)
     if args.dry_run:
+        reported = set()
         try:
             for name in selected:
                 print(name + ": " + (shlex.join(command(name, args, binary)[0]) if CATALOG[name][1] else CATALOG[name][2]))
+                inputs = lane_inputs(name, args, binary)
+                folders = Counter(path.parent for _, path in inputs if path is not None)
+                for label, path in inputs:
+                    if path is not None and path.exists():
+                        continue
+                    if path is not None and folders[path.parent] > 1 and not path.parent.exists():
+                        path = path.parent  # report an absent payload directory once, not each file
+                    if (label, path) in reported:
+                        continue
+                    reported.add((label, path))
+                    shown = path.relative_to(ROOT) if path is not None and path.is_relative_to(ROOT) else path
+                    print(f'  missing input: {label} ' + (str(shown) if path else '(required; not given)'))
         except (OSError, KeyError, TypeError, ValueError) as error:
             print(error, file=sys.stderr)
             return 2
@@ -814,10 +942,12 @@ def main(argv=None):
                     continue
                 path = lane_receipt(name, args)
                 before = path.read_bytes() if path.exists() else None
+                # A targeted replay is compared with the complete receipt that it leaves in place.
+                prior = lane_receipt(name) if path == ROOT / SELECTED_SELFTEST_RECEIPT else path
                 previous = None
-                if before:
+                if prior.exists():
                     try:
-                        old = json.loads(before)
+                        old = json.loads(prior.read_bytes())
                         previous = metrics(name, old.get("latest", old))
                     except (KeyError, TypeError, ValueError):
                         pass

@@ -15,6 +15,27 @@ The K13 run also supplies the unchanged replays that K01, K02, K03, K04 and
 K10 need (section 6.5). Those items keep their own closure conditions. The T05
 code gate is a prerequisite of this plan, not a part of it.
 
+## Update of 2026-10-14
+
+T04g added the tools that this plan lacked. Use them in place of the
+manual steps:
+
+- `tools/k1/configure.py` solves configurations C1 to C6 in the sealed image
+  and checks each SHA-256. A run reproduced C1 `6afbd212`, C2 `9e28277b`, C3
+  `2f938cda`, C5 `f2a06079` and C6 `95853321` exactly, so no replacement
+  baseline is needed. Section 3.4 has the C5 recipe wrong: C5 uses plain
+  `-m`, not `-y`, and its fragment list includes `net/config` (27 fragments
+  in name order), followed by the BPF and runtime overlays. Use
+  `configure.py` for step S1.
+- `tools/k1/reference.py` builds the GCC reference kernel for steps S2 and K2
+  (`--inventory` checks it against the retained inventory). Only its
+  configuration step has run.
+- `tools/k1/kunit_payload.py --install-deps` builds the KUnit payloads for
+  step K4. It has not run on a kernel.
+- `kunit.py` and `selftest_full.py` default to the audited source and this
+  plan's layout. A selected replay writes its own receipt beside the complete
+  one. `tools/bench.py --status ctest` works.
+
 ## 1. Facts
 
 | Item | Value | Source |

@@ -32,8 +32,8 @@ $ python3 tools/bench.py zlib --jobs 2
 ```
 
 `--list` prints all lanes with what each one measures. `--dry-run` prints the commands that a run
-would start, and `--evocc PATH` measures a compiler that you built elsewhere. A full run of all
-lanes takes many hours. Start with one program.
+would start and each input of a kernel lane that does not exist yet. `--evocc PATH` measures a
+compiler that you built elsewhere. A full run of all lanes takes many hours. Start with one program.
 
 ## Retained results
 
@@ -90,6 +90,26 @@ $ jq '.test | {command, passed}' tests/contracts/ladder-zlib-receipt.json
 The receipt names the source archive and its digest, the digest of the `evocc` that built it, and
 the exact test command. Anyone can download the same archive, build it with the same compiler and
 run the same command.
+
+## Kernel acceptance inputs
+
+The full kernel lanes read trees and payloads that you build first. Three tools in `tools/k1` make
+them in the sealed image, from the Linux source on the case-sensitive volume:
+
+```console
+$ python3 tools/k1/configure.py --output CAPTURE/config
+$ python3 tools/k1/reference.py --config CAPTURE/config/c6.config --output .build/case/final-s/pristine
+$ python3 tools/k1/kunit_payload.py --reference-boot BOOT/boot.json --install-deps
+```
+
+`configure.py` solves the recorded configurations and compares each one with its recorded SHA-256.
+`c2.config` is the KUnit configuration. `c6.config` is the selftest and BPF configuration.
+`reference.py` builds the GCC reference kernel of one configuration. It stops if `olddefconfig`
+changes that configuration. `kunit_payload.py` builds the KUnit runtime payload for each kernel of
+a complete composition. `--dry-run` of the first two tools and `--check` of the third start nothing.
+
+A replay with `--selftest-select` writes `tests/contracts/kernel-selftest-selected-receipt.json`.
+It does not replace the receipt of the complete run.
 
 ## The dashboard
 

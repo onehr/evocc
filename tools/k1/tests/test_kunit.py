@@ -137,7 +137,7 @@ class KUnitAcceptanceTest(unittest.TestCase):
             flight.assert_not_called()
 
     def test_upstream_parser_keeps_fail_skip_and_rejects_truncation_and_extra_results(self):
-        source = TOOLS.parents[1] / '.build/k7-coverage/case/linux-src'
+        source = kunit.parser().parse_args([]).source_root
         if not (source / 'tools/testing/kunit/kunit_parser.py').exists():
             self.skipTest('frozen Linux parser unavailable; exercised by the provisioned KUnit lane')
         contract = json.loads(kunit.CONTRACT.read_text())

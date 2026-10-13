@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 
+import layout
 import selftest
 import selftest_full
 
@@ -200,14 +201,15 @@ def flight(image, directory, env):
 
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument('--source-root', type=Path, default=ROOT / '.build/k7-coverage/case/linux-src')
+    result.add_argument('--source-root', type=Path, default=layout.SOURCE)
     result.add_argument('--kernel-receipt', type=Path,
                         default=ROOT / 'tests/contracts/kernel-expanded-kunit-full-receipt.json')
-    result.add_argument('--reference-boot', type=Path,
-                        default=ROOT / '.evidence/kunit/expanded-reference-builtin-20260922/boot.json')
+    # Each composition has its own reference boot; a default would name an
+    # old Image. kernel_selection() refuses a full composition without it.
+    result.add_argument('--reference-boot', type=Path, help='boot.json of the reference Image')
     for label in ('reference', 'subject'):
-        result.add_argument(f'--{label}-runtime', type=Path,
-                            default=ROOT / '.build/k7-coverage/kunit-runtime-20260921' / label)
+        result.add_argument(f'--{label}-runtime', type=Path, default=layout.KUNIT_RUNTIME / label,
+                            help='payload of tools/k1/kunit_payload.py')
     result.add_argument('--builtin-initramfs', type=Path, default=ROOT / '.build/initramfs/initramfs.cpio')
     result.add_argument('--check', action='store_true', help='read-only preflight; no boot or acceptance receipt')
     result.add_argument('--allow-qemu-drift', action='store_true')

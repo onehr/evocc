@@ -21,6 +21,10 @@ import tarfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+FULL_RECEIPT = ROOT / 'tests/contracts/kernel-selftest-full-receipt.json'
+# A targeted replay leaves every unselected program NOT_RUN. It is written
+# beside the complete-population receipt, never over it.
+SELECTED_RECEIPT = ROOT / 'tests/contracts/kernel-selftest-selected-receipt.json'
 RUNTIME_PACKAGES = ('procps', 'psmisc', 'udev', 'tcpdump', 'fio', 'kmod', 'dosfstools', 'sudo',
                     'e2fsprogs', 'libarchive13t64', 'netsniff-ng', 'libteam-utils',
                     'iperf3', 'traceroute', 'conntrack', 'fuse3', 'bpftrace', 'keyutils', 'fsverity',
@@ -1041,6 +1045,11 @@ def save(path, data):
     path.write_text(json.dumps(data, indent=2) + '\n')
 
 
+def receipt_destination(selectors):
+    """Only a complete run replaces the complete-population receipt."""
+    return SELECTED_RECEIPT if selectors else FULL_RECEIPT
+
+
 def build_command(command, handle, timeout):
     process = subprocess.Popen(command, stdout=handle, stderr=subprocess.STDOUT, start_new_session=True)
     try:
@@ -1304,13 +1313,15 @@ def refresh_runtime(work, kernel_build=None):
     return 0
 
 
-def main():
+def arguments():
+    # Imported here: the tests load this file without tools/k1 on the path.
+    from layout import SELFTEST_HEADERS, SELFTEST_WORK, SOURCE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--jobs', type=int, default=2)
-    parser.add_argument('--work-root', type=Path, default=ROOT / '.build/kselftest-full',
+    parser.add_argument('--work-root', type=Path, default=SELFTEST_WORK,
                         help='selftest build and installed userspace; separate from kernel output')
-    parser.add_argument('--source-root', type=Path, default=ROOT / '.build/linux-src')
-    parser.add_argument('--headers-root', type=Path, default=ROOT / '.build/kselftest/headers')
+    parser.add_argument('--source-root', type=Path, default=SOURCE)
+    parser.add_argument('--headers-root', type=Path, default=SELFTEST_HEADERS)
     parser.add_argument('--kernel-build-root', type=Path,
                         help='configured reference output for actual BTF and upstream test-module builds')
     parser.add_argument('--build-worker', action='store_true', help=argparse.SUPPRESS)
@@ -1330,7 +1341,15 @@ def main():
                         help='reuse a finished reference summary after checking the unchanged Image and payload; execute every subject program')
     parser.add_argument('--install-deps', action='store_true', help='install additional selftest dependencies only in the disposable build container')
     parser.add_argument('--allow-qemu-drift', action='store_true')
-    parser.add_argument('--select', action='append', default=[], help='replay an installed collection or collection:program; other programs remain NOT_RUN')
+    parser.add_argument('--select', action='append', default=[],
+                        help='replay an installed collection or collection:program; other programs remain NOT_RUN; '
+                             'the replay writes its own receipt beside the complete one')
+    return parser
+
+
+def main():
+    from layout import require_attached
+    parser = arguments()
     args = parser.parse_args()
     if args.reference_run and not args.reuse_build:
         parser.error('--reference-run requires --reuse-build')
@@ -1350,6 +1369,7 @@ def main():
     if args.allow_qemu_drift:
         os.environ['K1_ALLOW_QEMU_DRIFT'] = '1'
     work = args.work_root.resolve()
+    require_attached(work)
     work.mkdir(parents=True, exist_ok=True)
     selected_kernel = kernel_selection(args.expanded_kernel, receipt_path=args.kernel_receipt,
                                        reference_boot_path=args.reference_boot)
@@ -1416,7 +1436,7 @@ def main():
         shutil.copytree(work / 'logs', run / 'build')
     if not args.reuse_build and (work / 'dependencies.log').exists():
         shutil.copy2(work / 'dependencies.log', run / 'dependencies.log')
-    receipt_path = ROOT / 'tests/contracts/kernel-selftest-full-receipt.json'
+    receipt_path = receipt_destination(args.select)
     receipt = {'schemaVersion': 1, 'run': run_id, 'status': 'RUNNING',
                'scope': 'Every upstream TARGETS plus hotplug collection, SKIP_TARGETS empty; '
                         + ('expanded audited arm64 configuration' if args.expanded_kernel else 'unchanged K6 arm64 configuration'),
