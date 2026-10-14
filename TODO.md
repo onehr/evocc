@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K07, K10, K11, K11f, K12, N08, N09, N10, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | T03, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03s, T03t, T03u, T03v, T03x, T03z, D09, D10 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D10 follows the Darwin target line of T03i. |
+| AUDIT | T03, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03s, T03t, T03u, T03v, T03x, T03z, D09, D10, D11, D12 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D10 follows the Darwin target line of T03i. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -5050,6 +5050,31 @@ refusal; changing the P13 demo does not close it.
   rewrite chain end to end, and the checker refuses a certificate whose text
   names another target.
 
+- [ ] **D11 — `naked` functions get a frame record** — `OPEN`, P1.
+  Found on 2026-10-14 by the performance analysis. EvoCC accepts
+  `__attribute__((naked))` without a warning and ignores it. The function gets
+  `stp x29, x30, [sp, #-16]!` before its `asm` body, so an `asm` `ret` returns
+  with the stack pointer moved, and a `static inline` naked body is inlined with
+  its `ret`. Probe: `__attribute__((naked)) int f(void) { __asm__ volatile("mov
+  w0, #7\n\tret"); }` at `-O2` for both targets. The parser also accepts other
+  unknown attributes without a warning. arm64 Linux does not use `__naked` (only
+  32-bit ARM does). Next action: implement `naked` as GCC 14 does (no prologue,
+  no epilogue, a body of basic `asm` statements only, never inlined), or refuse
+  it with a stated code; then list every accepted attribute that changes code or
+  the ABI and that EvoCC ignores, and refuse each one. Exit: the probe gives the
+  GCC 14 code or the refusal on both targets, also under `-w`, and a test pins
+  each listed attribute.
+
+- [ ] **D12 — Caller-constant specialization breaks a proof-required entry** — `OPEN`, P2.
+  Found on 2026-10-14 by the performance analysis. Specialization from caller
+  constants (`crates/evocc-chir/src/inline.rs:706-814`) makes a proof-required
+  entry fail: `g(a,3)+g(a+1,3)` with the entries `g` and `f` exits 3 for `g`,
+  while the control with 3 and 4 exits 0. Next action: reproduce it as a
+  `crates/evocc/tests/proof_required.rs` case, then keep the entry's
+  unspecialized body for the checked stage or teach the stage the
+  specialization. Exit: both cases exit 0 with checked output, or the refusal
+  names the specialization.
+
 ## Codegen quality track — next quarter
 
 Authority: [codegen quality plan](docs/archive/codegen-quality-plan.md) and the
@@ -5489,6 +5514,20 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   both reductions run within twice GCC 14's count at -O2; the workspace gate,
   the allocation verifier and the proof-required path pass; the K02 profile
   is rerun.
+  October 14: the
+  [analysis](docs/archive/notebook/perf-n08-n11-analysis-20261014.md) measured
+  the causes. One `asm.goto` turns identical-value transport off for its whole
+  function (`crates/evocc-mir/src/generic/ssa.rs:212-219`,
+  `isa/aarch64/insts.rs:715-717`), and every K02 hot function has `asm goto`
+  patch sites. Without it the loop runs 28 instead of 175 instructions per
+  iteration. Read-write and tied `asm` outputs do the same; spill temporaries
+  ignore their copy partner; slot compaction leaves same-slot pairs. New next
+  action, replacing the one above: first add an independent SSA-destruction
+  check, then admit `asm.goto` without fixed bindings and read-write or tied
+  outputs, then copy hints and live ranges with holes in the allocator, not in
+  SSA destruction, because the Lean transport check needs equal definitions. The
+  2x exit for `loop-carried-transport.c` also needs Boolean threading and guard
+  hoisting, which need their own checker.
 
 - [ ] **N09 — Inline small static helpers by default** — `OPEN`, P1.
   The K02 fault path makes about 204 calls to small helpers that GCC
@@ -5501,6 +5540,13 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   flags, with the existing translation validation. Exit: the reduction runs
   within twice GCC 14's count; the ladder programs keep their results, and
   their total code size does not grow.
+  October 14: the
+  [analysis](docs/archive/notebook/perf-n08-n11-analysis-20261014.md) found that
+  the inliner refuses a plain `static` helper with a local object
+  (`crates/evocc-chir/src/inline.rs:989-1044`); inlined, the reduction runs 49
+  instead of 85. Next action: admit such helpers to the size-bounded class with
+  a per-unit growth cap; the exit also needs the N10 offset fold and constant
+  shift guards.
 
 - [ ] **N10 — Keep one-word records and small arrays in registers** — `OPEN`, P1.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to
@@ -5511,6 +5557,12 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   329 (GCC 14: 94). Next action: replace records of one machine word and
   small arrays indexed only by constants with scalars. Exit: both reductions
   run within twice GCC 14's count, and the workspace gate passes.
+  October 14: the
+  [analysis](docs/archive/notebook/perf-n08-n11-analysis-20261014.md) found no
+  promotion of records or arrays, and a constant element address costs four
+  instructions. Next action: promote one-word objects and small constant-indexed
+  arrays, decide the canary after it, fold a constant offset into `add #imm`,
+  and drop the guard of a constant shift.
 
 - [ ] **N11 — Sign only the returns that need a signature** — `OPEN`, P2.
   K15 signs every function, leaves included, for `-mbranch-protection=pac-ret`.
@@ -5520,6 +5572,13 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   the signature only where the return address never leaves `x30`; keep
   signing every function for `pac-ret+leaf`. Exit: driver tests pin both
   options, and a function that stores `x30` is always signed.
+  October 14: the
+  [analysis](docs/archive/notebook/perf-n08-n11-analysis-20261014.md) found that
+  `protects_codegen()` keeps a frame record in every function, so every leaf
+  signs. Next action: make the protection a per-variant set, let only
+  `-mno-omit-leaf-frame-pointer` keep leaf frames at the kernel flags, as GCC 14
+  does, and leave frameless leaves unsigned under `pac-ret`. Kernel stack
+  traces, ftrace and kprobes need the acceptance lane.
 
 ## Benchmark coverage index
 
