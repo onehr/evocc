@@ -1,0 +1,135 @@
+{
+  "schema": "agent-repair.protocol.a1",
+  "name": "P17a Protocol A: E3004 guidance and the response budget",
+  "status": "unregistered",
+  "status_note": "Machine form of the proposal. Nothing is registered. The owner fixes the provider, approves the measured run and registers it with a commit and a tag. The measured phase refuses to run while the status is unregistered. A harness change after the pilot needs a new pilot.",
+  "source": "docs/archive/notebook/agent-feedback-20261013/protocols.md",
+  "corpus_tag": "agent-repair-corpus-2",
+  "corpus_commit": "7eed5eac064e0993d0d26a967b50dc94c71cc55b",
+  "items_root": "tests/fixtures/agent-repair",
+  "items": [
+    "ub-addition-overflow",
+    "ub-subtraction-overflow",
+    "ub-multiplication-overflow",
+    "ub-negation-overflow",
+    "ub-quotient-overflow"
+  ],
+  "item_files": ["program.c", "fixed.c", "reference_main.c", "expected.txt", "origin.md", "class"],
+  "model": "deepseek/deepseek-v4.1-flash",
+  "reported_models": ["deepseek/deepseek-v4.1-flash", "deepseek/deepseek-v4.1-flash-20260910"],
+  "reported_models_basis": "The second name is the canonical slug of the same model in the public OpenRouter model list on 2026-10-14. Every P17 response reported the first name.",
+  "provider": {"name": "AtlasCloud", "order": ["atlas-cloud"], "allow_fallbacks": false},
+  "provider_basis": "The P17 receipt reports the name AtlasCloud for 95 of 272 responses. The public OpenRouter provider list gives the slug atlas-cloud; the model endpoint list gives the tag atlas-cloud/fp8 and max_completion_tokens 393216. The owner fixes the provider at registration.",
+  "temperature": 0,
+  "prompt_file": "tools/experiment/prompt.txt",
+  "prompt_sha256": "eaa8197fe9f298ea2ba2c2a9647aef665148f0f37066711e3cbaf044cd0fe3a1",
+  "user_message": "The P17 layout from repair.messages: Current program.c:, the source in a fenced c block, Feedback: and the feedback records.",
+  "reasoning_parameter": "none: the request has no reasoning field, as in P17",
+  "responses_per_trial": 1,
+  "repair_rounds": 0,
+  "arms": {
+    "G0": "Frozen feedback. The current evo produces the check, explain and plan records of repair.feedback for the original program.c in a fresh scratch directory per trial, as in P17.",
+    "G1": "G0 with the explain record replaced by g1_explain_line and one newline. The check and plan records do not change."
+  },
+  "g1_explain_line": "{\"code\":\"E3004\",\"title\":\"signed-integer-overflow\",\"text\":\"An executed signed integer operation has a result outside its permitted range. Check the operands before the operation, or compute in long long and convert back only when the result fits.\",\"exit_code\":0}",
+  "limits": {"L16": 16384, "L4": 4096},
+  "long_threshold_tokens": 4096,
+  "cells": [
+    {"arm": "G0", "limit": "L16", "per_item": 30},
+    {"arm": "G1", "limit": "L16", "per_item": 30},
+    {"arm": "G0", "limit": "L4", "per_item": 10},
+    {"arm": "G1", "limit": "L4", "per_item": 10}
+  ],
+  "phases": {
+    "pilot": {
+      "cost_cap_usd": 0.30,
+      "note": "The pilot does not estimate an effect and does not change the sample size. Its data stay out of the measured analysis.",
+      "trials": [
+        {"request": 1, "item": "ub-addition-overflow", "arm": "G0", "limit": "L16"},
+        {"request": 2, "item": "ub-addition-overflow", "arm": "G1", "limit": "L16"},
+        {"request": 3, "item": "ub-negation-overflow", "arm": "G0", "limit": "L16"},
+        {"request": 4, "item": "ub-negation-overflow", "arm": "G1", "limit": "L16"},
+        {"request": 5, "item": "ub-subtraction-overflow", "arm": "G0", "limit": "L16"},
+        {"request": 6, "item": "ub-subtraction-overflow", "arm": "G1", "limit": "L16"},
+        {"request": 7, "item": "ub-multiplication-overflow", "arm": "G0", "limit": "L4"},
+        {"request": 8, "item": "ub-multiplication-overflow", "arm": "G1", "limit": "L4"},
+        {"request": 9, "item": "ub-quotient-overflow", "arm": "G0", "limit": "L4"},
+        {"request": 10, "item": "ub-quotient-overflow", "arm": "G1", "limit": "L4"}
+      ],
+      "go_criteria": [
+        "All 10 responses report the pinned provider and the registered model.",
+        "Every response has usage, cost and `reasoning_tokens`.",
+        "The provider accepts `max_tokens` 16,384 without a parameter error.",
+        "The harness extracts, validates and scores every delivered candidate.",
+        "The pilot cost stays below USD 0.30."
+      ]
+    },
+    "measured": {
+      "cost_cap_usd": 3.50,
+      "requests": 400,
+      "order": "One random permutation of all 400 trials: budget.py order with the first 16 hexadecimal digits of the registration commit as the seed. Commit the order file before the first request. Between the registration commit and the run, only the order file may change. Run one request at a time."
+    }
+  },
+  "outcomes": {
+    "delivered": "finish_reason is stop and the answer is exactly one complete fenced c block, by the regular expression of repair.extract.",
+    "valid": "Delivered, and the candidate profile of repair.extract accepts the block.",
+    "correct": "Valid, and the unchanged repair.score passes it: sealed GCC 14 -O0, the hidden driver and the exact expected.txt.",
+    "long": "An L16 response with more than 4,096 completion tokens.",
+    "tokens": "Prompt, completion and reasoning from the usage record; answer is completion minus reasoning.",
+    "cost": "The reported usage cost."
+  },
+  "stopping": {
+    "cost_cap": "Reported-cost cap: USD 3.50 for the measured trials, USD 0.30 for the pilot, USD 1.50 for Part B. Check it before each request. The last request can cross the cap.",
+    "usage": "Missing or invalid usage or cost stops the run. It is never zero.",
+    "refusal": "HTTP 401, 402 or 403 stops the run.",
+    "deviation": "A response from another provider or another model stops the run and is reported as a deviation.",
+    "retry": "HTTP 429, 5xx or a transport error: retry the identical payload once after 2 seconds. The retry is billed and counted.",
+    "outcomes": "A length stop, an invalid candidate and a hidden failure are outcomes. Never retry them.",
+    "partial": "A stopped run is partial. Label the affected predictions incomplete."
+  },
+  "harness": {
+    "deadline_seconds": 900,
+    "socket_timeout_seconds": 120,
+    "retry_delay_seconds": 2,
+    "body_limit_bytes": 1048576,
+    "capture_stop_mib": 400,
+    "disk_start_gib": 25,
+    "disk_stop_gib": 15,
+    "unknown_cost_reserve": {"input_tokens": 1000, "input_usd_per_million": 0.45, "output_usd_per_million": 2.40},
+    "rules": [
+      "Usage of a response: an HTTP 200 body with choices needs a finite, non-negative cost and integer prompt, completion and reasoning tokens, with reasoning at most completion. Otherwise the run stops.",
+      "Embedded error: OpenRouter can send HTTP 200 and then an error object without choices. Its integer code counts as the HTTP status. Any other status or code, invalid JSON and a body above body_limit_bytes stop the run.",
+      "Unknown cost: a failed attempt that the protocol retries keeps a null cost. It adds the reserve, 1,000 input tokens and max_tokens output tokens at the planning maxima, to the cap comparison. It is never counted as zero.",
+      "Failed retry: when the retry fails again with HTTP 429, 5xx or a transport error, the trial is a request_error and the run stops.",
+      "Deadline: each HTTP attempt has a total deadline. Keep-alive whitespace does not extend it. A deadline is a transport error.",
+      "Frozen inputs: before each trial, the harness compares the evo and evocc SHA-256 with the values at the start, and the G0 bytes with the P17 reference after scratch-path replacement. A difference stops the run before the request.",
+      "Deviation: the harness records and scores the deviating trial, then stops. The trial stays out of the analysis.",
+      "Scoring: a scorer infrastructure failure leaves correct null and the run continues. A container cleanup or capture-limit stop stops the run.",
+      "Captures: every JSON capture goes through repair.encode, and every raw body is checked for the key and sk-or- before it is written. A match stops the run and the body is not kept."
+    ]
+  },
+  "analysis": {
+    "A1": "One-sided Fisher exact test of Long, G1 against G0, at L16, with the counts pooled over items.",
+    "A2": "Stratified permutation test. The statistic is the sum over items of the mean log completion tokens of G0 minus G1. Permute arm labels within items 100,000 times with the registered seed. One-sided.",
+    "correction": "Holm at a family level of 0.05 over A1 and A2.",
+    "descriptive": "A3, A4 and A5 with exact 95% intervals. If A4 fails for an arm, report A1 again with the L4 non-delivery counts as the registered fallback.",
+    "counts": "Delivered, valid and correct per cell; correct over valid and over attempted; byte-identical repeated responses per cell, with a distinct-response sensitivity check above 20%."
+  },
+  "p17": {
+    "receipt": "tests/contracts/agent-repair-20261008.json",
+    "receipt_sha256": "26132a5205389c4414d0e07ef39600039a10fd0a02a09ff3405c3f6413dd4c96",
+    "transcripts": "tests/contracts/agent-repair-transcripts-20261008.tar.gz",
+    "transcripts_sha256": "226a490f2365782314bf88a0e251ebe7bff15a6a6e2547c3cb13b8dd3c1731b8",
+    "reference": "Condition c3, repetition 1: the initial feedback that the round 1 request sent."
+  },
+  "part_b": {
+    "status": "Not approved. Part B needs a separate approval, its plan-record bytes and a pilot.",
+    "drafts": [
+      {"item": "ub-addition-overflow", "line": 6, "column": 12, "span": "a + b", "replacement": "(int)((long long)a + b > 2147483647 ? 2147483647 : (long long)a + b < -2147483647 - 1 ? -2147483647 - 1 : (long long)a + b)", "repair_id": "E3004.saturate", "kind": "review", "title": "If the contract requires saturation, compute in long long and clamp to the int range"},
+      {"item": "ub-subtraction-overflow", "line": 6, "column": 12, "span": "a - b", "replacement": "(int)((long long)a - b > 2147483647 ? 2147483647 : (long long)a - b < -2147483647 - 1 ? -2147483647 - 1 : (long long)a - b)", "repair_id": "E3004.saturate", "kind": "review", "title": "If the contract requires saturation, compute in long long and clamp to the int range"},
+      {"item": "ub-multiplication-overflow", "line": 6, "column": 12, "span": "a * b", "replacement": "(int)((long long)a * b > 2147483647 ? 2147483647 : (long long)a * b < -2147483647 - 1 ? -2147483647 - 1 : (long long)a * b)", "repair_id": "E3004.saturate", "kind": "review", "title": "If the contract requires saturation, compute in long long and clamp to the int range"},
+      {"item": "ub-negation-overflow", "line": 6, "column": 12, "span": "-a", "replacement": "(a == -2147483647 - 1 ? 2147483647 : -a)", "repair_id": "E3004.saturate", "kind": "review", "title": "If the contract requires saturation, map the minimum value to the maximum"},
+      {"item": "ub-quotient-overflow", "line": 6, "column": 12, "span": "a / b", "replacement": "(a == -2147483647 - 1 && b == -1 ? 2147483647 : a / b)", "repair_id": "E3004.saturate", "kind": "review", "title": "If the contract requires saturation, map the one overflowing quotient to the maximum"}
+    ]
+  }
+}

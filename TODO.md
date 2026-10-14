@@ -942,6 +942,17 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   A](docs/archive/notebook/agent-feedback-20261013/protocols.md) waits for the
   owner's approval: a 10-call pilot capped at USD 0.30, then 400 calls capped at
   USD 3.50. Do not rerun P17.
+  October 14: `tools/experiment/budget.py` implements Protocol A, with the
+  unregistered `tools/experiment/protocol-6.json` and 23 tests against a local
+  fake server. The free checks pass: the G0 bytes equal P17 for 5/5 items, and
+  the five Part B drafts pass the sealed scorer. The approved pilot stopped at
+  request 1: OpenRouter refused it with HTTP 403, because the key had used USD
+  10.45 of its USD 10 limit. The reported cost is USD 0, and no model response
+  exists. The [pilot
+  note](docs/archive/notebook/agent-feedback-20261013/p17a-pilot.md) and the
+  [receipt](tests/contracts/agent-repair-6-pilot-20261014.json) record it.
+  AtlasCloud was degraded during the run. Next action: the owner raises the key
+  limit or supplies a key; then the same 10 requests run again.
 
 - [x] **P21 — Replicate repair effort and test larger programs** — `DONE`, P1.
   Keep experiment 4 repetition 1 descriptive. Register two new repetitions

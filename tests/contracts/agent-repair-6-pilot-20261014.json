@@ -1,0 +1,334 @@
+{
+  "schema": "agent-repair.v6",
+  "phase": "budget-pilot",
+  "date": "2026-10-14T01:17:31.872744+00:00",
+  "protocol": {
+    "path": "tools/experiment/protocol-6.json",
+    "sha256": "efccac437430d0392df41abed273d4103af9c6a9617071a090b8a767b42d8c34",
+    "status": "unregistered"
+  },
+  "plan": {
+    "phase": "pilot",
+    "trials": [
+      {
+        "request": 1,
+        "item": "ub-addition-overflow",
+        "arm": "G0",
+        "limit": "L16"
+      },
+      {
+        "request": 2,
+        "item": "ub-addition-overflow",
+        "arm": "G1",
+        "limit": "L16"
+      },
+      {
+        "request": 3,
+        "item": "ub-negation-overflow",
+        "arm": "G0",
+        "limit": "L16"
+      },
+      {
+        "request": 4,
+        "item": "ub-negation-overflow",
+        "arm": "G1",
+        "limit": "L16"
+      },
+      {
+        "request": 5,
+        "item": "ub-subtraction-overflow",
+        "arm": "G0",
+        "limit": "L16"
+      },
+      {
+        "request": 6,
+        "item": "ub-subtraction-overflow",
+        "arm": "G1",
+        "limit": "L16"
+      },
+      {
+        "request": 7,
+        "item": "ub-multiplication-overflow",
+        "arm": "G0",
+        "limit": "L4"
+      },
+      {
+        "request": 8,
+        "item": "ub-multiplication-overflow",
+        "arm": "G1",
+        "limit": "L4"
+      },
+      {
+        "request": 9,
+        "item": "ub-quotient-overflow",
+        "arm": "G0",
+        "limit": "L4"
+      },
+      {
+        "request": 10,
+        "item": "ub-quotient-overflow",
+        "arm": "G1",
+        "limit": "L4"
+      }
+    ],
+    "model": "deepseek/deepseek-v4.1-flash",
+    "reported_models": [
+      "deepseek/deepseek-v4.1-flash",
+      "deepseek/deepseek-v4.1-flash-20260910"
+    ],
+    "provider": {
+      "name": "AtlasCloud",
+      "order": [
+        "atlas-cloud"
+      ],
+      "allow_fallbacks": false
+    },
+    "temperature": 0,
+    "limits": {
+      "L16": 16384,
+      "L4": 4096
+    },
+    "reasoning_parameter": null,
+    "prompt_file": "tools/experiment/prompt.txt",
+    "corpus_tag": "agent-repair-corpus-2",
+    "items_root": "tests/fixtures/agent-repair",
+    "cost_cap_usd": 0.3,
+    "max_requests": 10,
+    "max_http_attempts": 20,
+    "harness": {
+      "deadline_seconds": 900,
+      "socket_timeout_seconds": 120,
+      "retry_delay_seconds": 2,
+      "body_limit_bytes": 1048576,
+      "capture_stop_mib": 400,
+      "disk_start_gib": 25,
+      "disk_stop_gib": 15,
+      "unknown_cost_reserve": {
+        "input_tokens": 1000,
+        "input_usd_per_million": 0.45,
+        "output_usd_per_million": 2.4
+      }
+    }
+  },
+  "provenance": {
+    "commit": "e74f3596272217aa2517145b7e2b7e6194d6d2d2",
+    "uncommitted_inputs": [
+      "?? tools/experiment/budget.py",
+      "?? tools/experiment/protocol-6.json"
+    ],
+    "hashes": {
+      "tools/experiment/budget.py": "a255eb7ce9a3b53efd02ddfcc47301d4f0151aee8f84470ddd627a93896778f5",
+      "tools/experiment/repair.py": "4979683aae02a4ca44756f1fcfdef255af45ba8cb19e69bdb6fc2471a32f3854",
+      "tools/experiment/protocol-6.json": "efccac437430d0392df41abed273d4103af9c6a9617071a090b8a767b42d8c34",
+      "tools/experiment/prompt.txt": "eaa8197fe9f298ea2ba2c2a9647aef665148f0f37066711e3cbaf044cd0fe3a1",
+      "contracts/build-environment.json": "c508845a2a88443f450629da51895d84eebeb48b51acaca350c7207760b74512",
+      "tests/contracts/agent-repair-20261008.json": "26132a5205389c4414d0e07ef39600039a10fd0a02a09ff3405c3f6413dd4c96",
+      "tests/contracts/agent-repair-transcripts-20261008.tar.gz": "226a490f2365782314bf88a0e251ebe7bff15a6a6e2547c3cb13b8dd3c1731b8",
+      "tests/fixtures/agent-repair/ub-addition-overflow/program.c": "9b0e0b711a4429edeeab5c53b0cf1f777fc31a03c67d1d1c3e3a7a9fcf952ddb",
+      "tests/fixtures/agent-repair/ub-addition-overflow/fixed.c": "af2ab34293ad4eeb0ee3b427e6577ff3d676624db3a39d740912b2182c21a14d",
+      "tests/fixtures/agent-repair/ub-addition-overflow/reference_main.c": "62f7f5d359906cb4495f7badde23e8021b5903a69630a577dbbc0c926d60e0fd",
+      "tests/fixtures/agent-repair/ub-addition-overflow/expected.txt": "765317765681cbd33b06fe7ab31496be9121c76d1d68e7b262b1e1a338b46255",
+      "tests/fixtures/agent-repair/ub-addition-overflow/origin.md": "d6b266e33172bc9daa4e4e41c9f5dabd24a66514e1f3c5386c65145bd7e5b914",
+      "tests/fixtures/agent-repair/ub-addition-overflow/class": "b6a243ebd6f1797c3045b92b4cd87c1b6d4526b5d592ca8754c507d0368d1394",
+      "tests/fixtures/agent-repair/ub-subtraction-overflow/program.c": "35b7f7063b10694efa6df2337d8036ea6523cccf4c748b0fed012c7c21fa7361",
+      "tests/fixtures/agent-repair/ub-subtraction-overflow/fixed.c": "925c5b2f82e495b4ca4046ae7317e53c04dc3e190b515d4af96ce0a72791510e",
+      "tests/fixtures/agent-repair/ub-subtraction-overflow/reference_main.c": "908c3b68af471315b86c30349a751da071b3cd6dbd18484aed63b428dd6a7395",
+      "tests/fixtures/agent-repair/ub-subtraction-overflow/expected.txt": "d844fca756f1c30f0735d14f2d1fdf8a22127e023af651c548a463e9482f2983",
+      "tests/fixtures/agent-repair/ub-subtraction-overflow/origin.md": "a55a1056e1bba5e0aeae50c32c8bf74ff2d41c04affe125001234ab84102ec3d",
+      "tests/fixtures/agent-repair/ub-subtraction-overflow/class": "b6a243ebd6f1797c3045b92b4cd87c1b6d4526b5d592ca8754c507d0368d1394",
+      "tests/fixtures/agent-repair/ub-multiplication-overflow/program.c": "4c76a7aa7cc5a40a3277c5f668ff5b9124580fa46b6bd5c9f785a0241bb5d4ea",
+      "tests/fixtures/agent-repair/ub-multiplication-overflow/fixed.c": "c8528f8aad63c145b20d8d8546eca62561d6413598046232cecbbcaf6c8eaf8a",
+      "tests/fixtures/agent-repair/ub-multiplication-overflow/reference_main.c": "3813ae1e52c7b9574f7051ebd2558569011948fb14dab397309b3d17475796d1",
+      "tests/fixtures/agent-repair/ub-multiplication-overflow/expected.txt": "2b25bd185a6c487c6697c34ec8b6afc40f5eb723f90133c79dff5fe468b693b8",
+      "tests/fixtures/agent-repair/ub-multiplication-overflow/origin.md": "89b6da4dc4d07ba15a4749c1b14a12c2516dc019b9700655f1a3b739e84cb21f",
+      "tests/fixtures/agent-repair/ub-multiplication-overflow/class": "b6a243ebd6f1797c3045b92b4cd87c1b6d4526b5d592ca8754c507d0368d1394",
+      "tests/fixtures/agent-repair/ub-negation-overflow/program.c": "8c95024764d04a4bc67d357299a61a4dbb9d9d2b138ffb7f4ada458302e4eb61",
+      "tests/fixtures/agent-repair/ub-negation-overflow/fixed.c": "81ee44014eb4d705e175ee59f60ca859f964117b597daecb867feb2cc76e0b6d",
+      "tests/fixtures/agent-repair/ub-negation-overflow/reference_main.c": "2ce1a33208c9c05bcc92cfb9b719c99a1d7d39482b01d0ea2a15fbcd44ab901c",
+      "tests/fixtures/agent-repair/ub-negation-overflow/expected.txt": "50d9b751fa8ae6a3ec4ab9eab383ec9cef94d07c0059d2a252b285df93301888",
+      "tests/fixtures/agent-repair/ub-negation-overflow/origin.md": "0678f1d840f5452f210038018036c84b83148ce6fa242944ec24c89178f08034",
+      "tests/fixtures/agent-repair/ub-negation-overflow/class": "b6a243ebd6f1797c3045b92b4cd87c1b6d4526b5d592ca8754c507d0368d1394",
+      "tests/fixtures/agent-repair/ub-quotient-overflow/program.c": "a477c85d792dc6121726d73d74f6712018f00cdf806f2239796299adb9edea0d",
+      "tests/fixtures/agent-repair/ub-quotient-overflow/fixed.c": "e5502bd168b91026a999c01eaf678810e965a0bf815610dd50eba4279a14d56f",
+      "tests/fixtures/agent-repair/ub-quotient-overflow/reference_main.c": "147599ef1398a67210775634ee8c72ba0778c154d7276ecefcefa1da18138e3b",
+      "tests/fixtures/agent-repair/ub-quotient-overflow/expected.txt": "847837a504bc42469dc02738517f38a1a5ed0b9abec191c0c97964a0654d982e",
+      "tests/fixtures/agent-repair/ub-quotient-overflow/origin.md": "c6feea5838345f767abbffca07f4f61f957608803dde3aa9e272c43b0c57cc79",
+      "tests/fixtures/agent-repair/ub-quotient-overflow/class": "b6a243ebd6f1797c3045b92b4cd87c1b6d4526b5d592ca8754c507d0368d1394"
+    },
+    "image": "evo-nexlab:sealed",
+    "image_digest": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+    "scratch_parent": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T",
+    "python": "3.9.6",
+    "evo_sha256": "075508aaf8562c1e7d6e893933fc34ae70f8ca5633314e98d7690a95bad6b19f",
+    "evocc_sha256": "93eacee4e6e917049d041346c9ecbeff1266f8b17dd26bc684eeeed1a53c4c04",
+    "version": "evocc 0.1.0 (366fd796613e 2026-10-13)\nTarget: aarch64-apple-darwin\n"
+  },
+  "endpoints": [
+    {
+      "label": "before",
+      "time": "2026-10-14T01:17:31.873402+00:00",
+      "file": "endpoints-before.json",
+      "sha256": "9dc2e9cda6bae76111630557b207e6cbd6c12e0b98e1cde987977cee83b88db9",
+      "entries": [
+        {
+          "name": "AtlasCloud | deepseek/deepseek-v4.1-flash-20260910",
+          "tag": "atlas-cloud/fp8",
+          "quantization": "fp8",
+          "max_completion_tokens": 393216,
+          "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.00000003",
+            "discount": 0
+          },
+          "status": -5
+        }
+      ]
+    },
+    {
+      "label": "after",
+      "time": "2026-10-14T01:17:33.953857+00:00",
+      "file": "endpoints-after.json",
+      "sha256": "9dc2e9cda6bae76111630557b207e6cbd6c12e0b98e1cde987977cee83b88db9",
+      "entries": [
+        {
+          "name": "AtlasCloud | deepseek/deepseek-v4.1-flash-20260910",
+          "tag": "atlas-cloud/fp8",
+          "quantization": "fp8",
+          "max_completion_tokens": 393216,
+          "pricing": {
+            "prompt": "0.0000003",
+            "completion": "0.0000012",
+            "input_cache_read": "0.00000003",
+            "discount": 0
+          },
+          "status": -5
+        }
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "request": 1,
+      "item": "ub-addition-overflow",
+      "arm": "G0",
+      "limit": "L16",
+      "repetition": null,
+      "max_tokens": 16384,
+      "started_at": "2026-10-14T01:17:32.961791+00:00",
+      "status": "stopped",
+      "error": "provider_refused:http_403",
+      "deviation": null,
+      "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-evo-yoj4jab1",
+      "feedback_bytes": 1654,
+      "feedback_sha256": "498d3980189bc33a8a6fa2d3eadc730e5f8ccf8b44c864e789285fabda7529de",
+      "payload_sha256": "184af4706353f2e7ea76538f0c16132656c65b8c0f9aff6cc77a24904c55cc20",
+      "attempts": [
+        {
+          "attempt": 1,
+          "started_at": "2026-10-14T01:17:33.048326+00:00",
+          "seconds": 0.904,
+          "http_status": 403,
+          "transport_error": null,
+          "response_file": "001-a1.body",
+          "response_bytes": 491,
+          "response_sha256": "3039807ec2076711bd45c99d9fcf644cdb24f2ea735c7de928a96fd2900d44a9",
+          "cost": null,
+          "provider": null,
+          "model": null,
+          "verdict": "stop",
+          "reason": "provider_refused:http_403"
+        }
+      ],
+      "cost": 0.0,
+      "provider": null,
+      "model": null,
+      "response_id": null,
+      "response_sha256": null,
+      "prompt_tokens": null,
+      "completion_tokens": null,
+      "reasoning_tokens": null,
+      "answer_tokens": null,
+      "cached_tokens": null,
+      "finish_reason": null,
+      "native_finish_reason": null,
+      "delivered": false,
+      "valid": false,
+      "correct": false,
+      "long": null,
+      "undelivered": null,
+      "invalid": null,
+      "score_error": null,
+      "answer_sha256": null,
+      "reasoning_sha256": null,
+      "candidate_sha256": null,
+      "transcript": "001.json.gz",
+      "seconds": 0.991
+    }
+  ],
+  "totals": {
+    "trials": 1,
+    "completed": 0,
+    "requests": 1,
+    "retries": 0,
+    "cost_usd": 0.0,
+    "unknown_cost_attempts": 1,
+    "unknown_cost_reserve_usd": 0.0397716,
+    "delivered": 0,
+    "valid": 0,
+    "correct": 0,
+    "long": 0,
+    "cells": {
+      "G0-L16": {
+        "trials": 1,
+        "responses": 0,
+        "delivered": 0,
+        "valid": 0,
+        "correct": 0,
+        "long": 0,
+        "length": 0
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "reasoning_tokens": 0,
+    "answer_tokens": 0
+  },
+  "go": {
+    "criteria": [
+      {
+        "criterion": "All 10 responses report the pinned provider and the registered model.",
+        "held": false,
+        "evidence": "0 of 10 trials completed; providers ['None']; models ['None']"
+      },
+      {
+        "criterion": "Every response has usage, cost and `reasoning_tokens`.",
+        "held": false,
+        "evidence": "every final attempt has a cost and prompt, completion and reasoning tokens: False"
+      },
+      {
+        "criterion": "The provider accepts `max_tokens` 16,384 without a parameter error.",
+        "held": false,
+        "evidence": "0 L16 trials with HTTP 200; largest completion None tokens; length stops below the limit: []"
+      },
+      {
+        "criterion": "The harness extracts, validates and scores every delivered candidate.",
+        "held": false,
+        "evidence": "0 delivered, 0 valid, 0 scored, 0 correct"
+      },
+      {
+        "criterion": "The pilot cost stays below USD 0.30.",
+        "held": true,
+        "evidence": "reported USD 0.000000000 plus unknown-cost reserve USD 0.039771600 against the USD 0.30 cap"
+      }
+    ],
+    "held": false
+  },
+  "stop_reason": "provider_refused:http_403",
+  "unattempted": 9,
+  "provenance_after": {
+    "evo_sha256": "075508aaf8562c1e7d6e893933fc34ae70f8ca5633314e98d7690a95bad6b19f",
+    "evocc_sha256": "93eacee4e6e917049d041346c9ecbeff1266f8b17dd26bc684eeeed1a53c4c04",
+    "version": "evocc 0.1.0 (366fd796613e 2026-10-13)\nTarget: aarch64-apple-darwin\n"
+  }
+}
