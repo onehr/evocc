@@ -35,6 +35,12 @@ manual steps:
 - `kunit.py` and `selftest_full.py` default to the audited source and this
   plan's layout. A selected replay writes its own receipt beside the complete
   one. `tools/bench.py --status ctest` works.
+- The owner approved the disk steps of P0 on 2026-10-14. `out-def` and
+  `out-pac` are deleted, so their exact trees are no longer retained. The
+  receipt `kernel-direct-virt-receipt.json` keeps their Image hashes
+  `ce7bd3e3…` and `16a87d16…`. Compaction reclaimed 8.2 GB. The image now has
+  a 64 GiB capacity (68.7 GB container, 60.2 GB free). The mount options did
+  not change. `/` had 25 GiB free afterward.
 
 ## 1. Facts
 
