@@ -90,11 +90,11 @@ pub(crate) fn validate_anonymous_marks(
         &args.iter().map(|arg| arg.ty.clone()).collect::<Vec<_>>(),
         marks,
     )?;
-    if marks
-        .iter()
-        .enumerate()
-        .any(|(index, mark)| mark.is_sret() || (index < fixed && *mark != ParamMark::None))
-    {
+    if marks.iter().enumerate().any(|(index, mark)| {
+        mark.is_sret()
+            || *mark == ParamMark::SignExtend
+            || (index < fixed && *mark != ParamMark::None)
+    }) {
         return Err("call-site byval marks apply only to anonymous arguments".into());
     }
     Ok(())

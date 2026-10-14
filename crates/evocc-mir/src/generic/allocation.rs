@@ -240,9 +240,12 @@ where
                     reuse_local_reloads(target, &mut compacted, &mut assignment);
                 }
                 let frame_slots = compact_spill_slots(&mut compacted);
+                // A callee-saved register is saved when an allocated value
+                // occupies it or when an assembly body clobbers it.
                 let used_callee_saved = assignment
                     .values()
                     .copied()
+                    .chain(assembly_clobbers(&compacted.blocks))
                     .filter(|number| target.abi().callee_saved.contains(number))
                     .collect::<BTreeSet<u8>>()
                     .into_iter()
@@ -1326,6 +1329,27 @@ where
     // Walk by start point, ties by virtual register number.
     result.sort_by_key(|interval| (interval.start, interval.value));
     result
+}
+
+/// Every register that an assembly body of `blocks` clobbers, in an
+/// instruction or in a terminator.
+pub fn assembly_clobbers<I, T, C>(blocks: &[MachineBlock<I, T, C>]) -> BTreeSet<u8>
+where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+    T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body>,
+{
+    blocks
+        .iter()
+        .flat_map(|block| {
+            block
+                .insts
+                .iter()
+                .filter_map(AllocInst::assembly)
+                .chain(block.term.assembly())
+                .flat_map(ConstraintBody::clobbered_registers)
+        })
+        .collect()
 }
 
 fn early_clobbers<B, C>(body: &B) -> Vec<VirtualReg<C>>

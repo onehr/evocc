@@ -334,7 +334,12 @@ fn local_copy(class: RegClass, number: u8) -> Allocated {
         assignment: BTreeMap::from([(source.id, number), (destination.id, number)]),
         spilled: 0,
         frame_slots: 0,
-        used_callee_saved: Vec::new(),
+        // A sound allocation saves each callee-saved register that it writes.
+        used_callee_saved: regfile::CALLEE_SAVED
+            .contains(&number)
+            .then_some(number)
+            .into_iter()
+            .collect(),
         parameters: 0,
         outgoing: 0,
         indirect_result: false,

@@ -124,6 +124,21 @@ The first public version.
 
 ### Fixed
 
+- An `asm` statement that clobbers `x19` to `x28` no longer loses the caller's value: the
+  prologue saves the register and every epilogue restores it. A clobber of `x29` is refused
+  (E4009).
+- Calls between EvoCC code and Apple clang code on macOS follow the Apple arm64 convention.
+  Narrow integer arguments and results are extended by their signedness, named stack arguments
+  take their natural size and alignment, and a 128-bit argument does not start at an even
+  register. Before, these shapes passed wrong values.
+- On macOS, `long double` is binary64 with size and alignment 8, as with Apple clang. Darwin
+  EvoIR text now names its target. Until the rewrite checker reads that text, `-Oeq-scalar` and
+  the EqSat options are refused for `aarch64-apple-darwin`.
+- More shapes fail closed instead of compiling wrongly: a read of an `_Atomic` object (E2702), a
+  nonconstant range-designator initializer (E2917), a record of floating vectors at a function
+  boundary (E3049), and ABI-changing options such as `-fpack-struct` and `-mabi=ilp32`, also
+  under `-w`.
+- The proof-required path checks the guarded division of D06 to final assembly text.
 - `evo prove` accepts the input file before, between or after its output and
   entry options. All file-bearing command JSON tests cover both option orders.
 - `evo fix` accepts its file before or after options. Removing an unused declaration also

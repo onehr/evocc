@@ -133,9 +133,11 @@ pub(super) fn expression_kind(
 }
 
 impl Folder<'_> {
+    /// A floating type folds in its target format, so a Darwin
+    /// `long double` folds as binary64.
     fn declared_type(&self, ty: TypeId) -> Option<NumberType> {
         match self.types.get(ty)?.kind {
-            TypeKind::Float(kind) => Some(NumberType::Real(kind)),
+            TypeKind::Float(kind) => Some(NumberType::Real(self.target.float_format(kind))),
             _ => canonical_integer_type(self.types, ty).map(NumberType::Integer),
         }
     }
@@ -146,11 +148,13 @@ impl Folder<'_> {
         }
         match expression {
             CHirExpr::Floating(operation) => self.declared_type(operation.facts.ty()),
-            CHirExpr::FloatLit(literal, _) => Some(NumberType::Real(match literal.suffix {
-                FloatSuffix::None => FloatKind::F64,
-                FloatSuffix::F => FloatKind::F32,
-                FloatSuffix::L => FloatKind::F128,
-            })),
+            CHirExpr::FloatLit(literal, _) => Some(NumberType::Real(self.target.float_format(
+                match literal.suffix {
+                    FloatSuffix::None => FloatKind::F64,
+                    FloatSuffix::F => FloatKind::F32,
+                    FloatSuffix::L => FloatKind::F128,
+                },
+            ))),
             CHirExpr::Cast(ty, ..) => self.declared_type(*ty),
             CHirExpr::Unary(UnaryOp::Plus | UnaryOp::Neg, operand, _)
             | CHirExpr::EvaluateOnce(operand, _) => self.ty(operand, depth + 1),
@@ -428,6 +432,7 @@ pub(super) fn representation(
     let TypeKind::Float(kind) = types.get(destination)?.kind else {
         return None;
     };
+    let kind = target.float_format(kind);
     let value = Folder {
         types,
         symbols,

@@ -573,27 +573,44 @@ fn sentinel_module() -> Module {
             size: Some(71),
             align: 32,
         }],
-        declares: vec![evocc_evoir::FunctionDeclaration {
-            visibility: GlobalVisibility::Protected,
-            linkage: evocc_evoir::Linkage::Weak,
-            name: "sentinel_decl".into(),
-            params: vec![
-                EvoIRType::Ptr(AddressSpace::Generic),
-                EvoIRType::Mem(Region::All),
-                EvoIRType::World,
-            ],
-            param_marks: vec![
-                ParamMark::ByVal(RecordShape::new(24, 8)),
-                ParamMark::None,
-                ParamMark::None,
-            ],
-            variadic: true,
-            ret_tys: vec![
-                EvoIRType::Bits(32),
-                EvoIRType::Mem(Region::All),
-                EvoIRType::World,
-            ],
-        }],
+        declares: vec![
+            evocc_evoir::FunctionDeclaration {
+                visibility: GlobalVisibility::Protected,
+                linkage: evocc_evoir::Linkage::Weak,
+                name: "sentinel_decl".into(),
+                params: vec![
+                    EvoIRType::Ptr(AddressSpace::Generic),
+                    EvoIRType::Mem(Region::All),
+                    EvoIRType::World,
+                ],
+                param_marks: vec![
+                    ParamMark::ByVal(RecordShape::new(24, 8)),
+                    ParamMark::None,
+                    ParamMark::None,
+                ],
+                variadic: true,
+                ret_tys: vec![
+                    EvoIRType::Bits(32),
+                    EvoIRType::Mem(Region::All),
+                    EvoIRType::World,
+                ],
+            },
+            // Revision 2.4.0: a signed narrow parameter of the Darwin target
+            // carries `sext`.
+            evocc_evoir::FunctionDeclaration {
+                visibility: GlobalVisibility::External,
+                linkage: evocc_evoir::Linkage::Strong,
+                name: "sentinel_sign".into(),
+                params: vec![
+                    EvoIRType::Bits(11),
+                    EvoIRType::Mem(Region::All),
+                    EvoIRType::World,
+                ],
+                param_marks: vec![ParamMark::SignExtend, ParamMark::None, ParamMark::None],
+                variadic: false,
+                ret_tys: vec![EvoIRType::Mem(Region::All), EvoIRType::World],
+            },
+        ],
         globals: vec![
             GlobalObject {
                 read_only: false,
@@ -1545,6 +1562,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
             vector: None,
             floating: None,
         }),
+        ParamMark::SignExtend,
     ];
 
     let mut keys = BTreeSet::new();
@@ -1631,6 +1649,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
             ParamMark::None => "ParamMark.None",
             ParamMark::ByVal(_) => "ParamMark.ByVal(shape)",
             ParamMark::Sret(_) => "ParamMark.Sret(shape)",
+            ParamMark::SignExtend => "ParamMark.SignExtend",
         });
     }
     keys

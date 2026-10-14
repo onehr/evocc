@@ -14,8 +14,8 @@
 
 use evocc_evoir::parse_section9_module;
 use evocc_mir::{
-    allocate, compile_module_for, lower_module, out_of_ssa, validate_module, verify_allocation,
-    MInst, MTerm, RegClass, Target,
+    allocate, compile_module_for, lower_module, lower_module_for, out_of_ssa, validate_module,
+    verify_allocation, MInst, MTerm, RegClass, Target,
 };
 
 /// A function over `param_tys` returning `results`, with `body` between.
@@ -44,6 +44,17 @@ may_trap=false, may_unwind=false }}\n{{\n\
 fn lower(text: &str) -> evocc_mir::MModule {
     let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
     let lowered = lower_module(&module).expect("Section 5 has a row for every form here");
+    validate_module(&lowered).expect("the lowering produces verifiable EvoMIR");
+    lowered
+}
+
+/// The same, for a named target. The pair rule of Section 6.5 differs by
+/// ABI profile: Linux rounds a `bits<128>` argument to an even register,
+/// and Darwin does not.
+fn lower_for(target: Target, text: &str) -> evocc_mir::MModule {
+    let module = parse_section9_module(text.as_bytes()).expect("canonical EvoIR");
+    let lowered = lower_module_for(target, &module, &|_| false)
+        .expect("Section 5 has a row for every form here");
     validate_module(&lowered).expect("the lowering produces verifiable EvoMIR");
     lowered
 }
@@ -152,7 +163,7 @@ fn wide_pointer_indexes_keep_the_machine_address_bits() {
     .replace("ret %v2, %v90, %v91", "ret %v2, %v3, %v91")
     .replace("reads={}", "reads={all}")
     .replace("may_trap=false", "may_trap=true");
-    let module = lower(&text);
+    let module = lower_for(Target::Linux, &text);
     every_register_is_narrow(&module);
     let serialized = evocc_mir::render_module(&module);
     assert_eq!(evocc_mir::parse_module(&serialized).unwrap(), module);
@@ -162,8 +173,23 @@ fn wide_pointer_indexes_keep_the_machine_address_bits() {
             "main",
             &[
                 evocc_mir::MirValue::Int(0x1000),
-                // The 128-bit argument starts at the next even register pair.
+                // Linux: the 128-bit argument starts at the next even
+                // register pair.
                 evocc_mir::MirValue::Int(0),
+                evocc_mir::MirValue::Int(low),
+                evocc_mir::MirValue::Int(high),
+            ],
+            evocc_mir::MirLimits::new(1000),
+        )
+        .unwrap();
+        assert_eq!(output.results, [evocc_mir::MirValue::Int(expected)]);
+        // Darwin: it takes the next two registers (Section 6.5).
+        let darwin = lower_for(Target::Darwin, &text);
+        let output = evocc_mir::interpret_module(
+            &darwin,
+            "main",
+            &[
+                evocc_mir::MirValue::Int(0x1000),
                 evocc_mir::MirValue::Int(low),
                 evocc_mir::MirValue::Int(high),
             ],
@@ -536,8 +562,8 @@ fn widths_between_sixty_five_and_one_hundred_and_twenty_seven_stay_e4003() {
 ///
 /// Section 7 pins each by its position, so the count is what says which
 /// register the convention assigned: a skipped register is a real position.
-fn argument_positions(text: &str) -> usize {
-    let module = lower(text);
+fn argument_positions(target: Target, text: &str) -> usize {
+    let module = lower_for(target, text);
     module.functions[0].blocks[0].args.len()
 }
 
@@ -585,25 +611,43 @@ fn a_wide_argument_takes_an_even_aligned_register_pair() {
     // after two it is x2:x3 with nothing skipped" (GCC-14 `take_after_one`,
     // `take_after_two`).
     assert_eq!(
-        argument_positions(&sums_both_halves(&[])),
+        argument_positions(Target::Linux, &sums_both_halves(&[])),
         2,
         "a pair alone takes x0:x1"
     );
     assert_eq!(
-        argument_positions(&sums_both_halves(&["bits<64>"])),
+        argument_positions(Target::Linux, &sums_both_halves(&["bits<64>"])),
         4,
         "after one 64-bit argument the pair is x2:x3, with x1 skipped"
     );
     assert_eq!(
-        argument_positions(&sums_both_halves(&["bits<64>", "bits<64>"])),
+        argument_positions(Target::Linux, &sums_both_halves(&["bits<64>", "bits<64>"])),
         4,
         "after two it is x2:x3 with nothing skipped"
     );
     assert_eq!(
-        argument_positions(&sums_both_halves(&["bits<64>", "bits<64>", "bits<64>"])),
+        argument_positions(
+            Target::Linux,
+            &sums_both_halves(&["bits<64>", "bits<64>", "bits<64>"])
+        ),
         6,
         "after three the pair is x4:x5, with x3 skipped"
     );
+    // Section 6.5: the Darwin ABI profile does not round, as Apple clang does
+    // not: after one 64-bit argument the pair is x1:x2 (D04).
+    for (before, positions) in [
+        (vec![], 2),
+        (vec!["bits<64>"], 3),
+        (vec!["bits<64>", "bits<64>"], 4),
+        (vec!["bits<64>", "bits<64>", "bits<64>"], 5),
+    ] {
+        assert_eq!(
+            argument_positions(Target::Darwin, &sums_both_halves(&before)),
+            positions,
+            "Darwin, after {} 64-bit arguments",
+            before.len()
+        );
+    }
 
     // And every one of them allocates and verifies.
     for before in [

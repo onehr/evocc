@@ -128,7 +128,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let OperandTypeClass::Real(target) =
             self.operand_type_class(InferredType::Canonical(element))
         {
-            let precision = |kind| match kind {
+            let layout = self.target_layout;
+            let precision = |kind| match layout.float_format(kind) {
                 FloatKind::F16 => 11,
                 FloatKind::F32 => 24,
                 FloatKind::F64 => 53,
@@ -153,7 +154,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     || (128 - magnitude.leading_zeros() - magnitude.trailing_zeros()
                         <= precision(target)
                         && (target != FloatKind::F16 || magnitude < 65536))
-            } else if matches!(source, OperandTypeClass::Real(FloatKind::F128)) {
+            } else if matches!(source, OperandTypeClass::Real(kind)
+                if layout.float_format(kind) == FloatKind::F128)
+            {
                 false
             } else {
                 evocc_chir::constant::floating_constant_value(

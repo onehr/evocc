@@ -6,8 +6,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::allocation::{
-    AllocClass, AllocInst, AllocTerm, Allocated, AllocationTarget, ConstraintBody,
-    ConstraintOperand, ConstraintValue,
+    assembly_clobbers, AllocClass, AllocInst, AllocTerm, Allocated, AllocationTarget,
+    ConstraintBody, ConstraintOperand, ConstraintValue,
 };
 use super::machine::{MachInst, MachineBlock};
 use super::register::VirtualReg;
@@ -220,6 +220,25 @@ where
             return Err(refuse(
                 0,
                 format!("%v{} has an incompatible register bank", reg.id),
+            ));
+        }
+    }
+
+    // The frame saves exactly the callee-saved registers that the allocation
+    // names. Every callee-saved register that the function writes, through an
+    // assigned value or an assembly clobber, must be among them.
+    let written = allocated
+        .assignment
+        .values()
+        .copied()
+        .chain(assembly_clobbers(&allocated.blocks));
+    for number in written {
+        if target.abi().callee_saved.contains(&number)
+            && !allocated.used_callee_saved.contains(&number)
+        {
+            return Err(refuse(
+                0,
+                format!("callee-saved register {number} is written and is not saved"),
             ));
         }
     }
@@ -463,6 +482,13 @@ fn apply<I, C, A>(
     if inst.is_call() {
         for number in target.abi().call_clobbers {
             state.remove(number);
+        }
+    }
+    // An assembly body writes every register of its clobber list, wherever
+    // it stands in its block.
+    if let Some(body) = inst.assembly() {
+        for number in body.clobbered_registers() {
+            state.remove(&number);
         }
     }
     for reg in inst.defs() {

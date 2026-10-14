@@ -1062,3 +1062,127 @@ fn proof_options_are_admitted_only_with_the_baseline_path() {
     let output = run_proof(&directory, &checker, &["--core-entry=abs"], &source, &[]);
     assert_refused(&output, &directory, INPUT, "cannot create");
 }
+
+fn guarded_division() -> PathBuf {
+    repository().join("tests/fixtures/d06-guarded-division/evocc-demo-core-integer.c")
+}
+
+/// The arguments of the original D06 command, after the arguments that
+/// `proof_arguments` adds.
+const GUARDED_DIVISION: [&str; 4] = [
+    "--target=aarch64-unknown-linux-gnu",
+    "--color=never",
+    "--core-entry=divide",
+    "--core-entry=main",
+];
+
+/// D06: the signed overflow guard of `12 / divisor` is the 32-bit OR of two
+/// `cset` results, and the allocated entry copies the dead parameter
+/// `unused`. Both entries are checked to the final assembly text.
+#[test]
+fn guarded_division_is_checked_to_final_assembly_text() {
+    let (directory, record) = accept(&guarded_division(), &GUARDED_DIVISION);
+    assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 10);
+    for entry in ["divide", "main"] {
+        for (stage, report) in [
+            (
+                "lowering",
+                format!("STAGE_ACCEPTED stage=lowering entry={entry} scope=evoir-to-post-ssa-mir"),
+            ),
+            (
+                "allocation",
+                format!("STAGE_ACCEPTED stage=allocation entry={entry} functions=2"),
+            ),
+            (
+                "frame-emission",
+                format!("STAGE_ACCEPTED stage=frame-emission entry={entry} functions=2"),
+            ),
+            (
+                "pipeline",
+                format!("PIPELINE_ACCEPTED entry={entry} rewrites=0 functions=2"),
+            ),
+        ] {
+            let checked =
+                std::fs::read_to_string(directory.join(format!("checks/{stage}-{entry}.out")))
+                    .unwrap();
+            assert!(checked.starts_with(&report), "{stage} {entry}: {checked}");
+        }
+    }
+}
+
+/// D06 controls. Each change of one proof input is refused, and the driver
+/// publishes nothing. The lowering changes trap for a divisor that reaches
+/// the division, where the source returns `12 / divisor`. The allocation
+/// changes read a register that holds no argument, read the dead parameter
+/// as the divisor, or state a false entry hint.
+#[test]
+fn changed_guarded_division_inputs_are_rejected() {
+    let lowering = "stage lowering for entry `divide`";
+    let allocation = "stage allocation for entry `divide`";
+    for (roles, sed, file, changed, stage) in [
+        (
+            "ssa postssa",
+            r#"s/\["tb",false,/["tb",true,/"#,
+            "post-ssa-evomir.json",
+            r#"["tb",true,"#,
+            lowering,
+        ),
+        (
+            "ssa postssa",
+            r#"s/\["b_cond",\[13,"flags"\],"eq"/["b_cond",[13,"flags"],"ne"/"#,
+            "post-ssa-evomir.json",
+            r#"["b_cond",[13,"flags"],"ne""#,
+            lowering,
+        ),
+        (
+            "ssa postssa",
+            r#"s/"binary","orr"/"binary","and"/;s/\[20,"gpr32"\],4294967295\]/[20,"gpr32"],1]/"#,
+            "post-ssa-evomir.json",
+            r#""binary","and""#,
+            lowering,
+        ),
+        (
+            "ssa postssa",
+            r#"s/\[17,"gpr32"\],2147483648\]/[17,"gpr32"],12]/;s/\[20,"gpr32"\],4294967295\]/[20,"gpr32"],1]/"#,
+            "post-ssa-evomir.json",
+            r#"[17,"gpr32"],12]"#,
+            lowering,
+        ),
+        (
+            "allocation",
+            r#"s/\["mov",\["gpr",0,"w"\],\["gpr",1,"w"\]\]/["mov",["gpr",0,"w"],["gpr",3,"w"]]/"#,
+            "allocation.json",
+            r#"["mov",["gpr",0,"w"],["gpr",3,"w"]]"#,
+            allocation,
+        ),
+        (
+            "allocation",
+            r#"s/\["cmp_imm",\["flags"\],\["gpr",2,"w"\],0,"w"\]/["cmp_imm",["flags"],["gpr",0,"w"],0,"w"]/"#,
+            "allocation.json",
+            r#"["cmp_imm",["flags"],["gpr",0,"w"],0,"w"]"#,
+            allocation,
+        ),
+        (
+            "allocation",
+            r#"s/\[0,\[\[\["gpr",0\],\[0,"gpr32"\]\]\]\]/[0,[[["gpr",1],[0,"gpr32"]]]]/"#,
+            "allocation.json",
+            r#"[0,[[["gpr",1],[0,"gpr32"]]]]"#,
+            allocation,
+        ),
+    ] {
+        let directory = new_directory();
+        let output = run_changed(
+            &directory,
+            &GUARDED_DIVISION,
+            &guarded_division(),
+            roles,
+            sed,
+        );
+        assert_refused(&output, &directory, REJECTED, stage);
+        let input = std::fs::read_to_string(directory.join("inputs").join(file)).unwrap();
+        assert!(
+            input.contains(changed),
+            "the test checker must apply `{sed}`"
+        );
+    }
+}

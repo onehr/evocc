@@ -2,8 +2,8 @@
 //! Sealed references: 20260909-wide-predicates, GCC-14/Clang-19 O0/O2.
 
 use evocc_evoir::{interpret_module, parse_section9_module, InterpreterLimits, RuntimeValue};
-use evocc_mir::lane::observe_entry;
-use evocc_mir::{lower_module, validate_module, MirLimits};
+use evocc_mir::lane::observe_entry_for;
+use evocc_mir::{lower_module_for, validate_module, MirLimits, Target};
 use evocc_types::{EvoIRType, Region};
 
 fn function(name: &str, predicate: &str, widths: &[u16]) -> String {
@@ -31,7 +31,7 @@ fn function(name: &str, predicate: &str, widths: &[u16]) -> String {
 
 struct Predicate {
     source: evocc_evoir::Module,
-    lowered: evocc_mir::MModule,
+    lowered: Vec<(Target, evocc_mir::MModule)>,
     widths: Vec<u16>,
 }
 
@@ -40,11 +40,21 @@ impl Predicate {
         let text = function("probe", predicate, widths);
         let source = parse_section9_module(text.as_bytes()).expect("valid predicate syntax");
         evocc_evoir::validate_module(&source).expect("valid predicate module");
-        let lowered = lower_module(&source).expect("full-width predicates must lower");
-        validate_module(&lowered).expect("the independent machine validator must accept");
-        let rendered = evocc_mir::render_module(&lowered);
-        let parsed = evocc_mir::parse_module(&rendered).expect("machine text must round-trip");
-        assert_eq!(evocc_mir::render_module(&parsed), rendered);
+        // Darwin starts a `bits<128>` argument at the next register and Linux
+        // at an even one (EvoMIR Section 6.5), so both placements are run.
+        let lowered = [Target::Darwin, Target::Linux]
+            .into_iter()
+            .map(|target| {
+                let lowered = lower_module_for(target, &source, &|_| false)
+                    .expect("full-width predicates must lower");
+                validate_module(&lowered).expect("the independent machine validator must accept");
+                let rendered = evocc_mir::render_module(&lowered);
+                let parsed =
+                    evocc_mir::parse_module(&rendered).expect("machine text must round-trip");
+                assert_eq!(evocc_mir::render_module(&parsed), rendered);
+                (target, lowered)
+            })
+            .collect();
         Self {
             source,
             lowered,
@@ -73,19 +83,22 @@ impl Predicate {
             u64::from(expected),
             "EvoIR {values:x?}"
         );
-        let machine = observe_entry(
-            &self.lowered,
-            "probe",
-            &arguments,
-            &[EvoIRType::Bits(32)],
-            MirLimits::new(1000),
-        )
-        .expect("machine predicate executes");
-        assert_eq!(
-            machine.returns[0].raw_bits,
-            u64::from(expected),
-            "EvoMIR {values:x?}"
-        );
+        for (target, lowered) in &self.lowered {
+            let machine = observe_entry_for(
+                *target,
+                lowered,
+                "probe",
+                &arguments,
+                &[EvoIRType::Bits(32)],
+                MirLimits::new(1000),
+            )
+            .expect("machine predicate executes");
+            assert_eq!(
+                machine.returns[0].raw_bits,
+                u64::from(expected),
+                "EvoMIR {target:?} {values:x?}"
+            );
+        }
     }
 }
 
@@ -214,7 +227,7 @@ fn older_signed_shift_predicates_remain_total_at_full_width() {
 #[cfg(all(target_arch = "aarch64", any(target_os = "macos", target_os = "linux")))]
 #[test]
 fn native_predicates_agree_with_independent_magnitude_bounds() {
-    use evocc_mir::{compile_module_for, Target};
+    use evocc_mir::compile_module_for;
     use std::process::Command;
 
     let mut text = String::new();

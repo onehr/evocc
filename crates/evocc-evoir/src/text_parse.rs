@@ -42,7 +42,39 @@ struct Header {
 /// This makes accepted bytes a producer-reachable spelling rather than a
 /// permissive source language with aliases for the same module.
 pub fn parse_section9_module(bytes: &[u8]) -> Result<Module, String> {
+    if let Some(target) = crate::text::named_target(bytes) {
+        return Err(format!(
+            "the EvoIR text names target `{target}`; this reader reads the text of the implicit target `{}` only (Section 9.1)",
+            crate::text::IMPLICIT_TARGET
+        ));
+    }
     parse_module_profile(bytes, false)
+}
+
+/// Parse the text of one named target. The text of the implicit target has
+/// no target line; the text of every other target starts with one, which must
+/// name `target` (Section 9.1).
+pub fn parse_target_module(bytes: &[u8], target: &str) -> Result<Module, String> {
+    if target == crate::text::IMPLICIT_TARGET {
+        return parse_section9_module(bytes);
+    }
+    let line = format!("target {target}\n");
+    let Some(rest) = bytes.strip_prefix(line.as_bytes()) else {
+        return Err(format!(
+            "the EvoIR text does not start with `target {target}`"
+        ));
+    };
+    let body = if rest.is_empty() {
+        rest
+    } else {
+        rest.strip_prefix(b"\n")
+            .filter(|body| !body.is_empty())
+            .ok_or("a blank line separates the target line from the module")?
+    };
+    if crate::text::named_target(body).is_some() {
+        return Err("the EvoIR text names its target twice".to_owned());
+    }
+    parse_module_profile(body, false)
 }
 
 /// Explicit reader for archived pre-1.9.106 text. Never used as a fallback by
@@ -2406,9 +2438,13 @@ impl<'a> Cursor<'a> {
         Ok((types, canonical_marks(marks, count), marker.is_some()))
     }
 
-    /// Section 9: the optional `byval(size, align)` or `sret(size, align)`
-    /// that follows a parameter's type (revision 1.9.73).
+    /// Section 9: the optional `byval(size, align)`, `sret(size, align)` or
+    /// `sext` that follows a parameter's type (revision 1.9.73).
     fn record_mark(&mut self) -> Result<ParamMark, String> {
+        if self.at(" sext") {
+            self.expect(" sext")?;
+            return Ok(ParamMark::SignExtend);
+        }
         for (keyword, wrap) in [
             (" byval(", ParamMark::ByVal as fn(RecordShape) -> ParamMark),
             (" sret(", ParamMark::Sret as fn(RecordShape) -> ParamMark),

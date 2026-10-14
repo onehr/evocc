@@ -111,11 +111,12 @@ pub fn lower_module_with(
 
 /// The same, for a named target.
 ///
-/// Section 6 (revision 0.10): on Linux "an argument that finds no register
-/// goes to the stack in an 8-byte slot", while "on Darwin the platform packs
-/// stack arguments by natural alignment instead; that rule is still
-/// unmeasured, so more than eight integer arguments stay `E4010` there". The
-/// target is the only thing the two lowerings differ by.
+/// Section 6.1: on Linux an argument that finds no register goes to the stack
+/// in an 8-byte slot. On Darwin, only the Apple convention
+/// (`lower_module_with_anonymous_on_stack`) packs named stack arguments by
+/// natural size and alignment; this entry refuses them with `E4010`. The
+/// target also decides whether a 16-byte-aligned argument starts at an even
+/// register (Section 6.5).
 pub fn lower_module_for(
     target: Target,
     module: &Module,
@@ -525,10 +526,18 @@ fn scan_function(
             "binary128 ABI is qualified only for Linux".into(),
         );
     }
-    let plan = record_plan(target, &marked, true, None);
+    let plan = record_plan(target, &marked, true, None, anonymous_on_stack);
+    if let Some(detail) = &plan.refused {
+        report(
+            E4010,
+            entry_block,
+            0,
+            format!("@{}: {detail}", function.name),
+        );
+    }
     // Section 10's `E4010` is "more than eight integer arguments on Darwin
     // (Linux lowers stack arguments, revision 0.10)": the ABI table's
-    // `stack-arguments` fact.
+    // `stack-arguments` fact. The Apple convention places them instead.
     if plan.positions > target.abi().general_arguments() && !target.abi().facts.stack_arguments {
         report(
             E4010,
@@ -863,13 +872,22 @@ fn scan_inst(
             } else {
                 None
             };
-            let positions = record_plan(
+            let plan = record_plan(
                 target,
                 &marked_types(&arg_types(args), &marks),
                 true,
                 anonymous,
-            )
-            .positions;
+                anonymous_on_stack,
+            );
+            if let Some(detail) = &plan.refused {
+                report(
+                    E4010,
+                    block,
+                    index,
+                    format!("a call to @{callee}: {detail}"),
+                );
+            }
+            let positions = plan.positions;
             if positions > target.abi().general_arguments() && !target.abi().facts.stack_arguments {
                 report(
                     E4010,
@@ -921,13 +939,17 @@ fn scan_inst(
                 } if anonymous_on_stack => anonymous_start(*variadic, params),
                 _ => None,
             };
-            let positions = record_plan(
+            let plan = record_plan(
                 target,
                 &marked_types(&arg_types(args), &marks),
                 true,
                 anonymous,
-            )
-            .positions;
+                anonymous_on_stack,
+            );
+            if let Some(detail) = &plan.refused {
+                report(E4010, block, index, format!("an indirect call: {detail}"));
+            }
+            let positions = plan.positions;
             if positions > target.abi().general_arguments() && !target.abi().facts.stack_arguments {
                 report(
                     E4010,
@@ -1738,7 +1760,7 @@ fn lower_function(
         traps: Vec::new(),
         named_arguments: function
             .variadic
-            .then(|| named_argument_extent(target, function)),
+            .then(|| named_argument_extent(target, function, anonymous_on_stack)),
         anonymous_on_stack,
         constants: HashMap::new(),
         null_pointers: HashSet::new(),
@@ -1879,18 +1901,52 @@ fn lower_block(
     });
     let plan = marked
         .as_ref()
-        .map(|marked| record_plan(target, marked, true, None));
+        .map(|marked| record_plan(target, marked, true, None, lowerer.anonymous_on_stack));
     let mut args = Vec::new();
     let mut prologue: Vec<MInst> = Vec::new();
     let mut indirect_result = false;
     let mut ordinary = 0_usize;
+    // The address of the incoming stack area, once a named argument needs it.
+    let mut incoming: Option<VReg> = None;
     for (index, arg) in block.args.iter().enumerate() {
         if !is_register_type(&arg.value.ty) {
             continue;
         }
         let placement = plan.as_ref().map(|plan| plan.items[ordinary].clone());
         ordinary += 1;
-        if let Some(Placed { fillers, passing }) = placement {
+        if let Some(Placed {
+            fillers,
+            passing,
+            apple_stack,
+        }) = placement
+        {
+            // The Apple convention: a named argument that found no register
+            // is read from the named stack area at its offset (Section 6.6).
+            if let Some(offset) = apple_stack {
+                let base = match incoming {
+                    Some(base) => base,
+                    None => {
+                        let base = lowerer.fresh(RegClass::Gpr64);
+                        prologue.push(MInst::FrameAddress {
+                            dst: base,
+                            place: FramePlace::IncomingStack,
+                        });
+                        incoming = Some(base);
+                        base
+                    }
+                };
+                let mark = param_mark(&function.param_marks, index);
+                read_apple_stack_argument(
+                    lowerer,
+                    &mut prologue,
+                    &arg.value,
+                    &mark,
+                    &passing,
+                    base,
+                    offset,
+                )?;
+                continue;
+            }
             for _ in 0..fillers {
                 args.push(lowerer.fresh(RegClass::Gpr64));
             }
@@ -3573,49 +3629,11 @@ fn lower_inst(
                 &marked_types(&arg_types(args), &marks),
                 true,
                 anonymous,
+                lowerer.anonymous_on_stack,
             );
-            let (mut arguments, returned) = call_arguments(lowerer, insts, args, &marks, &plan)?;
-            if external(callee) {
-                // Section 6, revision 0.5: across the host boundary "a caller
-                // extends an argument narrower than 32 bits to 32 bits". The
-                // value of a `bits<N>` is its low `N` bits, so the extension
-                // that preserves it is the zero one; sign-extending would need
-                // the source type's signedness, which lives above the
-                // extraction boundary and which EvoIR does not carry. Recorded
-                // gap: a signed host parameter narrower than 32 bits is not
-                // reachable from EvoIR alone.
-                let mut slot = 0;
-                let ordinary = args.iter().filter(|value| is_register_type(&value.ty));
-                for (position, (value, placed)) in ordinary.zip(&plan.items).enumerate() {
-                    if let Some(start) = plan.anonymous.filter(|start| start.item == position) {
-                        slot += start.general + start.vector;
-                    }
-                    slot += placed.fillers;
-                    match placed.passing {
-                        Passing::Chunks(ref chunks) => slot += chunks.len(),
-                        Passing::Vectors {
-                            shape,
-                            skipped,
-                            stack,
-                        } => slot += simd_argument_pieces(shape, stack).len() + skipped,
-                        Passing::Pointer => slot += 1,
-                        Passing::Destination(_) => {}
-                        Passing::Value => {
-                            if is_pair(&value.ty) {
-                                slot += 2;
-                                continue;
-                            }
-                            if let EvoIRType::Bits(bits) = value.ty {
-                                if bits < 32 {
-                                    arguments[slot] =
-                                        lowerer.zero_extend(insts, arguments[slot], bits, Width::W);
-                                }
-                            }
-                            slot += 1;
-                        }
-                    }
-                }
-            }
+            // Section 6.2: a cross-boundary call extends its narrow arguments.
+            let (arguments, returned) =
+                call_arguments(lowerer, insts, args, &marks, &plan, external(callee))?;
             let mut outputs = call_results(lowerer, results)?;
             let after = call_record_result(lowerer, &mut outputs, returned);
             if plan.indirect_result {
@@ -3655,9 +3673,19 @@ fn lower_inst(
                 &marked_types(&arg_types(args), &marks),
                 true,
                 anonymous,
+                lowerer.anonymous_on_stack,
             );
             let pointer = lowerer.reg(callee)?;
-            let (arguments, returned) = call_arguments(lowerer, insts, args, &marks, &plan)?;
+            // Under the Apple convention an indirect call can reach code that
+            // another compiler built, so it extends its narrow arguments too.
+            let (arguments, returned) = call_arguments(
+                lowerer,
+                insts,
+                args,
+                &marks,
+                &plan,
+                lowerer.anonymous_on_stack,
+            )?;
             let mut outputs = call_results(lowerer, results)?;
             let after = call_record_result(lowerer, &mut outputs, returned);
             if plan.indirect_result {
@@ -4793,8 +4821,18 @@ fn assembly_vocabulary(assembly: &InlineAssembly) -> Result<(), String> {
         }
     }
     for clobber in &assembly.clobbers {
-        if AsmClobber::parse(clobber).is_none() {
-            return Err(format!("an assembly clobber '{clobber}'"));
+        match AsmClobber::parse(clobber) {
+            None => return Err(format!("an assembly clobber '{clobber}'")),
+            // Section 6.7: the frame record and every frame address use the
+            // frame register after the prologue, so no `asm` may write it.
+            Some(AsmClobber::Register(number))
+                if number == crate::isa::aarch64::regfile::FRAME_POINTER =>
+            {
+                return Err(format!(
+                    "an assembly clobber '{clobber}' of the frame register"
+                ));
+            }
+            Some(_) => {}
         }
     }
     Ok(())
@@ -4938,7 +4976,7 @@ fn lower_assembly(
 
 /// The same placement determines both saved registers and the first
 /// anonymous stack slot, including pair/record alignment padding.
-fn named_argument_extent(target: Target, function: &Function) -> (u8, u8, u64) {
+fn named_argument_extent(target: Target, function: &Function, apple: bool) -> (u8, u8, u64) {
     // Revision 0.18: a record spends the registers its chunks take, so the
     // count is the convention's, which is what the plan already answers.
     let declared: Vec<EvoIRType> = function
@@ -4951,7 +4989,41 @@ fn named_argument_extent(target: Target, function: &Function) -> (u8, u8, u64) {
         &marked_types(&declared, &function.param_marks),
         true,
         None,
+        apple,
     );
+    // The Apple convention: the anonymous arguments start after the named
+    // stack area, rounded up to eight (Section 6.12).
+    if apple {
+        let mut cursor = target.abi().argument_cursor();
+        for (placed, (ty, _)) in plan
+            .items
+            .iter()
+            .zip(marked_types(&declared, &function.param_marks).iter())
+        {
+            if placed.apple_stack.is_some() {
+                continue;
+            }
+            let classes: Vec<RegClass> = match &placed.passing {
+                Passing::Value if is_pair(ty) => vec![RegClass::Gpr64; 2],
+                Passing::Value => vec![class_of(ty).expect("validated argument class")],
+                Passing::Pointer => vec![RegClass::Gpr64],
+                Passing::Chunks(chunks) => vec![RegClass::Gpr64; chunks.len()],
+                Passing::Vectors { shape, .. } => simd_argument_pieces(*shape, false)
+                    .into_iter()
+                    .map(|(_, bytes)| simd_class(bytes))
+                    .collect(),
+                Passing::Destination(_) => Vec::new(),
+            };
+            for class in classes {
+                let _ = place(&mut cursor, class);
+            }
+        }
+        return (
+            cursor.used(general_bank()),
+            cursor.used(vector_bank()),
+            plan.apple_stack_bytes.next_multiple_of(8),
+        );
+    }
     let marked = marked_types(&declared, &function.param_marks);
     let abi = target.abi();
     let mut cursor = abi.argument_cursor();
@@ -5966,6 +6038,23 @@ struct Placed {
     /// than splitting it across the last register and the stack.
     fillers: usize,
     passing: Passing,
+    /// The Apple convention: the byte offset of a named argument that finds
+    /// no register, in the named stack area that the caller packs by natural
+    /// size and alignment (Section 6.6).
+    apple_stack: Option<u64>,
+}
+
+/// The largest named stack area that the Apple convention places, in bytes.
+/// A larger one is refused (`E4010`); below it, every offset and slot fits.
+const APPLE_STACK_AREA_LIMIT: u64 = 1 << 20;
+
+/// One piece of a named stack argument under the Apple convention: its byte
+/// offset inside the argument, its size and the class that holds it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ApplePiece {
+    offset: u64,
+    size: u64,
+    class: RegClass,
 }
 
 /// Section 6 applied to one argument list.
@@ -5981,6 +6070,15 @@ struct RecordPlan {
     /// The Apple variadic convention: the first anonymous argument and the
     /// registers that stay unused before it.
     anonymous: Option<AnonymousStart>,
+    /// The Apple convention: the bytes of the named stack area, before the
+    /// final rounding to eight.
+    apple_stack_bytes: u64,
+    /// The Apple convention: the free general and vector registers that zero
+    /// fillers take before the named stack words, so that each word finds a
+    /// stack slot.
+    apple_fill: (usize, usize),
+    /// A named argument that the Apple convention cannot place (`E4010`).
+    refused: Option<String>,
 }
 
 /// Where the anonymous arguments of a variadic call begin when they all go to
@@ -6003,8 +6101,71 @@ fn anonymous_start(variadic: bool, params: &[EvoIRType]) -> Option<usize> {
 fn uses_vector_bank(ty: &EvoIRType, mark: &ParamMark) -> bool {
     match mark {
         ParamMark::ByVal(shape) => shape.simd_members().is_some(),
-        ParamMark::None => simd_argument_bytes(ty).is_some(),
+        ParamMark::None | ParamMark::SignExtend => simd_argument_bytes(ty).is_some(),
         ParamMark::Sret(_) => false,
+    }
+}
+
+/// The pieces and the alignment of one named stack argument under the Apple
+/// convention (Section 6.6). A scalar takes its natural size and alignment.
+/// A record of at most sixteen bytes takes its eight-byte chunks, aligned to
+/// eight or, for a record aligned to sixteen, to sixteen. An HFA or HVA takes
+/// its members contiguously, aligned to the record's alignment up to sixteen.
+/// A larger record is the pointer to the caller's copy.
+fn apple_pieces(
+    ty: &EvoIRType,
+    mark: &ParamMark,
+    passing: &Passing,
+) -> Option<(Vec<ApplePiece>, u64)> {
+    let piece = |offset, size, class| ApplePiece {
+        offset,
+        size,
+        class,
+    };
+    match passing {
+        Passing::Value if is_pair(ty) => Some((
+            vec![piece(0, 8, RegClass::Gpr64), piece(8, 8, RegClass::Gpr64)],
+            16,
+        )),
+        Passing::Value => {
+            if let Some(bytes) = simd_argument_bytes(ty) {
+                if bytes == 16 && !matches!(ty, EvoIRType::Vec { .. }) {
+                    // binary128 has no Darwin placement.
+                    return None;
+                }
+                return Some((vec![piece(0, bytes, simd_class(bytes))], bytes));
+            }
+            let class = class_of(ty).ok()?;
+            let bytes = match ty {
+                EvoIRType::Bits(width) if *width <= 64 => {
+                    u64::from(width.div_ceil(8)).next_power_of_two()
+                }
+                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => 8,
+                _ => return None,
+            };
+            Some((vec![piece(0, bytes, class)], bytes))
+        }
+        Passing::Chunks(chunks) => Some((
+            (0..chunks.len() as u64)
+                .map(|chunk| piece(chunk * 8, 8, RegClass::Gpr64))
+                .collect(),
+            if mark.shape().is_some_and(|shape| shape.align >= 16) {
+                16
+            } else {
+                8
+            },
+        )),
+        Passing::Pointer => Some((vec![piece(0, 8, RegClass::Gpr64)], 8)),
+        Passing::Vectors { shape, .. } => {
+            let (count, size) = shape.simd_members()?;
+            Some((
+                (0..u64::from(count))
+                    .map(|member| piece(member * size, size, simd_class(size)))
+                    .collect(),
+                u64::from(shape.align).clamp(size.min(16), 16),
+            ))
+        }
+        Passing::Destination(_) => None,
     }
 }
 
@@ -6012,12 +6173,19 @@ fn uses_vector_bank(ty: &EvoIRType, mark: &ParamMark) -> bool {
 ///
 /// `pair_rounding` is the `bits<128>` rule as the two call sites already apply
 /// it: the entry block rounds only there, because "inside the function the rule
-/// has no meaning", and a call site always does.
+/// has no meaning", and a call site always does. The ABI table's
+/// `aligned-record-pair-rounding` fact decides it for a `bits<128>` as for a
+/// record aligned to sixteen: the Darwin platform rounds neither (Section 6.5).
+///
+/// `apple` selects the Apple convention (`CodegenOptions::anonymous_on_stack`):
+/// a named argument that finds no register goes to the named stack area at
+/// its natural size and alignment (Section 6.6).
 fn record_plan(
     target: Target,
     arguments: &[(EvoIRType, ParamMark)],
     pair_rounding: bool,
     anonymous_from: Option<usize>,
+    apple: bool,
 ) -> RecordPlan {
     let abi = target.abi();
     let general = abi.general_arguments();
@@ -6029,11 +6197,157 @@ fn record_plan(
     let mut indirect_result = false;
     let mut anonymous = None;
     let mut named_positions = None;
+    // The Apple convention: the named stack area and its words.
+    let mut apple_stack_bytes = 0_u64;
+    let mut apple_fill = (0, 0);
+    let mut apple_flushed = false;
+    let mut refused = None;
+    let flush = |cursor: &mut crate::generic::abi::ArgumentCursor<'_>,
+                 words: &[RegClass],
+                 fill: &mut (usize, usize),
+                 flushed: &mut bool| {
+        if *flushed {
+            return;
+        }
+        *flushed = true;
+        if words.is_empty() {
+            return;
+        }
+        fill.0 = general.saturating_sub(usize::from(cursor.used(general_bank())));
+        fill.1 = vectors.saturating_sub(usize::from(cursor.used(vector_bank())));
+        for _ in 0..fill.0 {
+            let _ = place(cursor, RegClass::Gpr64);
+        }
+        for _ in 0..fill.1 {
+            let _ = place(cursor, RegClass::Simd64);
+        }
+        for class in words {
+            let _ = place(cursor, *class);
+        }
+    };
     for (position, (ty, mark)) in arguments.iter().enumerate() {
+        let named = anonymous_from.is_none_or(|start| position < start);
+        // The Apple convention: decide each named argument's bank or the
+        // named stack area, as AAPCS64 decides it, and keep the register
+        // pieces in order. A bank that a named argument does not fit stays
+        // exhausted for the later named arguments.
+        if apple && named {
+            let passing = match mark {
+                ParamMark::Sret(shape) => {
+                    if shape.size > abi.record_register_bytes && shape.simd_members().is_none() {
+                        indirect_result = true;
+                    }
+                    items.push(Placed {
+                        fillers: 0,
+                        passing: Passing::Destination(*shape),
+                        apple_stack: None,
+                    });
+                    continue;
+                }
+                ParamMark::ByVal(shape) if shape.simd_members().is_some() => {
+                    let count = usize::from(shape.simd_members().unwrap().0);
+                    let stack = next_vector + count > vectors;
+                    Passing::Vectors {
+                        shape: *shape,
+                        skipped: 0,
+                        stack,
+                    }
+                }
+                ParamMark::ByVal(shape) if shape.size <= abi.record_register_bytes => {
+                    Passing::Chunks(record_chunks(shape.size))
+                }
+                ParamMark::ByVal(_) => Passing::Pointer,
+                ParamMark::None | ParamMark::SignExtend => Passing::Value,
+            };
+            let vector = matches!(passing, Passing::Vectors { .. })
+                || (matches!(passing, Passing::Value) && simd_argument_bytes(ty).is_some());
+            let (count, classes): (usize, Vec<RegClass>) = match &passing {
+                Passing::Value if is_pair(ty) => (2, vec![RegClass::Gpr64; 2]),
+                Passing::Value => (1, vec![class_of(ty).unwrap_or(RegClass::Gpr64)]),
+                Passing::Chunks(chunks) => (chunks.len(), vec![RegClass::Gpr64; chunks.len()]),
+                Passing::Pointer => (1, vec![RegClass::Gpr64]),
+                Passing::Vectors { shape, .. } => {
+                    let (members, size) = shape.simd_members().unwrap();
+                    (
+                        usize::from(members),
+                        vec![simd_class(size); usize::from(members)],
+                    )
+                }
+                Passing::Destination(_) => unreachable!("handled above"),
+            };
+            let fits = if vector {
+                next_vector + count <= vectors
+            } else {
+                next + count <= general
+            };
+            if fits {
+                if vector {
+                    next_vector += count;
+                } else {
+                    next += count;
+                }
+                for class in classes {
+                    let _ = place(&mut cursor, class);
+                }
+                items.push(Placed {
+                    fillers: 0,
+                    passing,
+                    apple_stack: None,
+                });
+                continue;
+            }
+            // AAPCS64: an argument that does not fit takes no register, and
+            // its bank stays exhausted for the later named arguments.
+            if vector {
+                next_vector = vectors;
+            } else {
+                next = general;
+            }
+            let Some((pieces, align)) = apple_pieces(ty, mark, &passing) else {
+                refused.get_or_insert_with(|| {
+                    format!("argument {position} of type {ty:?} has no Apple stack placement")
+                });
+                items.push(Placed {
+                    fillers: 0,
+                    passing,
+                    apple_stack: None,
+                });
+                continue;
+            };
+            let size = pieces.iter().map(|piece| piece.size).sum::<u64>();
+            // The area stays far below the range of a slot number, so that
+            // every later offset, word and slot of it fits.
+            let Some((offset, end)) = apple_stack_bytes
+                .checked_next_multiple_of(align)
+                .and_then(|offset| Some((offset, offset.checked_add(size)?)))
+                .filter(|(_, end)| *end <= APPLE_STACK_AREA_LIMIT)
+            else {
+                refused.get_or_insert_with(|| {
+                    format!("argument {position} ends beyond the named stack area")
+                });
+                items.push(Placed {
+                    fillers: 0,
+                    passing,
+                    apple_stack: None,
+                });
+                continue;
+            };
+            apple_stack_bytes = end;
+            items.push(Placed {
+                fillers: 0,
+                passing,
+                apple_stack: Some(offset),
+            });
+            continue;
+        }
         // The Apple variadic convention: the named arguments keep their
         // registers, and the anonymous ones start on the stack. A bank that
         // no anonymous argument uses keeps its free registers.
         if anonymous_from == Some(position) {
+            if apple {
+                let words = apple_word_classes(&items, arguments, apple_stack_bytes);
+                flush(&mut cursor, &words, &mut apple_fill, &mut apple_flushed);
+            }
             let rest = &arguments[position..];
             let fill_general = rest
                 .iter()
@@ -6076,6 +6390,7 @@ fn record_plan(
                 items.push(Placed {
                     fillers: 0,
                     passing: Passing::Destination(*shape),
+                    apple_stack: None,
                 });
             }
             ParamMark::ByVal(shape) if shape.simd_members().is_some() => {
@@ -6104,6 +6419,7 @@ fn record_plan(
                         skipped,
                         stack,
                     },
+                    apple_stack: None,
                 });
             }
             ParamMark::ByVal(shape) if shape.size <= abi.record_register_bytes => {
@@ -6139,25 +6455,34 @@ fn record_plan(
                 items.push(Placed {
                     fillers,
                     passing: Passing::Chunks(chunks),
+                    apple_stack: None,
                 });
             }
             ParamMark::ByVal(_) => {
                 items.push(Placed {
                     fillers: 0,
                     passing: Passing::Pointer,
+                    apple_stack: None,
                 });
                 next += 1;
             }
-            ParamMark::None => {
+            ParamMark::None | ParamMark::SignExtend => {
                 if simd_argument_bytes(ty).is_some() {
                     next_vector += 1;
                     items.push(Placed {
                         fillers: 0,
                         passing: Passing::Value,
+                        apple_stack: None,
                     });
                 } else {
                     let count = usize::from(is_pair(ty)) + 1;
-                    let fillers = if count == 2 && pair_rounding {
+                    // Section 6.5: a `bits<128>` starts at an even register
+                    // where the ABI table rounds a 16-byte-aligned argument;
+                    // an anonymous one starts at a 16-byte-aligned slot.
+                    let fillers = if count == 2
+                        && pair_rounding
+                        && (abi.aligned_record_pair_rounding || anonymous.is_some())
+                    {
                         cursor.pair_padding(general_bank())
                     } else {
                         0
@@ -6166,6 +6491,7 @@ fn record_plan(
                     items.push(Placed {
                         fillers,
                         passing: Passing::Value,
+                        apple_stack: None,
                     });
                 }
             }
@@ -6198,12 +6524,93 @@ fn record_plan(
             let _ = place(&mut cursor, class);
         }
     }
+    if apple && !apple_flushed {
+        let words = apple_word_classes(&items, arguments, apple_stack_bytes);
+        flush(&mut cursor, &words, &mut apple_fill, &mut apple_flushed);
+    }
     RecordPlan {
         items,
         positions: named_positions.unwrap_or(next),
         indirect_result,
         anonymous,
+        apple_stack_bytes,
+        apple_fill,
+        refused,
     }
+}
+
+/// The classes of the eight-byte words of the Apple named stack area, in
+/// address order. A word that holds one piece of eight bytes keeps that
+/// piece's class, and a sixteen-byte vector piece is one two-word element;
+/// every other word is composed in a general register.
+fn apple_word_classes(
+    items: &[Placed],
+    arguments: &[(EvoIRType, ParamMark)],
+    bytes: u64,
+) -> Vec<RegClass> {
+    apple_layout(items, arguments, bytes)
+        .into_iter()
+        .map(|word| match word {
+            AppleWord::Whole(_, piece) => piece.class,
+            AppleWord::Composed(_) => RegClass::Gpr64,
+        })
+        .collect()
+}
+
+/// One element of the Apple named stack area as the caller passes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum AppleWord {
+    /// One piece that fills the word, or the two words of a vector of
+    /// sixteen bytes: the argument index and the piece.
+    Whole(usize, ApplePiece),
+    /// The pieces that share one word, as (argument index, piece, byte
+    /// offset in the word). An empty list is padding.
+    Composed(Vec<(usize, ApplePiece, u64)>),
+}
+
+/// The named stack area, word by word.
+fn apple_layout(
+    items: &[Placed],
+    arguments: &[(EvoIRType, ParamMark)],
+    bytes: u64,
+) -> Vec<AppleWord> {
+    let mut placed: Vec<(u64, usize, ApplePiece)> = Vec::new();
+    for (index, (item, (ty, mark))) in items.iter().zip(arguments).enumerate() {
+        let Some(base) = item.apple_stack else {
+            continue;
+        };
+        let (pieces, _) =
+            apple_pieces(ty, mark, &item.passing).expect("a placed argument has pieces");
+        for piece in pieces {
+            placed.push((base + piece.offset, index, piece));
+        }
+    }
+    placed.sort_by_key(|(offset, _, _)| *offset);
+    let mut words = Vec::new();
+    let mut start = 0_u64;
+    let total = bytes.next_multiple_of(8);
+    while start < total {
+        let inside: Vec<_> = placed
+            .iter()
+            .filter(|(offset, _, _)| *offset >= start && *offset < start + 8)
+            .collect();
+        match inside.as_slice() {
+            [(offset, index, piece)] if *offset == start && piece.size >= 8 => {
+                words.push(AppleWord::Whole(*index, *piece));
+                start += piece.size;
+            }
+            _ => {
+                words.push(AppleWord::Composed(
+                    inside
+                        .iter()
+                        .map(|(offset, index, piece)| (*index, *piece, offset - start))
+                        .collect(),
+                ));
+                start += 8;
+            }
+        }
+    }
+    words
 }
 
 /// The ordinary arguments of a call or an entry block, paired with their marks.
@@ -6309,6 +6716,217 @@ fn arg_types(args: &[Value]) -> Vec<EvoIRType> {
 /// result of at most sixteen bytes is stored into when the call returns.
 type CallArguments = (Vec<VReg>, Option<(RecordShape, VReg)>);
 
+/// Read one named argument from the Apple named stack area at `offset` from
+/// `base`, the incoming stack address, with the access of its natural size
+/// (Section 6.6). A record is copied into a frame slot, as when it arrives
+/// in registers.
+fn read_apple_stack_argument(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    value: &Value,
+    mark: &ParamMark,
+    passing: &Passing,
+    base: VReg,
+    offset: u64,
+) -> Result<(), String> {
+    let (pieces, _) = apple_pieces(&value.ty, mark, passing)
+        .ok_or_else(|| format!("v{} has no Apple stack placement", value.id))?;
+    // An offset that does not fit is an error, never offset 0.
+    let beyond = || format!("v{} lies beyond the incoming stack area", value.id);
+    let at = |piece: &ApplePiece| -> Result<i64, String> {
+        offset
+            .checked_add(piece.offset)
+            .and_then(|offset| i64::try_from(offset).ok())
+            .ok_or_else(beyond)
+    };
+    let slot = |lowerer: &mut Lowerer, insts: &mut Vec<MInst>, shape: RecordShape| {
+        let slot = lowerer.fresh(RegClass::Gpr64);
+        insts.push(MInst::FrameSlot {
+            dst: slot,
+            origin: RECORD_ORIGIN_BASE + lowerer.record_origins,
+            size: shape.size,
+            align: shape.align,
+        });
+        lowerer.record_origins += 1;
+        slot
+    };
+    match passing {
+        Passing::Value if is_pair(&value.ty) => {
+            let (low, high) = lowerer.fresh_pair();
+            for (dst, piece) in [low, high].into_iter().zip(&pieces) {
+                insts.push(MInst::Load {
+                    align: 8,
+                    dst,
+                    base,
+                    offset: at(piece)?,
+                    kind: LoadKind::X,
+                    volatile: false,
+                });
+            }
+            lowerer.bind_pair(value, low, high);
+        }
+        Passing::Value | Passing::Pointer => {
+            let piece = pieces[0];
+            let dst = lowerer.fresh(piece.class);
+            insts.push(MInst::Load {
+                align: piece.size as u32,
+                dst,
+                base,
+                offset: at(&piece)?,
+                kind: if piece.class.is_simd() {
+                    simd_load(piece.size)
+                } else {
+                    piece_load(piece.size)
+                },
+                volatile: false,
+            });
+            lowerer.bind(value, dst);
+        }
+        Passing::Chunks(chunks) => {
+            let shape = mark
+                .shape()
+                .ok_or("a chunked argument is a marked record")?;
+            let destination = slot(lowerer, insts, shape);
+            let mut within = 0;
+            for ((chunk, size), piece) in chunks.iter().enumerate().zip(&pieces) {
+                // `load_chunk` reads up to eight bytes from its offset, so the
+                // whole chunk must lie inside the addressable range.
+                let at = at(piece)?;
+                at.checked_add(8).ok_or_else(beyond)?;
+                debug_assert_eq!(piece.offset, 8 * chunk as u64);
+                let word = load_chunk(lowerer, insts, base, at as u64, *size);
+                store_chunk(lowerer, insts, word, destination, within, *size);
+                within += size;
+            }
+            lowerer.bind(value, destination);
+        }
+        Passing::Vectors { shape, .. } => {
+            let destination = slot(lowerer, insts, *shape);
+            for piece in &pieces {
+                let member = lowerer.fresh(piece.class);
+                insts.push(MInst::Load {
+                    align: shape.align.min(piece.size as u32),
+                    dst: member,
+                    base,
+                    offset: at(piece)?,
+                    kind: simd_load(piece.size),
+                    volatile: false,
+                });
+                insts.push(MInst::Store {
+                    align: shape.align.min(piece.size as u32),
+                    src: member,
+                    base: destination,
+                    offset: i64::try_from(piece.offset).map_err(|_| beyond())?,
+                    kind: simd_store(piece.size),
+                    volatile: false,
+                });
+            }
+            lowerer.bind(value, destination);
+        }
+        Passing::Destination(_) => return Err("a record destination is never on the stack".into()),
+    }
+    Ok(())
+}
+
+/// The value of one Apple stack piece, zero-extended into a general
+/// register of 64 bits.
+fn apple_word_piece(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    reg: VReg,
+    piece: ApplePiece,
+) -> VReg {
+    let general = if reg.class.is_simd() {
+        // `fmov wN, sN`: the bits of a 32-bit floating piece.
+        let bits = lowerer.fresh(RegClass::Gpr32);
+        insts.push(MInst::Floating {
+            strict: false,
+            integer_bits: 0,
+            dst: bits,
+            op: evocc_evoir::FloatingOp::ToBits,
+            kind: evocc_types::FloatKind::F32,
+            args: vec![reg],
+        });
+        bits
+    } else {
+        reg
+    };
+    let extended = lowerer.zero_extend(insts, general, (piece.size * 8) as u16, Width::X);
+    if extended.class == RegClass::Gpr64 {
+        extended
+    } else {
+        let dst = lowerer.fresh(RegClass::Gpr64);
+        insts.push(MInst::Mov { dst, src: extended });
+        dst
+    }
+}
+
+/// The caller's side of the Apple named stack area: the zero fillers that
+/// exhaust both argument banks, then the area, one eight-byte word (or one
+/// sixteen-byte vector) per element, so that each element takes the next
+/// stack slot (Section 6.6).
+fn push_apple_stack_words(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    registers: &mut Vec<VReg>,
+    plan: &RecordPlan,
+    arguments: &[(EvoIRType, ParamMark)],
+    pieces: &HashMap<usize, Vec<VReg>>,
+) {
+    let words = apple_layout(&plan.items, arguments, plan.apple_stack_bytes);
+    if words.is_empty() {
+        return;
+    }
+    for _ in 0..plan.apple_fill.0 {
+        let filler = lowerer.word(insts, 0);
+        registers.push(filler);
+    }
+    for _ in 0..plan.apple_fill.1 {
+        let filler = lowerer.fresh(RegClass::Simd64);
+        insts.push(MInst::MovImm {
+            dst: filler,
+            imm: 0,
+        });
+        registers.push(filler);
+    }
+    let piece_reg = |index: usize, piece: &ApplePiece| -> VReg {
+        let (all, _) = apple_pieces(
+            &arguments[index].0,
+            &arguments[index].1,
+            &plan.items[index].passing,
+        )
+        .expect("a placed argument has pieces");
+        let position = all
+            .iter()
+            .position(|candidate| candidate == piece)
+            .expect("the piece belongs to its argument");
+        pieces[&index][position]
+    };
+    for word in words {
+        match word {
+            AppleWord::Whole(index, piece) => registers.push(piece_reg(index, &piece)),
+            AppleWord::Composed(inside) => {
+                let mut accumulated: Option<VReg> = None;
+                for (index, piece, within) in inside {
+                    let reg = piece_reg(index, &piece);
+                    let value = apple_word_piece(lowerer, insts, reg, piece);
+                    let placed = if within == 0 {
+                        value
+                    } else {
+                        lowerer.word_binary_imm(insts, BinOp::Lsl, value, within * 8)
+                    };
+                    accumulated = Some(match accumulated {
+                        None => placed,
+                        Some(low) => lowerer.word_binary(insts, BinOp::Orr, low, placed),
+                    });
+                }
+                let word = accumulated.unwrap_or_else(|| lowerer.word(insts, 0));
+                registers.push(word);
+            }
+        }
+    }
+}
+
 /// The registers a call passes, with the record convention applied.
 ///
 /// Returns the argument registers and, when the callee writes its result
@@ -6321,17 +6939,26 @@ fn call_arguments(
     args: &[Value],
     marks: &[ParamMark],
     plan: &RecordPlan,
+    extend: bool,
 ) -> Result<CallArguments, String> {
-    let _ = marks;
+    let marked = marked_types(&arg_types(args), marks);
     let mut registers: Vec<VReg> = Vec::new();
     let mut returned = None;
     let mut indirect_destination = None;
+    // The Apple convention: the registers that hold each named stack
+    // argument's pieces, until the words of the area are composed.
+    let mut stacked: HashMap<usize, Vec<VReg>> = HashMap::new();
+    let mut flushed = false;
+    // The narrow arguments to extend, as (register index, bits, signed).
+    let mut narrow: Vec<(usize, u16, bool)> = Vec::new();
     let ordinary = args.iter().filter(|value| is_register_type(&value.ty));
     for (position, (value, placed)) in ordinary.zip(&plan.items).enumerate() {
         // The Apple variadic convention: zero the argument registers that the
         // named arguments leave, so that the anonymous arguments go to the
         // stack. The callee reads none of these registers.
         if let Some(start) = plan.anonymous.filter(|start| start.item == position) {
+            push_apple_stack_words(lowerer, insts, &mut registers, plan, &marked, &stacked);
+            flushed = true;
             for _ in 0..start.general {
                 let filler = lowerer.word(insts, 0);
                 registers.push(filler);
@@ -6344,6 +6971,49 @@ fn call_arguments(
                 });
                 registers.push(filler);
             }
+        }
+        if placed.apple_stack.is_some() {
+            let pieces = match &placed.passing {
+                Passing::Value => lowerer.registers(value)?,
+                Passing::Pointer => vec![lowerer.reg(value)?],
+                Passing::Chunks(chunks) => {
+                    let base = lowerer.reg(value)?;
+                    let mut offset = 0;
+                    let mut words = Vec::new();
+                    for size in chunks {
+                        words.push(load_chunk(lowerer, insts, base, offset, *size));
+                        offset += size;
+                    }
+                    words
+                }
+                Passing::Vectors { shape, .. } => {
+                    let base = lowerer.reg(value)?;
+                    let (count, size) = shape.simd_members().ok_or("an HFA or HVA has members")?;
+                    let mut members = Vec::new();
+                    for member in 0..u64::from(count) {
+                        let reg = lowerer.fresh(simd_class(size));
+                        let offset = member
+                            .checked_mul(size)
+                            .and_then(|offset| i64::try_from(offset).ok())
+                            .ok_or("an HFA or HVA member lies beyond its record")?;
+                        insts.push(MInst::Load {
+                            align: shape.align.min(size as u32),
+                            dst: reg,
+                            base,
+                            offset,
+                            kind: simd_load(size),
+                            volatile: false,
+                        });
+                        members.push(reg);
+                    }
+                    members
+                }
+                Passing::Destination(_) => {
+                    return Err("a record destination is never on the stack".into())
+                }
+            };
+            stacked.insert(position, pieces);
+            continue;
         }
         for _ in 0..placed.fillers {
             // The skipped register is passed as zero rather than left
@@ -6404,8 +7074,30 @@ fn call_arguments(
                     returned = Some((*shape, lowerer.reg(value)?));
                 }
             }
-            Passing::Value => registers.extend(lowerer.registers(value)?),
+            Passing::Value => {
+                if let EvoIRType::Bits(bits) = value.ty {
+                    if extend && bits < 32 {
+                        let signed = marked.get(position).map(|(_, mark)| mark)
+                            == Some(&ParamMark::SignExtend);
+                        narrow.push((registers.len(), bits, signed));
+                    }
+                }
+                registers.extend(lowerer.registers(value)?);
+            }
         }
+    }
+    if !flushed {
+        push_apple_stack_words(lowerer, insts, &mut registers, plan, &marked, &stacked);
+    }
+    // Section 6.2: a caller that crosses the compiler boundary extends an
+    // argument narrower than 32 bits to 32 bits: by its sign when the
+    // signature marks it `sext`, otherwise by zeros.
+    for (slot, bits, signed) in narrow {
+        registers[slot] = if signed {
+            lowerer.sign_extend(insts, registers[slot], bits, Width::W)
+        } else {
+            lowerer.zero_extend(insts, registers[slot], bits, Width::W)
+        };
     }
     if let Some(destination) = indirect_destination {
         registers.push(destination);

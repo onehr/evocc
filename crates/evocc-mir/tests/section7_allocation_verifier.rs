@@ -7,8 +7,8 @@
 //! producer is adjacent to its consumer."
 
 use evocc_mir::{
-    allocate, out_of_ssa, verify_allocation, BinOp, Cond, MBlock, MFunction, MInst, MTerm,
-    RegClass, VReg, Width,
+    allocate, out_of_ssa, verify_allocation, AsmBody, AsmClobber, BinOp, Cond, MBlock, MFunction,
+    MInst, MTerm, RegClass, VReg, Width,
 };
 
 fn w(id: u32) -> VReg {
@@ -244,4 +244,72 @@ fn the_verifier_reads_only_the_allocated_function() {
     let allocated = allocate(&out_of_ssa(&straight())).expect("allocation");
     let copy = allocated.clone();
     assert_eq!(verify_allocation(&copy), Ok(()));
+}
+
+/// One `asm` in the middle of a block that writes `register`, with a value
+/// that the block defines before it and reads after it.
+fn clobbering(register: u8) -> MFunction {
+    MFunction {
+        name: "main".to_owned(),
+        blocks: vec![MBlock {
+            id: 0,
+            args: Vec::new(),
+            insts: vec![
+                MInst::MovImm { dst: w(0), imm: 7 },
+                MInst::Asm(AsmBody {
+                    template: String::new(),
+                    volatile: true,
+                    outputs: Vec::new(),
+                    inputs: Vec::new(),
+                    clobbers: vec![AsmClobber::Register(register)],
+                }),
+                MInst::Binary {
+                    op: BinOp::Add,
+                    dst: w(1),
+                    lhs: w(0),
+                    rhs: w(0),
+                    width: Width::W,
+                },
+            ],
+            term: MTerm::Ret { values: vec![w(1)] },
+        }],
+    }
+}
+
+/// Section 7.5: an `asm` writes every register that its clobber list names,
+/// wherever it stands in its block (T03g).
+#[test]
+fn a_value_kept_in_an_assembly_clobber_is_refused() {
+    let allocated = allocate(&out_of_ssa(&clobbering(9))).expect("allocation");
+    assert_eq!(verify_allocation(&allocated), Ok(()));
+    let mut forged = allocated.clone();
+    // The value read after the `asm` now waits in the clobbered register.
+    let across = forged.blocks[0]
+        .insts
+        .iter()
+        .find_map(|inst| match inst {
+            MInst::Binary { lhs, .. } => Some(lhs.id),
+            _ => None,
+        })
+        .expect("the read after the asm");
+    forged.assignment.insert(across, 9);
+    let refusal = verify_allocation(&forged).expect_err("the asm writes x9");
+    assert_eq!(refusal.code, "E4020");
+}
+
+/// Section 6.7 and `spec/target.md` B4: a callee-saved register that an `asm`
+/// clobbers is in the saved set, and the verifier checks that it is (T03g).
+#[test]
+fn a_callee_saved_assembly_clobber_is_saved() {
+    let allocated = allocate(&out_of_ssa(&clobbering(19))).expect("allocation");
+    assert!(
+        allocated.used_callee_saved.contains(&19),
+        "{:?}",
+        allocated.used_callee_saved
+    );
+    assert_eq!(verify_allocation(&allocated), Ok(()));
+    let mut forged = allocated.clone();
+    forged.used_callee_saved.retain(|number| *number != 19);
+    let refusal = verify_allocation(&forged).expect_err("x19 is written and not saved");
+    assert_eq!(refusal.code, "E4020");
 }

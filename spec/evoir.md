@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.3.0** | **Pinned ground truth** | Gave `builtin-argument-type` its own code on 2026-10-13
+**Revision 2.4.0** | **Pinned ground truth** | Stated the Darwin target profile on 2026-10-14
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -1388,7 +1388,9 @@ and a named physical register, which the allocator must treat as written.
 clobber never reserves `xN`. `qN`, `hN` and `bN` clobbers and malformed
 register names are `E3021`. Normal emission preserves the low 64 bits of a
 clobbered `v8` to `v15` on every return, including `asm.goto` paths, with frame
-and unwind locations; other SIMD clobbers need no callee save. Under
+and unwind locations; other SIMD clobbers need no callee save. It also saves a
+clobbered `x19` to `x28` and restores it on every return, and the backend
+refuses a clobbered `x29` (EvoMIR Section 6.7). Under
 `-mgeneral-regs-only` the compiler generates no SIMD access for this purpose.
 Template operand references: `%0` to `%9`, `%[name]`, a width modifier
 `%w0`/`%x0` before the number or name, `%c0`/`%c[name]` for immediates,
@@ -3451,12 +3453,17 @@ convenience. Two obligations follow, and Sections 9.4 and 9.5 discharge them:
   compiled. Completeness is therefore measured against the enumeration in this
   section, never against a renderer's own output.
 
-This revision has one implicit target authority:
-`aarch64-unknown-linux-gnu` with the AArch64 LP64 `TargetDataLayout`.
-No other target may claim conformance to these bytes. A later multi-target
-revision must add a target/layout identity to the module grammar before it can
-reuse this interchange format; taking a target from the environment is never an
-allowed interpretation.
+**Target identity.** Text with no target line describes the implicit target
+`aarch64-unknown-linux-gnu` with its AArch64 LP64 `TargetDataLayout`. The text
+of any other target starts with the line `target TRIPLE`, then a blank line
+before a nonempty module (Section 9.3). Today that target is
+`aarch64-apple-darwin`, whose data layout Section 10.5 states; `--emit=evoir`
+writes its line. A reader serves one target: `parse_section9_module` refuses
+text that names a target, and `parse_target_module` refuses text that does not
+name the target it was asked for. The checker of a rewrite chain reads only
+the implicit target, so the driver refuses `-Oeq-scalar`, `--eq-proof-dir` and
+the EqSat options for `aarch64-apple-darwin`. Taking a target from the
+environment is never an allowed interpretation.
 
 ### 9.2 Lexical Structure
 
@@ -3502,7 +3509,11 @@ digested.
 ### 9.3 Grammar
 
 ```text
-module          := ε | segment (newline segment)*
+module          := [target_line [newline body]] | body
+                   -- a target line names any target but the implicit one (9.1)
+target_line     := "target " triple newline
+triple          := (letter | digit | "_" | "-")+
+body            := ε | segment (newline segment)*
                    -- at most one of each, in this order:
                    -- global_seq, extern_seq, declare_seq, alias_seq, function_seq, module_asm_seq, tls_seq, lifecycle_seq
 global_seq      := global+
@@ -3550,7 +3561,7 @@ type            := "bits<" positive_int ">"
 signature       := "(" sig_param_list ")->(" type_list ")"
 sig_param_list  := ε | sig_param_item (", " sig_param_item)*
 sig_param_item  := sig_param | "..."
-sig_param       := type [record_mark]
+sig_param       := type [record_mark | " sext"]
 record_mark     := byval_mark | " sret(" integer ", " integer [hva_mark | hfa_mark] ")"
 byval_mark      := " byval(" integer ", " integer [hva_mark | hfa_mark] ")"
 hfa_mark        := ", hfa=" integer "x" ("f32" | "f64" | "f128") [", abi_align=16"]
@@ -3577,7 +3588,7 @@ region          := "all" | "unknown" | "global" | "stack" | "heap" | "escaped"
 bool            := "true" | "false"
 param_list      := ε | param_item (", " param_item)*
 param_item      := param | "..."
-param           := param_name ": " type [record_mark]
+param           := param_name ": " type [record_mark | " sext"]
 type_list       := ε | type ("," " " type)*
 
 block           := block_label "(" block_arg_list "):" newline
@@ -4277,7 +4288,10 @@ declaration order. A complete, naturally aligned 1/2/4/8-byte `volatile`
 union is read or written as one representation access through Section 3.8,
 without selecting a member; unsupported sizes/alignment and volatile record
 copies containing bit-fields retain `E2922` (`volatile-aggregate-copy-unsupported`).
-`_Atomic` objects remain outside this profile (`E2702`). The padding bytes of an initialized
+`_Atomic` objects remain outside this profile (`E2702`). C converts a read of an
+`_Atomic` object with an atomic load, so a read is `E2702` at the read, as an
+assignment or an update is at its target; `sizeof`, `&` and the other operands
+that read nothing stay admitted. The padding bytes of an initialized
 aggregate are uninitialized, and after a copy so are the destination's. The
 reference compilers differ on padding bytes after `b = a`; both behaviors
 are consistent with "unspecified", so the profile transfers initializedness
@@ -4302,6 +4316,20 @@ signature; the attribute is part of the signature for equality. `size` and
 `align` are the record type's; a zero `size` conveys no bytes and uses no
 alignment-filler registers. The machine maps these to the platform
 convention (EvoMIR Section 6), which can keep a small record in registers.
+
+**Narrow integers across calls on Darwin.** The Apple arm64 convention has a
+caller extend an integer argument narrower than 32 bits, and a callee such a
+result, to 32 bits by its C signedness. On `aarch64-apple-darwin` a parameter
+whose C type is a signed integer narrower than 32 bits (`signed char`,
+`short`, and plain `char`, which is signed there) is written
+`%argN: bits<N> sext`, in the function header, in every `declare` and in every
+`fnptr<Sig>`; the mark is part of the signature for equality, and it marks
+only a `bits<N>` with `1 < N < 32` (validation). An unmarked narrow integer is
+extended by zeros (EvoMIR Section 6.2). A function whose C result type is a
+signed integer narrower than 32 bits returns `bits<32>`: `return e;` converts
+`e` to the C result type and then sign-extends it, and the caller truncates
+the call result to the C result type. Other results, and every Linux
+signature, are unchanged.
 
 **Flexible array members.** A record whose last member is an array of unknown
 bound may be initialized at file scope with elements for that member; the
@@ -4481,7 +4509,11 @@ recursive SCCs are solved together. Every call still consumes and produces
 
 **Floating and arity lowering classes.** A floating scalar, floating complex
 or homogeneous floating aggregate call interface that lowering does not support
-is `E3049` (`not-lowered: floating-call-interface`). A required floating value
+is `E3049` (`not-lowered: floating-call-interface`). So is a parameter, result,
+anonymous argument or `va_arg` type that is a record of one to four short
+vectors (8 or 16 bytes) of one size with a floating lane: AAPCS64 makes it an
+HVA in vector registers, and lowering has no floating vector value to place
+there (the 2026-10-13 decision on L05). A required floating value
 or conversion on an integer-only lowering path is `E3050`
 (`not-lowered: floating-value`). A call whose actual arity differs from its
 resolved canonical interface is `E3051`, not `E3101`.
@@ -4927,8 +4959,11 @@ expression, or a range with `a > b`, is `E2917`
 (`designator-index-not-constant`) at that expression. For an array of
 unknown bound the bound becomes one more than the largest index any
 designator or positional element reaches: `[5] = 1` gives 6, `[2 ... 4] = 7`
-gives 5. A range designator's initializer must be an integer constant
-expression or an address constant; a non-constant one is `E2917`.
+gives 5. One written initializer serves every element of a range, so it
+must be a constant, as a static initializer is: an arithmetic constant
+expression, an address constant or a label difference, and each element of a
+braced list likewise. A nonconstant one would run once per element; it is
+`E2917` at the expression.
 
 Nothing changes below the plan: lowering consumes `InitAction`s exactly as
 before, so an initializer that arrives through designators is
@@ -6222,6 +6257,24 @@ either explicitly signed character type. Ordinary single-byte character
 constants and preprocessor character operands use that representation;
 signed-char mode removes `__CHAR_UNSIGNED__` before the user's `-D`/`-U` actions.
 
+**The Darwin target.** With `--target=aarch64-apple-darwin` the predefined set
+is the list above, then the definitions of
+`crates/evocc/src/aarch64-apple-darwin.h`, which follow Apple clang. The C data
+layout of this target differs from the Linux one in these facts, which follow
+Apple clang:
+
+- Plain `char` is signed by default.
+- `va_list` is one pointer: size 8 and alignment 8.
+- `long double` stays a distinct C type, for compatibility and `_Generic`,
+  with the IEEE binary64 format, size 8 and alignment 8. A `long double` value,
+  constant, conversion, HFA member, variadic argument and library argument is
+  a binary64 one, EvoIR `f64`; no binary128 operation or helper serves it.
+  `__SIZEOF_LONG_DOUBLE__` is 8, and the `__LDBL_*__` macros describe binary64,
+  so `<float.h>` agrees. `long double _Complex` has size 16 and alignment 8.
+- Narrow integers cross calls as Section 10.1.3 states.
+
+The EvoIR text of this target names it (Section 9.1).
+
 **Language modes.** The last language-mode option wins, and every macro it
 selects is set before the user's `-D`/`-U` actions.
 
@@ -7369,10 +7422,22 @@ to the signature spelling.
 
 ## Revision
 
-**Revision 2.3.0, 2026-10-13.** `builtin-argument-type` has its own code,
-`E2951`, in Section 6.3. Before, it shared `E2911` with
-`static-assertion-failed`, and Section 3.13.1 named `E2911` for a wrong
-operand type of a floating comparison builtin. Revision 2.2.0 of 2026-10-13
+**Revision 2.4.0, 2026-10-14.** The Darwin target profile is stated. Darwin
+EvoIR text starts with a target line, the Linux reader refuses it, and the
+driver refuses `-Oeq-scalar` for Darwin (Sections 9.1 and 9.3). On Darwin,
+`long double` has the binary64 format with size 8 and alignment 8 (Section
+10.5), a signed narrow integer parameter carries the new `sext` mark, and a
+signed narrow integer result travels as `bits<32>` (Sections 9.3 and 10.1.3).
+Section 3.11 states the save of a clobbered `x19` to `x28`. Section 10.1.3
+refuses a read of an `_Atomic` object (`E2702`) and a call interface with a
+record of floating vectors (`E3049`), and Section 10.1.12 states which range
+initializers are constant (`E2917`). Evidence:
+`crates/evocc/tests/darwin_long_double.rs`,
+`crates/evocc/tests/darwin_call_boundary.rs`,
+`crates/evocc-parser/tests/fail_closed_reads_and_ranges.rs` and
+`crates/evocc/tests/floating_vector_records.rs`. Revision 2.3.0 of 2026-10-13
+gave `builtin-argument-type` its own code, `E2951` (Sections 3.13.1 and 6.3).
+Revision 2.2.0 of 2026-10-13
 added the object-size checked builtins, the GNU argument pack, `E2949`,
 `E2950` and `E3066` (Sections 6.3, 10.1.9, 10.1.14 and 10.5). Revision 2.1.0
 of 2026-10-13 attached `used` and `retain` after a pointer `*` (Section

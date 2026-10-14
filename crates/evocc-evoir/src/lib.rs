@@ -35,8 +35,13 @@ pub use assembly::{
     assembly_register_type, AssemblyEdge, AssemblyInput, AssemblyLabel, AssemblyOutput,
     InlineAssembly,
 };
-pub use text::{render_global, render_module, render_pre_fenv_module, validate_section9_bytes};
-pub use text_parse::{parse_global_text, parse_pre_fenv_module, parse_section9_module};
+pub use text::{
+    render_global, render_module, render_pre_fenv_module, render_target_module,
+    validate_section9_bytes, IMPLICIT_TARGET,
+};
+pub use text_parse::{
+    parse_global_text, parse_pre_fenv_module, parse_section9_module, parse_target_module,
+};
 
 // ---------------------------------------------------------------------------
 // Core data types
@@ -1762,6 +1767,14 @@ pub fn validate_record_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Resul
     }
     let mut destinations = 0_usize;
     for (index, mark) in marks.iter().enumerate() {
+        if *mark == ParamMark::SignExtend {
+            if !matches!(params[index], EvoIRType::Bits(2..=31)) {
+                return Err(format!(
+                    "parameter {index} carries sext but is not an integer narrower than 32 bits"
+                ));
+            }
+            continue;
+        }
         let Some(shape) = mark.shape() else {
             continue;
         };

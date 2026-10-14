@@ -2993,7 +2993,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 expression,
                 &self.types,
                 &self.symbols,
-                &TargetDataLayout::aarch64_unknown_linux_gnu(),
+                &self.target_layout,
             )
             .is_some()
     }
@@ -3005,7 +3005,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             expression,
             &self.types,
             &self.symbols,
-            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+            &self.target_layout,
         )
         .is_some()
         {
@@ -3092,15 +3092,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         | OperandTypeClass::Complex(_)
                 ) && self.is_arithmetic_constant_expression(operand)
             }
-            CHirExpr::SizeOf(ty, _) => TargetDataLayout::aarch64_unknown_linux_gnu()
-                .sizeof_type(&self.types, *ty)
-                .is_ok(),
-            CHirExpr::AlignOf(ty, _) => TargetDataLayout::aarch64_unknown_linux_gnu()
-                .alignof_type(&self.types, *ty)
-                .is_ok(),
-            CHirExpr::SizeOfExpr(_, ty, _) => TargetDataLayout::aarch64_unknown_linux_gnu()
-                .sizeof_type(&self.types, *ty)
-                .is_ok(),
+            CHirExpr::SizeOf(ty, _) => self.target_layout.sizeof_type(&self.types, *ty).is_ok(),
+            CHirExpr::AlignOf(ty, _) => self.target_layout.alignof_type(&self.types, *ty).is_ok(),
+            CHirExpr::SizeOfExpr(_, ty, _) => {
+                self.target_layout.sizeof_type(&self.types, *ty).is_ok()
+            }
             CHirExpr::Unary(UnaryOp::Abs | UnaryOp::AddrOf | UnaryOp::Deref, _, _)
             | CHirExpr::LabelAddress { .. }
             | CHirExpr::Call(_, _, _)
@@ -3235,7 +3231,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ) {
             return false;
         }
-        let layout = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let layout = self.target_layout;
         layout
             .layout_of(&self.types, ty)
             .is_ok_and(|integer| integer.size_bytes >= layout.pointer_layout().size_bytes)
@@ -4139,6 +4135,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         let mut cursor = self.next_initializer_child(target, &path, None);
         for (element, designation) in elements.iter().zip(designations) {
+            if designation.as_ref().is_some_and(|designation| {
+                designation
+                    .designators
+                    .iter()
+                    .any(|designator| matches!(designator, WrittenDesignator::Range { .. }))
+            }) {
+                self.require_constant_range_initializer(element)?;
+            }
             for destination in self.initializer_element_destinations(
                 target,
                 &path,
@@ -4152,6 +4156,29 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     element,
                     actions,
                 )?;
+            }
+        }
+        Some(())
+    }
+
+    /// EvoIR 10.1.12: one written initializer serves every element of a
+    /// range designator, so it must be a constant; a nonconstant one would
+    /// run once per element. It is `E2917` at the expression.
+    fn require_constant_range_initializer(
+        &mut self,
+        written: &WrittenInitializer<'arena>,
+    ) -> Option<()> {
+        match written {
+            WrittenInitializer::Expression(expression) => {
+                if !self.static_initializer_expression_is_constant(expression) {
+                    self.report("E2917", "designator-index-not-constant", expression.span());
+                    return None;
+                }
+            }
+            WrittenInitializer::List { elements, .. } => {
+                for element in elements {
+                    self.require_constant_range_initializer(element)?;
+                }
             }
         }
         Some(())
@@ -4788,6 +4815,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let parsed_body = self.parse_compound_statement(false);
         self.loop_depth = outer_loop_depth;
         self.switch_depth = outer_switch_depth;
+        // EvoIR 10.1.3: `_Atomic` objects are outside the profile, so a read
+        // of one is refused where it is written, as an update is.
+        for span in evocc_chir::atomic_object_reads(parsed_body, &self.symbols, &self.types) {
+            self.report("E2702", "atomic-update-unsupported", span);
+        }
         let Some((_, function_name_declaration)) = implicit_function_name else {
             return parsed_body;
         };
@@ -5589,7 +5621,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .is_some_and(|tag| tag.transparent_union)
                 && attributes.last().is_some()
             {
-                let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+                let target = self.target_layout;
                 let first = match &self.types.tag(*tag).unwrap().state {
                     TagState::Complete(TagDefinition::Union(fields)) => fields.first(),
                     _ => None,
@@ -5738,7 +5770,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         else {
             return false;
         };
-        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let target = self.target_layout;
         let Some(first) = fields
             .first()
             .and_then(|field| target.layout_of(&self.types, field.ty).ok())
@@ -6322,7 +6354,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let declaration = self.finish_tag_event(event, keyword.span, Vec::new());
                 self.side_declarations.push(declaration);
             }
-            TargetDataLayout::aarch64_unknown_linux_gnu()
+            self.target_layout
                 .alignof_type(&self.types, ty)
                 .ok()
                 .map(u64::from)
@@ -6371,7 +6403,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .filter_map(|attribute| attribute.arguments.first()?.integer)
             .max()
             .unwrap_or(0);
-        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let target = self.target_layout;
         let natural = match self.types.get(ty) {
             Some(CanonicalType {
                 kind:
@@ -6907,7 +6939,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             ) => Some(8),
             TypeKind::Int(IntRank::Short | IntRank::UShort) => Some(16),
             TypeKind::Int(IntRank::Int | IntRank::UInt) => Some(32),
-            TypeKind::Enum(_) => TargetDataLayout::aarch64_unknown_linux_gnu()
+            TypeKind::Enum(_) => self
+                .target_layout
                 .layout_of(&self.types, ty)
                 .ok()
                 .and_then(|layout| layout.size_bytes.checked_mul(8))
@@ -7000,14 +7033,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 &self.target_layout,
             )
             .ok_or(()),
-            CHirExpr::BuiltinConstantP { operand, .. } => {
-                Ok(CInteger::int(i32::from(builtin_constant_p(
-                    operand,
-                    &self.types,
-                    &self.symbols,
-                    &TargetDataLayout::aarch64_unknown_linux_gnu(),
-                ))))
-            }
+            CHirExpr::BuiltinConstantP { operand, .. } => Ok(CInteger::int(i32::from(
+                builtin_constant_p(operand, &self.types, &self.symbols, &self.target_layout),
+            ))),
             CHirExpr::Lit(literal, _) => integer_literal_value(*literal).map_err(|_| ()),
             CHirExpr::MemoryRead { .. }
             | CHirExpr::BuiltinExpect(..)
@@ -7099,13 +7127,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Ok(self.eval_integer_constant_expression(operand)?.cast(target))
             }
             CHirExpr::SizeOf(ty, _) | CHirExpr::SizeOfExpr(_, ty, _) => Ok(CInteger::new(
-                TargetDataLayout::aarch64_unknown_linux_gnu()
+                self.target_layout
                     .sizeof_type(&self.types, *ty)
                     .map_err(|_| ())?,
                 CIntegerType::ULONG,
             )),
             CHirExpr::AlignOf(ty, _) => {
-                let alignment = TargetDataLayout::aarch64_unknown_linux_gnu()
+                let alignment = self
+                    .target_layout
                     .alignof_type(&self.types, *ty)
                     .map_err(|_| ())?;
                 Ok(CInteger::new(u64::from(alignment), CIntegerType::ULONG))
@@ -7230,13 +7259,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             CHirExpr::BitBuiltin { .. } => Ok(CIntegerType::INT),
             CHirExpr::StatementExpr { facts, .. } => self.canonical_integer_type(facts.ty()),
             CHirExpr::SizeOf(ty, _) | CHirExpr::SizeOfExpr(_, ty, _) => {
-                TargetDataLayout::aarch64_unknown_linux_gnu()
+                self.target_layout
                     .sizeof_type(&self.types, *ty)
                     .map_err(|_| ())?;
                 Ok(CIntegerType::ULONG)
             }
             CHirExpr::AlignOf(ty, _) => {
-                TargetDataLayout::aarch64_unknown_linux_gnu()
+                self.target_layout
                     .alignof_type(&self.types, *ty)
                     .map_err(|_| ())?;
                 Ok(CIntegerType::ULONG)
@@ -7416,10 +7445,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         self.detached_attributes.extend(type_attributes);
-        let dynamic_size = if size_query
-            && TargetDataLayout::aarch64_unknown_linux_gnu()
-                .sizeof_type(&self.types, ty)
-                .is_err()
+        let dynamic_size = if size_query && self.target_layout.sizeof_type(&self.types, ty).is_err()
         {
             let span = specifier.surface.span();
             let mut size = self.captured_size_expression(specifier.surface.type_id(), span);
@@ -7578,7 +7604,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ty: TypeId,
         span: SourceSpan,
     ) -> Option<&'arena CHirExpr<'arena>> {
-        let (fixed, captures) = TargetDataLayout::aarch64_unknown_linux_gnu()
+        let (fixed, captures) = self
+            .target_layout
             .array_size_factors(&self.types, ty)
             .ok()?;
         let mut size = self.size_literal(fixed, span);
@@ -11343,7 +11370,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         ) {
             return true;
         }
-        TargetDataLayout::aarch64_unknown_linux_gnu()
+        self.target_layout
             .array_size_factors(&self.types, pointee)
             .is_ok()
     }
@@ -12421,7 +12448,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
             }
             TokenKind::FloatLiteral => {
-                let Some(literal) = parse_float_literal(self.token_text(&tok)) else {
+                let Some(literal) = parse_float_literal(self.token_text(&tok), self.target_layout)
+                else {
                     self.report("E1006", "invalid-floating-literal", tok.span);
                     return None;
                 };
@@ -12820,7 +12848,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
 
-        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let target = self.target_layout;
         let result = builtin_constant_p(operand, &self.types, &self.symbols, &target);
         let span = self.merge_span(keyword.span, close.span);
         self.front_end_builtins
@@ -13013,7 +13041,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.report("E2906", "designator-outside-object", span);
                         return None;
                     };
-                    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+                    let target = self.target_layout;
                     let Ok(layout) = target.layout_of(&self.types, element) else {
                         self.report("E2906", "designator-outside-object", span);
                         return None;
@@ -14350,7 +14378,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn offsetof_field(&self, record_ty: TypeId, name: &str) -> Option<(u64, TypeId)> {
         let fields = self.record_member_path(record_ty, name)?;
-        let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+        let target = self.target_layout;
         let mut offset = 0_u64;
         for field in &fields {
             let layout = target.record_layout(&self.types, field.tag()).ok()?;
@@ -15878,7 +15906,9 @@ fn parse_int_literal(text: &str) -> Option<IntLit> {
     })
 }
 
-fn parse_float_literal(text: &str) -> Option<FloatLit> {
+/// A literal rounds once, directly into the format of its type. An `L`
+/// literal therefore has the target's `long double` format.
+fn parse_float_literal(text: &str, target: TargetDataLayout) -> Option<FloatLit> {
     let (number, suffix) = match text.as_bytes().last().copied() {
         Some(b'f' | b'F') => (&text[..text.len() - 1], FloatSuffix::F),
         Some(b'l' | b'L') => (&text[..text.len() - 1], FloatSuffix::L),
@@ -15886,11 +15916,11 @@ fn parse_float_literal(text: &str) -> Option<FloatLit> {
     };
     Some(FloatLit {
         value: evocc_chir::FloatConstant::Real(evocc_types::floating::FloatBits::parse(
-            match suffix {
+            target.float_format(match suffix {
                 FloatSuffix::F => FloatKind::F32,
                 FloatSuffix::None => FloatKind::F64,
                 FloatSuffix::L => FloatKind::F128,
-            },
+            }),
             number,
         )?),
         suffix,

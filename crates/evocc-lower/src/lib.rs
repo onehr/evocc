@@ -3143,7 +3143,7 @@ fn index_functions(
         {
             None
         } else {
-            Some(function_value_type(
+            Some(function_result_type(
                 unit.types(),
                 target,
                 *return_type,
@@ -3293,7 +3293,7 @@ fn function_info(
         .kind
     {
         TypeKind::Void => None,
-        _ => Some(function_value_type(
+        _ => Some(function_result_type(
             unit.types(),
             target,
             *return_type,
@@ -3462,18 +3462,20 @@ fn function_value_type(
     if let Some(TypeKind::Float(kind)) = types.get(ty).map(|ty| &ty.kind) {
         return Ok(FunctionValueType {
             source: ty,
-            ir: floating::ir_type(*kind).ok_or(LowerError::FloatingCallInterface { span })?,
+            ir: floating::ir_type(target.float_format(*kind))
+                .ok_or(LowerError::FloatingCallInterface { span })?,
             integer: CIntegerType::ULONG,
         });
     }
-    if evocc_chir::homogeneous_floating_aggregate(types, ty).is_some_and(|f| {
+    if evocc_chir::homogeneous_floating_aggregate(types, target, ty).is_some_and(|f| {
         !matches!(
             f.kind,
             evocc_types::FloatKind::F32
                 | evocc_types::FloatKind::F64
                 | evocc_types::FloatKind::F128
         )
-    }) {
+    }) || floating_vector_aggregate(types, target, ty)
+    {
         return Err(LowerError::FloatingCallInterface { span });
     }
     match types.get(ty).map(|canonical| &canonical.kind) {
@@ -3609,7 +3611,7 @@ fn function_pointer_interface(
         .collect::<Result<Vec<_>, _>>()?;
     let returned = match types.get(return_type).map(|ty| &ty.kind) {
         Some(TypeKind::Void) => None,
-        Some(_) => Some(function_value_type(types, target, return_type, span)?),
+        Some(_) => Some(function_result_type(types, target, return_type, span)?),
         None => {
             return Err(LowerError::UnknownType {
                 ty: return_type,
@@ -3749,7 +3751,7 @@ fn record_signature_marks(
             size: layout.size_bytes,
             align: layout.align_bytes,
             vector: homogeneous_vector_aggregate(types, ty),
-            floating: evocc_chir::homogeneous_floating_aggregate(types, ty),
+            floating: evocc_chir::homogeneous_floating_aggregate(types, target, ty),
         })
     };
     let mut marks = parameters
@@ -3757,6 +3759,10 @@ fn record_signature_marks(
         .map(|ty| {
             if is_aggregate_type(types, *ty) {
                 shape(*ty).map(ParamMark::ByVal)
+            } else if signed_narrow_integer(types, target, *ty, span) {
+                // EvoIR 10.1.3: on the Darwin target the caller extends a
+                // signed integer narrower than 32 bits by its sign.
+                Ok(ParamMark::SignExtend)
             } else {
                 Ok(ParamMark::None)
             }
@@ -3787,6 +3793,110 @@ fn is_wide_vector(types: &TypeInterner, ty: TypeId) -> bool {
         _ => return false,
     };
     u32::from(*lanes) * bits > 128
+}
+
+/// EvoIR 10.1.3: on a target whose calls extend narrow integers, a signed
+/// integer result narrower than 32 bits travels as `bits<32>`, the sign
+/// extension of the value. The callee extends it and the caller truncates it.
+fn function_result_type(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+    span: SourceSpan,
+) -> Result<FunctionValueType, LowerError> {
+    let mut value = function_value_type(types, target, ty, span)?;
+    if signed_narrow_integer(types, target, ty, span) {
+        value.ir = EvoIRType::Bits(32);
+    }
+    Ok(value)
+}
+
+/// Whether `ty` is a record that AAPCS64 makes an HVA and that has a vector
+/// with floating lanes: one to four short vectors (8 or 16 bytes) of one size,
+/// whatever their lane types. GCC and Apple clang pass such a record in
+/// vector registers; this lowering has no floating vector values (L05), so a
+/// call interface with one is refused (`E3049`) instead of passing it by the
+/// general record rule.
+fn floating_vector_aggregate(types: &TypeInterner, target: &TargetDataLayout, ty: TypeId) -> bool {
+    /// (vector bytes, member count, a floating lane seen)
+    fn visit(
+        types: &TypeInterner,
+        target: &TargetDataLayout,
+        ty: TypeId,
+        visiting: &mut BTreeSet<TypeId>,
+    ) -> Option<(u64, u64, bool)> {
+        if !visiting.insert(ty) {
+            return None;
+        }
+        let result = (|| match &types.get(ty)?.kind {
+            TypeKind::Vector { element, .. } => {
+                let bytes = target.layout_of(types, ty).ok()?.size_bytes;
+                let floating = matches!(types.get(*element)?.kind, TypeKind::Float(_));
+                matches!(bytes, 8 | 16).then_some((bytes, 1, floating))
+            }
+            TypeKind::Array {
+                element,
+                bound: ArrayBound::Fixed(count),
+            } => {
+                let (bytes, members, floating) = visit(types, target, *element, visiting)?;
+                let members = members.checked_mul(*count)?;
+                (1..=4)
+                    .contains(&members)
+                    .then_some((bytes, members, floating))
+            }
+            TypeKind::Struct(tag) | TypeKind::Union(tag) => {
+                let TagState::Complete(
+                    TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                ) = &types.tag(*tag)?.state
+                else {
+                    return None;
+                };
+                let union = matches!(types.get(ty)?.kind, TypeKind::Union(_));
+                let mut shape: Option<(u64, u64, bool)> = None;
+                for field in fields {
+                    if field.bit_field.is_some() {
+                        return None;
+                    }
+                    let member = visit(types, target, field.ty, visiting)?;
+                    shape = Some(match shape {
+                        None => member,
+                        Some(old) if old.0 == member.0 => (
+                            old.0,
+                            if union {
+                                old.1.max(member.1)
+                            } else {
+                                old.1 + member.1
+                            },
+                            old.2 || member.2,
+                        ),
+                        Some(_) => return None,
+                    });
+                }
+                shape.filter(|(_, members, _)| (1..=4).contains(members))
+            }
+            _ => None,
+        })();
+        visiting.remove(&ty);
+        result
+    }
+    matches!(
+        types.get(ty).map(|ty| &ty.kind),
+        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+    ) && visit(types, target, ty, &mut BTreeSet::new()).is_some_and(|(_, _, floating)| floating)
+}
+
+/// Whether a call on `target` extends a value of `ty` by its sign: a signed
+/// integer narrower than 32 bits, on a target whose calls extend narrow
+/// integers (EvoIR 10.1.3).
+fn signed_narrow_integer(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+    span: SourceSpan,
+) -> bool {
+    target.extends_narrow_call_integers()
+        && canonical_integer(types, target, ty, span)
+            .is_ok_and(|integer| integer.is_signed() && integer.bits() < 32)
 }
 
 fn canonical_integer(
@@ -4430,8 +4540,10 @@ impl<'a> FunctionLowerer<'a> {
                         let value = self.fresh_value(value_type.ir.clone());
                         self.emit(state, Inst::PtrNull(value.clone()))?;
                         returned.push(value);
-                    } else {
+                    } else if value_type.ir == bits(value_type.integer) {
                         returned.push(self.constant(state, value_type.integer, 0)?.value);
+                    } else {
+                        returned.push(self.constant(state, CIntegerType::INT, 0)?.value);
                     }
                 }
                 if self.info.participant {
@@ -5868,7 +5980,14 @@ impl<'a> FunctionLowerer<'a> {
                                     &mut state,
                                 )?
                             } else {
-                                self.cast(lowered, expected.integer, &mut state)?
+                                let value = self.cast(lowered, expected.integer, &mut state)?;
+                                // A result that travels wider than its C type
+                                // is extended by its signedness (10.1.3).
+                                if value.value.ty == expected.ir {
+                                    value
+                                } else {
+                                    self.cast(value, CIntegerType::INT, &mut state)?
+                                }
                             };
                             returned.push(lowered.value);
                         }
@@ -6355,7 +6474,8 @@ impl<'a> FunctionLowerer<'a> {
         }
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Float(kind)) => Ok((
-                floating::ir_type(*kind).ok_or(LowerError::FloatingValue { span })?,
+                floating::ir_type(self.target.float_format(*kind))
+                    .ok_or(LowerError::FloatingValue { span })?,
                 CIntegerType::ULONG,
             )),
             Some(TypeKind::Vector { .. }) => {
@@ -6531,7 +6651,7 @@ impl<'a> FunctionLowerer<'a> {
         };
         let return_type = match self.unit.types().get(*return_type).map(|ty| &ty.kind) {
             Some(TypeKind::Void) => None,
-            Some(_) => Some(function_value_type(
+            Some(_) => Some(function_result_type(
                 self.unit.types(),
                 self.target,
                 *return_type,
@@ -7907,7 +8027,9 @@ impl<'a> FunctionLowerer<'a> {
             return self.cast(value, integer, state);
         }
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
-            Some(TypeKind::Float(kind)) => self.cast_floating(value, *kind, state),
+            Some(TypeKind::Float(kind)) => {
+                self.cast_floating(value, self.target.float_format(*kind), state)
+            }
             Some(TypeKind::Vector { .. }) => {
                 if value.value.ty != self.c_value_type(ty, span)?.0 {
                     return Err(LowerError::UnsupportedExpression {
@@ -13102,7 +13224,7 @@ impl<'a> FunctionLowerer<'a> {
                     });
                 };
                 if self.is_aggregate_type(*ty)
-                    && !evocc_chir::is_integer_variadic_record(self.unit.types(), *ty)
+                    && !evocc_chir::is_integer_variadic_record(self.unit.types(), self.target, *ty)
                 {
                     return Err(LowerError::VarArgs {
                         span: argument.span(),
@@ -13195,6 +13317,7 @@ impl<'a> FunctionLowerer<'a> {
                     vector: homogeneous_vector_aggregate(self.unit.types(), expected.source),
                     floating: evocc_chir::homogeneous_floating_aggregate(
                         self.unit.types(),
+                        self.target,
                         expected.source,
                     ),
                 })
@@ -13341,19 +13464,33 @@ impl<'a> FunctionLowerer<'a> {
                 integer: None,
             },
         );
-        Ok(return_type.map(|value_type| {
-            if self.is_aggregate_type(value_type.source) {
-                ExprValue {
-                    value: aggregate_return
-                        .expect("aggregate-returning call allocated its result object"),
-                    integer: CIntegerType::ULONG,
-                }
-            } else {
-                ExprValue {
-                    value: results.remove(0),
-                    integer: value_type.integer,
-                }
-            }
+        let Some(value_type) = return_type else {
+            return Ok(None);
+        };
+        if self.is_aggregate_type(value_type.source) {
+            return Ok(Some(ExprValue {
+                value: aggregate_return
+                    .expect("aggregate-returning call allocated its result object"),
+                integer: CIntegerType::ULONG,
+            }));
+        }
+        let value = results.remove(0);
+        // A result that travels wider than its C type is truncated (10.1.3).
+        if value_type.ir != bits(value_type.integer) && matches!(value_type.ir, EvoIRType::Bits(_))
+        {
+            let narrow = self.fresh_value(bits(value_type.integer));
+            self.emit(
+                state,
+                Inst::Trunc(narrow.clone(), value, bits(value_type.integer)),
+            )?;
+            return Ok(Some(ExprValue {
+                value: narrow,
+                integer: value_type.integer,
+            }));
+        }
+        Ok(Some(ExprValue {
+            value,
+            integer: value_type.integer,
         }))
     }
 
@@ -13440,8 +13577,11 @@ impl<'a> FunctionLowerer<'a> {
                         unreachable!("floating representation store has a floating destination");
                     };
                     let value = self.floating_constant(
-                        evocc_types::floating::FloatBits::from_bits(kind, bits.raw_bits())
-                            .expect("canonical floating object representation"),
+                        evocc_types::floating::FloatBits::from_bits(
+                            self.target.float_format(kind),
+                            bits.raw_bits(),
+                        )
+                        .expect("canonical floating object representation"),
                         &state,
                     )?;
                     self.store_local(*symbol, value, target_span, &mut state)?;
@@ -13593,8 +13733,11 @@ impl<'a> FunctionLowerer<'a> {
         let result = if op == VarArgsBuiltinOp::Arg {
             let ty = requested_ty.ok_or(LowerError::VarArgs { span })?;
             if self.is_aggregate_type(ty) {
-                if !evocc_chir::is_integer_variadic_record(self.unit.types(), ty) {
+                if !evocc_chir::is_integer_variadic_record(self.unit.types(), self.target, ty) {
                     return Err(LowerError::VarArgs { span });
+                }
+                if floating_vector_aggregate(self.unit.types(), self.target, ty) {
+                    return Err(LowerError::FloatingCallInterface { span });
                 }
                 let layout = self
                     .target
@@ -13604,7 +13747,11 @@ impl<'a> FunctionLowerer<'a> {
                     size: layout.size_bytes,
                     align: layout.align_bytes,
                     vector: homogeneous_vector_aggregate(self.unit.types(), ty),
-                    floating: evocc_chir::homogeneous_floating_aggregate(self.unit.types(), ty),
+                    floating: evocc_chir::homogeneous_floating_aggregate(
+                        self.unit.types(),
+                        self.target,
+                        ty,
+                    ),
                 });
                 let origin = self.synthetic_origin()?;
                 Some(ExprValue {

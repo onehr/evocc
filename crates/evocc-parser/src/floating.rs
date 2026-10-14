@@ -122,7 +122,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             _ => FloatKind::F64,
         };
         if infinity {
-            let raw = match selected {
+            // The value has the format of the type: binary64 for a Darwin
+            // `long double`.
+            let format = self.target_layout.float_format(selected);
+            let raw = match format {
                 FloatKind::F32 => 0x7f800000,
                 FloatKind::F64 => 0x7ff0000000000000,
                 _ => 0x7fff0000000000000000000000000000,
@@ -130,7 +133,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(self.alloc_node(CHirExpr::FloatLit(
                 FloatLit {
                     value: evocc_chir::FloatConstant::Real(
-                        evocc_types::floating::FloatBits::from_bits(selected, raw)?,
+                        evocc_types::floating::FloatBits::from_bits(format, raw)?,
                     ),
                     suffix,
                 },

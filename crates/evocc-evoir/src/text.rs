@@ -6,6 +6,35 @@ use evocc_memory::{IndexSignedness, OffsetDirection};
 
 use crate::{BlockId, CmpOp, Function, GlobalKind, GlobalVisibility, Inst, Module, Value};
 
+/// The target that EvoIR text without a target line describes (Section 9.1).
+pub const IMPLICIT_TARGET: &str = "aarch64-unknown-linux-gnu";
+
+/// The target that the first line of `bytes` names, if it has a target line.
+pub(crate) fn named_target(bytes: &[u8]) -> Option<String> {
+    let rest = bytes.strip_prefix(b"target ")?;
+    let end = rest
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .unwrap_or(rest.len());
+    Some(String::from_utf8_lossy(&rest[..end]).into_owned())
+}
+
+/// Render `module` as the text of `target`. The implicit target has no
+/// target line; every other target's text starts with `target TRIPLE` and,
+/// for a nonempty module, a blank line (Section 9.1).
+#[must_use]
+pub fn render_target_module(module: &Module, target: &str) -> String {
+    let body = render_module(module);
+    if target == IMPLICIT_TARGET {
+        return body;
+    }
+    if body.is_empty() {
+        format!("target {target}\n")
+    } else {
+        format!("target {target}\n\n{body}")
+    }
+}
+
 /// Enforce the Section 9 byte envelope before semantic parsing.
 ///
 /// The empty module is the sole zero-byte form. Non-empty modules are ASCII,
@@ -1003,13 +1032,14 @@ fn render_parameter_types(params: &[EvoIRType], marks: &[ParamMark], variadic: b
     )
 }
 
-/// Section 9: `[" byval(" integer ", " integer ")" | " sret(" integer ", " integer ")"]`.
+/// Section 9: `[" byval(" integer ", " integer ")" | " sret(" integer ", " integer ")" | " sext"]`.
 ///
 /// The canonical text of a parameter with no mark is the type alone, so every
 /// module written before revision 1.9.73 renders unchanged.
 fn render_mark(mark: ParamMark) -> String {
     match mark {
         ParamMark::None => String::new(),
+        ParamMark::SignExtend => " sext".to_owned(),
         ParamMark::ByVal(shape) | ParamMark::Sret(shape) => {
             let mut extra = shape.vector.map_or_else(String::new, |v| {
                 format!(", hva={}xvec<{}, bits<{}>>", v.count, v.lanes, v.bits)

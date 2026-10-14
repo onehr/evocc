@@ -13,6 +13,7 @@
 #![doc = concat!("evocc-chir v", env!("CARGO_PKG_VERSION"))]
 
 pub mod allocation;
+mod atomic_reads;
 pub mod constant;
 pub mod core_profile;
 pub mod floating;
@@ -67,7 +68,11 @@ pub mod vector;
 /// A float member does not make a mixed record an HFA. Copying that member's
 /// bytes also does not execute a floating operation or initialize poison bytes.
 #[must_use]
-pub fn is_integer_variadic_record(types: &TypeInterner, ty: TypeId) -> bool {
+pub fn is_integer_variadic_record(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+) -> bool {
     use evocc_types::{TagDefinition, TagState, TypeKind};
     fn member(types: &TypeInterner, ty: TypeId, active: &mut Vec<TagId>) -> bool {
         match types.get(ty).map(|ty| &ty.kind) {
@@ -114,7 +119,7 @@ pub fn is_integer_variadic_record(types: &TypeInterner, ty: TypeId) -> bool {
                 | TypeKind::Complex(_)
         )
     ) && member(types, ty, &mut Vec::new())
-        && homogeneous_floating_aggregate(types, ty).is_none_or(|f| {
+        && homogeneous_floating_aggregate(types, target, ty).is_none_or(|f| {
             matches!(
                 f.kind,
                 evocc_types::FloatKind::F32
@@ -127,13 +132,20 @@ pub fn is_integer_variadic_record(types: &TypeInterner, ty: TypeId) -> bool {
 /// The AAPCS64 HFA class, distinguished from mixed or padded records which use
 /// general registers. Homogeneity is determined after completing the layout.
 #[must_use]
-pub fn is_homogeneous_floating_aggregate(types: &TypeInterner, ty: TypeId) -> bool {
-    homogeneous_floating_aggregate(types, ty).is_some()
+pub fn is_homogeneous_floating_aggregate(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+) -> bool {
+    homogeneous_floating_aggregate(types, target, ty).is_some()
 }
 
+/// The members of an HFA have one format, which `target` gives each C
+/// floating type: a Darwin `long double` member is a binary64 member.
 #[must_use]
 pub fn homogeneous_floating_aggregate(
     types: &TypeInterner,
+    target: &TargetDataLayout,
     ty: TypeId,
 ) -> Option<evocc_types::FloatAggregate> {
     use evocc_types::{FloatKind, TagDefinition, TagState, TypeKind};
@@ -143,9 +155,14 @@ pub fn homogeneous_floating_aggregate(
         Float(FloatKind, u64),
         General,
     }
-    fn shape(types: &TypeInterner, ty: TypeId, active: &mut Vec<TagId>) -> Shape {
+    fn shape(
+        types: &TypeInterner,
+        target: &TargetDataLayout,
+        ty: TypeId,
+        active: &mut Vec<TagId>,
+    ) -> Shape {
         match types.get(ty).map(|ty| &ty.kind) {
-            Some(TypeKind::Float(kind)) => Shape::Float(*kind, 1),
+            Some(TypeKind::Float(kind)) => Shape::Float(target.float_format(*kind), 1),
             Some(TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(count),
@@ -153,7 +170,7 @@ pub fn homogeneous_floating_aggregate(
                 if *count == 0 {
                     return Shape::Empty;
                 }
-                match shape(types, *element, active) {
+                match shape(types, target, *element, active) {
                     Shape::Float(kind, n) if count.checked_mul(n).is_some_and(|n| n <= 4) => {
                         Shape::Float(kind, count * n)
                     }
@@ -181,7 +198,7 @@ pub fn homogeneous_floating_aggregate(
                     let member = if field.bit_field.is_some() {
                         Shape::General
                     } else {
-                        shape(types, field.ty, active)
+                        shape(types, target, field.ty, active)
                     };
                     result = match (result, member) {
                         (Shape::Empty, right) => right,
@@ -203,7 +220,7 @@ pub fn homogeneous_floating_aggregate(
             _ => Shape::General,
         }
     }
-    match shape(types, ty, &mut Vec::new()) {
+    match shape(types, target, ty, &mut Vec::new()) {
         Shape::Float(kind, count @ 1..=4) => {
             let element_bytes = match kind {
                 FloatKind::F16 => 2,
@@ -211,7 +228,6 @@ pub fn homogeneous_floating_aggregate(
                 FloatKind::F64 => 8,
                 FloatKind::F128 => 16,
             };
-            let target = evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu();
             let layout = target.layout_of(types, ty).ok()?;
             // AAPCS64 B.6/C.4 use member alignment before an adjustment of
             // the whole record. A first aligned member can change transport
@@ -244,6 +260,7 @@ pub use allocation::{
     AllocationSite, AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError,
     AllocationSiteOrdinal,
 };
+pub use atomic_reads::atomic_object_reads;
 pub use constant::{
     attribute_query_target, builtin_constant_p, validate_front_end_builtin_records,
     AttributeQueryTarget,
@@ -264,7 +281,7 @@ pub use semantic::{
 };
 
 use evocc_common::SourceSpan;
-use evocc_types::{ArrayBound, Qualifiers, TagId, TagKind, TypeId, TypeInterner};
+use evocc_types::{ArrayBound, Qualifiers, TagId, TagKind, TargetDataLayout, TypeId, TypeInterner};
 
 // ---------------------------------------------------------------------------
 // Literal helpers

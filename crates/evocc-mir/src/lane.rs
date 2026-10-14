@@ -10,7 +10,7 @@ use evocc_evoir::RuntimeValue;
 use evocc_memory::{MemoryState, WorldState};
 use evocc_types::EvoIRType;
 
-use crate::{interpret_module, MModule, MirError, MirLimits, MirValue};
+use crate::{interpret_module, MModule, MirError, MirLimits, MirValue, Target};
 
 /// One defined EvoMIR execution, shaped so the Section 7 equality criterion
 /// can be applied to it directly.
@@ -70,6 +70,9 @@ fn unspecified_fill(index: usize, bits: u16) -> u64 {
 /// and world excluded. They are needed because Section 6 passes and returns a
 /// `bits<N>` with `N < 64` "in the low bits of its register with the upper bits
 /// unspecified": the register alone does not say how much of it is the value.
+///
+/// The argument registers follow the Darwin profile, as `lower_module` does.
+/// Use [`observe_entry_for`] for a module lowered for another target.
 pub fn observe_entry(
     module: &MModule,
     entry: &str,
@@ -77,6 +80,30 @@ pub fn observe_entry(
     result_types: &[EvoIRType],
     limits: MirLimits,
 ) -> Result<MirRun, MirError> {
+    observe_entry_for(
+        Target::Darwin,
+        module,
+        entry,
+        entry_args,
+        result_types,
+        limits,
+    )
+}
+
+/// The same, for a module lowered for `target`.
+///
+/// The target decides where a `bits<128>` argument starts. The entry block
+/// reads the registers that the target's ABI table assigns, so the lane must
+/// pass the arguments in the same registers.
+pub fn observe_entry_for(
+    target: Target,
+    module: &MModule,
+    entry: &str,
+    entry_args: &[RuntimeValue],
+    result_types: &[EvoIRType],
+    limits: MirLimits,
+) -> Result<MirRun, MirError> {
+    let pair_rounding = target.abi().aligned_record_pair_rounding;
     let mut arguments = Vec::new();
     for (index, value) in entry_args
         .iter()
@@ -85,10 +112,12 @@ pub fn observe_entry(
     {
         match value.ty {
             // Section 2: "lowering represents it as two `gpr64` virtual
-            // registers, the low half first", so the boundary passes two, and
-            // Section 6 rounds the position up to even before them.
+            // registers, the low half first", so the boundary passes two.
+            // Section 6.5 rounds the position up to even before them where
+            // the ABI table rounds a 16-byte-aligned argument: Linux does,
+            // Darwin does not.
             EvoIRType::Bits(128) => {
-                if arguments.len() % 2 == 1 {
+                if pair_rounding && arguments.len() % 2 == 1 {
                     arguments.push(MirValue::Int(0));
                 }
                 arguments.push(MirValue::Int(value.raw_bits));

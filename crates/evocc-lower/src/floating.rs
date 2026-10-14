@@ -303,11 +303,11 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        let kind = match literal.suffix {
+        let kind = self.target.float_format(match literal.suffix {
             evocc_chir::FloatSuffix::F => FloatKind::F32,
             evocc_chir::FloatSuffix::None => FloatKind::F64,
             evocc_chir::FloatSuffix::L => FloatKind::F128,
-        };
+        });
         let raw = match literal.value {
             evocc_chir::FloatConstant::Real(value) => value
                 .target_convert(kind)

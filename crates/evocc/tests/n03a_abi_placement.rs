@@ -322,7 +322,9 @@ const RECORDED: &[(&str, &str, &str)] = &[
     ),
     (
         "integer_pairs",
-        "asm dd656ac0d92157731ad5a16045fabd26889bb5a8a354c35cd64e1ede0ac5cfc0",
+        // D04: the Darwin profile places a `bits<128>` argument in the next
+        // two registers, as Apple clang does, with no even-register filler.
+        "asm 6d72b0c14208c0202dbe973b250a33fcdb6cdb00abed9947ceabed6537d09e68",
         "asm f75ebb5240a5df406f19d84d92a4ced25b6f39076975946c3e5042cdf8f43ee1",
     ),
     (
@@ -380,8 +382,10 @@ const RECORDED: &[(&str, &str, &str)] = &[
     ),
     (
         "partially_preserved_vectors",
-        "asm 77d3f284eb6f7c2bd8e8feb00d85bbe554f7b15d8fc5700aa9e1535d232cf9f9",
-        "asm 1a9aa1e2030346585642a9d9f8a9865768d40469ecd5b22158bc6079d59da374",
+        // T03g: the `asm` also clobbers x19 and x20, which both profiles now
+        // save and restore beside x21, d8, d9 and d15. No other line changed.
+        "asm 15e65ec05261d501fd2c44dbc2bcb19850bbbc90e86f00cfc4142e4d97d6b361",
+        "asm 0ed45099153841c744cdf4690da4f4eef8c4b284456dd9b30c03cb5f865b12f8",
     ),
     (
         "vector_arguments",

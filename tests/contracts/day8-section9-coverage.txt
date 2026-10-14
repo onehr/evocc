@@ -125,6 +125,7 @@ OffsetDirection.Add|%v1373 = ptr.offset.add.unsigned %v1374, %v1375 [scale=67]
 OffsetDirection.Subtract|%v1370 = ptr.offset.sub.signed %v1371, %v1372 [scale=61]
 ParamMark.ByVal(shape)|%arg3: ptr<generic> byval(24, 8, hva=3xvec<2, bits<32>>)
 ParamMark.None|%arg0: bits<37>
+ParamMark.SignExtend|bits<11> sext
 ParamMark.Sret(shape)|ptr<generic> sret(16, 16)
 RecordShape(size,align,vector,floating)|byval(24, 8, hva=3xvec<2, bits<32>>)
 FloatAggregate(kind,count,abi_align)|byval(16, 16, hfa=4xf32, abi_align=16)

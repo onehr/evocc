@@ -1,6 +1,6 @@
 # Verification Contract
 
-**Revision 1.0.0** | **Pinned ground truth** | **2026-10-06**
+**Revision 1.1.0** | **Pinned ground truth** | **2026-10-14**
 
 ## Status and scope
 
@@ -227,6 +227,14 @@ structure CheckedLowering (source : IR.Program) (ssa target : Program)
 The hypothesis is a typed value list; `sourceArgument` zero-extends to 64 bits.
 `Machine.source_machine_refines` (`MachineCorrespondence.lean`) composes it with the source result.
 
+The selection check compares a source word and a machine word through their canonical forms
+(`checkTerm`, `MachineSelectionNormal.lean`). When the canonical forms differ, a second proved pass
+lifts the unsigned width changes (`zext`, `trunc`) out of each bitwise operator (`liftCasts`,
+`lift_casts_sound`) and compares the lifted forms. The pass runs only after the first comparison
+fails, so every pair that the first comparison accepts stays accepted. It accepts, for example, the
+guard of a signed division, a one-bit OR in EvoIR, against the 32-bit OR of two zero-extended `cset`
+results that the backend emits (TODO D06).
+
 ### 4.5 Allocation: `allocation`
 
 `Alloc.checkAllocation` (`Alloc/Check.lean`) walks each post-SSA block and the allocated block with
@@ -250,6 +258,13 @@ theorem checkAllocation_sound_args (pre : Machine.Program) (post : Program) (hin
 `Alloc.checkAllocation_sound` is the same with one argument list and no `agrees`. The hypotheses are
 `progress` (the program before allocation is never stuck or malformed; the lowering refinement
 discharges it) and `agrees` (`Alloc.EntryAgrees`: equal after register-class normalization).
+
+`checkAllocation` checks the given hints first (`checkHinted`). If that check fails, and each given
+entry hint is a subset of the ABI entry state of its entry block (`entryHintsHold`), it checks again
+with that ABI entry state as the hint of each entry block (`entryHints`); the hints of the other
+blocks do not change. The soundness theorems hold for every hint, and `checkHinted_of_accepted` gives
+the hints that an accepted check used, so the retry adds no assumption. It accepts, for example, an
+allocated entry that copies a dead parameter (TODO D06).
 
 ### 4.6 Frame and emission: `frame-emission`
 
@@ -541,8 +556,12 @@ the comparisons, gives no known bit, because its proof in `Proofs/Transfer.lean`
 - The Lean test modules, built by `lake build`: `Pipeline/Tests.lean` (accepted fixtures, a
   rejection by the correct stage for each changed input, `AbiSourceEntry` with nonzero upper bits,
   the axiom guard), `Rewrite/Tests.lean`, `Core/SourceTargetCheckTests.lean`,
-  `Core/WellFormedTests.lean`, `MachineLoweringTests.lean`, `Alloc/AcceptanceTests.lean`,
-  `Asm/CheckTests.lean`, `Asm/PrintTests.lean`.
+  `Core/WellFormedTests.lean`, `MachineLoweringTests.lean`, `MachineSelectionDivisionTests.lean`
+  (the D06 guard pair, the cast-lifting laws and the changed operators that stay refused),
+  `Alloc/AcceptanceTests.lean` (with the D06 dead-parameter entry, its refinement theorem and three
+  refused changes), `Asm/CheckTests.lean`, `Asm/PrintTests.lean`.
+- `crates/evocc/tests/proof_required.rs` also checks the unchanged D06 program of
+  `tests/fixtures/d06-guarded-division/` to final assembly text, and its seven changed inputs exit 3.
 - `tools/gate-lean.sh` and `python3 tools/proof-native/proof_native.py all WORK_DIR`.
 - The receipts `tests/contracts/core-v1-pilot.json`, `tests/contracts/core-v1-native-run.json` and
   `tests/contracts/lean-p0-receipt.json`.
@@ -553,7 +572,10 @@ refresh each receipt that it makes stale.
 
 ## 11. Revision
 
-This is revision 1.0.0. If this document and the Lean sources disagree, the Lean sources decide, and
+This is revision 1.1.0 of 2026-10-14. It states the second comparison of the selection check
+(Section 4.4), the entry-hint retry of the allocation check (Section 4.5) and the Lean and Rust tests
+of TODO D06 (Section 10); the theorem statements and the record do not change. Revision 1.0.0 of
+2026-10-06 was the first pinned text. If this document and the Lean sources disagree, the Lean sources decide, and
 this document must get a corrected revision. To change it: (1) edit the text; (2) increase the
 revision line (major: the claim, a theorem statement or the record schema; minor: a new stage,
 export or field; patch: wording); (3) run `python3 tools/check-spec-pins.py --update`, then `python3

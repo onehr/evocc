@@ -26,7 +26,7 @@ use evocc_cpp::{
     PragmaVisibilityAction, Preprocessor,
 };
 use evocc_eqopt::{run_scalar_chain_with_checker, EqualityState, ExtractionPolicy};
-use evocc_evoir::{render_module, InterpreterLimits as EvoIrLimits, Module, RuntimeValue};
+use evocc_evoir::{InterpreterLimits as EvoIrLimits, Module, RuntimeValue};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_mir::emit::{CodegenOptions, StackGuard};
 use evocc_mir::{compile_module_with_options, NativeStop, RelocationModel, Target as MirTarget};
@@ -1130,6 +1130,14 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         return Err("--regalloc-opt is native-only and has no meaning for --check".into());
     }
     let target = target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu);
+    // EvoIR Section 9.1: the checker of a rewrite chain reads the EvoIR text
+    // of the implicit Linux target only. Darwin text names its target, and
+    // no checker reads it.
+    if target.is_darwin() && (optimize_scalar_evoir || eq_proof_dir.is_some() || eq_options) {
+        return Err(format!(
+            "-Oeq-scalar, --eq-proof-dir and the EqSat options are not available for target `{DARWIN_TARGET}`: its EvoIR text has no checker"
+        ));
+    }
     // Apple's arm64 convention passes every anonymous argument on the stack,
     // and its `va_list` is one pointer.
     codegen.anonymous_on_stack = target.is_darwin();
@@ -1932,7 +1940,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                     (module, None)
                 };
                 match action {
-                    ParsedAction::EmitEvoIr => emit_evoir(&module),
+                    ParsedAction::EmitEvoIr => emit_evoir(&module, options.target.triple()),
                     ParsedAction::EmitAsm => match &options.proof {
                         Some(proof) => proof_required::run(
                             options,
@@ -2148,9 +2156,17 @@ fn emit_chir(unit: &evocc_chir::CHirUnit<'_>) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn emit_evoir(module: &Module) -> ExitCode {
+/// EvoIR Section 9.1: the text of a target other than the implicit Linux
+/// target names that target in its first line.
+fn emit_evoir(module: &Module, target: &str) -> ExitCode {
     let mut stdout = std::io::stdout().lock();
-    if write!(stdout, "{}", render_module(module)).is_err() {
+    if write!(
+        stdout,
+        "{}",
+        evocc_evoir::render_target_module(module, target)
+    )
+    .is_err()
+    {
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS

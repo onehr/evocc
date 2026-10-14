@@ -4313,7 +4313,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     requested_ty.ok_or(InterpreterError::VarArgs { span })?,
                     span,
                 )?;
-                if matches!(target, ValueType::Aggregate(ty) if !crate::is_integer_variadic_record(self.unit.types(), ty))
+                if matches!(target, ValueType::Aggregate(ty) if !crate::is_integer_variadic_record(self.unit.types(), &self.target, ty))
                 {
                     return Err(InterpreterError::VarArgs { span });
                 }
@@ -5000,11 +5000,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirExpr::StringLit(_, _) => values.push(self.string_pointer(expression, true)?),
             CHirExpr::FloatLit(literal, _) => {
-                let kind = match literal.suffix {
+                let kind = self.target.float_format(match literal.suffix {
                     crate::FloatSuffix::F => evocc_types::FloatKind::F32,
                     crate::FloatSuffix::None => evocc_types::FloatKind::F64,
                     crate::FloatSuffix::L => evocc_types::FloatKind::F128,
-                };
+                });
                 let value = match literal.value {
                     crate::FloatConstant::Real(value) => value.target_convert(kind).ok_or(
                         InterpreterError::UnsupportedExpression {
@@ -5508,7 +5508,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let anonymous = arguments.split_off(signature.parameters.len());
         if anonymous
             .iter()
-            .any(|value| matches!(value, CValue::Aggregate { ty, .. } if !crate::is_integer_variadic_record(self.unit.types(), *ty)))
+            .any(|value| matches!(value, CValue::Aggregate { ty, .. } if !crate::is_integer_variadic_record(self.unit.types(), &self.target, *ty)))
         {
             return Err(InterpreterError::VarArgs { span: binding_span });
         }
@@ -6218,11 +6218,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     fn value_type(&self, ty: TypeId, span: SourceSpan) -> Result<ValueType, InterpreterError> {
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Void) => Ok(ValueType::Void),
+            // A value has the format of its type: a Darwin `long double`
+            // value is binary64.
             Some(TypeKind::Float(
                 kind @ (evocc_types::FloatKind::F32
                 | evocc_types::FloatKind::F64
                 | evocc_types::FloatKind::F128),
-            )) => Ok(ValueType::Floating(*kind)),
+            )) => Ok(ValueType::Floating(self.target.float_format(*kind))),
             Some(
                 TypeKind::Struct(_)
                 | TypeKind::Union(_)

@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K07, K10, K11, K11f, K12, N08, N09, N10, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | T03, T03g, T03h, T03i, T03j, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03r, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D04, D05, D06, D09 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D06 retains the separate 2026-10-07 guarded-division lowering refusal; do not fix it as part of P13-P16. |
+| AUDIT | T03, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D09, D10 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D10 follows the Darwin target line of T03i. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -2905,6 +2905,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   intrinsics move to L05b.
   [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l05-floating-vectors.md).
+  October 14: a record of floating vectors at a function boundary (parameter,
+  result, anonymous argument or `va_arg`) now gets E3049 on both targets.
+  Before, it passed by reference where AAPCS64 uses vector registers
+  (`crates/evocc/tests/floating_vector_records.rs`). Execution and intrinsics
+  remain.
 
 - [ ] **L05b — `arm_neon.h` intrinsics for the NEON original** — `OPEN`, P3.
   The 2026-10-13 decision on L05 keeps intrinsics out of L05. The torture and
@@ -3161,15 +3166,30 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   to T03z hold every finding.
   [Audit](docs/archive/notebook/spec-audit-20261013.md).
 
-  - [ ] **T03g — Save the callee-saved registers that `asm` clobbers** — `OPEN`, P1.
+  Batch of October 14 (T03g to T03j, T03r, D04 to D06): the full-workspace gate
+  ran 436 suites on its working tree: 3,306 passed, one failed and 7 ignored.
+  The failure was the missing Section 9 manifest line of the new `sext` mark.
+  The commit adds that line, and the suite then passes alone. Clippy and
+  formatting pass. Evidence: `.evidence/rust-batch2-20261013/`.
+
+  - [x] **T03g — Save the callee-saved registers that `asm` clobbers** — `DONE`, P1, 2026-10-14.
     (A01; the `asm` rule of A13). Probe P1 shows a host caller that loses `x19`.
     Next action: add P1 as a native regression for both targets. Then add the
     general callee-saved clobbers to the saved set, and make the allocation
     verifier clear the clobbers of every `asm`. Exit: the regression returns 42
     on the macOS host and in the sealed Linux lane. A forged allocation that
     keeps a value in an `asm`-clobbered register across the `asm` gets E4020.
+    October 14: the prologue saves an `asm`-clobbered `x19` to `x28`, and every
+    epilogue restores it. The allocation verifier clears the clobbers of every
+    `asm`, in a block or as a terminator. It refuses a written callee-saved
+    register that the frame does not save (E4020). An `asm` clobber of `x29` is
+    refused (E4009). The regression returns 42 against an Apple clang caller on
+    macOS and against a GCC 14 caller in the sealed Linux lane, at `-O0` and
+    `-O2` (`crates/evocc/tests/assembly_callee_saved_clobbers.rs`; the Linux
+    test is ignored by default and ran explicitly). EvoMIR 1.2.0 sections 6.7
+    and 9.2 state the rules.
 
-  - [ ] **T03h — Darwin calls across the compiler boundary** — `OPEN`, P1.
+  - [x] **T03h — Darwin calls across the compiler boundary** — `DONE`, P1, 2026-10-14.
     (A02, A03, A04). P2 to P5 compute wrong values against Apple clang. Next
     action: add host tests for P2 to P5, fail closed with a Section 10 code for
     each shape that the backend cannot place, correct the result rule of EvoMIR
@@ -3177,8 +3197,19 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     host, each of P2 to P5 gives the clang value (9, 9, 10, and the pair in
     `x1:x2`), or the driver refuses it with E4010 or E4009. No probe compiles to
     another value.
+    October 14: on Darwin a caller extends a narrow integer argument by its C
+    signedness, through the new EvoIR `sext` parameter mark. A callee returns a
+    signed narrow result as its 32-bit sign extension. Named stack arguments
+    take their natural size and alignment, and a `bits<128>` argument takes no
+    even register. A shape that the Apple placement does not cover gets E4010.
+    P2 to P5 now give the Apple clang values.
+    `crates/evocc/tests/darwin_call_boundary.rs` checks narrow arguments and
+    results, function pointers, 128-bit pairs and stack arguments of integers,
+    floats, records, HFAs and vectors. Every shape gives the Apple clang value
+    in both directions at `-O0` and `-O2`. EvoIR 2.4.0 section 10.1.3 and EvoMIR
+    1.2.0 sections 6.2, 6.5 and 6.6 state the rules.
 
-  - [ ] **T03i — State and test the Darwin target profile of EvoIR** — `OPEN`, P1.
+  - [x] **T03i — State and test the Darwin target profile of EvoIR** — `DONE`, P1, 2026-10-14.
     (A05, A24). Next action: decide the Darwin `long double` layout and the
     target identity of EvoIR text. Exit: under `--target=aarch64-apple-darwin`,
     `sizeof(long double)`, `__SIZEOF_LONG_DOUBLE__` and `offsetof(struct {char
@@ -3186,11 +3217,26 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     refuses `long double` objects with a stated code. Darwin EvoIR text carries
     a target mark, or the EvoIR reader and `-Oeq-scalar` refuse it. EvoIR §9.1
     and §10.5 state the rule.
+    October 14: on `aarch64-apple-darwin`, `long double` is binary64 with size
+    and alignment 8. The three probes equal Apple clang (8, 8, 16), and no
+    binary128 path serves the type. `<float.h>`, `printf` and `sscanf` with
+    `%Lf` through the macOS C library, and calls in both directions, agree with
+    Apple clang (`crates/evocc/tests/darwin_long_double.rs`). Darwin EvoIR text
+    starts with the line `target aarch64-apple-darwin`. The Linux reader refuses
+    that text, and the driver refuses `-Oeq-scalar` and the EqSat options for
+    Darwin; D10 tracks the checker. EvoIR 2.4.0 sections 9.1, 9.3 and 10.5 state
+    the rules. Without `--target`, `--emit=evoir` and the interpreters still use
+    the Linux layout, as the guide states.
 
-  - [ ] **T03j — Fail closed for `_Atomic` reads and nonconstant range initializers** — `OPEN`, P1.
+  - [x] **T03j — Fail closed for `_Atomic` reads and nonconstant range initializers** — `DONE`, P1, 2026-10-14.
     (A06, A07). Exit: parser tests show `_Atomic int g; int ld(void){return g;}`
     gives E2702 at `g` (or EvoIR `atomic.load seq_cst` and `ldar`), and `int
     b[4]={[0 ... 2]=f()};` gives E2917 at `f()`.
+    October 14: a read of an `_Atomic` object gets E2702 at the read; `sizeof`
+    and `&` stay admitted. A nonconstant range-designator initializer gets E2917
+    at the expression
+    (`crates/evocc-parser/tests/fail_closed_reads_and_ranges.rs`). General
+    atomics stay with L11a.
 
   - [ ] **T03k — Keep the division rule of a zero-size pointer difference** — `OPEN`, P2.
     (A08). Exit: for P9, EvoIR has `divisor_nonzero` and
@@ -3246,9 +3292,14 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     EvoMIR tests cover an invalid indirect target (E3048 in the EvoMIR
     interpreter) and empty or unsorted indirect successors.
 
-  - [ ] **T03r — Refuse ABI-changing options on the cc path** — `OPEN`, P2.
+  - [x] **T03r — Refuse ABI-changing options on the cc path** — `DONE`, P2, 2026-10-14.
     (A15). Exit: `evocc -S -fpack-struct` and `evocc -S -mabi=ilp32` exit 1 with
     a diagnostic at the option, also under `-w`. A cc-path test pins both.
+    October 14: the cc path refuses `-fpack-struct` and `-fpack-struct=N`,
+    `-fshort-enums`, `-mbig-endian`, an `-mabi=` value other than `lp64`, an
+    `-ffixed-` register other than `x18`, and `-fcall-used-` and `-fcall-saved-`
+    at the option, also under `-w` (`crates/evocc/tests/cc_abi_options.rs`).
+    EvoMIR 1.2.0 section 6.14 lists them.
 
   - [ ] **T03s — State and test the clean-check scope for pointer relations** — `OPEN`, P2.
     (A16). Exit: `--check` reports `&x[3]-&y`, `&a<&b` and a non-exact
@@ -4792,7 +4843,7 @@ refusal; changing the P13 demo does not close it.
   Closed by `16ba5757`. The parser reads every form that the writer prints, and
   a write-parse-write test gives the same text. EvoMIR 1.1.0 removes the two
   limits from Appendix A.
-- [ ] **D04 — Darwin profile: 128-bit argument pairs** — `OPEN`, P2.
+- [x] **D04 — Darwin profile: 128-bit argument pairs** — `DONE`, P2, 2026-10-14.
   Under the Darwin ABI profile, `record_plan` in
   `crates/evocc-mir/src/lower.rs` rounds a `bits<128>` argument to an even
   register pair, as under Linux. Apple clang does not round: after one
@@ -4808,8 +4859,12 @@ refusal; changing the P13 demo does not close it.
   intended difference. Exit: the decision in section 6.5 and a test: the
   test shows the platform placement, or the section documents the difference
   as intended and the test shows the even pair.
+  October 14, under T03h: the Darwin profile follows the platform. After one
+  64-bit argument a `bits<128>` argument takes `x1`:`x2`, and the crossed test
+  shows it. EvoMIR 1.2.0 section 6.5 states the rule; its conformance note is
+  gone.
 
-- [ ] **D05 — Darwin profile: variadic rules** — `RETEST`, P2.
+- [x] **D05 — Darwin profile: variadic rules** — `DONE`, P2, 2026-10-14.
   The backend option `CodegenOptions::anonymous_on_stack` (`a794cab5`)
   implements the Apple arm64 convention: a call passes every anonymous
   argument on the stack, and `va_list` is one pointer (`7c1fe668`). The C
@@ -4826,10 +4881,24 @@ refusal; changing the P13 demo does not close it.
   do not use the option. Next action: add a test against the Apple
   reference for each variadic case in spec 6.12. Exit: that test passes on a
   macOS host.
+  October 14: `crates/evocc/tests/darwin_variadic_boundary.rs` compares each
+  case of EvoMIR section 6.12 with Apple clang, in both directions at `-O0` and
+  `-O2`: `va_arg` of `int`, `long`, `double`, a pointer, `__int128` and `long
+  double`, HFA and HVA records, records up to and above 16 bytes, `va_copy`,
+  named stack arguments before the anonymous ones, a `va_list` passed to another
+  function and one that `vsnprintf` reads. It passes on this macOS host.
 
-- [ ] **D06 — Lowering check refuses the guarded division shape** — `OPEN`, P2.
+- [x] **D06 — Lowering check refuses the guarded division shape** — `DONE`, P2, 2026-10-14.
   Preserve the exact source from
   `.evidence/diagnostics/20261007/agent-demo/evocc-demo-core-integer.c`:
+  October 14: the Lean change `34d81cbf` adds the proved width and bitwise
+  conversion and the entry-state hint of the allocation check.
+  `tools/gate-lean.sh` passed on a clean tree and refreshed the receipt
+  (`350d48fe`). In `crates/evocc/tests/proof_required.rs`,
+  `guarded_division_is_checked_to_final_assembly_text` checks the unchanged
+  original (`tests/fixtures/d06-guarded-division/`) to final assembly text for
+  `divide` and `main`. Seven changed-input controls exit 3 and write no output.
+  Verification 1.1.0 states the two checks.
 
   ```c
   int divide(int divisor, int unused)
@@ -4931,6 +5000,19 @@ refusal; changing the P13 demo does not close it.
   that GCC drops. Next action: implement them with the D08 rules. Exit: each
   builtin has a crossed test against Apple clang or gcc-14, and
   `__has_builtin` reports it.
+
+- [ ] **D10 — Check `-Oeq-scalar` rewrites of Darwin EvoIR text** — `OPEN`, P1.
+  T03i gave Darwin EvoIR text a target line. The driver now refuses
+  `-Oeq-scalar`, `--eq-proof-dir` and the EqSat options for
+  `aarch64-apple-darwin`, because the rewrite checker reads only the text of the
+  implicit Linux target. Darwin is the default target on a macOS host, so the
+  README example "See the change in a real program" fails there with that
+  refusal. Next action: render the Darwin text with its target line in the
+  chain, and let `evocc-checker` read it with `parse_target_module`. Show that
+  no rule of the five registries depends on the data layout, or refuse the rules
+  that do. Exit: the README example passes on macOS, a test checks a Darwin
+  rewrite chain end to end, and the checker refuses a certificate whose text
+  names another target.
 
 ## Codegen quality track — next quarter
 

@@ -1416,7 +1416,8 @@ impl RecordShape {
 
 /// What EvoIR 10.1.3 (revision 1.9.73) says about one `ptr<generic>`
 /// parameter: nothing, that it holds a record passed by value, or that it is
-/// the destination a record result is written through.
+/// the destination a record result is written through. On the Darwin target
+/// a signed integer parameter narrower than 32 bits carries `sext` instead.
 ///
 /// EvoIR has no record-typed value, so a record crosses a call as a pointer to
 /// a copy; the mark tells the machine which pointers those are, so that it can
@@ -1437,14 +1438,18 @@ pub enum ParamMark {
     ByVal(RecordShape),
     /// `sret(size, align)`: the destination a record result is written to.
     Sret(RecordShape),
+    /// `sext`: a signed integer parameter narrower than 32 bits. A caller on
+    /// the Darwin target extends the argument by its sign to 32 bits, as the
+    /// Apple arm64 convention requires (EvoMIR Section 6.2).
+    SignExtend,
 }
 
 impl ParamMark {
-    /// The record's shape, for either mark.
+    /// The record's shape, for either record mark.
     #[must_use]
     pub const fn shape(self) -> Option<RecordShape> {
         match self {
-            Self::None => None,
+            Self::None | Self::SignExtend => None,
             Self::ByVal(shape) | Self::Sret(shape) => Some(shape),
         }
     }
@@ -1758,6 +1763,8 @@ pub struct TargetDataLayout {
     short_wchar: bool,
     signed_char: bool,
     pointer_va_list: bool,
+    binary64_long_double: bool,
+    narrow_call_extension: bool,
 }
 
 impl TargetDataLayout {
@@ -1767,18 +1774,57 @@ impl TargetDataLayout {
             short_wchar: false,
             signed_char: false,
             pointer_va_list: false,
+            binary64_long_double: false,
+            narrow_call_extension: false,
         }
     }
 
     /// Apple arm64 layout. Its `va_list` is one pointer to the anonymous
-    /// arguments, which the caller passes on the stack. Plain `char`
-    /// signedness stays a separate selection.
+    /// arguments, which the caller passes on the stack, and its `long double`
+    /// has the binary64 format of `double`. Plain `char` signedness stays a
+    /// separate selection.
     #[must_use]
     pub const fn aarch64_apple_darwin() -> Self {
         Self {
             short_wchar: false,
             signed_char: false,
             pointer_va_list: true,
+            binary64_long_double: true,
+            narrow_call_extension: true,
+        }
+    }
+
+    /// Whether a call extends an integer argument or result narrower than 32
+    /// bits to 32 bits by its C signedness: the caller extends an argument
+    /// and the callee a result. The Apple arm64 convention requires it.
+    #[must_use]
+    pub const fn extends_narrow_call_integers(&self) -> bool {
+        self.narrow_call_extension
+    }
+
+    /// Whether `long double` has the binary64 format of `double`. It stays a
+    /// distinct C type in either case.
+    #[must_use]
+    pub const fn long_double_is_binary64(&self) -> bool {
+        self.binary64_long_double
+    }
+
+    /// The value format of the C floating type of `kind`. `FloatKind::F128`
+    /// names `long double`, whose format the target chooses.
+    #[must_use]
+    pub const fn float_format(&self, kind: FloatKind) -> FloatKind {
+        match kind {
+            FloatKind::F128 if self.binary64_long_double => FloatKind::F64,
+            kind => kind,
+        }
+    }
+
+    /// The value format of the parts of a complex floating type.
+    #[must_use]
+    pub const fn complex_format(&self, base: ComplexBase) -> ComplexBase {
+        match base {
+            ComplexBase::CF128 if self.binary64_long_double => ComplexBase::CF64,
+            base => base,
         }
     }
 
@@ -1976,8 +2022,8 @@ impl<'a> LayoutContext<'a> {
             }
             TypeKind::GnuInt128(_) => Ok(TypeLayout::new(16, 16)),
             TypeKind::Int(rank) => Ok(integer_layout(rank)),
-            TypeKind::Float(kind) => Ok(float_layout(kind)),
-            TypeKind::Complex(base) => Ok(complex_layout(base)),
+            TypeKind::Float(kind) => Ok(float_layout(self.target.float_format(kind))),
+            TypeKind::Complex(base) => Ok(complex_layout(self.target.complex_format(base))),
             TypeKind::Vector { element, lanes, .. } => {
                 let element = self.layout_type(element)?;
                 let bytes = element

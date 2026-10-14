@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.1.0** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
+**Revision 1.2.0** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
 
 ## Status and scope
 
@@ -129,9 +129,11 @@ Section 6.1 lists their differences.
 The C driver emits both ABI profiles: `--target` accepts
 `aarch64-unknown-linux-gnu` and `aarch64-apple-darwin` (`parse_target` in
 `crates/evocc/src/main.rs`). For `aarch64-apple-darwin`, the driver also
-selects the Apple variadic convention of Section 6.12.
+selects the Apple convention of Sections 6.2, 6.6 and 6.12.
 The backend library and its tests cover both ABI profiles, and the
 exact-input adapter `evo-ir-asm` accepts `linux-aarch64` and `darwin-arm64`.
+That adapter reads the EvoIR text of the implicit Linux target only (EvoIR
+Section 9.1), so its `darwin-arm64` output never uses the Apple convention.
 The library entry points that take no target (`lower_module`,
 `compile_module`, `frame_of`, `emit_module`) use the Darwin ABI profile.
 
@@ -730,8 +732,8 @@ The C driver emits both ABI profiles (Section 1.3).
 | Frame record | 16 bytes | same |
 | Variadic save slots | 8 bytes per `x`, 16 per `v`; area alignment 16 | same |
 | Record register limit | 16 bytes | same |
-| **Stack arguments** | admitted | **refused** (`E4010`) |
-| **16-byte-aligned record starts at an even register** | yes | **no** |
+| **Stack arguments** | 8-byte slots | **natural size and alignment** under the Apple convention; otherwise **refused** (`E4010`) |
+| **16-byte-aligned argument (record or `bits<128>`) starts at an even register** | yes | **no** |
 
 The ABI profiles also differ in these places:
 
@@ -741,12 +743,15 @@ The ABI profiles also differ in these places:
   visibility only on its host ABI profile, Linux; Darwin refuses them. The
   kernel profile also sets the stack-protector slot to 16 bytes.
 - **Binary128** and strict 128-bit conversions: Linux only (Section 2.6).
-- **Variadic functions.** The Darwin platform passes every anonymous argument
-  on the stack, and its `va_list` is one pointer. By default, EvoMIR applies
-  the AAPCS64 rules of Section 6.12 under both ABI profiles. The backend
-  option `anonymous_on_stack` selects the Apple convention of Section 6.12.
-  The C driver enables it for `aarch64-apple-darwin` only.
-- **128-bit argument pairs**: see the conformance note of Section 6.5.
+- **The Apple convention.** The Darwin platform passes every anonymous
+  argument on the stack, its `va_list` is one pointer, it packs named stack
+  arguments by natural size and alignment, and a caller extends a narrow
+  integer argument by its C signedness. By default, EvoMIR applies the
+  AAPCS64 rules of Sections 6.2, 6.6 and 6.12 under both ABI profiles. The
+  backend option `anonymous_on_stack` selects the Apple convention of
+  Sections 6.2, 6.6 and 6.12. The C driver enables it for
+  `aarch64-apple-darwin` only.
+- **128-bit argument pairs** (Section 6.5).
 
 ### 6.2 Arguments and results
 
@@ -760,12 +765,17 @@ stack. A function returns up to eight integer or pointer results in `x0` to
 with `N < 64` has unspecified upper bits, and the callee applies Section 3. A
 call is **cross-boundary** when the callee's definition is not emitted beside
 the caller, a fact that emission knows and EvoIR cannot spell; every call to
-an EvoIR `declare` is one. At a cross-boundary call, the caller zero-extends
-every argument narrower than 32 bits to 32 bits under both ABI profiles (the
-Darwin rule, harmless under Linux). EvoIR carries no parameter signedness;
-a front end that passes a signed narrow argument emits `sext` to `bits<32>`.
-The callee zero-extends a result narrower than 32 bits to 32 bits on every
-return, because it cannot know its caller.
+an EvoIR `declare` is one. At a cross-boundary call, the caller extends every
+argument narrower than 32 bits to 32 bits under both ABI profiles (the Darwin
+rule, harmless under Linux): by its sign when the signature marks the
+parameter `sext` (EvoIR Section 10.1.3), otherwise by zeros. Under the Apple
+convention an indirect call extends its narrow arguments the same way,
+because its callee can be code that another compiler built. The callee
+zero-extends a result narrower than 32 bits to 32 bits on every return,
+because it cannot know its caller. On the Darwin target the front end returns
+a signed integer narrower than 32 bits as `bits<32>`, its sign extension
+(EvoIR Section 10.1.3), so a caller that another compiler built reads the
+value that the Apple convention promises.
 
 ### 6.3 Floating-point and vector arguments (Linux)
 
@@ -800,18 +810,17 @@ A `bits<128>` result is `x0`:`x1`, the low half in `x0`. Under Linux, a
 `bits<128>` argument takes `x(2k)`:`x(2k+1)`, the low half in the even
 register: after one 64-bit argument `x2`:`x3` (`x1` skipped), after two
 `x2`:`x3`, after seven the stack, 16-byte aligned, with `x7` unused. The
-Darwin platform does not round: `x1`:`x2` after one 64-bit argument.
-
-**Conformance note.** The implementation rounds to an even pair under both
-ABI profiles (`record_plan` in `crates/evocc-mir/src/lower.rs`). Under the
-Darwin ABI profile, a `bits<128>` argument after an odd number of
-general-register positions therefore disagrees with the platform at a
-cross-boundary call; calls between EvoCC functions agree. The native pair
-checks run on the Linux lane only.
+Darwin ABI profile does not round, as the platform does not: `x1`:`x2` after
+one 64-bit argument. The ABI table's `aligned-record-pair-rounding` fact
+decides the rounding for a `bits<128>` and for a record aligned to 16 alike.
+An anonymous `bits<128>` under the Apple convention starts at a
+16-byte-aligned slot.
 
 *Informative.* Linux: `p35-int128.c` (`ret128`, `take_after_one`,
 `take_after_two`, `take_after_seven`) under GCC-14 and Clang-19. Darwin:
-`.evidence/builtin-probes/20260905-b6/b6-darwin-abi.out` under Apple clang.
+`.evidence/builtin-probes/20260905-b6/b6-darwin-abi.out` under Apple clang,
+and the crossed test `crates/evocc/tests/darwin_call_boundary.rs` with the
+fixtures of `tests/fixtures/darwin-call-boundary/`.
 
 ### 6.6 Stack arguments
 
@@ -821,9 +830,37 @@ Under Linux, an argument that finds no register goes to the stack in an
 the low bytes of its slot. The caller writes slot `i` with `arg.outgoing` at
 `[sp, #8 * i]`; the callee reads it with `arg.incoming` at
 `x29 + 16 + 8 * i`. When the pins of a call leave no register for a stack
-argument value, its store precedes the fixed-register copies. The
-Darwin platform packs stack arguments by natural alignment; that rule is not
-implemented, so the Darwin ABI profile refuses stack arguments (`E4010`).
+argument value, its store precedes the fixed-register copies.
+
+**The Apple convention.** Under the Apple convention a named argument that
+finds no register goes to the **named stack area**, in argument order, at the
+next offset that is a multiple of its alignment:
+
+| Argument | Size | Alignment |
+|---|---|---|
+| Integer, pointer, `f32`, `f64`, short vector | its own size (1, 2, 4, 8 or 16) | its size |
+| `bits<128>` | 16 | 16 |
+| Record of at most 16 bytes that is no HFA or HVA | its size rounded up to 8 | 8, or 16 for a record aligned to 16 |
+| HFA or HVA | its members, contiguous | the record's alignment, at least a member's, at most 16 |
+| Record above 16 bytes | the pointer to the caller's copy, 8 | 8 |
+
+An argument that does not fit its bank takes no register, and that bank stays
+exhausted for the later named arguments, as in AAPCS64. The caller passes the
+area as 8-byte words in consecutive stack slots: zero fillers first take the
+free registers of both banks, then each word that one 8-byte piece fills is
+that piece, a 16-byte vector is one 16-byte element, and every other word is
+composed in a general register from its pieces, zero-extended and shifted to
+their byte offsets. The callee reads each named stack argument at
+`x29 + 16 + offset` with an access of its size. Without the Apple convention
+the Darwin ABI profile refuses stack arguments (`E4010`), and so does the
+Apple convention for an argument that the table above does not place and for
+a named stack area above 1 MiB.
+
+*Informative.* Apple, "Writing ARM64 code for Apple platforms"; the shapes
+`ints`, `floats`, `records`, `floating_records`, `pair_on_stack`,
+`record_split`, `interleaved` and `vectors` of
+`tests/fixtures/darwin-call-boundary/` agree with Apple clang in both
+directions at `-O0` and `-O2`.
 
 ### 6.7 Preserved registers
 
@@ -832,7 +869,11 @@ call-clobbered; `x18` is never used. A callee preserves only the low 64 bits
 of `v8` to `v15`; every other SIMD register is call-clobbered. The allocator
 never assigns `v8` to `v15`. When an `asm` clobbers one of them, the
 prologue saves its low 64 bits (`d8` to `d15`) and the epilogue restores
-them.
+them. When an `asm` clobbers one of `x19` to `x28`, the prologue saves it and
+every epilogue restores it, as for an allocated value. A function that
+contains an `asm` keeps its frame record, so a clobbered `x30` is restored
+from it. An `asm` that clobbers `x29` is refused (`E4009`): the frame record
+and every frame address read `x29` after the prologue, as GCC refuses it.
 
 ### 6.8 Frame layout
 
@@ -976,21 +1017,30 @@ for calls, the list object and `va_arg` with the Apple arm64 convention. It is
 off by default. The C driver enables it for `aarch64-apple-darwin` only. Under
 it, these rules apply:
 
-- A call passes the named arguments as above. It passes every anonymous
-  argument on the stack, in order, in slots of `S8` bytes. A 16-byte-aligned
-  anonymous argument starts at a 16-byte-aligned slot. A record above 16 bytes
-  that is not a vector group travels as a pointer to the caller's copy.
+- A call passes the named arguments as above, with the named stack area of
+  Section 6.6. It passes every anonymous argument on the stack, in order, in
+  slots of `S8` bytes, after the named stack area rounded up to 8. A
+  16-byte-aligned anonymous argument starts at a 16-byte-aligned slot. A
+  record above 16 bytes that is not a vector group travels as a pointer to
+  the caller's copy.
 - Zero fillers take the free argument registers of each bank that an
   anonymous argument uses, so no anonymous argument goes to a register.
 - The list object is one pointer (the `va_list` of the Darwin data layout).
-  `va_start` stores `x29 + 16 + named_stack_bytes` to it and nothing else.
+  `va_start` stores `x29 + 16 + named_stack_bytes` to it and nothing else,
+  where `named_stack_bytes` is the named stack area of Section 6.6 rounded up
+  to 8.
 - `va_arg` loads the pointer, rounds it up to 16 when `A` is 16, reads `T`
   there, and stores the pointer plus `S8` back.
 - The prologue still fills the save areas. Nothing reads them.
 
 *Informative.* The test `darwin_variadic_calls_agree_with_the_c_library` in
 `crates/evocc/tests/driver_cc.rs` runs variadic calls in both directions across
-the macOS C library.
+the macOS C library. `crates/evocc/tests/darwin_variadic_boundary.rs` compares
+each case of this section with Apple clang in both directions at `-O0` and
+`-O2`: `va_arg` of `int`, `long`, `double`, a pointer, `__int128` and `long
+double`, HFA and HVA records, records up to and above 16 bytes, `va_copy`,
+named stack arguments before the anonymous ones, a `va_list` passed to another
+function and a `va_list` that `vsnprintf` reads.
 
 *Informative.* Probes: `p34-varargs.c` (fourteen items, GCC-14 and Clang-19),
 `.evidence/builtin-probes/20260907-variadic-stack/results.txt` and
@@ -1030,8 +1080,17 @@ the backend does not perform; `-fira-region=one`, `-fira-hoist-pressure` and
 `-freorder-blocks-algorithm=simple` name one whole-function allocation, no
 hoisting pass and block placement in allocated order. They change no
 semantics, ABI or output, and a future pass must honor them. Other values,
-positive transformation options, `-fpack-struct`, `-mabi` and `-Ofast` are
-refused.
+positive transformation options and `-Ofast` are refused. An option that
+changes the ABI and that the backend does not implement is refused at the
+option on every command line, also under `-w` and `--cap-lints=allow`:
+`-fpack-struct` and `-fpack-struct=N`, `-fshort-enums`, `-mbig-endian`, an
+`-mabi=` value other than `lp64`, an `-ffixed-` register other than `x18`,
+and `-fcall-used-` and `-fcall-saved-`. `-mabi=lp64` names the default ABI
+and `-ffixed-x18` a register that the backend never uses (Section 6.7), so
+both are admitted.
+
+*Informative.* `crates/evocc/tests/cc_abi_options.rs` pins the cc command
+line; `crates/evocc/tests/compilation_options.rs` pins `--emit=asm`.
 
 ## 7. Out-of-SSA and Register Allocation
 
@@ -1367,7 +1426,10 @@ liveness or spill decisions of the allocator. It refuses (`E4020`) when:
 - a value live on entry is not in its ABI argument register, or two entry
   values share a register;
 - a register read does not hold the expected virtual register on every path
-  (a call clears the call-clobbered registers; an `asm` clears its clobbers);
+  (a call clears the call-clobbered registers; every `asm`, in a block or as
+  its terminator, clears its clobbers);
+- a callee-saved register that an assigned value occupies or an `asm`
+  clobbers is not in the saved set that the frame saves (Section 6.7);
 - a `flags` producer is not followed by its consumer;
 - an `asm` operand violates its bank, fixed binding, tie or early clobber, or
   a symbolic operand is not under `i`;
@@ -1422,8 +1484,8 @@ keep their names, so that old receipts can be read.
 | `E4006` | `not-lowered: indirect-branch` | Withdrawn: `br.indirect` lowers with complete edge bindings (Section 7.2). Invalid targets and malformed bindings keep their own checks. |
 | `E4007` | `not-lowered: frame-address` | Withdrawn: `frame_address` lowers (Section 5.1). |
 | `E4008` | `not-lowered: pointer-difference` | Withdrawn: `ptr.to_int` operands, 64-bit subtraction and exact signed division lower through scalar forms. |
-| `E4009` | `not-lowered: unsupported-form` | An EvoIR instruction absent from Section 5, or a form that the ABI profile does not admit (binary128, section placement or a patchable entry on Darwin). |
-| `E4010` | `abi: too-many-register-arguments` | More than eight general-register argument positions on the Darwin ABI profile (Section 6.6). |
+| `E4009` | `not-lowered: unsupported-form` | An EvoIR instruction absent from Section 5, a form that the ABI profile does not admit (binary128, section placement or a patchable entry on Darwin), or an `asm` that clobbers `x29` (Section 6.7). |
+| `E4010` | `abi: too-many-register-arguments` | A stack argument on the Darwin ABI profile without the Apple convention, or a named stack argument that the Apple convention does not place (Section 6.6). |
 | `E4011` | `abi: aggregate-by-value` | Withdrawn: `byval`/`sret` records follow AAPCS64 (Section 6.4). |
 | `E4012` | `abi: variadic` | Withdrawn: variadic callees and callers lower (Section 6.12). |
 | `E4013` | `abi: too-many-results` | More than eight ordinary results. |
@@ -1587,11 +1649,24 @@ and the checked UB-check profile; each exporter refuses other forms.
 
 ## Revision
 
-**Revision 1.1.0, 2026-10-13.** Appendix A adds the productions of the
-`spill.store`, `spill.reload`, `arg.incoming` and `arg.outgoing` forms and
-admits a `#zero:` assembly operand of every class. The parser now reads every
-form that the writer prints. Revision 1.0.1 of 2026-10-07 specified the Apple
-variadic convention (Sections 1.3, 6.1 and 6.12).
+**Revision 1.2.0, 2026-10-14.** The Darwin ABI profile follows Apple clang
+at calls across the compiler boundary: a caller extends a narrow argument by
+the `sext` mark of its parameter, also at an indirect call under the Apple
+convention (Section 6.2); a `bits<128>` argument takes the next two registers
+(Section 6.5, which drops its conformance note); and the Apple convention
+packs named stack arguments by natural size and alignment instead of refusing
+them (Sections 6.1, 6.6 and 6.12). An `asm` clobber of `x19` to `x28` is saved
+and restored, and an `asm` clobber of `x29` is refused (Section 6.7). The
+allocation verifier clears the clobbers of every `asm` and checks the saved
+set (Section 9.2). Section 6.14 lists the ABI-changing options that every
+command line refuses, and Section 6.12 names the crossed variadic test.
+Section 10 states the new meanings of `E4009` and `E4010`.
+Evidence: `crates/evocc/tests/darwin_call_boundary.rs`,
+`crates/evocc/tests/assembly_callee_saved_clobbers.rs` and
+`crates/evocc-mir/tests/section7_allocation_verifier.rs`. Revision 1.1.0 of
+2026-10-13 added the Appendix A productions of the `spill.*` and `arg.*`
+forms; revision 1.0.1 of 2026-10-07 specified the Apple variadic convention
+(Sections 1.3, 6.1 and 6.12).
 
 **Revision 1.0.0, 2026-10-06.** This revision is the pinned ground truth of
 EvoMIR. It specifies the same machine IR and backend as revision 0.64 of

@@ -837,6 +837,18 @@ impl Session {
             .map_or("/dev/null", |source| source.path.as_str());
         let options = crate::parse_options(&self.compile_arguments(self.mode(), input), true)
             .map_err(|message| self.fail(&message))?;
+        // EvoMIR Section 6.14: an option that changes the ABI is refused at the
+        // option whatever the warning level. Ignoring it would give every
+        // record, enumeration or register a layout that its callers disagree
+        // with.
+        for option in options.ignored_options.iter() {
+            if changes_the_abi(option) {
+                return Err(self.fail_at(
+                    &format!("option `{option}` changes the ABI, which this compiler cannot honor"),
+                    Some(option),
+                ));
+            }
+        }
         for option in options.ignored_options.iter().chain(&self.command.ignored) {
             let message = format!("option `{option}` is not supported and has no effect");
             match options.lints.driver_warning() {
@@ -1268,4 +1280,24 @@ impl Session {
         }
         toolchain::run(&tool, &arguments, &mounts, verbose, false)
     }
+}
+
+/// Whether `option` changes the data layout or the register convention in a
+/// way that this compiler does not implement: record packing, short
+/// enumerations, another `-mabi` than the default `lp64`, big-endian data, or
+/// a register reserved or reassigned for the whole program. The backend never
+/// uses `x18`, so `-ffixed-x18` keeps the ABI.
+fn changes_the_abi(option: &str) -> bool {
+    option == "-fpack-struct"
+        || option.starts_with("-fpack-struct=")
+        || option == "-fshort-enums"
+        || option == "-mbig-endian"
+        || option
+            .strip_prefix("-mabi=")
+            .is_some_and(|abi| abi != "lp64")
+        || option
+            .strip_prefix("-ffixed-")
+            .is_some_and(|register| !matches!(register, "x18" | "w18"))
+        || option.starts_with("-fcall-used-")
+        || option.starts_with("-fcall-saved-")
 }
