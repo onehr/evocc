@@ -3396,6 +3396,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     checker. One traversal test over all 59 instruction variants for every
     hand-written traversal. The boundary scan covers `costs.rs`, `encodings.rs`
     and `patterns.rs`. E4004 and the alias-truth rule each have a test.
+    October 14, Lean part: `lean/EvoIR/Rewrite/Tests.lean` covers the seven
+    untested Section 9 refusals of A36 with 15 refusal fixtures and 9 controls
+    that pass the same check. Each case also agrees with `checkRewriteText`.
+    `lake env lean` checks the file with exit 0, and four scratch mutations of
+    it fail as they should. Two checks cannot be reached by any certificate
+    (`Check.lean:68` and the constant test of `Replay.lean:368`), by reading the
+    code. `evoir-sem --list-stages` prints five rows; the Rust comparison with
+    `STAGES` is open. The full Lean gate waits for free disk space.
+    [Note](docs/archive/notebook/lean-rewrite-refusals-20261014.md).
 
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed
