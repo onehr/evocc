@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.4.0** | **Pinned ground truth** | Stated the Darwin target profile on 2026-10-14
+**Revision 2.5.0** | **Pinned ground truth** | Corrected the equality-saturation and trusted-base text on 2026-10-14
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -13,10 +13,12 @@
 are normative. In those parts, a requirement uses "must" or "must not", and
 "can" states a permission. The following text is informative: paragraphs and
 list items that start with "Note", "Example", "Rationale" or "Informative";
-the worked examples of Sections 9.6 to 9.8 and other code blocks that are
-introduced as examples; and references to tests, fixtures, measurements and
-reference-compiler behavior, which identify conformance evidence and do not
-add requirements.
+Sections 8.1 to 8.4 and 10.2 and the fact table of Section 7.2, which
+describe a design that no code of this revision applies; Section 10.3, which
+summarizes rules that other sections state; the worked examples
+of Sections 9.6 to 9.8 and other code blocks that are introduced as examples;
+and references to tests, fixtures, measurements and reference-compiler
+behavior, which identify conformance evidence and do not add requirements.
 
 **Formal semantics of `core-v1`.** For the checked subset `core-v1`, the Lean
 definitions in `lean/EvoIR/Core/` are the formal semantics of EvoIR. The prose
@@ -639,9 +641,12 @@ is `ctpop`; `__builtin_bswap16/32/64` are `bswap`. Example values: `clz(1u) = 31
 condition is true, `0` otherwise.
 
 `eq` / `ne`: bitwise equality / inequality for integers. Pointer equality
-compares the complete provenance and byte offset from Section 1.3; function
-pointers therefore compare equal exactly when both are null or both name the
-same function symbol. No instruction compares pointers by order.
+compares the abstract addresses of the two operands (Section 5.3), not their
+provenance. Two pointers into one object compare equal exactly when their
+byte offsets are equal, and a pointer from `ptr.from_int` compares by its
+integer address. Function pointers compare equal exactly when both are null
+or both name the same function symbol. No instruction compares pointers by
+order.
 `slt` / `sle`: signed two's-complement less-than / less-or-equal.
 `ult` / `ule`: unsigned less-than / less-or-equal.
 
@@ -1146,7 +1151,7 @@ to resolve and no declaration to consult.
 **Anonymous arguments.** When the callee's signature is
 variadic, the arguments between the last listed parameter and `%m0` are
 anonymous. Each has one of the types `bits<32>`, `bits<64>`, `bits<128>`,
-`f64`, `ptr<AS>` or `fnptr<Sig>`: these are the C types that survive the
+`f64`, `f128`, `ptr<AS>` or `fnptr<Sig>`: these are the C types that survive the
 default argument promotions (10.1.3), and the front end performs the
 promotions, so `bits<8>` and `bits<16>` never appear here. There may be any
 number of them, including none. Their types are not part of the signature and
@@ -1311,9 +1316,11 @@ register with an independent input or another output. Register allocation,
 spills, selected-edge writeback and the independent allocation and proof
 checks preserve tied and early-clobber placement.
 
-Assembly keeps maximal memory/world effects, including `fenv=true`, regardless
-of `volatile`. It can change FP controls/status; native admission knowledge
-must be invalidated across it before subsequent baseline or strict arithmetic.
+Assembly keeps the effect summary of Section 4.2 regardless of `volatile`: it
+reads and writes `all`, and `volatile`, `io`, `fenv` and `may_trap` are true;
+`atomic` and `may_unwind` are false. It can change FP controls/status; native
+admission knowledge must be invalidated across it before subsequent baseline
+or strict arithmetic.
 The compiler never resets FPCR/FPSR to accommodate it. Both interpreters still
 report E3021 upon reaching opaque assembly. Native execution, allocation
 verification and proof reconstruction are required; type admission alone is
@@ -1427,7 +1434,7 @@ it ineligible as a region root or witness, so no rewrite can reach it.
 | Field | Description |
 |---|---|
 | `%ap` | A `ptr<AS>` to a **list object**: 32 bytes at alignment 8, the lowering of one `__builtin_va_list` (10.1.5). |
-| `Type` | For `va_arg`: one of `bits<32>`, `bits<64>`, `bits<128>`, `f64`, `ptr<AS>`, `fnptr<Sig>`, the promoted types of Section 3.10. |
+| `Type` | For `va_arg`: one of `bits<32>`, `bits<64>`, `bits<128>`, `f64`, `f128`, `ptr<AS>`, `fnptr<Sig>` or an integer `vec<L, bits<N>>`, the promoted types of Section 3.10. |
 
 **Semantics.** A variadic function receives, besides its listed parameters,
 the sequence of anonymous arguments its caller passed. `va_start` makes the
@@ -1876,14 +1883,17 @@ two interpreters without exposing interpreter-local identities.
 
 ### 4.4 Reordering Rules
 
-Two instructions `I1` and `I2` where `I1` dominates `I2` in program order may
-be reordered (I2 scheduled before I1) if and only if:
+No transformation of this revision reorders two EvoIR instructions. The P0
+and guard rewrites replace one root in place (Sections 8.8 and 8.12), and
+EvoMIR lowering keeps the order of memory operations (EvoMIR Section 5.1).
 
-1. `I1.writes ∩ I2.reads = {}` (no write-after-read hazard)
-2. `I1.reads ∩ I2.writes = {}` (no read-after-write hazard)
-3. `I1.writes ∩ I2.writes = {}` (no write-after-write hazard)
-4. Neither `I1` nor `I2` touches `world`
-5. Neither `I1` nor `I2` may trap ahead of a volatile/IO operation
+Informative. A later transformation could schedule `I2` before an `I1` that
+dominates it only if `I1.writes ∩ I2.reads = {}` (no write-after-read
+hazard), `I1.reads ∩ I2.writes = {}` (no read-after-write hazard),
+`I1.writes ∩ I2.writes = {}` (no write-after-write hazard), neither
+instruction touches `world`, and neither may trap ahead of a volatile or I/O
+operation. A revision that adds such a transformation must make these
+conditions normative and test them.
 
 ### 4.5 E-Class Effect Invariant
 
@@ -2280,12 +2290,16 @@ and no offset: `ptr.offset` applied to it is invalid, and loading or storing
 through it is invalid, because a function is not an object with bytes. Only
 `call` consumes it.
 
-Two pointers compare equal exactly when both components are equal, which for
-function pointers means naming the same symbol. Distinct `ObjectId` values
-remain distinct even if an implementation chooses identical abstract address
-bits for their object representations. Provenance is never
-derived from a host address. Conversions between pointers and integers follow
-Section 3.7: `ptr.to_int` exposes the object, and `ptr.from_int` yields
+Each object has a deterministic abstract address, derived from its
+allocation origin, and the address ranges of two objects never overlap. A pointer's abstract address is its object's
+address plus its byte offset, the integer address of an exposed-address
+pointer, zero for `Null`, or a value fixed by the function symbol. Pointer
+equality (Section 3.5) compares these addresses, so for function pointers it
+means naming the same symbol. Provenance stays part of the pointer: two
+pointers with equal addresses and different provenance compare equal, and an
+access through each still follows its own provenance (Section 5.4).
+Provenance is never derived from a host address. Conversions between pointers
+and integers follow Section 3.7: `ptr.to_int` exposes the object, and `ptr.from_int` yields
 exposed-address provenance. Backend provenance erasure is outside EvoIR.
 
 ### 5.4 Pointer and Access Classification
@@ -2361,6 +2375,8 @@ deliberately does not repeat the text.
 | `signed_overflow` | `E3004` |
 | `invalid_shift_count` | `E3005` |
 | `invalid_signed_left_shift` | `E3006` |
+| `bit_builtin_zero_operand` | `E3022` |
+| `floating_to_integer` | `E3063` |
 
 For operands of type `bits<N>`, `signed_add_defined`,
 `signed_sub_defined`, and `signed_mul_defined` each have type
@@ -2417,9 +2433,13 @@ each code's meaning and deliberately does not repeat the text.
 
 Both interpreters use the deterministic classification order from Section 5.4
 and delegate code/message selection to the shared typed memory-fault authority;
-they may not maintain divergent local mapping tables. C-HIR attaches the source access span;
-EvoIR attaches its block identity and the driver reports the established
-source-independent `1:1` location until a source map is specified.
+they may not maintain divergent local mapping tables. C-HIR attaches the
+source access span. EvoIR attaches the function, block and instruction of the
+fault. The driver
+reports the C source span that lowering recorded for that instruction. When
+the instruction has no recorded span, or the function changed after
+lowering, it reports the span of the function's declaration; with neither,
+it reports the input file without a position.
 
 ### 6.2 UB Obligations
 
@@ -2634,27 +2654,24 @@ condition may reuse them.
 
 ### 6.4 UB and Optimization
 
-A `ub.assume.<reason> %ok` instruction creates a fact `ok == true` that is available
-in all dominated blocks. The EqSat engine uses this fact:
+No transformation of this revision reads a fact from `ub.assume`. No rule of
+the registries of Section 11.6 has a premise from it, and `ub.assume` and
+every predicate of Section 3.3.1 stay outside the P0 regions (Section 8.5).
+The guard folding of Section 8.12 replaces a predicate only on the known bits
+of its operands, never on an assumption.
 
-```text
-rule signed_add_associative
-    add(add(?a, ?b), ?c)
- => add(?a, add(?b, ?c))
-requires
-    signed_add_defined(?a, ?b) && signed_add_defined(?a + ?b, ?c)
-```
-
-Without the obligation, `(a+b)+c` and `a+(b+c)` differ for signed
-two's-complement overflow — their overflow behavior may differ even though
-the `add.bits` results are equal. The obligation makes them semantically
-equivalent.
+Informative. A `ub.assume.<reason> %ok` lets a later transformation assume
+`%ok == true` in every block that it dominates. Reassociation of a signed
+addition is an example: `(a+b)+c` and `a+(b+c)` have equal `add.bits`
+results, but their signed overflow occurs on different operands, so a rule
+that reassociates must require the obligations of both inner additions.
 
 ### 6.5 Propagation Rules
 
-UB facts propagate forward. An `ub.assume.<reason> %ok` in block `B` creates a fact
-that holds in every block dominated by `B` along paths where `%ok` was true.
-This is expressed in the equality context `Γ` (Section 7).
+Informative. UB facts propagate forward: an `ub.assume.<reason> %ok` in block
+`B` gives a fact that holds in every block that `B` dominates, along paths
+where `%ok` was true, and the equality context `Γ` (Section 7) would hold it.
+This revision reads no such fact (Section 6.4).
 
 A successful memory guard creates a fact keyed by its output `mem<all>` value,
 pointer, and (for `access_in_bounds`) exact size/alignment. Because every later
@@ -2682,7 +2699,13 @@ produce the same value but trap under different conditions are **not** equal.
 
 ### 7.2 Context Γ
 
-`Γ` is a set of facts known at a particular program point. It includes:
+`Γ` is a set of facts known at a particular program point. In this revision
+`Γ` holds only the known-bits facts of Section 8.10. They come from the
+operands of a node and from the edges into its block, never from a branch
+condition, an assumption, a range or provenance.
+
+Informative. The design adds these fact kinds in later revisions; no
+transformation of this revision uses them as facts of `Γ`:
 
 | Fact kind | Example | Source |
 |---|---|---|
@@ -2793,30 +2816,32 @@ improvement and would silently disable all P0 optimization. Costs are solved by
 repeatedly visiting nodes in `NodeId` order and assigning a finite cost only
 when every child required by the applicable rule has a finite cost, until no
 choice changes. A class reachable from the root but left without a finite choice
-makes extraction fail and triggers baseline fallback rather than recursion or a
-placeholder. This is deliberately an instruction-count-only P0 model: it does
+makes the extraction of that region fail, and the root keeps its original
+instruction; extraction never recurses or inserts a placeholder. This is
+deliberately an instruction-count-only P0 model: it does
 not estimate register pressure, and a later multi-objective model must revise
 the cost authority rather than reinterpret these zero-cost cases. Cross-block
 reuse remains excluded by Section 8.5. Explicit node and epoch budgets bound
-every run. Budget,
-matching, extraction, validation, or proof failure returns the byte-identical
-original EvoIR and continues compilation; equality saturation is never needed
-for correctness.
+every transaction (Section 8.11). A region whose extraction fails is
+declined, and its root keeps its original instruction. A proof failure, a
+reassembly or validation failure of the output module, or a disagreement
+with the equality state fails the whole transaction: it returns the
+byte-identical original EvoIR, a certificate with no region, and the equality
+state it entered with (Section 8.9). The driver's chain of transactions (Section 8.11, "Runs") then stops
+the compilation with exit 1; it does not continue with the module that has
+no rewrite. Equality saturation is never needed for correctness: a
+compilation without `-Oeq-scalar` applies no rewrite.
 
-The driver profile fixes `max_nodes = 100000` and `max_epochs = 1024` for one
-`saturate_scalar` transaction. The node bound counts the complete persistent
-graph after each proposed insertion, not merely nodes newly allocated by this
-call. One epoch is one traversal of registry rules in Section 11.6 order over
-canonical root e-classes in numeric order and nodes in insertion order. Within
-one left-hand node, substitutions are ordered lexicographically by the vector
-of bound canonical e-class IDs after variables are sorted by name; a builder
-that can reuse several existing nodes chooses the smallest `NodeId`.
-Congruence rebuilding visits dirty canonical classes numerically and their
-parent nodes in insertion order. Hash-table iteration is never observable. A
-fixed-point epoch that creates no node or union terminates successfully and
-still counts as one. Reaching either bound before fixed point rolls the whole
-transaction back and returns the unchanged module. Tests may inject smaller
-bounds, but the bound and fallback semantics do not change.
+The P0 profile bounds one transaction by `max_nodes = 100000` and
+`max_epochs = 1024` (Section 8.11). The driver admits smaller limits of its
+own (`--eq-max-nodes`, `--eq-max-epochs`) and refuses larger ones; a
+certificate records the profile bounds, never a smaller limit (Section 11.3,
+"Budget"). Reaching a bound or a limit is a successful stop: the transaction
+keeps every region that it admitted before the stop, admits no further
+region, and records the stop in its certificate. Tests may inject smaller
+limits, but the stop semantics do not change. The producer is deterministic:
+one module, one set of options and one policy give one certificate and one
+output, byte for byte. Hash-table iteration is never observable.
 
 Every accepted merge is present in a complete certificate whose trusted
 operator/rule authority, canonical input-module digest, exact witness and seed
@@ -2849,15 +2874,17 @@ The exact driver capability is `-Oeq-scalar`, and `-Oeq-scalar --probe` is
 implemented. The broader `-Oeq --probe` exits 69 `NOT_IMPLEMENTED`.
 
 Persistence is active for the eligible EvoIR scalar values of the P0 profile.
-The C-HIR and target-representation arrows in Sections 8.1 through 8.4 are
-architecture (informative). They do not authorize target lowering, backend
-nodes, pointer/object nodes, or any rewrite outside this section.
+Sections 8.1 to 8.4 are informative: they describe an architecture of which
+this revision implements only the persistent P0 scalar classes of this
+section. No C-HIR, EvoMIR or target representation enters an e-class. These
+sections do not authorize target lowering, backend nodes, pointer/object
+nodes, or any rewrite outside this section.
 
 ### 8.1 Architecture
 
-The equality database persists `EClassId`s across lowering phases. It is not
-a pass-local temporary data structure; it is the persistent state of compiler
-knowledge.
+Informative. The equality database persists `EClassId`s across lowering
+phases. It is not a pass-local temporary data structure; it is the persistent
+state of compiler knowledge.
 
 ```text
 C-HIR lowering        adds EvoIR representations to existing EClasses
@@ -3107,9 +3134,9 @@ Optimization is optional. The checker recomputes the complete ordered set of
 eligible regions and both manifests from `before.evo`, but the certificate may
 name any duplicate-free subsequence of that set. Every named region must match
 the independently derived identity and manifests exactly. An omitted eligible
-region means "not optimized", not an invalid proof; otherwise a budget fallback
-or an optimizer that deliberately performs no rewrites could never emit the
-required valid empty certificate.
+region means "not optimized", not an invalid proof; otherwise a budget stop,
+which omits every region after it, or an optimizer that deliberately performs
+no rewrites could never emit a valid certificate.
 
 ### 8.8 Reassembling the After-Module
 
@@ -3209,16 +3236,22 @@ class, original node and proof history remain in the database. The map update
 and module replacement commit atomically. This is how equality persists while
 Section 8.8 is free to renumber textual `%v` identities.
 
-**Transactions.** `ingest_module`, `saturate_scalar` and `extract_module` are
-separate phase operations, but one driver optimization wraps all three in one
-outer transaction. Phase boundaries may create internal savepoints; they do not
-publish a commit or advance the revision. Only after proof replay, extraction,
-full-module reassembly and module validation all pass does the outer transaction
-atomically publish both module and state. A successful top-level transaction
-that made at least one mutation advances the revision exactly once; an
-idempotent no-op does not. Budget exhaustion, a proof failure, a validation
-failure and an extraction failure all roll the outer transaction back to the
-module, graph, maps, proof history and revision it entered with.
+**Transactions.** `ingest_module` seeds the state from the first module, once.
+After it, one optimization is one transaction: the producer derives the
+regions, the certificate and the reassembled output module, which must pass
+module validation; the transaction then applies the admitted merges to a
+staged copy of the state, remaps the values and checks the history (below).
+Only when every step passes does it publish the module and the state
+together. A transaction that made at least one mutation advances the
+revision exactly once; one that made none changes nothing. A proof failure,
+a reassembly or validation failure, or a disagreement between the
+certificate and the state returns the original module with a certificate
+that has no region, and leaves the module, graph, maps, proof history and
+revision as the transaction entered them. Reaching a bound is not a failure:
+the transaction keeps every region admitted before the stop (Section 8.11).
+A chain of transactions (Section 8.11, "Runs") stages the state once for the
+whole chain and publishes it only after the checker accepts every
+certificate of the chain.
 
 Rollback restores the state *and* the module together. A failure that returned
 the original module while leaving unions in the database would be invisible in
@@ -3229,16 +3262,20 @@ this is a property of the transaction rather than of any caller.
 
 **Accumulation.** A representation is added to an existing class. A class that
 has been optimized retains the representation it started with alongside the one
-extraction chose, and a later phase adding a target-specific form joins the same
-class rather than creating a new one. An implementation that replaced the
-original would be indistinguishable at the point most tests look, and would
-differ only when a later phase asked what else was equal, which is exactly when
-the difference matters.
+extraction chose. No later phase adds a representation in this revision; a
+phase that does must join the existing class rather than create a new one. An
+implementation that replaced the original would be indistinguishable at the
+point most tests look, and would differ only when a later phase asked what else
+was equal, which is exactly when the difference matters.
 
-**Justification.** Every union carries a proof event. Replaying the accumulated
-history against the trusted registry re-derives exactly the partition the state
-holds; a partition containing a union the history does not justify is invalid
-regardless of how it arose.
+**Justification.** Every union carries a proof event. Before a transaction
+publishes, the producer replays the accumulated e-graph certificate under the
+rules that the certificate itself carries, re-derives each history entry with
+its own rule code as an instance of a reviewed rule, and requires the classes
+of each entry to be one class of the partition. If a check fails, the
+transaction fails as above. This is a self-check of the producer, not an
+independent check: the independent check of each transaction is the checker
+of Section 11 on its EVP certificate.
 
 ### 8.10 Analysis Lattices
 
@@ -3267,9 +3304,10 @@ before.
 **Merge.** When two classes are unioned, the merged class's fact is the meet of
 the two: every bit known in either is known in the result. If the two disagree
 on a bit both know, the union is **invalid** — two values with a differing
-known bit cannot be equal — and the transaction rolls back under Section 8.9.
-That check is part of what makes a union sound, so it is performed by the
-checker as well as the producer.
+known bit cannot be equal. A producer abandons the region that would contain
+it (Section 8.7 lets it decline any region), and a checker refuses a
+certificate that records it (status 3). That check is part of what makes a
+union sound, so it is performed by the checker as well as the producer.
 
 **Facts of seeds.** A seed of origin `input` carries a fact computed once per
 function, before regions are formed, by a forward fixed point over the
@@ -3334,12 +3372,13 @@ checker under Section 11.3.
 
 ### 8.11 Bounded Scheduler
 
-Saturation is never run to a fixed point in production. The scheduler is bounded
-in four independent ways and every bound is recorded, so a checker confirms that
-a certificate's producer stayed within them rather than trusting that it did.
+Saturation is never run to a fixed point in production. A transaction has
+three bounds, nodes, epochs and match fuel, and its certificate records each
+one, so a checker confirms that the producer stayed within them rather than
+trusting that it did. A run of transactions has a fourth bound (below).
 
-**Tiers.** Rules belong to one of two tiers and an epoch runs the tiers in
-order:
+**Tiers.** Rules belong to one of two tiers, and a producer tries the tiers in
+order on each candidate:
 
 ```text
 Tier A   canonical reductions          x+0, x*1, x&0, x|0, double negation,
@@ -3348,22 +3387,28 @@ Tier B   fact-driven rules             constant folding, known-bits identities
 ```
 
 Tier B depends on facts that Tier A's reductions may sharpen, which is why the
-order is fixed rather than left to the implementation.
+order is fixed rather than left to the implementation. Within a tier the order
+is registry order (Section 11.6). The emitting rules of `p0.scalar.v4` belong
+to neither tier; a producer tries them after both, so a fold wins over an
+emitted node.
 
-**Match fuel.** Each rule may fire at most `max(256, 8 × n)` times per epoch,
-where `n` is the number of nodes the region held when the transaction began.
-Fuel is per rule per epoch, so one prolific rule cannot starve the rest.
+**Match fuel.** Each rule may fire at most `max(256, 8 × n)` times per epoch
+in one region, where `n` is the number of nodes the region held when the
+transaction began. Fuel is per rule per epoch, so one prolific rule cannot
+starve the rest.
 
-**Epochs and nodes.** The node and epoch ceilings of the P0 profile stand:
-`max_nodes = 100000`, `max_epochs = 1024`, the node bound counted over the
-complete persistent graph after each proposed insertion.
+**Epochs and nodes.** The ceilings of the P0 profile are `max_nodes = 100000`
+and `max_epochs = 1024` for one transaction. The consumed node quantity is
+the number of nodes that the regions of the certificate record, and the
+consumed epoch quantity is the highest epoch marker (Section 11.3).
 
-**Stop rule.** Saturation stops at the first of: no rule fired in an epoch
-(*saturated*); no root's best extraction became strictly cheaper in two
-consecutive epochs (*no-new-best*); the epoch, node or fuel bound was reached
-(*epochs*, *nodes*, *fuel*). Hitting a bound is a successful stop, not a
-failure: extraction proceeds from the current graph, and Section 8's rule that
-saturation is never needed for correctness is what makes that safe.
+**Stop rule.** A transaction stops at the first of: no further rewrite to
+propose (*saturated*); no root's best extraction became strictly cheaper in
+two consecutive epochs (*no-new-best*); a limit of the producer's own
+(*policy*); the epoch, node or fuel bound (*epochs*, *nodes*, *fuel*).
+Hitting a bound or a limit is a successful stop, not a failure: the
+transaction keeps every region admitted before the stop, and Section 8's rule
+that saturation is never needed for correctness is what makes that safe.
 
 **Record.** The certificate carries the bounds, the amounts consumed, the stop
 reason, and an epoch marker before each epoch's events. The checker verifies
@@ -3372,12 +3417,28 @@ epoch count, and that an exhaustion reason is consistent with the
 recorded consumption. It does not re-run the scheduler; a schedule is a choice,
 and what is verified is that the choice stayed inside the declared box.
 
+Informative. The producer of this revision (`crates/evocc-eqopt`) does not
+iterate rules over e-classes. It makes one forward sweep over each block in
+instruction order and proposes at most one rewrite for each candidate root,
+in the tier order above. It then builds one region for each proposal that its
+policy keeps, and recomputes the facts and the merges of that region from the
+region's own nodes, as a checker does. Both steps stop at the first proposal
+that would pass the node limit or the epoch limit: the sweep counts the nodes
+of its candidate graphs and its rewrites, and the region builder counts the
+certificate nodes and the admitted regions. A rewrite gets the epoch after
+the latest epoch that changed a class it matches on, and never an epoch below
+the previous marker of its region. Where an existing constant node fits a
+right-hand side, the producer reuses the one with the smallest `NodeId`. It
+records `stop=policy` when a limit stopped it and `stop=saturated`
+otherwise; it never writes `no-new-best`, `epochs`, `nodes` or `fuel`.
+
 **Runs.** A run is a sequence of at most `max_transactions = 8` transactions
 over one module, each transaction taking the previous one's output as its
-input. The driver stops the run when a transaction admits no region or at
-the ceiling. Each transaction's certificate stands alone and is verified
-alone; the run is verified by digest chaining, the `output` digest of one
-certificate being the `input` digest of the next, and a chain that breaks
+input. The driver admits a smaller ceiling (`--eq-max-transactions`). It
+stops the run after a transaction that admits no region or that stops at a
+limit, or at the ceiling. Each transaction's certificate stands alone and is
+verified alone; the run is verified by digest chaining, the `output` digest of
+one certificate being the `input` digest of the next, and a chain that breaks
 anywhere fails the run. A run exists because 11.6 lets a left-hand
 `const_like` match only a constant present in the before witness closure, so
 a constant one transaction derives becomes matchable only in the next. The
@@ -4026,7 +4087,7 @@ moving or deleting the point at which the invalid execution is observed.
 
 ```text
 func @caller(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
-    effects { reads={all}, writes={all}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=true }
+    effects { reads={all}, writes={all}, volatile=true, atomic=true, io=true, fenv=true, may_trap=true, may_unwind=true }
 {
 ^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
     (%v3, %v4, %v5) = call @callee(%v0, %v1, %v2)
@@ -5429,8 +5490,9 @@ The front end checks that output operands are modifiable lvalues, that every
 labels in scope, and that string literals concatenate; it keeps the statement
 in C-HIR losslessly (template text, operands with constraints, clobbers,
 labels, qualifiers, spans). Constraint strings are preserved as text and not
-validated in this revision. `asm` has maximal effects: it reads and writes
-`mem<all>` and `world`, may not be reordered, duplicated or removed, and an
+validated in this revision. `asm` has the effects of Section 4.2: it reads
+and writes `mem<all>` and `world`, may not be reordered, duplicated or
+removed, and an
 `asm goto` is a terminator whose successors are its labels plus fall-through.
 Lowering produces the `asm` instruction of Section 3.11 when every operand
 constraint, clobber and template reference is in the vocabulary that section
@@ -6148,10 +6210,11 @@ expansion spans in the main file and `s` has its spelling span in line 1.
 
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
-After EqSat optimization and extraction, the chosen EvoIR representations
-are lowered to EvoMIR. The contracts for this phase are defined in the
-EvoMIR specification and are not part of this document, except for the
-following invariant carried through the persistent equality database:
+Informative. After EqSat optimization and extraction, the chosen EvoIR
+representations are lowered to EvoMIR. `spec/evomir.md` holds the contract
+of that phase. EvoMIR representations do not enter e-classes in this revision
+(EvoMIR Section 1), so the invariant below binds no current code. A revision
+that lets them enter must first make it normative and checked:
 
 > **Every EvoMIR representation added to an EClass shares the EvoIR-level
 > semantics of that EClass.** The EvoIR-to-EvoMIR lowering agent must not
@@ -6159,6 +6222,9 @@ following invariant carried through the persistent equality database:
 > abstract semantics of that EClass for all defined executions.
 
 ### 10.3 Agent Contract Summary
+
+Informative. This table summarizes rules that other sections state; it adds
+none.
 
 | Agent | Must | Must Not |
 |---|---|---|
@@ -6394,7 +6460,7 @@ else is `E0106` (`feature-query-malformed`).
 - `__has_attribute(name)`: `name` with a surrounding `__` pair stripped. The
   answer is the GCC 14 answer, recorded in
   `crates/evocc-cpp/predefined/has-attribute.tsv`: `202311` for `fallthrough` and `noreturn`; `1`
-  for `aligned`, `alloc_size`, `always_inline`, `assume_aligned`, `cleanup`, `cold`, `const`, `copy`, `designated_init`, `error`, `externally_visible`, `format`, `gnu_inline`, `malloc`, `no_instrument_function`, `no_profile_instrument_function`, `no_sanitize_coverage`, `no_stack_protector`, `noclone`, `noinline`, `noipa`, `nonnull`, `nonstring`, `packed`, `pure`, `retain`, `section`, `uninitialized`, `unused`, `used`, `warn_unused_result`, `warning`, `weak`; `0` for `btf_type_tag`, `diagnose_as_builtin`, `disable_sanitizer_instrumentation`, `no_caller_saved_registers`, `overloadable`, `pass_dynamic_object_size`, `pass_object_size`, `preserve_most`;
+  for `aligned`, `alloc_size`, `always_inline`, `assume_aligned`, `cleanup`, `cold`, `const`, `copy`, `designated_init`, `error`, `externally_visible`, `format`, `gnu_inline`, `malloc`, `no_instrument_function`, `no_profile_instrument_function`, `no_sanitize_coverage`, `no_stack_protector`, `noclone`, `noinline`, `noipa`, `nonnull`, `nonstring`, `packed`, `patchable_function_entry`, `pure`, `retain`, `section`, `uninitialized`, `unused`, `used`, `warn_unused_result`, `warning`, `weak`; `0` for `btf_type_tag`, `diagnose_as_builtin`, `disable_sanitizer_instrumentation`, `ection`, `no_caller_saved_registers`, `overloadable`, `pass_dynamic_object_size`, `pass_object_size`, `preserve_most`, `x`;
   `0` for any name not in that table. The table is data, not code, and
   `crates/evocc-cpp/tests/target_profile.rs` checks its digest.
 - `__has_builtin(name)`: `1` exactly for the builtins that the front end
@@ -6845,21 +6911,21 @@ every region, since most epochs touch few regions. Epochs are numbered from 1: w
 
 **Budget.** Every `quantity` is written consumed `/` bound, in that order:
 `budget nodes=3/100000 epochs=1/1024 fuel=0/256 n=0 stop=saturated` is a
-transaction that inserted three nodes into a graph bounded at one hundred
-thousand, ran one epoch of a possible 1024, and stopped because nothing new
-could be proposed. The `nodes` and `epochs` bounds are the profile's
-constants (8.11), and the checker verifies that the recorded bounds equal
-them. `fuel` is the per-rule, per-epoch quantity of 8.11: `n` is the number
+transaction whose regions record three nodes of a bound of one hundred
+thousand, whose highest epoch marker is 1 of a possible 1024, and which
+stopped because nothing new could be proposed. The `nodes` and `epochs`
+bounds are the profile's constants (8.11), and the checker verifies that the
+recorded bounds equal them. `fuel` is the per-rule, per-epoch quantity of 8.11: `n` is the number
 of nodes the region held when the transaction began, the fuel bound is
 `max(256, 8 * n)`, and the fuel consumed is the largest number of firings any
-single rule made in any single epoch. The checker verifies that each consumed
-does not exceed its bound, that the fuel bound equals `max(256, 8 * n)` for
+single rule made in any single epoch of one region. The checker verifies
+that each consumed does not exceed its bound, that the fuel bound equals `max(256, 8 * n)` for
 the recorded `n`, that no epoch marker exceeds the consumed epoch count, and
 that a stop reason of `epochs`, `nodes` or `fuel` coincides with that
 quantity's consumed equalling its bound. `n` itself is declared, not
 re-derived: a producer that overstates it only widens a box the checker
 still holds it to. `saturated` and `no-new-best` are not verified; they would
-require re-running the scheduler and are telemetry. A producer that stops by a rule of its own, neither at a profile ceiling nor at saturation, records `stop=policy`; it is telemetry like `saturated` and `no-new-best`. `saturated` has exactly the meaning of 8.11: no rule fired in the transaction's last epoch. It says nothing about a fresh transaction over the output, which may admit regions because 11.6 lets a left-hand `const_like` match only a constant present in the before witness closure, never one an earlier epoch derived; such *residual regions* are a quality metric of the registry, not a false record. For a certificate covering several regions, `n` is the largest starting node count among them. With P0 regions the fuel bound's floor of 256 is not reachable, so `stop=fuel` is reserved for a profile with larger regions; the grammar keeps it. Hitting any ceiling keeps every region admitted before the stop (8.11): a producer that answers its own budget exhaustion with a zero-region certificate is non-conforming, because it discards work the checker would have verified. An `evp2` header without a budget line, or an `evp1` header with one or with epoch markers, is malformed (status 2).
+require re-running the scheduler and are telemetry. A producer that stops by a rule of its own, neither at a profile ceiling nor at saturation, records `stop=policy`; it is telemetry like `saturated` and `no-new-best`. `saturated` has exactly the meaning of 8.11: the producer had no further rewrite to propose. It says nothing about a fresh transaction over the output, which may admit regions because 11.6 lets a left-hand `const_like` match only a constant present in the before witness closure, never one an earlier epoch derived; such *residual regions* are a quality metric of the registry, not a false record. For a certificate covering several regions, `n` is the largest starting node count among them. With P0 regions the fuel bound's floor of 256 is not reachable, so `stop=fuel` is reserved for a profile with larger regions; the grammar keeps it. Hitting any ceiling keeps every region admitted before the stop (8.11): a producer that answers its own budget exhaustion with a zero-region certificate is non-conforming, because it discards work the checker would have verified. An `evp2` header without a budget line, or an `evp1` header with one or with epoch markers, is malformed (status 2).
 
 **Zero regions.** Any compilation that accepts no rewrite produces a certificate
 with a header and an `output` line and no region blocks, whether or not eligible
@@ -6954,10 +7020,24 @@ differ from the producer's, so reassembly disagrees and the certificate is
 *rejected*. Sharing fails safe, and duplicating a parser the interpreter needs
 anyway would add a second thing to drift.
 
+**Shared, and not fail-safe: the renderer, the validator, `inst_results` and
+the certificate codec.** The checker renders its reassembled module with the
+Section 9 renderer `render_module`, validates it with `validate_module`,
+enumerates instruction results with `evocc_evoir::inst_results`, and reads
+the certificate with `evocc_proof::parse_evp1`, whose writer `render_evp1`
+the producer uses. Its reassembly renumbers operands with `all_values_mut`, a
+copy of the producer's function. On the ordinary `-Oeq-scalar` path the
+backend compiles the producer's in-memory module, and the checker sees only
+its rendering: a field that the renderer drops is absent from both texts, so
+the checker can accept a region whose eligibility depends on that field. A
+defect in any of these parts is common to both sides and can make the
+checker accept; Section 11.7 lists them in the trusted base.
+
 **Not shared: eligibility and seed derivation.** A common defect here makes both
 sides agree that an ineligible region was eligible, and the certificate is
 *accepted*. Sharing fails dangerous. The checker implements Sections 8.5 through
-8.7 for itself.
+8.7 for itself, but it enumerates results through the shared `inst_results`
+(above).
 
 **Not shared: the rule registry.** The trusted P0 rules live in the checker.
 Rules are stated with variable patterns and explicit constant side conditions,
@@ -7271,13 +7351,23 @@ this calculation itself and compares the resulting derived node's sort and
 `value` attribute; the certificate never supplies a trusted fold result.
 
 **Residual risk, recorded rather than implied.** The certificate format
-definition remains shared between producer and checker, so a defect in that
-definition is invisible to both; the partial Lean reader of Section 11.3 does
-not remove this risk. It is bounded instead by a mutation campaign whose
-property is that **no mutant of the optimizer produces a semantically different
-module together with an accepted certificate** — not that every mutant is
-rejected, since a mutant that merely disables a rewrite emits a valid empty
-certificate and should pass.
+definition and its reader and writer (`crates/evocc-proof/src/evp1.rs`) remain
+shared between producer and checker, so a defect in that definition is
+invisible to both; the partial Lean reader of Section 11.3 does not remove
+this risk. The property that would bound it is that **no mutant of the
+optimizer produces a semantically different module together with an accepted
+certificate** — not that every mutant is rejected, since a mutant that merely
+disables a rewrite emits a valid empty certificate and should pass. No test
+measures that property. The campaign that exists,
+`crates/evocc-proofcheck/tests/day8_proof_contract.rs`, runs the real producer
+once and then edits its output by hand: five semantic corruptions (an
+after-module change with a recomputed output digest, a wrong rule name, a
+wrong fold payload, a wrong binding and a hidden witness) each exit 3, and a
+certificate with no region, which stands for a mutant that only disables
+rewrites, exits 0. The after-module forgeries of
+`crates/evocc-proofcheck/tests/copy_is_opaque.rs` are of the same kind. No
+test mutates the optimizer's code, the shared certificate reader and writer,
+or the shared parts of `evocc-evoir` (Section 11.7, A4).
 
 **Proof coverage.** A machine-checked proof of a registry
 covers *instances*: a rule together with every type parameter the registry
@@ -7298,22 +7388,28 @@ instances, under a new digest that both sides interpret identically. No
 enabling condition is ever implied under an old digest, and an independent
 proof gate may fail without failing any build. The receipt is
 `tests/contracts/lean-p0-receipt.json`; the plan is `docs/archive/lean-plan.md`.
+The receipt binds the revision line and the SHA-256 of this document, and
+`python3 tools/render-status.py --check` fails when either differs from the
+pin of this document in `spec/pins.json`.
 
 ### 11.7 Trusted Base
 
 What a certificate establishes rests on the following, each stated so that a
 reader can see which are checked by a machine and which are believed. The
-receipt above lists them by number.
+Lean receipt `tests/contracts/lean-p0-receipt.json` does not use these
+numbers: its `trust` field lists the assumptions of the Lean layer in its own
+words.
 
 | Item | Trusted object | Guarantor |
 |---|---|---|
-| A1 | Section 8.5 eligibility and taint: every value the e-graph touches is total, poison-free and effect-free | The producer's and the checker's separate Rust implementations |
+| A1 | Section 8.5 eligibility and taint: every value the e-graph touches is total, poison-free and effect-free | The producer's and the checker's separate Rust implementations; both enumerate results through the shared `inst_results` (A4) |
 | A2 | The function-level seed-fact fixed point of Section 8.10: entry arguments top, every edge including back edges | The checker's own recomputation; an inductive-invariant check of the final table, where present, adds independent evidence |
-| A3 | The checker's replay, extraction and reassembly, including the association of facts with the right class in the pre-merge state | Rust, Section 11.2 |
-| A4 | The Section 9 parser, shared by producer and checker | Rust |
+| A3 | The checker's replay, extraction and reassembly, including the association of facts with the right class in the pre-merge state | Rust, Section 11.2; the reassembly renumbers operands with `all_values_mut`, a copy of the producer's function |
+| A4 | The code that producer and checker share (Section 11.6): the Section 9 parser and renderer, `validate_module` and `inst_results` of `evocc-evoir`, and the certificate reader and writer of `evocc-proof` | Rust; the field sentinel and the traversal test of `crates/evocc-evoir/tests/section9_completeness.rs` (10 of the 59 instruction variants) are evidence, not proof |
 | A5 | The Lean kernel, and on SAT-backed proofs the per-theorem native reflection axioms and the compiler behind them | Lean toolchain pinned in `lean/lean-toolchain` |
 | A6 | The registry decoder, the Lean semantics definitions and the audit script | Reviewed code; round-trip comparison of decoded data against the digest-bound text |
 | A7 | Agreement between the Rust semantics (interpreter, folds, transfers) and the Lean model | Differential vectors only; evidence, not proof |
+| A8 | On the ordinary `-Oeq-scalar` path, the completeness of the renderer (Section 9.1, "Total"): the backend compiles the in-memory module, and the checker sees only its rendering | The field sentinel of `section9_completeness.rs`; evidence, not proof |
 
 A proof of the registry replaces two things that were previously believed on
 review alone: that each registry rule is a valid equality of the Section 3
@@ -7422,20 +7518,25 @@ to the signature spelling.
 
 ## Revision
 
-**Revision 2.4.0, 2026-10-14.** The Darwin target profile is stated. Darwin
-EvoIR text starts with a target line, the Linux reader refuses it, and the
-driver refuses `-Oeq-scalar` for Darwin (Sections 9.1 and 9.3). On Darwin,
-`long double` has the binary64 format with size 8 and alignment 8 (Section
-10.5), a signed narrow integer parameter carries the new `sext` mark, and a
-signed narrow integer result travels as `bits<32>` (Sections 9.3 and 10.1.3).
-Section 3.11 states the save of a clobbered `x19` to `x28`. Section 10.1.3
-refuses a read of an `_Atomic` object (`E2702`) and a call interface with a
-record of floating vectors (`E3049`), and Section 10.1.12 states which range
-initializers are constant (`E2917`). Evidence:
-`crates/evocc/tests/darwin_long_double.rs`,
-`crates/evocc/tests/darwin_call_boundary.rs`,
-`crates/evocc-parser/tests/fail_closed_reads_and_ranges.rs` and
-`crates/evocc/tests/floating_vector_records.rs`. Revision 2.3.0 of 2026-10-13
+**Revision 2.5.0, 2026-10-14.** The text of equality saturation and of the
+checker states what the code does. Reaching a bound keeps the admitted
+regions, a failed transaction returns the original module, and the driver's
+chain then stops with exit 1 (Sections 8, 8.9 and 8.11). Section 8.11 states
+what a certificate records and describes the current producer as
+informative, and Section 8.9 states the transaction and the producer's
+history self-check. Sections 4.4, 6.4, 6.5, 7.2, 8.1 to 8.4 and 10.2 mark as
+informative the design that no code applies, and Section 10.3 is marked as a
+summary. Section 11.6 names the code that producer and checker share or copy
+and the mutation campaign that exists, and Section 11.7 adds that code and
+the renderer to the trusted base. Pointer equality compares abstract
+addresses (Sections 3.5 and 5.3). Smaller corrections: `f128` anonymous
+arguments (Sections 3.10 and 3.12), the effects of `asm` (Sections 3.11 and
+10.1.16), the reason table and the fault location of Section 6.1, the
+summary of the Section 9.8 example and the attribute answers of Section
+10.5. No registry block, grammar production or row of the Section 6.3 table
+changes. The errata note is `docs/archive/notebook/spec-errata-20261014.md`.
+Revision 2.4.0 of 2026-10-14 stated the Darwin target profile (Sections
+3.11, 9.1, 9.3, 10.1.3, 10.1.12 and 10.5). Revision 2.3.0 of 2026-10-13
 gave `builtin-argument-type` its own code, `E2951` (Sections 3.13.1 and 6.3).
 Revision 2.2.0 of 2026-10-13
 added the object-size checked builtins, the GNU argument pack, `E2949`,

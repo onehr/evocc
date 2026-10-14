@@ -6,20 +6,20 @@
       "sha256": "eb63f6366ae68948228dd0b3147a8579a9abc1884799318cff17444b784ba29c"
     },
     "spec/evoir.md": {
-      "revision": "2.4.0",
-      "sha256": "ca4333e2739cdaf1f967c750dab06b0b5819478bf28a5fb38cfd79a192d0663d"
+      "revision": "2.5.0",
+      "sha256": "dd6afdfe60ee08a7943a93be43f422fdfe4b03b62f5067f795e9f044f2d4d2f2"
     },
     "spec/evomir.md": {
-      "revision": "1.2.0",
-      "sha256": "5e4ed0402a180871282e506c3d50bd187d0adf5b78ebeffe4b9057e5c7ffa5ba"
+      "revision": "1.2.1",
+      "sha256": "4d84a850feffbabed48804e3fd55c59fed79e2b51e5979491da93ed889e5a36f"
     },
     "spec/target.md": {
-      "revision": "1.0.0",
-      "sha256": "13e6cc6fe6d3d1080bf7e34a162b82096197053e6be78ede8bbda270c3456482"
+      "revision": "1.0.1",
+      "sha256": "8218ae7bddcaaa757cafa04d3875d544d58fe2892dd147d0a7cb6ed9d7a4dfaf"
     },
     "spec/verification.md": {
-      "revision": "1.1.0",
-      "sha256": "7262d5f2612d37faabf3335d0202f71ce2a8a7611bdcfc01cebe53e0fb5044bc"
+      "revision": "1.1.1",
+      "sha256": "54678ea98ff0e0337211c4bffb38ebfbe03bde27c0b10263dfa0969b11903921"
     }
   }
 }

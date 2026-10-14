@@ -4,7 +4,8 @@
 Usage: python3 tools/render-status.py           # update docs/status.md
        python3 tools/render-status.py --ascii   # read-only terminal overview
        python3 tools/render-status.py --todo    # read-only validated TODO queues
-       python3 tools/render-status.py --check   # compare with docs/status.md
+       python3 tools/render-status.py --check   # compare with docs/status.md and check that
+                                                # the Lean receipt binds the spec/evoir.md pin
        python3 tools/render-status.py --codegen-trend <jsonl>  # read-only N05 trend
 """
 
@@ -41,6 +42,8 @@ RECEIPTS = (
     "ladder-doom-receipt.json", "eqsat-r02-pilot-receipt-20260930.json",
 )
 OUTCOMES = ("PASS", "FAIL", "SKIP", "TIMEOUT", "INVALID_OUTPUT", "INCOMPLETE", "NOT_RUN")
+LEAN_RECEIPT = "lean-p0-receipt.json"
+REVISION = re.compile(r"\*\*Revision ([0-9.]+)\*\*")
 
 
 def render_todo(source: str) -> str:
@@ -234,13 +237,44 @@ def eqsat_pilot_status(receipts) -> list[str]:
 
 
 def revision(path: Path) -> str:
-    found = re.search(r"\*\*Revision ([0-9.]+)\*\*", path.read_text())
+    found = REVISION.search(path.read_text())
     return found.group(1) if found else "?"
 
 
 def contract(name: str) -> dict:
     path = ROOT / "tests" / "contracts" / name
     return json.loads(path.read_text()) if path.exists() else {}
+
+
+def spec_pins() -> dict:
+    path = ROOT / "spec" / "pins.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def lean_binding_errors(receipt: dict, pins: dict) -> list[str]:
+    """The Lean receipt must bind the pinned text of spec/evoir.md.
+
+    verification.md section 5.4: tools/lean/audit.py writes the revision line
+    and the SHA-256 of spec/evoir.md into the receipt. A receipt that binds
+    another revision or digest describes another text, so --check fails until
+    tools/gate-lean.sh rewrites the receipt. A missing receipt, binding or pin
+    fails too: a check that cannot find its evidence is not a pass.
+    """
+    pin = (pins.get("pins") or {}).get("spec/evoir.md") or {}
+    if not pin.get("revision") or not pin.get("sha256"):
+        return ["spec/pins.json has no complete pin for spec/evoir.md"]
+    binding = receipt.get("binding") or {}
+    found = REVISION.search(str(binding.get("spec_revision") or ""))
+    bound = found.group(1) if found else "none"
+    digest = binding.get("spec_sha256") or "none"
+    errors = []
+    if bound != pin["revision"]:
+        errors.append(f"tests/contracts/{LEAN_RECEIPT} binds spec/evoir.md revision {bound}, "
+                      f"but spec/pins.json pins {pin['revision']}; rerun tools/gate-lean.sh")
+    if digest != pin["sha256"]:
+        errors.append(f"tests/contracts/{LEAN_RECEIPT} binds spec/evoir.md SHA-256 {digest}, "
+                      f"but spec/pins.json pins {pin['sha256']}; rerun tools/gate-lean.sh")
+    return errors
 
 
 def load_receipts() -> dict[str, dict]:
@@ -610,7 +644,8 @@ def main(argv: list[str] | None = None) -> int:
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--ascii", action="store_true", help="print ASCII only; do not write any file")
     modes.add_argument("--todo", action="store_true", help="validate/print TODO queues; no receipts, tests or writes")
-    modes.add_argument("--check", action="store_true", help="compare generated Markdown with docs/status.md")
+    modes.add_argument("--check", action="store_true",
+                       help="compare generated Markdown with docs/status.md; check the Lean receipt binding")
     modes.add_argument("--codegen-trend", type=Path, help="print compact N05 observations; no tests or writes")
     args = parser.parse_args(argv)
     if args.codegen_trend:
@@ -637,10 +672,13 @@ def main(argv: list[str] | None = None) -> int:
     text = render_document(receipts, **versions)
     print(text, end="")
     if args.check:
+        errors = []
         if (OUT.read_text() if OUT.exists() else "") != text:
-            print("docs/status.md differs from the receipt checkpoint; rerun tools/render-status.py", file=sys.stderr)
-            return 1
-        return 0
+            errors.append("docs/status.md differs from the receipt checkpoint; rerun tools/render-status.py")
+        errors += lean_binding_errors(receipts.get(LEAN_RECEIPT, {}), spec_pins())
+        for error in errors:
+            print(error, file=sys.stderr)
+        return 1 if errors else 0
     OUT.write_text(text)
     return 0
 

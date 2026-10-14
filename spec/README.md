@@ -1,7 +1,8 @@
 # Specifications
 
-This directory holds the ground truth of EvoCC: four pinned documents that state what the
-intermediate representations, the target description and the checked compilation path must be.
+This directory holds the ground truth of EvoCC: five pinned documents that state what the
+intermediate representations, the target description, the checked compilation path and the
+presentation of diagnostics must be.
 Code, tests and proofs implement these documents. When code and a document disagree, one of them has a
 defect; a fix changes the code, or it changes the document with a new revision.
 
@@ -9,10 +10,11 @@ defect; a fix changes the code, or it changes the document with a new revision.
 
 | Document | Revision | Governs |
 |---|---|---|
-| [`evoir.md`](evoir.md) | 2.0.0 | EvoIR: types, block-argument SSA, instructions, effects, memory, undefined behavior and diagnostics, equality saturation, text syntax, cross-IR contracts, the proof-checking interface and the reviewed rule registries |
-| [`evomir.md`](evomir.md) | 1.0.0 | EvoMIR: registers and classes, sub-width values, instructions, lowering from EvoIR, frame and calling convention, SSA destruction and allocation, emission, verification and diagnostics |
-| [`target.md`](target.md) | 1.0.0 | The internal target description: the components in `targets/aarch64/`, their form and rules, and what a correct backend operation means |
-| [`verification.md`](verification.md) | 1.0.0 | The checked compilation path: the claim, the subset `core-v1`, the semantics and refinement, the stage checkers and theorems, the pipeline theorem, the exports, proof-required mode and the trusted base |
+| [`evoir.md`](evoir.md) | 2.5.0 | EvoIR: types, block-argument SSA, instructions, effects, memory, undefined behavior and diagnostics, equality saturation, text syntax, cross-IR contracts, the proof-checking interface and the reviewed rule registries |
+| [`evomir.md`](evomir.md) | 1.2.1 | EvoMIR: registers and classes, sub-width values, instructions, lowering from EvoIR, frame and calling convention, SSA destruction and allocation, emission, verification and diagnostics |
+| [`target.md`](target.md) | 1.0.1 | The internal target description: the components in `targets/aarch64/`, their form and rules, and what a correct backend operation means |
+| [`verification.md`](verification.md) | 1.1.1 | The checked compilation path: the claim, the subset `core-v1`, the semantics and refinement, the stage checkers and theorems, the pipeline theorem, the exports, proof-required mode and the trusted base |
+| [`diagnostics.md`](diagnostics.md) | 1.3.0 | The presentation of diagnostics: code ranges, spans and source bytes, text and color, message style, JSON records and source repairs, exit status; the diagnostic authority table stays in `evoir.md` Section 6.3 |
 
 The revision column shows the state when this index was written. The revision line of each document
 and `spec/pins.json` decide.
@@ -61,7 +63,7 @@ changes a generated file or a test result, so run its reader before you commit. 
 
 | Block | Document | Reader |
 |---|---|---|
-| Revision line | All four | `tools/check-spec-pins.py`; for `evoir.md` and `evomir.md` also `tools/render-status.py` (dashboard versions); `tools/lean/audit.py` binds the `evoir.md` line and SHA-256 into `tests/contracts/lean-p0-receipt.json` |
+| Revision line | All five | `tools/check-spec-pins.py`; for `evoir.md` and `evomir.md` also `tools/render-status.py` (dashboard versions); `tools/lean/audit.py` binds the `evoir.md` line and SHA-256 into `tests/contracts/lean-p0-receipt.json`, and `tools/render-status.py --check` fails when that binding differs from the `evoir.md` pin |
 | Section 6.3 Diagnostic Authority table | `evoir.md` | `crates/evocc/build.rs` (the diagnostic table of the driver), `crates/evocc/tests/check_product.rs` |
 | Sections 9.3, 9.3.1 and 9.3.2: grammar productions and shape blocks | `evoir.md` | `crates/evocc-evoir/tests/spec_grammar_contract.rs`, `tools/check-textual-grammar.py` |
 | Section 11.6 reviewed registry blocks and digests | `evoir.md` | `tools/lean/registry_to_lean.py` (generates `lean/EvoIR/Registry.lean` and `GuardRegistry.lean`; step 1 of `tools/gate-lean.sh`), `tools/lean/audit.py`, `crates/evocc-eqopt/tests/registry_digests.rs` |

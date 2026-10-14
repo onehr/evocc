@@ -1,6 +1,6 @@
 # Verification Contract
 
-**Revision 1.1.0** | **Pinned ground truth** | **2026-10-14**
+**Revision 1.1.1** | **Pinned ground truth** | **2026-10-14**
 
 ## Status and scope
 
@@ -39,7 +39,12 @@ must have `--emit=asm`, `--proof-required=NEW_DIR`, at least one `--core-entry=N
 have a development pass, a pass report, a frame, selection or allocation variant, an unchecked UB
 profile, or an EqSat option without `-Oeq-scalar`. The front-end profile must not have signed
 wrapping, a runtime floating-point environment, a stack protector or zero-initialization of
-automatic objects. The one optional rewrite option is `-Oeq-scalar` with `--eq-checker-sha256`.
+automatic objects. The optional rewrite option is `-Oeq-scalar`. With it, the command line must
+have `--eq-checker-sha256` and can have each other EqSat option that the driver admits with
+`-Oeq-scalar`: `--eq-policy` or `--eq-weights`, `--eq-checker`, `--eq-checker-timeout-ms`,
+`--eq-max-nodes`, `--eq-max-epochs`, `--eq-max-transactions` and `--eq-proof-dir`, within the
+driver's limits: at most 100000 nodes and 1024 epochs, 1 to 8 transactions, and a checker timeout
+from 1 to 300000 ms (`spec/evoir.md` section 8.11).
 
 ### 2.2 Source constructors
 
@@ -270,9 +275,13 @@ allocated entry that copies a dead parameter (TODO D06).
 
 The checkers are `Asm.Check.checkAsm` (`Asm/Check.lean`), `Asm.printMatches` (`Asm/Print.lean`) and
 `Pipeline.resultViewOk`. `checkAsm` checks the allocated program, the AST and untrusted frame hints:
-frame areas inside the frame and disjoint; only `x0` to `x15` and `x19` to `x28` allocated; operand
-views that agree with instruction widths; no private frame object or stack release; a stack bound
-for the frame and each callee; a body equal to the emitter templates with optional variants off.
+frame areas inside the frame and disjoint, and a save slot for each callee-saved register that the
+function writes; only `x0` to `x15` and `x19` to `x28` allocated; operand views that agree with
+instruction widths, except the zero-extension mask `and xD, xN, #imm` with a 32-bit source view
+and `imm < 2^32` (`zeroMask`); the entry structure: the first block is the entry block with
+identifier 0, block identifiers are unique, and no branch goes to the entry block; no private frame
+object or stack release; a stack bound for the frame and each callee; a body equal to the emitter
+templates with optional variants off.
 `printMatches file actual` is `file.print == actual`. From `Asm/Soundness.lean`:
 
 ```lean
@@ -393,6 +402,9 @@ build` on the pinned toolchain, the self-test, the differential vectors and `too
 which fails on any `sorryAx`, classifies each audited theorem as `kernel-only` or `native-backed`,
 and writes `tests/contracts/lean-p0-receipt.json` with the Lean commit, the toolchain, the registry
 digests and the revision line and SHA-256 of `spec/evoir.md`.
+`python3 tools/render-status.py --check` fails when that revision or SHA-256 differs from the
+`spec/evoir.md` pin in `spec/pins.json`, so a receipt for another text of `spec/evoir.md` is stale
+until `tools/gate-lean.sh` rewrites it.
 
 ## 6. Exports and readers
 
@@ -414,8 +426,13 @@ The driver writes these files to `NEW_DIR/inputs/`; `ENTRY` is an entry, `NNN` a
 The SSA and post-SSA programs must come from the ordinary backend
 (`evocc_mir::lower_module_for_profile`, checked UB profile, then `evocc_mir::out_of_ssa`).
 Snapshots, hints and proposals are untrusted. The readers are trusted (section 8): they decode,
-refuse unknown or noncanonical forms, and do not repair. A source reader fault changes the claimed
-program; another reader fault changes compared values.
+refuse unknown forms, and do not repair. They do not refuse every noncanonical spelling. The JSON
+readers parse with Lean's `Json.parse`, which skips spaces, tabs, carriage returns and line feeds
+around each token and decodes string escapes. `Core.IR.Reader.readProgram` trims each line and skips
+empty lines. `Rewrite.Reader.certificate` splits at each line feed and each space and trims nothing.
+A noncanonical spelling of a value therefore decodes to that value; the digest chain (7.3) binds
+the bytes that each reader reads to the bytes that the driver wrote. A source reader fault changes
+the claimed program; another reader fault changes compared values.
 
 ## 7. Proof-required mode
 
@@ -476,11 +493,15 @@ have `id`, `status`, `reason`. A stage row has no other name field.
 
 ### 7.5 Result labels
 
-`result` is `CHECKED_TO_` and the last program of the leading integrated rows, in upper case. Every
-current row is integrated, so `result` must be `CHECKED_TO_FINAL_ASSEMBLY`, `scope` must be "checked
-from typed Core source to final assembly text", and `all_stages_checked` and `output.checked` must
-be `true`. A row without roles is `NOT_CHECKED` ("not integrated"); its result must not be called
-checked to assembly text. Without `-Oeq-scalar`, the row `rewrite` is `NOT_CHECKED`.
+`result` is `CHECKED_TO_` and the last program of the leading integrated rows, in upper case. A row
+is integrated when it has roles. `all_stages_checked` and `output.checked` are `true` exactly when
+every row of the driver table is integrated, whether or not each row ran. Every current row is
+integrated, so `result` must be `CHECKED_TO_FINAL_ASSEMBLY`, `scope` must be "checked from typed
+Core source to final assembly text", and `all_stages_checked` and `output.checked` must be `true`.
+A row without roles is `NOT_CHECKED` ("not integrated"); its result must not be called checked to
+assembly text. Without `-Oeq-scalar`, the row `rewrite` is `NOT_CHECKED` with the reason "no rewrite
+ran; the compilation has no -Oeq-scalar", and `all_stages_checked` stays `true`: there is no
+rewrite step to check, and the row `pipeline` checks a chain of zero steps (5.1, check 5).
 
 ### 7.6 Exit codes
 
@@ -572,9 +593,15 @@ refresh each receipt that it makes stale.
 
 ## 11. Revision
 
-This is revision 1.1.0 of 2026-10-14. It states the second comparison of the selection check
-(Section 4.4), the entry-hint retry of the allocation check (Section 4.5) and the Lean and Rust tests
-of TODO D06 (Section 10); the theorem statements and the record do not change. Revision 1.0.0 of
+This is revision 1.1.1 of 2026-10-14. It corrects the text to what the driver and Lean do: every
+EqSat option that the driver admits with `-Oeq-scalar` (Section 2.1), the `zeroMask` exception, the
+callee-saved save slots and the entry structure of `checkAsm` (Section 4.6), the whitespace and
+escapes that the readers accept (Section 6) and the rule of `all_stages_checked` (Section 7.5).
+Section 5.4 names the check that compares the Lean receipt with the `spec/evoir.md` pin. The theorem
+statements and the record do not change; the errata note is
+`docs/archive/notebook/spec-errata-20261014.md`. Revision 1.1.0 of 2026-10-14 stated the second
+comparison of the selection check (Section 4.4), the entry-hint retry of the allocation check
+(Section 4.5) and the Lean and Rust tests of TODO D06 (Section 10). Revision 1.0.0 of
 2026-10-06 was the first pinned text. If this document and the Lean sources disagree, the Lean sources decide, and
 this document must get a corrected revision. To change it: (1) edit the text; (2) increase the
 revision line (major: the claim, a theorem statement or the record schema; minor: a new stage,

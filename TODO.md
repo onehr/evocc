@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K07, K10, K11, K11f, K12, N08, N09, N10, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | T03, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03s, T03t, T03u, T03v, T03w, T03x, T03y, T03z, D09, D10 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D10 follows the Darwin target line of T03i. |
+| AUDIT | T03, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03s, T03t, T03u, T03v, T03x, T03z, D09, D10 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D10 follows the Darwin target line of T03i. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -3344,24 +3344,49 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     persistent P0 classes. `day8_persistent_state_contract` and `verified_chain`
     stay green.
 
-  - [ ] **T03w — EvoIR errata for §4.4, §6.4, §6.5, §7.2, §8, §10.2, §10.3 and §11** — `OPEN`, P2.
+  - [x] **T03w — EvoIR errata for §4.4, §6.4, §6.5, §7.2, §8, §10.2, §10.3 and §11** — `DONE`, P2, 2026-10-14.
     (A26, A27, the text of A29, A30, A31, A42, A47, A51). Exit: one revision
     with updated pins. `rg -n "rolls the whole transaction
     back|saturate_scalar|extract_module|signed_add_associative" spec/evoir.md`
     finds nothing. §11.7 lists the shared `inst_results` and the renderer. The
     residual-risk paragraph states the campaign that exists.
+    October 14: EvoIR 2.5.0 states what the code does. Reaching an EqSat bound
+    keeps the admitted regions; a failed transaction returns the original module
+    and a certificate with no region, and the driver's chain exits 1 (sections
+    8, 8.9, 8.11 and 11.3). The tiers and stop reasons are stated as coded.
+    Sections 4.4, 6.4, 6.5, 7.2, 8.1 to 8.4, 10.2 and 10.3 are marked
+    informative, and `signed_add_associative` is gone. Section 11.6 names the
+    shared code that is not fail-safe (the renderer, `validate_module`,
+    `inst_results`, the certificate codec and the checker's copy of
+    `all_values_mut`), and its residual-risk paragraph states the mutation
+    campaign that exists. Section 11.7 adds the renderer to the trusted base.
+    The exit `rg` pattern finds nothing. [Errata
+    note](docs/archive/notebook/spec-errata-20261014.md).
 
   - [ ] **T03x — EvoMIR and `target.md` errata** — `OPEN`, P2.
     (A34, A48, A50, the text of A44 and A46). Exit: revisions with updated pins.
     The §5.1 guard rows say that native code relies on the C rule and checks no
     memory fault. `randomized_semantic_gate.rs` accepts only active Section 10
     codes, and the EqSat bridge errors stop reusing E4001 and E4002.
+    October 14: the text part is done: EvoMIR 1.2.1 says that native code relies
+    on the C rule for `ptr.offset` and the guards and checks no memory fault,
+    states one GOT rule, keeps `spill.*` and `arg.*` out of the interpreter, and
+    says that a refusal leaves the whole translation unit without assembly;
+    target 1.0.1 gives the real version lines. Open: the randomized gate still
+    accepts withdrawn codes, and `evocc-eqopt` still reuses E4001 and E4002.
 
-  - [ ] **T03y — `verification.md`, receipt binding and `spec/README.md`** — `OPEN`, P2.
+  - [x] **T03y — `verification.md`, receipt binding and `spec/README.md`** — `DONE`, P2, 2026-10-14.
     (A33, A46, A49, A52). Exit: a check (in `tools/render-status.py --check` or
     a test) fails when `binding.spec_sha256` differs from the `spec/evoir.md`
     pin. The receipt is refreshed after the in-flux edits land. The README lists
     five documents. §2.1, §4.6 and §6 match the driver and Lean.
+    October 14: `spec/README.md` lists the five pinned documents. Verification
+    1.1.1 lists every EqSat option that `-Oeq-scalar` admits, the `zeroMask`
+    exception and the entry structure, the reader leniency and the
+    `all_stages_checked` rule as coded. `tools/render-status.py --check` fails
+    when the Lean receipt binds another `spec/evoir.md` revision or SHA-256 than
+    the pin (`tools/tests/test_render_status_binding.py`). `tools/gate-lean.sh`
+    then refreshed the receipt for EvoIR 2.5.0.
 
   - [ ] **T03z — Missing negative-test matrices** — `OPEN`, P2.
     (A29, A36, A43, A44, A45). Exit: these tests exist and pass. Seven refusal

@@ -1,6 +1,6 @@
 # EvoCC Target Description
 
-**Revision 1.0.0** | **Pinned ground truth** | Stabilized from revision 2 on 2026-10-06
+**Revision 1.0.1** | **Pinned ground truth** | Stabilized from revision 2 on 2026-10-06
 
 ## Status and scope
 
@@ -67,11 +67,14 @@ targets/
 - **Form.** A table is canonical ASCII with LF line ends, no tab and no
   carriage return, one fact per line and single spaces between fields, so
   that a digest is meaningful and a diff is reviewable. Line 1 is
-  `version <component>.v1`, line 2 is `target aarch64`, and line 3 is
-  `sha256 <hex>`: the SHA-256 of the file without that line. A table that
-  depends on another names that table's digest: `abi-<os>` names the
-  `regfile` digest, and `profile-<name>` names its host ABI and that ABI's
-  digest.
+  `version <kind>.v1`, where `<kind>` is the component name without its
+  `-<os>` or `-<name>` suffix: `regfile.v1`, `insts.v1`, `encodings.v1`,
+  `patterns.v1` and `costs.v1`, `abi.v1` for each `abi-<os>`, and
+  `profile.v1` for each `profile-<name>`. Line 2 is `target aarch64`, and
+  line 3 is `sha256 <hex>`: the SHA-256 of the file without that line. A
+  table that depends on another names that table's digest: `abi-<os>` names
+  the `regfile` digest, and `profile-<name>` names its host ABI and that
+  ABI's digest.
 - **Grammar.** The grammar of each table is the one that
   `tools/generate-target.py` accepts. The generator refuses noncanonical
   bytes, unknown facts, duplicate names, unresolved references and digest
@@ -109,8 +112,13 @@ derived from encoding facts and are not widened to the architectural maximum.
    (`crates/evocc-mir/src/generic/`) contain no ISA names, register names or
    target types. Per-ISA hand-written code contains no literal register sets,
    immediate ranges or clobber lists; those come from generated tables.
-   `crates/evocc-mir/tests/target_boundary.rs` checks both and requires one
-   owner for every migrated table.
+   `crates/evocc-mir/tests/target_boundary.rs` checks the first sentence by
+   a scan of `generic/` for instruction-set names, register names,
+   mnemonics, target types and imports from outside `generic/`. It checks
+   the second sentence only for a fixed list of migrated declarations
+   (register-set arrays and ABI constants and functions), which must have
+   one owner; it finds no literal immediate range or clobber list. Appendix A
+   lists the known gaps.
 3. **The verifier and the allocator read the same `insts`.** Two hand-written
    copies of instruction facts can agree on a wrong answer; one generated copy
    cannot disagree with itself, and the MIR interpreter and the native
@@ -136,12 +144,12 @@ claim and its own way of being established.
 
 | Row | Operation | Claim | Established by | Kind |
 | --- | --- | --- | --- | --- |
-| B1 | Lowering pattern | For every input in the pattern's domain, the EvoIR operation's value equals the effect of the machine sequence on the result register, and no state outside the declared set changes | Bounded SMT per width against `isa-semantics`; Lean proof where a fixed template closes it | Proved or bounded |
+| B1 | Lowering pattern | For every input in the pattern's domain, the EvoIR operation's value equals the effect of the machine sequence on the result register, and no state outside the declared set changes | Bounded SMT per width against `isa-semantics`; Lean proof where a fixed template closes it. No pattern row has either yet (the note below) | Proved or bounded; not yet established |
 | B2 | Immediate and addressing legality | The chosen encoding exists for the value | Decision functions generated from `encodings`; assembler round trip on generated instances | Oracle |
 | B3 | Register allocation | The allocated function implements the virtual one: no live value overwritten, every constraint met, spills and reloads paired | The allocation verifier, **per compiled function**, reading `insts` | Translation validation |
 | B4 | Frame and calls | Argument placement, callee-saved preservation and alignment follow `abi-<os>` | Generated conformance cases against GCC and Clang; verifier check of callee-saved preservation | Oracle and per-instance |
 | B5 | Emission | The printed text assembles to the intended instruction | Assembler round trip | Oracle |
-| B6 | Machine-level peephole | As B1 | As B1 | Proved or bounded |
+| B6 | Machine-level peephole | As B1 | As B1; no pattern row has a proof yet | Proved or bounded; not yet established |
 | B7 | The description itself | `isa-semantics` matches the processor; `abi-<os>` matches the platform | Emulator and native differentials; reference-compiler differentials | Tested, trusted |
 
 B3 is the important design choice: the allocator is not proved. Each of its
@@ -241,12 +249,17 @@ constant names are the stable anchors; line numbers drift.
 
 ## Revision
 
-**Revision 1.0.0, 2026-10-06.** This revision is the pinned ground truth of
-the target description contract. It keeps the components, form, rules and
-obligations of revision 2 of 2026-10-03, removes the status preamble and the
-migration schedule, states the table header and digest form, and updates the
-extraction map to the generated tables and the `generic/` and
-`isa/aarch64/` modules. The complete history is in git:
+**Revision 1.0.1, 2026-10-14.** Corrections that make the text state what
+the code and the tables do; no component, rule or obligation changes. Section
+3 states the actual first line of each table (`abi.v1`, `profile.v1`), Rule 2
+of Section 4 states what `target_boundary.rs` checks, and the rows B1 and B6
+of Section 5 state that no pattern row has a proof yet. The errata note is
+`docs/archive/notebook/spec-errata-20261014.md`. Revision 1.0.0 of 2026-10-06
+was the pinned ground truth of the target description contract: it kept the
+components, form, rules and obligations of revision 2 of 2026-10-03, removed
+the status preamble and the migration schedule, stated the table header and
+digest form, and updated the extraction map to the generated tables and the
+`generic/` and `isa/aarch64/` modules. The complete history is in git:
 `git log -- docs/target-spec.md spec/target.md`.
 
 **Change procedure.** A change to this document must follow these steps:

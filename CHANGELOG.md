@@ -99,8 +99,8 @@ The first public version.
   checkers in `evoir-sem` check each stage of the actual compilation, and the theorem
   `checkPipeline_sound` covers the chain from typed Core source to the final assembly text. A
   refusal writes no output.
-- Five pinned specifications in `spec/`: EvoIR 2.3.0, EvoMIR 1.1.0, the target description 1.0.0,
-  the verification contract 1.0.0 and the diagnostic format 1.3.0.
+- Five pinned specifications in `spec/`: EvoIR 2.5.0, EvoMIR 1.2.1, the target description 1.0.1,
+  the verification contract 1.1.1 and the diagnostic format 1.3.0.
 - The evaluation ladder, `tools/bench.py`: conformance suites, fifteen application lanes and Linux
   build, boot, kselftest and KUnit lanes. Each lane writes a receipt.
 - The EvoCC Book in `book/`: installation, a first program, undefined behavior, compiling with
@@ -139,6 +139,10 @@ The first public version.
   boundary (E3049), and ABI-changing options such as `-fpack-struct` and `-mabi=ilp32`, also
   under `-w`.
 - The proof-required path checks the guarded division of D06 to final assembly text.
+- The EvoIR, EvoMIR, target and verification specifications state what the code does where the
+  2026-10-13 audit found them wrong: EqSat bounds and failures, the trusted base, GOT addresses,
+  guard lowering and reader leniency. `tools/render-status.py --check` fails when the Lean receipt
+  binds another EvoIR revision than the pinned one.
 - `evo prove` accepts the input file before, between or after its output and
   entry options. All file-bearing command JSON tests cover both option orders.
 - `evo fix` accepts its file before or after options. Removing an unused declaration also

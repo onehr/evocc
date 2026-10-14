@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.2.0** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
+**Revision 1.2.1** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
 
 ## Status and scope
 
@@ -24,7 +24,7 @@ definitions are the formal semantics:
 
 | Stage | Lean definitions |
 |---|---|
-| EvoMIR before allocation | `lean/EvoIR/Machine.lean` |
+| EvoMIR before allocation | `lean/EvoIR/Machine.lean` (syntax), `lean/EvoIR/MachineExecution.lean` (semantics) |
 | Allocated EvoMIR | `lean/EvoIR/Alloc/Syntax.lean`, `lean/EvoIR/Alloc/Semantics.lean` |
 | Frame, instruction templates and assembly text | `lean/EvoIR/Asm/` |
 
@@ -94,7 +94,7 @@ assembler. EvoMIR representations do not enter e-classes.
   trap under the default UB-check profile and is never dropped silently.
 - **What is not lowered fails closed.** An EvoIR form that this document
   does not lower gets a diagnostic of Section 10 at the instruction, and the
-  driver produces no assembly for that function.
+  driver produces no assembly for the translation unit.
 
 The invariant of EvoIR Section 10.2 governs every EvoMIR form: it implements
 the abstract semantics of its EvoIR source for **all defined executions**. A
@@ -475,7 +475,8 @@ logical edges; edges to one target keep distinct parameter-copy routes.
 
 ### 4.6 Pseudo-forms and markers
 
-Emission expands these forms; the interpreter executes them as stated.
+Emission expands these forms. The interpreter executes them as stated,
+except `spill.*` and `arg.*`, which exist only after allocation (Section 9.1).
 
 | Form | Semantics |
 |---|---|
@@ -546,12 +547,12 @@ table or in a family that Sections 2 and 4 admit is refused (Section 10).
 | `icmp.eq`/`ne` on pointers | the same, 64-bit, no extension |
 | `ptr.null` | `mov #0` |
 | `global_addr @g` / `func_addr @f` | `adrp` + `add` with the symbol spellings of Section 4.1 |
-| `ptr.offset.<direction>.<signedness>` | the index extended per the signedness, scaled by `lsl` for a power-of-two scale and `mul` otherwise, then `add` or `sub` by the direction; the machine wraps where EvoIR computes in unbounded arithmetic and reports `E3011`, an admissible difference because the pointer-formation guard has been asserted before |
+| `ptr.offset.<direction>.<signedness>` | the index extended per the signedness, scaled by `lsl` for a power-of-two scale and `mul` otherwise, then `add` or `sub` by the direction; the machine wraps where EvoIR computes in unbounded arithmetic and reports `E3011`. Native code relies on the C rule that a defined program forms no pointer outside its object: it checks neither the overflow nor the `pointer_valid` guard that follows the offset (EvoIR Section 10.4, rule 10), which lowers to nothing (below) |
 | `ptr.to_int`, `ptr.from_int.*` | nothing: the value is the same 64-bit register |
 | `alloca` (static size and alignment) | `frame.slot` at the instruction's program point |
 | `alloca.dynamic` | `stack.alloc` at the instruction's program point, preserving byte-count operand, origin and alignment |
 | `lifetime.end` | `stack.release` for an address that originates from dynamic allocation, including explicit edge transport; a fixed object stays reserved and needs no native instruction |
-| `pointer_valid`, `access_in_bounds` | nothing: the front end already lowered the guards into `ub.assume`; the instruction has no machine effect |
+| `pointer_valid`, `access_in_bounds` | nothing. EvoIR keeps the memory guards out of `ub.assume` (EvoIR Section 6.1), so neither UB-check profile (Section 5.2) checks them. Native code relies on the C rule that a defined program makes no invalid access and checks no memory fault (`E3009` to `E3013`); only the interpreters check the guards. `access_in_bounds` gives the alignment that it proves to the access it guards (the ` [align=N]` suffix of Section 4.1) |
 | `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker (Section 5.4 can select an immediate address) |
 | `load [volatile]` of a pointer | `ldr.p` / `ldr.pf` |
 | `store [volatile]` | `str` of the matching width, `str.p` for a pointer (Section 5.4) |
@@ -1286,13 +1287,21 @@ names that position. The template text is copied verbatim and never parsed.
 ### 8.4 External symbols
 
 A `call @f` to an EvoIR `declare` uses the profile's `bl` spelling and is
-cross-boundary (Section 6.2). The address of an EvoIR `extern` object or
-`declare` function, strong or weak, uses GOT indirection (Section 8.1): it
-reads the linker's address slot, adds no EvoIR memory operation, and is zero
-for an absent weak definition. Defined symbols keep direct page-relative
-addresses, so a PIE needs no direct relocation against external data. The
-interpreter lanes report `E3039`/`E3040` for external calls, and the native
-run decides.
+cross-boundary (Section 6.2). The address of a symbol uses GOT indirection
+(Section 8.1) when the symbol is weak, or when the code is position
+independent and the symbol has `visibility` `external` (ELF default
+visibility). On Linux the rule applies to definitions as well as to `extern`
+objects and `declare` functions, because the final linker, not the unit,
+decides interposition. On Darwin it applies only to symbols that the unit
+does not define, and a definition keeps a direct page-relative address. Every
+other symbol address is direct and page-relative, so a strong `extern` object
+under `-fno-pic` and a strong `hidden`, `protected` or `internal` symbol use
+no GOT. The driver emits position-independent code by default: a PIE on
+Linux, and always on Darwin; `-fno-pic` and its other spellings select static
+code on Linux (EvoIR Section 10.5). A GOT access reads the linker's address
+slot, adds no EvoIR memory operation, and is zero for an absent weak
+definition. The interpreter lanes report `E3039`/`E3040` for external calls,
+and the native run decides.
 
 *Informative.* PIE measurements:
 `.evidence/builtin-probes/20260908-external-object-pie/results.txt`,
@@ -1317,10 +1326,8 @@ The Darwin spellings are stated, not measured.
 
 **Visibility.** Emission writes the visibility directive for definitions,
 aliases and referenced declarations; an unused declaration creates no linker
-dependency. Strength is independent of visibility. Strong hidden and
-protected references can use direct addresses; default-visible PIC
-references use the GOT even for a local definition; weak references keep the
-GOT. Direct calls keep named relocations.
+dependency. Strength is independent of visibility. Section 8.4 states which
+symbol addresses use the GOT. Direct calls keep named relocations.
 
 *Informative.* ELF component probes: `tests/fixtures/symbol-component-*.c`.
 
@@ -1409,9 +1416,12 @@ Four instruments, each independent of the lowering, check the backend;
 
 ### 9.1 The EvoMIR interpreter
 
-Every Section 4 form except `asm` and `asm.goto` has executable semantics.
-The interpreter must agree with the EvoIR interpreter on results, traps and
-the volatile trace. The randomized semantic gate runs it as a third lane
+Every Section 4 form except `asm`, `asm.goto` and the allocator forms
+`spill.store`, `spill.reload`, `arg.incoming` and `arg.outgoing` has
+executable semantics. The interpreter runs EvoMIR before allocation, and the
+allocator forms exist only after it, so the interpreter refuses them as
+invalid input. The interpreter must agree with the EvoIR interpreter on
+results, traps and the volatile trace. The randomized semantic gate runs it as a third lane
 (EvoIR before and after optimization, EvoMIR after lowering); a mismatch is
 shrunk, and a lowering refusal is counted by code, not compared.
 
@@ -1437,8 +1447,10 @@ liveness or spill decisions of the allocator. It refuses (`E4020`) when:
 
 ### 9.3 The Lean checkers
 
-For `core-v1`, the Lean checkers validate each compilation. Each reads
-untrusted proposals or hints and decides without trusting them:
+For `core-v1`, the Lean checkers validate each compilation in
+proof-required mode (`spec/verification.md`, Section 7); an ordinary
+compilation runs none of them. Each reads untrusted proposals or hints and
+decides without trusting them:
 
 | Checker | Definition | What it relates |
 |---|---|---|
@@ -1471,8 +1483,8 @@ one `bits<32>`; programs are compared by exit status modulo 256.
 ## 10. Diagnostics
 
 Active refusals are reported at the EvoIR instruction that could not be
-lowered, and the driver emits no assembly for that function. Withdrawn codes
-keep their names, so that old receipts can be read.
+lowered, and the driver emits no assembly for the translation unit. Withdrawn
+codes keep their names, so that old receipts can be read.
 
 | Code | Name | Meaning |
 |---|---|---|
@@ -1649,21 +1661,21 @@ and the checked UB-check profile; each exporter refuses other forms.
 
 ## Revision
 
-**Revision 1.2.0, 2026-10-14.** The Darwin ABI profile follows Apple clang
-at calls across the compiler boundary: a caller extends a narrow argument by
-the `sext` mark of its parameter, also at an indirect call under the Apple
-convention (Section 6.2); a `bits<128>` argument takes the next two registers
-(Section 6.5, which drops its conformance note); and the Apple convention
-packs named stack arguments by natural size and alignment instead of refusing
-them (Sections 6.1, 6.6 and 6.12). An `asm` clobber of `x19` to `x28` is saved
-and restored, and an `asm` clobber of `x29` is refused (Section 6.7). The
-allocation verifier clears the clobbers of every `asm` and checks the saved
-set (Section 9.2). Section 6.14 lists the ABI-changing options that every
-command line refuses, and Section 6.12 names the crossed variadic test.
-Section 10 states the new meanings of `E4009` and `E4010`.
-Evidence: `crates/evocc/tests/darwin_call_boundary.rs`,
-`crates/evocc/tests/assembly_callee_saved_clobbers.rs` and
-`crates/evocc-mir/tests/section7_allocation_verifier.rs`. Revision 1.1.0 of
+**Revision 1.2.1, 2026-10-14.** Corrections that make the text state what
+the code does; no lowering, allocation or emission rule changes. The
+`ptr.offset` and memory-guard rows of Section 5.1 state that native code
+relies on the C rule and checks no memory fault. Section 8.4 states the one
+rule of GOT addresses that `emit.rs` applies, and Section 8.5 refers to it.
+Sections 4.6 and 9.1 exclude the allocator forms `spill.*` and `arg.*` from
+the interpreter, Section 9.3 limits the Lean checkers to proof-required
+mode, Sections 1.1 and 10 state that a refusal leaves the whole translation
+unit without assembly, and the Status table names
+`lean/EvoIR/MachineExecution.lean`. The errata note is
+`docs/archive/notebook/spec-errata-20261014.md`. Revision 1.2.0 of
+2026-10-14 followed Apple clang at Darwin calls across the compiler boundary,
+saved and restored an `asm` clobber of `x19` to `x28`, and listed the refused
+ABI-changing options (Sections 6.1, 6.2, 6.5 to 6.7, 6.12, 6.14, 9.2 and
+10). Revision 1.1.0 of
 2026-10-13 added the Appendix A productions of the `spill.*` and `arg.*`
 forms; revision 1.0.1 of 2026-10-07 specified the Apple variadic convention
 (Sections 1.3, 6.1 and 6.12).
