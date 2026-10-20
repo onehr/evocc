@@ -6,8 +6,8 @@
       "sha256": "772ee506e130683c927d466519a809f993bf5234b7572a8cfaffc4f19c42d249"
     },
     "spec/evoir.md": {
-      "revision": "2.11.0",
-      "sha256": "b295b7dc2c6231ca330fc8b4b5c0634f00725866bd1faa34806db41bddd38ad4"
+      "revision": "2.11.1",
+      "sha256": "aeed3d5aac4aabca130db14f7b2d673ef85962f9cb1e1fb1899d9b08ba9c28b4"
     },
     "spec/evomir.md": {
       "revision": "1.5.0",

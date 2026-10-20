@@ -136,8 +136,8 @@ was found in the read-only process check at this planning checkpoint.
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
-| REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT |  | D01-D14 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| REVIEW | D16 | Decide the rule for calls that return twice by name (D16). No other rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
+| AUDIT |  | D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -5454,6 +5454,35 @@ refusal; changing the P13 demo does not close it.
   also compiles and executes under that restriction on both targets. Combined
   acceptance passes 3,454 tests, zero failures, eight ignores, Clippy/fmt and
   all six Lean steps. [Repair record](tests/fixtures/darwin-arguments.out).
+
+- [x] **D15 — Accept `returns_twice` prototypes from `<pthread.h>`** — `DONE`, P1, 2026-10-20.
+  Found on 2026-10-20 by the L11a TinyCC replay. D11 (f81a13d4) refused
+  `returns_twice` at every placement, and glibc's `pthread.h` declares
+  `__sigsetjmp_cancel` with it, so every Linux unit that included `<pthread.h>`
+  failed with E2952; the release binaries of 7fec1ce5 have the defect. EvoIR
+  2.11.1 accepts the attribute on a function prototype and records it. A
+  definition, a call or any other use of the designator of a marked function is
+  E2952, in any declaration order, because EvoCC has no rule for a second
+  return; a use inside a function that the unit does not retain is not reported.
+  Other placements keep E2952. The `pthread_cleanup_push` and
+  `pthread_cleanup_pop` macros are refused at their `__sigsetjmp_cancel` call. A
+  `pthread_create`/`pthread_join` program links with gcc-14 in the sealed lane
+  and runs at O0 and O2. The full offline workspace gate passes 466 suites,
+  3,526 tests, zero failures and 14 ignores, plus Clippy and formatting.
+  [Tests](crates/evocc/tests/returns_twice_attribute.rs).
+
+- [ ] **D16 — Calls that return twice by name** — `NEEDS_RULE`, P2.
+  Found on 2026-10-20 during D15. GCC 14 treats `setjmp`, `sigsetjmp`,
+  `savectx`, `vfork` and `getcontext`, also with leading underscores, as
+  returning twice by name. EvoCC compiles them as ordinary calls: `setjmp(b)`
+  emits `bl _setjmp`. An asm-label redeclaration also bypasses the D15 mark:
+  after `int h(void) __asm__("f");` a call `h()` emits `bl f`. No test shows
+  whether EvoCC's allocation and slot sharing keep the values that a second
+  return reads. Next action: decide the rule, either a refusal or GCC's
+  treatment of values live across such a call, and probe a `setjmp`/`longjmp`
+  program at O0 and O2 on both targets. Exit: the rule is in EvoIR, and tests
+  pin each named function, the asm-label alias and the ladder programs that call
+  `setjmp`.
 
 ## Codegen quality track — next quarter
 

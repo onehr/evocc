@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.11.0** | **Pinned ground truth** | Generic atomic forms on memory on 2026-10-20
+**Revision 2.11.1** | **Pinned ground truth** | Prototype returns_twice marks on 2026-10-20
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -4877,9 +4877,26 @@ call and argument effects still execute exactly once.
 are `E2952` (`unsupported-function-attribute`). This also applies to names
 enclosed in `__` and to the `gnu` and `__gnu__` bracket namespaces. It applies
 to every placement, including prototypes, type names and unused definitions,
-on both targets. A warning option cannot suppress this error. No ordinary
-frame or default calling convention may stand in for one of these contracts.
-Unrelated bracket namespaces do not denote these GNU attributes.
+on both targets, with the one `returns_twice` exception below. A warning
+option cannot suppress this error. No ordinary frame or default calling
+convention may stand in for one of these contracts. Unrelated bracket
+namespaces do not denote these GNU attributes.
+
+`returns_twice` on a function declaration that is not a definition is
+accepted among the declaration specifiers and directly before or after the
+declarator. The front end records it on that function. For example, glibc's `<pthread.h>`
+declares `__sigsetjmp_cancel` in this way. EvoCC has no execution rule for a
+second return. `E2952` is therefore reported at each definition of a function
+that any of its declarations marks. It is also reported at each use of the
+function's designator: a call, an address or any other operand, evaluated or
+not. A call through a pointer cannot be checked, so a call is not the only use
+that counts. The result does not depend on declaration order: a later
+declaration that adds the mark still refuses an earlier definition or use. A
+use outside a function body is reported. A use in a function body is a
+deferred front-end profile refusal. It is not reported for a function that the
+unreferenced internal function rule of 10.1.16 drops. Neither interpreter
+enters such a body, and the lowering does not emit it. `returns_twice` on any
+other declaration or in any other placement is `E2952` at the attribute.
 
 The sole accepted `optimize` form has one or more ordinary string arguments
 whose comma-separated options are all `no-tree-vectorize`,
@@ -5049,7 +5066,7 @@ compound literals, and a front end must not emit it.
 | `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_` (10.1.14) |
 | `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
 | `E2951` | a floating comparison or classification builtin with an operand of the wrong type (3.13.1) |
-| `E2952` | an unsupported execution or calling-convention attribute (10.1.9) |
+| `E2952` | an unsupported execution or calling-convention attribute, or a definition or use of a function marked `returns_twice` (10.1.9) |
 | `E2953` | a cast to a struct type from an incompatible operand type (10.1.3) |
 | `E2954` | a declaration makes a previously folded string object's binding weak, aliased or assembly-renamed (10.1.17) |
 | `E2955` | `_Atomic` names an array, function, atomic or qualified type, or an atomic bit-field (10.1.21) |
@@ -7965,6 +7982,14 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.11.1, 2026-10-20.** Section 10.1.9 accepts `returns_twice` on a
+function declaration that is not a definition and records it. `E2952` moves
+to each definition and each use of the designator of a marked function, in
+any declaration order. A use in a dropped internal function is not reported.
+Every other placement keeps `E2952` at the attribute. This repairs every Linux
+unit that includes glibc's `<pthread.h>`. No EvoIR operation, registry or
+Lean rule domain changes.
 
 **Revision 2.11.0, 2026-10-20.** Section 10.1.14 admits the generic
 `__atomic_load`, `__atomic_store`, `__atomic_exchange` and

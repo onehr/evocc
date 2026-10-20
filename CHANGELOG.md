@@ -177,6 +177,10 @@ The first public version.
 
 ### Fixed
 
+- Linux programs that include `<pthread.h>` compile again. A `returns_twice` prototype is
+  accepted and recorded. A definition, a call or any other use of such a function is E2952,
+  because EvoCC has no rule for a second return. This includes the glibc `pthread_cleanup_push`
+  and `pthread_cleanup_pop` macros.
 - A compound update of a real integer by an integer-complex value, such as `x *= 2 + 1i`, now
   stores the converted complex result. Native code stored a wrong value before. A floating or
   pointer target is E2102.

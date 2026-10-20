@@ -333,9 +333,48 @@ struct DeclarationTransaction {
     initialized_const_undo: usize,
     initialized_string_undo: usize,
     string_constant_uses: usize,
+    function_uses: usize,
+    function_definitions: usize,
     side_declarations: usize,
     builtin_declarations: usize,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReturnsTwiceState {
+    Open,
+    Accepted,
+    Refused,
+}
+
+/// A GNU `returns_twice` attribute in a declaration position. Only the
+/// declaration that receives it knows whether it declares a function.
+#[derive(Debug, Clone, Copy)]
+struct ReturnsTwiceAttribute {
+    /// The complete attribute span, which the declaration receives.
+    span: SourceSpan,
+    /// The attribute name, where E2952 is reported.
+    name: SourceSpan,
+    preceding: usize,
+    state: ReturnsTwiceState,
+}
+
+/// A function designator or a function definition, in parse encounter order.
+/// `owner` is the definition whose body contains a designator.
+#[derive(Debug, Clone, Copy)]
+struct FunctionUse {
+    function: SymbolId,
+    owner: Option<SymbolId>,
+    span: SourceSpan,
+    preceding: usize,
+}
+
+/// A profile refusal, the diagnostic count before it, and the expression
+/// whose consumer can discharge it.
+type DeferredRefusal = (
+    evocc_chir::ProfileRefusal,
+    usize,
+    Option<BinaryExpressionIdentity>,
+);
 
 type AttributeNames = HashSet<String>;
 type MemberAttributeKey = (TagId, usize);
@@ -451,6 +490,12 @@ pub struct Parser<'src, 'arena> {
     )>,
     /// Attributes on labels and type names, which have no declaration node.
     detached_attributes: Vec<Attribute>,
+    /// Deferred `returns_twice` attributes until their declarations settle them.
+    returns_twice_attributes: Vec<ReturnsTwiceAttribute>,
+    /// A later declaration can add `returns_twice` to a function. Its uses and
+    /// definitions are therefore checked when the unit is complete.
+    function_uses: Vec<FunctionUse>,
+    function_definitions: Vec<FunctionUse>,
     generic_selections: Vec<GenericSelectionRecord>,
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     switch_depth: usize,
@@ -582,6 +627,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             current_function_parameters: None,
             profile_refusals: Vec::new(),
             detached_attributes: Vec::new(),
+            returns_twice_attributes: Vec::new(),
+            function_uses: Vec::new(),
+            function_definitions: Vec::new(),
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
             switch_depth: 0,
@@ -736,6 +784,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 observed.insert(symbol, parameters);
             }
         }
+        let (late_refusals, mut returns_twice_uses) = self.returns_twice_refusals();
         let mut unit = CHirUnit::new(
             decls,
             std::mem::take(&mut self.types),
@@ -762,13 +811,26 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         unit.set_generic_selections(std::mem::take(&mut self.generic_selections));
         unit.set_front_end_builtins(std::mem::take(&mut self.front_end_builtins));
         unit.set_unprototyped_parameters(observed);
-        let refusals = std::mem::take(&mut self.profile_refusals);
+        let mut refusals = std::mem::take(&mut self.profile_refusals);
+        refusals.append(&mut returns_twice_uses);
+        refusals.sort_by_key(|(_, preceding, _)| *preceding);
         unit.set_profile_refusals(
             refusals
                 .iter()
                 .map(|(refusal, _, _)| refusal.clone())
                 .collect(),
         );
+        let mut late = late_refusals
+            .into_iter()
+            .map(|(span, preceding)| {
+                (
+                    "E2952",
+                    "unsupported-function-attribute: returns_twice",
+                    span,
+                    preceding,
+                )
+            })
+            .collect::<Vec<_>>();
         if !refusals.is_empty() {
             let retained = evocc_chir::inline::retained_functions(&unit);
             let active = refusals.into_iter().filter(|(refusal, _, _)| {
@@ -778,13 +840,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .as_ref()
                         .map_or(true, |functions| functions.contains(&refusal.function))
             });
-            for (inserted, (refusal, preceding, _)) in active.enumerate() {
-                self.report(refusal.code, refusal.message, refusal.span);
-                let diagnostic = self.diagnostics.pop().expect("just reported diagnostic");
-                // This is parse encounter order, not a comparison of spans
-                // from different headers or macro expansion locations.
-                self.diagnostics.insert(preceding + inserted, diagnostic);
-            }
+            late.extend(active.map(|(refusal, preceding, _)| {
+                (refusal.code, refusal.message, refusal.span, preceding)
+            }));
+        }
+        late.sort_by_key(|(_, _, _, preceding)| *preceding);
+        for (inserted, (code, message, span, preceding)) in late.into_iter().enumerate() {
+            self.report(code, message, span);
+            let diagnostic = self.diagnostics.pop().expect("just reported diagnostic");
+            // This is parse encounter order, not a comparison of spans
+            // from different headers or macro expansion locations.
+            self.diagnostics.insert(preceding + inserted, diagnostic);
         }
         unit
     }
@@ -958,28 +1024,139 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         message: &'static str,
         span: SourceSpan,
     ) -> bool {
-        let mut scope = Some(self.current_scope);
-        while let Some(id) = scope {
-            let Ok(entry) = self.symbols.scope(id) else {
-                break;
-            };
-            if let Some(function) = entry.function_owner() {
-                self.profile_refusals.push((
-                    evocc_chir::ProfileRefusal {
-                        function,
-                        code,
-                        message,
-                        span,
-                    },
-                    self.diagnostics.len(),
-                    None,
-                ));
-                return true;
-            }
-            scope = entry.parent();
+        if let Some(function) = self.function_owner() {
+            self.profile_refusals.push((
+                evocc_chir::ProfileRefusal {
+                    function,
+                    code,
+                    message,
+                    span,
+                },
+                self.diagnostics.len(),
+                None,
+            ));
+            return true;
         }
         self.report(code, message, span);
         false
+    }
+
+    /// The function definition whose body encloses the current scope.
+    fn function_owner(&self) -> Option<SymbolId> {
+        let mut scope = Some(self.current_scope);
+        while let Some(id) = scope {
+            let entry = self.symbols.scope(id).ok()?;
+            if let Some(function) = entry.function_owner() {
+                return Some(function);
+            }
+            scope = entry.parent();
+        }
+        None
+    }
+
+    /// Record a use of a function designator. A call through a pointer cannot
+    /// be checked, so every use counts, not only a direct call.
+    fn note_function_use(&mut self, function: SymbolId, span: SourceSpan) {
+        if self
+            .symbols
+            .symbol(function)
+            .is_ok_and(|entry| entry.kind() == SymbolKind::Function)
+        {
+            self.function_uses.push(FunctionUse {
+                function,
+                owner: self.function_owner(),
+                span,
+                preceding: self.diagnostics.len(),
+            });
+        }
+    }
+
+    /// A function prototype accepts the deferred `returns_twice` attributes it
+    /// receives. Any other declaration refuses them at the attribute name.
+    fn settle_returns_twice(&mut self, attributes: &[Attribute], accept: bool) {
+        for attribute in attributes {
+            if attribute.semantic_name() != Some("returns_twice") {
+                continue;
+            }
+            let mut refused = None;
+            for entry in &mut self.returns_twice_attributes {
+                if entry.span != attribute.span {
+                    continue;
+                }
+                match (accept, entry.state) {
+                    (true, ReturnsTwiceState::Open) => entry.state = ReturnsTwiceState::Accepted,
+                    (false, ReturnsTwiceState::Open | ReturnsTwiceState::Accepted) => {
+                        entry.state = ReturnsTwiceState::Refused;
+                        refused.get_or_insert(entry.name);
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(name) = refused {
+                self.report(
+                    "E2952",
+                    "unsupported-function-attribute: returns_twice",
+                    name,
+                );
+            }
+        }
+    }
+
+    /// E2952 for `returns_twice` after the whole unit is known: an attribute
+    /// that no declaration settled, a definition, and a use outside any
+    /// function body are reported at once; a use inside a body is deferred,
+    /// so only a retained function reports it.
+    fn returns_twice_refusals(&mut self) -> (Vec<(SourceSpan, usize)>, Vec<DeferredRefusal>) {
+        let mut reported = Vec::new();
+        let mut unsettled = Vec::new();
+        for entry in std::mem::take(&mut self.returns_twice_attributes) {
+            if entry.state == ReturnsTwiceState::Open && !unsettled.contains(&entry.span) {
+                unsettled.push(entry.span);
+                reported.push((entry.name, entry.preceding));
+            }
+        }
+        let functions = self
+            .entity_attributes
+            .iter()
+            .filter(|(symbol, names)| {
+                names.contains("returns_twice")
+                    && self
+                        .symbols
+                        .symbol(**symbol)
+                        .is_ok_and(|entry| entry.kind() == SymbolKind::Function)
+            })
+            .map(|(symbol, _)| *symbol)
+            .collect::<HashSet<_>>();
+        let definitions = std::mem::take(&mut self.function_definitions);
+        let uses = std::mem::take(&mut self.function_uses);
+        if functions.is_empty() {
+            return (reported, Vec::new());
+        }
+        for definition in definitions {
+            if functions.contains(&definition.function) {
+                reported.push((definition.span, definition.preceding));
+            }
+        }
+        let mut deferred = Vec::new();
+        for usage in uses {
+            if !functions.contains(&usage.function) {
+                continue;
+            }
+            match usage.owner {
+                Some(function) => deferred.push((
+                    evocc_chir::ProfileRefusal {
+                        function,
+                        code: "E2952",
+                        message: "unsupported-function-attribute: returns_twice",
+                        span: usage.span,
+                    },
+                    usage.preceding,
+                    None,
+                )),
+                None => reported.push((usage.span, usage.preceding)),
+            }
+        }
+        (reported, deferred)
     }
 
     fn token_text<'a>(&'a self, tok: &'a Token) -> &'a str {
@@ -1201,6 +1378,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             initialized_const_undo: self.initialized_const_undo.len(),
             initialized_string_undo: self.initialized_string_undo.len(),
             string_constant_uses: self.string_constant_uses.len(),
+            function_uses: self.function_uses.len(),
+            function_definitions: self.function_definitions.len(),
             side_declarations: self.side_declarations.len(),
             builtin_declarations: self.builtin_declarations.len(),
         }
@@ -1231,6 +1410,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn rollback_declaration_transaction(&mut self, transaction: &DeclarationTransaction) {
         self.string_constant_uses
             .truncate(transaction.string_constant_uses);
+        self.function_uses.truncate(transaction.function_uses);
+        self.function_definitions
+            .truncate(transaction.function_definitions);
         while self.initialized_string_undo.len() > transaction.initialized_string_undo {
             let (symbol, previous) = self
                 .initialized_string_undo
@@ -1893,6 +2075,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             }
             let mut declarations = self.side_declarations.split_off(side_start);
+            self.settle_returns_twice(&attributes, false);
             if let Some(event) = specifier.tag_event {
                 self.detached_attributes.extend(attributes);
                 declarations.push(self.finish_tag_event(
@@ -2003,6 +2186,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             )
             && self.peek_kind() == Some(TokenKind::LBrace)
         {
+            self.settle_returns_twice(&attributes, false);
             let (mut parameters, parameter_scope, inherited_from_specifier) =
                 self.function_declaration_parameters(&declarator, &specifier, full_type)?;
             // An unspecified declaration can compose with a prototype, but
@@ -2040,6 +2224,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             }
             if has_body {
+                self.function_definitions.push(FunctionUse {
+                    function: symbol,
+                    owner: None,
+                    span: declarator.name.span,
+                    preceding: self.diagnostics.len(),
+                });
                 // Reject a second ordinary body inside the declaration
                 // transaction, preserving rollback and diagnostic encounter
                 // order. Final emission still depends on the complete chain.
@@ -2239,6 +2429,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2202", "invalid-initializer-type", declarator.span);
                 return None;
             }
+            self.settle_returns_twice(&attributes, is_function);
             let parsed_function_parameters = if is_function {
                 Some(self.function_declaration_parameters(&declarator, &specifier, full_type)?)
             } else {
@@ -2561,6 +2752,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2903", "malformed-attribute", attribute.span);
                 return None;
             }
+            self.note_function_use(function, argument.span);
             let callee = self.alloc_node(CHirExpr::Ident {
                 symbol: function,
                 spelling: spelling.to_owned(),
@@ -4834,6 +5026,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     parameter_attributes.extend(declaration.attributes.iter().cloned());
                     parameter_attributes
                         .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
+                    self.settle_returns_twice(&parameter_attributes, false);
                     let ty =
                         self.apply_declaration_attributes(ty, &mut parameter_attributes, false);
                     parameter.ty = ty;
@@ -5369,7 +5562,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 // cannot return through our ordinary frame. Reject the written
                 // contract even on a prototype, an unused definition or a type:
                 // a later declaration must not hide an unsupported convention.
+                // `returns_twice` in a declaration position waits for its
+                // declaration: a prototype records it, and the uses and the
+                // definition of that function are refused instead.
+                let deferred_returns_twice = gnu_name
+                    && name == "returns_twice"
+                    && matches!(
+                        placement,
+                        AttributePlacement::DeclarationSpecifiers
+                            | AttributePlacement::BeforeDeclarator
+                            | AttributePlacement::AfterDeclarator
+                    );
+                let preceding = self.diagnostics.len();
                 if gnu_name
+                    && !deferred_returns_twice
                     && matches!(
                         name.as_str(),
                         "naked"
@@ -5474,6 +5680,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         ) && name == "unused"))
                 {
                     self.report("E2903", "malformed-attribute", name_token.span);
+                }
+                if deferred_returns_twice {
+                    self.returns_twice_attributes.push(ReturnsTwiceAttribute {
+                        span,
+                        name: name_token.span,
+                        preceding,
+                        state: ReturnsTwiceState::Open,
+                    });
                 }
                 attributes.push(Attribute {
                     name,
@@ -6919,6 +7133,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
                 member_attributes
                     .extend(self.parse_attribute_specifiers(AttributePlacement::Member));
+                self.settle_returns_twice(&member_attributes, false);
                 // Representation changes use the same resolver as object,
                 // typedef and parameter declarations. Member alignment stays
                 // on the member, never on its canonical type identity.
@@ -7660,6 +7875,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.side_declarations.extend(captures);
         }
         type_attributes.extend(self.parse_attribute_specifiers(AttributePlacement::TypeName));
+        self.settle_returns_twice(&type_attributes, false);
         for attribute in &mut type_attributes {
             attribute.placement = AttributePlacement::TypeName;
         }
@@ -8579,6 +8795,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let mut parameter_attributes = specifier_attributes;
             parameter_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
+            self.settle_returns_twice(&parameter_attributes, false);
             self.validate_alignment_specifiers(ty, &parameter_attributes, false);
             let ty = self.apply_declaration_attributes(ty, &mut parameter_attributes, false);
             params.push(ParameterDecl {
@@ -12803,6 +13020,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 }
                 self.lint_uses.insert(symbol);
+                self.note_function_use(symbol, tok.span);
                 let facts = self.facts_for_symbol(symbol);
                 CHirExpr::Ident {
                     symbol,
@@ -14284,6 +14502,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             (checked, builtin.checked)
         };
         arguments.extend(pack);
+        self.note_function_use(symbol, designator_span);
         let facts = self.facts_for_symbol(symbol);
         let callee = self.alloc_node(CHirExpr::Ident {
             symbol,
@@ -14543,6 +14762,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return_ty,
             designator_span,
         )?;
+        self.note_function_use(symbol, designator_span);
         let facts = self.facts_for_symbol(symbol);
         let callee = self.alloc_node(CHirExpr::Ident {
             symbol,
