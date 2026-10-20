@@ -19,6 +19,20 @@ The first public version.
   requires.
 - `__builtin_return_address(n)` and `__builtin_frame_address(n)` with `n` from 1 to 65535 return
   a null pointer on both targets and in both interpreters, as GCC does. An invalid depth is E2913.
+- Integer-complex division and compound division use GCC's wide algorithm in the component
+  type on both targets. Each step keeps its division-by-zero and overflow checks, and only the
+  selected branch runs. E2948 is withdrawn. Apple clang uses another formula, so Darwin results
+  can differ from Apple clang's.
+- Integer vectors of 1, 2 and 4 bytes can be arguments and results. Linux follows GCC 14 in
+  general registers; Clang 19 returns them in SIMD registers, which stays a recorded
+  incompatibility. Darwin follows Apple clang and returns them in `v0` with widened lanes; that
+  result is E4002 under `-mgeneral-regs-only`.
+- The GNU `__atomic` fetch-op, op-fetch, exchange, compare-exchange, test-and-set, clear, fence
+  and lock-free builtins on 1-, 2-, 4- and 8-byte scalars, inline on both targets. E2947 reports
+  exactly the constant orders that GCC 14 warns about and every constant outside 0 to 5. The
+  interpreters run one thread and report E3021 at a non-relaxed fence, as at
+  `__sync_synchronize`. Crossed native thread tests pass against GCC 14, Clang 19 and Apple
+  clang; they are not a memory-model proof.
 - Three more checked string builtins of the macOS 26 SDK (`__builtin___memccpy_chk`,
   `__builtin___strlcpy_chk`, `__builtin___strlcat_chk`), four checked `printf`-family builtins
   and `__builtin___clear_cache`, which calls the target's runtime helper.
@@ -154,6 +168,9 @@ The first public version.
 
 ### Fixed
 
+- A compound update of a real integer by an integer-complex value, such as `x *= 2 + 1i`, now
+  stores the converted complex result. Native code stored a wrong value before. A floating or
+  pointer target is E2102.
 - `evocc-checker --version` and `evoir-sem --version` report the release
   version without reading files from a source checkout.
 - Repeated inline-assembly operands keep their own constraints when one operand

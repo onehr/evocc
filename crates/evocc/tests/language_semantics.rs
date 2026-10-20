@@ -1052,10 +1052,13 @@ fn aggregate_parameters_keep_storage_addresses_across_edges() {
 }
 
 #[test]
-fn integer_complex_division_retains_the_oracle_disagreement() {
+fn integer_complex_division_parses_without_the_withdrawn_refusal() {
+    // L07 replaced E2948 with GCC's wide algorithm (EvoIR 10.1.14). The
+    // values are tested in integer_complex_division.rs.
     for source in [
         "int main(void){_Complex int z=(9+7i)/(2+1i);return __real__ z;}",
         "int main(void){_Complex int z=9+7i;z/=2+1i;return __real__ z;}",
+        "int main(void){int x=9;x/=2+1i;return x;}",
     ] {
         let arena = evocc_common::Arena::new(64 * 1024);
         let file = evocc_common::FileId::new(0);
@@ -1066,8 +1069,32 @@ fn integer_complex_division_retains_the_oracle_disagreement() {
         }
         let mut parser = evocc_parser::Parser::new(tokens, file, source);
         let _unit = parser.parse_translation_unit_in(&arena);
-        assert!(parser.had_error(), "accepted conflicting form: {source}");
-        assert_eq!(parser.diagnostic().unwrap().code, "E2948");
+        assert!(
+            !parser.had_error(),
+            "{source}: {:?}",
+            parser.diagnostic().map(|diagnostic| diagnostic.code)
+        );
+    }
+}
+
+#[test]
+fn integer_complex_updates_refuse_non_integer_real_targets() {
+    for source in [
+        "int main(void){double d=3;d*=1+2i;return 0;}",
+        "int main(void){double d=3;d/=1+2i;return 0;}",
+        "int main(void){int *p=0;p+=1+2i;return 0;}",
+    ] {
+        let arena = evocc_common::Arena::new(64 * 1024);
+        let file = evocc_common::FileId::new(0);
+        let mut lexer = evocc_lex::Lexer::new(file, source);
+        let mut tokens = Vec::new();
+        while let Some(token) = lexer.next() {
+            tokens.push(token);
+        }
+        let mut parser = evocc_parser::Parser::new(tokens, file, source);
+        let _unit = parser.parse_translation_unit_in(&arena);
+        assert!(parser.had_error(), "accepted invalid update: {source}");
+        assert_eq!(parser.diagnostic().unwrap().code, "E2102", "{source}");
     }
 }
 

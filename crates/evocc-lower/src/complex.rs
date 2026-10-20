@@ -259,6 +259,9 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<[ExprValue; 2], LowerError> {
+        if op == BinaryOp::Div {
+            return self.complex_division(a, b, ty, state);
+        }
         if !matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul) {
             return Err(LowerError::UnsupportedExpression {
                 span,
@@ -287,5 +290,149 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "invalid complex arithmetic",
             }),
         }
+    }
+
+    /// `|v|` for the comparison of GCC's wide algorithm: the negation of a
+    /// negative signed value, with its overflow obligation. Only `MIN` makes
+    /// the unconditional negation overflow, and then `|v|` is undefined too.
+    fn complex_magnitude(
+        &mut self,
+        value: ExprValue,
+        ty: CIntegerType,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        if !ty.is_signed() {
+            return Ok(value);
+        }
+        let zero = self.constant(state, ty, 0)?;
+        let negated =
+            self.emit_signed_arithmetic(state, BinaryOp::Sub, zero.clone(), value.clone(), ty)?;
+        let negative = self.checked_compare(state, CmpOp::SLt, &value.value, &zero.value)?;
+        let magnitude = self.select_bits(state, &negative, &negated.value, &value.value)?;
+        Ok(ExprValue {
+            value: magnitude,
+            integer: ty,
+        })
+    }
+
+    /// GCC's wide algorithm in the component type (EvoIR 10.1.14). A real
+    /// branch on `|c| < |d|` keeps the other quotient from executing: a
+    /// select would execute its division and report a false `E3002`.
+    fn complex_division(
+        &mut self,
+        a: [ExprValue; 2],
+        b: [ExprValue; 2],
+        ty: CIntegerType,
+        state: &mut State,
+    ) -> Result<[ExprValue; 2], LowerError> {
+        let [c, d] = b.clone();
+        let c = self.complex_magnitude(c, ty, state)?;
+        let d = self.complex_magnitude(d, ty, state)?;
+        let compare = if ty.is_signed() {
+            CmpOp::SLt
+        } else {
+            CmpOp::ULt
+        };
+        let smaller = self.checked_compare(state, compare, &c.value, &d.value)?;
+        let mut operands = Vec::new();
+        for value in a.into_iter().chain(b) {
+            let key = self.retain_temporary(value.value, state);
+            state.env.get_mut(&key).unwrap().integer = Some(ty);
+            operands.push(key);
+        }
+        let keys = self.expression_join_keys(state, &[]);
+        let mut then_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let mut else_state = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let then_arguments = self.edge_values(state, &keys)?;
+        let else_arguments = self.edge_values(state, &keys)?;
+        self.terminate(
+            state,
+            conditional_branch(
+                smaller,
+                None,
+                then_state.block,
+                then_arguments,
+                else_state.block,
+                else_arguments,
+            ),
+        )?;
+        let results = [
+            EnvKey::Temporary(self.next_temporary),
+            EnvKey::Temporary(self.next_temporary + 1),
+        ];
+        self.next_temporary += 2;
+        for (branch, smaller) in [(&mut then_state, true), (&mut else_state, false)] {
+            let values = operands
+                .iter()
+                .map(|key| {
+                    let bound = branch.env.remove(key).expect("retained quotient operand");
+                    ExprValue {
+                        value: bound.value,
+                        integer: ty,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let [a, b, c, d]: [ExprValue; 4] = values.try_into().expect("four operands");
+            let pair = self.wide_quotient(smaller, [a, b, c, d], ty, branch)?;
+            for (key, value) in results.into_iter().zip(pair) {
+                branch.env.insert(
+                    key,
+                    BoundValue {
+                        value: value.value,
+                        integer: Some(ty),
+                    },
+                );
+            }
+        }
+        let mut merge_keys = keys
+            .into_iter()
+            .filter(|key| !operands.contains(key))
+            .collect::<Vec<_>>();
+        merge_keys.extend(results);
+        let merge = self.new_block_from(&then_state, &merge_keys, BlockRole::Ordinary)?;
+        self.branch(&then_state, merge.block, &merge_keys)?;
+        self.branch(&else_state, merge.block, &merge_keys)?;
+        *state = merge;
+        Ok(results.map(|key| {
+            let bound = state.env.remove(&key).expect("joined quotient component");
+            ExprValue {
+                value: bound.value,
+                integer: ty,
+            }
+        }))
+    }
+
+    /// One branch of the wide algorithm, each step in the written order.
+    fn wide_quotient(
+        &mut self,
+        smaller: bool,
+        [a, b, c, d]: [ExprValue; 4],
+        ty: CIntegerType,
+        state: &mut State,
+    ) -> Result<[ExprValue; 2], LowerError> {
+        // |c| < |d|: ratio = c / d, div = c * ratio + d,
+        //   r = (a * ratio + b) / div, i = (b * ratio - a) / div.
+        // Otherwise: ratio = d / c, div = d * ratio + c,
+        //   r = (b * ratio + a) / div, i = (b - a * ratio) / div.
+        let (near, far, first, second) = if smaller {
+            (c, d, a.clone(), b.clone())
+        } else {
+            (d, c, b.clone(), a.clone())
+        };
+        let ratio = self.emit_div_rem(state, BinaryOp::Div, near.clone(), far.clone(), ty)?;
+        let scaled = self.emit_signed_arithmetic(state, BinaryOp::Mul, near, ratio.clone(), ty)?;
+        let div = self.emit_signed_arithmetic(state, BinaryOp::Add, scaled, far, ty)?;
+        let scaled = self.emit_signed_arithmetic(state, BinaryOp::Mul, first, ratio.clone(), ty)?;
+        let real = self.emit_signed_arithmetic(state, BinaryOp::Add, scaled, second, ty)?;
+        let real = self.emit_div_rem(state, BinaryOp::Div, real, div.clone(), ty)?;
+        let imaginary = if smaller {
+            let scaled = self.emit_signed_arithmetic(state, BinaryOp::Mul, b, ratio, ty)?;
+            self.emit_signed_arithmetic(state, BinaryOp::Sub, scaled, a, ty)?
+        } else {
+            let scaled = self.emit_signed_arithmetic(state, BinaryOp::Mul, a, ratio, ty)?;
+            self.emit_signed_arithmetic(state, BinaryOp::Sub, b, scaled, ty)?
+        };
+        let imaginary = self.emit_div_rem(state, BinaryOp::Div, imaginary, div, ty)?;
+        Ok([real, imaginary])
     }
 }

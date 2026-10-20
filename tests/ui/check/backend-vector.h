@@ -1,2 +1,2 @@
-typedef unsigned char v4u8 __attribute__((vector_size(4)));
-v4u8 bad(v4u8 x) { return x; }
+typedef int v4si __attribute__((vector_size(16)));
+v4si bad(v4si x) { return x; }

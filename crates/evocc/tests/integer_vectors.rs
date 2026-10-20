@@ -548,11 +548,16 @@ fn vector_index_checks_keep_the_entire_operand_width() {
 }
 
 #[test]
-fn small_vector_abi_conflicts_are_refused_without_disabling_local_operations() {
+fn small_vector_abi_lowers_without_admitting_non_consensus_operations() {
+    // L06: tiny vectors at a call boundary follow the target rule; the
+    // crossed tests are in tiny_vector_abi.rs.
     let source = include_str!("../../../tests/fixtures/integer-vector-small.c");
     let out = run(source, "--emit=asm");
-    assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("E4002"));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     for source in [
         "typedef int v __attribute__((vector_size(16))); void f(v *p){(*p)++;}",
         "typedef int v __attribute__((vector_size(16))); int *f(v *p){return &(*p)[0];}",

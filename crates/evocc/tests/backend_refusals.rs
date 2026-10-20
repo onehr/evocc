@@ -19,9 +19,11 @@ fn run(source: &str, target: &str, flags: &[&str]) -> Output {
 
 #[test]
 fn a_refused_function_does_not_hide_behind_a_translation_unit_error() {
-    let source = "typedef unsigned char v4u8 __attribute__((vector_size(4)));\nint clean(void) { return 0; }\nv4u8 bad(v4u8 x) { return x; }\nint local(void) { v4u8 x={1,2,3,4}; return x[1]; }\n";
+    // A 16-byte vector needs a SIMD register, which -mgeneral-regs-only
+    // refuses in the backend. Tiny vectors at a call boundary lower (L06).
+    let source = "typedef int v4si __attribute__((vector_size(16)));\nint clean(void) { return 0; }\nv4si bad(v4si x) { return x; }\nint local(void) { int x[4]={1,2,3,4}; return x[1]; }\n";
     for target in ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu"] {
-        let output = run(source, target, &[]);
+        let output = run(source, target, &["-mgeneral-regs-only"]);
         let message = String::from_utf8_lossy(&output.stderr);
         assert_eq!(output.status.code(), Some(1), "{message}");
         assert!(output.stdout.is_empty(), "a refused unit has no assembly");
@@ -31,7 +33,7 @@ fn a_refused_function_does_not_hide_behind_a_translation_unit_error() {
         );
         assert!(message.contains("not-lowered: vector"), "{message}");
         assert!(message.contains("@bad block 0 instruction 0"), "{message}");
-        assert!(message.contains("sub-8-byte vector ABI"), "{message}");
+        assert!(message.contains("-mgeneral-regs-only"), "{message}");
         assert!(!message.contains("<command-line>"), "{message}");
     }
 }
@@ -58,8 +60,8 @@ fn darwin_profile_refusals_are_lowering_diagnostics() {
 
 #[test]
 fn assembler_labels_do_not_lose_the_source_function() {
-    let source = "typedef unsigned char v4u8 __attribute__((vector_size(4)));\nv4u8 bad(v4u8 x) __asm__(\"_renamed\");\nv4u8 bad(v4u8 x) { return x; }\n";
-    let output = run(source, "aarch64-apple-darwin", &[]);
+    let source = "typedef int v4si __attribute__((vector_size(16)));\nv4si bad(v4si x) __asm__(\"_renamed\");\nv4si bad(v4si x) { return x; }\n";
+    let output = run(source, "aarch64-apple-darwin", &["-mgeneral-regs-only"]);
     let message = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{message}");
     assert!(

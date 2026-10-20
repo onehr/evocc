@@ -2516,10 +2516,21 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     None
                 }
                 MachineTask::ApplyAtomic(access) => {
+                    // Operands were evaluated once each, left to right; a
+                    // dynamic order only selects seq_cst.
+                    if access.failure.is_some() {
+                        expect_machine_integer(
+                            pop_machine_value(&mut values, access.span)?,
+                            access.span,
+                        )?;
+                    }
                     let _order = expect_machine_integer(
                         pop_machine_value(&mut values, access.span)?,
                         access.span,
                     )?;
+                    if access.weak.is_some() {
+                        pop_machine_value(&mut values, access.span)?;
+                    }
                     let stored = if access.value.is_some() {
                         Some(pop_machine_value(&mut values, access.span)?)
                     } else {
@@ -5106,6 +5117,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             // Match the lowered, ordered assembly boundary instead of
             // pretending that this interpreter models concurrent execution.
+            return Err(InterpreterError::Asm { span: call_span });
+        }
+        if (spelling == "__atomic_thread_fence" || spelling == "__atomic_signal_fence")
+            && self.unit.symbols().is_builtin_function(*symbol)
+        {
+            // The order operand has run. The front end removes a relaxed
+            // fence; every other one is the same ordered assembly boundary
+            // as `__sync_synchronize` in the lowered program.
             return Err(InterpreterError::Asm { span: call_span });
         }
         if spelling == "__builtin_prefetch" && self.unit.symbols().is_builtin_function(*symbol) {
@@ -7796,20 +7815,55 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .unwrap_or(evocc_memory::AtomicOrder::SeqCst);
         let ty = self.value_type(access.access_ty, span)?;
         if let Some((operation, result_kind)) = access.rmw {
-            let value = self.atomic_operand_value(
-                stored.ok_or(InterpreterError::UnsupportedType {
-                    ty: access.access_ty,
-                    span,
-                })?,
-                ty,
+            let stored = stored.ok_or(InterpreterError::UnsupportedType {
+                ty: access.access_ty,
                 span,
-            )?;
-            let expected = expected
-                .map(|value| self.atomic_operand_value(value, ty, span))
-                .transpose()?;
-            let (memory, world, result) = self
-                .memory
-                .atomic_rmw(
+            })?;
+            // GNU `__atomic` add and subtract on a pointer count bytes.
+            let pointer_offset = matches!(ty, ValueType::Pointer(_))
+                && matches!(
+                    operation,
+                    evocc_memory::AtomicRmwOp::Add | evocc_memory::AtomicRmwOp::Sub
+                );
+            // The compare-exchange of `__atomic_compare_exchange_n` reads the
+            // expected value through its pointer with an ordinary load.
+            let expected_object = if access.writeback {
+                let (pointer, _) = expect_machine_pointer(
+                    expected.ok_or(InterpreterError::UninitializedValue { span })?,
+                    span,
+                )?;
+                Some(pointer)
+            } else {
+                None
+            };
+            let expected = match expected_object {
+                Some(pointer) => Some(self.load_memory_value(
+                    pointer,
+                    access.access_ty,
+                    Qualifiers::default(),
+                    span,
+                )?),
+                None => expected,
+            };
+            let outcome = if pointer_offset {
+                let CValue::Integer(bytes) = stored else {
+                    return Err(InterpreterError::UninitializedValue { span });
+                };
+                self.memory.atomic_pointer_offset(
+                    &self.world,
+                    address,
+                    layout,
+                    order,
+                    access.volatile,
+                    operation,
+                    bytes.raw_bits() as u64,
+                )
+            } else {
+                let value = self.atomic_operand_value(stored, ty, span)?;
+                let expected = expected
+                    .map(|value| self.atomic_operand_value(value, ty, span))
+                    .transpose()?;
+                self.memory.atomic_rmw(
                     &self.world,
                     address,
                     layout,
@@ -7819,9 +7873,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     value,
                     expected,
                 )
-                .map_err(|error| self.memory_error(error, span))?;
+            };
+            let (memory, world, result) =
+                outcome.map_err(|error| self.memory_error(error, span))?;
             self.memory = memory;
             self.world = world;
+            if let Some(pointer) = expected_object.filter(|_| !result.exchanged) {
+                // A failed comparison stores the observed value back.
+                let observed = self.atomic_result_value(result.old, ty, span)?;
+                self.store_memory_value(
+                    pointer,
+                    access.access_ty,
+                    Qualifiers::default(),
+                    observed,
+                    span,
+                )?;
+            }
             return match result_kind {
                 crate::AtomicRmwReturn::Old => self.atomic_result_value(result.old, ty, span),
                 crate::AtomicRmwReturn::New => self.atomic_result_value(result.new, ty, span),
@@ -9319,6 +9386,31 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             let result = self.apply_complex(&operation, &[left, right])?;
             return self
                 .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
+        }
+        if let CValue::Aggregate { ty: complex, .. } = right {
+            if crate::complex::rank(self.unit.types(), complex).is_some() {
+                // A real target with a complex value: the front end converted
+                // the value to the common complex type. Compute there, then
+                // convert the result to the target type (EvoIR 10.1.14).
+                let op = crate::vector::assignment_binary(operator).ok_or(
+                    InterpreterError::UnsupportedExpression {
+                        feature: "invalid complex assignment",
+                        span,
+                    },
+                )?;
+                let mut operation = crate::complex::ComplexExpr {
+                    op: crate::complex::ComplexOp::Binary(op),
+                    operands: Vec::new(),
+                    facts: ExprFacts::value(complex),
+                    span,
+                };
+                let result = self.apply_complex(&operation, &[left, right])?;
+                operation.op = crate::complex::ComplexOp::Convert;
+                operation.facts = ExprFacts::value(ty);
+                let result = self.apply_complex(&operation, &[result])?;
+                return self
+                    .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
+            }
         }
         if crate::vector::shape(self.unit.types(), ty).is_some() {
             let op = crate::vector::assignment_binary(operator).ok_or(

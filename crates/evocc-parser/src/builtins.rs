@@ -73,6 +73,8 @@ const LIBRARY: &[&str] = &[
     "__builtin__Exit",
     "__builtin_prefetch",
     "__sync_synchronize",
+    "__atomic_thread_fence",
+    "__atomic_signal_fence",
     "__builtin_extract_return_addr",
 ];
 
@@ -122,7 +124,8 @@ pub(crate) const SPELLED: &[&str] = &[
 /// `E2933` and `E2935`. `__has_builtin` reports them as absent.
 const REFUSED: &[&str] = &["__builtin_puts", "__builtin_exit", "__builtin__Exit"];
 
-/// The legacy `__sync` read-modify-write operations.
+/// The read-modify-write operations of the legacy `__sync` and the GNU
+/// `__atomic` fetch-op and op-fetch forms.
 const LEGACY_OPERATIONS: &[&str] = &["add", "sub", "and", "or", "xor", "nand"];
 
 /// The keyword token of a builtin spelling, or `None` for an identifier.
@@ -134,7 +137,7 @@ pub(crate) fn token_kind(name: &str) -> Option<TokenKind> {
     if let Some(&(_, kind)) = KEYWORDS.iter().find(|(spelling, _)| *spelling == name) {
         return Some(kind);
     }
-    if super::legacy_atomic(name).is_some() {
+    if super::legacy_atomic(name).is_some() || super::gnu_atomic(name).is_some() {
         return Some(TokenKind::BuiltinAtomic);
     }
     if super::floating::is_builtin(name)
@@ -179,6 +182,21 @@ pub fn names() -> Vec<String> {
         names.push(format!("__sync_fetch_and_{operation}"));
         names.push(format!("__sync_{operation}_and_fetch"));
     }
+    for operation in LEGACY_OPERATIONS {
+        names.push(format!("__atomic_fetch_{operation}"));
+        names.push(format!("__atomic_{operation}_fetch"));
+    }
+    names.extend(
+        [
+            "__atomic_exchange_n",
+            "__atomic_compare_exchange_n",
+            "__atomic_test_and_set",
+            "__atomic_clear",
+            "__atomic_always_lock_free",
+            "__atomic_is_lock_free",
+        ]
+        .map(str::to_owned),
+    );
     names.extend(
         [
             "__sync_bool_compare_and_swap",

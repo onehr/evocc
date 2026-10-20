@@ -37,6 +37,56 @@ fn legacy_atomic(
     Some(result)
 }
 
+/// A GNU `__atomic` builtin beyond `__atomic_load_n` and `__atomic_store_n`
+/// (EvoIR 10.1.14). Fences are library builtins with an `int` operand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GnuAtomic {
+    Update(evocc_chir::AtomicRmwOp, evocc_chir::AtomicRmwReturn),
+    CompareExchange,
+    TestAndSet,
+    Clear,
+    AlwaysLockFree,
+    IsLockFree,
+}
+
+fn gnu_atomic(name: &str) -> Option<GnuAtomic> {
+    use evocc_chir::{AtomicRmwOp as R, AtomicRmwReturn as V};
+    let name = name.strip_prefix("__atomic_")?;
+    Some(match name {
+        "exchange_n" => GnuAtomic::Update(R::Exchange, V::Old),
+        "compare_exchange_n" => GnuAtomic::CompareExchange,
+        "test_and_set" => GnuAtomic::TestAndSet,
+        "clear" => GnuAtomic::Clear,
+        "always_lock_free" => GnuAtomic::AlwaysLockFree,
+        "is_lock_free" => GnuAtomic::IsLockFree,
+        _ => {
+            let (operation, result) = if let Some(op) = name.strip_prefix("fetch_") {
+                (op, V::Old)
+            } else {
+                (name.strip_suffix("_fetch")?, V::New)
+            };
+            let operation = R::from_mnemonic(operation)
+                .filter(|op| !matches!(op, R::Exchange | R::CompareExchange))?;
+            GnuAtomic::Update(operation, result)
+        }
+    })
+}
+
+/// The order a compare-exchange carries in EvoIR: its success order,
+/// strengthened to acq_rel when a release success pairs with an acquiring
+/// failure. Each half of an admitted pair is at most as strong as this order.
+fn merged_exchange_order(
+    success: evocc_chir::AtomicOrder,
+    failure: evocc_chir::AtomicOrder,
+) -> evocc_chir::AtomicOrder {
+    use evocc_chir::AtomicOrder as O;
+    if success == O::Release && matches!(failure, O::Consume | O::Acquire) {
+        O::AcqRel
+    } else {
+        success
+    }
+}
+
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 
@@ -9568,20 +9618,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // right-associative RHS so recovery resumes at the statement boundary.
         let typed_target = self.typed_update_target(target);
         let mut value = self.parse_assignment()?;
-        if op == AssignmentOp::Divide
-            && (self.complex_expression_type(target).is_some()
-                || self.complex_expression_type(value).is_some())
-        {
-            self.report(
-                "E2948",
-                "integer-complex-division-oracle-conflict",
-                target.span(),
-            );
-            return None;
+        let complex_target = self.complex_expression_type(target).is_some();
+        let complex_update = op != AssignmentOp::Simple
+            && (complex_target || self.complex_expression_type(value).is_some());
+        if complex_update {
+            let span = self.merge_span(target.span(), value.span());
+            value = self.complex_update_value(op, target, value, span)?;
         }
         self.require_supported_assignment_promotion(op, target, value)?;
-        let typed_target = typed_target?;
+        let mut typed_target = typed_target?;
         let span = self.merge_span(target.span(), value.span());
+        if complex_update && !complex_target {
+            // A real target is read and written through its object, so the
+            // complex computation sees one evaluated place.
+            if let TypedUpdateTarget::Direct(_) = typed_target {
+                let Some(place) = self.resolve_memory_place(target) else {
+                    self.report("E2102", "invalid-update-operands", span);
+                    return None;
+                };
+                typed_target = TypedUpdateTarget::Memory(place);
+            }
+        }
         let vector_update =
             op != AssignmentOp::Simple && self.vector_expression_type(target).is_some();
         let constraint = if vector_update {
@@ -12762,6 +12819,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_builtin_atomic(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
         let name = self.token_text(&keyword);
+        if let Some(form) = gnu_atomic(name) {
+            return self.parse_gnu_atomic(keyword, form);
+        }
         let load = name == "__atomic_load_n";
         let legacy = legacy_atomic(name);
         if !self.match_kind(TokenKind::LParen) {
@@ -12805,8 +12865,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .canonical_integer_type(pointer.pointee)
             .is_ok_and(|integer| integer.bits() <= 64)
             || matches!(canonical.kind, TypeKind::Pointer(_));
+        // A GNU `__atomic` builtin on an `_Atomic` object means its
+        // non-atomic type (EvoIR 10.1.14); the legacy `__sync` set does not
+        // admit one.
         if !valid_type
-            || canonical.qualifiers.is_atomic
+            || (legacy.is_some() && canonical.qualifiers.is_atomic)
             || (!load && canonical.qualifiers.is_const)
             || (legacy.is_some() && matches!(canonical.kind, TypeKind::Int(IntRank::Bool)))
         {
@@ -12920,10 +12983,352 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 constant_order,
                 access_ty,
                 volatile,
+                writeback: false,
+                weak: None,
+                failure: None,
                 facts: ExprFacts::value(result_ty),
                 span: self.merge_span(keyword.span, close.span),
             })),
         )
+    }
+
+    /// One constant memory order of an atomic builtin, or `None` for a
+    /// dynamic order. A constant outside 0..5 or outside `valid` is `E2947`.
+    fn atomic_order_operand(
+        &mut self,
+        order: &'arena CHirExpr<'arena>,
+        valid: &dyn Fn(evocc_chir::AtomicOrder) -> bool,
+    ) -> Option<Option<evocc_chir::AtomicOrder>> {
+        let inferred = self.converted_expression_type(order)?;
+        if !is_integer_class(self.operand_type_class(inferred.ty)) {
+            self.report("E2913", "builtin-operand-not-convertible", order.span());
+            return None;
+        }
+        let Ok(value) = self.eval_integer_constant_expression(order) else {
+            return Some(None);
+        };
+        let chosen = value
+            .try_mathematical_value()
+            .and_then(evocc_chir::AtomicOrder::from_c)
+            .filter(|chosen| valid(*chosen));
+        if chosen.is_none() {
+            self.report("E2947", "invalid-atomic-memory-order", order.span());
+            return None;
+        }
+        Some(chosen)
+    }
+
+    /// The `__atomic` read-modify-write, exchange, compare-exchange,
+    /// test-and-set, clear and lock-free builtins (EvoIR 10.1.14).
+    fn parse_gnu_atomic(
+        &mut self,
+        keyword: Token,
+        form: GnuAtomic,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        use evocc_chir::{AtomicOrder as O, AtomicRmwOp as R, AtomicRmwReturn as V};
+        if !self.match_kind(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        let mut operands = Vec::new();
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            loop {
+                operands.push(self.parse_argument_expression()?);
+                if !self.match_kind(TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        let arity = match form {
+            GnuAtomic::Update(..) => 3,
+            GnuAtomic::CompareExchange => 6,
+            GnuAtomic::TestAndSet
+            | GnuAtomic::Clear
+            | GnuAtomic::AlwaysLockFree
+            | GnuAtomic::IsLockFree => 2,
+        };
+        if operands.len() != arity || self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance()?;
+        let span = self.merge_span(keyword.span, close.span);
+        let int_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        let bool_ty = self.intern(TypeKind::Int(IntRank::Bool), Qualifiers::default());
+        if matches!(form, GnuAtomic::AlwaysLockFree | GnuAtomic::IsLockFree) {
+            return self.parse_atomic_lock_free(form, operands[0], operands[1], span);
+        }
+        let address = operands[0];
+        let inferred = self.converted_expression_type(address)?;
+        let OperandTypeClass::Pointer(pointer) = self.operand_type_class(inferred.ty) else {
+            self.report("E2913", "builtin-operand-not-convertible", address.span());
+            return None;
+        };
+        let canonical = self.types.get(pointer.pointee)?.clone();
+        if canonical.qualifiers.is_const {
+            self.report("E2913", "builtin-operand-not-convertible", address.span());
+            return None;
+        }
+        let volatile = canonical.qualifiers.is_volatile;
+        let literal = |parser: &Self, value: u64| {
+            parser.alloc_node(CHirExpr::Lit(
+                IntLit {
+                    value,
+                    suffix: IntSuffix::None,
+                    base: IntBase::Dec,
+                },
+                span,
+            ))
+        };
+        // Test-and-set and clear act on the first byte of any object.
+        if matches!(form, GnuAtomic::TestAndSet | GnuAtomic::Clear) {
+            if matches!(canonical.kind, TypeKind::Function { .. }) {
+                self.report("E2913", "builtin-operand-not-convertible", address.span());
+                return None;
+            }
+            let byte = self.intern(TypeKind::Int(IntRank::UChar), Qualifiers::default());
+            let qualifiers = Qualifiers {
+                is_volatile: volatile,
+                ..Qualifiers::default()
+            };
+            let pointee = self.intern(TypeKind::Int(IntRank::UChar), qualifiers);
+            let byte_pointer = self.intern(TypeKind::Pointer(pointee), Qualifiers::default());
+            let address = self.alloc_node(CHirExpr::Cast(byte_pointer, address, address.span()));
+            let set = form == GnuAtomic::TestAndSet;
+            let order = operands[1];
+            let constant_order = self.atomic_order_operand(order, &|order| {
+                set || matches!(order, O::Relaxed | O::Release | O::SeqCst)
+            })?;
+            let value = literal(self, u64::from(set));
+            let value = Some(self.alloc_node(CHirExpr::Cast(byte, value, span)));
+            let order = self.alloc_node(CHirExpr::Cast(int_ty, order, order.span()));
+            let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
+            let access = self.alloc_node(CHirExpr::Atomic(evocc_chir::CHirAtomicAccess {
+                address,
+                value,
+                expected: None,
+                rmw: set.then_some((R::Exchange, V::Old)),
+                order,
+                constant_order,
+                access_ty: byte,
+                volatile,
+                writeback: false,
+                weak: None,
+                failure: None,
+                facts: ExprFacts::value(if set { byte } else { void_ty }),
+                span,
+            }));
+            // The result is whether the byte was set before.
+            return Some(if set {
+                self.alloc_node(CHirExpr::Cast(bool_ty, access, span))
+            } else {
+                access
+            });
+        }
+        let pointer_object = matches!(canonical.kind, TypeKind::Pointer(_));
+        let integer = self
+            .canonical_integer_type(pointer.pointee)
+            .ok()
+            .filter(|integer| integer.bits() <= 64);
+        let pointee_is_function = match canonical.kind {
+            TypeKind::Pointer(target) => self
+                .types
+                .get(target)
+                .is_some_and(|ty| matches!(ty.kind, TypeKind::Function { .. })),
+            _ => false,
+        };
+        let valid_object = match form {
+            // Arithmetic needs an integer other than `_Bool`, or an object
+            // pointer for add and subtract, which count bytes.
+            GnuAtomic::Update(operation, _)
+                if !matches!(operation, R::Exchange | R::CompareExchange) =>
+            {
+                integer.is_some_and(|integer| integer != CIntegerType::BOOL)
+                    || (pointer_object
+                        && !pointee_is_function
+                        && matches!(operation, R::Add | R::Sub))
+            }
+            _ => integer.is_some() || pointer_object,
+        };
+        if !valid_object {
+            self.report("E2913", "builtin-operand-not-convertible", address.span());
+            return None;
+        }
+        // An `_Atomic` object means its non-atomic type here.
+        let access_ty = self.intern(canonical.kind.clone(), Qualifiers::default());
+        let pointer_offset =
+            pointer_object && matches!(form, GnuAtomic::Update(R::Add | R::Sub, _));
+        let value_operand = operands[if form == GnuAtomic::CompareExchange {
+            2
+        } else {
+            1
+        }];
+        let value = if pointer_offset {
+            let class = self.operand_type_class(self.converted_expression_type(value_operand)?.ty);
+            if !is_integer_class(class) {
+                self.report(
+                    "E2913",
+                    "builtin-operand-not-convertible",
+                    value_operand.span(),
+                );
+                return None;
+            }
+            let bytes = self.intern(TypeKind::Int(IntRank::ULong), Qualifiers::default());
+            self.alloc_node(CHirExpr::Cast(bytes, value_operand, value_operand.span()))
+        } else {
+            if !matches!(
+                self.assignment_constraint(AssignmentOp::Simple, access_ty, value_operand),
+                UpdateConstraint::Scalar
+            ) {
+                self.report(
+                    "E2913",
+                    "builtin-operand-not-convertible",
+                    value_operand.span(),
+                );
+                return None;
+            }
+            self.alloc_node(CHirExpr::Cast(
+                access_ty,
+                value_operand,
+                value_operand.span(),
+            ))
+        };
+        if form == GnuAtomic::CompareExchange {
+            let expected = operands[1];
+            let inferred = self.converted_expression_type(expected)?;
+            let OperandTypeClass::Pointer(target) = self.operand_type_class(inferred.ty) else {
+                self.report("E2913", "builtin-operand-not-convertible", expected.span());
+                return None;
+            };
+            // The expected object is an unqualified object of the same type:
+            // its ordinary load and store carry no qualifier of their own.
+            let same = self.types.get(target.pointee).is_some_and(|ty| {
+                ty.qualifiers == Qualifiers::default()
+                    && self
+                        .types
+                        .compatible_ignoring_top_qualifiers(target.pointee, access_ty)
+            });
+            if !same {
+                self.report("E2913", "builtin-operand-not-convertible", expected.span());
+                return None;
+            }
+            let weak = operands[3];
+            if !is_scalar_class(self.operand_type_class(self.converted_expression_type(weak)?.ty)) {
+                self.report("E2913", "builtin-operand-not-convertible", weak.span());
+                return None;
+            }
+            let success = self.atomic_order_operand(operands[4], &|_| true)?;
+            let failure = self.atomic_order_operand(operands[5], &|failure| {
+                !matches!(failure, O::Release | O::AcqRel)
+                    && success.is_none_or(|success| failure as u8 <= success as u8)
+            })?;
+            let constant_order = success
+                .zip(failure)
+                .map(|(success, failure)| merged_exchange_order(success, failure));
+            let order = self.alloc_node(CHirExpr::Cast(int_ty, operands[4], operands[4].span()));
+            let failure = self.alloc_node(CHirExpr::Cast(int_ty, operands[5], operands[5].span()));
+            return Some(
+                self.alloc_node(CHirExpr::Atomic(evocc_chir::CHirAtomicAccess {
+                    address,
+                    value: Some(value),
+                    expected: Some(expected),
+                    rmw: Some((R::CompareExchange, V::Success)),
+                    order,
+                    constant_order,
+                    access_ty,
+                    volatile,
+                    writeback: true,
+                    weak: Some(weak),
+                    failure: Some(failure),
+                    facts: ExprFacts::value(bool_ty),
+                    span,
+                })),
+            );
+        }
+        let GnuAtomic::Update(operation, result) = form else {
+            unreachable!("classified atomic form")
+        };
+        let constant_order = self.atomic_order_operand(operands[2], &|_| true)?;
+        let order = self.alloc_node(CHirExpr::Cast(int_ty, operands[2], operands[2].span()));
+        Some(
+            self.alloc_node(CHirExpr::Atomic(evocc_chir::CHirAtomicAccess {
+                address,
+                value: Some(value),
+                expected: None,
+                rmw: Some((operation, result)),
+                order,
+                constant_order,
+                access_ty,
+                volatile,
+                writeback: false,
+                weak: None,
+                failure: None,
+                facts: ExprFacts::value(access_ty),
+                span,
+            })),
+        )
+    }
+
+    /// `__atomic_always_lock_free` and `__atomic_is_lock_free`. Sizes 1, 2,
+    /// 4 and 8 are lock-free, and 16 where the target says so. A null pointer
+    /// constant means typical alignment. `__atomic_always_lock_free` takes
+    /// only that pointer and is an integer constant expression; for
+    /// `__atomic_is_lock_free` a pointer to a type aligned to the size also
+    /// answers 1, after its evaluation. Any other answer needs the run-time
+    /// library and is `E2935`.
+    fn parse_atomic_lock_free(
+        &mut self,
+        form: GnuAtomic,
+        size: &'arena CHirExpr<'arena>,
+        pointer: &'arena CHirExpr<'arena>,
+        span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let Ok(bytes) = self.eval_integer_constant_expression(size) else {
+            self.report("E2913", "builtin-operand-not-convertible", size.span());
+            return None;
+        };
+        let bytes = bytes.try_mathematical_value().unwrap_or(-1);
+        let lock_free = matches!(bytes, 1 | 2 | 4 | 8)
+            || (bytes == 16 && self.target_layout.sixteen_byte_atomics_are_lock_free());
+        let bool_ty = self.intern(TypeKind::Int(IntRank::Bool), Qualifiers::default());
+        let answer = |parser: &Self, value: bool| {
+            let literal = parser.alloc_node(CHirExpr::Lit(
+                IntLit {
+                    value: u64::from(value),
+                    suffix: IntSuffix::None,
+                    base: IntBase::Dec,
+                },
+                span,
+            ));
+            parser.alloc_node(CHirExpr::Cast(bool_ty, literal, span))
+        };
+        if self.is_null_pointer_constant(pointer) {
+            return Some(answer(self, lock_free));
+        }
+        let class = self.operand_type_class(self.converted_expression_type(pointer)?.ty);
+        let OperandTypeClass::Pointer(target) = class else {
+            self.report("E2913", "builtin-operand-not-convertible", pointer.span());
+            return None;
+        };
+        if form == GnuAtomic::AlwaysLockFree {
+            self.report("E2913", "builtin-operand-not-convertible", pointer.span());
+            return None;
+        }
+        let aligned = self
+            .target_layout
+            .layout_of(&self.types, target.pointee)
+            .is_ok_and(|layout| i128::from(layout.align_bytes) >= bytes);
+        if !(lock_free && aligned) {
+            self.report(
+                "E2935",
+                "unsupported-library-builtin: __atomic_is_lock_free",
+                span,
+            );
+            return None;
+        }
+        let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
+        let evaluated = self.alloc_node(CHirExpr::Cast(void_ty, pointer, pointer.span()));
+        Some(self.alloc_node(CHirExpr::Comma(evaluated, answer(self, true), span)))
     }
 
     fn parse_builtin_expect(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
@@ -13675,6 +14080,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2909", "builtin-arity", designator_span);
             return None;
         }
+        // A fence admits the six constant orders and any run-time order. A
+        // relaxed fence has no effect: only its operand is evaluated.
+        if matches!(builtin, "__atomic_thread_fence" | "__atomic_signal_fence")
+            && self.atomic_order_operand(arguments[0], &|_| true)?
+                == Some(evocc_chir::AtomicOrder::Relaxed)
+        {
+            let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
+            return Some(self.alloc_node(CHirExpr::Cast(
+                void_ty,
+                arguments[0],
+                arguments[0].span(),
+            )));
+        }
         if variable_prefetch_arity
             && self
                 .converted_expression_type(arguments[0])
@@ -14040,6 +14458,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 )
             }
             "__sync_synchronize" => ("__sync_synchronize", void_ty, Vec::new()),
+            "__atomic_thread_fence" | "__atomic_signal_fence" => (builtin, void_ty, vec![int_ty]),
             "__builtin___clear_cache" => {
                 ("__clear_cache", void_ty, vec![void_pointer, void_pointer])
             }

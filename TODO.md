@@ -135,7 +135,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, L03, L04, L05, L05b, L11a, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT |  | D01-D14 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -3015,7 +3015,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   and each intrinsic has a crossed test against GCC 14 on Linux and Apple
   clang on Darwin.
 
-- [ ] **L06 — Sub-8-byte integer-vector external ABI** — `OPEN`, P2.
+- [x] **L06 — Sub-8-byte integer-vector external ABI** — `DONE`, P2, 2026-10-20.
   GCC GPR and Clang SIMD conventions disagree and crossed controls fail.
   Choose/document a bounded ABI from the actual target contract; do not invent
   interoperability from self-calls. Close with explicit mode identity, both
@@ -3027,8 +3027,19 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   incompatibility; on Darwin the result follows Apple clang's widened `v0`.
   [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l06-tiny-vector-abi.md).
+  Closed on 2026-10-20 (EvoIR 2.8.0, EvoMIR 1.4.0). Linux passes and returns
+  tiny vectors as integers in general registers, so `-mgeneral-regs-only` admits
+  them. Darwin passes the 4-byte integer image and returns the widened `v0`
+  layout of Apple clang; that result is E4002 under `-mgeneral-regs-only`.
+  Against GCC 14 at O0/O2 the crossed calls pass in both directions, also with a
+  general-registers-only GCC driver. Clang 19 negative controls fail in exactly
+  the result checks, which stays a recorded incompatibility. Apple clang agrees
+  in both directions. The originals `pr60960` and `20050316-1` pass in every
+  mode. [Tests](crates/evocc/tests/tiny_vector_abi.rs). The lead's
+  full-workspace gate of 2026-10-20 passes 462 suites, 3,497 tests, zero
+  failures and 11 ignores, plus Clippy and formatting.
 
-- [ ] **L07 — Integer-complex division** — `OPEN`, P2.
+- [x] **L07 — Integer-complex division** — `DONE`, P2, 2026-10-20.
   `(9+7i)/(2+1i)` yields GCC `4+3i` and Clang `5+1i`; current refusal is E2948.
   Specify the algorithm, promotions, truncation, overflow and zero-divisor
   contract, then implement shared evaluation/lowering. Close with boundary and
@@ -3039,6 +3050,18 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   at each step, on both targets.
   [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l07-integer-complex-division.md).
+  Closed on 2026-10-20 (EvoIR 2.7.0). Division and compound division use GCC's
+  wide algorithm in the common component type on both targets; each step keeps
+  its E3002 or E3004 obligation, and the lowering branches so only the selected
+  quotient runs. E2948 is withdrawn. A real integer target of a complex update
+  now stores the converted result; native code stored a wrong value before.
+  Floating and pointer targets are E2102. `-fcx-limited-range` and `-ffast-math`
+  do not change the rule, and Apple clang's textbook results can differ. Both
+  interpreters, both targets at O0/O2 and 31 GCC-checked runs on the sealed
+  Linux lane pass, and the pinned torture original `pr104604` passes in every
+  mode. [Tests](crates/evocc/tests/integer_complex_division.rs). The lead's
+  full-workspace gate of 2026-10-20 passes 462 suites, 3,497 tests, zero
+  failures and 11 ignores, plus Clippy and formatting.
 
 - [x] **L08 — Pointer-to-VLA typeof operand evaluation** — `DONE`, P2, 2026-10-16.
   Oracles disagree on a side-effect counter (GCC 0, Clang 1); agreed array forms,
@@ -3126,7 +3149,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     in this slice.
     [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
     [packet](docs/archive/notebook/rules-20261013/l11a-general-atomic-objects.md).
-  - [ ] **L11b — Additional `__atomic` RMW/CAS/exchange** — `OPEN`, P2.
+  - [x] **L11b — Additional `__atomic` RMW/CAS/exchange** — `DONE`, P2, 2026-10-20.
     CASE=1 refuses E2001. Specify success/failure orders, weak/strong CAS,
     expected-value updates, dynamic orders and width limits before extending the
     existing legacy RMW representation. Require native crossed-compiler tests;
@@ -3139,6 +3162,20 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     refused, never implicit calls.
     [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
     [packet](docs/archive/notebook/rules-20261013/l11b-atomic-rmw-cas.md).
+    Closed on 2026-10-20 (EvoIR 2.9.0, EvoMIR 1.4.1). The fetch-op, op-fetch,
+    exchange, compare-exchange, test-and-set, clear, fence and lock-free
+    builtins run inline on both targets. E2947 covers exactly GCC 14's warned
+    order constants and every constant outside 0 to 5. Fences use the
+    `__sync_synchronize` barrier, so both interpreters report E3021 at a
+    non-relaxed fence; a dedicated fence instruction would need a new Section 9
+    coverage line. Pointer bitwise operations, a qualified `*expected`, a
+    run-time `is_lock_free` answer and the generic forms stay named refusals
+    (E2913, E2935, E2949 for L11c). Crossed native thread tests against GCC 14
+    and Clang 19 on Linux (165 checks each way) and Apple clang on Darwin pass;
+    a passing run is not a memory-model proof.
+    [Tests](crates/evocc/tests/gnu_atomic_builtins.rs). The lead's
+    full-workspace gate of 2026-10-20 passes 462 suites, 3,497 tests, zero
+    failures and 11 ignores, plus Clippy and formatting.
   - [ ] **L11c — Generic aggregate atomics** — `OPEN`, P2.
     CASE=2 refuses E2001 for a naturally aligned eight-byte record. Specify
     representation/initializedness/provenance and lock-free versus runtime-helper

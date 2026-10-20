@@ -214,6 +214,78 @@ impl MemoryState {
             },
         ))
     }
+    /// GNU `__atomic` add or subtract on an object pointer. The byte count is
+    /// unscaled, and the result keeps the old pointer's provenance. As C11
+    /// 7.17.7.5p3 says for address types, the result may be an address that
+    /// no access can use, but the operation itself is defined.
+    #[allow(clippy::too_many_arguments)]
+    pub fn atomic_pointer_offset(
+        &self,
+        world: &WorldState,
+        address: Pointer,
+        access: AccessLayout,
+        order: AtomicOrder,
+        volatile: bool,
+        operation: AtomicRmwOp,
+        bytes: u64,
+    ) -> Result<(Self, WorldState, AtomicRmwResult), MemoryFault> {
+        if access.size_bytes != 8
+            || access.align_bytes != 8
+            || !matches!(operation, AtomicRmwOp::Add | AtomicRmwOp::Sub)
+        {
+            return Err(MemoryFault::InvalidAtomicAccess);
+        }
+        let old = self.load_pointer_value(address, access)?;
+        let delta = if operation == AtomicRmwOp::Sub {
+            bytes.wrapping_neg()
+        } else {
+            bytes
+        };
+        let exposed = |raw: u64| {
+            if raw == 0 {
+                PointerValue::Null
+            } else {
+                PointerValue::Exposed(raw)
+            }
+        };
+        let new = match old {
+            PointerValue::Null => exposed(delta),
+            PointerValue::Exposed(raw) => exposed(raw.wrapping_add(delta)),
+            PointerValue::Object(pointer) if pointer.exposed_address.is_some() => {
+                exposed(self.pointer_address(old)?.wrapping_add(delta))
+            }
+            PointerValue::Object(pointer) => {
+                PointerValue::Object(pointer.checked_offset(delta as i64)?)
+            }
+            PointerValue::Function(_) => return Err(MemoryFault::InvalidAtomicAccess),
+        };
+        let memory = self.store_pointer_value(address, access, new)?;
+        let mut world = self.atomic_event(
+            world,
+            address,
+            access,
+            order,
+            volatile,
+            false,
+            AtomicValue::Pointer(new),
+        )?;
+        let event = world
+            .atomic_trace
+            .last_mut()
+            .expect("atomic event just appended");
+        event.rmw = Some(operation);
+        event.previous = Some(ObservedValue::Pointer(self.observe_pointer_value(old)?));
+        Ok((
+            memory,
+            world,
+            AtomicRmwResult {
+                old: AtomicValue::Pointer(old),
+                new: AtomicValue::Pointer(new),
+                exchanged: true,
+            },
+        ))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn atomic_load(
         &self,

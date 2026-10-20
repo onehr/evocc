@@ -62,7 +62,6 @@ E2944	Give an unrelated helper a distinct name and preserve the intended call ta
 E2945	Enter the scope normally before reaching the label.
 E2946	Use distinct names for local objects or helpers and the library operation.
 E2947	Choose an order permitted by the operation and sufficient for the synchronization protocol.
-E2948	Choose an explicit arithmetic contract before replacing integer-complex division.
 E2949	Test `__has_builtin` before you call a builtin that a compiler can lack.
 E2950	Forward the pack only from an `always_inline` variadic function, as the last call argument.
 E2951	Convert an integer operand to a floating type, or use an ordinary integer comparison.

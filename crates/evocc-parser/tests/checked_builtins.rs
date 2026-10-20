@@ -337,10 +337,11 @@ fn an_unknown_builtin_call_names_the_builtin_where_it_is_spelled() {
         "E2001",
     );
     // The atomic and legacy synchronization namespaces are reserved too.
+    // `__atomic_fetch_min` is not an admitted GNU builtin (EvoIR 10.1.14).
     for (call, name) in [
         (
-            "(int)__atomic_fetch_add(&value, 1, 5)",
-            "__atomic_fetch_add",
+            "(int)__atomic_fetch_min(&value, 1, 5)",
+            "__atomic_fetch_min",
         ),
         ("__sync_fetch_and_frob(&value, 1)", "__sync_fetch_and_frob"),
     ] {

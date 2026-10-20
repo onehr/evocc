@@ -1253,24 +1253,22 @@ The required order in a concurrent program depends on its communication protocol
 
 ### E2948: integer-complex-division-oracle-conflict
 
-The source divides values using the integer-complex extension.
-EvoCC refuses this operation because the reference compilers disagree on its semantics.
+This withdrawn code identified integer-complex division.
+Current EvoCC divides integer-complex values and must not reuse this code.
 
-Integer-complex arithmetic is not ordinary ISO C floating-complex arithmetic.
-Selecting one reference result silently would hide a language-profile decision.
+Integer-complex division uses GCC's wide algorithm in the component type.
+Each step keeps the ordinary division-by-zero and overflow checks.
+
+Trigger: none
+Reason: the diagnostic authority table marks this code as withdrawn.
 
 ```c
 int main(void) {
     _Complex int a = 4, b = 2;
     _Complex int result = a / b;
-    return __real__ result;
+    return __real__ result - 2;
 }
 ```
-
-Fix: none
-
-Choose an explicit arithmetic contract before replacing integer-complex division.
-Converting to floating complex changes the operation and is not a general fix.
 
 ### E2949: unknown-builtin
 

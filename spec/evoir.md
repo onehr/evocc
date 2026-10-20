@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.6.8** | **Pinned ground truth** | Function vectorization restrictions on 2026-10-19
+**Revision 2.9.0** | **Pinned ground truth** | GNU atomic read-modify-write builtins on 2026-10-20
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -962,16 +962,24 @@ implied.
 **Atomic read-modify-write.**
 `(%old, %m1, %w1) = atomic.rmw.<op> <order> [volatile] %m0, %w0, %ptr, %value [, %expected] : T`
 has `<op>` in `add`, `sub`, `and`, `or`, `xor`, `nand`, `exchange` and
-`cmpxchg`. `T` is `bits<8|16|32|64>` or a pointer; a pointer admits only
-`exchange` and `cmpxchg`. `%value`, `%expected` and the result have type `T`,
-and only `cmpxchg` takes `%expected`. The guard, size and natural alignment
-rules are those of `atomic.load`. The operation returns the old value and fresh
-memory/world tokens. Arithmetic wraps to the width of `T`; `exchange` and
-`cmpxchg` keep a pointer's complete representation and provenance. `cmpxchg`
-stores `%value` only when the old value equals `%expected`, and a failed
-comparison stores nothing. Invalid operands, type or order are `E3062`. These
-operations are outside P0; native code uses a width-correct exclusive
-load/store loop that keeps the `cmpxchg` failure path.
+`cmpxchg`. `T` is `bits<8|16|32|64>` or a pointer, and `bits<1>` for
+`exchange` and `cmpxchg` only. A function pointer admits only `exchange` and
+`cmpxchg`. An object pointer admits those two and `add` and `sub` with a
+`bits<64>` `%value`: a byte count, never scaled by the pointee size. Otherwise
+`%value`, `%expected` and the result have type `T`, and only `cmpxchg` takes
+`%expected`. The guard, size and natural alignment rules are those of
+`atomic.load`; a `bits<1>` access is one byte. The operation returns the old
+value and fresh memory/world tokens. Arithmetic wraps to the width of `T`;
+`exchange` and `cmpxchg` keep a pointer's complete representation and
+provenance. A pointer `add` or `sub` keeps the old pointer's provenance and
+moves its address by the byte count. As C11 7.17.7.5p3 says for address
+types, the result can be an address that no access may use, but the operation
+itself is defined; from a null or integer-derived pointer it gives an
+integer-derived address. `cmpxchg` stores `%value` only when the old value
+equals `%expected`, and a failed comparison stores nothing. Invalid operands,
+type or order are `E3062`. These operations are outside P0; native code uses
+a width-correct exclusive load/store loop that keeps the `cmpxchg` failure
+path.
 
 `world` orders execution/scheduling within one thread; it does not establish
 cross-thread sequential consistency. The three interpreters implement only
@@ -2571,7 +2579,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2945` | `jump-into-variable-type-scope` | front end |
 | `E2946` | `builtin-local-binding-conflict` | front end; lowering for a library-symbol/object collision |
 | `E2947` | `invalid-atomic-memory-order` | front end |
-| `E2948` | `integer-complex-division-oracle-conflict` | front end |
+| `E2948` | `integer-complex-division-oracle-conflict` | front end; withdrawn: integer-complex division follows 10.1.14 |
 | `E2949` | `unknown-builtin` | front end |
 | `E2950` | `invalid-va-arg-pack` | front end; lowering, for a body that keeps the pack |
 | `E2951` | `builtin-argument-type` | front end |
@@ -4178,7 +4186,7 @@ not hard-code target widths, pointer size, or pointer alignment.
 | `const` | No IR effect. Purely a C-HIR check. |
 | `volatile` | Exact `load volatile` / `store volatile` syntax and ordered world-trace events. |
 | `restrict` | Preserved in C-HIR only; `NoAlias` facts are outside this revision (5.5). |
-| `_Atomic` | Typed unsupported; the separately admitted scalar `__atomic_load_n` / `__atomic_store_n` do not imply a complete `_Atomic` type system. |
+| `_Atomic` | Typed unsupported; the separately admitted scalar `__atomic` builtins (10.1.14) do not imply a complete `_Atomic` type system. |
 
 #### 10.1.3 Lvalue Lowering
 
@@ -4966,7 +4974,7 @@ compound literals, and a front end must not emit it.
 | `E2910` | a resolved builtin name used without a call |
 | `E2911` | `_Static_assert` condition evaluates to zero |
 | `E2912` | `_Static_assert` condition is not an integer constant expression |
-| `E2913` | `__builtin_expect` operand of non-arithmetic type |
+| `E2913` | `__builtin_expect` operand of non-arithmetic type, or an atomic builtin operand outside its domain (10.1.14) |
 | `E2914` | `asm` template names an unknown operand, or an output operand is not a modifiable lvalue |
 | `E2915` | `__auto_type` with no initializer, several declarators, or an array/function declarator |
 | `E2916` | `case a ... b` with `a > b` or overlapping another case |
@@ -4987,7 +4995,7 @@ compound literals, and a front end must not emit it.
 | `E2932` | a cycle of `always_inline` calls, which no substitution order can eliminate |
 | `E2933` | `__builtin_exit` or `__builtin__Exit` (10.1.14) |
 | `E2934` | `_Noreturn` on an object or a typedef (10.1.18) |
-| `E2935` | `__builtin_puts`, a library builtin this profile does not provide |
+| `E2935` | `__builtin_puts`, a library builtin this profile does not provide, or an `__atomic_is_lock_free` answer that needs the run-time library (10.1.14) |
 | `E2937` | a called expression that is not of pointer-to-function type (10.1.18) |
 | `E2938` | an invalid `_Alignas` request or placement (10.1.18) |
 | `E2939` | a wide bit-field use that 10.1.16 does not admit |
@@ -4997,6 +5005,7 @@ compound literals, and a front end must not emit it.
 | `E2944` | a recognized ordinary `alloca` call whose name the unit defines or renames |
 | `E2945` | a jump into the scope of a variably modified declaration |
 | `E2946` | a nonliteral `__builtin_strcmp` with a visible same-named `static` function, or lowering a library symbol that collides with a linked object |
+| `E2947` | a constant memory order that an atomic builtin does not admit (10.1.14) |
 | `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_` (10.1.14) |
 | `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
 | `E2951` | a floating comparison or classification builtin with an operand of the wrong type (3.13.1) |
@@ -5277,9 +5286,10 @@ and returns `void`. The pointee is an integer of 1/2/4/8-byte size or a
 target-width pointer. A store requires a modifiable pointee; const loads and
 volatile pointers preserve their ordinary meaning. Unsupported types report
 `E2913`, wrong arity `E2909`, and a builtin not called `E2910`. These accesses
-are never ICEs. This admission does not include `_Atomic`-qualified objects,
-generic aggregate atomics, 128-bit accesses or MMIO; the legacy `__sync`
-builtins below supply read-modify-write, compare-and-swap and exchange.
+are never ICEs. An `_Atomic`-qualified pointee means its non-atomic type for
+every `__atomic` builtin; this admits no other `_Atomic` operation. The
+admission does not include generic aggregate atomics, 128-bit accesses or
+MMIO.
 
 Source constant order values map 0/1/2/3/4/5 to
 relaxed/consume/acquire/release/acq_rel/seq_cst. Loads admit 0/1/2/5 and stores
@@ -5292,6 +5302,68 @@ values across later effects and does not evaluate operands in an unevaluated
 or unreached context. The source constant/dynamic distinction is fixed before
 optimization or inlining. Lowering uses Section 3.8's atomic operations,
 never ordinary memory access or an undeclared external helper.
+
+**GNU read-modify-write builtins.** These builtins follow GCC 14 on both
+targets. `__atomic_fetch_OP(p, v, order)` returns the old value and
+`__atomic_OP_fetch(p, v, order)` the new one, for `OP` in `add`, `sub`,
+`and`, `or`, `xor` and `nand`; `nand` is `~(old & v)`. The pointee is an
+integer of 1, 2, 4 or 8 bytes other than `_Bool`, and `v` converts to its
+type; arithmetic wraps at that width. On an object pointer, `add` and `sub`
+move the address by `v` bytes, unscaled, as GCC documents: `v` is an integer
+converted to `unsigned long`. `__atomic_exchange_n(p, v, order)` stores `v`
+and returns the old value; it also admits `_Bool` and any pointer pointee.
+`__atomic_compare_exchange_n(p, e, d, weak, success, failure)` evaluates its
+six operands once each, left to right. `e` points to an unqualified object of
+the pointee type. An ordinary load reads `*e` before the atomic operation; the
+operation stores `d` when the object equals that value, integers by value and
+pointers by address, and returns 1. Otherwise an ordinary store writes the
+observed value to `*e`, and the result is 0. `weak` is evaluated and a weak
+request is strong: the interpreters never fail spuriously. The result has
+type `_Bool`. `__atomic_test_and_set(p, order)` exchanges the first byte of
+the object with 1 and returns whether it was nonzero; `__atomic_clear(p,
+order)` stores the byte 0. Both admit any object pointer.
+
+Every order admits the constants 0 to 5 except: `__atomic_clear` admits
+relaxed, release and seq_cst; the failure order of a compare-exchange is not
+release or acq_rel and not numerically greater than the success order. These
+are exactly the pairs for which GCC 14 does not warn with
+`-Winvalid-memory-model`. Every other constant is `E2947` at its operand,
+including a constant outside 0..5 where GCC sometimes stays silent. A
+run-time order is evaluated once and makes the operation seq_cst; for a
+compare-exchange either run-time order makes both halves seq_cst. EvoIR keeps
+one order for a compare-exchange: the success order, or acq_rel for a release
+success with a consume or acquire failure. Each half is at least as strong as
+its source order. A const pointee, a floating pointee, a record, a 16-byte
+integer, a function-pointer or `_Bool` arithmetic operand, bitwise arithmetic
+on a pointer and a qualified `*e` are `E2913`.
+
+**GNU fences.** `__atomic_thread_fence(order)` and
+`__atomic_signal_fence(order)` are library builtins of type `void (int)`.
+A relaxed constant order has no effect: only the operand is evaluated. Any
+other thread fence lowers, like `__sync_synchronize`, to an implicit
+`asm volatile` with a `memory` clobber, no operands and the current
+`mem`/`world` tokens: template `dmb ishld` for consume and acquire and
+`dmb ish` otherwise, and `dmb ish` for a run-time order. A signal fence has
+the empty template, so it orders the compiler only. Both interpreters report
+`E3021` on reaching one of these barriers.
+
+**GNU lock-free queries.** In both queries `size` must be an integer constant
+expression, or the query is `E2913`. `__atomic_always_lock_free(size, 0)` is
+an integer constant expression of type `_Bool`: 1 for sizes 1, 2, 4 and 8,
+and for 16 on Darwin only, as Apple clang answers; 0 otherwise. Its pointer
+must be a null pointer constant (`E2913`). `__atomic_is_lock_free(size, p)`
+evaluates `p` and is 1 when that query is 1 and `p` is a null pointer
+constant or points to a type whose alignment is at least `size`. Any other
+answer needs the run-time library and is `E2935`. 16-byte atomic operations
+stay `E2913` on both targets. `__has_builtin` answers 1 for every builtin of
+this section.
+
+**Interpreter scope.** Both interpreters run one thread. They show values,
+operand effects, the compare-exchange write-back and the order of atomic
+events. They do not show inter-thread ordering; the crossed native tests of
+`crates/evocc/tests/gnu_atomic_builtins.rs` exercise it against GCC 14,
+Clang 19 and Apple clang, and a passing run of them is not a memory-model
+proof.
 
 **Library builtins.** `__builtin_memset`, `__builtin_memcpy`,
 `__builtin_memcmp`, `__builtin_strcmp`, `__builtin_strncmp` and
@@ -5399,8 +5471,31 @@ decrement is also outside the consensus extension set. GNU dynamic
 lane); conversion and equal-size reinterpretation are distinct operations.
 Integer vectors participate in fixed/variadic calls and homogeneous vector
 aggregates through EvoMIR's real ABI, not scalar-parameter substitution.
-General-register-only mode still forbids executed SIMD values. A sub-8-byte
-vector at an external ABI boundary is E4002.
+General-register-only mode still forbids executed SIMD values.
+
+**Tiny vectors at a call boundary.** A tiny vector is an integer vector of
+1, 2 or 4 bytes. Its call convention is fixed by the target triple; no option
+changes it. Lane `i` of a vector with `w`-byte lanes occupies bits `8*i*w` to
+`8*(i+1)*w - 1` of its integer image, and bits above the vector are
+unspecified.
+
+- `aarch64-unknown-linux-gnu` follows GCC 14. A parameter, a result and an
+  anonymous argument are the unsigned integer image of the same size: the
+  next general register or an 8-byte stack slot, and a result in `w0`. No
+  SIMD register is involved, so `-mgeneral-regs-only` admits them. Clang 19
+  returns tiny vectors in `v0`, so a call that returns a tiny vector between
+  EvoCC and Clang code is a recorded incompatibility. Arguments, anonymous
+  arguments and records agree with Clang.
+- `aarch64-apple-darwin` follows Apple clang. A parameter is the 4-byte
+  integer image: the next general register, or a 4-byte slot of the named
+  stack area. An anonymous argument takes an 8-byte slot. A result returns in
+  `v0` with each lane widened to fill 64 bits: four 8-bit lanes as 16-bit
+  lanes, two lanes as 32-bit lanes, and one lane in lane 0. The caller reads
+  only the low bits of each widened lane. Under `-mgeneral-regs-only` a
+  function or call with a tiny-vector result is E4002.
+
+A record that contains a tiny vector follows the ordinary composite rules; a
+tiny vector is never an HVA member (EvoMIR 6.2 and 6.6).
 
 **Legacy `__sync` builtins.** `__sync_synchronize()` has type `void`, takes
 no arguments and is a full memory barrier; it is not a constant expression and
@@ -5510,9 +5605,42 @@ integer type `T`, real then imaginary. Arithmetic works per component at
 component width, conversions convert each component, the real and imaginary
 projections are lvalues, and conjugation negates the imaginary component. It
 passes as an ordinary composite under AAPCS64, not as a vector or floating
-aggregate. Division and compound division of integer complex values are
-`E2948`. Overflow, initializedness, qualification and object/provenance checks
-apply per component.
+aggregate. Overflow, initializedness, qualification and object/provenance
+checks apply per component.
+
+**Integer-complex division.** Division uses GCC's wide algorithm in the
+common component type `U` on both targets. `U` is the usual arithmetic
+conversion of the operand component types. A complex operand keeps its
+component type; a real integer operand is promoted and gets a zero imaginary
+part. For `x = a + bi` and `y = c + di`, with `|v|` the negation of a negative
+signed `v`:
+
+```text
+if |c| < |d|:  ratio = c / d;  div = c * ratio + d
+               r = (a * ratio + b) / div;  i = (b * ratio - a) / div
+else:          ratio = d / c;  div = d * ratio + c
+               r = (b * ratio + a) / div;  i = (b - a * ratio) / div
+```
+
+Each step is the C operation on `U`, in the written order, with its existing
+obligation. Signed overflow, `|v|` of the minimum value included, is `E3004`.
+Division by zero is `E3002`; a zero divisor reaches `d / c` with `c == 0`.
+Unsigned steps wrap. Only the selected branch executes, so the lowering
+branches on `|c| < |d|` and never selects between two computed quotients.
+The result has type `_Complex U`. When both operands are integer constant
+expressions, the steps use the constant arithmetic of 10.1.19, and a step
+that divides by zero or computes `MIN / -1` makes the expression
+non-constant (`E2208` in a static initializer). `-fcx-limited-range` and
+`-ffast-math` do not change this rule. Apple clang uses the textbook formula
+instead, so Darwin results can differ from Apple clang's.
+
+**Integer-complex updates.** For `x op= y` with `op` one of `+`, `-`, `*`
+and `/`, where either side is integer complex, `y` converts to `_Complex U`
+for the component type of `x` and of `y`. A complex `x` gets each component
+of the result converted back to its component type. A real `x` must be an
+integer; it is evaluated once as an object and gets the result converted to
+its type, so a `_Bool` target tests both components. A floating or pointer
+target is `E2102`.
 
 **Scalar broadcast.** An integer scalar no wider than an unsigned lane converts
 to the lane's unsigned representation before broadcast, negative values
@@ -7690,6 +7818,28 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.9.0, 2026-10-20.** Section 10.1.14 admits the GNU `__atomic`
+fetch-op, op-fetch, exchange, compare-exchange, test-and-set, clear, fence and
+lock-free builtins on 1-, 2-, 4- and 8-byte scalars, with E2947 for exactly
+the constant orders that GCC 14 warns about and every constant outside 0..5.
+Section 3.8 admits `bits<1>` exchange and compare-exchange and a byte count
+for pointer `add` and `sub`. Fences use the barrier assembly of
+`__sync_synchronize`. No new EvoIR instruction, registry or Lean rule domain.
+
+**Revision 2.8.0, 2026-10-20.** Section 10.1.14 admits integer vectors of
+1, 2 and 4 bytes at a call boundary. Linux follows GCC 14 in general
+registers; Darwin follows Apple clang's 4-byte argument image and widened
+`v0` result. The E4002 refusal of these signatures is removed. No EvoIR
+operation, registry or Lean rule domain changes.
+
+**Revision 2.7.0, 2026-10-20.** Section 10.1.14 admits integer-complex
+division with GCC's wide algorithm in the component type on both targets.
+Each step keeps its E3002 or E3004 obligation, and only the selected branch
+executes. Compound updates convert the value to the common complex type; a
+real integer target keeps the converted result, and a floating or pointer
+target is E2102. E2948 is withdrawn. No EvoIR operation, registry or Lean
+rule domain changes.
 
 **Revision 2.6.8, 2026-10-19.** Section 10.1.9 admits only the three disabling
 automatic-vectorization options in `optimize`. All other options still fail

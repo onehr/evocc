@@ -1765,6 +1765,7 @@ pub struct TargetDataLayout {
     pointer_va_list: bool,
     binary64_long_double: bool,
     narrow_call_extension: bool,
+    sixteen_byte_lock_free: bool,
 }
 
 impl TargetDataLayout {
@@ -1776,6 +1777,7 @@ impl TargetDataLayout {
             pointer_va_list: false,
             binary64_long_double: false,
             narrow_call_extension: false,
+            sixteen_byte_lock_free: false,
         }
     }
 
@@ -1791,7 +1793,16 @@ impl TargetDataLayout {
             pointer_va_list: true,
             binary64_long_double: true,
             narrow_call_extension: true,
+            sixteen_byte_lock_free: true,
         }
+    }
+
+    /// Whether `__atomic_always_lock_free(16, 0)` is true. Apple clang
+    /// answers 1; GCC 14 on Linux answers 0. EvoCC admits no 16-byte atomic
+    /// operation either way (EvoIR 10.1.14).
+    #[must_use]
+    pub const fn sixteen_byte_atomics_are_lock_free(&self) -> bool {
+        self.sixteen_byte_lock_free
     }
 
     /// Whether a call extends an integer argument or result narrower than 32

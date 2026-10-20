@@ -389,6 +389,103 @@ fn short_vector_bytes(ty: &EvoIRType) -> Option<u64> {
     vector_bytes(ty).filter(|bytes| matches!(bytes, 8 | 16))
 }
 
+/// The lanes and lane width of an integer vector of 1, 2 or 4 bytes.
+fn tiny_vector_shape(ty: &EvoIRType) -> Option<(u16, u16)> {
+    vector_bytes(ty)
+        .filter(|bytes| matches!(bytes, 1 | 2 | 4))
+        .and_then(|_| evocc_evoir::integer_vector_shape(ty))
+}
+
+/// The Apple convention returns a tiny vector in `v0` with each lane widened
+/// to fill 64 bits: four 8-bit lanes as 16-bit lanes, two lanes as 32-bit
+/// lanes, and one lane in lane 0 of two 32-bit lanes (Section 6.2).
+fn apple_result_lane_bits(lanes: u16) -> u16 {
+    if lanes == 4 {
+        16
+    } else {
+        32
+    }
+}
+
+/// Move a tiny vector from its general register into the Apple result layout.
+fn widen_apple_result(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    value: VReg,
+    (lanes, bits): (u16, u16),
+) -> VReg {
+    let bytes = (lanes * bits / 8) as u8;
+    let wide = apple_result_lane_bits(lanes);
+    let mut parts = Vec::new();
+    for lane in 0..lanes {
+        let index = lowerer.fresh(RegClass::Gpr32);
+        insts.push(MInst::MovImm {
+            dst: index,
+            imm: u64::from(lane),
+        });
+        let part = lowerer.fresh(RegClass::Gpr32);
+        insts.push(MInst::Vector {
+            dst: part,
+            extract: true,
+            lane_bits: bits,
+            bytes,
+            args: vec![value, index],
+        });
+        parts.push(part);
+    }
+    while parts.len() * usize::from(wide) < 64 {
+        let zero = lowerer.fresh(RegClass::Gpr32);
+        insts.push(MInst::MovImm { dst: zero, imm: 0 });
+        parts.push(zero);
+    }
+    let dst = lowerer.fresh(RegClass::Simd64);
+    insts.push(MInst::Vector {
+        dst,
+        extract: false,
+        lane_bits: wide,
+        bytes: 8,
+        args: parts,
+    });
+    dst
+}
+
+/// Read a tiny vector back from the Apple result layout. Only the low bits of
+/// each widened lane are significant.
+fn narrow_apple_result(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    value: VReg,
+    (lanes, bits): (u16, u16),
+) -> VReg {
+    let wide = apple_result_lane_bits(lanes);
+    let mut parts = Vec::new();
+    for lane in 0..lanes {
+        let index = lowerer.fresh(RegClass::Gpr32);
+        insts.push(MInst::MovImm {
+            dst: index,
+            imm: u64::from(lane),
+        });
+        let part = lowerer.fresh(RegClass::Gpr32);
+        insts.push(MInst::Vector {
+            dst: part,
+            extract: true,
+            lane_bits: wide,
+            bytes: 8,
+            args: vec![value, index],
+        });
+        parts.push(part);
+    }
+    let dst = lowerer.fresh(RegClass::Gpr32);
+    insts.push(MInst::Vector {
+        dst,
+        extract: false,
+        lane_bits: bits,
+        bytes: (lanes * bits / 8) as u8,
+        args: parts,
+    });
+    dst
+}
+
 fn simd_argument_bytes(ty: &EvoIRType) -> Option<u64> {
     match ty {
         EvoIRType::F32 => Some(4),
@@ -586,14 +683,6 @@ fn scan_function(
         );
     }
     for ty in &params {
-        if matches!(vector_bytes(ty), Some(1 | 2 | 4)) {
-            report(
-                E4002,
-                entry_block,
-                0,
-                "sub-8-byte vector ABI differs between the sealed compilers".into(),
-            );
-        }
         if let Err(code) = class_of(ty) {
             report(code, entry_block, 0, format!("parameter of type {ty:?}"));
         }
@@ -612,14 +701,6 @@ fn scan_function(
         );
     }
     for ty in &results {
-        if matches!(vector_bytes(ty), Some(1 | 2 | 4)) {
-            report(
-                E4002,
-                entry_block,
-                0,
-                "sub-8-byte vector ABI differs between the sealed compilers".into(),
-            );
-        }
         if let Err(code) = class_of(ty) {
             report(code, entry_block, 0, format!("result of type {ty:?}"));
         }
@@ -701,20 +782,6 @@ fn scan_inst(
             }
         }
     }
-    if let Inst::Call { args, results, .. } | Inst::IndirectCall { args, results, .. } = inst {
-        if args
-            .iter()
-            .chain(results)
-            .any(|value| matches!(vector_bytes(&value.ty), Some(1 | 2 | 4)))
-        {
-            report(
-                E4002,
-                block,
-                index,
-                "sub-8-byte vector ABI differs between the sealed compilers".into(),
-            );
-        }
-    }
     // Every operand and result must have a class before the form is judged, so
     // that a floating-point add is E4001 rather than E4009.
     for value in inst_results(inst).into_iter().chain(inst_uses(inst)) {
@@ -760,14 +827,6 @@ fn scan_inst(
         // has no class for are refused by the operand scan above.
         Inst::VaAccess(access) => {
             if let VariadicOp::Arg(result) = &access.op {
-                if matches!(vector_bytes(&result.ty), Some(1 | 2 | 4)) {
-                    report(
-                        E4002,
-                        block,
-                        index,
-                        "sub-8-byte vector ABI differs between the sealed compilers".into(),
-                    );
-                }
                 if variadic_slot(&result.ty).is_none() {
                     report(
                         E4009,
@@ -3144,6 +3203,13 @@ fn lower_terminator(
                         results[slot] = lowerer.zero_extend(insts, results[slot], bits, Width::W);
                     }
                 }
+                // Section 6.2: the Apple convention returns a tiny vector in
+                // `v0` with widened lanes.
+                if let Some(shape) =
+                    tiny_vector_shape(&value.ty).filter(|_| lowerer.anonymous_on_stack)
+                {
+                    results[slot] = widen_apple_result(lowerer, insts, results[slot], shape);
+                }
                 slot += 1;
             }
             // Section 6 (revision 0.18): "An `sret` result of at most 16
@@ -3726,6 +3792,7 @@ fn lower_inst(
             let (arguments, returned) =
                 call_arguments(lowerer, insts, args, &marks, &plan, external(callee))?;
             let mut outputs = call_results(lowerer, results)?;
+            let narrowed = apple_call_results(lowerer, &mut outputs, results);
             let after = call_record_result(lowerer, &mut outputs, returned);
             if plan.indirect_result {
                 insts.push(MInst::IndirectResult);
@@ -3736,6 +3803,7 @@ fn lower_inst(
                 results: outputs,
                 fp_mode: None,
             });
+            insts.extend(narrowed);
             insts.extend(after);
         }
         Inst::IndirectCall {
@@ -3778,6 +3846,7 @@ fn lower_inst(
                 lowerer.anonymous_on_stack,
             )?;
             let mut outputs = call_results(lowerer, results)?;
+            let narrowed = apple_call_results(lowerer, &mut outputs, results);
             let after = call_record_result(lowerer, &mut outputs, returned);
             if plan.indirect_result {
                 insts.push(MInst::IndirectResult);
@@ -3787,6 +3856,7 @@ fn lower_inst(
                 args: arguments,
                 results: outputs,
             });
+            insts.extend(narrowed);
             insts.extend(after);
         }
         // --- the undefined-behaviour predicates of Section 5 ----------------
@@ -4045,6 +4115,34 @@ fn call_args(
         registers.extend(lowerer.registers(value)?);
     }
     Ok(registers)
+}
+
+/// Section 6.2: under the Apple convention a call reads a tiny-vector result
+/// from `v0` and narrows its widened lanes after the call.
+fn apple_call_results(
+    lowerer: &mut Lowerer,
+    outputs: &mut [VReg],
+    results: &[Value],
+) -> Vec<MInst> {
+    let mut after = Vec::new();
+    if !lowerer.anonymous_on_stack {
+        return after;
+    }
+    let mut slot = 0;
+    for value in results.iter().filter(|value| is_register_type(&value.ty)) {
+        if is_pair(&value.ty) {
+            slot += 2;
+            continue;
+        }
+        if let Some(shape) = tiny_vector_shape(&value.ty) {
+            let wide = lowerer.fresh(RegClass::Simd64);
+            outputs[slot] = wide;
+            let narrow = narrow_apple_result(lowerer, &mut after, wide, shape);
+            lowerer.bind(value, narrow);
+        }
+        slot += 1;
+    }
+    after
 }
 
 fn call_results(lowerer: &mut Lowerer, results: &[Value]) -> Result<Vec<VReg>, String> {
@@ -6260,6 +6358,9 @@ fn apple_pieces(
                     u64::from(width.div_ceil(8)).next_power_of_two()
                 }
                 EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => 8,
+                // Apple clang passes a tiny vector as its 4-byte integer
+                // image, so it takes a 4-byte slot (Section 6.6).
+                EvoIRType::Vec { .. } if tiny_vector_shape(ty).is_some() => 4,
                 _ => return None,
             };
             Some((vec![piece(0, bytes, class)], bytes))

@@ -176,9 +176,11 @@ fn unknown_reserved_builtins_are_refused_even_without_warnings() {
     // them is never an implicit external call, whatever the warning level.
     for (call, name) in [
         ("__builtin_not_provided(1)", "__builtin_not_provided"),
+        // `__atomic_fetch_add` is admitted since L11b; `__atomic_fetch_min`
+        // is not (EvoIR 10.1.14).
         (
-            "(int)__atomic_fetch_add(&value, 1, 5)",
-            "__atomic_fetch_add",
+            "(int)__atomic_fetch_min(&value, 1, 5)",
+            "__atomic_fetch_min",
         ),
         ("__sync_fetch_and_frob(&value, 1)", "__sync_fetch_and_frob"),
     ] {

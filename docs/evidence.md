@@ -195,8 +195,9 @@ jq also passes. Floating complex/vectors and other explicitly refused forms stay
 current source profile. FP is not the only remaining application or kernel-test blocker.
 
 The [remaining-semantics brief](archive/notebook/remaining-semantics-research-brief-20260921.md) itemizes
-other measured dialect boundaries. These include the tiny-vector external ABI, integer-complex
-division, pointer-to-VLA type queries and nonzero-depth return addresses.
+other measured dialect boundaries. The tiny-vector external ABI, integer-complex division,
+pointer-to-VLA type queries and nonzero-depth return addresses now follow decided rules (TODO L06
+to L09).
 
 Whole-kernel EqSat reproducibility/certificate acceptance (G2), the GCC `-O2` performance
 comparison (Q2), measured self-improvement (Q3) and the x86/release gates still have no accepted

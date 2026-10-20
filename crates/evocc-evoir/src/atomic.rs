@@ -121,11 +121,22 @@ impl AtomicAccess {
             expected,
         } = &self.op
         {
-            if result.ty == EvoIRType::Bits(1)
-                || value.ty != result.ty
+            // An object pointer adds or subtracts a `bits<64>` byte count,
+            // unscaled; every other operation keeps one value type.
+            let pointer_offset = matches!(result.ty, EvoIRType::Ptr(_))
+                && matches!(operation, AtomicRmwOp::Add | AtomicRmwOp::Sub)
+                && value.ty == EvoIRType::Bits(64);
+            // `_Bool` admits only exchange and compare-exchange of its byte.
+            if (result.ty == EvoIRType::Bits(1)
+                && !matches!(
+                    operation,
+                    AtomicRmwOp::Exchange | AtomicRmwOp::CompareExchange
+                ))
+                || (value.ty != result.ty && !pointer_offset)
                 || expected.as_ref().is_some_and(|v| v.ty != result.ty)
                 || (*operation == AtomicRmwOp::CompareExchange) != expected.is_some()
                 || (matches!(result.ty, EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. })
+                    && !pointer_offset
                     && !matches!(
                         operation,
                         AtomicRmwOp::Exchange | AtomicRmwOp::CompareExchange
@@ -165,14 +176,26 @@ pub(crate) fn execute_atomic(
             value,
             expected,
         } => {
+            let pointer_offset =
+                matches!(result.ty, EvoIRType::Ptr(_)) && value.ty == EvoIRType::Bits(64);
             let value = atomic_operand(values, value, block)?;
             let expected = expected
                 .as_ref()
                 .map(|value| atomic_operand(values, value, block))
                 .transpose()?;
-            let (memory, world, outcome) = state
-                .memory
-                .atomic_rmw(
+            let outcome = match value {
+                evocc_memory::AtomicValue::Integer(bytes) if pointer_offset => {
+                    state.memory.atomic_pointer_offset(
+                        &state.world,
+                        address,
+                        layout,
+                        access.order,
+                        access.volatile,
+                        *operation,
+                        bytes as u64,
+                    )
+                }
+                _ => state.memory.atomic_rmw(
                     &state.world,
                     address,
                     layout,
@@ -181,8 +204,10 @@ pub(crate) fn execute_atomic(
                     *operation,
                     value,
                     expected,
-                )
-                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                ),
+            };
+            let (memory, world, outcome) =
+                outcome.map_err(|error| InterpreterError::MemoryAccess { block, error })?;
             state.memory = memory;
             state.world = world;
             let value = match outcome.old {

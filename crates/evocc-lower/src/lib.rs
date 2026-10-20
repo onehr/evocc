@@ -931,6 +931,8 @@ fn lower_resolved_unit(
                 "__builtin_extract_return_addr"
                     | "__builtin_prefetch"
                     | "__sync_synchronize"
+                    | "__atomic_thread_fence"
+                    | "__atomic_signal_fence"
                     | "alloca"
             )
         {
@@ -7838,7 +7840,15 @@ impl<'a> FunctionLowerer<'a> {
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;
+        // The orders and the weak flag were evaluated once each; a dynamic
+        // order only selects seq_cst.
+        if access.failure.is_some() {
+            values.pop();
+        }
         let _evaluated_order = values.pop();
+        if access.weak.is_some() {
+            values.pop();
+        }
         let stored = if access.value.is_some() {
             values.pop().map(|bound| bound.value)
         } else {
@@ -7851,6 +7861,26 @@ impl<'a> FunctionLowerer<'a> {
         };
         let address = values.remove(0).value;
         let (ty, integer) = self.c_value_type(access.access_ty, access.span)?;
+        // `__atomic_compare_exchange_n` reads the expected value through its
+        // pointer with an ordinary load before the atomic operation.
+        let expected_object = if access.writeback {
+            expected.clone()
+        } else {
+            None
+        };
+        let expected = match &expected_object {
+            Some(pointer) => Some(
+                self.emit_memory_load(
+                    pointer.clone(),
+                    access.access_ty,
+                    false,
+                    access.span,
+                    state,
+                )?
+                .value,
+            ),
+            None => expected,
+        };
         let result = (stored.is_none() || access.rmw.is_some()).then(|| self.fresh_value(ty));
         let mem_in = self.token(state, EnvKey::Memory)?.value;
         let guarded = self.fresh_value(EvoIRType::Mem(Region::All));
@@ -7899,6 +7929,7 @@ impl<'a> FunctionLowerer<'a> {
             use evocc_chir::{AtomicRmwOp as R, AtomicRmwReturn as K};
             let (value, integer) = match access.rmw {
                 Some((_, K::Success)) => {
+                    let observed = value.clone();
                     let old =
                         self.cast(ExprValue { value, integer }, CIntegerType::ULONG, state)?;
                     let expected = self.cast(
@@ -7909,10 +7940,54 @@ impl<'a> FunctionLowerer<'a> {
                         CIntegerType::ULONG,
                         state,
                     )?;
-                    (
-                        self.checked_compare(state, CmpOp::Eq, &old.value, &expected.value)?,
-                        CIntegerType::BOOL,
-                    )
+                    let equal =
+                        self.checked_compare(state, CmpOp::Eq, &old.value, &expected.value)?;
+                    if let Some(pointer) = expected_object {
+                        // A failed comparison stores the observed value back.
+                        self.store_on_failure(
+                            equal.clone(),
+                            pointer,
+                            ExprValue {
+                                value: observed,
+                                integer,
+                            },
+                            access,
+                            state,
+                        )
+                        .map(|equal| (equal, CIntegerType::BOOL))?
+                    } else {
+                        (equal, CIntegerType::BOOL)
+                    }
+                }
+                Some((operation @ (R::Add | R::Sub), K::New))
+                    if matches!(value.ty, EvoIRType::Ptr(_)) =>
+                {
+                    // Pointer forms add or subtract bytes as an address; the
+                    // atomic object itself keeps its provenance.
+                    let operand = stored.expect("RMW value");
+                    let address = self.fresh_value(EvoIRType::Bits(64));
+                    self.emit(
+                        state,
+                        Inst::PointerCast {
+                            result: address.clone(),
+                            operand: value.clone(),
+                        },
+                    )?;
+                    let inst = if operation == R::Add {
+                        Inst::Add
+                    } else {
+                        Inst::Sub
+                    };
+                    let moved = self.emit_raw_binary(state, inst, &address, &operand)?;
+                    let pointer = self.fresh_value(value.ty.clone());
+                    self.emit(
+                        state,
+                        Inst::PointerCast {
+                            result: pointer.clone(),
+                            operand: moved,
+                        },
+                    )?;
+                    (pointer, integer)
                 }
                 Some((operation, K::New)) => {
                     let operand = stored.expect("RMW value");
@@ -7937,6 +8012,97 @@ impl<'a> FunctionLowerer<'a> {
         } else {
             self.constant(state, CIntegerType::INT, 0)
         }
+    }
+
+    /// An implicit `asm volatile` barrier with a `memory` clobber, no
+    /// operands and the current effect tokens. Both interpreters report
+    /// `E3021` on reaching it; native code emits the template.
+    fn emit_barrier(
+        &mut self,
+        template: &str,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<(), LowerError> {
+        let assembly = InlineAssembly {
+            template: template.into(),
+            volatile: true,
+            outputs: vec![],
+            inputs: vec![],
+            results: vec![],
+            clobbers: vec!["memory".into()],
+            mem_in: self.token(state, EnvKey::Memory)?.value,
+            world_in: self.token(state, EnvKey::World)?.value,
+            mem_out: self.fresh_value(EvoIRType::Mem(Region::All)),
+            world_out: self.fresh_value(EvoIRType::World),
+        };
+        assembly
+            .validate(&[])
+            .map_err(|reason| LowerError::AsmOperand { span, reason })?;
+        self.replace_effect_tokens(
+            state,
+            assembly.mem_out.clone(),
+            Some(assembly.world_out.clone()),
+        );
+        self.emit(state, Inst::Asm(assembly))
+    }
+
+    /// Store `observed` through `pointer` only when `equal` is false, then
+    /// join. Returns `equal` as it reaches the join.
+    fn store_on_failure(
+        &mut self,
+        equal: Value,
+        pointer: Value,
+        observed: ExprValue,
+        access: &evocc_chir::CHirAtomicAccess<'a>,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        let integer = observed.integer;
+        let mut carried = Vec::new();
+        for value in [equal.clone(), pointer, observed.value] {
+            let key = self.retain_temporary(value, state);
+            state.env.get_mut(&key).unwrap().integer = Some(integer);
+            carried.push(key);
+        }
+        let keys = self.expression_join_keys(state, &[]);
+        let done = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let mut failed = self.new_block_from(state, &keys, BlockRole::Ordinary)?;
+        let done_arguments = self.edge_values(state, &keys)?;
+        let failed_arguments = self.edge_values(state, &keys)?;
+        self.terminate(
+            state,
+            conditional_branch(
+                equal,
+                None,
+                done.block,
+                done_arguments,
+                failed.block,
+                failed_arguments,
+            ),
+        )?;
+        let pointer = failed.env[&carried[1]].value.clone();
+        let observed = ExprValue {
+            value: failed.env[&carried[2]].value.clone(),
+            integer,
+        };
+        self.emit_memory_store(
+            pointer,
+            observed,
+            access.access_ty,
+            false,
+            access.span,
+            &mut failed,
+        )?;
+        self.branch(&failed, done.block, &keys)?;
+        *state = done;
+        let equal = state
+            .env
+            .remove(&carried[0])
+            .expect("joined comparison")
+            .value;
+        for key in &carried[1..] {
+            state.env.remove(key);
+        }
+        Ok(equal)
     }
 
     fn emit_memory_load(
@@ -13184,27 +13350,45 @@ impl<'a> FunctionLowerer<'a> {
                             }
                             // Use the existing opaque, ordered assembly
                             // path: this is a hardware fence, not a call.
-                            let assembly = InlineAssembly {
-                                template: "dmb ish".into(),
-                                volatile: true,
-                                outputs: vec![],
-                                inputs: vec![],
-                                results: vec![],
-                                clobbers: vec!["memory".into()],
-                                mem_in: self.token(state, EnvKey::Memory)?.value,
-                                world_in: self.token(state, EnvKey::World)?.value,
-                                mem_out: self.fresh_value(EvoIRType::Mem(Region::All)),
-                                world_out: self.fresh_value(EvoIRType::World),
+                            self.emit_barrier("dmb ish", span, state)?;
+                            return Ok(None);
+                        }
+                        "__atomic_thread_fence" | "__atomic_signal_fence" => {
+                            let [argument] = arguments.as_slice() else {
+                                return Err(LowerError::UnsupportedExpression {
+                                    span,
+                                    feature: "fence arity",
+                                });
                             };
-                            assembly
-                                .validate(&[])
-                                .map_err(|reason| LowerError::AsmOperand { span, reason })?;
-                            self.replace_effect_tokens(
-                                state,
-                                assembly.mem_out.clone(),
-                                Some(assembly.world_out.clone()),
-                            );
-                            self.emit(state, Inst::Asm(assembly))?;
+                            // EvoIR 10.1.14: a run-time order is evaluated
+                            // once and makes the fence seq_cst. The front end
+                            // already removed a relaxed constant fence.
+                            let order = constant_integer(self.unit, self.target, argument)
+                                .and_then(|value| value.try_mathematical_value())
+                                .map_or(
+                                    Some(evocc_evoir::AtomicOrder::SeqCst),
+                                    evocc_evoir::AtomicOrder::from_c,
+                                )
+                                .ok_or(LowerError::UnsupportedExpression {
+                                    span,
+                                    feature: "invalid fence order",
+                                })?;
+                            self.lower_discarded_expr(argument, state)?;
+                            // A thread fence is the same opaque, ordered
+                            // barrier as `__sync_synchronize`, `dmb ishld`
+                            // when it only acquires. A signal fence orders the
+                            // compiler only: an empty barrier template.
+                            use evocc_evoir::AtomicOrder as O;
+                            let template = if spelling == "__atomic_signal_fence" {
+                                ""
+                            } else if matches!(order, O::Consume | O::Acquire) {
+                                "dmb ishld"
+                            } else {
+                                "dmb ish"
+                            };
+                            if order != O::Relaxed {
+                                self.emit_barrier(template, span, state)?;
+                            }
                             return Ok(None);
                         }
                         "__builtin_extract_return_addr" => {
@@ -14376,7 +14560,7 @@ impl<'a> FunctionLowerer<'a> {
         // operand (including calls), then read the value to be updated.
         // A call can change that object; caching its old value loses effects.
         let right = self.lower_expr(assigned, state)?;
-        let address = state
+        let mut address = state
             .env
             .remove(&address_key)
             .expect("retained assignment address")
@@ -14406,7 +14590,43 @@ impl<'a> FunctionLowerer<'a> {
             self.coerce_to_object_type(right, Some(assigned), place.value_ty(), span, state)?
         } else {
             let original = original.expect("memory compound assignment loaded its left value");
-            if evocc_evoir::floating_kind(&original.value.ty).is_some()
+            let complex = evocc_chir::vector::expression_type(self.unit.types(), assigned)
+                .filter(|ty| evocc_chir::complex::rank(self.unit.types(), *ty).is_some());
+            if let Some(complex) = complex {
+                // A real target with a complex value: the front end converted
+                // the value to the common complex type. Compute there, then
+                // convert the result to the target type (EvoIR 10.1.14).
+                let op = evocc_chir::vector::assignment_binary(operator).ok_or(
+                    LowerError::UnsupportedExpression {
+                        span,
+                        feature: "invalid complex assignment",
+                    },
+                )?;
+                // Division branches; keep the destination across the join.
+                let address_key = self.retain_temporary(address, state);
+                let result = self.lower_complex_values(
+                    evocc_chir::complex::ComplexOp::Binary(op),
+                    &[None, Some(complex)],
+                    complex,
+                    vec![original, right],
+                    span,
+                    state,
+                )?;
+                let result = self.lower_complex_values(
+                    evocc_chir::complex::ComplexOp::Convert,
+                    &[Some(complex)],
+                    place.value_ty(),
+                    vec![result],
+                    span,
+                    state,
+                )?;
+                address = state
+                    .env
+                    .remove(&address_key)
+                    .expect("retained complex assignment address")
+                    .value;
+                result
+            } else if evocc_evoir::floating_kind(&original.value.ty).is_some()
                 || evocc_evoir::floating_kind(&right.value.ty).is_some()
             {
                 let op = evocc_chir::vector::assignment_binary(operator).ok_or(

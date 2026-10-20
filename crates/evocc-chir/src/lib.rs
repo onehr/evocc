@@ -729,10 +729,21 @@ pub struct CHirAtomicAccess<'arena> {
     pub rmw: Option<(evocc_memory::AtomicRmwOp, AtomicRmwReturn)>,
     pub order: &'arena CHirExpr<'arena>,
     /// None denotes a source-dynamic order, strengthened to seq_cst after
-    /// evaluating the original expression. Inlining never discards it.
+    /// evaluating the original expression. Inlining never discards it. A
+    /// compare-exchange with two constant orders keeps their merged order.
     pub constant_order: Option<evocc_memory::AtomicOrder>,
     pub access_ty: TypeId,
     pub volatile: bool,
+    /// `__atomic_compare_exchange_n`: `expected` points to the expected
+    /// value. An ordinary load reads it before the operation, and an
+    /// ordinary store writes the observed value back when the comparison
+    /// fails.
+    pub writeback: bool,
+    /// The `weak` operand, evaluated after `value` and before `order`. A weak
+    /// compare-exchange is implemented as a strong one.
+    pub weak: Option<&'arena CHirExpr<'arena>>,
+    /// The failure order of a compare-exchange, evaluated after `order`.
+    pub failure: Option<&'arena CHirExpr<'arena>>,
     pub facts: ExprFacts,
     pub span: SourceSpan,
 }
@@ -747,17 +758,23 @@ pub enum AtomicRmwReturn {
 }
 
 impl<'arena> CHirAtomicAccess<'arena> {
+    /// The operands in evaluation order: address, expected, value, weak,
+    /// order and failure order.
     pub fn operands(&self) -> impl DoubleEndedIterator<Item = &'arena CHirExpr<'arena>> {
         std::iter::once(self.address)
             .chain(self.expected)
             .chain(self.value)
+            .chain(self.weak)
             .chain(std::iter::once(self.order))
+            .chain(self.failure)
     }
     pub fn operands_mut(&mut self) -> impl Iterator<Item = &mut &'arena CHirExpr<'arena>> {
         std::iter::once(&mut self.address)
             .chain(self.expected.iter_mut())
             .chain(self.value.iter_mut())
+            .chain(self.weak.iter_mut())
             .chain(std::iter::once(&mut self.order))
+            .chain(self.failure.iter_mut())
     }
 }
 

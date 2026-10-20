@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.3.9** | **Pinned ground truth** | Private zero-branch selection on 2026-10-19
+**Revision 1.4.1** | **Pinned ground truth** | Atomic pointer offsets on 2026-10-20
 
 ## Status and scope
 
@@ -286,6 +286,8 @@ unordered inputs with zero, and mask the result to false.
 `N` and the size `B` in bytes: `B` = 8 uses `simd64`, 16 uses `simd128`, and
 1, 2 or 4 uses `gpr32`. Emission expands them to lane moves and indexed
 selection. An invalid index traps with `E3011` before the hardware masks it.
+A `gpr32` vector also crosses a call boundary in a general register
+(Section 6.2).
 Wider vectors are local objects with scalarized operations.
 `crypto.aese`, `crypto.aesd`, `crypto.aesmc` and `crypto.aesimc` operate on
 `simd128`. SIMD classes are refused under `-mgeneral-regs-only` (`E4002`).
@@ -411,7 +413,12 @@ value. `OP` is `add`, `sub`, `and`, `or`, `xor`, `nand`, `exchange` or
 (LDAXR for an acquiring order), the operation into a scratch register, STXR
 (STLXR for a releasing order) and a retry branch; `seq_cst` adds `dmb ish`
 before and after; a failed `cmpxchg` leaves with CLREX. The result register
-must not overlap an input.
+must not overlap an input. A pointer `add` or `sub` of EvoIR Section 3.8 is
+`atomic.rmw.add.p` or `atomic.rmw.sub.p` with a `gpr64` byte count: the
+64-bit integer operation on the address. A `bits<1>` exchange or
+compare-exchange uses kind `b`. The GNU fences of EvoIR Section 10.1.14
+arrive as barrier `asm` (Section 8.3): `dmb ish`, `dmb ishld`, or an empty
+template for a signal fence.
 
 ### 4.3 Arithmetic and logic
 
@@ -828,6 +835,26 @@ a signed integer narrower than 32 bits as `bits<32>`, its sign extension
 (EvoIR Section 10.1.3), so a caller that another compiler built reads the
 value that the Apple convention promises.
 
+**Tiny vectors.** An integer vector of 1, 2 or 4 bytes is a `gpr32` value
+(Section 2.7). As an argument, named or anonymous, it is placed like an
+integer of 32 bits or less: the next of `x0` to `x7`, or a stack slot of
+Section 6.6, with lane 0 in the low bits and unspecified bits above the
+vector. A caller never extends it. A result is `w0`, except under the Apple
+convention: there the callee returns it in `v0` with each lane widened, four
+8-bit lanes as four 16-bit lanes and every other shape as two 32-bit lanes,
+the vector's lanes first and zero lanes after them. The caller reads each
+widened lane and keeps only its low bits. This is the layout Apple clang
+uses; under `-mgeneral-regs-only` it is `E4002`, because `v0` is a SIMD
+register. Under Linux the shapes agree with GCC 14 in both directions;
+Clang 19 returns them in SIMD registers instead, which is a recorded
+incompatibility for results only.
+
+*Informative.* `crates/evocc/tests/tiny_vector_abi.rs` with
+`tests/fixtures/tiny-vector-abi-shapes*` and the probe pair of
+`tests/fixtures/rules-20261013/l06-tiny-vector-*`: GCC 14 and EvoCC agree in
+both directions at `-O0` and `-O2`, Clang 19 differs in exactly the result
+checks, and Apple clang and EvoCC agree in both directions.
+
 ### 6.3 Floating-point and vector arguments (Linux)
 
 `f32`, `f64`, HFA members, 8- and 16-byte integer vectors and HVA members
@@ -890,6 +917,7 @@ next offset that is a multiple of its alignment:
 | Argument | Size | Alignment |
 |---|---|---|
 | Integer, pointer, `f32`, `f64`, short vector | its own size (1, 2, 4, 8 or 16) | its size |
+| Integer vector of 1, 2 or 4 bytes | 4, its integer image | 4 |
 | `bits<128>` | 16 | 16 |
 | Record of at most 16 bytes that is no HFA or HVA | its size rounded up to 8 | 8, or 16 for a record aligned to 16 |
 | HFA or HVA | its members, contiguous | the record's alignment, at least a member's, at most 16 |
@@ -1630,7 +1658,7 @@ this table, not a withdrawn code or the allocation verifier's separate E4020.
 | Code | Name | Meaning |
 |---|---|---|
 | `E4001` | `not-lowered: floating-point` | Withdrawn: scalar `f32`/`f64` are admitted (Section 2.6); other formats remain front-end refusals. |
-| `E4002` | `not-lowered: vector` | An unsupported vector execution or external vector ABI, or a SIMD class under `-mgeneral-regs-only`. Native arguments and results of integer vectors below 8 bytes are refused; local operations on them are admitted. |
+| `E4002` | `not-lowered: vector` | An unsupported vector execution or external vector ABI, or a SIMD class under `-mgeneral-regs-only`, including an Apple tiny-vector result in `v0` (Section 6.2). |
 | `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`. Width 128 is admitted, including the UB predicates and hosted division. |
 | `E4004` | `not-lowered: tuple` | A tuple-typed value. |
 | `E4005` | `not-lowered: static-pointer-data` | Withdrawn: static relocations are emitted (Section 8.2). |
@@ -1802,6 +1830,17 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.4.1, 2026-10-20.** Section 4.2 names the existing forms that the
+GNU atomic builtins use: pointer `add` and `sub` with a byte count, `bits<1>`
+exchange and compare-exchange, and the fence barriers. No machine form
+changes.
+
+**Revision 1.4.0, 2026-10-20.** Sections 2.7, 6.2 and 6.6 lower integer
+vectors of 1, 2 and 4 bytes at a call boundary. Under both ABI profiles they
+pass in a general register; the Apple convention returns them in `v0` with
+widened lanes and gives a named stack argument a 4-byte slot. E4002 no longer
+refuses these signatures.
 
 **Revision 1.3.7, 2026-10-18.** Section 5.4 lets later accesses reuse an
 immediate address after the first matching access forms it in the same

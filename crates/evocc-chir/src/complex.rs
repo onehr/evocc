@@ -57,6 +57,37 @@ pub fn binary(
     let [a, b0] = a;
     let [c, d] = b;
     match op {
+        BinaryOp::Div => {
+            // GCC's wide algorithm (EvoIR 10.1.14). Each step is the C
+            // operation in the component type; only one branch executes.
+            let magnitude = |v: CInteger| {
+                if !v.ty().is_signed() || v.mathematical_value() >= 0 {
+                    Ok(v)
+                } else if wrapping {
+                    Ok(CInteger::from_raw(0u128.wrapping_sub(v.raw_bits()), v.ty()))
+                } else {
+                    crate::integer::eval_unary_at_type(UnaryOp::Neg, v)
+                }
+            };
+            let (abs_c, abs_d) = (magnitude(c)?, magnitude(d)?);
+            let smaller =
+                crate::integer::eval_binary_at_type(BinaryOp::Lt, abs_c, abs_d, c.ty())?.truth();
+            if smaller {
+                let ratio = calc(BinaryOp::Div, c, d)?;
+                let div = calc(BinaryOp::Add, calc(BinaryOp::Mul, c, ratio)?, d)?;
+                let real = calc(BinaryOp::Add, calc(BinaryOp::Mul, a, ratio)?, b0)?;
+                let real = calc(BinaryOp::Div, real, div)?;
+                let imaginary = calc(BinaryOp::Sub, calc(BinaryOp::Mul, b0, ratio)?, a)?;
+                Ok([real, calc(BinaryOp::Div, imaginary, div)?])
+            } else {
+                let ratio = calc(BinaryOp::Div, d, c)?;
+                let div = calc(BinaryOp::Add, calc(BinaryOp::Mul, d, ratio)?, c)?;
+                let real = calc(BinaryOp::Add, calc(BinaryOp::Mul, b0, ratio)?, a)?;
+                let real = calc(BinaryOp::Div, real, div)?;
+                let imaginary = calc(BinaryOp::Sub, b0, calc(BinaryOp::Mul, a, ratio)?)?;
+                Ok([real, calc(BinaryOp::Div, imaginary, div)?])
+            }
+        }
         BinaryOp::Add | BinaryOp::Sub => Ok([calc(op, a, c)?, calc(op, b0, d)?]),
         BinaryOp::Mul => Ok([
             calc(
