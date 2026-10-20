@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.6.0** | **Pinned ground truth** | Calls that return twice on 2026-10-20
+**Revision 1.7.0** | **Pinned ground truth** | Masked EvoIR accesses on 2026-10-21
 
 ## Status and scope
 
@@ -505,7 +505,7 @@ except `spill.*` and `arg.*`, which exist only after allocation (Section 9.1).
 | `frame.slot [origin=O, size=S, align=A]` | Defines a `gpr64` `:=` the address of a fresh object of `S` bytes at alignment `A`, one per dynamic execution, as EvoIR Section 3.7 requires of `alloca`. After allocation it is a fixed object (Section 6.8). Reuse of that memory by a re-executed `alloca` is sound, because EvoIR ends the lifetime of the previous object before the site is reached again. |
 | `stack.alloc rn, [origin=O, align=A]` | Defines a `gpr64` `:=` the address of a fresh uninitialized object of the runtime unsigned `gpr64` byte count `rn`, with a distinct origin `O` and a power-of-two alignment `A`. It preserves the fixed objects and the earlier live dynamic objects, with a disjoint outgoing-argument area below the new object (Section 6.11). |
 | `stack.release rn` | Ends the logical lifetime of the dynamic object at `rn`. Native emission reclaims stack bytes only for the top dynamic allocation; otherwise the bytes stay reserved until the frame is restored. It never releases an intervening live function-lifetime allocation. |
-| `mem.copy[.volatile.read\|.volatile.write\|.volatile.readwrite] [rd], [rs], #size, #align` | Copies `size` bytes from `rs` to `rd`, transferring per-byte initializedness and pointer fragments as EvoIR Section 3.8's `copy` does (identical or disjoint ranges). Emission uses load/store pairs of the largest unit (8, 4, 2 or 1 bytes) that divides `size` and `align`, unrolled up to 64 bytes and a counted loop above. These loads never report an uninitialized read: they move representation. A volatile variant admits only sizes 1, 2, 4, 8 with `align >= size` and makes exactly one load and one store. |
+| `mem.copy[.volatile.read\|.volatile.write\|.volatile.readwrite] [rd], [rs], #size, #align` | Copies `size` bytes from `rs` to `rd`, transferring per-bit initializedness and pointer fragments as EvoIR Section 3.8's `copy` does (identical or disjoint ranges). Emission uses load/store pairs of the largest unit (8, 4, 2 or 1 bytes) that divides `size` and `align`, unrolled up to 64 bytes and a counted loop above. These loads never report an uninitialized read: they move representation. A volatile variant admits only sizes 1, 2, 4, 8 with `align >= size` and makes exactly one load and one store. |
 | `frame.address [place]` | Defines a `gpr64`: `incoming` (the first incoming stack slot, `x29 + 16`), `gr_top` (the top of the general register save area), `saved_lr` (`[x29, #8]`), `fp` (`x29`) or `fp_N` (the frame pointer `N` saved links up the chain). |
 | `va.save [named=N]` | Requests the variadic save areas; `N` argument registers are taken by named parameters (Section 6.12). |
 | `indirect.result` | The last argument of the next call, or the last parameter of this function, is the destination of a record result above 16 bytes and travels in `x8` (Section 6.4). |
@@ -575,9 +575,9 @@ table or in a family that Sections 2 and 4 admit is refused (Section 10).
 | `alloca.dynamic` | `stack.alloc` at the instruction's program point, preserving byte-count operand, origin and alignment |
 | `lifetime.end` | `stack.release` for an address that originates from dynamic allocation, including explicit edge transport; a fixed object stays reserved and needs no native instruction |
 | `pointer_valid`, `access_in_bounds` | nothing. EvoIR keeps the memory guards out of `ub.assume` (EvoIR Section 6.1), so neither UB-check profile (Section 5.2) checks them. Native code relies on the C rule that a defined program makes no invalid access and checks no memory fault (`E3009` to `E3013`); only the interpreters check the guards. `access_in_bounds` gives the alignment that it proves to the access it guards (the ` [align=N]` suffix of Section 4.1) |
-| `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker (Section 5.4 can select an immediate address) |
+| `load [volatile]` of `bits<N>`, `N <= 64` | `ldr` of the matching width, with the marker (Section 5.4 can select an immediate address). A mask (EvoIR Section 3.8) lowers to nothing: the `ldr` reads every bit |
 | `load [volatile]` of a pointer | `ldr.p` / `ldr.pf` |
-| `store [volatile]` | `str` of the matching width, `str.p` for a pointer (Section 5.4) |
+| `store [volatile]` | `str` of the matching width, `str.p` for a pointer (Section 5.4). A mask lowers to nothing: the `str` writes every bit, as the masked EvoIR store does |
 | `atomic.load`/`atomic.store order [volatile]` | `atomic.load.K`/`atomic.store.K` with the same order, marker and kind |
 | atomic read-modify-write and compare-exchange | `atomic.rmw.OP.K` with the same order and marker |
 | `atomic.copy.*` | the `atomic.load.K`, `atomic.store.K` or `atomic.rmw.OP.K` sequence of Section 4.2 with ordinary buffer accesses |
@@ -1565,9 +1565,14 @@ Every Section 4 form except `asm`, `asm.goto` and the allocator forms
 executable semantics. The interpreter runs EvoMIR before allocation, and the
 allocator forms exist only after it, so the interpreter refuses them as
 invalid input. The interpreter must agree with the EvoIR interpreter on
-results, traps and the volatile trace. The randomized semantic gate runs it as a third lane
+results, traps and the volatile trace, with one exception. A masked EvoIR
+access lowers to an unmasked one (Section 5.1), so this interpreter requires
+every bit of a loaded byte to be initialized. When a bit-field store reads a
+byte whose other bits are uninitialized, it reports `E3001`, and the EvoIR
+interpreter does not. The randomized semantic gate runs it as a third lane
 (EvoIR before and after optimization, EvoMIR after lowering); a mismatch is
-shrunk, and a lowering refusal is counted by code, not compared.
+shrunk, and a lowering refusal is counted by code, not compared. That gate
+generates no masked access.
 
 ### 9.2 The allocation verifier
 
@@ -1873,6 +1878,13 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.7.0, 2026-10-21.** Section 5.1 lowers the masked `load` and
+`store` of EvoIR 2.19.0 to the unmasked machine access, so native code does not
+change. `mem.copy` moves the initializedness of each bit. Section 9.1 states
+the one place where this interpreter and the EvoIR interpreter disagree: the
+container load of a bit-field store over uninitialized neighbours. No machine
+form changes.
 
 **Revision 1.6.0, 2026-10-20.** Sections 4.5 and A add `bl.returns_twice`,
 the form of EvoIR's `call.returns_twice`. Section 7.4 spills every range that

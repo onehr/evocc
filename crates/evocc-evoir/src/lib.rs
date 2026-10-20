@@ -443,7 +443,8 @@ pub enum Inst {
     },
 
     /// Load through `address`, consuming and producing explicit effect tokens.
-    /// The loaded type is owned by `result`.
+    /// The loaded type is owned by `result`. A `mask` selects the bits that
+    /// must be initialized; the other bits may be uninitialized (3.8).
     Load {
         result: Value,
         address: Value,
@@ -452,9 +453,12 @@ pub enum Inst {
         mem_out: Value,
         world_out: Value,
         volatile: bool,
+        mask: Option<u128>,
     },
 
     /// Store `value` through `address`, consuming and producing effect tokens.
+    /// A `mask` selects the bits that become initialized; the other bits keep
+    /// their initializedness (3.8).
     Store {
         address: Value,
         value: Value,
@@ -463,6 +467,7 @@ pub enum Inst {
         mem_out: Value,
         world_out: Value,
         volatile: bool,
+        mask: Option<u128>,
     },
 
     /// Copy a complete object representation, including initializedness and
@@ -3164,10 +3169,12 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             world_in,
             mem_out,
             world_out,
-            ..
+            volatile,
+            mask,
         } => {
             expect_pointer(&address.ty, "load address", block)?;
             expect_data_type(&result.ty, "load result", block)?;
+            validate_access_mask(*mask, &result.ty, *volatile, "load", block)?;
             expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "load", block)
         }
         Inst::Store {
@@ -3177,10 +3184,12 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             world_in,
             mem_out,
             world_out,
-            ..
+            volatile,
+            mask,
         } => {
             expect_pointer(&address.ty, "store address", block)?;
             expect_data_type(&value.ty, "stored value", block)?;
+            validate_access_mask(*mask, &value.ty, *volatile, "store", block)?;
             expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "store", block)
         }
         Inst::Copy {
@@ -3328,6 +3337,37 @@ fn validate_layout(layout: AccessLayout, operation: &str, block: BlockId) -> Res
     if layout.size_bytes > i64::MAX as u64 || !layout.align_bytes.is_power_of_two() {
         return Err(format!(
             "{operation} in block {block} has invalid size/alignment {layout:?}"
+        ));
+    }
+    Ok(())
+}
+
+/// A mask belongs to a non-volatile access of `bits<8>` to `bits<128>`. It
+/// selects at least one bit fewer than the access has: an access of every
+/// bit is written without a mask (3.8).
+fn validate_access_mask(
+    mask: Option<u128>,
+    ty: &EvoIRType,
+    volatile: bool,
+    operation: &str,
+    block: BlockId,
+) -> Result<(), String> {
+    let Some(mask) = mask else {
+        return Ok(());
+    };
+    let EvoIRType::Bits(width @ (8 | 16 | 32 | 64 | 128)) = ty else {
+        return Err(format!(
+            "{operation} in block {block} has a mask but is not an integer access"
+        ));
+    };
+    if volatile {
+        return Err(format!(
+            "{operation} in block {block} has a mask and is volatile"
+        ));
+    }
+    if mask >= u128::MAX >> (128 - u32::from(*width)) {
+        return Err(format!(
+            "{operation} in block {block} has mask {mask}, which is not narrower than bits<{width}>"
         ));
     }
     Ok(())
@@ -5933,69 +5973,84 @@ fn execute_instruction(
             mem_out,
             world_out,
             volatile,
+            mask,
         } => {
             let memory_token = read_value(values, mem_in, block)?;
             let _ = read_value(values, world_in, block)?;
             let address = read_pointer(values, address, block)?;
             let layout = matching_guard(state, memory_token, address, block)?;
-            let loaded = match &result.ty {
-                EvoIRType::Vec(..) => {
-                    let (representation, world) = state
+            let loaded = match (&result.ty, mask) {
+                (EvoIRType::Bits(_), Some(mask)) if !*volatile => InternalValue::Bits(
+                    state
                         .memory
-                        .load_representation(&state.world, address, layout, *volatile)
-                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
-                    state.world = world;
-                    state.save_vector(representation)
-                }
-                EvoIRType::Bits(_) | EvoIRType::F32 | EvoIRType::F64 | EvoIRType::F128 => {
-                    let raw = if *volatile {
-                        let (raw, world) = state
-                            .memory
-                            .volatile_load_integer(&state.world, address, layout)
-                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
-                        state.world = world;
-                        raw
-                    } else {
-                        state
-                            .memory
-                            .load_integer(address, layout)
-                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?
-                    };
-                    InternalValue::Bits(raw)
-                }
-                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => {
-                    let pointer = if *volatile {
-                        let (pointer, world) = state
-                            .memory
-                            .volatile_load_pointer_value(&state.world, address, layout)
-                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
-                        state.world = world;
-                        pointer
-                    } else {
-                        state
-                            .memory
-                            .load_pointer_value(address, layout)
-                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?
-                    };
-                    match (&result.ty, pointer) {
-                        (EvoIRType::Ptr(_), PointerValue::Null) => {
-                            InternalValue::Pointer(Pointer::NULL)
-                        }
-                        (EvoIRType::Ptr(_), PointerValue::Object(pointer)) => {
-                            InternalValue::Pointer(pointer)
-                        }
-                        (EvoIRType::Ptr(_), PointerValue::Exposed(address)) => {
-                            InternalValue::Pointer(Pointer::from_address(address))
-                        }
-                        _ => InternalValue::FunctionPointer(pointer),
-                    }
-                }
-                _ => {
+                        .load_integer_bits(address, layout, *mask)
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?,
+                ),
+                (_, Some(_)) => {
                     return Err(InterpreterError::UnsupportedInstruction {
                         block,
-                        operation: "load type",
+                        operation: "masked load type",
                     });
                 }
+                (ty, None) => match ty {
+                    EvoIRType::Vec(..) => {
+                        let (representation, world) = state
+                            .memory
+                            .load_representation(&state.world, address, layout, *volatile)
+                            .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                        state.world = world;
+                        state.save_vector(representation)
+                    }
+                    EvoIRType::Bits(_) | EvoIRType::F32 | EvoIRType::F64 | EvoIRType::F128 => {
+                        let raw = if *volatile {
+                            let (raw, world) = state
+                                .memory
+                                .volatile_load_integer(&state.world, address, layout)
+                                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                            state.world = world;
+                            raw
+                        } else {
+                            state
+                                .memory
+                                .load_integer(address, layout)
+                                .map_err(|error| InterpreterError::MemoryAccess { block, error })?
+                        };
+                        InternalValue::Bits(raw)
+                    }
+                    EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => {
+                        let pointer = if *volatile {
+                            let (pointer, world) = state
+                                .memory
+                                .volatile_load_pointer_value(&state.world, address, layout)
+                                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                            state.world = world;
+                            pointer
+                        } else {
+                            state
+                                .memory
+                                .load_pointer_value(address, layout)
+                                .map_err(|error| InterpreterError::MemoryAccess { block, error })?
+                        };
+                        match (&result.ty, pointer) {
+                            (EvoIRType::Ptr(_), PointerValue::Null) => {
+                                InternalValue::Pointer(Pointer::NULL)
+                            }
+                            (EvoIRType::Ptr(_), PointerValue::Object(pointer)) => {
+                                InternalValue::Pointer(pointer)
+                            }
+                            (EvoIRType::Ptr(_), PointerValue::Exposed(address)) => {
+                                InternalValue::Pointer(Pointer::from_address(address))
+                            }
+                            _ => InternalValue::FunctionPointer(pointer),
+                        }
+                    }
+                    _ => {
+                        return Err(InterpreterError::UnsupportedInstruction {
+                            block,
+                            operation: "load type",
+                        });
+                    }
+                },
             };
             let next_memory_token = state.fresh_token()?;
             let next_world_token = state.fresh_token()?;
@@ -6011,13 +6066,30 @@ fn execute_instruction(
             mem_out,
             world_out,
             volatile,
+            mask,
         } => {
             let memory_token = read_value(values, mem_in, block)?;
             let _ = read_value(values, world_in, block)?;
             let address = read_pointer(values, address, block)?;
             let layout = matching_guard(state, memory_token, address, block)?;
-            match read_internal(values, value, block)? {
-                InternalValue::Vector(identity) => {
+            let stored = read_internal(values, value, block)?;
+            match (stored, mask) {
+                (InternalValue::Bits(raw), Some(mask)) if !*volatile => {
+                    state.memory = state
+                        .memory
+                        .store_integer_bits(address, layout, raw, *mask)
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                }
+                (InternalValue::Uninitialized, _) => {
+                    return Err(InterpreterError::UninitializedRead { block });
+                }
+                (_, Some(_)) => {
+                    return Err(InterpreterError::UnsupportedInstruction {
+                        block,
+                        operation: "masked store value",
+                    });
+                }
+                (InternalValue::Vector(identity), None) => {
                     let (memory, world) = state
                         .memory
                         .store_representation(
@@ -6031,7 +6103,7 @@ fn execute_instruction(
                     state.memory = memory;
                     state.world = world;
                 }
-                InternalValue::Bits(raw) => {
+                (InternalValue::Bits(raw), None) => {
                     if *volatile {
                         let (memory, world) = state
                             .memory
@@ -6046,7 +6118,7 @@ fn execute_instruction(
                             .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                     }
                 }
-                InternalValue::Pointer(pointer) => {
+                (InternalValue::Pointer(pointer), None) => {
                     if *volatile {
                         let (memory, world) = state
                             .memory
@@ -6061,7 +6133,7 @@ fn execute_instruction(
                             .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                     }
                 }
-                InternalValue::FunctionPointer(pointer) => {
+                (InternalValue::FunctionPointer(pointer), None) => {
                     if *volatile {
                         let (memory, world) = state
                             .memory
@@ -6076,9 +6148,6 @@ fn execute_instruction(
                                 .store_pointer_value(address, layout, pointer)
                                 .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
                     }
-                }
-                InternalValue::Uninitialized => {
-                    return Err(InterpreterError::UninitializedRead { block });
                 }
             }
             let next_memory_token = state.fresh_token()?;

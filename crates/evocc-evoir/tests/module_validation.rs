@@ -70,6 +70,7 @@ fn pointer_load(ty: EvoIRType) -> Module {
                 mem_out: mem(7),
                 world_out: world(8),
                 volatile: false,
+                mask: None,
             },
         ],
         vec![value(6, ty), mem(7), world(8)],

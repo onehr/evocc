@@ -502,19 +502,24 @@ pub struct ByteSequence {
     pointer_fragments: Vec<Option<PointerFragment>>,
 }
 
-/// A transported object representation, including indeterminate bytes and
+/// The initializedness mask of a byte whose eight bits are all initialized.
+/// Bit `i` of a mask is set when bit `i` of its byte is initialized. Only a
+/// bit-field store sets part of a mask.
+const INITIALIZED_BYTE: u8 = u8::MAX;
+
+/// A transported object representation, including indeterminate bits and
 /// opaque pointer fragments. Transport is not a semantic read of its bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectRepresentation {
     value: ByteSequence,
-    initialized: Vec<bool>,
+    initialized: Vec<u8>,
 }
 
 impl ObjectRepresentation {
     pub fn uninitialized(size: usize) -> Result<Self, MemoryFault> {
         Ok(Self {
             value: ByteSequence::try_from_bytes(repeat_value(size, 0, size as u64)?)?,
-            initialized: repeat_value(size, false, size as u64)?,
+            initialized: repeat_value(size, 0, size as u64)?,
         })
     }
 
@@ -524,8 +529,9 @@ impl ObjectRepresentation {
     pub fn bytes(&self) -> &[u8] {
         self.value.bytes()
     }
-    pub fn initialized(&self) -> &[bool] {
-        &self.initialized
+    /// Whether each byte has all eight of its bits initialized.
+    pub fn initialized(&self) -> Vec<bool> {
+        complete_bytes(&self.initialized)
     }
 
     pub fn write_integer(
@@ -557,13 +563,17 @@ impl ObjectRepresentation {
         };
         self.value.bytes[offset..end].copy_from_slice(slice);
         self.value.pointer_fragments[offset..end].fill(None);
-        self.initialized[offset..end].fill(raw.is_some());
+        self.initialized[offset..end].fill(if raw.is_some() { INITIALIZED_BYTE } else { 0 });
         Ok(())
     }
 
     pub fn read_integer(&self, offset: usize, width: usize, order: ByteOrder) -> Option<u128> {
         let end = offset.checked_add(width)?;
-        if width > 16 || end > self.size() || !self.initialized[offset..end].iter().all(|bit| *bit)
+        if width > 16
+            || end > self.size()
+            || !self.initialized[offset..end]
+                .iter()
+                .all(|bits| *bits == INITIALIZED_BYTE)
         {
             return None;
         }
@@ -1083,7 +1093,8 @@ struct ObjectRecord {
     address: u64,
     info: ObjectInfo,
     bytes: Vec<u8>,
-    initialized: Vec<bool>,
+    /// One initializedness mask per byte; see [`INITIALIZED_BYTE`].
+    initialized: Vec<u8>,
     pointer_fragments: Vec<Option<PointerFragment>>,
 }
 
@@ -1585,7 +1596,7 @@ impl MemoryState {
             .expect("object checked before cloning");
         for (initialized, fragment) in object.initialized.iter().zip(&mut object.pointer_fragments)
         {
-            if *initialized && fragment.is_none() {
+            if *initialized == INITIALIZED_BYTE && fragment.is_none() {
                 *fragment = Some(PointerFragment::STATIC_INITIALIZER);
             }
         }
@@ -1796,7 +1807,9 @@ impl MemoryState {
             .ok_or(MemoryFault::UnknownObject {
                 object: address.object,
             })?;
-        Ok(object.initialized[range].iter().all(|bit| *bit))
+        Ok(object.initialized[range]
+            .iter()
+            .all(|bits| *bits == INITIALIZED_BYTE))
     }
 
     pub fn load_bytes(
@@ -1815,7 +1828,7 @@ impl MemoryState {
             })?;
         if let Some(relative) = object.initialized[range.clone()]
             .iter()
-            .position(|bit| !*bit)
+            .position(|bits| *bits != INITIALIZED_BYTE)
         {
             let first_uninitialized = u64::try_from(range.start + relative).map_err(|_| {
                 MemoryFault::HostSizeExceeded {
@@ -1863,7 +1876,7 @@ impl MemoryState {
                 access,
                 ObservedValue::Representation {
                     bytes: representation.value.bytes.clone(),
-                    initialized: representation.initialized.clone(),
+                    initialized: representation.initialized(),
                 },
             )?
         } else {
@@ -1908,7 +1921,7 @@ impl MemoryState {
                 access,
                 ObservedValue::Representation {
                     bytes: representation.value.bytes.clone(),
-                    initialized: representation.initialized.clone(),
+                    initialized: representation.initialized(),
                 },
             )?
         } else {
@@ -1943,7 +1956,7 @@ impl MemoryState {
                 object: address.object,
             })?;
         object.bytes[range.clone()].copy_from_slice(&value.bytes);
-        object.initialized[range.clone()].fill(true);
+        object.initialized[range.clone()].fill(INITIALIZED_BYTE);
         object.pointer_fragments[range].clone_from_slice(&value.pointer_fragments);
         Ok(next)
     }
@@ -1986,7 +1999,7 @@ impl MemoryState {
         let object = &self.objects[&resolved.object];
         let observed = ObservedValue::Representation {
             bytes: clone_slice(&object.bytes[range.clone()], access.size_bytes)?,
-            initialized: clone_slice(&object.initialized[range], access.size_bytes)?,
+            initialized: complete_bytes(&object.initialized[range]),
         };
         let mut world = world.clone();
         if volatile.reads() {
@@ -2256,7 +2269,7 @@ impl MemoryState {
             .get_mut(&address.object)
             .ok_or(MemoryFault::InvalidArgumentList)?;
         object.bytes[range.clone()].fill(0);
-        object.initialized[range.clone()].fill(true);
+        object.initialized[range.clone()].fill(INITIALIZED_BYTE);
         object.pointer_fragments[range].fill(None);
         if let Some(identity) = identity {
             next.argument_lists.insert(address, identity);
@@ -2284,6 +2297,80 @@ impl MemoryState {
     ) -> Result<Self, MemoryFault> {
         let representation = encode_integer(self.config.byte_order, access.size_bytes, value)?;
         self.store_bytes(address, access, &representation)
+    }
+
+    /// Load an integer of which only the bits that `demanded` selects must
+    /// be initialized. Every bit of the result is the bit that memory holds;
+    /// a bit outside `demanded` can be uninitialized, and then its value is
+    /// one that the program never stored. A bit-field read demands its own
+    /// bits, and the read of a bit-field store demands none.
+    pub fn load_integer_bits(
+        &self,
+        address: Pointer,
+        access: AccessLayout,
+        demanded: u128,
+    ) -> Result<u128, MemoryFault> {
+        validate_integer_width(access.size_bytes)?;
+        let address = self.resolve_pointer(address)?;
+        self.check_argument_list_access(address, access, false)?;
+        let range = self.checked_range(address, access)?;
+        let object = self
+            .objects
+            .get(&address.object)
+            .ok_or(MemoryFault::UnknownObject {
+                object: address.object,
+            })?;
+        let demanded = encode_integer(self.config.byte_order, access.size_bytes, demanded)?;
+        if let Some(relative) = demanded
+            .bytes
+            .iter()
+            .zip(&object.initialized[range.clone()])
+            .position(|(wanted, present)| wanted & !present != 0)
+        {
+            let first_uninitialized = u64::try_from(range.start + relative).map_err(|_| {
+                MemoryFault::HostSizeExceeded {
+                    size_bytes: access.size_bytes,
+                }
+            })?;
+            return Err(MemoryFault::UninitializedRead {
+                address,
+                size_bytes: access.size_bytes,
+                first_uninitialized,
+            });
+        }
+        decode_integer(self.config.byte_order, &object.bytes[range])
+    }
+
+    /// Store every bit of an integer, but initialize only the bits that
+    /// `initializing` selects. Every other bit keeps its initializedness, so
+    /// a bit-field store initializes its own bits and no neighbour's.
+    pub fn store_integer_bits(
+        &self,
+        address: Pointer,
+        access: AccessLayout,
+        value: u128,
+        initializing: u128,
+    ) -> Result<Self, MemoryFault> {
+        let representation = encode_integer(self.config.byte_order, access.size_bytes, value)?;
+        let initializing = encode_integer(self.config.byte_order, access.size_bytes, initializing)?;
+        let address = self.resolve_pointer(address)?;
+        let mut next = self.store_bytes(address, access, &representation)?;
+        let range = self.checked_range(address, access)?;
+        let previous = &self.objects[&address.object].initialized[range.clone()];
+        let object = next
+            .objects
+            .get_mut(&address.object)
+            .ok_or(MemoryFault::UnknownObject {
+                object: address.object,
+            })?;
+        for ((bits, before), added) in object.initialized[range]
+            .iter_mut()
+            .zip(previous)
+            .zip(&initializing.bytes)
+        {
+            *bits = before | added;
+        }
+        Ok(next)
     }
 
     pub fn load_pointer(
@@ -2503,7 +2590,15 @@ impl MemoryState {
         let (bytes, initialized, pointer_fragments) = match contents {
             AllocationContents::InitialState(initial) => (
                 repeat_value(length, 0_u8, layout.size_bytes)?,
-                repeat_value(length, initial == InitialState::Zeroed, layout.size_bytes)?,
+                repeat_value(
+                    length,
+                    if initial == InitialState::Zeroed {
+                        INITIALIZED_BYTE
+                    } else {
+                        0
+                    },
+                    layout.size_bytes,
+                )?,
                 repeat_value(
                     length,
                     (initial == InitialState::Zeroed)
@@ -2524,7 +2619,7 @@ impl MemoryState {
                 }
                 (
                     clone_slice(&value.bytes, layout.size_bytes)?,
-                    repeat_value(length, true, layout.size_bytes)?,
+                    repeat_value(length, INITIALIZED_BYTE, layout.size_bytes)?,
                     repeat_value(length, None, layout.size_bytes)?,
                 )
             }
@@ -2824,6 +2919,11 @@ fn validate_integer_width(size_bytes: u64) -> Result<(), MemoryFault> {
         return Err(MemoryFault::IntegerWidthUnsupported { size_bytes });
     }
     Ok(())
+}
+
+/// Whether each byte of `masks` has all eight of its bits initialized.
+fn complete_bytes(masks: &[u8]) -> Vec<bool> {
+    masks.iter().map(|bits| *bits == INITIALIZED_BYTE).collect()
 }
 
 fn repeat_value<T: Clone>(length: usize, value: T, size_bytes: u64) -> Result<Vec<T>, MemoryFault> {

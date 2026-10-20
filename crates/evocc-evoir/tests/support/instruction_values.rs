@@ -453,6 +453,7 @@ pub fn sentinel_instructions() -> Vec<Inst> {
             mem_out: mem(1354),
             world_out: world(1355),
             volatile: true,
+            mask: Some(5),
         },
         Inst::Store {
             address: pointer(1360),
@@ -462,6 +463,7 @@ pub fn sentinel_instructions() -> Vec<Inst> {
             mem_out: mem(1364),
             world_out: world(1365),
             volatile: true,
+            mask: Some(6),
         },
         Inst::Copy {
             destination: pointer(1366),

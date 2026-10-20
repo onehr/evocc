@@ -902,17 +902,35 @@ impl FunctionRenderer {
                 mem_out,
                 world_out,
                 volatile,
-            } => format!(
-                "({}, {}, {}) = load{} {}, {}, {} : {}",
-                render_value(result),
-                render_value(mem_out),
-                render_value(world_out),
-                if *volatile { " volatile" } else { "" },
-                render_value(mem_in),
-                render_value(world_in),
-                render_value(address),
-                render_type(&result.ty)
-            ),
+                mask,
+            } => {
+                let volatile = if *volatile { " volatile" } else { "" };
+                match mask {
+                    None => format!(
+                        "({}, {}, {}) = load{} {}, {}, {} : {}",
+                        render_value(result),
+                        render_value(mem_out),
+                        render_value(world_out),
+                        volatile,
+                        render_value(mem_in),
+                        render_value(world_in),
+                        render_value(address),
+                        render_type(&result.ty)
+                    ),
+                    Some(mask) => format!(
+                        "({}, {}, {}) = load{} {}, {}, {} : {} [mask={}]",
+                        render_value(result),
+                        render_value(mem_out),
+                        render_value(world_out),
+                        volatile,
+                        render_value(mem_in),
+                        render_value(world_in),
+                        render_value(address),
+                        render_type(&result.ty),
+                        mask
+                    ),
+                }
+            }
             Inst::Store {
                 address,
                 value,
@@ -921,16 +939,33 @@ impl FunctionRenderer {
                 mem_out,
                 world_out,
                 volatile,
-            } => format!(
-                "({}, {}) = store{} {}, {}, {}, {}",
-                render_value(mem_out),
-                render_value(world_out),
-                if *volatile { " volatile" } else { "" },
-                render_value(mem_in),
-                render_value(world_in),
-                render_value(address),
-                render_value(value)
-            ),
+                mask,
+            } => {
+                let volatile = if *volatile { " volatile" } else { "" };
+                match mask {
+                    None => format!(
+                        "({}, {}) = store{} {}, {}, {}, {}",
+                        render_value(mem_out),
+                        render_value(world_out),
+                        volatile,
+                        render_value(mem_in),
+                        render_value(world_in),
+                        render_value(address),
+                        render_value(value)
+                    ),
+                    Some(mask) => format!(
+                        "({}, {}) = store{} {}, {}, {}, {} [mask={}]",
+                        render_value(mem_out),
+                        render_value(world_out),
+                        volatile,
+                        render_value(mem_in),
+                        render_value(world_in),
+                        render_value(address),
+                        render_value(value),
+                        mask
+                    ),
+                }
+            }
             Inst::Copy {
                 destination,
                 source,
@@ -1609,6 +1644,7 @@ mod tests {
                     mem_out: memory(4),
                     world_out: world(5),
                     volatile: false,
+                    mask: None,
                 },
                 "(%v0, %v4, %v5) = load %v2, %v3, %v1 : bits<32>",
             ),
@@ -1621,6 +1657,7 @@ mod tests {
                     mem_out: memory(4),
                     world_out: world(5),
                     volatile: false,
+                    mask: None,
                 },
                 "(%v4, %v5) = store %v2, %v3, %v1, %v0",
             ),
@@ -1633,6 +1670,7 @@ mod tests {
                     mem_out: memory(4),
                     world_out: world(5),
                     volatile: true,
+                    mask: None,
                 },
                 "(%v0, %v4, %v5) = load volatile %v2, %v3, %v1 : bits<32>",
             ),
@@ -1645,6 +1683,7 @@ mod tests {
                     mem_out: memory(4),
                     world_out: world(5),
                     volatile: true,
+                    mask: None,
                 },
                 "(%v4, %v5) = store volatile %v2, %v3, %v1, %v0",
             ),

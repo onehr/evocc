@@ -284,6 +284,7 @@ fn roundtrip_module(stored: StoredProvenance) -> Module {
                 mem_out: stored_memory.clone(),
                 world_out: stored_world.clone(),
                 volatile: false,
+                mask: None,
             },
             Inst::PointerValid {
                 mem_in: stored_memory,
@@ -304,6 +305,7 @@ fn roundtrip_module(stored: StoredProvenance) -> Module {
                 mem_out: loaded_memory.clone(),
                 world_out: loaded_world.clone(),
                 volatile: false,
+                mask: None,
             },
             Inst::Const(argument_value.clone(), 41),
             Inst::IndirectCall {

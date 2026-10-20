@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.18.1** | **Pinned ground truth** | Darwin `wchar_t` on 2026-10-21
+**Revision 2.19.0** | **Pinned ground truth** | bit-field initializedness on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -863,6 +863,8 @@ integers is thereby PNVI-style: address arithmetic on integers is ordinary
 (%m1, %w1) = store %m0, %w0, %ptr, %val
 (%v, %m1, %w1) = load volatile %m0, %w0, %ptr : Type
 (%m1, %w1) = store volatile %m0, %w0, %ptr, %val
+(%v, %m1, %w1) = load %m0, %w0, %ptr : bits<N> [mask=M]
+(%m1, %w1) = store %m0, %w0, %ptr, %val [mask=M]
 ```
 
 | Field | Description |
@@ -875,6 +877,7 @@ integers is thereby PNVI-style: address arithmetic on integers is ordinary
 | `%val` | Value to store. |
 | `Type` | The type being loaded. |
 | `volatile` | Optional access marker; absence means ordinary access. |
+| `mask=M` | Optional bit mask of a non-volatile `bits<N>` access, with `N` 8, 16, 32, 64 or 128. Bit `i` of `M` selects bit `i` of the value. `M` must leave at least one bit unselected: an access of every bit has no mask. |
 
 **Object copy.**
 
@@ -890,8 +893,8 @@ integers is thereby PNVI-style: address arithmetic on integers is ordinary
 | `align=A` | Access alignment for both ranges. |
 
 `copy` transfers the object representation of `N` bytes from `%src` to `%dst`
-together with each byte's initializedness: an uninitialized source byte makes
-the destination byte uninitialized and reports nothing (Section 5 already
+together with each bit's initializedness: an uninitialized source bit makes
+the destination bit uninitialized and reports nothing (Section 5 already
 lets a copy move uninitialized bytes; only a scalar `load` of one reports
 `E3001`). Stored pointer bytes keep their provenance representation. The
 two ranges must be identical or disjoint; any other overlap reports `E3027`.
@@ -905,7 +908,8 @@ uses `copy.volatile.read`, `copy.volatile.write` or `copy.volatile.readwrite`
 with the same operands and results: these require N in {1,2,4,8} and A >= N,
 emit one source read and/or one destination write respectively (read first),
 and transfer the same representation metadata without interpreting padding.
-Each observable event records its width and the bytes' initializedness; even
+Each observable event records its width and the bytes' initializedness, a
+byte counting as initialized when all eight of its bits are; even
 an identical-range copy retains the requested events. No atomicity or MMIO
 contract is implied. Larger/misaligned unions remain E2922; ordinary volatile
 record member access follows 10.1.3.
@@ -915,15 +919,26 @@ record member access follows 10.1.3.
 `load(%m0, %w0, %ptr)`: returns the value of type `Type` stored at address
 `%ptr`, plus explicitly threaded `%m1` and `%w1` tokens. `%m1` denotes the
 same immutable memory snapshot as `%m0`. The load fails with `E3001` when any
-requested byte is uninitialized, and otherwise uses the exact pointer,
+requested bit is uninitialized, and otherwise uses the exact pointer,
 lifetime, bounds, and alignment classification from Section 6.1.
 
 `store(%m0, %w0, %ptr, %val)`: returns a new memory token `%m1` that is
 identical to `%m0` except that the value at address `%ptr` has been replaced
-with `%val` and the written bytes are initialized, plus the explicitly
+with `%val` and the written bits are initialized, plus the explicitly
 threaded `%w1`. Storing and later loading a pointer preserves its complete
 provenance and offset; a partial non-pointer overwrite of its object
 representation makes a later pointer load fail with `E3013`.
+
+**Masked accesses.** `load ... [mask=M]` reports `E3001` only when a bit
+that `M` selects is uninitialized. Each bit of its result is the bit that
+memory holds. A bit that `M` does not select can be uninitialized; its value
+is then one that the program never stored. `store ... [mask=M]` writes every
+bit of `%val`. Afterwards the bits that `M` selects are initialized, and every
+other bit keeps its initializedness. Both forms keep every other check of the
+unmasked forms, and a masked store still makes a later pointer load of the
+bytes it writes fail with `E3013`. A mask changes no value, so native code
+emits the unmasked access. The only producer is the lowering of a
+non-volatile bit-field access (10.1.6).
 
 For an ordinary access, `%w1` denotes the unchanged world state through a
 fresh SSA identity. A successful volatile access appends exactly one ordered
@@ -998,7 +1013,7 @@ size `N` and alignment `N`, as `atomic.load` does. Every buffer is a
 greater than `N`; the buffers use the access checks of `copy`. A load admits
 the orders of `atomic.load`, a store those of `atomic.store`, and an exchange
 or a compare-exchange every order. Every transfer moves the object
-representation as `copy` does: each byte keeps its initializedness, and
+representation as `copy` does: each bit keeps its initializedness, and
 stored pointer bytes keep their provenance. `atomic.copy.load` moves the
 object to `%dst`. `atomic.copy.store` moves `%src` to the object.
 `atomic.copy.exchange` moves `%src` to the object and the old object to
@@ -2345,10 +2360,16 @@ live allocation identity and no bytes: initializing or copying it accesses
 nothing, a byte access reports `E3011`, and an access after its lifetime
 reports `E3010`. A zero-sized global has empty `bytes=` and `initialized=`
 fields. Distinct zero-sized objects need not have distinct addresses.
-Object bytes and one initialized bit per byte are distinct state. A store marks
-exactly its destination range initialized. A load of any range containing an
-uninitialized byte reports `E3001`; merely allocating, copying, passing, or
-branching with an uninitialized object does not report a diagnostic.
+Object bytes and one initialized flag per bit are distinct state. A store marks
+exactly its destination bits initialized: every bit of its range, or the bits
+of its mask (3.8). A load reports `E3001` when a bit that it requests is
+uninitialized: every bit of its range, or the bits of its mask. Merely
+allocating, copying, passing, or branching with an uninitialized object does
+not report a diagnostic. A byte is partly initialized only after a masked
+store to it, or after an operation that moves such a byte unchanged, such as
+`copy`. A program without a bit-field store has no such byte. The
+`initialized=` field of a global has one flag per byte, for all eight of its
+bits.
 
 ### 5.3 Object Representations and Pointer Provenance
 
@@ -2399,8 +2420,8 @@ Memory faults use this deterministic precedence:
 5. An access is misaligned unless `object.align_bytes >= required_alignment`
    and `byte_offset mod required_alignment == 0`.
 6. A store to string-literal storage is a write to a read-only object.
-7. A load whose requested byte range is not fully initialized is an
-   uninitialized read.
+7. A load that requests an uninitialized bit (5.2) is an uninitialized
+   read.
 8. After an initialized pointer-sized range has been read, a pointer result
    whose bytes do not have one exact provenance fragment is an invalid pointer
    representation.
@@ -2504,7 +2525,7 @@ each code's meaning and deliberately does not repeat the text.
 
 | Diagnostic | Meaning |
 |---|---|
-| `E3001` | At least one loaded byte is uninitialized. |
+| `E3001` | At least one bit that a load requests is uninitialized. |
 | `E3009` | The accessed pointer has `Null` provenance. |
 | `E3010` | The named object's lifetime has ended. |
 | `E3011` | Pointer formation or the complete access range is outside its object, or checked offset arithmetic overflowed. |
@@ -2564,7 +2585,7 @@ trapping, which lets definite assignment on a later path overwrite it. Any
 semantic consumption—arithmetic, comparison, conversion, branch condition,
 ordinary call argument, or return—reports `E3001`.
 It is not a zero value and it must never be silently replaced by one. Memory
-initializedness uses the separate per-byte object bitmap and follows the same
+initializedness uses the separate per-bit object state and follows the same
 consume-time rule: transporting a pointer or memory token does not trap; the
 executed load does.
 
@@ -3813,9 +3834,9 @@ inst_body :=
   | value_name " = access_in_bounds " value_name ", " value_name
         " [size=" integer ", align=" integer "]"
   | "(" value_name ", " value_name ", " value_name ") = load" volatile_marker
-        " " value_name ", " value_name ", " value_name " : " type
+        " " value_name ", " value_name ", " value_name " : " type [mask_mark]
   | "(" value_name ", " value_name ") = store" volatile_marker
-        " " value_name ", " value_name ", " value_name ", " value_name
+        " " value_name ", " value_name ", " value_name ", " value_name [mask_mark]
   | "(" value_name ", " value_name ", " value_name ") = atomic.load " atomic_order volatile_marker
         " " value_name ", " value_name ", " value_name " : " type
   | "(" value_name ", " value_name ") = atomic.store " atomic_order volatile_marker
@@ -3884,6 +3905,7 @@ ub_reason        := "division_by_zero" | "remainder_by_zero" | "signed_overflow"
                   | "floating_to_integer"
 trap_reason      := "scalar_function_fell_off_end" | "unreachable_reached" | "builtin_trap"
 volatile_marker  := ε | " volatile"
+mask_mark        := " [mask=" integer "]"
 atomic_order     := "relaxed" | "consume" | "acquire" | "release" | "acq_rel" | "seq_cst"
 atomic_rmw_op    := "add" | "sub" | "and" | "or" | "xor" | "nand" | "exchange" | "cmpxchg"
 atomic_copy_op   := "load" | "store" | "exchange" | "cmpxchg"
@@ -3993,6 +4015,8 @@ ub.assume.<> <>
 <> = access_in_bounds <>, <> [size=<>, align=<>]
 (<>, <>, <>) = load<> <>, <>, <> : <>
 (<>, <>) = store<> <>, <>, <>, <>
+(<>, <>, <>) = load<> <>, <>, <> : <> [mask=<>]
+(<>, <>) = store<> <>, <>, <>, <> [mask=<>]
 (<>) = copy<> <>, <>, <>, <> [size=<>, align=<>]
 (<>, <>, <>) = atomic.load <><> <>, <>, <> : <>
 (<>, <>) = atomic.store <><> <>, <>, <>, <>
@@ -4026,7 +4050,8 @@ effects { reads=<>, writes=<>, volatile=<>, atomic=<>, io=<>, fenv=<>, may_trap=
 ```
 
 `load<>` and `store<>` show the optional volatile marker, which is either empty
-or one space followed by `volatile`. `call<> @` shows the optional mark of a
+or one space followed by `volatile`. A masked load or store has its own shape,
+because its mask is a field. `call<> @` shows the optional mark of a
 direct call, which is either empty or `.returns_twice` (3.10). `ret` appears
 twice because a function returning nothing emits the mnemonic alone; a grammar
 admitting only the second form could not represent a legal module.
@@ -4143,6 +4168,9 @@ they describe is not a legal module. These are the checks Section 2.4, Section
   symbol/signature pair does not name an exact function definition.
 - A function whose calling convention is not `target_default` in this profile.
 - A `size`, `align`, `scale` or width outside the range its definition allows.
+- A mask on a volatile access or on an access that is not `bits<8>`,
+  `bits<16>`, `bits<32>`, `bits<64>` or `bits<128>`, or a mask that selects
+  every bit of the access or a bit beyond it (3.8).
 
 The two categories carry distinct exit statuses in Section 11.4, because a file
 that cannot be read and a module that must not be trusted are different
@@ -4307,7 +4335,9 @@ The pointer must not escape, and every incoming edge, including backedges,
 must agree on its object and offset. Each allocation site must execute at
 most once. The pass keeps `alloca`, `lifetime.end`, pointer and bounds checks.
 It must show that every removed store consumes initialized bits and that
-every removed load is preceded by initialization on all incoming paths.
+every removed load is preceded by initialization on all incoming paths. A
+masked store initializes only part of its cell, so it never counts as that
+initialization.
 Allocation and lifetime end clear initialization facts. Uninitialized SSA
 seeds are transport only; they must not reach a semantic read.
 
@@ -4662,7 +4692,7 @@ Bitfields lower to load-modify-store sequences using bitwise operations:
 ; s.f = 5;
 
 %m1 = access_in_bounds %m0, %s_addr [size=1, align=1]
-(%old, %m2, %w1) = load %m1, %w0, %s_addr : bits<8>      ; load containing byte
+(%old, %m2, %w1) = load %m1, %w0, %s_addr : bits<8> [mask=0] ; load containing byte
 %mask   = const.bits<8> 248
 %five   = const.bits<8> 5
 %zero   = const.bits<8> 0
@@ -4670,8 +4700,26 @@ Bitfields lower to load-modify-store sequences using bitwise operations:
 %shift  = shl.bits<8> %five, %zero                        ; shift value into place
 %new    = or.bits<8> %masked, %shift                      ; insert field
 %m3 = access_in_bounds %m2, %s_addr [size=1, align=1]
-(%m4, %w2) = store %m3, %w1, %s_addr, %new               ; write back
+(%m4, %w2) = store %m3, %w1, %s_addr, %new [mask=7]      ; write back
 ```
+
+**Bit-field initializedness.** A store to a bit-field writes only its own
+bits. It is never a read of another member, and every other bit keeps its
+initializedness. A non-volatile bit-field access goes byte by byte, and the
+masks of Section 3.8 state the rule:
+
+- A read loads each byte that the field touches. The load mask selects the
+  field's bits of that byte, so only those bits must be initialized.
+- A store writes a byte that the field covers completely with an unmasked
+  store. For a byte that the field covers in part, the load has `[mask=0]`
+  and requests no bit, and the store mask selects the field's bits.
+
+A later read of a member that was never stored is `E3001`; a read of a stored
+member is not. A record copy moves the state of each bit. The C-HIR
+interpreter applies the same rule to the same bytes. Native code is the same
+sequence without masks. A volatile bit-field access keeps the container rule
+below: its read of the container is one volatile event, and an uninitialized
+neighbour makes that read `E3001`.
 
 **Volatile bit-fields.** A read of a volatile bit-field accesses its declared
 allocation container. A write is a read-modify-write of that container that
@@ -8114,6 +8162,8 @@ Section 3 defines each instruction and Section 9.3 gives its exact spelling.
 | | `access_in_bounds` | `mem<all>` | `%m`, `%ptr`, size, align | yes |
 | | `load [volatile]` | Type, `mem<all>`, `world` | `%m`, `%w`, `%ptr` | yes |
 | | `store [volatile]` | `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` : Type | yes |
+| | `load ... [mask=M]` | `bits<N>`, `mem<all>`, `world` | `%m`, `%w`, `%ptr`, mask | yes; `E3001` only for a selected bit |
+| | `store ... [mask=M]` | `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` : `bits<N>`, mask | yes |
 | | `copy`, `copy.volatile.read`, `copy.volatile.write`, `copy.volatile.readwrite` | `mem<all>`, `world` | `%m`, `%w`, `%dst`, `%src`, size, align | yes; `E3027` for a partial overlap |
 | | `atomic.load order [volatile]` | Type, `mem<all>`, `world` | `%m`, `%w`, `%ptr` | yes |
 | | `atomic.store order [volatile]` | `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` | yes |
@@ -8173,6 +8223,17 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.19.0, 2026-10-21.** Section 5.2 tracks initializedness per bit,
+and Section 3.8 adds an optional `mask` field to `load` and `store` of
+`bits<N>`. A load mask selects the bits that must be initialized; a store
+mask selects the bits that become initialized, and the other bits keep their
+state. `copy` moves the state of each bit. Section 10.1.6 lowers a
+non-volatile bit-field access with these masks, so a store to a bit-field is
+not a read of its neighbours, and a read of a never-stored member stays
+`E3001`. Sections 9.3, 9.3.1 and 9.5 give the syntax and its rejections.
+Native code does not change. No registry or Lean rule domain changes; the
+`core-v1` path admits no masked access.
 
 **Revision 2.18.1, 2026-10-21.** Section 10.5 corrects the wide character
 types of the Darwin target. They follow Apple clang: `wchar_t` and `wint_t`

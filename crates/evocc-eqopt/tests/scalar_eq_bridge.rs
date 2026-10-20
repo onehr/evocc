@@ -115,6 +115,7 @@ fn effect_nodes_are_refused_at_the_bridge_boundary() {
             ty: EvoIRType::World,
         },
         volatile: false,
+        mask: None,
     };
     let error = ingest_scalar_inst(&load).expect_err("load must not enter scalar egraph");
     assert_eq!(error.code(), "EQ_EFFECT_EXCLUDED");

@@ -7700,9 +7700,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let at = address
                     .checked_offset(i64::from(position / 8))
                     .map_err(|error| self.memory_error(error, span))?;
+                // Only the field's own bits of the byte must be initialized.
+                let own = ((1u128 << count) - 1) << within;
                 let byte = self
                     .memory
-                    .load_integer(at, AccessLayout::new(1, 1))
+                    .load_integer_bits(at, AccessLayout::new(1, 1), own)
                     .map_err(|error| self.memory_error(error, span))?;
                 raw |= ((byte >> within) & ((1u128 << count) - 1)) << consumed;
                 consumed += count;
@@ -7767,17 +7769,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 .checked_offset(i64::from(position / 8))
                 .map_err(|error| self.memory_error(error, span))?;
             let mask = ((1u128 << count) - 1) << within;
+            // The store keeps the other bits of a partial byte. It reads none
+            // of them, and it initializes only the field's own bits.
             let original = if count == 8 {
                 0
             } else {
                 self.memory
-                    .load_integer(at, AccessLayout::new(1, 1))
+                    .load_integer_bits(at, AccessLayout::new(1, 1), 0)
                     .map_err(|error| self.memory_error(error, span))?
             };
             let byte = (original & !mask) | (((value.raw_bits() >> consumed) << within) & mask);
             self.memory = self
                 .memory
-                .store_integer(at, AccessLayout::new(1, 1), byte)
+                .store_integer_bits(at, AccessLayout::new(1, 1), byte, mask)
                 .map_err(|error| self.memory_error(error, span))?;
             consumed += count;
         }

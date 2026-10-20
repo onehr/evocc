@@ -445,7 +445,7 @@ impl MemoryState {
         };
         let observe = |value: &ObjectRepresentation| ObservedValue::Representation {
             bytes: value.bytes().to_vec(),
-            initialized: value.initialized().to_vec(),
+            initialized: value.initialized(),
         };
         let load = op == AtomicCopyOp::Load || !exchanged;
         let mut world =

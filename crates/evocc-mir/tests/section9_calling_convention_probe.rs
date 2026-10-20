@@ -247,6 +247,7 @@ fn fold(
                     mem_out: mem_out.clone(),
                     world_out: world_out.clone(),
                     volatile: false,
+                    mask: None,
                 });
                 mem = mem_out;
                 world = world_out;

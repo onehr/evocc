@@ -460,6 +460,8 @@ pub(super) fn promote(function: &mut Function) {
     }
     let keys: Vec<_> = cells.keys().copied().collect();
     let cell_indices: BTreeMap<_, _> = keys.iter().enumerate().map(|(i, k)| (*k, i)).collect();
+    // A masked store initializes only some bits of its cell, so it never
+    // makes the cell definitely initialized (EvoIR 3.8).
     let transfer = |inst: &Inst, state: &mut Vec<bool>| match inst {
         Inst::Alloca { result, .. } => {
             for (i, key) in keys.iter().enumerate() {
@@ -468,7 +470,11 @@ pub(super) fn promote(function: &mut Function) {
                 }
             }
         }
-        Inst::Store { address, .. } => {
+        Inst::Store {
+            address,
+            mask: None,
+            ..
+        } => {
             if let Some(index) = cell(&facts, address).and_then(|k| cell_indices.get(&k)) {
                 state[*index] = true;
             }
@@ -696,6 +702,7 @@ pub(super) fn promote(function: &mut Function) {
                             world_in: world_in.clone(),
                             world_out: world_out.clone(),
                             volatile: false,
+                            mask: None,
                         });
                     }
                 }

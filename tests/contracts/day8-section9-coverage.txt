@@ -89,7 +89,7 @@ Inst.ICmp(result,operation,lhs,rhs)|%v1230 = icmp.eq %v1231, %v1232
 Inst.IndirectCall(results,callee,args,arg_marks,mem_in,world_in,mem_out,world_out)|(%v1390, %v1391, %v1397, %v1398) = call %v1392(%v1393, %v1394 byval(16, 16), %v1395, %v1396)
 Inst.LShr(result,lhs,rhs)|%v1090 = lshr.bits<37> %v1091, %v1092
 Inst.LifetimeEnd(mem_in,world_in,pointer,mem_out,world_out)|(%v1323, %v1324) = lifetime.end %v1320, %v1321, %v1322
-Inst.Load(result,address,mem_in,world_in,mem_out,world_out,volatile)|(%v1350, %v1354, %v1355) = load volatile %v1352, %v1353, %v1351 : bits<37>
+Inst.Load(result,address,mem_in,world_in,mem_out,world_out,volatile,mask)|(%v1350, %v1354, %v1355) = load volatile %v1352, %v1353, %v1351 : bits<37> [mask=5]
 Inst.Mul(result,lhs,rhs)|%v1040 = mul.bits<37> %v1041, %v1042
 Inst.Or(result,lhs,rhs)|%v1110 = or.bits<37> %v1111, %v1112
 Inst.PointerCast(result,operand)|%v1430 = ptr.to_int %v1431
@@ -107,7 +107,7 @@ Inst.SignedDivRemNoOverflow(result,dividend,divisor)|%v1170 = signed_div_rem_no_
 Inst.SignedMulDefined(result,lhs,rhs)|%v1150 = signed_mul_defined %v1151, %v1152
 Inst.SignedShlDefined(result,shifted,amount,amount_signed)|%v1190 = signed_shl_defined.signed %v1191, %v1192
 Inst.SignedSubDefined(result,lhs,rhs)|%v1140 = signed_sub_defined %v1141, %v1142
-Inst.Store(address,value,mem_in,world_in,mem_out,world_out,volatile)|(%v1364, %v1365) = store volatile %v1362, %v1363, %v1360, %v1361
+Inst.Store(address,value,mem_in,world_in,mem_out,world_out,volatile,mask)|(%v1364, %v1365) = store volatile %v1362, %v1363, %v1360, %v1361 [mask=6]
 Inst.Sub(result,lhs,rhs)|%v1030 = sub.bits<37> %v1031, %v1032
 Inst.Trap(reason)|trap.scalar_function_fell_off_end
 Inst.Trunc(result,source,target_ty)|%v1420 = trunc.bits<9> %v1421

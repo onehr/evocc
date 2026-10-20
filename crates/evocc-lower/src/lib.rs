@@ -7462,13 +7462,16 @@ impl<'a> FunctionLowerer<'a> {
             })
     }
 
+    /// One byte access. A `mask` names the bits that a load requires to be
+    /// initialized, or the bits that a store initializes (EvoIR 3.8).
     fn emit_byte_access(
         &mut self,
         address: Value,
         stored: Option<Value>,
+        mask: Option<u128>,
         state: &mut State,
     ) -> Result<Value, LowerError> {
-        self.emit_integer_access(address, stored, CIntegerType::UCHAR, false, state)
+        self.emit_integer_access(address, stored, CIntegerType::UCHAR, false, mask, state)
     }
 
     fn emit_integer_access(
@@ -7477,6 +7480,7 @@ impl<'a> FunctionLowerer<'a> {
         stored: Option<Value>,
         integer: CIntegerType,
         volatile: bool,
+        mask: Option<u128>,
         state: &mut State,
     ) -> Result<Value, LowerError> {
         let mem_in = self.token(state, EnvKey::Memory)?.value;
@@ -7507,6 +7511,7 @@ impl<'a> FunctionLowerer<'a> {
                     mem_out: mem_out.clone(),
                     world_out: world_out.clone(),
                     volatile,
+                    mask,
                 },
             )?;
             value
@@ -7522,6 +7527,7 @@ impl<'a> FunctionLowerer<'a> {
                     mem_out: mem_out.clone(),
                     world_out: world_out.clone(),
                     volatile,
+                    mask,
                 },
             )?;
             result
@@ -7589,7 +7595,9 @@ impl<'a> FunctionLowerer<'a> {
             let count = (8 - within).min(field.width_bits - consumed);
             let byte_address =
                 self.constant_offset_address(address.clone(), u64::from(position / 8), state)?;
-            let byte = self.emit_byte_access(byte_address, None, state)?;
+            // The read demands only the field's own bits of this byte.
+            let own = (count < 8).then(|| ((1u128 << count) - 1) << within);
+            let byte = self.emit_byte_access(byte_address, None, own, state)?;
             let shift = self
                 .constant(state, CIntegerType::UINT, u64::from(within))?
                 .value;
@@ -7677,10 +7685,12 @@ impl<'a> FunctionLowerer<'a> {
             self.emit(state, Inst::Shl(shifted.clone(), low, shift))?;
             let selected = self.fresh_value(EvoIRType::Bits(8));
             self.emit(state, Inst::And(selected.clone(), shifted, mask))?;
-            let stored = if count == 8 {
-                selected
+            // A partial byte keeps the other bits: the load reads none of
+            // them, and the store initializes only the field's bits.
+            let (stored, written) = if count == 8 {
+                (selected, None)
             } else {
-                let original = self.emit_byte_access(byte_address.clone(), None, state)?;
+                let original = self.emit_byte_access(byte_address.clone(), None, Some(0), state)?;
                 let keep = self
                     .constant(state, CIntegerType::UCHAR, !mask_bits & 255)?
                     .value;
@@ -7688,9 +7698,9 @@ impl<'a> FunctionLowerer<'a> {
                 self.emit(state, Inst::And(kept.clone(), original, keep))?;
                 let merged = self.fresh_value(EvoIRType::Bits(8));
                 self.emit(state, Inst::Or(merged.clone(), kept, selected))?;
-                merged
+                (merged, Some(u128::from(mask_bits)))
             };
-            self.emit_byte_access(byte_address, Some(stored), state)?;
+            self.emit_byte_access(byte_address, Some(stored), written, state)?;
             consumed += count;
         }
         Ok(value)
@@ -7733,7 +7743,7 @@ impl<'a> FunctionLowerer<'a> {
                 .min((offset + bytes) * 8);
             let count = last - first;
             let at = self.bit_field_unit_address(address.clone(), field, offset, state)?;
-            let raw = self.emit_integer_access(at, None, unit_integer, true, state)?;
+            let raw = self.emit_integer_access(at, None, unit_integer, true, None, state)?;
             let shift = self
                 .constant(state, CIntegerType::UINT, u64::from(first - offset * 8))?
                 .value;
@@ -7813,11 +7823,12 @@ impl<'a> FunctionLowerer<'a> {
             let mask = self.wide_constant(state, unit_integer, mask_bits)?.value;
             let selected = self.emit_raw_binary(state, Inst::And, &positioned, &mask)?;
             let at = self.bit_field_unit_address(address.clone(), field, offset, state)?;
-            let original = self.emit_integer_access(at.clone(), None, unit_integer, true, state)?;
+            let original =
+                self.emit_integer_access(at.clone(), None, unit_integer, true, None, state)?;
             let keep = self.wide_constant(state, unit_integer, !mask_bits)?.value;
             let kept = self.emit_raw_binary(state, Inst::And, &original, &keep)?;
             let merged = self.emit_raw_binary(state, Inst::Or, &kept, &selected)?;
-            self.emit_integer_access(at, Some(merged), unit_integer, true, state)?;
+            self.emit_integer_access(at, Some(merged), unit_integer, true, None, state)?;
         }
         Ok(value)
     }
@@ -8198,6 +8209,7 @@ impl<'a> FunctionLowerer<'a> {
                 mem_out: mem_out.clone(),
                 world_out: world_out.clone(),
                 volatile,
+                mask: None,
             },
         )?;
         self.replace_effect_tokens(state, mem_out, Some(world_out));
@@ -8253,6 +8265,7 @@ impl<'a> FunctionLowerer<'a> {
                 mem_out: mem_out.clone(),
                 world_out: world_out.clone(),
                 volatile,
+                mask: None,
             },
         )?;
         self.replace_effect_tokens(state, mem_out, Some(world_out));
@@ -8654,7 +8667,7 @@ impl<'a> FunctionLowerer<'a> {
                                 state,
                             )?;
                             let zero = self.constant(state, CIntegerType::UCHAR, 0)?.value;
-                            self.emit_byte_access(at, Some(zero), state)?;
+                            self.emit_byte_access(at, Some(zero), None, state)?;
                         }
                         continue;
                     }

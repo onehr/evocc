@@ -1823,6 +1823,7 @@ impl FunctionGen<'_> {
             mem_out: mem_out.clone(),
             world_out: world_out.clone(),
             volatile,
+            mask: None,
         });
         block.mem = mem_out;
         block.world = world_out;
@@ -1855,6 +1856,7 @@ impl FunctionGen<'_> {
             mem_out: mem_out.clone(),
             world_out: world_out.clone(),
             volatile,
+            mask: None,
         });
         block.mem = mem_out;
         block.world = world_out;

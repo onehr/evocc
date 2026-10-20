@@ -1639,6 +1639,7 @@ fn parse_tuple_instruction(
     for (prefix, volatile) in [("load volatile ", true), ("load ", false)] {
         if let Some(rest) = rhs.strip_prefix(prefix) {
             require_count(&result_ids, 3, "load results")?;
+            let (rest, mask) = parse_access_mask(rest)?;
             let (operands, ty) = rest
                 .rsplit_once(" : ")
                 .ok_or_else(|| "malformed load type".to_owned())?;
@@ -1661,12 +1662,14 @@ fn parse_tuple_instruction(
                     ty: EvoIRType::World,
                 },
                 volatile,
+                mask,
             });
         }
     }
     for (prefix, volatile) in [("store volatile ", true), ("store ", false)] {
         if let Some(rest) = rhs.strip_prefix(prefix) {
             require_count(&result_ids, 2, "store results")?;
+            let (rest, mask) = parse_access_mask(rest)?;
             let operands = parse_values(rest, values, false)?;
             require_count(&operands, 4, "store operands")?;
             return Ok(Inst::Store {
@@ -1683,6 +1686,7 @@ fn parse_tuple_instruction(
                     ty: EvoIRType::World,
                 },
                 volatile,
+                mask,
             });
         }
     }
@@ -2280,6 +2284,26 @@ fn parse_named<'a>(text: &'a str, name: &str) -> ParseResult<&'a str> {
     text.strip_prefix(name)
         .and_then(|text| text.strip_prefix('='))
         .ok_or_else(|| format!("missing {name} field").into())
+}
+
+/// Split the optional ` [mask=M]` field from the end of a load or store.
+fn parse_access_mask(text: &str) -> ParseResult<(&str, Option<u128>)> {
+    let Some((rest, field)) = text.rsplit_once(" [mask=") else {
+        return Ok((text, None));
+    };
+    let digits = field
+        .strip_suffix(']')
+        .ok_or_else(|| "malformed access mask".to_owned())?;
+    if digits.is_empty()
+        || (digits.len() > 1 && digits.starts_with('0'))
+        || !digits.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err("access mask is not canonical unsigned decimal".into());
+    }
+    let mask = digits
+        .parse()
+        .map_err(|_| "access mask exceeds 128 bits".to_owned())?;
+    Ok((rest, Some(mask)))
 }
 
 fn parse_canonical_u64(text: &str) -> ParseResult<u64> {

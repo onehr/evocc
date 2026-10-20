@@ -665,11 +665,12 @@ fn inst_schema(inst: &Inst) -> &'static str {
             mem_out,
             world_out,
             volatile,
+            mask,
         } => {
             let _ = (
-                result, address, mem_in, world_in, mem_out, world_out, volatile,
+                result, address, mem_in, world_in, mem_out, world_out, volatile, mask,
             );
-            "Inst.Load(result,address,mem_in,world_in,mem_out,world_out,volatile)"
+            "Inst.Load(result,address,mem_in,world_in,mem_out,world_out,volatile,mask)"
         }
         Inst::Store {
             address,
@@ -679,11 +680,12 @@ fn inst_schema(inst: &Inst) -> &'static str {
             mem_out,
             world_out,
             volatile,
+            mask,
         } => {
             let _ = (
-                address, value, mem_in, world_in, mem_out, world_out, volatile,
+                address, value, mem_in, world_in, mem_out, world_out, volatile, mask,
             );
-            "Inst.Store(address,value,mem_in,world_in,mem_out,world_out,volatile)"
+            "Inst.Store(address,value,mem_in,world_in,mem_out,world_out,volatile,mask)"
         }
         Inst::Copy {
             destination,

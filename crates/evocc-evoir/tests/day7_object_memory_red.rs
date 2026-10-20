@@ -194,6 +194,7 @@ fn automatic_store_load_roundtrip_executes_real_memory() {
                 mem_out: mem2.clone(),
                 world_out: world2.clone(),
                 volatile: false,
+                mask: None,
             },
             Inst::AccessInBounds {
                 mem_in: mem2,
@@ -209,6 +210,7 @@ fn automatic_store_load_roundtrip_executes_real_memory() {
                 mem_out: mem3.clone(),
                 world_out: world3.clone(),
                 volatile: false,
+                mask: None,
             },
         ],
         vec![loaded, mem3, world3],
@@ -318,6 +320,7 @@ fn initialized_global_and_volatile_trace_are_observable() {
                 mem_out: mem1.clone(),
                 world_out: world1.clone(),
                 volatile: true,
+                mask: None,
             },
         ],
         vec![loaded, mem1, world1],
