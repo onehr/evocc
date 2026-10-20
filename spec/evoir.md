@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.13.0** | **Pinned ground truth** | Prototype convention marks on 2026-10-20
+**Revision 2.14.0** | **Pinned ground truth** | `__has_include_next` on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -6978,10 +6978,10 @@ octal and hexadecimal escapes and `\e`; a malformed one is `E1006` before
 evaluation and never reads as zero. `#if CAT(300,) > 100` and
 `#if CAT(0x1,00) > 100` are true.
 
-**Feature queries.** All four are defined as macros, so `#ifdef __has_attribute`
-is true for each of `__has_attribute`, `__has_builtin`, `__has_feature` and
-`__has_include`. Their arguments are one token or one header name; anything
-else is `E0106` (`feature-query-malformed`).
+**Feature queries.** All five are defined as macros, so `#ifdef __has_attribute`
+is true for each of `__has_attribute`, `__has_builtin`, `__has_feature`,
+`__has_include` and `__has_include_next`. Their arguments are one token or one
+header name; anything else is `E0106` (`feature-query-malformed`).
 
 - `__has_attribute(name)`: `name` with a surrounding `__` pair stripped. The
   answer is the GCC 14 answer, recorded in
@@ -7001,6 +7001,18 @@ else is `E0106` (`feature-query-malformed`).
 - `__has_feature(name)`: `0` for every name, as in GCC 14.
 - `__has_include(<h>)` and `__has_include("h")`: `1` when the include search
   the directive would perform finds the file, else `0`.
+- `__has_include_next(<h>)` and `__has_include_next("h")`: `1` when the search
+  of `#include_next` finds the file, else `0`.
+
+**`#include_next`.** The search starts at the directory after the one that
+found the current file. The quoted form does not search the directory of the
+current file. A file found beside its includer keeps the position of that
+includer, as in Clang; GCC 14 restarts at the first directory in that case. A
+file named by `-include` searches from the first directory. In the main file,
+`#include_next` searches as `#include` does and `__has_include_next` answers
+as `__has_include` does, as in GCC 14 and Clang. Example: on Darwin, Clang's
+resource `<limits.h>` includes the SDK `<limits.h>` only when
+`__has_include_next(<limits.h>)` holds, and the SDK header defines `PATH_MAX`.
 
 **Pragmas.** `_Pragma("text")` destringizes and is processed as `#pragma text`.
 `#pragma once` is honoured. `#pragma GCC diagnostic ...`, `#pragma GCC
@@ -8052,6 +8064,15 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.14.0, 2026-10-21.** Section 10.5 adds `__has_include_next`, the
+fifth feature query, and states the search of `#include_next`. The search
+continues after the directory that found the current file. In the main file,
+the directive and the query search as `#include` and `__has_include` do, as in
+GCC 14 and Clang. On Darwin, Clang's resource `<limits.h>`, `<stdint.h>`,
+`<tgmath.h>` and `<unwind.h>` now include the SDK headers of the same name, as
+with Apple clang, so `PATH_MAX` exists after `<limits.h>`. No EvoIR operation,
+registry or Lean rule domain changes.
 
 **Revision 2.13.0, 2026-10-20.** Section 10.1.9 accepts every execution and
 calling-convention attribute of its list on a function declaration that is not

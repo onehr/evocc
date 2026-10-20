@@ -13,11 +13,12 @@ const AARCH64_UNKNOWN_LINUX_GNU_PREDEFINED: &str =
     include_str!("../predefined/aarch64-unknown-linux-gnu.h");
 const HAS_ATTRIBUTE_ANSWERS: &str = include_str!("../predefined/has-attribute.tsv");
 const HAS_BUILTIN_NAMES: &str = include_str!("../predefined/has-builtin.txt");
-const FEATURE_QUERY_NAMES: [&str; 4] = [
+const FEATURE_QUERY_NAMES: [&str; 5] = [
     "__has_attribute",
     "__has_builtin",
     "__has_feature",
     "__has_include",
+    "__has_include_next",
 ];
 const INVALID_PASTE_MARKER_PREFIX: &str = "\u{1e}evocc-invalid-paste:";
 
@@ -719,6 +720,8 @@ pub struct Preprocessor {
     pragma_once_files: HashSet<String>,
     include_paths: Vec<String>,
     current_include_path: Option<usize>,
+    /// The number of included sources that are open. Zero is the main file.
+    include_depth: usize,
     forced_includes: Vec<String>,
     macro_prefix_maps: Vec<(String, String)>,
     cond_stack: Vec<CondState>,
@@ -759,6 +762,7 @@ impl Preprocessor {
             pragma_once_files: HashSet::new(),
             include_paths: Vec::new(),
             current_include_path: None,
+            include_depth: 0,
             forced_includes: Vec::new(),
             macro_prefix_maps: Vec::new(),
             cond_stack: Vec::new(),
@@ -1091,6 +1095,7 @@ impl Preprocessor {
         }
         let previous_file = std::mem::replace(&mut self.current_file, resolved.to_owned());
         let conditional_floor = self.cond_stack.len();
+        self.include_depth += 1;
         let processed = self.process_impl(
             TokenStream::new(tokens),
             &content,
@@ -1098,8 +1103,17 @@ impl Preprocessor {
             true,
             conditional_floor,
         );
+        self.include_depth -= 1;
         self.current_file = previous_file;
         Ok(processed)
+    }
+
+    /// Where `#include_next` and `__has_include_next` start the search: after
+    /// the directory that found the current file. A file found beside its
+    /// includer keeps the position of that includer. In the main file both
+    /// search as `#include` and `__has_include` do, as in GCC 14 and Clang.
+    fn include_next_start(&self) -> Option<usize> {
+        (self.include_depth > 0).then(|| self.current_include_path.map_or(0, |index| index + 1))
     }
 
     fn header_name(&mut self, tokens: &[Token], source: &[u8]) -> Option<(String, IncludeKind)> {
@@ -1495,9 +1509,11 @@ impl Preprocessor {
                                     &self.current_file,
                                     &self.include_paths,
                                     self.standard_includes,
-                                    (dir_name == "include_next").then_some(
-                                        self.current_include_path.map_or(0, |index| index + 1),
-                                    ),
+                                    if dir_name == "include_next" {
+                                        self.include_next_start()
+                                    } else {
+                                        None
+                                    },
                                 );
                                 if let Some((resolved, origin)) = path {
                                     if !self.pragma_once_files.contains(&resolved) {
@@ -2036,18 +2052,26 @@ impl Preprocessor {
                 "__has_builtin" => one_query_token(arguments, source)
                     .map(|name| i64::from(HAS_BUILTIN_NAMES.lines().any(|known| known == name))),
                 "__has_feature" => one_query_token(arguments, source).map(|_| 0),
-                "__has_include" => parse_header_name(arguments, source).map(|(name, kind)| {
-                    i64::from(
-                        resolve_include(
-                            &name,
-                            kind,
-                            &self.current_file,
-                            &self.include_paths,
-                            self.standard_includes,
+                "__has_include" | "__has_include_next" => {
+                    let start = if query == "__has_include_next" {
+                        self.include_next_start()
+                    } else {
+                        None
+                    };
+                    parse_header_name(arguments, source).map(|(name, kind)| {
+                        i64::from(
+                            resolve_include_with_origin(
+                                &name,
+                                kind,
+                                &self.current_file,
+                                &self.include_paths,
+                                self.standard_includes,
+                                start,
+                            )
+                            .is_some(),
                         )
-                        .is_some(),
-                    )
-                }),
+                    })
+                }
                 _ => None,
             }
         };
@@ -2691,28 +2715,12 @@ fn read_include_argument(
     None
 }
 
-/// Try to resolve an include file name to an absolute path.
-/// For quoted includes, first search relative to the current directory,
-/// then the include path list. For angle-bracket includes, only search
-/// the include path list.
-fn resolve_include(
-    name: &str,
-    kind: IncludeKind,
-    current_file: &str,
-    include_paths: &[String],
-    standard_includes: bool,
-) -> Option<String> {
-    resolve_include_with_origin(
-        name,
-        kind,
-        current_file,
-        include_paths,
-        standard_includes,
-        None,
-    )
-    .map(|(path, _)| path)
-}
-
+/// Try to resolve an include file name to an absolute path, and return the
+/// index of the search directory that found it. For quoted includes, first
+/// search relative to the current directory, then the include path list. For
+/// angle-bracket includes, only search the include path list. `search_start`
+/// is the first index of an `#include_next` search, which skips the current
+/// directory.
 fn resolve_include_with_origin(
     name: &str,
     kind: IncludeKind,
