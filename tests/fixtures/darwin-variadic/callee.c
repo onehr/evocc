@@ -155,3 +155,14 @@ long forward(int n, ...)
     va_end(ap);
     return sum;
 }
+
+/* The named stack area uses SIMD words; the anonymous long uses the other bank. */
+double v_after_vector_stack(double a, double b, double c, double d, double e,
+                            double f, double g, double h, double i, ...)
+{
+    va_list ap;
+    va_start(ap, i);
+    long n = va_arg(ap, long);
+    va_end(ap);
+    return a + b + c + d + e + f + g + h + i + n;
+}

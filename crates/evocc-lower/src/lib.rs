@@ -14,6 +14,7 @@ mod conditions;
 mod constants;
 mod floating;
 mod neon;
+mod private_memory;
 mod reuse;
 mod selection;
 mod tls;
@@ -528,9 +529,28 @@ pub fn lower_unit_with_source<R>(
     optimize: bool,
     consume: impl FnOnce(&CHirUnit<'_>, Module) -> R,
 ) -> Result<R, LowerError> {
-    lower_unit_with_origins(unit, target, optimize, false, |source, module, _| {
+    lower_unit_with_origins(unit, target, optimize, false, &[], |source, module, _| {
         consume(source, module)
     })
+}
+
+/// Lower selected externally callable entries without deriving their parameter
+/// values from the closed set of C callers. The original source stays intact.
+pub fn lower_unit_with_entries<R>(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    optimize: bool,
+    entries: &[&str],
+    consume: impl FnOnce(&CHirUnit<'_>, Module) -> R,
+) -> Result<R, LowerError> {
+    lower_unit_with_origins(
+        unit,
+        target,
+        optimize,
+        false,
+        entries,
+        |source, module, _| consume(source, module),
+    )
 }
 
 /// Keep source origins for diagnostic execution. Ordinary compilation does not
@@ -541,7 +561,7 @@ pub fn lower_unit_with_locations<R>(
     optimize: bool,
     consume: impl FnOnce(&CHirUnit<'_>, Module, SourceLocations) -> R,
 ) -> Result<R, LowerError> {
-    lower_unit_with_origins(unit, target, optimize, true, consume)
+    lower_unit_with_origins(unit, target, optimize, true, &[], consume)
 }
 
 fn lower_unit_with_origins<R>(
@@ -549,6 +569,7 @@ fn lower_unit_with_origins<R>(
     target: &TargetDataLayout,
     optimize: bool,
     record: bool,
+    entries: &[&str],
     consume: impl FnOnce(&CHirUnit<'_>, Module, SourceLocations) -> R,
 ) -> Result<R, LowerError> {
     let mut locations = record.then(SourceLocations::default);
@@ -559,8 +580,8 @@ fn lower_unit_with_origins<R>(
         AllocationSiteManifest::derive(unit).map_err(|error| LowerError::InvalidGeneratedSsa {
             message: error.to_string(),
         })?;
-    let retained =
-        evocc_chir::inline::without_unreferenced_functions(unit).map_err(LowerError::Linkage)?;
+    let retained = evocc_chir::inline::without_unreferenced_functions_with_entries(unit, entries)
+        .map_err(LowerError::Linkage)?;
     let unit = retained.as_ref();
     if let Some(refusal) = unit.profile_refusals().iter().find(|refusal| {
         unit.iter().any(|declaration| {
@@ -572,13 +593,12 @@ fn lower_unit_with_origins<R>(
     }
     if evocc_chir::inline::needs_substitution(unit, target) {
         let arena = evocc_common::Arena::default();
-        let rewritten = evocc_chir::inline::substitute(unit, &arena, target).map_err(|e| {
-            LowerError::Inline {
+        let rewritten = evocc_chir::inline::substitute_with_entries(unit, &arena, target, entries)
+            .map_err(|e| LowerError::Inline {
                 span: e.span,
                 cycle: e.cycle,
                 reason: e.message,
-            }
-        })?;
+            })?;
         let module = lower_resolved_unit(&rewritten, target, None, optimize, &mut locations)?;
         return Ok(consume(&rewritten, module, locations.unwrap_or_default()));
     }
@@ -1015,6 +1035,24 @@ fn lower_resolved_unit(
                 align: align.max(entry.declared_alignment()),
             },
         );
+    }
+    // The builtin namespace does not declare a C identifier. Its emitted
+    // library symbol can nevertheless collide with a source object. Keep the
+    // namespaces separate and refuse that linkage before constructing invalid
+    // IR; do not silently call or rename an object as a library function.
+    for entry in unit.symbols().symbols_in_source_order() {
+        let name = entry.spelling();
+        if has_linked_object_storage(unit, entry.id())
+            && (global_names.contains(name) || extern_objects.contains_key(name))
+            && declares.contains_key(name)
+            && unit.symbols().builtin_function(name).is_some()
+        {
+            return Err(LowerError::Linkage(evocc_chir::linkage::LinkageError {
+                code: "E2946",
+                message: "builtin-local-binding-conflict",
+                span: entry.span(),
+            }));
+        }
     }
     let mut module = Module {
         tls: Vec::new(),
@@ -2975,9 +3013,16 @@ fn prevalidate_expr_for_lowering(
         // Substitution replaces the pack at each call site. A body that
         // keeps it has no anonymous arguments to forward.
         CHirExpr::BuiltinVarArgPack { span, .. } => Err(LowerError::VarArgPack { span: *span }),
-        CHirExpr::BuiltinReturnAddress { .. } => Ok(()),
-        CHirExpr::BuiltinFrameAddress { depth, .. } if u16::try_from(*depth).is_ok() => Ok(()),
-        CHirExpr::BuiltinFrameAddress { span, .. } => Err(LowerError::FrameAddress { span: *span }),
+        CHirExpr::BuiltinReturnAddress { depth, .. }
+        | CHirExpr::BuiltinFrameAddress { depth, .. }
+            if u16::try_from(*depth).is_ok() =>
+        {
+            Ok(())
+        }
+        CHirExpr::BuiltinReturnAddress { span, .. }
+        | CHirExpr::BuiltinFrameAddress { span, .. } => {
+            Err(LowerError::FrameAddress { span: *span })
+        }
         CHirExpr::LabelAddress { .. } => Ok(()),
         CHirExpr::BuiltinUnreachable { .. } | CHirExpr::BuiltinTrap { .. } => Ok(()),
         CHirExpr::CompoundLit(_, initializer, _) => {
@@ -4673,6 +4718,7 @@ impl<'a> FunctionLowerer<'a> {
         allocation::share_allocation_sites(&mut function)?;
         if optimize {
             reuse::reuse_pure_block_values(&mut function);
+            private_memory::promote(&mut function);
         }
         let value_map = renumber_function(&mut function)?;
         if let (Some(locations), Some(values)) = (locations, source_values) {
@@ -10368,18 +10414,15 @@ impl<'a> FunctionLowerer<'a> {
                     }
                     let integer =
                         canonical_integer(self.unit.types(), self.target, facts.ty(), *span)?;
-                    let result = self.fresh_value(bits(integer));
                     let value = declaration.enumerator_value().ok_or(
                         LowerError::UnsupportedExpression {
                             span: *span,
                             feature: "enumerator symbol is missing its canonical value",
                         },
                     )?;
-                    self.emit(state, Inst::Const(result.clone(), value as u64))?;
-                    return Ok(ExprValue {
-                        value: result,
-                        integer,
-                    });
+                    // The symbol stores a signed host integer. Materialize its
+                    // C-width bit pattern, not its sign-extended host bits.
+                    return self.wide_constant(state, integer, value as u128);
                 }
                 if declaration.kind() == SymbolKind::Function
                     && declaration.spelling() == spelling
@@ -10514,20 +10557,23 @@ impl<'a> FunctionLowerer<'a> {
                     span: *span,
                     feature: "void variadic operation used as a value",
                 }),
-            CHirExpr::BuiltinReturnAddress { .. } | CHirExpr::BuiltinFrameAddress { .. } => {
+            CHirExpr::BuiltinReturnAddress { depth, .. }
+            | CHirExpr::BuiltinFrameAddress { depth, .. } => {
                 let result = self.fresh_value(EvoIRType::Ptr(AddressSpace::Generic));
-                let instruction =
-                    if let CHirExpr::BuiltinFrameAddress { depth, span, .. } = expression {
-                        Inst::FrameAddress {
-                            result: result.clone(),
-                            depth: u16::try_from(*depth)
-                                .map_err(|_| LowerError::FrameAddress { span: *span })?,
-                        }
-                    } else {
-                        Inst::ReturnAddress {
-                            result: result.clone(),
-                        }
-                    };
+                let instruction = if *depth != 0 {
+                    // This is a runtime null value. The front end must
+                    // retain the builtin's non-constant-expression status.
+                    Inst::PtrNull(result.clone())
+                } else if matches!(expression, CHirExpr::BuiltinFrameAddress { .. }) {
+                    Inst::FrameAddress {
+                        result: result.clone(),
+                        depth: 0,
+                    }
+                } else {
+                    Inst::ReturnAddress {
+                        result: result.clone(),
+                    }
+                };
                 self.emit(state, instruction)?;
                 Ok(ExprValue {
                     value: result,
@@ -11498,6 +11544,14 @@ impl<'a> FunctionLowerer<'a> {
             let right = self.cast(right, CIntegerType::ULONG, state)?;
             let bytes = self.fresh_value(EvoIRType::Bits(64));
             self.emit(state, Inst::Sub(bytes.clone(), left.value, right.value))?;
+            // A zero-sized GNU element type has stride zero. Preserve the
+            // division obligation rather than relying on raw total sdiv.
+            let nonzero = self.fresh_value(EvoIRType::Bits(1));
+            self.emit(
+                state,
+                Inst::DivisorNonZero(nonzero.clone(), scale.value.clone()),
+            )?;
+            self.emit(state, Inst::UbAssume(nonzero, UbReason::DivisionByZero))?;
             let result = self.fresh_value(EvoIRType::Bits(64));
             self.emit(state, Inst::SDiv(result.clone(), bytes, scale.value))?;
             return Ok(ExprValue {

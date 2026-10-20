@@ -658,6 +658,16 @@ fn all_values_mut(instruction: &mut Inst) -> Vec<&mut Value> {
     }
 }
 
+#[cfg(test)]
+#[path = "../../evocc-evoir/tests/support/instruction_values.rs"]
+mod instruction_values;
+
+#[test]
+fn every_instruction_field_survives_independent_reassembly() {
+    instruction_values::assert_use_remap(remap_uses);
+    instruction_values::assert_all_values(all_values_mut);
+}
+
 fn remap_all(instruction: &mut Inst, identities: &HashMap<u32, u32>) -> Result<(), ()> {
     for value in all_values_mut(instruction) {
         remap_identity(value, identities)?;

@@ -1,0 +1,53 @@
+Private integer storage promotion — 2026-10-16
+
+This bounded C-lowering pass promotes fixed, unescaped integer cells across
+joins and loops. It admits complete initialized one-word integer record
+copies, including a checked store to an external destination. It retains IR
+allocation, lifetime, pointer and bounds checks. Partial representations,
+padding, pointer records, volatile/atomic accesses, opaque assembly, escaped
+objects and repeated allocation sites stay in memory. Every predecessor
+contributes address and initialization facts. This is not certified EqSat.
+
+The canary is removed only when every fixed object was promoted, with no
+dynamic allocation or activation address. An explicit input-IR canary mark
+is still honored. Unused native fixed addresses reserve no slot; dynamic
+allocation remains observable. An alignment fixture now makes its addresses
+live, and the instruction-table fixture reflects this changed DCE contract.
+The first full gate retained those two fixture failures. The corrected
+fixtures and implementation pass the combined full-workspace gate.
+
+Unchanged reductions, kernel argv, 100000 measured calls per variant:
+Symbol          Before/call  After/call  GCC14/call  Before text  After text  GCC text
+theta                   239         200          94         1008         844       376
+pte_offset_map          114          61          23          572         312       120
+
+All six container runs and six TCG runs exit zero with matching checksums.
+The plugin reports zero dropped and irregular blocks in every run. Named
+symbol counts use executable addresses disjoint from init. These are not
+latency measurements or full-kernel results. Both 2x exit conditions remain
+unmet. The separate scalar-oracle fixture executes at O0/O2 on Darwin/Linux
+and with Apple clang; 20 check/build/execute commands pass.
+
+Original hot units compile and assemble without installation or boot:
+Unit                         Previous object bytes   After object bytes
+mm/page_alloc.o                             527904               527664
+arch/arm64/kvm/mmu.o                         703416               703416
+crypto/sha3_generic.o                       253720               253720
+These are whole-object bytes, not .text. Each preserves the original source
+and config and discloses the same 41 options omitted by the existing probe.
+There are zero unreviewed omissions.
+
+Capture: .evidence/private-memory-20261016/ (500 MiB cap).
+before.json, after.json, native.json and runtime/counts.json retain commands,
+hashes and measurements. The six hashed probe .s/.o files under
+.evidence/live-range-holes-20261016/ total 11421225 bytes. They are retired
+after a no-open-handle check; kernel-probes.memory.json and
+kernel-assembly.memory.json remain. Exact intermediate probe files are no
+longer retained. Current kernel pairs, sources and runtime programs remain.
+Combined acceptance: 454 Rust suites, 3449 passed, zero failed, eight ignored;
+Clippy and formatting pass. All six Lean steps pass, with 62 rule theorems
+and 36 analysis rows. No additional proof domain is claimed.
+Together with return signing, retained captures add 84300 KiB; the existing
+target cache grows 336432 KiB from the 09:12 baseline. Probe captures add
+96 KiB net after cleanup. Combined measured net growth is 420768 KiB;
+shared-cache growth is not attributed to this pass alone. Free space: 50 GiB.

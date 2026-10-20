@@ -627,8 +627,25 @@ fn variable_arrays_reenter_labels_and_sibling_scopes() {
 }
 
 #[test]
-fn floating_representation_array_places_do_not_require_floating_execution() {
-    check("representation-only-array-places.c", EXECUTION);
+fn unsupported_function_options_do_not_silently_change_representation_accesses() {
+    // Preserve this original reproducer. Its per-function no-strict-aliasing
+    // request used to be silently ignored; it is now an explicit refusal.
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/representation-only-array-places.c");
+    for mode in EXECUTION {
+        let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+            .args(["--target=aarch64-unknown-linux-gnu", mode])
+            .arg(&source)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("E2952") && stderr.contains("optimize"),
+            "{stderr}"
+        );
+        assert!(output.stdout.is_empty());
+    }
 }
 
 #[test]
@@ -889,20 +906,16 @@ fn variably_modified_typeof_captures_each_new_bound() {
 }
 
 #[test]
-fn variably_modified_pointer_typeof_retains_the_oracle_disagreement() {
-    let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
-        .args(["--target=aarch64-unknown-linux-gnu", "--emit=asm"])
-        .arg(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../tests/fixtures/variable-array-typeof-effects.c"),
-        )
-        .output()
-        .unwrap();
-    assert!(
-        !output.status.success(),
-        "VM pointer typeof must not silently pick an evaluation contract"
-    );
-    assert!(String::from_utf8_lossy(&output.stderr).contains("E2904"));
+fn variably_modified_pointer_typeof_preserves_evaluation_contexts() {
+    for optimization in ["-O0", "-O2"] {
+        check_with_args(
+            "variable-array-typeof-effects.c",
+            EXECUTION,
+            &[optimization],
+        );
+        check_with_args("typeof-evaluation-contexts.c", EXECUTION, &[optimization]);
+        check_with_args("typeof-parameter-evaluation.c", EXECUTION, &[optimization]);
+    }
 }
 
 #[test]
@@ -987,16 +1000,25 @@ fn atomic_read_modify_write_returns_old_and_new_values() {
     check("atomic-rmw-widths.c", EXECUTION);
 }
 #[test]
-fn ancestor_return_address_retains_the_measured_oracle_boundary() {
+fn ancestor_addresses_use_the_reviewed_null_rule() {
+    for optimization in ["-O0", "-O2"] {
+        check_with_args("activation-address-depths.c", EXECUTION, &[optimization]);
+    }
+    // Keep the original contrary-oracle fixture unchanged: it requires a real
+    // ancestor and therefore returns one under the approved null rule.
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/ancestor-return-address.c");
     let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
-        .args(["--target=aarch64-unknown-linux-gnu", "--emit=asm"])
+        .args(["--target=aarch64-unknown-linux-gnu", "--interpret-evoir"])
         .arg(source)
         .output()
         .expect("start compiler");
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("E2913"));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"1\n");
 }
 #[test]
 fn integer_complex_arithmetic_keeps_both_components() {

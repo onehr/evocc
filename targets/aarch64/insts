@@ -1,6 +1,6 @@
 version insts.v1
 target aarch64
-sha256 77e5e59744be08c311fd146d7c406d8dafc2e2df4f7310b858d2616d212522c6
+sha256 f7bb68f5c11105987ffc6752d9ec4f54a153081784f03fe3c38778048524270c
 inst Floating defs=dst uses=args* rewrite_defs=dst rewrite_uses=args* flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=- outgoing=-
 inst Aes defs=dst uses=args* rewrite_defs=dst rewrite_uses=args* flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=- outgoing=-
 inst AtomicRmw defs=dst uses=base,value,expected? rewrite_defs=dst rewrite_uses=base,value,expected? flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=dst indirect_result=false spill=- incoming=- outgoing=-
@@ -39,7 +39,7 @@ inst SpillReload defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false dis
 inst IncomingArg defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=dst:slot outgoing=-
 inst OutgoingArg defs=- uses=src rewrite_defs=- rewrite_uses=src flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=- outgoing=src:slot
 inst MemCopy defs=- uses=dst,src rewrite_defs=- rewrite_uses=dst,src flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=- outgoing=-
-inst FrameSlot defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=- outgoing=-
+inst FrameSlot defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=true call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=- outgoing=-
 inst StackAlloc defs=dst uses=size rewrite_defs=dst rewrite_uses=size flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=- outgoing=-
 inst StackRelease defs=- uses=address rewrite_defs=- rewrite_uses=address flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=- outgoing=-
 inst FrameAddress defs=dst uses=- rewrite_defs=dst rewrite_uses=- flags=false discardable=false call=false copy=- fixed=false call_operands=- assembly=- exclusive=- indirect_result=false spill=- incoming=- outgoing=-
@@ -54,4 +54,4 @@ term Cb uses=src,taken_args*,untaken_args* rewrite_uses=src edges=taken:taken_ar
 term Tb uses=src,taken_args*,untaken_args* rewrite_uses=src edges=taken:taken_args,untaken:untaken_args exit=false indirect=- forwarding=false jump=- assembly=- returns=- spill_bridge=false
 term Ret uses=values* rewrite_uses=values* edges=- exit=true indirect=- forwarding=false jump=- assembly=- returns=values spill_bridge=false
 term Brk uses=- rewrite_uses=- edges=- exit=true indirect=- forwarding=false jump=- assembly=- returns=- spill_bridge=false
-term AsmGoto uses=body.inputs.reg,body.outputs.read,labels.args*,fallthrough_args* rewrite_uses=body.outputs.reg,body.inputs.reg edges=labels*,fallthrough:fallthrough_args exit=false indirect=- forwarding=true jump=- assembly=body returns=- spill_bridge=true
+term AsmGoto uses=body.inputs.reg,body.outputs.read,labels.args*,fallthrough_args* rewrite_uses=body.outputs.reg,body.inputs.reg edges=labels*,fallthrough:fallthrough_args exit=false indirect=- forwarding=body.fixed jump=- assembly=body returns=- spill_bridge=true

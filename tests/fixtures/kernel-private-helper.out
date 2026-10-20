@@ -1,0 +1,60 @@
+Bounded private helper substitution — 2026-10-16
+
+New optional leaves may contain fixed scalar or pointer locals. They must
+retain the existing 48-node leaf limit and have no calls, loops, escaped
+objects, activation-sensitive operations, assembly or statement expressions.
+The new class excludes attributed functions/locals, static storage, cleanup,
+volatile/atomic locals and VM capture objects. Existing explicit-inline paths
+are unchanged. A unit has 1024 source-node cost units for these new calls,
+including calls inside another expansion. This is not a machine-byte bound.
+When the budget runs out, the call remains. The rewritten reference closure
+keeps its callable definition. No independent checker is changed.
+
+Unchanged source: tests/fixtures/kernel-codegen-reductions/leaf-helper-call.c
+SHA-256: ff4cb64243ebcf6f1773335712e43f3c5f4ffceb4a74ffad6233cd9776744038
+Kernel flags include checked UB, general registers, PAC returns, frame
+pointers, strong stack protection and zero initialization. Two unsupported
+flags remain disclosed in before.json/after.json; no exact argv claim.
+
+Variant       folio_state/call   helper/caller   Total/call   Function bytes
+Before                 55                 18           73              268
+After                  37                  0           37              172
+GCC 14                  9                  0            9               36
+
+Each variant makes 100000 caller entries. Before has 300000 helper entries,
+six instructions each. All three container executions and three TCG runs
+exit zero and print REDUCTION_CHECKSUM 55730. Counts include both named
+functions, not libc or the driver. Executable addresses do not overlap init.
+Existing GCC Image, disk and plugin are reused. One CPU and current QEMU are
+diagnostic overrides, not historical kernel acceptance or a latency result.
+
+The 15 substitution tests include three RED failures before implementation,
+budget exhaustion across two callers, retained definitions, argument effects,
+UB checks and storage/attribute exclusions. The 65 language tests and 23
+proof-required tests pass. A proof-required pass covers only its supported
+profile; these tests do not prove the unrestricted C substitution algorithm.
+
+Capture: .evidence/private-helper-20261016/ (500 MiB limit).
+runtime/counts.json binds the source, binaries, commands and measured counts.
+N09 remains OPEN: 37/9 exceeds 2, and all-ladder result/size parity is NOT_RUN.
+
+Original units compile and assemble; no object is installed or booted:
+Unit                      Before object bytes   After object bytes
+mm/page_alloc.o                       528064               527904
+arch/arm64/kvm/mmu.o                   703544               703416
+crypto/sha3_generic.o                  253720               253720
+These are whole-object bytes, not a .text or application-size comparison.
+The free_pages_ok symbol shrinks by 36 bytes; the selected MMU/SHA3 symbols
+do not change size. The same 41 Kbuild option omissions remain per unit,
+with zero unreviewed omissions. The three sources and configs are unchanged.
+Probe records: .evidence/live-range-holes-20261016/kernel-probes.helper.json
+and kernel-assembly.helper.json. Six hashed .s/.o intermediates (11422419
+bytes) are retired after checking open handles; records and runtime payloads
+remain. The exact intermediate probe files are no longer retained.
+Combined acceptance: 451 suites, 3436 PASS, zero failures and eight retained
+ignores; Clippy, formatting and all six Lean gate steps pass. The final
+compiler hash matches after.json and the 92 prior executed assemblies.
+The shared worktree is dirty; this is not clean-release acceptance.
+Frontend cache plus the live-segment, variable-type and helper captures grew
+by 1340848 KiB from 07:15; shared cache growth is not sole task attribution.
+About 42 GiB remains free. No target, kernel tree or VM disk was added.

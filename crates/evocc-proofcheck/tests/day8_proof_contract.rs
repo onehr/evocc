@@ -12,60 +12,71 @@ const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495
 const REGISTRY_SHA256: &str = "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9";
 static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
 
-const PRODUCER_CLIENT: &str = r#"
-use std::{env, fs};
-use evocc_eqopt::{ScalarEqBudget, optimize_scalar_module_with_evp1};
-use evocc_evoir::{Block, BlockArg, Function, FunctionParam, Inst, Module, Value, render_module};
-use evocc_proof::render_evp1;
-use evocc_types::EvoIRType;
-
-fn bits(id: u32) -> Value { Value { id, ty: EvoIRType::Bits(32) } }
-
-fn main() {
-    let paths = env::args_os().skip(1).collect::<Vec<_>>();
-    assert_eq!(paths.len(), 3);
-    let before = Module {
-        tls: Vec::new(),
-        lifecycle: Vec::new(),
-        aliases: Vec::new(),
-        assembly: Vec::new(),
-        extern_objects: Vec::new(),
-        declares: Vec::new(),
-        globals: Vec::new(),
-        functions: vec![Function {
-            section: None,
-            patchable_entry: None,
-            stack_protect: false,
-            alignment: 4,
-            variadic: false,
-            linkage: evocc_evoir::Linkage::Strong,
-            visibility: evocc_evoir::GlobalVisibility::External,
-            name: "main".to_owned(),
-            params: vec![FunctionParam { name: "x".to_owned(), ty: EvoIRType::Bits(32) }],
-            param_marks: Vec::new(),
-            ret_tys: vec![EvoIRType::Bits(32), EvoIRType::Bits(32)],
-            effects: Default::default(),
-            blocks: vec![Block {
-                id: 0,
-                args: vec![BlockArg { name: "x".to_owned(), value: bits(0) }],
-                insts: vec![
-                    Inst::Const(bits(1), 0),
-                    Inst::Add(bits(2), bits(0), bits(1)),
-                    Inst::Const(bits(3), 2),
-                    Inst::Const(bits(4), 3),
-                    Inst::Add(bits(5), bits(3), bits(4)),
-                ],
-                terminator: Inst::Ret(vec![bits(2), bits(5)]),
-            }],
-        }],
+mod producer {
+    use evocc_eqopt::{optimize_scalar_module_with_evp1, ScalarEqBudget};
+    use evocc_evoir::{
+        render_module, Block, BlockArg, Function, FunctionParam, Inst, Module, Value,
     };
-    let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
-    assert_eq!(outcome.certificate.regions.len(), 2);
-    fs::write(&paths[0], render_module(&before)).unwrap();
-    fs::write(&paths[1], render_module(&outcome.module)).unwrap();
-    fs::write(&paths[2], render_evp1(&outcome.certificate)).unwrap();
+    use evocc_proof::render_evp1;
+    use evocc_types::EvoIRType;
+    use std::fs;
+
+    fn bits(id: u32) -> Value {
+        Value {
+            id,
+            ty: EvoIRType::Bits(32),
+        }
+    }
+
+    pub fn write(paths: [&std::path::Path; 3]) {
+        let before = Module {
+            tls: Vec::new(),
+            lifecycle: Vec::new(),
+            aliases: Vec::new(),
+            assembly: Vec::new(),
+            extern_objects: Vec::new(),
+            declares: Vec::new(),
+            globals: Vec::new(),
+            functions: vec![Function {
+                section: None,
+                patchable_entry: None,
+                stack_protect: false,
+                alignment: 4,
+                variadic: false,
+                linkage: evocc_evoir::Linkage::Strong,
+                visibility: evocc_evoir::GlobalVisibility::External,
+                name: "main".to_owned(),
+                params: vec![FunctionParam {
+                    name: "x".to_owned(),
+                    ty: EvoIRType::Bits(32),
+                }],
+                param_marks: Vec::new(),
+                ret_tys: vec![EvoIRType::Bits(32), EvoIRType::Bits(32)],
+                effects: Default::default(),
+                blocks: vec![Block {
+                    id: 0,
+                    args: vec![BlockArg {
+                        name: "x".to_owned(),
+                        value: bits(0),
+                    }],
+                    insts: vec![
+                        Inst::Const(bits(1), 0),
+                        Inst::Add(bits(2), bits(0), bits(1)),
+                        Inst::Const(bits(3), 2),
+                        Inst::Const(bits(4), 3),
+                        Inst::Add(bits(5), bits(3), bits(4)),
+                    ],
+                    terminator: Inst::Ret(vec![bits(2), bits(5)]),
+                }],
+            }],
+        };
+        let outcome = optimize_scalar_module_with_evp1(&before, ScalarEqBudget::default());
+        assert_eq!(outcome.certificate.regions.len(), 2);
+        fs::write(paths[0], render_module(&before)).unwrap();
+        fs::write(paths[1], render_module(&outcome.module)).unwrap();
+        fs::write(paths[2], render_evp1(&outcome.certificate)).unwrap();
+    }
 }
-"#;
 
 struct Inputs {
     dir: PathBuf,
@@ -113,44 +124,7 @@ impl Drop for Inputs {
 }
 
 fn run_real_producer(inputs: &Inputs) {
-    let client = inputs.dir.join("producer-client");
-    fs::create_dir_all(client.join("src")).expect("create producer client");
-    let proofcheck = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let crates = proofcheck.parent().expect("proofcheck lives under crates");
-    fs::write(
-        client.join("Cargo.toml"),
-        format!(
-            r#"[package]
-name = "day8-evp1-producer-client"
-version = "0.0.0"
-edition = "2021"
-
-[workspace]
-
-[dependencies]
-evocc-eqopt = {{ path = {:?} }}
-evocc-evoir = {{ path = {:?} }}
-evocc-proof = {{ path = {:?} }}
-evocc-types = {{ path = {:?} }}
-"#,
-            crates.join("evocc-eqopt"),
-            crates.join("evocc-evoir"),
-            crates.join("evocc-proof"),
-            crates.join("evocc-types"),
-        ),
-    )
-    .expect("write producer manifest");
-    fs::write(client.join("src/main.rs"), PRODUCER_CLIENT).expect("write producer client");
-    let output = Command::new(env!("CARGO"))
-        .arg("--config")
-        .arg(proofcheck.join("../../.cargo/config.toml"))
-        .args(["run", "--quiet", "--offline", "--"])
-        .args([&inputs.before, &inputs.after, &inputs.proof])
-        .current_dir(&client)
-        .env("CARGO_TARGET_DIR", client.join("target"))
-        .output()
-        .expect("run real EVP1 producer");
-    assert_status(&output, 0, "real producer client");
+    producer::write([&inputs.before, &inputs.after, &inputs.proof]);
 }
 
 fn certificate(input: &str, output: &str) -> String {

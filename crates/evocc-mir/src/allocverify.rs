@@ -1,6 +1,6 @@
 //! Compatibility entry points for the independent shared allocation verifier.
 
-use crate::{Allocated, MTerm, Target};
+use crate::{Allocated, MFunction, MTerm, Target};
 
 pub use crate::generic::allocverify::VerifierRefusal;
 
@@ -17,6 +17,25 @@ pub fn verify_allocation_for(target: Target, allocated: &Allocated) -> Result<()
         &crate::isa::aarch64::allocation::Aarch64Allocation::for_target(target),
         allocated,
     )
+}
+
+/// Bind the retained input to the caller's actual pre-allocation program.
+/// Native entry points use this form: an allocation cannot replace both sides
+/// of the comparison and certify a different program.
+pub fn verify_allocation_against(
+    target: Target,
+    input: &MFunction,
+    allocated: &Allocated,
+) -> Result<(), VerifierRefusal> {
+    if &allocated.input != input {
+        return Err(VerifierRefusal {
+            code: "E4020",
+            name: "allocation: verifier-refused",
+            block: 0,
+            detail: "retained allocation input differs from the caller's program".into(),
+        });
+    }
+    verify_allocation_for(target, allocated)
 }
 
 /// Preserve the existing constant terminator query.

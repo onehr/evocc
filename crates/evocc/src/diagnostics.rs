@@ -8,6 +8,8 @@ pub enum Format {
     Text,
     Short,
     Json,
+    /// One `concise-1` object per diagnostic; see spec/diagnostics.md 5.2.
+    Concise,
 }
 
 impl Format {
@@ -16,8 +18,9 @@ impl Format {
             "text" => Ok(Self::Text),
             "short" => Ok(Self::Short),
             "json" => Ok(Self::Json),
+            "concise" => Ok(Self::Concise),
             _ => Err(format!(
-                "unsupported error format `{value}`; expected text, short or json"
+                "unsupported error format `{value}`; expected text, short, json or concise"
             )),
         }
     }
@@ -26,6 +29,8 @@ impl Format {
     pub fn for_usage(args: &[String]) -> Self {
         if args.iter().any(|arg| arg == "--error-format=json") {
             Self::Json
+        } else if args.iter().any(|arg| arg == "--error-format=concise") {
+            Self::Concise
         } else if args.iter().any(|arg| arg == "--error-format=short") {
             Self::Short
         } else {
@@ -62,6 +67,10 @@ impl Format {
                 "{{\"schema\":\"evocc.check.v1\",\"kind\":\"check\",\"status\":\"completed\",\"main_return\":\"{result}\",\"claim\":\"executed-path-only\",\"scope\":{}}}\n",
                 quoted(CHECK_SCOPE)
             ),
+            Self::Concise => format!(
+                "{{\"status\":\"completed\",\"main_return\":\"{result}\",\"scope\":{}}}\n",
+                quoted(CHECK_SCOPE)
+            ),
         }
     }
 }
@@ -73,7 +82,12 @@ const LONG_COMMAND_LINE: usize = 80;
 
 /// The scope of a completed check. It is not a correctness claim.
 const CHECK_SCOPE: &str =
-    "No undefined behavior was found on the executed path. This does not check that the results are correct.";
+    "No finding from the implemented checks on the executed path. Pointer subtraction and ordering obligations are not checked. This does not check that the results are correct.";
+
+/// Every precise execution finding has this note. A concise record omits it.
+const EXECUTED_PATH: &str = "this operation failed on the executed path";
+/// The longest `source` excerpt of a concise record, in characters.
+const EXCERPT: usize = 80;
 
 pub fn command_color() -> Color {
     std::env::args()
@@ -186,6 +200,20 @@ impl Repair {
     pub fn json(&self) -> String {
         format!("{{\"repair_id\":{},\"kind\":{},\"file\":{},\"span\":{},\"replacement\":{},\"title\":{}}}",
             quoted(self.repair_id), quoted(self.kind), quoted(&self.span.file), span_json(&self.span), quoted(&self.replacement), quoted(self.title))
+    }
+
+    /// The concise repair. `at` and `end` give the whole edit span.
+    fn concise(&self) -> String {
+        format!(
+            "{{\"id\":{},\"kind\":{},\"title\":{},\"at\":{},\"end\":\"{}:{}\",\"replacement\":{}}}",
+            quoted(self.repair_id),
+            quoted(self.kind),
+            quoted(self.title),
+            quoted(&location(&self.span)),
+            self.span.line_end,
+            self.span.column_end,
+            quoted(&self.replacement)
+        )
     }
 }
 
@@ -309,6 +337,9 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
         assert!((span.line_end, span.column_end) >= (span.line_start, span.column_start));
     }
     let primary = primary[0];
+    if format == Format::Concise {
+        return concise(diagnostic, primary);
+    }
     let heading = if diagnostic.code.is_empty() {
         diagnostic.level.to_owned()
     } else {
@@ -437,7 +468,149 @@ pub fn render(diagnostic: &Diagnostic, format: Format, color: Color) -> String {
     )
 }
 
+/// A `concise-1` diagnostic. Section 5.2 fixes its keys and their order. An
+/// absent key is omitted, not null.
+fn concise(diagnostic: &Diagnostic, primary: &Span) -> String {
+    let code = if diagnostic.code.is_empty() {
+        "null".into()
+    } else {
+        quoted(&diagnostic.code)
+    };
+    let mut out = format!(
+        "{{\"code\":{code},\"message\":{}",
+        quoted(&diagnostic.message)
+    );
+    if diagnostic.level != "error" {
+        write!(out, ",\"level\":{}", quoted(diagnostic.level)).unwrap();
+    }
+    write!(out, ",\"at\":{}", quoted(&location(primary))).unwrap();
+    if primary.line_end != primary.line_start {
+        write!(
+            out,
+            ",\"end\":\"{}:{}\"",
+            primary.line_end, primary.column_end
+        )
+        .unwrap();
+    }
+    if let Some(source) = excerpt(primary) {
+        write!(out, ",\"source\":{}", quoted(&source)).unwrap();
+    }
+    if primary.label != diagnostic.message {
+        write!(out, ",\"label\":{}", quoted(&primary.label)).unwrap();
+    }
+    let also: Vec<_> = diagnostic
+        .spans
+        .iter()
+        .filter(|span| !span.primary)
+        .map(|span| match span.label.as_str() {
+            "" => location(span),
+            label => format!("{} {label}", location(span)),
+        })
+        .collect();
+    let notes: Vec<_> = diagnostic
+        .notes
+        .iter()
+        .filter(|note| note.as_str() != EXECUTED_PATH)
+        .collect();
+    let list = |items: &[&String]| {
+        items
+            .iter()
+            .map(|s| quoted(s))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    for (key, items) in [
+        ("also", also.iter().collect::<Vec<_>>()),
+        ("notes", notes),
+        ("help", diagnostic.help.iter().collect()),
+    ] {
+        if !items.is_empty() {
+            write!(out, ",\"{key}\":[{}]", list(&items)).unwrap();
+        }
+    }
+    if let Some(why) = explanation_line(&diagnostic.code) {
+        write!(out, ",\"why\":{}", quoted(why)).unwrap();
+    }
+    if let Some(fix) = repair_hint(&diagnostic.code) {
+        write!(out, ",\"fix\":{}", quoted(fix)).unwrap();
+    }
+    if !diagnostic.repairs.is_empty() {
+        let repairs: Vec<_> = diagnostic.repairs.iter().map(Repair::concise).collect();
+        write!(out, ",\"repairs\":[{}]", repairs.join(",")).unwrap();
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// `PATH:LINE:COLUMN` of the start of a span.
+fn location(span: &Span) -> String {
+    let directory = std::env::current_dir().and_then(std::fs::canonicalize);
+    let file = directory
+        .ok()
+        .and_then(|directory| relative(&span.file, &directory))
+        .unwrap_or_else(|| span.file.clone());
+    format!("{file}:{}:{}", span.line_start, span.column_start)
+}
+
+/// The name of `file` relative to the canonical `directory`, when the file is
+/// below it. Canonical paths keep a symbolic link, such as `/var` on macOS,
+/// from hiding the relation.
+fn relative(file: &str, directory: &std::path::Path) -> Option<String> {
+    let path = std::fs::canonicalize(file).ok()?;
+    let name = path.strip_prefix(directory).ok()?.to_str()?;
+    (!name.is_empty()).then(|| name.to_owned())
+}
+
+/// The span text on its first line, as the text form shows it under the
+/// markers. A long excerpt is cut. ` ...` marks a span that continues.
+fn excerpt(span: &Span) -> Option<String> {
+    let line = span
+        .source
+        .split(|byte| *byte == b'\n')
+        .nth(span.line_start as usize - 1)
+        .unwrap_or_default();
+    let start = (span.column_start as usize - 1).min(line.len());
+    let end = if span.line_end == span.line_start {
+        (span.column_end as usize - 1).min(line.len())
+    } else {
+        line.len()
+    };
+    let indent = displayed(&line[..start]).chars().count();
+    let width = displayed(&line[..end])
+        .chars()
+        .count()
+        .saturating_sub(indent);
+    let mut text: String = displayed(line).chars().skip(indent).take(width).collect();
+    if text.is_empty() {
+        return None;
+    }
+    if text.chars().count() > EXCERPT {
+        text = text.chars().take(EXCERPT - 3).collect::<String>() + "...";
+    }
+    if span.line_end > span.line_start {
+        text.push_str(" ...");
+    }
+    Some(text)
+}
+
 include!(concat!(env!("OUT_DIR"), "/diagnostic_catalogue.rs"));
+
+/// The first line of the first paragraph of the explanation page.
+fn explanation_line(code: &str) -> Option<&'static str> {
+    let index = CATALOGUE.binary_search_by_key(&code, |row| row.0).ok()?;
+    CATALOGUE[index]
+        .1
+        .lines()
+        .skip(1)
+        .find(|line| !line.trim().is_empty())
+        .filter(|line| !line.starts_with("```"))
+}
+
+/// The one-line repair hint from `explain/hints.txt`, when the code has one.
+fn repair_hint(code: &str) -> Option<&'static str> {
+    let index = HINTS.binary_search_by_key(&code, |row| row.0).ok()?;
+    Some(HINTS[index].1)
+}
 
 pub fn explain(code: &str) -> Result<String, String> {
     let index = CATALOGUE
@@ -657,6 +830,109 @@ mod tests {
             quoted("雪\"\\\n\r\t\u{0}\u{1f}"),
             "\"雪\\\"\\\\\\n\\r\\t\\u0000\\u001f\""
         );
+    }
+
+    #[test]
+    fn concise_keeps_the_key_order_and_omits_defaults() {
+        let mut diagnostic = sample();
+        diagnostic.notes.insert(0, EXECUTED_PATH.into());
+        assert_eq!(
+            render(&diagnostic, Format::Concise, Color::Always),
+            concat!(
+                "{\"code\":\"E3002\",\"message\":\"division by zero\",\"at\":\"demo.c:2:12\",",
+                "\"source\":\"a / b\",\"label\":\"divisor is 0 here\",",
+                "\"notes\":[\"the divisor was 0 on the executed path\"],",
+                "\"help\":[\"check the divisor before the division\"],",
+                "\"why\":\"The executed integer division has a zero divisor.\",",
+                "\"fix\":\"Check the divisor and choose the required error behavior before dividing.\"}\n"
+            )
+        );
+        // A command warning has no code, page or hint. An insertion point has no text.
+        let span = |start, end| {
+            evocc_common::SourceSpan::new(evocc_common::FileId::DUMMY, start, end, 1, start + 1)
+        };
+        let mut warning = Diagnostic::new(
+            "",
+            "message",
+            Span::source(COMMAND_LINE, b"-x y", span(0, 2), "label"),
+        );
+        warning.level = "warning";
+        let mut secondary = Span::source(COMMAND_LINE, b"-x y", span(3, 3), "");
+        secondary.primary = false;
+        warning.spans.push(secondary);
+        assert_eq!(
+            render(&warning, Format::Concise, Color::Never),
+            "{\"code\":null,\"message\":\"message\",\"level\":\"warning\",\"at\":\"<command-line>:1:1\",\"source\":\"-x\",\"label\":\"label\",\"also\":[\"<command-line>:1:4\"]}\n"
+        );
+    }
+
+    #[test]
+    fn concise_source_is_the_shown_first_line_and_is_cut() {
+        let excerpt_of = |source: &[u8], start: u32, end: u32, line: u32, column: u32| {
+            let span = evocc_common::SourceSpan::new(
+                evocc_common::FileId::new(1),
+                start,
+                end,
+                line,
+                column,
+            );
+            excerpt(&Span::source("cut.c", source, span, "label"))
+        };
+        // Tabs expand from the start of the line, as under the text markers.
+        assert_eq!(excerpt_of(b"ab\tc\n", 1, 4, 1, 2).as_deref(), Some("b  c"));
+        assert_eq!(
+            excerpt_of(b"a\x1bb\n", 0, 3, 1, 1).as_deref(),
+            Some("a\\x1bb")
+        );
+        assert_eq!(excerpt_of(b"abc\n", 1, 1, 1, 2), None);
+        let body = format!("int x = {}1;", "1 + ".repeat(30));
+        let source = format!("\t{body}\nint y;\n");
+        // 80 characters stay whole. A longer text keeps 77 and `...`.
+        let whole = excerpt_of(source.as_bytes(), 1, 81, 1, 2).unwrap();
+        assert_eq!((whole.chars().count(), whole.as_str()), (80, &body[..80]));
+        let cut = excerpt_of(source.as_bytes(), 1, 82, 1, 2).unwrap();
+        assert_eq!(cut, format!("{}...", &body[..77]));
+        // A span that continues on the next line ends with ` ...`.
+        let continued = excerpt_of(source.as_bytes(), 1, source.len() as u32 - 2, 1, 2).unwrap();
+        assert_eq!(continued, format!("{}... ...", &body[..77]));
+        let short = excerpt_of(b"f(\n);\n", 0, 4, 1, 1).unwrap();
+        assert_eq!(short, "f( ...");
+    }
+
+    #[test]
+    fn concise_paths_compare_canonical_directories() {
+        let directory =
+            std::env::temp_dir().join(format!("evocc-concise-path-{}", std::process::id()));
+        std::fs::create_dir_all(directory.join("sub")).unwrap();
+        let file = directory.join("sub/input.c");
+        std::fs::write(&file, "").unwrap();
+        let file = file.to_str().unwrap();
+        let canonical = directory.canonicalize().unwrap();
+        // The temporary directory can itself pass through a symbolic link.
+        assert_eq!(relative(file, &canonical).as_deref(), Some("sub/input.c"));
+        assert_eq!(
+            relative(file, &canonical.join("sub")).as_deref(),
+            Some("input.c")
+        );
+        assert_eq!(relative(file, &canonical.join("other")), None);
+        assert_eq!(relative(directory.to_str().unwrap(), &canonical), None);
+        assert_eq!(relative(COMMAND_LINE, &canonical), None);
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn every_page_has_a_why_sentence_and_hints_are_sorted() {
+        for (code, _) in CATALOGUE {
+            let why = explanation_line(code).unwrap();
+            assert!(why.ends_with('.'), "{code}: {why}");
+        }
+        assert!(HINTS.windows(2).all(|pair| pair[0].0 < pair[1].0));
+        for (code, hint) in HINTS {
+            assert!(explanation_line(code).is_some(), "{code}");
+            assert_eq!(repair_hint(code), Some(*hint));
+        }
+        assert_eq!(repair_hint("E9999"), None);
+        assert_eq!(explanation_line(""), None);
     }
 
     #[test]

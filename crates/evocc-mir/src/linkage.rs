@@ -28,6 +28,12 @@ use evocc_evoir::{Function, GlobalVisibility, Inst, Module};
 /// globals' relocations and the module assembly table.
 #[must_use]
 pub fn emitted_functions(module: &Module) -> BTreeSet<String> {
+    emitted_functions_with_entries(module, &[])
+}
+
+/// Selected proof entries are roots even when C gives them internal linkage.
+/// Keep their call closures without changing the symbols' linkage or bodies.
+pub fn emitted_functions_with_entries(module: &Module, entries: &[&str]) -> BTreeSet<String> {
     let internal = module
         .functions
         .iter()
@@ -37,7 +43,10 @@ pub fn emitted_functions(module: &Module) -> BTreeSet<String> {
     let mut kept = module
         .functions
         .iter()
-        .filter(|function| function.visibility != GlobalVisibility::Internal)
+        .filter(|function| {
+            function.visibility != GlobalVisibility::Internal
+                || entries.contains(&function.name.as_str())
+        })
         .map(|function| function.name.clone())
         .collect::<BTreeSet<String>>();
 

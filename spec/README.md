@@ -10,14 +10,19 @@ defect; a fix changes the code, or it changes the document with a new revision.
 
 | Document | Revision | Governs |
 |---|---|---|
-| [`evoir.md`](evoir.md) | 2.5.0 | EvoIR: types, block-argument SSA, instructions, effects, memory, undefined behavior and diagnostics, equality saturation, text syntax, cross-IR contracts, the proof-checking interface and the reviewed rule registries |
-| [`evomir.md`](evomir.md) | 1.2.1 | EvoMIR: registers and classes, sub-width values, instructions, lowering from EvoIR, frame and calling convention, SSA destruction and allocation, emission, verification and diagnostics |
-| [`target.md`](target.md) | 1.0.1 | The internal target description: the components in `targets/aarch64/`, their form and rules, and what a correct backend operation means |
-| [`verification.md`](verification.md) | 1.1.1 | The checked compilation path: the claim, the subset `core-v1`, the semantics and refinement, the stage checkers and theorems, the pipeline theorem, the exports, proof-required mode and the trusted base |
-| [`diagnostics.md`](diagnostics.md) | 1.3.0 | The presentation of diagnostics: code ranges, spans and source bytes, text and color, message style, JSON records and source repairs, exit status; the diagnostic authority table stays in `evoir.md` Section 6.3 |
+| [`evoir.md`](evoir.md) | 2.6.5 | EvoIR: types, block-argument SSA, instructions, effects, memory, undefined behavior and diagnostics, equality saturation, text syntax, cross-IR contracts, the proof-checking interface and the reviewed rule registries |
+| [`evomir.md`](evomir.md) | 1.3.2 | EvoMIR: registers and classes, sub-width values, instructions, lowering from EvoIR, frame and calling convention, SSA destruction and allocation, emission, verification and diagnostics |
+| [`target.md`](target.md) | 1.1.0 | The internal target description: the components in `targets/aarch64/`, their form and rules, and what a correct backend operation means |
+| [`verification.md`](verification.md) | 1.1.2 | The checked compilation path: the claim, the subset `core-v1`, the semantics and refinement, the stage checkers and theorems, the pipeline theorem, the exports, proof-required mode and the trusted base |
+| [`diagnostics.md`](diagnostics.md) | 1.4.1 | The presentation of diagnostics: code ranges, spans and source bytes, text and color, message style, JSON records and source repairs, exit status; the diagnostic authority table stays in `evoir.md` Section 6.3 |
 
 The revision column shows the state when this index was written. The revision line of each document
 and `spec/pins.json` decide.
+
+The grammar script and the target generator's Python unit tests are manual
+change checks. Do not infer that the workspace gate or CI runs them. The
+workspace gate runs the specification-pin and target-generator `--check`
+commands; its Cargo tests also check the textual grammar contract.
 
 ## Pins
 

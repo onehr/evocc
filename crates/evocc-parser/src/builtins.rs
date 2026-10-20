@@ -39,6 +39,7 @@ const KEYWORDS: &[(&str, TokenKind)] = &[
 
 /// Builtins with the prototype of the C library function that they name.
 const LIBRARY: &[&str] = &[
+    "__builtin___clear_cache",
     "__builtin_memset",
     "__builtin_nan",
     "__builtin_nanf",

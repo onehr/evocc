@@ -326,11 +326,53 @@ fn parameter_bounds_adjust_after_name_resolution() {
 }
 
 #[test]
-fn typeof_captures_a_variable_type_name_but_refuses_conflicting_pointer_evaluation() {
+fn typeof_captures_a_variable_type_name_and_evaluates_vm_pointer_operands() {
     accepts("void f(int n) { typeof(int[n]) a; }\n");
+    for spelling in ["typeof", "__typeof__", "__typeof", "__typeof_unqual__"] {
+        assert_eq!(run_main(&format!(
+            "int main(void) {{ int n=3, calls=0; int a[n]; {spelling}((calls++, &a)) p=(calls==1 ? &a : 0); return calls != 1 || sizeof(*p) != 3*sizeof(int) || p != &a; }}"
+        )), 0);
+    }
+}
+
+#[test]
+fn vm_typeof_declarations_keep_jump_and_operand_scope_rules() {
+    for source in [
+        "void f(int n) { int a[n]; goto inside; typeof(&a) p; inside: ; }",
+        "void f(int n) { int a[n]; switch(n) { typeof(&a) p; case 1: ; } }",
+    ] {
+        rejects(source, "E2945");
+    }
     rejects(
-        "void f(int n) { int a[n]; int calls=0; typeof((calls++, &a)) p=&a; }\n",
-        "E2904",
+        "void f(int n) { int a[n]; typeof(({ int local=0; &a; })) p; local=1; }",
+        "E2001",
+    );
+}
+
+#[test]
+fn vm_typeof_captures_execute_only_in_the_evaluated_expression() {
+    assert_eq!(
+        run_main(include_str!(
+            "../../../tests/fixtures/typeof-evaluation-contexts.c"
+        )),
+        0
+    );
+}
+
+#[test]
+fn vm_pointer_increment_keeps_compatible_captured_types() {
+    // Two declarations capture the same bound in distinct hidden objects.
+    // Pointer subtraction depends on compatible pointees, not capture IDs.
+    assert_eq!(run_main("int main(void) { int n=3; int a[n]; int (*p)[n]=&a; int (*start)[n]=p; typeof(p++) q=&a; return (p-start)!=1 || sizeof(*q)!=sizeof(a); }"), 0);
+}
+
+#[test]
+fn vm_typeof_parameter_captures_belong_to_definition_entry() {
+    assert_eq!(
+        run_main(include_str!(
+            "../../../tests/fixtures/typeof-parameter-evaluation.c"
+        )),
+        0
     );
 }
 

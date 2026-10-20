@@ -57,6 +57,8 @@ Read the process status as well as the JSON record.
 ## JSON and MCP
 
 Place `--json` before `--` for one command-record JSON object per line.
+`evo check FILE.c --json --form=concise-1` gives one shorter record with each
+code, location, explanation line and repair hint; omit `--form` for the full record.
 Read [book/src/agents.md](../../book/src/agents.md) for command schemas and
 MCP arguments, and [spec/diagnostics.md](../../spec/diagnostics.md) for
 diagnostic spans, repair records and safety classifications.

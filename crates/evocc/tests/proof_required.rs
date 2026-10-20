@@ -162,6 +162,11 @@ fn assert_record(record: &str, checked: &[&str]) {
     assert!(record.contains(&format!("\"scope\": \"{SCOPE}\"")));
     assert!(record.contains("\"all_stages_checked\": true"));
     assert!(record.contains("\"checked\": true"));
+    let compiler = record.split_once("\"compiler\": {").unwrap().1;
+    let compiler = compiler.split_once("\"sha256\": \"").unwrap().1;
+    let compiler = compiler.split_once('"').unwrap().0;
+    assert_eq!(compiler.len(), 64, "compiler digest: {compiler}");
+    assert!(compiler.bytes().all(|byte| byte.is_ascii_hexdigit()));
     assert!(!record.to_lowercase().contains("verified"), "{record}");
     for trusted in [
         "the Lean kernel",
@@ -318,34 +323,36 @@ fn accept(source: &Path, extra: &[&str]) -> (Scratch, String) {
 fn pilot_entries_are_checked_to_final_assembly_text() {
     let (directory, record) = accept(&fixture("musl-abs.c"), &["--core-entry=abs"]);
     assert_eq!(record.matches("\"result\": \"ACCEPTED\"").count(), 5);
-    // The allocation export, the AST and the text match the frozen allocation
-    // and frame-emission fixtures, apart from the compiler release metadata.
-    for (exported, frozen) in [
-        ("allocation.json", "lean/EvoIR/Alloc/Fixtures/musl-abs.json"),
+    // Live-range holes remove three identity moves and use w1 instead of w2
+    // for zero. Pin the reviewed current outputs after the complete Lean
+    // pipeline accepts them. Keep the historical fixtures unchanged: the
+    // Lean self-tests still replay their earlier allocation and frame proof.
+    for (exported, expected) in [
+        (
+            "allocation.json",
+            "09afd2191c3984f27a2e6e39345b4f6f825fe298c5fc5db83f0ffb039fca4b11",
+        ),
         (
             "asm-ast.json",
-            "tests/fixtures/verification/asm/musl-abs.ast.json",
+            "2c4cf48755eb176f32d4138ed7306c394b0ca80cefaa44055cc2fde40bb0eabc",
         ),
-        ("assembly.s", "tests/fixtures/verification/asm/musl-abs.s"),
+        (
+            "assembly.s",
+            "1ac2ceac191a6ebb8af0fd493865b2ab310f872f035774ce3c289ac7956326fc",
+        ),
     ] {
-        let frozen = std::fs::read_to_string(repository().join(frozen)).unwrap();
-        let expected = if exported == "allocation.json" {
-            frozen
-        } else {
-            // Preserve the historical fixtures. Only the exact producer note
-            // follows today's release; every instruction and hint stays fixed.
-            let producer = "EvoCC 0.0.0 aarch64-unknown-linux-gnu";
-            assert_eq!(frozen.matches(producer).count(), 1, "{exported}");
-            frozen.replace(
-                producer,
-                &format!(
-                    "EvoCC {} aarch64-unknown-linux-gnu",
-                    env!("CARGO_PKG_VERSION")
-                ),
-            )
-        };
+        let actual = std::fs::read_to_string(directory.join("inputs").join(exported)).unwrap();
+        let producer = format!(
+            "EvoCC {} aarch64-unknown-linux-gnu",
+            env!("CARGO_PKG_VERSION")
+        );
         assert_eq!(
-            std::fs::read_to_string(directory.join("inputs").join(exported)).unwrap(),
+            actual.matches(&producer).count(),
+            usize::from(exported != "allocation.json")
+        );
+        let normalized = actual.replace(&producer, "EvoCC 0.0.0 aarch64-unknown-linux-gnu");
+        assert_eq!(
+            evocc_proof::sha256_hex(normalized.as_bytes()),
             expected,
             "{exported}"
         );
@@ -516,6 +523,7 @@ fn rewrites_are_checked_between_v01_and_v02() {
 /// The stage argument, for example `allocation`, is not a binding, also when
 /// it is equal to a role name.
 const CHANGING_ROLE_CHECKER: &str = r#"#!/bin/sh
+set -e
 if [ -n "$EVOCC_TEST_COMMAND" ] && [ "$1" != "$EVOCC_TEST_COMMAND" ]; then
     exec "$EVOCC_TEST_LEAN_CHECKER" "$@"
 fi
@@ -528,7 +536,12 @@ for binding in "$@"; do
     case " $EVOCC_TEST_ROLE " in
         *" $role "*)
             file=${binding#*=}
-            sed -e "$EVOCC_TEST_SED" "$file" > "$file.changed" && mv "$file.changed" "$file"
+            sed -e "$EVOCC_TEST_SED" "$file" > "$file.changed"
+            if cmp -s "$file" "$file.changed"; then
+                echo "test mutation did not change $role" >&2
+                exit 97
+            fi
+            mv "$file.changed" "$file"
             ;;
     esac
 done
@@ -598,6 +611,24 @@ fn the_pipeline_check_is_the_final_decision() {
 }
 
 #[test]
+fn a_stale_mutation_is_a_checker_error_not_a_proof_rejection() {
+    let directory = new_directory();
+    let output = run_changed(
+        &directory,
+        &["--core-entry=abs"],
+        &fixture("musl-abs.c"),
+        "allocation",
+        "s/nonexistent-proof-input/changed-proof-input/",
+    );
+    assert_refused(
+        &output,
+        &directory,
+        CHECKER,
+        "test mutation did not change allocation",
+    );
+}
+
+#[test]
 fn changed_allocation_exports_are_rejected() {
     let read = |directory: &Path| {
         std::fs::read_to_string(directory.join("inputs/allocation.json")).unwrap()
@@ -610,11 +641,11 @@ fn changed_allocation_exports_are_rejected() {
         &["--core-entry=abs"],
         &fixture("musl-abs.c"),
         "allocation",
-        r#"s/\["gpr",2,"w"],\["gpr",0,"w"],"w"]/["gpr",0,"w"],["gpr",2,"w"],"w"]/"#,
+        r#"s/\["gpr",1,"w"],\["gpr",0,"w"],"w"]/["gpr",0,"w"],["gpr",1,"w"],"w"]/"#,
     );
     assert_refused(&output, &directory, REJECTED, "stage allocation for entry");
     assert_refused(&output, &directory, REJECTED, "allocation not confirmed");
-    assert!(read(&directory).contains(r#"["flags"],["gpr",0,"w"],["gpr",2,"w"],"w"]"#));
+    assert!(read(&directory).contains(r#"["flags"],["gpr",0,"w"],["gpr",1,"w"],"w"]"#));
     drop(directory);
 
     // A reload from a wrong spill slot before an outgoing stack argument.
@@ -992,6 +1023,71 @@ fn checker_without_matching_acceptance_is_refused() {
 }
 
 #[test]
+fn checker_responses_cannot_publish_a_failed_or_unbound_result() {
+    use std::os::unix::fs::PermissionsExt;
+    // These are protocol faults, not counterexamples to a Lean theorem. Each
+    // case runs through the actual driver and checks publication as well as exit.
+    for (reply, checker_exit, driver_exit, reason) in [
+        (
+            "STAGE_ACCEPTED stage=source-to-evoir entry=abs",
+            "1",
+            REJECTED,
+            "rejected",
+        ),
+        (
+            "STAGE_ACCEPTED stage=source-to-evoir entry=abs",
+            "2",
+            INPUT,
+            "not supported or not readable",
+        ),
+        (
+            "STAGE_ACCEPTED stage=source-to-evoir entry=abs",
+            "64",
+            CHECKER,
+            "checker failed",
+        ),
+        ("", "0", CHECKER, "no acceptance line"),
+        (
+            "STAGE_ACCEPTED stage=lowering entry=abs",
+            "0",
+            CHECKER,
+            "no acceptance line",
+        ),
+        (
+            "STAGE_ACCEPTED stage=source-to-evoir entry=abs_extra",
+            "0",
+            CHECKER,
+            "no acceptance line",
+        ),
+        (
+            "STAGE_ACCEPTED stage=source-to-evoir entry=abs\nextra",
+            "0",
+            CHECKER,
+            "no acceptance line",
+        ),
+    ] {
+        let work = new_directory();
+        std::fs::create_dir(&*work).unwrap();
+        let checker = work.join("checker.sh");
+        std::fs::write(
+            &checker,
+            format!("#!/bin/sh\nprintf '%s\\n' '{reply}'\nexit {checker_exit}\n"),
+        )
+        .unwrap();
+        std::fs::set_permissions(&checker, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let directory = work.join("proof");
+        let output = run_proof(
+            &directory,
+            &checker,
+            &["--core-entry=abs"],
+            &fixture("musl-abs.c"),
+            &[],
+        );
+        assert_refused(&output, &directory, driver_exit, reason);
+    }
+}
+
+#[test]
 fn source_outside_core_v1_is_refused() {
     let checker = lean_checker();
     for (text, reason) in [
@@ -1034,6 +1130,10 @@ fn proof_options_are_admitted_only_with_the_baseline_path() {
         vec!["--core-entry=abs", "--eq-proof-dir=/tmp/x"],
         vec!["--core-entry=abs", "--ub-checks=unchecked"],
         vec!["--core-entry=abs", "--frame-opt=paired-saves"],
+        vec!["--core-entry=abs", "-fwrapv"],
+        vec!["--core-entry=abs", "-frounding-math"],
+        vec!["--core-entry=abs", "-fstack-protector-strong"],
+        vec!["--core-entry=abs", "-ftrivial-auto-var-init=zero"],
         vec!["--core-entry=abs", "--proof-proposal=other=/dev/null"],
         vec![],
     ] {
@@ -1063,6 +1163,162 @@ fn proof_options_are_admitted_only_with_the_baseline_path() {
     assert_refused(&output, &directory, INPUT, "cannot create");
 }
 
+#[test]
+fn cc_actions_do_not_publish_outside_the_proof_command_contract() {
+    for action in ["-S", "-c"] {
+        let directory = new_directory();
+        let destination = new_directory().with_extension("out");
+        let output = evocc(
+            &[
+                action,
+                "-o",
+                destination.to_str().unwrap(),
+                "--target=aarch64-unknown-linux-gnu",
+                &format!("--proof-required={}", directory.display()),
+                &format!("--proof-checker={}", lean_checker().display()),
+                "--core-entry=abs",
+                "-O0",
+                "-fno-builtin",
+            ],
+            &fixture("musl-abs.c"),
+            &[],
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "{action}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stderr).contains("requires --emit=asm"));
+        assert!(output.stdout.is_empty());
+        assert!(!directory.exists());
+        assert!(!destination.exists());
+    }
+}
+
+#[test]
+fn record_publication_failure_removes_the_assembly_output() {
+    let directory = new_directory();
+    let output = run_proof(
+        &directory,
+        &test_checker("changing-checker.sh"),
+        &["--core-entry=abs"],
+        &fixture("musl-abs.c"),
+        &[
+            ("EVOCC_TEST_LEAN_CHECKER", &lean_checker()),
+            ("EVOCC_TEST_ACTION", Path::new("block-record")),
+        ],
+    );
+    assert_refused(&output, &directory, INPUT, "cannot write");
+    assert!(std::fs::symlink_metadata(directory.join("record.json")).is_err());
+}
+
+#[test]
+fn selected_entries_keep_their_full_argument_domain() {
+    for second in [3, 4] {
+        let source = source_file(&format!(
+            "static int g(int a, int b) {{ int result = a + b; return result; }}\n\
+             int f(int a) {{ return g(a, 3) + g(a + 1, {second}); }}\n"
+        ));
+        let directory = new_directory();
+        let output = run_proof(
+            &directory,
+            &lean_checker(),
+            &["--core-entry=g", "--core-entry=f"],
+            &source,
+            &[],
+        );
+        assert!(
+            output.status.success(),
+            "second={second}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let record = std::fs::read_to_string(directory.join("record.json")).unwrap();
+        assert_record(
+            &record,
+            &[
+                "source-to-evoir",
+                "lowering",
+                "allocation",
+                "frame-emission",
+            ],
+        );
+        std::fs::remove_file(source).unwrap();
+    }
+}
+
+#[test]
+fn selected_private_entry_is_retained_without_a_c_caller() {
+    let source = source_file("static int entry(int a) { return a + 2; }\n");
+    let directory = new_directory();
+    let output = run_proof(
+        &directory,
+        &lean_checker(),
+        &["--core-entry=entry"],
+        &source,
+        &[],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(directory.join("output.s").is_file());
+    std::fs::remove_file(source).unwrap();
+}
+
+#[test]
+fn copied_zero_branches_are_checked_to_final_assembly_text() {
+    for predicate in ["==", "!="] {
+        let source = source_file(&format!(
+            "int entry(unsigned a) {{ if ((unsigned long)a {predicate} 0) return 3; return 7; }}\n"
+        ));
+        let (directory, _) = accept(&source, &["--core-entry=entry"]);
+        let assembly = std::fs::read_to_string(directory.join("output.s")).unwrap();
+        assert!(
+            assembly.contains("cbz") || assembly.contains("cbnz"),
+            "{assembly}"
+        );
+        std::fs::remove_file(source).unwrap();
+    }
+}
+
+#[test]
+fn changed_copied_zero_branches_are_rejected() {
+    let source =
+        source_file("int entry(unsigned a) { if ((unsigned long)a == 0) return 3; return 7; }\n");
+    // Flip the edge polarity, or test the emitted zero constant instead of
+    // the argument. Both are well-formed branches with different behavior.
+    for (sed, changed) in [
+        (r#"s/\["cb",false,/["cb",true,/"#, r#"["cb",true,"#),
+        (
+            r#"s/\["cb",false,\[0,"gpr32"\]/["cb",false,[2,"gpr32"]/"#,
+            r#"["cb",false,[2,"gpr32"]"#,
+        ),
+    ] {
+        let directory = new_directory();
+        let output = run_changed(
+            &directory,
+            &["--core-entry=entry"],
+            &source,
+            "ssa postssa",
+            sed,
+        );
+        assert_refused(
+            &output,
+            &directory,
+            REJECTED,
+            "stage lowering for entry `entry`",
+        );
+        let input = std::fs::read_to_string(directory.join("inputs/post-ssa-evomir.json")).unwrap();
+        assert!(
+            input.contains(changed),
+            "the test checker must apply `{sed}`"
+        );
+    }
+    std::fs::remove_file(source).unwrap();
+}
+
 fn guarded_division() -> PathBuf {
     repository().join("tests/fixtures/d06-guarded-division/evocc-demo-core-integer.c")
 }
@@ -1077,8 +1333,8 @@ const GUARDED_DIVISION: [&str; 4] = [
 ];
 
 /// D06: the signed overflow guard of `12 / divisor` is the 32-bit OR of two
-/// `cset` results, and the allocated entry copies the dead parameter
-/// `unused`. Both entries are checked to the final assembly text.
+/// `cset` results. The unused second parameter needs no physical copy.
+/// Both entries are checked to the final assembly text.
 #[test]
 fn guarded_division_is_checked_to_final_assembly_text() {
     let (directory, record) = accept(&guarded_division(), &GUARDED_DIVISION);
@@ -1113,8 +1369,8 @@ fn guarded_division_is_checked_to_final_assembly_text() {
 /// D06 controls. Each change of one proof input is refused, and the driver
 /// publishes nothing. The lowering changes trap for a divisor that reaches
 /// the division, where the source returns `12 / divisor`. The allocation
-/// changes read a register that holds no argument, read the dead parameter
-/// as the divisor, or state a false entry hint.
+/// changes read a register that holds no argument, use the numerator as the
+/// divisor, or state a false entry hint.
 #[test]
 fn changed_guarded_division_inputs_are_rejected() {
     let lowering = "stage lowering for entry `divide`";
@@ -1150,16 +1406,16 @@ fn changed_guarded_division_inputs_are_rejected() {
         ),
         (
             "allocation",
-            r#"s/\["mov",\["gpr",0,"w"\],\["gpr",1,"w"\]\]/["mov",["gpr",0,"w"],["gpr",3,"w"]]/"#,
+            r#"s/\["cmp_imm",\["flags"\],\["gpr",0,"w"\],0,"w"\]/["cmp_imm",["flags"],["gpr",3,"w"],0,"w"]/"#,
             "allocation.json",
-            r#"["mov",["gpr",0,"w"],["gpr",3,"w"]]"#,
+            r#"["cmp_imm",["flags"],["gpr",3,"w"],0,"w"]"#,
             allocation,
         ),
         (
             "allocation",
-            r#"s/\["cmp_imm",\["flags"\],\["gpr",2,"w"\],0,"w"\]/["cmp_imm",["flags"],["gpr",0,"w"],0,"w"]/"#,
+            r#"s/\["binary","sdiv",\["gpr",0,"w"\],\["gpr",1,"w"\],\["gpr",0,"w"\],"w"\]/["binary","sdiv",["gpr",0,"w"],["gpr",1,"w"],["gpr",1,"w"],"w"]/"#,
             "allocation.json",
-            r#"["cmp_imm",["flags"],["gpr",0,"w"],0,"w"]"#,
+            r#"["binary","sdiv",["gpr",0,"w"],["gpr",1,"w"],["gpr",1,"w"],"w"]"#,
             allocation,
         ),
         (

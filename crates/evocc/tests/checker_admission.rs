@@ -122,3 +122,119 @@ fn bundle_publication_failure_keeps_original_rejection() {
     assert!(error.contains("additionally"), "{error}");
     assert!(f.0.join("main.c").is_file());
 }
+
+#[test]
+fn darwin_rewrite_chain_retains_and_checks_its_target() {
+    let f = Fixture::new();
+    fs::write(
+        f.0.join("main.c"),
+        include_str!("../../../examples/add_zero.c"),
+    )
+    .unwrap();
+    let directory = f.0.join("chain");
+    let out = f
+        .command()
+        .args(["--target=aarch64-apple-darwin", "-O0"])
+        .arg(format!("--eq-checker-sha256={}", trusted()))
+        .arg(format!("--eq-proof-dir={}", directory.display()))
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert!(out.stdout.starts_with(b"target aarch64-apple-darwin\n\n"));
+    evocc_evoir::parse_target_module(&out.stdout, "aarch64-apple-darwin").unwrap();
+    let record = fs::read_to_string(directory.join("chain.json")).unwrap();
+    assert!(record.contains("\"publication\":\"VERIFIED\""), "{record}");
+    assert!(record.contains("\"result\":\"CHANGED\""), "{record}");
+    assert!(record.contains("\"result\":\"UNCHANGED\""), "{record}");
+    let mut replayed = 0;
+    for entry in fs::read_dir(&directory).unwrap() {
+        let entry = entry.unwrap();
+        let name = entry.file_name().into_string().unwrap();
+        let Some(stem) = name.strip_suffix(".before.evo") else {
+            continue;
+        };
+        let before = entry.path();
+        let after = directory.join(format!("{stem}.after.evo"));
+        let proof = directory.join(format!("{stem}.proof.evp"));
+        assert!(fs::read(&before)
+            .unwrap()
+            .starts_with(b"target aarch64-apple-darwin\n"));
+        assert!(fs::read(&after)
+            .unwrap()
+            .starts_with(b"target aarch64-apple-darwin\n"));
+        let replay = Command::new(env!("CARGO_BIN_EXE_evocc-checker"))
+            .args([before, after, proof])
+            .output()
+            .unwrap();
+        assert!(replay.status.success(), "{replay:?}");
+        replayed += 1;
+    }
+    assert_eq!(replayed, 2);
+    assert!(fs::read_to_string(directory.join("000.proof.evp"))
+        .unwrap()
+        .contains("p0_001_add_zero_rhs"));
+}
+
+#[test]
+fn darwin_identity_chain_keeps_the_same_target_bytes_as_emission() {
+    let f = Fixture::new();
+    let directory = f.0.join("identity");
+    let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args(["--target=aarch64-apple-darwin", "--emit=evoir"])
+        .arg(format!("--eq-proof-dir={}", directory.display()))
+        .arg(f.0.join("main.c"))
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        fs::read(directory.join("input.evo")).unwrap(),
+        output.stdout
+    );
+    assert_eq!(
+        fs::read(directory.join("output.evo")).unwrap(),
+        output.stdout
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn darwin_readme_example_runs_with_and_without_certified_rewrites() {
+    let f = Fixture::new();
+    let source = f.0.join("main.c");
+    fs::write(&source, include_str!("../../../examples/add_zero.c")).unwrap();
+    let checked = Command::new(env!("CARGO_BIN_EXE_evo"))
+        .arg("check")
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(checked.status.success(), "{checked:?}");
+    let mut texts = Vec::new();
+    for optimized in [false, true] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_evocc"));
+        command.args(["--target=aarch64-apple-darwin", "-O0", "--emit=asm"]);
+        if optimized {
+            command
+                .arg("-Oeq-scalar")
+                .arg(format!("--eq-checker-sha256={}", trusted()));
+        }
+        let output = command.arg(&source).output().unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let assembly = f.0.join("program.s");
+        let executable = f.0.join("program");
+        fs::write(&assembly, &output.stdout).unwrap();
+        let linked = Command::new("cc")
+            .arg(&assembly)
+            .arg("-o")
+            .arg(&executable)
+            .output()
+            .unwrap();
+        assert!(linked.status.success(), "{linked:?}");
+        let run = Command::new(&executable).output().unwrap();
+        assert!(run.status.success(), "{run:?}");
+        texts.push(output.stdout);
+    }
+    assert_ne!(
+        texts[0], texts[1],
+        "the example must change emitted instructions"
+    );
+}

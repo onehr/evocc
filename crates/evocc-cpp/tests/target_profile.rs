@@ -14,7 +14,7 @@ const ATTRIBUTE_TABLE_SHA256: &str =
 /// `crates/evocc-parser/tests/builtin_inventory.rs` checks that this table
 /// lists exactly the builtins that the front end implements.
 const BUILTIN_TABLE_SHA256: &str =
-    "ad8d7ba1fd96ac26fb192ec32b81cbf1324968bda6dea227661143dff5447486";
+    "ab43ec9c5ff3453d2b568a857ddd3d44b2650a4ab81355fccfed086db6e2519a";
 
 static NEXT_TEMP_TREE: AtomicU64 = AtomicU64::new(0);
 
@@ -300,7 +300,7 @@ fn feature_query_tables_are_digest_checked_data() {
     ))
     .expect("read builtin answer table");
     assert_eq!(sha256_hex(builtins.as_bytes()), BUILTIN_TABLE_SHA256);
-    assert_eq!(builtins.lines().count(), 279);
+    assert_eq!(builtins.lines().count(), 287);
 }
 
 #[test]

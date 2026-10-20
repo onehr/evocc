@@ -30,6 +30,11 @@ pub type Result<T> = std::result::Result<T, String>;
 /// module outside the core assembly profile, and refuses if the allocated
 /// functions do not reproduce the compiler text.
 pub fn export_core_asm(module: &Module) -> Result<(String, String)> {
+    export_core_asm_with_entries(module, &[])
+}
+
+/// Keep the same explicit callable roots as the proof-required native path.
+pub fn export_core_asm_with_entries(module: &Module, entries: &[&str]) -> Result<(String, String)> {
     if !module.globals.is_empty()
         || !module.aliases.is_empty()
         || !module.assembly.is_empty()
@@ -59,7 +64,7 @@ pub fn export_core_asm(module: &Module) -> Result<(String, String)> {
     }
     let target = crate::Target::Linux;
     let profile = crate::UbCheckProfile::Checked;
-    let keep = crate::emitted_functions(module);
+    let keep = crate::emitted_functions_with_entries(module, entries);
     let lowered =
         crate::lower_module_for_profile(target, module, &|name| !keep.contains(name), profile)
             .map_err(|e| format!("{e:?}"))?;
@@ -68,7 +73,7 @@ pub fn export_core_asm(module: &Module) -> Result<(String, String)> {
         if !keep.contains(&function.name) {
             continue;
         }
-        let destroyed = crate::out_of_ssa(function);
+        let destroyed = crate::regalloc::checked_out_of_ssa(function, true)?;
         let mut allocated =
             crate::allocate_for_with_options(target, &destroyed, Default::default())
                 .map_err(|detail| format!("@{}: {detail}", function.name))?;
@@ -77,18 +82,19 @@ pub fn export_core_asm(module: &Module) -> Result<(String, String)> {
             .iter()
             .find(|source| source.name == function.name)
             .is_some_and(|source| source.visibility == GlobalVisibility::Internal);
-        crate::verify_allocation_for(target, &allocated)
+        crate::verify_allocation_against(target, &destroyed, &allocated)
             .map_err(|refusal| format!("@{}: {}", function.name, refusal.detail))?;
         functions.push(allocated);
     }
     let unit = crate::emit_module_unit(target, &functions, &[], &[]);
     let text = format!("// evocc-native-ub-checks={}\n{unit}", profile.name());
-    let actual = crate::compile_module_with_options(
+    let actual = crate::compile_module_with_entries(
         target,
         module,
         &|_| true,
         crate::RelocationModel::PositionIndependent,
         &crate::emit::CodegenOptions::default(),
+        entries,
     )
     .map_err(|e| format!("{e:?}"))?;
     if actual != text {

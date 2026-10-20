@@ -1076,21 +1076,9 @@ fn the_third_lane_lowers_or_refuses_every_compared_program() {
         assert!(
             matches!(
                 *code,
-                "E4001"
-                    | "E4002"
-                    | "E4003"
-                    | "E4004"
-                    | "E4005"
-                    | "E4006"
-                    | "E4007"
-                    | "E4008"
-                    | "E4009"
-                    | "E4010"
-                    | "E4011"
-                    | "E4012"
-                    | "E4013"
+                "E4002" | "E4003" | "E4004" | "E4009" | "E4010" | "E4013"
             ),
-            "{code} is not a Section 10 diagnostic"
+            "{code} is not an active Section 10 lowering diagnostic"
         );
     }
 }

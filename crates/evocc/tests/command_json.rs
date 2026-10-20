@@ -198,6 +198,190 @@ fn usage_and_explanation_errors_are_json_too() {
     }
 }
 
+/// `concise-1` names a file below the working directory relatively. The file
+/// argument keeps the uncanonical temporary path, as in the agent harness.
+fn concise(work: &Scratch, source: &str, status: i32, expected: &str) {
+    std::fs::write(work.file(), source).unwrap();
+    let output = evo()
+        .current_dir(&work.0)
+        .args(["check", &work.file(), "--json", "--form=concise-1"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(status), "{output:?}");
+    assert!(output.stderr.is_empty(), "{output:?}");
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
+}
+
+#[test]
+fn concise_check_records_have_fixed_keys_and_relative_locations() {
+    let work = Scratch::new();
+    concise(
+        &work,
+        "int main(void) { int zero = 0; return 1 / zero; }\n",
+        1,
+        r#"{"form":"concise-1","status":"stopped","diagnostics":[{"code":"E3002","message":"integer-division-by-zero","at":"input.c:1:39","source":"1 / zero","help":["check the divisor before the division or remainder operation"],"why":"The executed integer division has a zero divisor.","fix":"Check the divisor and choose the required error behavior before dividing."}],"exit_code":1}
+"#,
+    );
+    concise(
+        &work,
+        "int main(void) { return 7; }\n",
+        0,
+        r#"{"form":"concise-1","status":"completed","main_return":"7","scope":"No finding from the implemented checks on the executed path. Pointer subtraction and ordering obligations are not checked. This does not check that the results are correct.","exit_code":0}
+"#,
+    );
+    // A secondary span keeps its own location and label.
+    concise(
+        &work,
+        "int f(int a);\nlong f(int a) { return a; }\nint main(void) { return 0; }\n",
+        1,
+        r#"{"form":"concise-1","status":"stopped","diagnostics":[{"code":"E2002","message":"incompatible-redeclaration: f","at":"input.c:2:6","source":"f","also":["input.c:1:5 previous declaration is here"],"why":"Two declarations of one name do not describe compatible entities.","fix":"Correct the conflicting declaration instead of casting each use."}],"exit_code":1}
+"#,
+    );
+    // A whole-function span shows its end and only the first line.
+    concise(
+        &work,
+        "static int spin(void)\n{\n    for (;;) {\n    }\n    return 0;\n}\n\nint main(void)\n{\n    return spin();\n}\n",
+        1,
+        r#"{"form":"concise-1","status":"stopped","diagnostics":[{"code":"E3008","message":"interpreter-fuel-exhausted","at":"input.c:1:1","end":"6:2","source":"static int spin(void) ...","notes":["execution reached a resource limit; this is not a finding of undefined behavior","the executing function is shown; this instruction has no retained expression position"],"why":"The interpreter reached its execution step limit.","fix":"Inspect long-running loops and use a finite workload when testing termination."}],"exit_code":1}
+"#,
+    );
+    // The plan adds the -Wall repairs. A warning keeps its own repairs.
+    concise(
+        &work,
+        "static int f(int unused) { return 0; }\nmain(void) { return f(7); }\n",
+        0,
+        r#"{"form":"concise-1","status":"completed","main_return":"0","scope":"No finding from the implemented checks on the executed path. Pointer subtraction and ordering obligations are not checked. This does not check that the results are correct.","diagnostics":[{"code":"W0004","message":"declaration has no type specifier","level":"warning","at":"input.c:2:1","source":"main","help":["write an explicit type specifier"],"why":"A declaration omits its type specifier.","fix":"Write an explicit type specifier, such as `int`.","repairs":[{"id":"W0004.insert-int","kind":"safe","title":"write an explicit type specifier","at":"input.c:2:1","end":"2:1","replacement":"int "}]}],"repairs":[{"id":"W0002.void-cast","kind":"safe","title":"use the parameter or mark it __attribute__((unused))","at":"input.c:1:27","end":"1:27","replacement":" (void)unused;"},{"id":"W0004.insert-int","kind":"safe","title":"write an explicit type specifier","at":"input.c:2:1","end":"2:1","replacement":"int "}],"exit_code":0}
+"#,
+    );
+    // A review repair keeps its kind. Both copies escape a newline the same way.
+    concise(
+        &work,
+        "int f(void) { return missing(1, 2.0); }\nint main(void) { return 0; }\n",
+        1,
+        r#"{"form":"concise-1","status":"stopped","diagnostics":[{"code":"W0003","message":"function has no declaration","at":"input.c:1:22","source":"missing","help":["declare the function before its first call"],"why":"A call names a function with no visible declaration.","fix":"Declare the function before its first call, normally by including its header.","repairs":[{"id":"W0003.insert-prototype","kind":"review","title":"declare the function before its first call","at":"input.c:1:1","end":"1:1","replacement":"int missing(int, double);\n"}]}],"repairs":[{"id":"W0003.insert-prototype","kind":"review","title":"declare the function before its first call","at":"input.c:1:1","end":"1:1","replacement":"int missing(int, double);\n"}],"exit_code":1}
+"#,
+    );
+}
+
+#[test]
+fn concise_locations_outside_the_working_directory_keep_the_reported_path() {
+    let work = Scratch::new();
+    let elsewhere = Scratch::new();
+    std::fs::write(
+        work.file(),
+        "int main(void) { int zero = 0; return 1 / zero; }\n",
+    )
+    .unwrap();
+    let output = evo()
+        .current_dir(&elsewhere.0)
+        .args(["check", &work.file(), "--json", "--form=concise-1"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        text.contains(&format!("\"at\":\"{}:1:39\"", work.file())),
+        "{text}"
+    );
+    // A relative argument below the working directory stays relative.
+    let output = evo()
+        .current_dir(work.0.parent().unwrap())
+        .args(["check", "--json", "--form=concise-1"])
+        .arg(work.0.file_name().unwrap().to_str().unwrap().to_owned() + "/input.c")
+        .output()
+        .unwrap();
+    let text = String::from_utf8(output.stdout).unwrap();
+    let name = work.0.file_name().unwrap().to_str().unwrap();
+    assert!(
+        text.contains(&format!("\"at\":\"{name}/input.c:1:39\"")),
+        "{text}"
+    );
+}
+
+#[test]
+fn full_1_is_the_default_check_record() {
+    let work = Scratch::new();
+    for source in [
+        "int main(void) { return 7; }\n",
+        "int main(void) { int zero = 0; return 1 / zero; }\n",
+        "main(void) { return 0; }\n",
+    ] {
+        std::fs::write(work.file(), source).unwrap();
+        let default = evo()
+            .args(["check", &work.file(), "--json"])
+            .output()
+            .unwrap();
+        for args in [
+            ["check", &work.file(), "--json", "--form=full-1"],
+            ["check", "--form=full-1", "--json", &work.file()],
+        ] {
+            let explicit = evo().args(args).output().unwrap();
+            assert_eq!(explicit.status, default.status, "{args:?}");
+            assert_eq!(explicit.stdout, default.stdout, "{args:?}");
+            assert_eq!(explicit.stderr, default.stderr, "{args:?}");
+        }
+    }
+}
+
+#[test]
+fn form_selects_a_check_record_and_nothing_else() {
+    let work = Scratch::new();
+    let file = work.file();
+    let output = evo()
+        .args(["check", &file, "--form=concise-1"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let error = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        error.starts_with("evo: ") && error.contains("--form"),
+        "{error}"
+    );
+    for args in [
+        vec!["check", &file, "--json", "--form=concise-2"],
+        vec!["check", &file, "--json", "--form="],
+        vec!["check", &file, "--json", "--form"],
+        vec!["check", &file, "--json", "--form", "concise-1"],
+        vec![
+            "check",
+            &file,
+            "--json",
+            "--form=concise-1",
+            "--form=full-1",
+        ],
+        vec!["check", &file, "--json", "--form=full-1", "--form=full-1"],
+        vec!["explain", "E3002", "--json", "--form=concise-1"],
+        vec!["fix", &file, "--plan", "--json", "--form=concise-1"],
+        vec!["run", &file, "--json", "--form=full-1"],
+        vec!["version", "--json", "--form=full-1"],
+    ] {
+        let output = evo().args(&args).output().unwrap();
+        assert_eq!(output.status.code(), Some(1), "{args:?}");
+        assert_json(
+            &output,
+            "assert r['exit_code']==1 and '--form' in r['error'],r",
+            &[],
+        );
+    }
+    // After the separator, the option is a program argument.
+    std::fs::write(
+        &file,
+        "int main(int n, char **v) { return n == 2 && v[1][2] == 'f' ? 7 : 1; }\n",
+    )
+    .unwrap();
+    let output = evo()
+        .args(["run", &file, "--json", "--", "--form=concise-1"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(7), "{output:?}");
+    assert_json(
+        &output,
+        "assert r=={'exit_code':7,'stdout':'','stderr':''}",
+        &[],
+    );
+}
+
 #[test]
 fn build_json_is_the_written_receipt() {
     let work = Scratch::new();

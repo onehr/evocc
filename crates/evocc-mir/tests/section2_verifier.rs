@@ -38,6 +38,182 @@ fn one_block(args: Vec<VReg>, insts: Vec<MInst>, term: MTerm) -> MModule {
 }
 
 #[test]
+fn call_flag_clobber_can_precede_a_new_compare() {
+    let module = one_block(
+        vec![g(0)],
+        vec![
+            MInst::Bl {
+                fp_mode: None,
+                symbol: "touch".into(),
+                args: vec![],
+                results: vec![],
+            },
+            MInst::CmpImm {
+                dst: f(1),
+                lhs: g(0),
+                imm: 0,
+                width: Width::X,
+            },
+            MInst::Cset {
+                dst: w(2),
+                flags: f(1),
+                cond: Cond::Eq,
+            },
+        ],
+        MTerm::Ret { values: vec![w(2)] },
+    );
+    validate_module(&module).unwrap();
+}
+
+#[test]
+fn assembly_goto_results_exist_on_edges_not_on_input() {
+    use evocc_mir::{AsmBody, AsmConstraint, AsmDirection, AsmOperand};
+    let body = AsmBody {
+        template: "mov %w0, %w1".into(),
+        volatile: true,
+        outputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Write),
+            w(1),
+        )],
+        inputs: vec![AsmOperand::reg(
+            AsmConstraint::Register(AsmDirection::Read),
+            w(0),
+        )],
+        clobbers: vec![],
+    };
+    let mut module = one_block(
+        vec![w(0)],
+        vec![],
+        MTerm::AsmGoto {
+            body,
+            labels: vec![(1, vec![w(1)])],
+            fallthrough: 1,
+            fallthrough_args: vec![w(1)],
+        },
+    );
+    module.functions[0].blocks.push(MBlock {
+        id: 1,
+        args: vec![w(2)],
+        insts: vec![],
+        term: MTerm::Ret { values: vec![w(2)] },
+    });
+    validate_module(&module).unwrap();
+    let mut forged = module.clone();
+    assert_eq!(
+        evocc_mir::parse_module(&evocc_mir::render_module(&module)).unwrap(),
+        module
+    );
+    let MTerm::AsmGoto { body, .. } = &mut forged.functions[0].blocks[0].term else {
+        unreachable!()
+    };
+    body.inputs[0].value = evocc_mir::AsmValue::Reg(w(1));
+    assert!(validate_module(&forged)
+        .unwrap_err()
+        .contains("without a definition"));
+    let MTerm::AsmGoto { body, .. } = &mut module.functions[0].blocks[0].term else {
+        unreachable!()
+    };
+    body.outputs[0].value = evocc_mir::AsmValue::Reg(w(0));
+    assert!(validate_module(&module)
+        .unwrap_err()
+        .contains("defined twice"));
+}
+
+#[test]
+fn tst_requires_an_encodable_logical_immediate() {
+    for imm in [0, 5, u64::MAX] {
+        let module = one_block(
+            vec![g(0)],
+            vec![
+                MInst::TstImm {
+                    dst: f(1),
+                    lhs: g(0),
+                    imm,
+                    width: Width::X,
+                },
+                MInst::Cset {
+                    dst: w(2),
+                    flags: f(1),
+                    cond: Cond::Eq,
+                },
+            ],
+            MTerm::Ret { values: vec![w(2)] },
+        );
+        let error = validate_module(&module).expect_err("unencodable tst must be refused");
+        assert!(error.contains("unencodable tst immediate"), "{error}");
+    }
+}
+
+#[test]
+fn indirect_successors_are_nonempty_unique_and_sorted() {
+    for edges in [
+        vec![],
+        vec![(2, vec![]), (1, vec![])],
+        vec![(1, vec![]), (1, vec![])],
+    ] {
+        let module = one_block(
+            vec![g(0)],
+            vec![],
+            MTerm::Indirect {
+                target: g(0),
+                edges,
+            },
+        );
+        let error = validate_module(&module).expect_err("invalid successor set");
+        assert!(error.contains("successors"), "{error}");
+    }
+}
+
+#[test]
+fn indirect_execution_refuses_a_value_that_does_not_name_a_successor() {
+    let mut module = one_block(
+        vec![g(0)],
+        vec![],
+        MTerm::Indirect {
+            target: g(0),
+            edges: vec![(1, vec![])],
+        },
+    );
+    module.functions[0].blocks.push(MBlock {
+        id: 1,
+        args: vec![],
+        insts: vec![],
+        term: MTerm::Ret { values: vec![] },
+    });
+    validate_module(&module).unwrap();
+    let error = evocc_mir::interpret_module(
+        &module,
+        "f",
+        &[evocc_mir::MirValue::Int(0)],
+        evocc_mir::MirLimits::new(20),
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "E3048");
+}
+
+#[test]
+fn native_emission_checks_the_complete_lowered_module() {
+    let text = "func @f(%arg0: bits<32>) -> (bits<32>) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>):
+    ret %v0
+}
+";
+    let mut module = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+    // Individual functions remain valid, but the module has two definitions.
+    // The native entry must not publish assembly from this invalid lowering.
+    module.functions.push(module.functions[0].clone());
+    let error = evocc_mir::compile_module_for(evocc_mir::Target::Linux, &module, &|_| true)
+        .expect_err("invalid lowered module");
+    assert!(
+        matches!(error, evocc_mir::NativeStop::Verification(_)),
+        "{error:?}"
+    );
+    assert!(error.detail().contains("duplicate function symbol"));
+}
+
+#[test]
 fn a_flags_value_consumed_by_the_next_instruction_is_legal() {
     let module = one_block(
         vec![w(0), w(1)],

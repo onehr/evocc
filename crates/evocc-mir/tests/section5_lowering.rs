@@ -84,7 +84,7 @@ fn mnemonics(module: &evocc_mir::MModule) -> Vec<String> {
     let mut names = mnemonics_with_boundary(module);
     for function in &module.functions {
         for block in &function.blocks {
-            let MTerm::Ret { .. } = block.term else {
+            let MTerm::Ret { ref values } = block.term else {
                 continue;
             };
             // The extension is the last instruction before the return, and
@@ -96,7 +96,13 @@ fn mnemonics(module: &evocc_mir::MModule) -> Vec<String> {
                         op: evocc_mir::BinOp::And,
                         ..
                     } | MInst::Extend { .. }
-                );
+                ) || matches!(last, MInst::Mov { dst, src }
+                    if values.as_slice() == [*dst]
+                        && block.insts.iter().any(|inst|
+                            matches!(inst, MInst::Cset { dst, .. } if dst == src)));
+                // A Cset result is already 0 or 1. Zero-upper-bit selection
+                // replaces its boundary mask with a copy to the return value.
+                // Do not hide any other copy or any instruction in the row.
                 if extension && names.last().is_some() {
                     names.pop();
                 }

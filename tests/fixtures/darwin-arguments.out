@@ -1,0 +1,45 @@
+Darwin variadic cursors and named stack arguments — 2026-10-16
+
+Two failures from the unchanged return-signing runtime are repaired:
+1. Both interpreters treated Darwin's eight-byte list as a 32-byte list.
+   Memory start/access/copy/overlap now use the selected target layout.
+   C-HIR va_copy does too. The EvoIR program entry also receives that target;
+   it previously rebuilt a Linux layout before init/main/fini execution.
+2. A ninth named integer argument under -mgeneral-regs-only requested SIMD
+   fillers. Packed stack words now exhaust only their used banks. Later
+   anonymous arguments still exhaust their own banks from the updated cursor.
+
+Validation before the full gate:
+- Memory crate: 42 PASS, zero failures. Cursor tests cover both layouts,
+  adjacent lists, independent positions, partial read/write/copy rejection,
+  ended cursors and undersized storage.
+- Driver/ABI tests: 47 PASS, zero failures. Darwin integer and packed calls
+  cross with Apple clang in both directions at O0/O2. Existing mixed calls
+  include named integer stack words before anonymous floating values and
+  named floating stack words before anonymous integers. Real FP/vector
+  functions remain refused under general-only mode.
+- The original runtime, both minimal inputs and the new adjacent-list input
+  pass 48 source checks, 16 EvoCC native executions and eight Apple clang
+  controls. Both targets, both optimization levels and both interpreters are
+  included. All native EvoCC builds use general-only and pac-ret.
+
+Capture: .evidence/darwin-arguments-20261016/, 500 MiB retention cap.
+plan.txt and runtime.json keep scope, commands, input/output hashes and exits.
+The first RED tests and the second failure that exposed the lifecycle entry
+remain. The earlier return-signing captures are unchanged historical inputs.
+Acceptance: tools/gate-changed.sh --full-workspace --offline passes 455 Rust
+suites: 3,454 PASS, zero failures, eight retained ignores; Clippy and fmt pass.
+tools/gate-lean.sh passes all six steps: 62 rule theorems, 36 analysis rows
+(576 enumerated instances). The receipt binds EvoIR 2.6.7 and EvoMIR 1.3.5.
+These are the shared dirty checkout's gates, not a clean release build.
+
+Scoped disk delta: target/frontend grew 235,092 KiB; this capture uses
+7,924 KiB, including the copied acceptance-time lean-receipt.json. One closed
+failed-test directory (28 KiB, no open handles) was removed; its inputs and
+RED output remain. Net for these paths: +242,988 KiB.
+The shared compiler-cache growth is not attributed solely to these repairs.
+Free space at closure: about 29 GiB. No runtime or sealed evidence was removed.
+
+Claim ceiling: target-layout and ABI repairs, not a new proof domain or a
+fresh kernel/application campaign. Darwin and variadic operations remain
+outside the Lean core subset. No release or clean-tree claim is made.

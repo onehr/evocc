@@ -97,6 +97,17 @@ fn forward(output: &Output) -> Result<()> {
     Ok(())
 }
 
+/// The compiler bridge of `evo fix`. MODE is plan, safe or review.
+fn repair_command(compiler: &Path, mode: &str, format: &str, file: &str) -> Command {
+    let mut command = Command::new(compiler);
+    command
+        .args(["--parse-only", "-Wall", "--cap-lints=warn", "--color=never"])
+        .arg(format!("--repair={mode}"))
+        .arg(format!("--error-format={format}"))
+        .arg(file);
+    command
+}
+
 fn fix(compiler: &Path, args: &[String]) -> Result<i32> {
     let (flags, files): (Vec<_>, Vec<_>) = args
         .iter()
@@ -117,12 +128,7 @@ fn fix(compiler: &Path, args: &[String]) -> Result<i32> {
         _ => return Err("fix requires --plan or --apply [--review], with optional --json".into()),
     };
     let format = if json { "json" } else { "text" };
-    let output = Command::new(compiler)
-        .args(["--parse-only", "-Wall", "--cap-lints=warn", "--color=never"])
-        .arg(format!("--repair={mode}"))
-        .arg(format!("--error-format={format}"))
-        .arg(file)
-        .output()?;
+    let output = repair_command(compiler, mode, format, file).output()?;
     if json && output.stdout.is_empty() {
         let rows = std::str::from_utf8(&output.stderr)?
             .lines()
@@ -133,6 +139,118 @@ fn fix(compiler: &Path, args: &[String]) -> Result<i32> {
         forward(&output)?;
     }
     Ok(code(output.status))
+}
+
+/// A JSON string with the escapes of the compiler's records: a newline, a
+/// carriage return and a tab take two bytes. `full-1` keeps `quote()`.
+fn compact(value: &str) -> String {
+    let mut out = String::from("\"");
+    for c in value.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c < ' ' => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// The name of FILE in a concise record. A file below the working directory
+/// is named relative to it. Canonical paths keep a symbolic link, such as
+/// `/var` on macOS, from hiding the relation.
+fn concise_path(file: &str) -> String {
+    below_current_directory(file).unwrap_or_else(|| file.to_owned())
+}
+
+fn below_current_directory(file: &str) -> Option<String> {
+    let directory = std::env::current_dir().ok()?.canonicalize().ok()?;
+    let path = fs::canonicalize(file).ok()?;
+    let name = path.strip_prefix(directory).ok()?.to_str()?;
+    (!name.is_empty()).then(|| name.to_owned())
+}
+
+/// One plan repair in the concise form. `at` and `end` give the edit span.
+fn concise_repair(repair: &json::Json) -> Result<String> {
+    let span = repair.get("span")?;
+    let number = |key: &str| match span.get(key)? {
+        json::Json::Number(text) => Ok(text.clone()),
+        _ => Err(Box::<dyn std::error::Error>::from(
+            "expected a span coordinate",
+        )),
+    };
+    let at = format!(
+        "{}:{}:{}",
+        concise_path(span.get("file")?.string()?),
+        number("line_start")?,
+        number("column_start")?
+    );
+    Ok(format!(
+        "{{\"id\":{},\"kind\":{},\"title\":{},\"at\":{},\"end\":\"{}:{}\",\"replacement\":{}}}",
+        compact(repair.get("repair_id")?.string()?),
+        compact(repair.get("kind")?.string()?),
+        compact(repair.get("title")?.string()?),
+        compact(&at),
+        number("line_end")?,
+        number("column_end")?,
+        compact(repair.get("replacement")?.string()?)
+    ))
+}
+
+/// `concise-1`: one record with the facts of the check, the explanation line
+/// and hint of each code, and the plan's repairs. `Json::render()` sorts keys,
+/// so each compiler line is validated and then embedded unchanged.
+fn concise_check(compiler: &Path, file: &str) -> Result<i32> {
+    let output = Command::new(compiler)
+        .args(["--check", file, "--error-format=concise"])
+        .output()?;
+    let mut record = String::from("{\"form\":\"concise-1\"");
+    if output.stdout.is_empty() {
+        record.push_str(",\"status\":\"stopped\"");
+    } else {
+        let completion = json::parse(std::str::from_utf8(&output.stdout)?)?;
+        if completion.get("status")?.string()? != "completed" {
+            return Err("invalid completion record".into());
+        }
+        record.push_str(&format!(
+            ",\"status\":\"completed\",\"main_return\":{},\"scope\":{}",
+            compact(completion.get("main_return")?.string()?),
+            compact(completion.get("scope")?.string()?)
+        ));
+    }
+    let diagnostics = std::str::from_utf8(&output.stderr)?
+        .lines()
+        .map(|line| -> Result<&str> {
+            match json::parse(line)? {
+                json::Json::Object(_) => Ok(line),
+                _ => Err("expected a diagnostic object".into()),
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if !diagnostics.is_empty() {
+        record.push_str(&format!(",\"diagnostics\":[{}]", diagnostics.join(",")));
+    }
+    // A source that does not parse has no plan record and so no repairs.
+    let plan = repair_command(compiler, "plan", "json", file).output()?;
+    if !plan.stdout.is_empty() {
+        let plan = json::parse(std::str::from_utf8(&plan.stdout)?)?;
+        let repairs = plan
+            .get("repairs")?
+            .array()?
+            .iter()
+            .map(concise_repair)
+            .collect::<Result<Vec<_>>>()?;
+        if !repairs.is_empty() {
+            record.push_str(&format!(",\"repairs\":[{}]", repairs.join(",")));
+        }
+    }
+    let status = code(output.status);
+    println!("{record},\"exit_code\":{status}}}");
+    Ok(status)
 }
 
 fn run(compiler: &Path, args: &[OsString]) -> Result<i32> {
@@ -481,6 +599,14 @@ fn execute() -> Result<i32> {
             raw.remove(i);
         }
     }
+    // `--form` selects the check record. After `--` it is a program argument.
+    let end = raw.iter().position(|a| a == "--").unwrap_or(raw.len());
+    let mut forms = Vec::new();
+    for i in (0..end).rev() {
+        if raw[i] == "--form" || raw[i].as_bytes().starts_with(b"--form=") {
+            forms.push(raw.remove(i));
+        }
+    }
     let verb = raw
         .first()
         .map_or(Ok("help"), |s| s.to_str().ok_or("command is not UTF-8"))?;
@@ -489,7 +615,7 @@ fn execute() -> Result<i32> {
             "evo run|check|explain|prove|build|fix|mcp|lsp|version|help"
         }
         "run" => "evo run FILE.c [-- ARGS]",
-        "check" => "evo check FILE.c",
+        "check" => "evo check FILE.c [--json [--form=full-1|concise-1]]",
         "explain" => "evo explain CODE",
         "prove" => "evo prove FILE.c -o OUT.s [--entry NAME ...]",
         "build" => "evo build [DIR] [-- MAKE_ARGS]",
@@ -498,6 +624,18 @@ fn execute() -> Result<i32> {
         "lsp" => "evo lsp",
         "version" => "evo version",
         _ => return Err(format!("unknown command: {verb}").into()),
+    };
+    let concise = match forms.as_slice() {
+        [] => false,
+        [_] if verb != "check" || !json => {
+            return Err("--form applies only to check with --json".into());
+        }
+        [form] => match form.to_str() {
+            Some("--form=full-1") => false,
+            Some("--form=concise-1") => true,
+            _ => return Err("--form requires full-1 or concise-1".into()),
+        },
+        _ => return Err("--form may appear only once".into()),
     };
     if matches!(verb, "help" | "--help")
         || ((raw.len() == 2 || (raw.len() == 3 && raw[2] == "--json")) && raw[1] == "--help")
@@ -552,6 +690,9 @@ fn execute() -> Result<i32> {
         "check" | "explain" | "version" => {
             if args.len() != usize::from(verb != "version") {
                 return Err(format!("usage: {usage}").into());
+            }
+            if concise {
+                return concise_check(&compiler, &args[0]);
             }
             let flag = match verb {
                 "check" => "--check",

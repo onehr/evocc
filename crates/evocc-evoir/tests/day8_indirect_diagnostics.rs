@@ -225,7 +225,9 @@ fn roundtrip_module(stored: StoredProvenance) -> Module {
     let allocated_memory = mem(3);
     let allocated_world = world(4);
     let stored_value = match stored {
-        StoredProvenance::Object => value(5, EvoIRType::Ptr(AddressSpace::Global)),
+        // global_addr has ptr<generic>; the stored provenance is still an
+        // object, which must remain the distinct runtime E3016 failure.
+        StoredProvenance::Object => value(5, EvoIRType::Ptr(AddressSpace::Generic)),
         StoredProvenance::Function32 => value(5, signature(32)),
     };
     let checked_store = mem(6);

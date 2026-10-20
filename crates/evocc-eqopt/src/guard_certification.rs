@@ -2,8 +2,12 @@
 //! Unlike the diagnostic lane, excluded/opaque operands never enter a witness.
 use super::*;
 
-pub(super) fn optimize(module: &Module, policy: &ExtractionPolicy) -> CertifiedScalarEqTransaction {
-    let input = render_module(module);
+pub(super) fn optimize(
+    module: &Module,
+    policy: &ExtractionPolicy,
+    target: &str,
+) -> CertifiedScalarEqTransaction {
+    let input = render_target_module(module, target);
     let mut report = ScalarEqReport::default();
     let mut regions = Vec::new();
     let mut events = Vec::new();
@@ -124,7 +128,7 @@ pub(super) fn optimize(module: &Module, policy: &ExtractionPolicy) -> CertifiedS
         registry_name: GUARD_REGISTRY.to_owned(),
         registry_digest: GUARD_DIGEST.to_owned(),
         input_digest: sha256_hex(input.as_bytes()),
-        output_digest: sha256_hex(render_module(&output).as_bytes()),
+        output_digest: sha256_hex(render_target_module(&output, target).as_bytes()),
         budget: Some(scheduler_record(&regions, report.budget_exhausted)),
         regions,
     };

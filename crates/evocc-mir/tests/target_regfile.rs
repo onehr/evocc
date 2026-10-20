@@ -314,7 +314,11 @@ fn existing_assembly_binding_and_clobber_spelling_boundaries_are_unchanged() {
 fn local_copy(class: RegClass, number: u8) -> Allocated {
     let source = VReg::new(0, class);
     let destination = VReg::new(1, class);
-    Allocated {
+    let mut allocated = Allocated {
+        input: evocc_mir::MFunction {
+            name: "register_bank_fixture".into(),
+            blocks: vec![],
+        },
         name: "register_bank_fixture".to_owned(),
         blocks: vec![MBlock {
             id: 0,
@@ -344,7 +348,9 @@ fn local_copy(class: RegClass, number: u8) -> Allocated {
         outgoing: 0,
         indirect_result: false,
         internal: false,
-    }
+    };
+    allocated.input.blocks = allocated.blocks.clone();
+    allocated
 }
 
 #[test]

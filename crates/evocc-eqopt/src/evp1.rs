@@ -2,7 +2,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use evocc_evoir::{inst_results, render_module, validate_module, CmpOp, Inst, Module, Value};
+use evocc_evoir::{
+    inst_results, render_target_module, validate_module, CmpOp, Inst, Module, Value,
+    IMPLICIT_TARGET,
+};
 use evocc_proof::{
     sha256_hex, EvpBudget, EvpCertificate, EvpCongruence, EvpEffectClass, EvpEvent, EvpExtraction,
     EvpExtractionChoice, EvpNode, EvpNodeSource, EvpPremise, EvpProofRef, EvpQuantity, EvpRegion,
@@ -159,11 +162,21 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
     module: &Module,
     policy: &ExtractionPolicy,
 ) -> CertifiedScalarEqTransaction {
+    optimize_scalar_module_with_evp1_transaction_for_target(module, policy, IMPLICIT_TARGET)
+}
+
+/// Rules operate on explicit bit-vector sorts. Target identity still belongs
+/// to the complete module bytes, including unchanged non-scalar operations.
+pub(crate) fn optimize_scalar_module_with_evp1_transaction_for_target(
+    module: &Module,
+    policy: &ExtractionPolicy,
+    target: &str,
+) -> CertifiedScalarEqTransaction {
     if policy.registry() == RegistryCeiling::GuardV1 {
-        return guards::optimize(module, policy);
+        return guards::optimize(module, policy, target);
     }
     let budget = policy.schedule().budget();
-    let input = render_module(module);
+    let input = render_target_module(module, target);
     let (transient, applied) = optimize_scalar_module_with_events(module, budget);
     let mut report = transient.report;
     report.telemetry.search_bridge_nodes = report.graph_nodes;
@@ -315,7 +328,7 @@ pub(crate) fn optimize_scalar_module_with_evp1_transaction(
             return zero_transaction(module, input, report);
         }
     };
-    let output_text = render_module(&output);
+    let output_text = render_target_module(&output, target);
     report.regions_admitted = regions.len();
     report.graph_nodes = proof_nodes;
     report.epochs = regions.len();
@@ -2495,6 +2508,15 @@ fn renumber(function: &mut evocc_evoir::Function) -> Result<HashMap<u32, u32>, (
 fn remap_value(value: &mut Value, identities: &HashMap<u32, u32>) -> Result<(), ()> {
     value.id = *identities.get(&value.id).ok_or(())?;
     Ok(())
+}
+
+#[cfg(test)]
+#[path = "../../evocc-evoir/tests/support/instruction_values.rs"]
+mod instruction_values;
+
+#[test]
+fn every_instruction_field_survives_producer_renumbering() {
+    instruction_values::assert_all_values(all_values_mut);
 }
 
 fn remap_all(instruction: &mut Inst, identities: &HashMap<u32, u32>) -> Result<(), ()> {

@@ -48,6 +48,17 @@ impl Work {
 
     /// Compile `source` to `object` with EvoCC or Apple clang.
     fn compile(&self, evocc: bool, level: &str, source: &str, object: &str) {
+        self.compile_options(evocc, level, source, object, &[]);
+    }
+
+    fn compile_options(
+        &self,
+        evocc: bool,
+        level: &str,
+        source: &str,
+        object: &str,
+        options: &[&str],
+    ) {
         let program = if evocc {
             env!("CARGO_BIN_EXE_evocc")
         } else {
@@ -56,6 +67,7 @@ impl Work {
         let output = Command::new(program)
             .current_dir(&self.0)
             .args([level, "-c", source, "-o", object])
+            .args(options)
             .output()
             .unwrap();
         succeeded(&format!("{program} {level} {source}"), &output);
@@ -74,6 +86,38 @@ impl Work {
             .unwrap()
             .status
             .code()
+    }
+}
+
+#[test]
+fn integer_stack_arguments_do_not_require_the_vector_bank() {
+    let work = Work::new("integer-stack");
+    for level in ["-O0", "-O2"] {
+        for evocc in [false, true] {
+            let compiler = if evocc { "evocc" } else { "clang" };
+            for part in ["caller", "callee"] {
+                work.compile_options(
+                    evocc,
+                    level,
+                    &format!("integer-{part}.c"),
+                    &format!("{compiler}-{part}.o"),
+                    &["-mgeneral-regs-only"],
+                );
+            }
+        }
+        for caller in ["clang", "evocc"] {
+            for callee in ["clang", "evocc"] {
+                assert_eq!(
+                    work.run(
+                        &format!("{caller}-caller.o"),
+                        &format!("{callee}-callee.o"),
+                        "integer-stack"
+                    ),
+                    Some(0),
+                    "{level}: {caller} caller / {callee} callee"
+                );
+            }
+        }
     }
 }
 

@@ -609,7 +609,9 @@ fn instruction_cases() -> Vec<InstCase> {
             },
             &[g(1)],
             &[],
-            (false, false, false),
+            // A fixed address has no effect if nothing uses it. Dynamic
+            // allocation below remains observable and is not discardable.
+            (false, true, false),
         ),
         case(
             "StackAlloc",

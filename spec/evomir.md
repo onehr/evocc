@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.2.1** | **Pinned ground truth** | Stabilized from revision 0.64 on 2026-10-06
+**Revision 1.3.9** | **Pinned ground truth** | Private zero-branch selection on 2026-10-19
 
 ## Status and scope
 
@@ -73,7 +73,7 @@ sentence is a defect; the Revision section gives the change procedure.
 | UB-check profile | `checked` or `unchecked`: how `ub.assume` lowers (Section 5.2). |
 | kernel profile | The project choices in `targets/aarch64/profile-kernel` (Section 6.1). |
 | optional variant | A behavior that an option selects and that is OFF by default (Section 1.4). |
-| protected function | A function for which every optional variant is suppressed (Section 1.4). |
+| protected function | A function for which allocation, selection, paired-save and shared-exit variants are suppressed (Section 1.4). |
 
 ## 1. Purpose and Position
 
@@ -109,7 +109,8 @@ The native path processes each function in this order:
 
 1. Lowering (Section 5) to block-argument SSA form; validation (Section 4.7).
 2. The optional `extensions` selection variant (Section 5.5).
-3. SSA destruction and dead-computation removal (Section 7.1).
+3. SSA destruction and dead-computation removal (Section 7.1), independently
+   checked against the actual input (Section 9.2.1).
 4. The optional `controls` selection variant (Section 5.5).
 5. Register allocation (Section 7) with the optional allocation variants.
 6. The allocation verifier (Section 9.2). A refusal stops the function.
@@ -160,9 +161,11 @@ during allocation. The comments `// evocc-local-selected NAME=N` and
 **Protected functions.** A function is protected when it is compiled with an
 explicit frame-pointer request (`-fno-omit-frame-pointer`), a leaf-frame-pointer
 request (`-mno-omit-leaf-frame-pointer`), `-mgeneral-regs-only`, a
-system-register stack guard, or a nonzero patchable entry. Every optional
-variant is suppressed for a protected function. The kernel build uses these
-conditions, and the variants are not validated there.
+system-register stack guard, or a nonzero patchable entry. Allocation,
+instruction-selection, paired-save and shared-exit variants are suppressed
+for a protected function. Leaf-frame omission has separate admission
+(Sections 6.9 and 6.13). The other variants are not validated for the kernel
+build merely because leaf-frame omission is permitted.
 
 ## 2. Values, Registers and Classes
 
@@ -489,7 +492,7 @@ except `spill.*` and `arg.*`, which exist only after allocation (Section 9.1).
 | `indirect.result` | The last argument of the next call, or the last parameter of this function, is the destination of a record result above 16 bytes and travels in `x8` (Section 6.4). |
 | `spill.store rt, [slot #S]` / `rd = spill.reload [slot #S]` | Store to and reload from a spill slot. Only the allocator inserts them. |
 | `arg.incoming [slot #S]` / `arg.outgoing rt, [slot #S]` | Read of incoming and write of outgoing stack argument slot `S`. Only the allocator inserts them (Section 6.6). |
-| `asm` / `asm.goto` | The instruction of EvoIR Section 3.11, carried through unchanged: the template, the operands with their constraints, the clobbers and, for `asm.goto`, the label successors. The interpreter does not execute it (`E3021`). Emission fills the template (Section 8.3). |
+| `asm` / `asm.goto` | Preserves the template, operand constraints, clobbers and label successors of EvoIR Section 3.11. Section 7.3 separates tied input/output SSA values without changing the physical constraint. The interpreter does not execute it (`E3021`). Emission fills the template (Section 8.3). |
 
 The prologue and the epilogue are not instructions: the interpreter's memory
 is EvoIR's object model, with no linear stack, `sp` or return address, so
@@ -597,6 +600,27 @@ These rules are part of the default lowering. Each selects existing EvoMIR
 instructions and adds no EvoIR operation, EqSat rule or effect permission.
 When a rule does not match, the ordinary rows apply.
 
+**Literal integer conversions.** `sext`, `zext` and `trunc` whose operand is
+a literal, or a chain of such conversions from a literal in the same block,
+select a constant of the result type. Both widths must be 1 through 64.
+First mask the source to its EvoIR width, then apply the conversion and mask
+to the result width. Signed extension uses the source sign bit, not the
+machine register sign bit. This rule does not infer facts for block parameters,
+poison or symbolic addresses, and does not change any EvoIR UB obligation.
+
+**Zero upper bits.** After lowering, a GPR value starts with its full machine
+width as an upper bound on its significant bits. `cset` has bound one;
+integer literals, moves, immediate AND and extensions propagate bounds from
+their machine semantics. A non-entry block argument takes the maximum bound
+over every incoming edge. Entry arguments remain unknown. A worklist may
+decrease bounds to a fixed point; unhandled definitions retain full width.
+An extension selects a move only if the source bound fits its unsigned
+source width, or is strictly below its signed source width. An immediate
+AND selects a move only if its mask retains every potentially set source
+bit. The destination identity and register class stay: a W destination still
+truncates and a W-to-X move still zero-extends. This selects machine copies;
+it does not remove obligations, infer branch conditions, or change effects.
+
 **Compared-value selection.** The contiguous full-width integer chain
 `c = icmp(x, y); e = zext(c); mask = 0 - e; d = a xor b; masked = d and mask;
 result = b xor masked`, where `{a, b}` is `{x, y}`, all values have one
@@ -606,6 +630,16 @@ existing constant or a single-use constant between the extension and the
 subtraction. Nothing else is removed or moved. Symbolic addresses are
 excluded.
 
+**Private zero branches.** A final compare with zero followed by an `eq` or
+`ne` branch can select `cbz` or `cbnz` on the source of a private integer move.
+The move result and comparison flags must each have one definition and one
+use, including uses in outgoing block arguments. The comparison width must
+match the move result. Same-width GPR moves and W-to-X zero extension preserve
+the zero test; X-to-W truncation does not. Remove only that move and comparison.
+Keep the branch destinations and arguments. The proof checker checks both
+the tested width and branch polarity; this grants no equivalence for ordered
+comparisons or arbitrary comparisons of different widths.
+
 **Checked flag branches.** When an obligation is the only use of the Boolean
 of the immediately preceding EvoIR instruction, and that Boolean is a final
 `cset` adjacent to its flags producer, lowering removes the `cset` and
@@ -614,6 +648,14 @@ edge arguments stay. Any other use keeps the `cset` and `tbz`.
 
 ### 5.4 Immediate addresses
 
+A directly constant `ptr.offset` index of width 1 through 64 is decoded at
+its own signedness, scaled and directed in checked wide arithmetic. If the
+displacement fits `i64` and its magnitude is at most 4095, lowering selects
+one `add.x #imm` or `sub.x #imm`; zero aliases the base register. Larger,
+dynamic and 128-bit indices keep the general Section 5.1 sequence. This is
+machine address selection, not a provenance rule. It changes no EvoIR
+obligation, access, or native memory-check boundary.
+
 An ordinary typed load or store can use `[base, #offset]` for one preceding
 constant `ptr.offset` in the same block, with only constant materializations
 between them. The index is decoded at its own width and signedness, scaled
@@ -621,6 +663,14 @@ and directed; the displacement must fit `i64` and the access immediate, and,
 when strict alignment can expand the access (Section 8.9), every byte
 displacement. The access attributes, guards and arguments stay; atomic
 operations are not selected.
+
+If that first access uses the same base and displacement, later ordinary
+accesses to the same pointer in the same machine block may also use the
+immediate form. The first access stays at its position and establishes that
+pointer formation succeeded. The base is immutable pre-allocation SSA; later
+accesses retain their own memory checks and volatile events. A call, another
+address or other computation before the first access prevents selection.
+No address fact crosses a machine-block boundary, including a guard split.
 
 ### 5.5 Optional selection variants
 
@@ -848,10 +898,12 @@ next offset that is a multiple of its alignment:
 An argument that does not fit its bank takes no register, and that bank stays
 exhausted for the later named arguments, as in AAPCS64. The caller passes the
 area as 8-byte words in consecutive stack slots: zero fillers first take the
-free registers of both banks, then each word that one 8-byte piece fills is
+free registers only of banks used by the packed words, then each word that one 8-byte piece fills is
 that piece, a 16-byte vector is one 16-byte element, and every other word is
 composed in a general register from its pieces, zero-extended and shifted to
-their byte offsets. The callee reads each named stack argument at
+their byte offsets. An unused bank stays free; later anonymous arguments
+exhaust their own banks from the resulting cursor (6.12). Integer-only stack
+arguments must not introduce a SIMD operand. The callee reads each named stack argument at
 `x29 + 16 + offset` with an access of its size. Without the Apple convention
 the Darwin ABI profile refuses stack arguments (`E4010`), and so does the
 Apple convention for an argument that the table above does not place and for
@@ -929,8 +981,14 @@ mismatch.
 
 A validated EvoIR `stack_protect` mark adds the canary slot; the guard is
 `__stack_chk_guard` through the GOT or a system register plus a byte offset.
-`pac-ret` signs `x30` with the incoming `sp` and authenticates it after `sp`
-is restored; return-address builtins strip the authentication bits. Under
+`pac-ret` signs every function that stores `x30`, with the incoming `sp`,
+and authenticates it after `sp` is restored. A frameless leaf that never
+stores `x30` is unsigned. `pac-ret+leaf` also signs that leaf; its `sp`
+does not change before authentication. Both signing requests permit omission
+of an unnecessary leaf record under the exact allocated-function conditions
+in Section 6.13. A function that fails those conditions retains its record
+and signature. `-mno-omit-leaf-frame-pointer` forces the record even for an
+otherwise eligible leaf. Return-address builtins strip authentication bits. Under
 `-mgeneral-regs-only`, no SIMD register is saved, including the vector save
 area.
 
@@ -1065,14 +1123,21 @@ EvoIR or interpreter behavior. Eligibility is per function, and `-O2` or
   size is zero and the function has no calls, saves, fixed objects, spill
   slots, outgoing or variadic areas, dynamic allocations, stack guard, inline
   assembly, incoming stack arguments, or reads of an activation, incoming or
-  save-area address. Return signing and the entry CFA (`sp + 0`) stay.
+  save-area address. These conditions are checked after allocation, including
+  helper calls and spills inserted by lowering and allocation. The entry CFA
+  stays `sp + 0`. Signing follows Section 6.9. Only the independent
+  `-mno-omit-leaf-frame-pointer` request prevents this omission; a general
+  frame-pointer request, general-register restriction, unused stack-guard
+  policy or patchable NOP entry does not by itself require a leaf record.
 
 ### 6.14 Compatibility options
 
-`-fno-omit-frame-pointer` requests the default frame path and makes the
-function protected; `-fomit-frame-pointer` clears that request (last
-occurrence wins) and permits frame removal only through `leaf-frames`;
-`-mno-omit-leaf-frame-pointer` is an independent request. These options name
+`-fno-omit-frame-pointer` requests the default frame path for functions that
+need a frame and makes the function protected as defined in Section 1.4;
+`-fomit-frame-pointer` clears that request (last occurrence wins). Neither
+option alone enables frame removal. `leaf-frames` or a return-signing request
+permits omission of an unnecessary leaf record. The independent
+`-mno-omit-leaf-frame-pointer` request prevents that omission. These options name
 existing behavior: `-fno-optimize-sibling-calls`, `-fno-align-functions`,
 `-fno-align-jumps`, `-fno-align-labels`, `-fno-align-loops`,
 `-fno-prefetch-loop-arrays`, `-fno-tree-ch` and
@@ -1117,13 +1182,18 @@ computation whose result nothing demands. Instructions that the `insts`
 table marks as not discardable (memory accesses, calls, assembly, guards)
 are never removed. The `evo-ir-asm` option `--retain-dead-computations`
 turns the removal off for attribution measurements.
+An unused `frame.slot` address is discardable: it performs no memory access
+and exposes no object identity. A demanded address retains its slot. Dynamic
+allocation, loads, stores and assembly remain nondiscardable. This removes
+native storage after private-cell promotion without deleting EvoIR lifetime
+or access obligations.
 
 **Identical-value transport.** At the validated SSA boundary, a block
 parameter is identified with its sole distinct incoming value when all other
 incoming bindings pass that parameter unchanged, through forwarding chains;
 two distinct definitions are never identified. Entry parameters, entry
-back-edges, and functions with fixed-register assembly operands, `asm.goto`
-or indirect dispatch are excluded, and ordinary assembly admits only the
+back-edges, and functions with fixed-register assembly operands (in an `asm`
+or `asm.goto`) or indirect dispatch are excluded. Assembly admits only the
 rewriting of its input and address uses. Only proven transport copies are
 removed; no instruction, guard, label or successor moves.
 
@@ -1146,12 +1216,12 @@ The allocator satisfies `asm` constraints before anything else:
 | Constraint | Requirement on the allocator |
 |---|---|
 | `r`, `=r`, `+r` | any general register of the class of the operand |
-| `=&r`, `+&r` | a general register that no input operand of the same `asm` holds (early clobber) |
+| `=&r`, `+&r` | a general register that no independent input operand of the same `asm` holds (early clobber); its own tied input is permitted |
 | `w`, `=w`, `+w` | any SIMD register of the class of the operand |
-| `=&w`, `+&w` | a SIMD register that no input operand holds |
+| `=&w`, `+&w` | a SIMD register that no independent input operand holds; its own tied input is permitted |
 | `rZ` | as `r`; an operand known to be zero is the zero register and takes no allocation |
 | `Q`, `=Q`, `+Q`, `Qo` | a register that holds the address of the operand; the reference is `[reg]` |
-| a digit | the register of the output that the digit names (tied); the two live ranges are one |
+| an unsigned decimal output index (0–255) | the register of that output (tied); the assembly operand occurrences share one location |
 | `I`, `J`, `K`, `L`, `i`, `n` | no register: an immediate that emission writes literally; lowering refuses a non-constant |
 | `p` | a register that holds the address |
 
@@ -1164,6 +1234,14 @@ and `sN` name one physical register. Scratch registers are never assigned.
 registers; each gets its own boundary copy before the fixed locations apply.
 A tied input shares its output's location, and contradictory fixed
 requirements in a tie are invalid.
+
+**SSA inputs and outputs.** Before allocation, each register output has a
+fresh SSA identity. A read-write register output lowers to a write output
+and an appended tied input. Appending preserves every explicit operand and
+label reference in the template. After SSA destruction, boundary copies put
+the incoming value in the output location; they do not overwrite the incoming
+SSA value if it is used later. An `asm.goto` output is defined before its edge
+arguments, not before its own inputs. Memory operands keep their address uses.
 
 **Symbolic immediates.** An `i` operand can be a symbol plus a signed 64-bit
 addend, derived from address definitions, pointer casts and constant 64-bit
@@ -1179,16 +1257,25 @@ and SVE are not admitted in `asm`.
 
 ### 7.4 Linear scan
 
-Instructions are numbered in block order. A live range runs from the
-definition to the last use, extended over every block in which the value is
-live on entry. The allocator walks live ranges by start point and assigns
+Instructions are numbered in block order, with reads before writes. A live
+range contains a segment for each block that defines, reads or carries the
+value. The segment spans that block's definitions and uses; live-in values
+extend to block entry, and live-out values extend to block exit. A block in
+which the value is not live contributes no segment. Early-clobber definitions
+start at the input-read point. Ranges interfere only where their segments
+overlap, including fixed locations and assembly clobbers. A range spans a
+call only when a segment contains the call's read point and extends past it.
+The allocator walks live ranges by first segment start and assigns
 the first free register of the class in the order of Section 2.5 (the
 across-call set for a range that spans a call). Argument and result
 registers, `x8` for an indirect result and the scratch pins are pre-assigned.
 Allocation is deterministic.
 
-**Spills.** When no register is free, the allocator spills the overlapping
-live range whose next use is furthest away; on equal distance, the lower
+**Spills.** When no register is free, the allocator considers overlapping
+ranges whose individual removal frees a candidate register over every segment
+of the current range. A register held by several disjoint ranges is not freed
+by removing only one that conflicts with the current range. Among eligible
+victims, it spills the range whose next use is furthest away; on equal distance, the lower
 virtual register number is spilled. If the current live range reaches
 further than all of them, it is spilled. A spilled value is reloaded before
 each use and stored after its definition, and the scan runs again, at most
@@ -1196,8 +1283,11 @@ each use and stored after its definition, and the scan runs again, at most
 value that existed before the first rewrite, or allocation refuses. This is
 a fail-closed limit, not a proof that no allocation exists.
 
-**After the scan.** The allocator removes each move whose two operands got
-the same register; it does no other coalescing. Then it compacts the logical
+**After the scan.** The allocator removes each same-class move whose two
+operands got the same register. All definitions and uses in each connected
+component of these copies receive one consistent name, including copies from
+different predecessors of a join. This renames physical-location identities,
+not the source SSA definitions. It does no other coalescing. Then it compacts the logical
 spill slots: slots that are never live at the same time share storage.
 
 ### 7.5 What the allocation must satisfy
@@ -1410,7 +1500,7 @@ entry that switches sections cannot change where later output lands.
 
 ## 9. Verification
 
-Four instruments, each independent of the lowering, check the backend;
+The following instruments check the backend;
 `spec/verification.md` states what each checker proves. A function with an
 `asm` is outside the interpreter lane.
 
@@ -1428,8 +1518,9 @@ shrunk, and a lowering refusal is counted by code, not compared.
 ### 9.2 The allocation verifier
 
 `crates/evocc-mir/src/generic/allocverify.rs` checks every allocated function
-before emission by a forward dataflow over the allocated blocks, the
-assignment and the target facts. It never reads the intervals, pins,
+before emission. It reads the unchanged post-SSA input, the allocated blocks,
+the assignment and the target facts. The allocated record retains that input
+before boundary copies or spill rewriting. It never reads the intervals, pins,
 liveness or spill decisions of the allocator. It refuses (`E4020`) when:
 
 - a virtual register has no assignment, or one in an incompatible bank;
@@ -1438,12 +1529,56 @@ liveness or spill decisions of the allocator. It refuses (`E4020`) when:
 - a register read does not hold the expected virtual register on every path
   (a call clears the call-clobbered registers; every `asm`, in a block or as
   its terminator, clears its clobbers);
+- a spill reload does not preserve its source value, including a reload from
+  the wrong initialized slot or overlapping live slots;
+- a non-transport instruction, its attributes or a control-flow destination
+  changes, or a call or return does not preserve the ABI's ordered operands;
 - a callee-saved register that an assigned value occupies or an `asm`
   clobbers is not in the saved set that the frame saves (Section 6.7);
 - a `flags` producer is not followed by its consumer;
 - an `asm` operand violates its bank, fixed binding, tie or early clobber, or
   a symbolic operand is not under `i`;
 - an atomic read-modify-write result overlaps an input of its loop.
+
+The source-relation check is in `generic/allocation_relation.rs`. It tracks
+equalities between source values and physical registers or private stack slots.
+Native and proof-export callers compare the retained input with their original
+post-SSA function through `verify_allocation_against`; replacing both sides of
+an allocated pair does not change the program being checked.
+Entry facts come from the ordered source signature and the selected ABI. Copies
+and spill traffic transport existing facts; reloads do not create facts. Source
+definitions invalidate old facts for that value. Joins take intersections and
+iterate to a fixed point before reads are checked. Narrow copies preserve only
+the low bits they carry. Full-width spill accesses invalidate overlapping slots.
+Transport-only edge blocks must reach the original successor without a cycle.
+Explicit logical spill slots in machine-level inputs have their own identity
+space; they are not assumed to have the compacted physical slot numbers.
+Tied assembly operands compare the fixed binding implied by the tie; repeating
+that binding on both operands does not change the constraint.
+This Rust check is not a Lean theorem or a proof of instruction selection,
+frame emission, or the complete native path. Section 9.3 keeps those limits.
+
+### 9.2.1 SSA transport validation
+
+Before allocation, `generic/ssa_check.rs` checks the actual validated SSA
+function against its actual post-SSA function. Producer annotations propose
+the demanded values, entry representatives and retained instruction positions.
+The checker does not rerun forwarding, demand search or copy scheduling.
+It checks the demand closure, ordered entry arguments, each retained
+operation and its attributes, unchanged definitions, and input-value origins.
+Only discardable, undemanded instructions can be removed. Extra instructions
+and administrative blocks can contain only same-class, non-flags copies.
+Every actual outgoing path, including an `asm.goto` output edge, must
+establish the destination's parameter relation. Administrative cycles and
+changed original destinations are refused. Computed destinations keep their
+original labels. Every refusal (`E4021`) prevents emission; there is no
+unchecked fallback. Proof exports run this check on the same input/output
+boundary, then still require their existing Lean checks.
+
+This is ordinary Rust translation validation. The target's instruction facts
+remain trusted, and assembly is an opaque operation with explicit uses,
+definitions and constraints. The check does not extend `core-v1`, prove the
+Rust implementation or validate assembly-template semantics.
 
 ### 9.3 The Lean checkers
 
@@ -1486,6 +1621,12 @@ Active refusals are reported at the EvoIR instruction that could not be
 lowered, and the driver emits no assembly for the translation unit. Withdrawn
 codes keep their names, so that old receipts can be read.
 
+The scalar e-graph bridge uses the internal exclusion labels
+`EQ_EFFECT_EXCLUDED` and `EQ_OPERATOR_EXCLUDED`. These are optimizer admission
+results, not machine-lowering diagnostics; they must not reuse `E4001` or
+`E4002`. The randomized lowering gate accepts only active lowering codes from
+this table, not a withdrawn code or the allocation verifier's separate E4020.
+
 | Code | Name | Meaning |
 |---|---|---|
 | `E4001` | `not-lowered: floating-point` | Withdrawn: scalar `f32`/`f64` are admitted (Section 2.6); other formats remain front-end refusals. |
@@ -1502,6 +1643,7 @@ codes keep their names, so that old receipts can be read.
 | `E4012` | `abi: variadic` | Withdrawn: variadic callees and callers lower (Section 6.12). |
 | `E4013` | `abi: too-many-results` | More than eight ordinary results. |
 | `E4020` | `allocation: verifier-refused` | The allocation verifier found a violation. Internal; it must never reach a user of a released build. |
+| `E4021` | `transport: verifier-refused` | The SSA transport check found a violation. Internal; it must never reach a user of a released build. |
 
 ## Appendix A. Textual Form
 
@@ -1582,7 +1724,7 @@ terminator      := "b " edge
                  | "br " use " [" edge (", " edge)* "]"
                  | "ret" [" " use ("," " " use)*]
                  | "brk #" int
-                 | "asm.goto" asm-body " labels [" [edge (", " edge)*] "] fallthrough " edge
+                 | [def ("," " " def)* " = "] "asm.goto" asm-body " labels [" [edge (", " edge)*] "] fallthrough " edge
 asm-body        := [".volatile"] " " string " outputs [" [asm-out ("," " " asm-out)*] "]"
                    " inputs [" [asm-in ("," " " asm-in)*] "]"
                    " clobbers [" [string ("," " " string)*] "]"
@@ -1660,6 +1802,39 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.3.7, 2026-10-18.** Section 5.4 lets later accesses reuse an
+immediate address after the first matching access forms it in the same
+machine block. Accesses, volatile events and guard boundaries remain.
+
+**Revision 1.3.2, 2026-10-16.** Section 7.4 uses per-block live segments for
+interference and call preservation, retains all blockers when choosing a
+spill victim, and renames complete identity-copy components after allocation.
+The independent allocation check and the Lean proof profile are unchanged.
+
+**Revision 1.3.1, 2026-10-16.** Section 5.4 selects immediate pointer offsets
+after width, sign, scale and direction decoding. The native pointer-check
+boundary and the Lean proof profile are unchanged.
+
+**Revision 1.3.0, 2026-10-16.** Section 7.1 admits identical-value transport
+across assembly-goto edges without fixed bindings. Section 9.2.1 requires an
+independent check of every actual SSA/post-SSA pair before allocation. The
+Lean profile and theorem are unchanged.
+
+**Revision 1.2.4, 2026-10-16.** Section 9.2 requires the allocation check to
+relate source values to register and spill contents, preserve ordered ABI
+positions and instruction/CFG structure, and bind the input to the caller's
+program. The ordinary Rust check does not extend the Lean proof profile.
+
+**Revision 1.2.3, 2026-10-15.** Section 10 separates EqSat eligibility labels
+from native refusal codes. The randomized native gate admits only active
+lowering codes from that table.
+
+**Revision 1.2.2, 2026-10-15.** Section 7.3 states SSA input/output identities
+for inline assembly and the boundary copies after SSA destruction. Appended
+ties can name outputs above nine. Native emission validates the lowered module
+before allocation; `asm.goto` definitions are rendered, parsed and checked at
+their edge boundary.
 
 **Revision 1.2.1, 2026-10-14.** Corrections that make the text state what
 the code does; no lowering, allocation or emission rule changes. The

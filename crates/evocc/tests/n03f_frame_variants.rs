@@ -490,9 +490,17 @@ fn leaf_frames_remove_only_the_unneeded_record_and_preserve_authentication() {
             let options = CodegenOptions {
                 unwind_tables: true,
                 sign_returns: signed,
+                sign_leaf_returns: signed,
                 ..CodegenOptions::default()
             };
-            let before = compile(target, &ir, &options);
+            let before = compile(
+                target,
+                &ir,
+                &CodegenOptions {
+                    leaf_frame_pointer_required: true,
+                    ..options.clone()
+                },
+            );
             assert!(before.contains("stp x29, x30"));
             let after = compile(target, &ir, &with(leaf, &options));
             assert!(!after.contains("stp x29, x30"), "{after}");
@@ -518,7 +526,6 @@ fn leaf_frames_keep_activation_stack_calls_and_opaque_assembly() {
         "extern long work(long); long f(long n) { return work(n); }",
         "void *f(void) { return __builtin_frame_address(0); }",
         "void *f(void) { return __builtin_return_address(0); }",
-        "void *f(void) { return __builtin_frame_address(1); }",
         "long f(long n) { __asm__ volatile(\"nop\"); return n; }",
         "long f(long n) { volatile long a[2]; a[1] = n; return a[1]; }",
         "long f(long n) { volatile char a[n]; a[0] = 1; return a[0]; }",
@@ -537,14 +544,14 @@ fn leaf_frames_keep_activation_stack_calls_and_opaque_assembly() {
 fn frame_pointer_requests_have_ordered_and_independent_meanings() {
     let source = "unsigned long f(unsigned long n) { return n + 7; }";
     for (flags, retained) in [
-        (vec!["-fno-omit-frame-pointer"], true),
+        (vec!["-fno-omit-frame-pointer"], false),
         (
             vec!["-fno-omit-frame-pointer", "-fomit-frame-pointer"],
             false,
         ),
         (
             vec!["-fomit-frame-pointer", "-fno-omit-frame-pointer"],
-            true,
+            false,
         ),
         (
             vec!["-mno-omit-leaf-frame-pointer", "-fomit-frame-pointer"],

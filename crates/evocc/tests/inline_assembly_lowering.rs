@@ -885,6 +885,29 @@ fn short_circuit_guards_do_not_lower_unselected_assembly_immediates() {
 }
 
 #[test]
+fn paired_compare_exchange_preserves_repeated_fixed_and_unfixed_operands() {
+    let source = include_str!("fixtures/assembly_compare_exchange_pair.c");
+    for optimization in ["-O0", "-O2"] {
+        let output = run_with_options(
+            source,
+            "--emit=asm",
+            &[
+                optimization,
+                "-mgeneral-regs-only",
+                "-mbranch-protection=pac-ret",
+            ],
+        );
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let assembly = String::from_utf8(output.stdout).unwrap();
+        assert!(assembly.contains("casp x0, x1, x2, x3, [x4]"), "{assembly}");
+    }
+}
+
+#[test]
 fn local_register_bindings_survive_ir_round_trip() {
     let output = run(FIXED_REGISTERS, "--emit=evoir");
     assert!(
@@ -1070,6 +1093,44 @@ fn register_alternatives_do_not_admit_outputs_or_wide_operands() {
 }
 
 #[cfg(target_arch = "aarch64")]
+#[test]
+fn tied_assembly_keeps_inputs_live_after_independent_outputs() {
+    execute_native_assembly(
+        r#"
+        __attribute__((noinline)) int change(int x) {
+            int a = x, b;
+            __asm__("add %w0, %w0, #1" : "+r"(a));
+            __asm__("add %w0, %w0, #2" : "=r"(b) : "0"(x));
+            return a + b + x;
+        }
+        int main(void) {
+            for (int x = -10; x != 11; ++x)
+                if (change(x) != 3*x + 3) return 1;
+            return 0;
+        }
+    "#,
+        "tied-live-input",
+    );
+}
+
+#[cfg(target_arch = "aarch64")]
+#[test]
+fn read_write_outputs_above_nine_keep_named_references() {
+    execute_native_assembly(
+        r#"
+        int main(void) {
+            int a=0,b=1,c=2,d=3,e=4,f=5,g=6,h=7,i=8,j=9,k=10;
+            __asm__("add %w[last], %w[last], #5" : "+r"(a), "+r"(b), "+r"(c),
+                "+r"(d), "+r"(e), "+r"(f), "+r"(g), "+r"(h),
+                "+r"(i), "+r"(j), [last] "+r"(k));
+            return a+b+c+d+e+f+g+h+i+j+k != 60;
+        }
+    "#,
+        "read-write-output-index",
+    );
+}
+
+#[cfg(target_arch = "aarch64")]
 fn execute_native_assembly(source_text: &str, name: &str) {
     let target = if cfg!(target_os = "macos") {
         evocc_mir::Target::Darwin
@@ -1090,6 +1151,12 @@ fn execute_native_assembly(source_text: &str, name: &str) {
     let source = directory.join("program.s");
     let program = directory.join("program");
     let module = evocc_evoir::parse_section9_module(&output.stdout).unwrap();
+    let lowered = evocc_mir::lower_module_for(target, &module, &|_| true).unwrap();
+    evocc_mir::validate_module(&lowered).unwrap();
+    assert_eq!(
+        evocc_mir::parse_module(&evocc_mir::render_module(&lowered)).unwrap(),
+        lowered,
+    );
     let assembly = evocc_mir::compile_module_for(target, &module, &|_| true).unwrap();
     fs::write(&source, assembly).unwrap();
     let assembled = Command::new("clang")

@@ -20,8 +20,8 @@ use evocc_types::EvoIRType;
 use crate::isa::aarch64::abi::{ProfileFeature, KERNEL};
 use crate::lane::is_register_type;
 use crate::{
-    allocate_for_with_options, emitted_functions, lower_module_for_profile, out_of_ssa,
-    verify_allocation_for, RelocationModel, Target,
+    allocate_for_with_options, lower_module_for_profile, verify_allocation_against, Refusal,
+    RelocationModel, Target,
 };
 
 /// Where the native pipeline stopped.
@@ -31,10 +31,10 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeStop {
     /// Section 5 has no row for some instruction; the codes are Section 10's.
-    Lowering(Vec<&'static str>),
+    Lowering(Vec<Refusal>),
     /// Section 7's linear scan did not settle.
     Allocation(String),
-    /// Section 9's second instrument refused the allocation (`E4020`).
+    /// A machine validation, SSA-transport or allocation check refused.
     Verification(String),
     /// The host assembler refused the emitted text.
     Assembly(String),
@@ -62,7 +62,11 @@ impl NativeStop {
     #[must_use]
     pub fn detail(&self) -> String {
         match self {
-            Self::Lowering(codes) => codes.join(","),
+            Self::Lowering(refusals) => refusals
+                .iter()
+                .map(|refusal| format!("{} {}", refusal.code, refusal.message()))
+                .collect::<Vec<_>>()
+                .join("\n"),
             Self::Allocation(text)
             | Self::Verification(text)
             | Self::Assembly(text)
@@ -115,7 +119,20 @@ pub fn compile_module_with_options(
     relocation: RelocationModel,
     options: &crate::emit::CodegenOptions,
 ) -> Result<String, NativeStop> {
-    compile_module_with_guard_control(target, module, keep, relocation, options, None)
+    compile_module_with_entries(target, module, keep, relocation, options, &[])
+}
+
+/// Compile with additional callable roots. This keeps selected proof entries
+/// through native dead-function removal, just as source lowering keeps them.
+pub fn compile_module_with_entries(
+    target: Target,
+    module: &Module,
+    keep: &dyn Fn(&str) -> bool,
+    relocation: RelocationModel,
+    options: &crate::emit::CodegenOptions,
+    entries: &[&str],
+) -> Result<String, NativeStop> {
+    compile_module_with_guard_control(target, module, keep, relocation, options, entries, None)
 }
 
 /// Size-attribution only. Not certificate-admitted, installable or PASS-eligible.
@@ -130,6 +147,7 @@ pub fn compile_module_for_guard_attribution(
         &|_| true,
         RelocationModel::PositionIndependent,
         &crate::emit::CodegenOptions::default(),
+        &[],
         Some(true_predicates),
     )?;
     Ok(format!("// UNVERIFIED_DIAGNOSTIC: NON_INSTALLABLE, NOT_PASS_ELIGIBLE\n{assembly}\n.section .note.evocc.unverified,\"\",%progbits\n.asciz \"UNVERIFIED_DIAGNOSTIC_NON_INSTALLABLE\"\n"))
@@ -141,27 +159,47 @@ fn compile_module_with_guard_control(
     keep: &dyn Fn(&str) -> bool,
     relocation: RelocationModel,
     options: &crate::emit::CodegenOptions,
+    entries: &[&str],
     true_predicates: Option<&std::collections::BTreeMap<String, std::collections::BTreeSet<u32>>>,
 ) -> Result<String, NativeStop> {
     // Linux-only features are the kernel profile's host-only facts.
     let admits = |feature| KERNEL.admits(target, feature);
+    let unsupported = |function: Option<&evocc_evoir::Function>, detail: &str| {
+        NativeStop::Lowering(vec![Refusal {
+            function: function.map_or_else(String::new, |f| f.name.clone()),
+            block: function.and_then(|f| f.blocks.first()).map_or(0, |b| b.id),
+            index: 0,
+            code: "E4009",
+            name: "not-lowered: unsupported-form",
+            detail: detail.into(),
+        }])
+    };
     if (!admits(ProfileFeature::FunctionSections) && options.function_sections)
         || (!admits(ProfileFeature::DataSections) && options.data_sections)
     {
-        return Err(NativeStop::Assembly(
-            "individual function/data sections require the Linux ELF target".into(),
+        return Err(unsupported(
+            None,
+            "individual function/data sections require the Linux ELF target",
         ));
     }
     if !admits(ProfileFeature::ExplicitSections)
         && module.functions.iter().any(|f| f.section.is_some())
     {
-        return Err(NativeStop::Assembly(
-            "explicit function sections require the Linux ELF target".into(),
+        return Err(unsupported(
+            module.functions.iter().find(|f| f.section.is_some()),
+            "explicit function sections require the Linux ELF target",
         ));
     }
     if !admits(ProfileFeature::Tls) && !module.tls.is_empty() {
-        return Err(NativeStop::Assembly(
-            "ELF TLS requires the Linux target".into(),
+        return Err(unsupported(
+            module.functions.iter().find(|f| {
+                f.blocks.iter().any(|b| {
+                    b.insts
+                        .iter()
+                        .any(|i| matches!(i, evocc_evoir::Inst::TlsAddr(_)))
+                })
+            }),
+            "ELF TLS requires the Linux target",
         ));
     }
     if !admits(ProfileFeature::PatchableEntry)
@@ -170,8 +208,12 @@ fn compile_module_with_guard_control(
             .iter()
             .any(|f| f.patchable_entry.is_some_and(|(n, _)| n != 0))
     {
-        return Err(NativeStop::Assembly(
-            "patchable function entries require the Linux ELF target".into(),
+        return Err(unsupported(
+            module
+                .functions
+                .iter()
+                .find(|f| f.patchable_entry.is_some_and(|(n, _)| n != 0)),
+            "patchable function entries require the Linux ELF target",
         ));
     }
     if !admits(ProfileFeature::ProtectedVisibility)
@@ -185,8 +227,12 @@ fn compile_module_with_guard_control(
             .chain(module.aliases.iter().map(|a| a.visibility))
             .any(|v| v == evocc_evoir::GlobalVisibility::Protected)
     {
-        return Err(NativeStop::Assembly(
-            "ELF protected visibility is unsupported by the Darwin target".into(),
+        return Err(unsupported(
+            module
+                .functions
+                .iter()
+                .find(|f| f.visibility == evocc_evoir::GlobalVisibility::Protected),
+            "ELF protected visibility is unsupported by the Darwin target",
         ));
     }
     // Section 8 (revision 0.16) drops an internal function nothing references
@@ -194,7 +240,7 @@ fn compile_module_with_guard_control(
     // an unreferenced `static inline` stub from a shared header calls
     // functions the configuration does not build, and lowering one would
     // either refuse or leave an undefined symbol in the object.
-    let emitted = emitted_functions(module);
+    let emitted = crate::linkage::emitted_functions_with_entries(module, entries);
     let keep = &move |name: &str| keep(name) && emitted.contains(name);
     let lowered = if let Some(claimed) = true_predicates {
         crate::lower::lower_module_for_guard_attribution(
@@ -213,12 +259,11 @@ fn compile_module_with_guard_control(
     } else {
         lower_module_for_profile(target, module, &|name| !keep(name), options.ub_checks)
     }
-    .map_err(|refusals| {
-        let mut codes: Vec<&'static str> = refusals.iter().map(|refusal| refusal.code).collect();
-        codes.sort_unstable();
-        codes.dedup();
-        NativeStop::Lowering(codes)
-    })?;
+    .map_err(NativeStop::Lowering)?;
+    // Allocation cannot repair a malformed SSA program. Check the complete
+    // lowered module before any function is allocated or assembly is emitted.
+    crate::validate_module(&lowered)
+        .map_err(|detail| NativeStop::Verification(format!("invalid lowered EvoMIR: {detail}")))?;
     let mut functions = Vec::new();
     let mut extension_report = String::new();
     for function in &lowered.functions {
@@ -236,7 +281,14 @@ fn compile_module_with_guard_control(
                     .any(|reg| reg.class.is_simd())
             })
         {
-            return Err(NativeStop::Lowering(vec!["E4002"]));
+            return Err(NativeStop::Lowering(vec![Refusal {
+                function: function.name.clone(),
+                block: function.blocks.first().map_or(0, |b| b.id),
+                index: 0,
+                code: "E4002",
+                name: "not-lowered: vector",
+                detail: "a SIMD register class is not admitted under -mgeneral-regs-only".into(),
+            }]));
         }
         let source = module
             .functions
@@ -262,11 +314,11 @@ fn compile_module_with_guard_control(
             None
         };
         let function = selected.as_ref().unwrap_or(function);
-        let destroyed = if options.retain_dead_computations {
-            crate::regalloc::out_of_ssa_with_dce(function, false)
-        } else {
-            out_of_ssa(function)
-        };
+        let destroyed =
+            crate::regalloc::checked_out_of_ssa(function, !options.retain_dead_computations)
+                .map_err(|detail| {
+                    NativeStop::Verification(format!("@{}: {detail}", function.name))
+                })?;
         let controls = if options.select_controls && !protected {
             let (selected, counts) = crate::isa::aarch64::controls::select(&destroyed);
             for (pattern, count) in counts.selected {
@@ -295,7 +347,7 @@ fn compile_module_with_guard_control(
             .map_err(|detail| NativeStop::Allocation(format!("@{}: {detail}", function.name)))?;
         allocated.internal = source
             .is_some_and(|source| source.visibility == evocc_evoir::GlobalVisibility::Internal);
-        verify_allocation_for(target, &allocated).map_err(|refusal| {
+        verify_allocation_against(target, destroyed, &allocated).map_err(|refusal| {
             NativeStop::Verification(format!(
                 "@{}: {} {} in block {}: {}",
                 function.name, refusal.code, refusal.name, refusal.block, refusal.detail

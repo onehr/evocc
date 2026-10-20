@@ -1,7 +1,6 @@
-error[E4002]: evomir-lowering-refused
-  --> <command-line>:1:1
+error[E4002]: not-lowered: vector: @add block 0 instruction 0: a SIMD register class is not admitted under -mgeneral-regs-only
+  --> tests/ui/check/backend-floating.c:2:8
    |
- 1 | --emit=asm -mgeneral-regs-only --color=never --error-format=text tests/ui/check/backend-floating.c
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evomir-lowering-refused
+ 2 | double add(double value) { return value + 1.0; }
+   |        ^^^ not-lowered: vector: @add block 0 instruction 0: a SIMD register class is not admitted under -mgeneral-regs-only
    |
-   = note: input file: tests/ui/check/backend-floating.c

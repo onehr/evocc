@@ -865,13 +865,15 @@ pub enum CHirExpr<'arena> {
         facts: ExprFacts,
         span: SourceSpan,
     },
-    /// The current activation's return address.
+    /// The return-address builtin. A nonzero admitted depth yields null;
+    /// depth zero keeps the current activation's return address.
     BuiltinReturnAddress {
+        depth: u128,
         facts: ExprFacts,
         span: SourceSpan,
     },
-    /// The frame-address builtin. Only depth zero has abstract interpreter
-    /// semantics; ancestors require a physical native frame chain.
+    /// The frame-address builtin. A nonzero admitted depth yields null on
+    /// both targets and in the interpreters; no ancestor frame is read.
     BuiltinFrameAddress {
         depth: u128,
         facts: ExprFacts,

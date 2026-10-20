@@ -497,7 +497,7 @@ fn a_member_of_an_incomplete_record_cannot_be_projected() {
 fn a_member_name_that_does_not_exist_is_rejected() {
     expect_rejected(
         "struct S { int a; }; int main(void) { struct S s; s.a = 1; return s.missing; }",
-        "E2102",
+        "E2906",
     );
 }
 

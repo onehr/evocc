@@ -27,6 +27,8 @@ pub enum Param {
     Int,
     /// The target `va_list`.
     VaList,
+    /// `FILE *`, or an opaque `void *` before the header defines `FILE`.
+    Stream,
 }
 
 /// The prototype of a checked builtin and its relation to the plain function.
@@ -42,8 +44,8 @@ pub struct CheckedBuiltin {
     /// The named parameters of the checked entry point.
     pub parameters: &'static [Param],
     pub variadic: bool,
-    /// The parameter that receives the destination object size.
-    pub size: usize,
+    /// The destination object size, absent for stream formatting functions.
+    pub size: Option<usize>,
     /// The parameter that receives the format-checking flag, if any.
     pub flag: Option<usize>,
     /// The parameter whose constant value no greater than the size proves
@@ -67,7 +69,7 @@ impl CheckedBuiltin {
     /// the plain call. Anonymous arguments are always kept.
     #[must_use]
     pub fn keeps(&self, index: usize) -> bool {
-        index != self.size && Some(index) != self.flag
+        Some(index) != self.size && Some(index) != self.flag
     }
 
     /// Decide from constant argument values whether the plain function can
@@ -79,10 +81,22 @@ impl CheckedBuiltin {
     /// beyond the size, so a nonzero or unknown flag always keeps the call.
     #[must_use]
     pub fn check_is_redundant(&self, constant: impl Fn(usize) -> Option<u64>) -> bool {
+        self.check_with_source(constant, None)
+    }
+
+    /// Include the bytes through the first NUL of a literal copy source.
+    /// Stream formatting has no size check to discharge: keep its library
+    /// entry point and flag even when the flag happens to be zero.
+    #[must_use]
+    pub fn check_with_source(
+        &self,
+        constant: impl Fn(usize) -> Option<u64>,
+        copy_bytes: Option<u64>,
+    ) -> bool {
         if self.flag.is_some_and(|flag| constant(flag) != Some(0)) {
             return false;
         }
-        let Some(size) = constant(self.size) else {
+        let Some(size) = self.size.and_then(&constant) else {
             return false;
         };
         size == u64::MAX
@@ -90,6 +104,32 @@ impl CheckedBuiltin {
                 .length
                 .and_then(&constant)
                 .is_some_and(|length| length <= size)
+            || (matches!(self.plain, "strcpy" | "stpcpy")
+                && copy_bytes.is_some_and(|length| length <= size))
+    }
+
+    /// Only a literal copy supplies this bound. Do not use it for strcat:
+    /// its destination's current length also contributes to the write.
+    #[must_use]
+    pub fn literal_copy_size(&self, arguments: &[&crate::CHirExpr<'_>]) -> Option<u64> {
+        if !matches!(self.plain, "strcpy" | "stpcpy") {
+            return None;
+        }
+        let crate::CHirExpr::StringLit(literal, _) = arguments.get(1)? else {
+            return None;
+        };
+        if !matches!(
+            literal.prefix,
+            crate::StringPrefix::None | crate::StringPrefix::U8
+        ) {
+            return None;
+        }
+        let units = literal.decoded_units()?;
+        let length = units
+            .iter()
+            .position(|unit| *unit == 0)
+            .unwrap_or(units.len());
+        u64::try_from(length).ok()?.checked_add(1)
     }
 }
 
@@ -109,21 +149,100 @@ const fn entry(
         result,
         parameters,
         variadic,
-        size,
+        size: Some(size),
         flag,
         length,
     }
 }
 
-use Param::{Chars, ConstChars, ConstPointer, Int, Pointer, Size, VaList};
+use Param::{Chars, ConstChars, ConstPointer, Int, Pointer, Size, Stream, VaList};
 
 const COPY: &[Param] = &[Pointer, ConstPointer, Size, Size];
 const STRING: &[Param] = &[Chars, ConstChars, Size];
 const BOUNDED_STRING: &[Param] = &[Chars, ConstChars, Size, Size];
 
-/// The checked builtins of GCC 14 that the fortified headers of glibc and of
-/// the macOS SDK select for a GNU compiler.
+const fn stream_entry(
+    builtin: &'static str,
+    plain: &'static str,
+    checked: &'static str,
+    parameters: &'static [Param],
+    variadic: bool,
+    flag: usize,
+) -> CheckedBuiltin {
+    CheckedBuiltin {
+        builtin,
+        plain,
+        checked,
+        result: Int,
+        parameters,
+        variadic,
+        size: None,
+        flag: Some(flag),
+        length: None,
+    }
+}
+
+/// The checked builtins selected by the glibc and macOS SDK headers.
 pub const CHECKED_BUILTINS: &[CheckedBuiltin] = &[
+    entry(
+        "__builtin___memccpy_chk",
+        "memccpy",
+        "__memccpy_chk",
+        Pointer,
+        &[Pointer, ConstPointer, Int, Size, Size],
+        false,
+        (4, None, Some(3)),
+    ),
+    entry(
+        "__builtin___strlcpy_chk",
+        "strlcpy",
+        "__strlcpy_chk",
+        Size,
+        BOUNDED_STRING,
+        false,
+        (3, None, Some(2)),
+    ),
+    entry(
+        "__builtin___strlcat_chk",
+        "strlcat",
+        "__strlcat_chk",
+        Size,
+        BOUNDED_STRING,
+        false,
+        (3, None, Some(2)),
+    ),
+    stream_entry(
+        "__builtin___printf_chk",
+        "printf",
+        "__printf_chk",
+        &[Int, ConstChars],
+        true,
+        0,
+    ),
+    stream_entry(
+        "__builtin___vprintf_chk",
+        "vprintf",
+        "__vprintf_chk",
+        &[Int, ConstChars, VaList],
+        false,
+        0,
+    ),
+    stream_entry(
+        "__builtin___fprintf_chk",
+        "fprintf",
+        "__fprintf_chk",
+        &[Stream, Int, ConstChars],
+        true,
+        1,
+    ),
+    stream_entry(
+        "__builtin___vfprintf_chk",
+        "vfprintf",
+        "__vfprintf_chk",
+        &[Stream, Int, ConstChars, VaList],
+        false,
+        1,
+    ),
     entry(
         "__builtin___memcpy_chk",
         "memcpy",
@@ -277,14 +396,16 @@ mod tests {
     #[test]
     fn each_plain_call_drops_exactly_the_size_and_flag() {
         for builtin in CHECKED_BUILTINS {
-            let removed = usize::from(builtin.flag.is_some()) + 1;
+            let removed = usize::from(builtin.flag.is_some()) + usize::from(builtin.size.is_some());
             assert_eq!(
                 builtin.plain_parameters().len() + removed,
                 builtin.parameters.len(),
                 "{}",
                 builtin.builtin
             );
-            assert_eq!(builtin.parameters[builtin.size], Param::Size);
+            if let Some(size) = builtin.size {
+                assert_eq!(builtin.parameters[size], Param::Size);
+            }
             if let Some(flag) = builtin.flag {
                 assert_eq!(builtin.parameters[flag], Param::Int);
             }

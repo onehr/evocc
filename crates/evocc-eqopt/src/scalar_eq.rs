@@ -108,13 +108,13 @@ pub fn ingest_scalar_inst(inst: &Inst) -> Result<ScalarOperator, ScalarBridgeErr
         | Inst::Call { .. }
         | Inst::IndirectCall { .. } => {
             return Err(ScalarBridgeError {
-                code: "E4001",
+                code: "EQ_EFFECT_EXCLUDED",
                 message: "effect-bearing-instruction-is-not-scalar-egraph-eligible",
             });
         }
         _ => {
             return Err(ScalarBridgeError {
-                code: "E4002",
+                code: "EQ_OPERATOR_EXCLUDED",
                 message: "instruction-is-not-total-day7-p0-scalar",
             });
         }

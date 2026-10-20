@@ -348,3 +348,61 @@ fn unsupported_execution_does_not_establish_absence_of_undefined_behavior() {
         "{text}"
     );
 }
+
+#[test]
+fn concise_compiler_records_keep_their_fixed_key_order() {
+    let completed = run(
+        &["--check", "--error-format=concise"],
+        "int main(void) { return 3; }\n",
+    );
+    assert!(completed.status.success(), "{completed:?}");
+    assert!(completed.stderr.is_empty(), "{completed:?}");
+    assert_eq!(
+        String::from_utf8(completed.stdout).unwrap(),
+        "{\"status\":\"completed\",\"main_return\":\"3\",\"scope\":\"No finding from the implemented checks on the executed path. Pointer subtraction and ordering obligations are not checked. This does not check that the results are correct.\"}\n"
+    );
+    let finding = run(
+        &["--check", "--error-format=concise"],
+        "int main(void) {\n    int divisor = 0;\n    return 10 / divisor;\n}\n",
+    );
+    assert_eq!(finding.status.code(), Some(1));
+    assert!(finding.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(finding.stderr).unwrap(),
+        "{\"code\":\"E3002\",\"message\":\"integer-division-by-zero\",\"at\":\"/dev/stdin:3:12\",\"source\":\"10 / divisor\",\"help\":[\"check the divisor before the division or remainder operation\"],\"why\":\"The executed integer division has a zero divisor.\",\"fix\":\"Check the divisor and choose the required error behavior before dividing.\"}\n"
+    );
+}
+
+#[test]
+fn concise_command_errors_and_the_repair_bridge() {
+    let missing = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args(["--check", "--error-format=concise"])
+        .output()
+        .unwrap();
+    assert_eq!(missing.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(missing.stderr).unwrap(),
+        "{\"code\":null,\"message\":\"an input file is required\",\"at\":\"<command-line>:1:1\",\"source\":\"--check --error-format=concise\"}\n"
+    );
+    // A plan has no concise form. The bridge refuses it before any repair.
+    let plan = Command::new(env!("CARGO_BIN_EXE_evocc"))
+        .args([
+            "--parse-only",
+            "--repair=plan",
+            "--error-format=concise",
+            "/dev/null",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(plan.status.code(), Some(1));
+    assert!(plan.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(plan.stderr).unwrap(),
+        "{\"code\":null,\"message\":\"option --repair does not support --error-format=concise\",\"at\":\"<command-line>:1:1\",\"source\":\"--parse-only --repair=plan --error-format=concise /dev/null\",\"label\":\"--repair does not support --error-format=concise\"}\n"
+    );
+    let unknown = run(&["--check", "--error-format=compact"], "");
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(String::from_utf8(unknown.stderr)
+        .unwrap()
+        .contains("expected text, short, json or concise"));
+}

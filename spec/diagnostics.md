@@ -1,6 +1,6 @@
 # Diagnostic Presentation
 
-**Revision 1.3.0** | **Pinned ground truth** | **2026-10-13**
+**Revision 1.4.1** | **Pinned ground truth** | **2026-10-16**
 
 ## 1. Scope
 
@@ -123,14 +123,16 @@ no extra wrapper, embedded record separator, or trailing comma. The successful
 completion record. A completed path is not a whole-program safety proof.
 
 A completed check states its scope in text and in JSON. The JSON completion
-record has a `scope` string. The text form ends with the same two sentences:
+record has a `scope` string. The text form ends with the same three sentences:
 
 ```text
-No undefined behavior was found on the executed path. This does not check that the results are correct.
+No finding from the implemented checks on the executed path. Pointer subtraction and ordering obligations are not checked. This does not check that the results are correct.
 ```
 
-This statement applies only to the executed path. It does not claim that the
-program results are correct. Revision 1.2.0 adds `scope`. The record keeps all
+This statement applies only to the implemented checks on the executed path.
+It does not claim complete UB detection or correct program results. Revision
+1.4.1 names the pointer-relation exclusions specified in EvoIR 10.1.3;
+revision 1.2.0 added `scope`. The record keeps all
 other fields and values, including `claim` with the value `executed-path-only`.
 
 These field names, types and meanings are stable. An incompatible change
@@ -182,6 +184,75 @@ Plan diagnostics describe the input; apply diagnostics describe the post-check
 when edits were attempted. Failed or rolled-back edits have `applied=0`.
 The compiler bridge is `--parse-only --repair=plan|safe|review`; its
 `--error-format=json` form uses the same result record.
+
+### 5.2. Concise check record
+
+`evo check FILE.c --json --form=concise-1` writes one `concise-1` record on one
+line. It replaces the check record, the explanation records and the plan
+record. No `--form` and `--form=full-1` keep the records above byte for byte.
+`full-1` stays the default. A replay selects `--form=full-1`. A change of the
+default requires a new major revision of this specification.
+
+`--form` requires `check` and `--json`, once, with the value `full-1` or
+`concise-1`. Any other use is a command error. The MCP `check` tool takes an
+optional `form` string with the same two values. Another value is error
+-32602. Omission is `full-1`.
+
+The record has these keys in this order. An absent key is omitted, not null.
+
+| Key | When present | Value |
+|---|---|---|
+| `form` | always | `"concise-1"` |
+| `status` | always | `"completed"` when main returned; otherwise `"stopped"` |
+| `main_return` | completed | The `main_return` string of the completion record |
+| `scope` | completed | The `scope` sentence of the completion record |
+| `diagnostics` | at least one diagnostic | Concise diagnostics in report order |
+| `repairs` | the plan has repairs | The repairs of `evo fix FILE.c --plan --json`, in concise form |
+| `exit_code` | always | The process status of `evo`, not of the program |
+
+`stopped` covers findings, limits, unsupported operations and errors. The
+notes keep the category statement of a code that is not undefined behavior.
+The record omits `rendered`, the span objects, the rest of each explanation
+page and the plan diagnostics. `full-1` and `evo explain CODE` keep them.
+
+A concise diagnostic has these keys in this order:
+
+| Key | When present | Value |
+|---|---|---|
+| `code` | always | The code, or null for an unnumbered command error |
+| `message` | always | The `message` of the JSON record |
+| `level` | the level is not `error` | The level |
+| `at` | always | `PATH:LINE:COLUMN` of the primary span start |
+| `end` | the primary span covers more than one line | `LINE:COLUMN` of the exclusive end |
+| `source` | the primary span has text on its first line | That text, shown as in the text form |
+| `label` | the primary label differs from `message` | The primary label |
+| `also` | there are secondary spans | Strings `PATH:LINE:COLUMN LABEL` |
+| `notes` | a note remains | The notes except `this operation failed on the executed path` |
+| `help` | nonempty | The `help` strings of the JSON record |
+| `why` | the code has an explanation page | The first line of the first paragraph of the page |
+| `fix` | the hint table has the code | The repair hint of the code |
+| `repairs` | the diagnostic has repairs | Concise repairs |
+
+`source` has at most 80 characters. A longer text keeps its first 77
+characters and `...`. ` ...` follows when the span continues on a later line.
+A concise repair has `id`, `kind`, `title`, `at`, `end` and `replacement` in
+this order. `id` is the `repair_id`. `at` and `end` give the whole edit span.
+For an insertion they name the same position.
+
+`PATH` is relative to the current directory when the canonical file path is
+below the canonical current directory. Otherwise it is the reported file.
+Compare canonical paths: on macOS, `/var` and `/private/var` name the same
+directory. Strings use the escapes of section 5.
+
+`crates/evocc/explain/hints.txt` has one `CODE<TAB>HINT` line for each code
+with a usable action. A hint is one action sentence of at most 120 bytes. The
+build refuses a code outside the authority table and a code listed twice. The
+explanation pages do not change, so `evo explain` keeps its text.
+
+The compiler writes concise diagnostics for `--error-format=concise`. Its
+completed `--check` result is the object
+`{"status":"completed","main_return":"N","scope":SCOPE}`. `--repair` with
+`--error-format=concise` is a command error. Revision 1.4.0 adds this section.
 
 ## 6. Exit status and conformance
 

@@ -1,0 +1,59 @@
+SSA transport and unchanged kernel reductions — 2026-10-16
+
+Scope: ordinary Rust translation validation, then forwarding across asm-goto
+edges without fixed register bindings. No new Lean profile or kernel acceptance.
+The checker compares actual SSA and post-SSA programs. It does not rerun the
+producer. The independent allocation relation still checks the next boundary.
+
+The initial three mutations changed a retained input, operation or return.
+All three passed the old post-SSA-only allocation boundary and now fail the
+transport check. Additional cases cover demand, entry identity, classes,
+loops, copy cycles, critical edges, effects, and asm-goto outputs and attributes.
+With the check alone, both original reduction assembly files were byte-identical.
+
+Execution measurement (inside the named symbol, callees excluded):
+Reduction                    Calls  Before/call  After/call  GCC14/call  After/GCC
+loop-carried-transport          100       179130       29734        8236      3.610
+asm-goto-live-transport      100000          488         171          67      2.552
+
+Function text bytes:
+free_ok: 1584 -> 456; GCC14 288.
+fault:   3940 -> 772; GCC14 348.
+
+All before/after/GCC executables return zero in the Linux container and TCG.
+Checksums: loop 2ee0c8514; fault af7e366cb7e1e280. Sources and driver bodies
+are unchanged. This checks the existing fixed workloads, not every input.
+The driver and external helpers are GCC-built. The loop header's 1 << order
+guard remains; no UB guard is removed by this transport change.
+
+The first PC-only count also counted /init at overlapping executable addresses.
+Keep that capture as rejected attribution evidence. The table above comes from
+a new link at 0x10000000, checked disjoint from init's executable load ranges.
+All six profiles have dropped=0 and irregular=0. All runtime inputs remain
+unchanged. The existing GCC kernel and scratch disk were reused; disk writes
+use QEMU snapshot mode. No kernel tree or disk image was created.
+
+TCG uses one neoverse-n2 CPU and the recorded current QEMU binary. Its hash
+differs from the historical kernel selftest contract, and one CPU is a
+diagnostic override. This is not that contract's kernel acceptance replay,
+not a latency benchmark, and not a completed K02 or N08 exit.
+
+Capture: .evidence/ssa-transport-20261016/ (500 MiB limit).
+The baseline and forwarding JSON records retain compiler/source/assembly hashes.
+runtime-disjoint/counts.json retains binary hashes and measured counts.
+Each run's result.json retains the exact command and runtime input hashes.
+Original kernel probes: mm/page_alloc.c and arch/arm64/kvm/mmu.c both compile
+and assemble. Each command has 41 classified option omissions and zero
+unreviewed omissions; this is not exact Kbuild argv parity. No kernel object
+was installed, relinked or booted by these probes.
+Combined acceptance with constant addresses: full offline workspace gate,
+450 suites / 3423 PASS / 0 FAIL / 8 ignored; Clippy and formatting PASS.
+All six Lean steps PASS: 62 rule theorems, 36 analysis rows, 576 enumerated
+instances. Logs: .evidence/constant-address-20261016/{workspace,lean}-final.log.
+The shared worktree is dirty; this is not clean-release acceptance.
+The first sandboxed gate failed to start two containers and was stopped;
+it is not a passing gate. The first complete gate's old ABI snapshot failure
+also remains recorded. The snapshot update was checked against all seven
+old/new assembly pairs before the final run.
+Scoped frontend cache plus these two captures: +481764 KiB from the recorded
+05:52 baseline; shared-cache changes are included. No new target or VM disk.

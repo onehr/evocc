@@ -4101,3 +4101,32 @@ work. The slice keeps about 40 MiB: 16 MiB of payload scratch on the case
 volume, 20 MiB of extracted QEMU source in the session scratch, and the
 3 MiB capture. The 135 MiB QEMU tarball was removed after its hash and
 signature were checked.
+
+## 2026-10-16: static-string FORTIFY replay
+
+The approved static-string ICE rule and the single-trip byte-query repair
+pass the unchanged `lib/tests/fortify_kunit.c` suite in a paired minimal
+Linux 6.18.44 configuration: GCC 14 **26 PASS / 0 FAIL**, EvoCC **26 PASS /
+0 FAIL**, with normal poweroff and no KUnit parser error on either side.
+The 120-second limit is unchanged. The first EvoCC replay, before the
+single-trip repair, remains recorded as **25 PASS / 1 FAIL**, at line 90.
+Its Image and serial log are retained, not replaced by the successful run.
+
+This reuses `.build/case/kbuild-probe/out-tiny`, after preserving its prior
+config, Image, vmlinux and System.map. The accepted `out-k16` is unchanged.
+Only `lib/tests/fortify_kunit.o` is EvoCC-built; the remaining C, assembler
+and linker are the reference toolchain. Kbuild regenerated its two version
+objects. The installed test object, original source, configuration and
+command record are checked by hash after relink. Projected options are
+disclosed; this is not exact GCC command equivalence.
+
+See the [bounded replay](../../../tests/fixtures/fortify-static-string-replay.out)
+and the `fortify/minimal-pair` follow-up in the
+[existing receipt](../../../tests/contracts/kernel-expanded-kunit-receipt.json).
+Capture: `.evidence/fortify-constant-20261016/`, about 24 MiB after cleanup.
+The two copied test objects and emitted assembly were hashed and removed
+after an open-handle check; they are reproducible and have no Trash copy.
+Plans, logs, hashes, three test Images and the prior tiny runtime remain.
+No new kernel tree or VM disk was created. This result does not close the
+retired expanded composition, the 7,008-unit configuration, K13/K14 or the
+full kselftest population. Compiler package gates are recorded in TODO.md.

@@ -558,9 +558,10 @@ fn every_slot_lies_on_a_boundary_its_own_access_can_scale() {
     let w = |id: u32| VReg::new(id, RegClass::Gpr32);
     let g = |id: u32| VReg::new(id, RegClass::Gpr64);
 
-    // Three objects whose alignments and sizes do not divide each other, and a
-    // value that lives across a call so that a callee-saved register is used
-    // and the save area has to start somewhere.
+    // Three live objects whose alignments and sizes do not divide each other,
+    // and a value that lives across a call. Pass the addresses to the helper:
+    // unused fixed addresses are removed before allocation and cannot test
+    // object layout. The call also requires a callee-saved save area.
     let function = MFunction {
         name: "frame".to_owned(),
         blocks: vec![MBlock {
@@ -588,7 +589,7 @@ fn every_slot_lies_on_a_boundary_its_own_access_can_scale() {
                 MInst::Bl {
                     fp_mode: None,
                     symbol: "helper".to_owned(),
-                    args: vec![w(0)],
+                    args: vec![w(0), g(1), g(2), g(3)],
                     results: vec![w(4)],
                 },
                 MInst::Binary {

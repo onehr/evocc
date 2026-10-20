@@ -268,9 +268,13 @@ fn measure(
             Ok(text) => text,
             Err(stop) => {
                 match &stop {
-                    NativeStop::Lowering(codes) => {
-                        for code in codes {
-                            *row.lowering_refused.entry((*code).to_owned()).or_default() += 1;
+                    NativeStop::Lowering(refusals) => {
+                        for code in refusals
+                            .iter()
+                            .map(|r| r.code)
+                            .collect::<std::collections::BTreeSet<_>>()
+                        {
+                            *row.lowering_refused.entry(code.to_owned()).or_default() += 1;
                         }
                     }
                     other => *row.stopped.entry(other.component()).or_default() += 1,

@@ -74,14 +74,26 @@ pub fn interpret_program_with_site(
     limits: InterpreterLimits,
     site: &mut Option<ExecutionSite>,
 ) -> Result<InterpreterOutcome, InterpreterError> {
-    *site = None;
     let target = TargetDataLayout::aarch64_unknown_linux_gnu();
+    interpret_program_with_target_and_site(module, entry_args, &target, limits, site)
+}
+
+/// Run initialization, main and finalization with one explicitly selected
+/// target layout. Source drivers must not lose their target at this boundary.
+pub fn interpret_program_with_target_and_site(
+    module: &Module,
+    entry_args: &[RuntimeValue],
+    target: &TargetDataLayout,
+    limits: InterpreterLimits,
+    site: &mut Option<ExecutionSite>,
+) -> Result<InterpreterOutcome, InterpreterError> {
+    *site = None;
     let alignment = module
         .functions
         .iter()
         .map(|f| f.alignment)
         .max()
         .unwrap_or(4);
-    let state = ExecutionState::for_target(&target, alignment)?;
+    let state = ExecutionState::for_target(target, alignment)?;
     interpret_module_execution(module, "main", entry_args, limits, state, true, site)
 }

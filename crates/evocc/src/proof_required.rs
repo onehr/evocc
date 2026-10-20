@@ -195,6 +195,53 @@ const STAGES: &[Stage] = &[
 
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 
+#[test]
+fn compiled_lean_stage_roles_match_the_driver_table() {
+    let checker = std::env::var_os("EVOCC_PROOF_CHECKER")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lean/.lake/build/bin/evoir-sem")
+        });
+    let output = Command::new(&checker)
+        .arg("--list-stages")
+        .output()
+        .unwrap_or_else(|error| panic!("{}: {error}; build evoir-sem first", checker.display()));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let expected = STAGES
+        .iter()
+        .filter(|stage| stage.place != Place::Whole)
+        .map(|stage| {
+            let roles = stage
+                .roles
+                .expect("every declared stage must be integrated");
+            let required = roles
+                .iter()
+                .filter(|&&role| role != Role::Proposal)
+                .map(|role| role.name())
+                .collect::<Vec<_>>()
+                .join(",");
+            let optional = roles
+                .iter()
+                .filter(|&&role| role == Role::Proposal)
+                .map(|role| role.name())
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{} required={required} optional={optional}", stage.id)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        expected
+    );
+}
+
 /// The scope of a result in which every stage is integrated.
 const COMPLETE_SCOPE: &str = "checked from typed Core source to final assembly text";
 
@@ -391,6 +438,7 @@ pub(crate) struct Rewrites {
 /// compiles. `rewrites` is `None` without `-Oeq-scalar`. On success, the
 /// assembly goes to standard output after the record exists. On failure,
 /// nothing goes to standard output.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run(
     options: &DriverOptions,
     proof: &ProofOptions,
@@ -399,6 +447,7 @@ pub(crate) fn run(
     module: &Module,
     rewrites: Option<&Rewrites>,
     resolved: &CHirUnit<'_>,
+    pp: &evocc_cpp::Preprocessor,
 ) -> ExitCode {
     let refuse = |(failure, message): Refusal| {
         options.error_format.usage(&format!(
@@ -410,7 +459,7 @@ pub(crate) fn run(
         Ok(exported) => exported,
         Err(refusal) => return refuse(refusal),
     };
-    let assembly = match crate::assemble(options, module, resolved) {
+    let assembly = match crate::assemble(options, module, resolved, pp) {
         Ok(assembly) => assembly,
         Err(code) => return code,
     };
@@ -484,7 +533,12 @@ fn export(
             "the output has a data object, alias, constructor or file-scope assembly outside core-v1".into(),
         ));
     }
-    let emitted = evocc_mir::emitted_functions(module);
+    let entries = options
+        .core_entries
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    let emitted = evocc_mir::emitted_functions_with_entries(module, &entries);
     if let Some(name) = emitted
         .iter()
         .find(|name| !options.core_entries.contains(name))
@@ -535,7 +589,8 @@ fn export(
     })?;
     let mut post = ssa.clone();
     for function in &mut post.functions {
-        *function = evocc_mir::out_of_ssa(function);
+        *function = evocc_mir::regalloc::checked_out_of_ssa(function, true)
+            .map_err(|detail| (Failure::Input, format!("machine transport check: {detail}")))?;
     }
     for (role, program, mode, path) in [
         (
@@ -564,7 +619,7 @@ fn export(
     artifacts.push(Artifact::new(Role::Allocation, None, None, path, bytes));
     // The assembly AST and the frame hints of the same module, from the same
     // lowering, allocation and frame layout.
-    let (ast, _) = evocc_mir::asm_ast::export_core_asm(module)
+    let (ast, _) = evocc_mir::asm_ast::export_core_asm_with_entries(module, &entries)
         .map_err(|error| unsupported(format!("assembly AST snapshot refused: {error}")))?;
     let path = "inputs/asm-ast.json".into();
     artifacts.push(Artifact::new(Role::Asm, None, None, path, ast.into_bytes()));
@@ -712,8 +767,18 @@ fn check_and_record(
     } else {
         format!("checked to {reaches}, not to final assembly")
     };
-    let compiler = std::env::current_exe().unwrap_or_default();
-    let compiler_sha256 = fs::read(&compiler).map_or_else(|_| String::new(), sha256);
+    let compiler = std::env::current_exe().map_err(|error| {
+        (
+            Failure::Input,
+            format!("cannot locate compiler for its digest: {error}"),
+        )
+    })?;
+    let compiler_sha256 = fs::read(&compiler).map(sha256).map_err(|error| {
+        (
+            Failure::Input,
+            format!("cannot read compiler for its digest: {error}"),
+        )
+    })?;
     let file = |path: &str, digest: &str| {
         Json::Object(vec![
             ("path", Json::text(path)),
@@ -767,8 +832,26 @@ fn check_and_record(
     let mut text = String::new();
     record.render(0, &mut text);
     text.push('\n');
-    create_new(&proof.directory.join("output.s"), &published.bytes)?;
-    create_new(&proof.directory.join("record.json"), text.as_bytes())?;
+    // Both paths belong to this new attempt directory. Publication is one
+    // result: a missing record must not leave an apparently accepted output,
+    // and a partial write must not leave an apparently complete record.
+    let output_path = proof.directory.join("output.s");
+    let record_path = proof.directory.join("record.json");
+    let publication = create_new(&output_path, &published.bytes)
+        .and_then(|()| create_new(&record_path, text.as_bytes()));
+    if let Err((failure, mut message)) = publication {
+        for path in [&output_path, &record_path] {
+            if let Err(error) = fs::remove_file(path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    message.push_str(&format!(
+                        "; cannot remove failed publication `{}`: {error}",
+                        path.display()
+                    ));
+                }
+            }
+        }
+        return Err((failure, message));
+    }
     let record = proof.directory.join("record.json");
     Ok(format!("{result}: {scope}; record {}", record.display()))
 }

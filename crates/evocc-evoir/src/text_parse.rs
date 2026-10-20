@@ -13,6 +13,39 @@ use crate::{
 
 type BinaryConstructor = fn(Value, Value, Value) -> Inst;
 
+/// Section 9.5 distinguishes unreadable syntax from a readable invalid module.
+/// Keep this distinction typed: consumers must not infer an exit code from
+/// diagnostic wording. The original string-returning readers remain available.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModuleParseError {
+    Malformed(String),
+    Invalid(String),
+}
+
+impl std::fmt::Display for ModuleParseError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Malformed(message) | Self::Invalid(message) => formatter.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for ModuleParseError {}
+
+impl From<String> for ModuleParseError {
+    fn from(message: String) -> Self {
+        Self::Malformed(message)
+    }
+}
+
+impl From<&str> for ModuleParseError {
+    fn from(message: &str) -> Self {
+        Self::Malformed(message.to_owned())
+    }
+}
+
+type ParseResult<T> = Result<T, ModuleParseError>;
+
 #[derive(Clone)]
 struct Signature {
     params: Vec<EvoIRType>,
@@ -42,11 +75,15 @@ struct Header {
 /// This makes accepted bytes a producer-reachable spelling rather than a
 /// permissive source language with aliases for the same module.
 pub fn parse_section9_module(bytes: &[u8]) -> Result<Module, String> {
+    parse_section9_module_detailed(bytes).map_err(|error| error.to_string())
+}
+
+fn parse_section9_module_detailed(bytes: &[u8]) -> ParseResult<Module> {
     if let Some(target) = crate::text::named_target(bytes) {
         return Err(format!(
             "the EvoIR text names target `{target}`; this reader reads the text of the implicit target `{}` only (Section 9.1)",
             crate::text::IMPLICIT_TARGET
-        ));
+        ).into());
     }
     parse_module_profile(bytes, false)
 }
@@ -55,14 +92,17 @@ pub fn parse_section9_module(bytes: &[u8]) -> Result<Module, String> {
 /// no target line; the text of every other target starts with one, which must
 /// name `target` (Section 9.1).
 pub fn parse_target_module(bytes: &[u8], target: &str) -> Result<Module, String> {
+    parse_target_module_detailed(bytes, target).map_err(|error| error.to_string())
+}
+
+/// Parse and validate with the status distinction required by Section 11.4.
+pub fn parse_target_module_detailed(bytes: &[u8], target: &str) -> ParseResult<Module> {
     if target == crate::text::IMPLICIT_TARGET {
-        return parse_section9_module(bytes);
+        return parse_section9_module_detailed(bytes);
     }
     let line = format!("target {target}\n");
     let Some(rest) = bytes.strip_prefix(line.as_bytes()) else {
-        return Err(format!(
-            "the EvoIR text does not start with `target {target}`"
-        ));
+        return Err(format!("the EvoIR text does not start with `target {target}`").into());
     };
     let body = if rest.is_empty() {
         rest
@@ -72,7 +112,7 @@ pub fn parse_target_module(bytes: &[u8], target: &str) -> Result<Module, String>
             .ok_or("a blank line separates the target line from the module")?
     };
     if crate::text::named_target(body).is_some() {
-        return Err("the EvoIR text names its target twice".to_owned());
+        return Err("the EvoIR text names its target twice".into());
     }
     parse_module_profile(body, false)
 }
@@ -81,10 +121,15 @@ pub fn parse_target_module(bytes: &[u8], target: &str) -> Result<Module, String>
 /// the current reader. The newly introduced effect is derived, not assumed
 /// false; strict operations cannot be smuggled into this historical grammar.
 pub fn parse_pre_fenv_module(bytes: &[u8]) -> Result<Module, String> {
+    parse_pre_fenv_module_detailed(bytes).map_err(|error| error.to_string())
+}
+
+/// The archived text profile uses the same malformed/invalid distinction.
+pub fn parse_pre_fenv_module_detailed(bytes: &[u8]) -> ParseResult<Module> {
     parse_module_profile(bytes, true)
 }
 
-fn parse_module_profile(bytes: &[u8], legacy: bool) -> Result<Module, String> {
+fn parse_module_profile(bytes: &[u8], legacy: bool) -> ParseResult<Module> {
     validate_section9_bytes(bytes)?;
     if bytes.is_empty() {
         return Ok(Module::default());
@@ -107,10 +152,10 @@ fn parse_module_profile(bytes: &[u8], legacy: bool) -> Result<Module, String> {
                 .insert(header.name.clone(), header.signature)
                 .is_some()
             {
-                return Err(format!(
+                return Err(ModuleParseError::Invalid(format!(
                     "E3041: symbol-declared-and-defined: '{}'",
                     header.name
-                ));
+                )));
             }
         }
     }
@@ -123,10 +168,10 @@ fn parse_module_profile(bytes: &[u8], legacy: bool) -> Result<Module, String> {
             if definitions.contains(&alias.target) {
                 if let Some(signature) = signatures.get(&alias.target).cloned() {
                     if signatures.insert(alias.name.clone(), signature).is_some() {
-                        return Err(format!(
+                        return Err(ModuleParseError::Invalid(format!(
                             "E3041: symbol-declared-and-defined: '{}'",
                             alias.name
-                        ));
+                        )));
                     }
                 }
             }
@@ -140,10 +185,7 @@ fn parse_module_profile(bytes: &[u8], legacy: bool) -> Result<Module, String> {
     };
     let mut module = parser.module()?;
     if parser.position != lines.len() {
-        return Err(format!(
-            "unexpected module text at line {}",
-            parser.position + 1
-        ));
+        return Err(format!("unexpected module text at line {}", parser.position + 1).into());
     }
     if legacy {
         let derived = crate::derive_effect_summaries(&module);
@@ -151,14 +193,14 @@ fn parse_module_profile(bytes: &[u8], legacy: bool) -> Result<Module, String> {
             function.effects.fenv = effects.fenv;
         }
     }
-    validate_module(&module)?;
+    validate_module(&module).map_err(ModuleParseError::Invalid)?;
     let rendered = if legacy {
         crate::render_pre_fenv_module(&module)?
     } else {
         crate::render_module(&module)
     };
     if rendered.as_bytes() != bytes {
-        return Err("EvoIR module is not in canonical Section 9 form".to_owned());
+        return Err("EvoIR module is not in canonical Section 9 form".into());
     }
     Ok(module)
 }
@@ -171,14 +213,14 @@ struct ModuleParser<'a> {
 }
 
 impl ModuleParser<'_> {
-    fn module(&mut self) -> Result<Module, String> {
+    fn module(&mut self) -> ParseResult<Module> {
         let mut globals = Vec::new();
         while self
             .lines
             .get(self.position)
             .is_some_and(|line| line.starts_with("global @"))
         {
-            globals.push(parse_global_text(self.lines[self.position])?);
+            globals.push(parse_global_text_detailed(self.lines[self.position])?);
             self.position += 1;
         }
         if !globals.is_empty()
@@ -264,7 +306,8 @@ impl ModuleParser<'_> {
                     return Err(format!(
                         "functions must be separated by one blank line at line {}",
                         self.position + 1
-                    ));
+                    )
+                    .into());
                 }
                 self.position += 1;
             }
@@ -344,7 +387,7 @@ impl ModuleParser<'_> {
         })
     }
 
-    fn function(&mut self) -> Result<Function, String> {
+    fn function(&mut self) -> ParseResult<Function> {
         let line = self
             .lines
             .get(self.position)
@@ -352,10 +395,10 @@ impl ModuleParser<'_> {
         let header = parse_function_header(line)?;
         self.position += 1;
         if header.convention != "target_default" {
-            return Err(format!(
+            return Err(ModuleParseError::Invalid(format!(
                 "function '{}' uses unsupported calling convention '{}'",
                 header.name, header.convention
-            ));
+            )));
         }
         let effects_line = self
             .lines
@@ -364,7 +407,7 @@ impl ModuleParser<'_> {
         let effects = parse_effects(effects_line, self.legacy)?;
         self.position += 1;
         if self.lines.get(self.position) != Some(&"{") {
-            return Err(format!("function '{}' has no opening brace", header.name));
+            return Err(format!("function '{}' has no opening brace", header.name).into());
         }
         self.position += 1;
 
@@ -375,7 +418,8 @@ impl ModuleParser<'_> {
                     return Err(format!(
                         "blocks in '{}' must be separated by one blank line",
                         header.name
-                    ));
+                    )
+                    .into());
                 }
                 self.position += 1;
             }
@@ -409,7 +453,7 @@ impl ModuleParser<'_> {
         })
     }
 
-    fn block(&mut self, is_entry: bool) -> Result<Block, String> {
+    fn block(&mut self, is_entry: bool) -> ParseResult<Block> {
         let header = self
             .lines
             .get(self.position)
@@ -421,7 +465,9 @@ impl ModuleParser<'_> {
             .map(|argument| (argument.value.id, argument.value.ty.clone()))
             .collect::<HashMap<_, _>>();
         if values.len() != args.len() {
-            return Err(format!("duplicate block argument in block {id}"));
+            return Err(ModuleParseError::Invalid(format!(
+                "duplicate block argument in block {id}"
+            )));
         }
 
         let mut insts = Vec::new();
@@ -449,7 +495,10 @@ impl ModuleParser<'_> {
             let inst = parse_instruction(body, &values, self.signatures)?;
             for result in crate::inst_results(&inst) {
                 if values.insert(result.id, result.ty.clone()).is_some() {
-                    return Err(format!("duplicate value %v{} in block {id}", result.id));
+                    return Err(ModuleParseError::Invalid(format!(
+                        "duplicate value %v{} in block {id}",
+                        result.id
+                    )));
                 }
             }
             insts.push(inst);
@@ -464,7 +513,7 @@ impl ModuleParser<'_> {
     }
 }
 
-fn parse_linkage(cursor: &mut Cursor<'_>) -> Result<Linkage, String> {
+fn parse_linkage(cursor: &mut Cursor<'_>) -> ParseResult<Linkage> {
     if cursor.at(" linkage=weak") {
         cursor.expect(" linkage=weak")?;
         Ok(Linkage::Weak)
@@ -473,7 +522,7 @@ fn parse_linkage(cursor: &mut Cursor<'_>) -> Result<Linkage, String> {
     }
 }
 
-fn parse_alias(line: &str) -> Result<SymbolAlias, String> {
+fn parse_alias(line: &str) -> ParseResult<SymbolAlias> {
     let mut cursor = Cursor::new(line);
     cursor.expect("alias @")?;
     let name = cursor.ident()?.to_owned();
@@ -490,7 +539,7 @@ fn parse_alias(line: &str) -> Result<SymbolAlias, String> {
     })
 }
 
-fn parse_visibility(cursor: &mut Cursor<'_>) -> Result<GlobalVisibility, String> {
+fn parse_visibility(cursor: &mut Cursor<'_>) -> ParseResult<GlobalVisibility> {
     if cursor.at(" visibility=internal") {
         cursor.expect(" visibility=internal")?;
         Ok(GlobalVisibility::Internal)
@@ -508,22 +557,28 @@ fn parse_visibility(cursor: &mut Cursor<'_>) -> Result<GlobalVisibility, String>
 /// Parse one canonical global line without its terminating newline.
 /// Cross-symbol relocation and origin checks belong to module validation.
 pub fn parse_global_text(line: &str) -> Result<GlobalObject, String> {
+    parse_global_text_detailed(line).map_err(|error| error.to_string())
+}
+
+fn parse_global_text_detailed(line: &str) -> ParseResult<GlobalObject> {
     crate::validate_section9_bytes(format!("{line}\n").as_bytes())?;
     let global = parse_global(line)?;
-    crate::validate_layout(global.layout, "module global", 0)?;
+    crate::validate_layout(global.layout, "module global", 0).map_err(ModuleParseError::Invalid)?;
     if global.bytes.len() as u64 != global.layout.size_bytes
         || global.initialized.len() != global.bytes.len()
     {
         return Err("global bytes/initialized lengths must equal its size".into());
     }
-    global.validate_section()?;
+    global
+        .validate_section()
+        .map_err(ModuleParseError::Invalid)?;
     if crate::render_global(&global).strip_suffix('\n') != Some(line) {
         return Err("global is not in canonical Section 9 form".into());
     }
     Ok(global)
 }
 
-fn parse_global(line: &str) -> Result<GlobalObject, String> {
+fn parse_global(line: &str) -> ParseResult<GlobalObject> {
     let mut section = None;
     let without_section;
     let line = if let Some((head, tail)) = line.split_once(" section=") {
@@ -553,7 +608,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
                 && !(fields.len() == 4 && fields[3] == "exposed")
                 && fields.len() != 5
             {
-                return Err("malformed relocation".to_owned());
+                return Err("malformed relocation".into());
             }
             let offset = fields[0]
                 .parse::<u64>()
@@ -572,7 +627,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
                 .parse::<i64>()
                 .map_err(|_| "invalid relocation addend")?;
             if offset.to_string() != fields[0] || addend.to_string() != fields[2] {
-                return Err("noncanonical relocation integer".to_owned());
+                return Err("noncanonical relocation integer".into());
             }
             let difference = if fields.len() == 5 {
                 let base = fields[3]
@@ -619,7 +674,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         Linkage::Strong
     };
     if fields.len() != 9 || fields[0] != "global" {
-        return Err("malformed module global".to_owned());
+        return Err("malformed module global".into());
     }
     let symbol = parse_symbol(fields[1])?.to_owned();
     let origin = parse_named_u64(fields[2], "origin")?;
@@ -628,21 +683,21 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         "function_static" => GlobalKind::FunctionStatic,
         "string_literal" => GlobalKind::StringLiteral,
         "compound_literal" => GlobalKind::CompoundLiteral,
-        _ => return Err("unknown module-global kind".to_owned()),
+        _ => return Err("unknown module-global kind".into()),
     };
     let visibility = match parse_named(fields[4], "visibility")? {
         "external" => GlobalVisibility::External,
         "internal" => GlobalVisibility::Internal,
         "hidden" => GlobalVisibility::Hidden,
         "protected" => GlobalVisibility::Protected,
-        _ => return Err("unknown module-global visibility".to_owned()),
+        _ => return Err("unknown module-global visibility".into()),
     };
     let size = parse_named_u64(fields[5], "size")?;
     let align = u32::try_from(parse_named_u64(fields[6], "align")?)
         .map_err(|_| "global alignment exceeds u32".to_owned())?;
     let byte_text = parse_named(fields[7], "bytes")?;
     if (byte_text.is_empty() && size != 0) || byte_text.len() % 2 != 0 {
-        return Err("global bytes must contain complete hexadecimal bytes".to_owned());
+        return Err("global bytes must contain complete hexadecimal bytes".into());
     }
     let mut bytes = Vec::with_capacity(byte_text.len() / 2);
     for pair in byte_text.as_bytes().as_chunks::<2>().0 {
@@ -654,9 +709,9 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
         .map(|byte| match byte {
             b'0' => Ok(false),
             b'1' => Ok(true),
-            _ => Err("global initialization bitmap is not binary".to_owned()),
+            _ => Err("global initialization bitmap is not binary".into()),
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<ParseResult<Vec<_>>>()?;
     Ok(GlobalObject {
         read_only,
         section,
@@ -672,7 +727,7 @@ fn parse_global(line: &str) -> Result<GlobalObject, String> {
     })
 }
 
-fn parse_declaration_header(line: &str) -> Result<Header, String> {
+fn parse_declaration_header(line: &str) -> ParseResult<Header> {
     let mut cursor = Cursor::new(line);
     cursor.expect("declare @")?;
     let name = cursor.ident()?.to_owned();
@@ -703,7 +758,7 @@ fn parse_declaration_header(line: &str) -> Result<Header, String> {
     })
 }
 
-fn parse_function_header(line: &str) -> Result<Header, String> {
+fn parse_function_header(line: &str) -> ParseResult<Header> {
     let mut cursor = Cursor::new(line);
     cursor.expect("func @")?;
     let name = cursor.ident()?.to_owned();
@@ -723,7 +778,7 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
             cursor.expect("%arg")?;
             let actual = cursor.index()?;
             if actual != index {
-                return Err("function parameters must use positional %arg numbering".to_owned());
+                return Err("function parameters must use positional %arg numbering".into());
             }
             cursor.expect(": ")?;
             params.push(cursor.ty()?);
@@ -799,12 +854,14 @@ fn parse_function_header(line: &str) -> Result<Header, String> {
 /// The size and alignment are a record's, so the alignment is a power of two
 /// and nonzero; the record may have zero bytes. A mark list is empty or exactly as
 /// long as the parameter list.
-fn check_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> {
+fn check_marks(params: &[EvoIRType], marks: &[ParamMark]) -> ParseResult<()> {
     if marks.is_empty() {
         return Ok(());
     }
     if marks.len() != params.len() {
-        return Err("a record mark list must be as long as the parameter list".to_owned());
+        return Err(ModuleParseError::Invalid(
+            "a record mark list must be as long as the parameter list".into(),
+        ));
     }
     let mut destinations = 0_usize;
     for (index, mark) in marks.iter().enumerate() {
@@ -812,27 +869,29 @@ fn check_marks(params: &[EvoIRType], marks: &[ParamMark]) -> Result<(), String> 
             continue;
         };
         if params[index] != EvoIRType::Ptr(AddressSpace::Generic) {
-            return Err(format!(
+            return Err(ModuleParseError::Invalid(format!(
                 "parameter {index} carries a record mark but is not ptr<generic>"
-            ));
+            )));
         }
         if !shape.valid() {
-            return Err(format!(
+            return Err(ModuleParseError::Invalid(format!(
                 "parameter {index} marks a record whose alignment {} is not a power of two",
                 shape.align
-            ));
+            )));
         }
         if mark.is_sret() {
             destinations += 1;
         }
     }
     if destinations > 1 {
-        return Err("a signature carries at most one sret parameter".to_owned());
+        return Err(ModuleParseError::Invalid(
+            "a signature carries at most one sret parameter".into(),
+        ));
     }
     Ok(())
 }
 
-fn parse_effects(line: &str, legacy: bool) -> Result<EffectSummary, String> {
+fn parse_effects(line: &str, legacy: bool) -> ParseResult<EffectSummary> {
     let mut cursor = Cursor::new(line);
     cursor.expect("    effects { reads=")?;
     let reads_all = cursor.region_set()?;
@@ -868,7 +927,7 @@ fn parse_effects(line: &str, legacy: bool) -> Result<EffectSummary, String> {
     })
 }
 
-fn parse_block_header(line: &str, is_entry: bool) -> Result<(BlockId, Vec<BlockArg>), String> {
+fn parse_block_header(line: &str, is_entry: bool) -> ParseResult<(BlockId, Vec<BlockArg>)> {
     let mut cursor = Cursor::new(line);
     let id = if is_entry {
         cursor.expect("^entry")?;
@@ -903,7 +962,7 @@ fn parse_instruction(
     body: &str,
     values: &HashMap<u32, EvoIRType>,
     signatures: &HashMap<String, Signature>,
-) -> Result<Inst, String> {
+) -> ParseResult<Inst> {
     if body.starts_with('(') {
         return parse_tuple_instruction(body, values, signatures);
     }
@@ -934,7 +993,7 @@ fn parse_instruction(
             op: crate::FloatingOp::parse(name).ok_or("unknown floating operation")?,
             arguments: parse_values(operands, values, false)?,
         };
-        operation.validate()?;
+        operation.validate().map_err(ModuleParseError::Invalid)?;
         return Ok(Inst::Floating(operation));
     }
 
@@ -952,7 +1011,7 @@ fn parse_instruction(
             op,
             arguments: parse_values(operands, values, false)?,
         };
-        instruction.validate()?;
+        instruction.validate().map_err(ModuleParseError::Invalid)?;
         return Ok(Inst::Vector(instruction));
     }
 
@@ -976,6 +1035,9 @@ fn parse_instruction(
         }
         let immediate = cursor.index()?;
         cursor.finish()?;
+        if matches!(ty, EvoIRType::Bits(_)) && !crate::integer_constant_fits(&ty, immediate) {
+            return Err(format!("constant {immediate} does not fit {ty:?}").into());
+        }
         return Ok(Inst::Const(Value { id: result_id, ty }, immediate));
     }
     if let Some(rest) = rhs.strip_prefix("uninitialized.") {
@@ -1194,7 +1256,7 @@ fn parse_instruction(
         let (number, ty) = rest.split_once(" : ").ok_or("malformed frame depth")?;
         let depth = number.parse::<u16>().map_err(|_| "invalid frame depth")?;
         if depth == 0 || depth.to_string() != number {
-            return Err("frame depth must be canonical nonzero metadata".to_owned());
+            return Err("frame depth must be canonical nonzero metadata".into());
         }
         return Ok(Inst::FrameAddress {
             result: Value {
@@ -1248,24 +1310,24 @@ fn parse_instruction(
             direction: match direction {
                 "add" => OffsetDirection::Add,
                 "sub" => OffsetDirection::Subtract,
-                _ => return Err("unknown ptr.offset direction".to_owned()),
+                _ => return Err("unknown ptr.offset direction".into()),
             },
             signedness: match signedness {
                 "signed" => IndexSignedness::Signed,
                 "unsigned" => IndexSignedness::Unsigned,
-                _ => return Err("unknown ptr.offset signedness".to_owned()),
+                _ => return Err("unknown ptr.offset signedness".into()),
             },
             scale,
         });
     }
-    Err("unknown Section 9 instruction form".to_owned())
+    Err("unknown Section 9 instruction form".into())
 }
 
 fn parse_tuple_instruction(
     body: &str,
     values: &HashMap<u32, EvoIRType>,
     signatures: &HashMap<String, Signature>,
-) -> Result<Inst, String> {
+) -> ParseResult<Inst> {
     let close = body
         .find(") = ")
         .ok_or_else(|| "malformed multi-result instruction".to_owned())?;
@@ -1299,7 +1361,7 @@ fn parse_tuple_instruction(
                 ty: EvoIRType::World,
             },
         };
-        operation.validate()?;
+        operation.validate().map_err(ModuleParseError::Invalid)?;
         return Ok(Inst::StrictFloating(operation));
     }
     if let Some(rest) = rhs.strip_prefix("va_arg.byval ") {
@@ -1626,9 +1688,9 @@ fn parse_tuple_instruction(
         let (args, arg_marks) = parse_call_values(args_text, values)?;
         if let Some(symbol) = callee_text.strip_prefix('@') {
             validate_ident(symbol)?;
-            let signature = signatures
-                .get(symbol)
-                .ok_or_else(|| format!("call to missing function '{symbol}'"))?;
+            let signature = signatures.get(symbol).ok_or_else(|| {
+                ModuleParseError::Invalid(format!("call to missing function '{symbol}'"))
+            })?;
             return build_direct_call(result_ids, symbol, args, arg_marks, signature);
         }
         let callee = use_value(callee_text, values)?;
@@ -1639,7 +1701,9 @@ fn parse_tuple_instruction(
             marks,
         } = &callee.ty
         else {
-            return Err("indirect callee is not a function pointer".to_owned());
+            return Err(ModuleParseError::Invalid(
+                "indirect callee is not a function pointer".into(),
+            ));
         };
         let signature = Signature {
             variadic: *variadic,
@@ -1649,7 +1713,7 @@ fn parse_tuple_instruction(
         };
         return build_indirect_call(result_ids, callee, args, arg_marks, &signature);
     }
-    Err("unknown multi-result Section 9 instruction form".to_owned())
+    Err("unknown multi-result Section 9 instruction form".into())
 }
 
 fn build_direct_call(
@@ -1658,7 +1722,7 @@ fn build_direct_call(
     args: Vec<Value>,
     arg_marks: Vec<ParamMark>,
     signature: &Signature,
-) -> Result<Inst, String> {
+) -> ParseResult<Inst> {
     let (ordinary_results, mem_out, world_out) = call_results(result_ids, signature)?;
     let (ordinary_args, mem_in, world_in) = call_args(args, signature)?;
     Ok(Inst::Call {
@@ -1679,7 +1743,7 @@ fn build_indirect_call(
     args: Vec<Value>,
     arg_marks: Vec<ParamMark>,
     signature: &Signature,
-) -> Result<Inst, String> {
+) -> ParseResult<Inst> {
     let (ordinary_results, mem_out, world_out) = call_results(result_ids, signature)?;
     let (ordinary_args, mem_in, world_in) = call_args(args, signature)?;
     Ok(Inst::IndirectCall {
@@ -1694,12 +1758,11 @@ fn build_indirect_call(
     })
 }
 
-fn call_results(
-    ids: Vec<u32>,
-    signature: &Signature,
-) -> Result<(Vec<Value>, Value, Value), String> {
+fn call_results(ids: Vec<u32>, signature: &Signature) -> ParseResult<(Vec<Value>, Value, Value)> {
     if signature.results.len() < 2 || ids.len() != signature.results.len() {
-        return Err("call result count disagrees with callee signature".to_owned());
+        return Err(ModuleParseError::Invalid(
+            "call result count disagrees with callee signature".into(),
+        ));
     }
     let values = ids
         .into_iter()
@@ -1714,15 +1777,14 @@ fn call_results(
     ))
 }
 
-fn call_args(
-    args: Vec<Value>,
-    signature: &Signature,
-) -> Result<(Vec<Value>, Value, Value), String> {
+fn call_args(args: Vec<Value>, signature: &Signature) -> ParseResult<(Vec<Value>, Value, Value)> {
     if signature.params.len() < 2
         || args.len() < signature.params.len()
         || (!signature.variadic && args.len() != signature.params.len())
     {
-        return Err("call argument count disagrees with callee signature".to_owned());
+        return Err(ModuleParseError::Invalid(
+            "call argument count disagrees with callee signature".into(),
+        ));
     }
     let split = args.len() - 2;
     Ok((
@@ -1736,7 +1798,7 @@ fn parse_assembly(
     rhs: &str,
     result_ids: &[u32],
     values: &HashMap<u32, EvoIRType>,
-) -> Result<Inst, String> {
+) -> ParseResult<Inst> {
     use crate::{
         assembly_memory_constraint, AssemblyInput, AssemblyLabel, AssemblyOutput, InlineAssembly,
     };
@@ -1847,7 +1909,9 @@ fn parse_assembly(
     let mut edge_values = values.clone();
     for result in assembly.results() {
         if edge_values.insert(result.id, result.ty.clone()).is_some() {
-            return Err("duplicate assembly result".into());
+            return Err(ModuleParseError::Invalid(
+                "duplicate assembly result".into(),
+            ));
         }
     }
     cursor.expect(" labels [")?;
@@ -1873,7 +1937,7 @@ fn parse_assembly(
     })
 }
 
-fn parse_terminator(body: &str, values: &HashMap<u32, EvoIRType>) -> Result<Inst, String> {
+fn parse_terminator(body: &str, values: &HashMap<u32, EvoIRType>) -> ParseResult<Inst> {
     if let Some(rest) = body.strip_prefix("br.indirect ") {
         let (target, list) = rest.split_once(" [").ok_or("malformed indirect branch")?;
         let mut list = list
@@ -1925,10 +1989,10 @@ fn parse_terminator(body: &str, values: &HashMap<u32, EvoIRType>) -> Result<Inst
             "scalar_function_fell_off_end" => TrapReason::ScalarFunctionFellOffEnd,
             "unreachable_reached" => TrapReason::UnreachableReached,
             "builtin_trap" => TrapReason::BuiltinTrap,
-            _ => return Err("unknown trap reason".to_owned()),
+            _ => return Err("unknown trap reason".into()),
         }));
     }
-    Err("unknown terminator".to_owned())
+    Err("unknown terminator".into())
 }
 
 fn is_terminator_body(body: &str) -> bool {
@@ -1941,7 +2005,7 @@ fn is_terminator_body(body: &str) -> bool {
 }
 
 /// One block label with no argument list: `^entry` is canonically block zero.
-fn parse_block_label(label: &str) -> Result<BlockId, String> {
+fn parse_block_label(label: &str) -> ParseResult<BlockId> {
     if label == "^entry" {
         return Ok(0);
     }
@@ -1950,13 +2014,13 @@ fn parse_block_label(label: &str) -> Result<BlockId, String> {
             .strip_prefix("^b")
             .ok_or_else(|| "unknown block label".to_owned())?,
     )?)
-    .map_err(|_| "block id exceeds u32".to_owned())
+    .map_err(|_| "block id exceeds u32".into())
 }
 
 fn parse_branch_target(
     text: &str,
     values: &HashMap<u32, EvoIRType>,
-) -> Result<(BlockId, Vec<Value>), String> {
+) -> ParseResult<(BlockId, Vec<Value>)> {
     let open = text
         .find('(')
         .ok_or_else(|| "malformed branch target".to_owned())?;
@@ -1967,7 +2031,7 @@ fn parse_branch_target(
     Ok((parse_block_label(label)?, parse_values(args, values, true)?))
 }
 
-fn find_target_separator(text: &str) -> Result<usize, String> {
+fn find_target_separator(text: &str) -> ParseResult<usize> {
     let mut depth = 0_u32;
     for (index, byte) in text.bytes().enumerate() {
         match byte {
@@ -1983,7 +2047,7 @@ fn find_target_separator(text: &str) -> Result<usize, String> {
             _ => {}
         }
     }
-    Err("cond_br has no second target".to_owned())
+    Err("cond_br has no second target".into())
 }
 
 fn binary_constructors() -> [(&'static str, BinaryConstructor); 13] {
@@ -2013,7 +2077,7 @@ fn predicate_constructors() -> [(&'static str, BinaryConstructor); 4] {
     ]
 }
 
-fn parse_cmp(text: &str) -> Result<CmpOp, String> {
+fn parse_cmp(text: &str) -> ParseResult<CmpOp> {
     match text {
         "eq" => Ok(CmpOp::Eq),
         "ne" => Ok(CmpOp::Ne),
@@ -2021,11 +2085,11 @@ fn parse_cmp(text: &str) -> Result<CmpOp, String> {
         "sle" => Ok(CmpOp::SLe),
         "ult" => Ok(CmpOp::ULt),
         "ule" => Ok(CmpOp::ULe),
-        _ => Err("unknown comparison operation".to_owned()),
+        _ => Err("unknown comparison operation".into()),
     }
 }
 
-fn parse_ub_reason(text: &str) -> Result<UbReason, String> {
+fn parse_ub_reason(text: &str) -> ParseResult<UbReason> {
     match text {
         "division_by_zero" => Ok(UbReason::DivisionByZero),
         "remainder_by_zero" => Ok(UbReason::RemainderByZero),
@@ -2034,14 +2098,11 @@ fn parse_ub_reason(text: &str) -> Result<UbReason, String> {
         "invalid_shift_count" => Ok(UbReason::InvalidShiftCount),
         "invalid_signed_left_shift" => Ok(UbReason::InvalidSignedLeftShift),
         "floating_to_integer" => Ok(UbReason::FloatingToInteger),
-        _ => Err("unknown UB reason".to_owned()),
+        _ => Err("unknown UB reason".into()),
     }
 }
 
-fn parse_two_values(
-    text: &str,
-    values: &HashMap<u32, EvoIRType>,
-) -> Result<(Value, Value), String> {
+fn parse_two_values(text: &str, values: &HashMap<u32, EvoIRType>) -> ParseResult<(Value, Value)> {
     let operands = parse_values(text, values, false)?;
     require_count(&operands, 2, "binary operands")?;
     Ok((operands[0].clone(), operands[1].clone()))
@@ -2051,12 +2112,12 @@ fn parse_values(
     text: &str,
     values: &HashMap<u32, EvoIRType>,
     allow_empty: bool,
-) -> Result<Vec<Value>, String> {
+) -> ParseResult<Vec<Value>> {
     if text.is_empty() {
         return if allow_empty {
             Ok(Vec::new())
         } else {
-            Err("empty value list".to_owned())
+            Err("empty value list".into())
         };
     }
     text.split(", ")
@@ -2067,7 +2128,7 @@ fn parse_values(
 fn parse_call_values(
     text: &str,
     values: &HashMap<u32, EvoIRType>,
-) -> Result<(Vec<Value>, Vec<ParamMark>), String> {
+) -> ParseResult<(Vec<Value>, Vec<ParamMark>)> {
     let mut cursor = Cursor::new(text);
     let mut args = Vec::new();
     let mut marks = Vec::new();
@@ -2092,31 +2153,31 @@ fn parse_call_values(
     Ok((args, marks))
 }
 
-fn use_value(text: &str, values: &HashMap<u32, EvoIRType>) -> Result<Value, String> {
+fn use_value(text: &str, values: &HashMap<u32, EvoIRType>) -> ParseResult<Value> {
     let id = parse_value_name(text)?;
     let ty = values
         .get(&id)
-        .ok_or_else(|| format!("use of undefined local value %v{id}"))?
+        .ok_or_else(|| ModuleParseError::Invalid(format!("use of undefined local value %v{id}")))?
         .clone();
     Ok(Value { id, ty })
 }
 
-fn parse_result_ids(text: &str) -> Result<Vec<u32>, String> {
+fn parse_result_ids(text: &str) -> ParseResult<Vec<u32>> {
     if text.is_empty() {
-        return Err("empty result list".to_owned());
+        return Err("empty result list".into());
     }
     text.split(", ").map(parse_value_name).collect()
 }
 
-fn parse_value_name(text: &str) -> Result<u32, String> {
+fn parse_value_name(text: &str) -> ParseResult<u32> {
     u32::try_from(parse_canonical_u64(
         text.strip_prefix("%v")
             .ok_or_else(|| "malformed value name".to_owned())?,
     )?)
-    .map_err(|_| "value id exceeds u32".to_owned())
+    .map_err(|_| "value id exceeds u32".into())
 }
 
-fn split_attributes(text: &str) -> Result<(&str, &str), String> {
+fn split_attributes(text: &str) -> ParseResult<(&str, &str)> {
     let (operands, attributes) = text
         .split_once(" [")
         .ok_or_else(|| "missing instruction attributes".to_owned())?;
@@ -2128,7 +2189,7 @@ fn split_attributes(text: &str) -> Result<(&str, &str), String> {
     ))
 }
 
-fn parse_layout(text: &str) -> Result<AccessLayout, String> {
+fn parse_layout(text: &str) -> ParseResult<AccessLayout> {
     let (size, align) = text
         .split_once(", ")
         .ok_or_else(|| "malformed access layout".to_owned())?;
@@ -2139,7 +2200,7 @@ fn parse_layout(text: &str) -> Result<AccessLayout, String> {
     ))
 }
 
-fn parse_alloca_attributes(text: &str) -> Result<(u64, AccessLayout), String> {
+fn parse_alloca_attributes(text: &str) -> ParseResult<(u64, AccessLayout)> {
     let fields = text.split(", ").collect::<Vec<_>>();
     require_count(&fields, 3, "alloca attributes")?;
     Ok((
@@ -2152,27 +2213,27 @@ fn parse_alloca_attributes(text: &str) -> Result<(u64, AccessLayout), String> {
     ))
 }
 
-fn parse_named_u64(text: &str, name: &str) -> Result<u64, String> {
+fn parse_named_u64(text: &str, name: &str) -> ParseResult<u64> {
     parse_canonical_u64(parse_named(text, name)?)
 }
 
-fn parse_named<'a>(text: &'a str, name: &str) -> Result<&'a str, String> {
+fn parse_named<'a>(text: &'a str, name: &str) -> ParseResult<&'a str> {
     text.strip_prefix(name)
         .and_then(|text| text.strip_prefix('='))
-        .ok_or_else(|| format!("missing {name} field"))
+        .ok_or_else(|| format!("missing {name} field").into())
 }
 
-fn parse_canonical_u64(text: &str) -> Result<u64, String> {
+fn parse_canonical_u64(text: &str) -> ParseResult<u64> {
     if text.is_empty()
         || (text.len() > 1 && text.starts_with('0'))
         || !text.bytes().all(|byte| byte.is_ascii_digit())
     {
-        return Err("integer is not canonical unsigned decimal".to_owned());
+        return Err("integer is not canonical unsigned decimal".into());
     }
-    text.parse().map_err(|_| "integer exceeds u64".to_owned())
+    text.parse().map_err(|_| "integer exceeds u64".into())
 }
 
-fn parse_symbol(text: &str) -> Result<&str, String> {
+fn parse_symbol(text: &str) -> ParseResult<&str> {
     let ident = text
         .strip_prefix('@')
         .ok_or_else(|| "malformed symbol".to_owned())?;
@@ -2180,33 +2241,30 @@ fn parse_symbol(text: &str) -> Result<&str, String> {
     Ok(ident)
 }
 
-fn validate_ident(ident: &str) -> Result<(), String> {
+fn validate_ident(ident: &str) -> ParseResult<()> {
     let mut bytes = ident.bytes();
     let first = bytes.next().ok_or_else(|| "empty identifier".to_owned())?;
     if !first.is_ascii_alphabetic() && first != b'_' {
-        return Err("identifier has invalid first byte".to_owned());
+        return Err("identifier has invalid first byte".into());
     }
     if !bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.')) {
-        return Err("identifier contains an invalid byte".to_owned());
+        return Err("identifier contains an invalid byte".into());
     }
     Ok(())
 }
 
-fn parse_type(text: &str) -> Result<EvoIRType, String> {
+fn parse_type(text: &str) -> ParseResult<EvoIRType> {
     let mut cursor = Cursor::new(text);
     let ty = cursor.ty()?;
     cursor.finish()?;
     Ok(ty)
 }
 
-fn require_count<T>(values: &[T], expected: usize, description: &str) -> Result<(), String> {
+fn require_count<T>(values: &[T], expected: usize, description: &str) -> ParseResult<()> {
     if values.len() == expected {
         Ok(())
     } else {
-        Err(format!(
-            "{description} has {}, expected {expected}",
-            values.len()
-        ))
+        Err(format!("{description} has {}, expected {expected}", values.len()).into())
     }
 }
 
@@ -2224,20 +2282,20 @@ impl<'a> Cursor<'a> {
         self.text[self.position..].starts_with(expected)
     }
 
-    fn expect(&mut self, expected: &str) -> Result<(), String> {
+    fn expect(&mut self, expected: &str) -> ParseResult<()> {
         if self.at(expected) {
             self.position += expected.len();
             Ok(())
         } else {
-            Err(format!("expected {expected:?} at byte {}", self.position))
+            Err(format!("expected {expected:?} at byte {}", self.position).into())
         }
     }
 
-    fn finish(&self) -> Result<(), String> {
+    fn finish(&self) -> ParseResult<()> {
         if self.position == self.text.len() {
             Ok(())
         } else {
-            Err(format!("unexpected text at byte {}", self.position))
+            Err(format!("unexpected text at byte {}", self.position).into())
         }
     }
 
@@ -2245,7 +2303,7 @@ impl<'a> Cursor<'a> {
         &self.text[self.position..]
     }
 
-    fn ident(&mut self) -> Result<&'a str, String> {
+    fn ident(&mut self) -> ParseResult<&'a str> {
         let start = self.position;
         while self
             .text
@@ -2260,7 +2318,7 @@ impl<'a> Cursor<'a> {
         Ok(ident)
     }
 
-    fn index(&mut self) -> Result<u64, String> {
+    fn index(&mut self) -> ParseResult<u64> {
         let start = self.position;
         while self
             .text
@@ -2273,16 +2331,18 @@ impl<'a> Cursor<'a> {
         parse_canonical_u64(&self.text[start..self.position])
     }
 
-    fn value_id(&mut self) -> Result<u32, String> {
+    fn value_id(&mut self) -> ParseResult<u32> {
         self.expect("%v")?;
-        u32::try_from(self.index()?).map_err(|_| "value id exceeds u32".to_owned())
+        u32::try_from(self.index()?).map_err(|_| "value id exceeds u32".into())
     }
 
-    fn value(&mut self, values: &HashMap<u32, EvoIRType>) -> Result<Value, String> {
+    fn value(&mut self, values: &HashMap<u32, EvoIRType>) -> ParseResult<Value> {
         let id = self.value_id()?;
         let ty = values
             .get(&id)
-            .ok_or_else(|| format!("value %v{id} is not a prior local definition"))?
+            .ok_or_else(|| {
+                ModuleParseError::Invalid(format!("value %v{id} is not a prior local definition"))
+            })?
             .clone();
         Ok(Value { id, ty })
     }
@@ -2290,7 +2350,7 @@ impl<'a> Cursor<'a> {
     fn assembly_edge(
         &mut self,
         values: &HashMap<u32, EvoIRType>,
-    ) -> Result<crate::AssemblyEdge, String> {
+    ) -> ParseResult<crate::AssemblyEdge> {
         self.expect("^")?;
         let target = if self.at("entry") {
             self.expect("entry")?;
@@ -2311,7 +2371,7 @@ impl<'a> Cursor<'a> {
         Ok(crate::AssemblyEdge { target, arguments })
     }
 
-    fn quoted(&mut self) -> Result<String, String> {
+    fn quoted(&mut self) -> ParseResult<String> {
         self.expect("\"")?;
         let mut bytes = Vec::new();
         loop {
@@ -2355,7 +2415,7 @@ impl<'a> Cursor<'a> {
         String::from_utf8(bytes).map_err(|_| "assembly string is not UTF-8".into())
     }
 
-    fn boolean(&mut self) -> Result<bool, String> {
+    fn boolean(&mut self) -> ParseResult<bool> {
         if self.at("true") {
             self.expect("true")?;
             Ok(true)
@@ -2363,11 +2423,11 @@ impl<'a> Cursor<'a> {
             self.expect("false")?;
             Ok(false)
         } else {
-            Err("expected boolean".to_owned())
+            Err("expected boolean".into())
         }
     }
 
-    fn region_set(&mut self) -> Result<bool, String> {
+    fn region_set(&mut self) -> ParseResult<bool> {
         if self.at("{}") {
             self.expect("{}")?;
             return Ok(false);
@@ -2378,11 +2438,11 @@ impl<'a> Cursor<'a> {
         if region == Region::All {
             Ok(true)
         } else {
-            Err("Day 8 effect sets may contain only region all".to_owned())
+            Err("Day 8 effect sets may contain only region all".into())
         }
     }
 
-    fn region(&mut self) -> Result<Region, String> {
+    fn region(&mut self) -> ParseResult<Region> {
         for (name, region) in [
             ("unknown", Region::Unknown),
             ("escaped", Region::Escaped),
@@ -2396,10 +2456,10 @@ impl<'a> Cursor<'a> {
                 return Ok(region);
             }
         }
-        Err("unknown memory region".to_owned())
+        Err("unknown memory region".into())
     }
 
-    fn type_list(&mut self, end: &str) -> Result<Vec<EvoIRType>, String> {
+    fn type_list(&mut self, end: &str) -> ParseResult<Vec<EvoIRType>> {
         let mut types = Vec::new();
         if self.at(end) {
             return Ok(types);
@@ -2413,7 +2473,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    fn parameter_types(&mut self) -> Result<(Vec<EvoIRType>, Vec<ParamMark>, bool), String> {
+    fn parameter_types(&mut self) -> ParseResult<(Vec<EvoIRType>, Vec<ParamMark>, bool)> {
         let mut types = Vec::new();
         let mut marks = Vec::new();
         let mut marker = None;
@@ -2440,7 +2500,7 @@ impl<'a> Cursor<'a> {
 
     /// Section 9: the optional `byval(size, align)`, `sret(size, align)` or
     /// `sext` that follows a parameter's type (revision 1.9.73).
-    fn record_mark(&mut self) -> Result<ParamMark, String> {
+    fn record_mark(&mut self) -> ParseResult<ParamMark> {
         if self.at(" sext") {
             self.expect(" sext")?;
             return Ok(ParamMark::SignExtend);
@@ -2458,7 +2518,9 @@ impl<'a> Cursor<'a> {
             let align = u32::try_from(self.index()?)
                 .map_err(|_| "record alignment exceeds u32".to_owned())?;
             if !align.is_power_of_two() {
-                return Err("record alignment is not a power of two".into());
+                return Err(ModuleParseError::Invalid(
+                    "record alignment is not a power of two".into(),
+                ));
             }
             let vector = if self.at(", hva=") {
                 self.expect(", hva=")?;
@@ -2501,20 +2563,22 @@ impl<'a> Cursor<'a> {
                 floating,
             };
             if !shape.valid() {
-                return Err("invalid record ABI shape".into());
+                return Err(ModuleParseError::Invalid("invalid record ABI shape".into()));
             }
             return Ok(wrap(shape));
         }
         Ok(ParamMark::None)
     }
 
-    fn ty(&mut self) -> Result<EvoIRType, String> {
+    fn ty(&mut self) -> ParseResult<EvoIRType> {
         if self.at("bits<") {
             self.expect("bits<")?;
-            let width =
-                u16::try_from(self.index()?).map_err(|_| "bit width exceeds u16".to_owned())?;
+            let width = u16::try_from(self.index()?)
+                .map_err(|_| ModuleParseError::Invalid("bit width exceeds u16".to_owned()))?;
             if width == 0 {
-                return Err("bit width must be positive".to_owned());
+                return Err(ModuleParseError::Invalid(
+                    "bit width must be positive".into(),
+                ));
             }
             self.expect(">")?;
             return Ok(EvoIRType::Bits(width));
@@ -2546,7 +2610,7 @@ impl<'a> Cursor<'a> {
                 self.expect("threadlocal")?;
                 AddressSpace::ThreadLocal
             } else {
-                return Err("unknown pointer address space".to_owned());
+                return Err("unknown pointer address space".into());
             };
             self.expect(">")?;
             return Ok(EvoIRType::Ptr(space));
@@ -2559,10 +2623,12 @@ impl<'a> Cursor<'a> {
         }
         if self.at("vec<") {
             self.expect("vec<")?;
-            let count =
-                u16::try_from(self.index()?).map_err(|_| "vector count exceeds u16".to_owned())?;
+            let count = u16::try_from(self.index()?)
+                .map_err(|_| ModuleParseError::Invalid("vector count exceeds u16".to_owned()))?;
             if count == 0 {
-                return Err("vector count must be positive".to_owned());
+                return Err(ModuleParseError::Invalid(
+                    "vector count must be positive".into(),
+                ));
             }
             self.expect(", ")?;
             let element = self.ty()?;
@@ -2589,6 +2655,6 @@ impl<'a> Cursor<'a> {
                 marks,
             });
         }
-        Err(format!("unknown EvoIR type at byte {}", self.position))
+        Err(format!("unknown EvoIR type at byte {}", self.position).into())
     }
 }

@@ -1913,43 +1913,13 @@ fn ruling_compliant_goldens_are_frozen_for_eight_unique_programs() {
 
 #[test]
 fn block_arguments_must_expose_real_value_identity() {
-    let workspace = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("evocc-lower lives under workspace/crates")
-        .to_owned();
-    let probe = std::env::temp_dir().join(format!(
-        "c30-day6-block-arg-value-id-{}",
-        std::process::id()
-    ));
-    assert!(!probe.exists(), "block-arg API probe path already exists");
-    std::fs::create_dir_all(probe.join("src")).expect("create block-arg API probe");
-    let manifest = format!(
-        r#"[package]
-name = "day6-block-arg-value-id-probe"
-version = "0.0.0"
-edition = "2021"
+    use evocc_evoir::{validate_ssa, Block, BlockArg, Function, Inst, Value};
+    use evocc_types::EvoIRType;
 
-[workspace]
+    fn value(id: u32, ty: EvoIRType) -> Value {
+        Value { id, ty }
+    }
 
-[dependencies]
-evocc-evoir = {{ path = {:?} }}
-evocc-types = {{ path = {:?} }}
-"#,
-        workspace.join("crates/evocc-evoir"),
-        workspace.join("crates/evocc-types")
-    );
-    std::fs::write(probe.join("Cargo.toml"), manifest).expect("write probe manifest");
-    std::fs::write(
-        probe.join("src/main.rs"),
-        r#"use evocc_evoir::{validate_ssa, Block, BlockArg, Function, Inst, Value};
-use evocc_types::EvoIRType;
-
-fn value(id: u32, ty: EvoIRType) -> Value {
-    Value { id, ty }
-}
-
-fn main() {
     let bits1 = EvoIRType::Bits(1);
     let bits32 = EvoIRType::Bits(32);
     let condition = value(0, bits1.clone());
@@ -2005,46 +1975,40 @@ fn main() {
             },
         ],
     };
-    assert!(validate_ssa(&valid).is_ok(), "distinct block arguments are valid");
+    assert!(
+        validate_ssa(&valid).is_ok(),
+        "distinct block arguments are valid"
+    );
 
     let mut duplicate = valid.clone();
     duplicate.blocks[2].args[0].value = left.clone();
     duplicate.blocks[2].terminator = Inst::Ret(vec![left]);
-    assert!(validate_ssa(&duplicate).is_err(), "duplicate block-arg Value IDs must fail");
+    assert!(
+        validate_ssa(&duplicate).is_err(),
+        "duplicate block-arg Value IDs must fail"
+    );
 
     let mut cross_block = valid.clone();
     cross_block.blocks[1].terminator = Inst::Ret(vec![payload.clone()]);
-    assert!(validate_ssa(&cross_block).is_err(), "direct cross-block use must fail");
+    assert!(
+        validate_ssa(&cross_block).is_err(),
+        "direct cross-block use must fail"
+    );
 
     let mut wrong_arity = valid.clone();
     wrong_arity.blocks[0].terminator =
         Inst::CondBr(condition.clone(), 1, Vec::new(), 2, vec![payload.clone()]);
-    assert!(validate_ssa(&wrong_arity).is_err(), "wrong edge arity must fail");
+    assert!(
+        validate_ssa(&wrong_arity).is_err(),
+        "wrong edge arity must fail"
+    );
 
     let mut wrong_type = valid;
     wrong_type.blocks[0].terminator =
         Inst::CondBr(condition.clone(), 1, vec![condition], 2, vec![payload]);
-    assert!(validate_ssa(&wrong_type).is_err(), "wrong edge type must fail");
-}
-"#,
-    )
-    .expect("write probe source");
-
-    let output =
-        std::process::Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
-            .arg("--config")
-            .arg(workspace.join(".cargo/config.toml"))
-            .args(["run", "--offline", "--quiet"])
-            .current_dir(&probe)
-            .env("CARGO_TARGET_DIR", probe.join("target"))
-            .output()
-            .expect("run block-arg API compile probe");
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    std::fs::remove_dir_all(&probe).expect("clean block-arg API probe");
-
     assert!(
-        output.status.success(),
-        "BlockArg plus validate_ssa must enforce real Value identity, local use-def, and edge types/arity instead of synthesizing identity from an index:\n{stderr}"
+        validate_ssa(&wrong_type).is_err(),
+        "wrong edge type must fail"
     );
 }
 

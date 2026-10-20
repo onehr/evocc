@@ -193,6 +193,92 @@ fn a_deferred_object_size_query_is_not_a_parse_time_constant() {
 }
 
 #[test]
+fn additional_checked_calls_keep_dynamic_bounds_and_format_flags() {
+    for (call, callee, count) in [
+        (
+            "__builtin___memccpy_chk(d, s, 256, n, 8)",
+            "__memccpy_chk",
+            5,
+        ),
+        ("__builtin___memccpy_chk(d, s, 256, 8, 8)", "memccpy", 4),
+        ("__builtin___strlcpy_chk(d, s, n, 8)", "__strlcpy_chk", 4),
+        ("__builtin___strlcpy_chk(d, s, 8, 8)", "strlcpy", 3),
+        ("__builtin___strlcat_chk(d, s, 9, 8)", "__strlcat_chk", 4),
+        ("__builtin___strlcat_chk(d, s, 8, 8)", "strlcat", 3),
+        ("__builtin___printf_chk(flag, s, n)", "__printf_chk", 3),
+        ("__builtin___vprintf_chk(flag, s, ap)", "__vprintf_chk", 3),
+        (
+            "__builtin___fprintf_chk(stream, flag, s, n)",
+            "__fprintf_chk",
+            4,
+        ),
+        (
+            "__builtin___vfprintf_chk(stream, flag, s, ap)",
+            "__vfprintf_chk",
+            4,
+        ),
+    ] {
+        let source = format!(
+            "{SIZE_T}long f(char *d, const char *s, size_t n, int flag, void *stream, __builtin_va_list ap) {{ return (long)({call}); }}"
+        );
+        assert_eq!(returned_call(&source), (callee.to_owned(), count), "{call}");
+    }
+}
+
+#[test]
+fn literal_copy_bounds_include_the_first_terminator_not_the_array_extent() {
+    for name in ["strcpy", "stpcpy"] {
+        for (literal, size, plain) in [
+            (r#""abc""#, 4, true),
+            (r#""abc""#, 3, false),
+            (r#""""#, 1, true),
+            (r#""""#, 0, false),
+            (r#""a\0ignored""#, 2, true),
+            (r#""a\0ignored""#, 1, false),
+            (r#""a" "bc""#, 4, true),
+        ] {
+            let source = format!(
+                "char *f(char *d) {{ return __builtin___{name}_chk(d, {literal}, {size}); }}"
+            );
+            let expected = if plain {
+                name.to_owned()
+            } else {
+                format!("__{name}_chk")
+            };
+            assert_eq!(
+                returned_call(&source),
+                (expected, if plain { 2 } else { 3 }),
+                "{source}"
+            );
+        }
+    }
+    // Concatenation also reads the destination; the source length alone is
+    // not a bound on its writes. Do not reuse the copy proof for this call.
+    assert_eq!(
+        returned_call("char *f(char *d) { return __builtin___strcat_chk(d, \"a\", 2); }"),
+        ("__strcat_chk".to_owned(), 3)
+    );
+}
+
+#[test]
+fn stream_builtins_use_the_header_type_not_a_local_typedef() {
+    let source = "typedef struct stream FILE;\n\
+        int __fprintf_chk(FILE *, int, const char *, ...);\n\
+        int fprintf(FILE *, const char *, ...);\n\
+        int f(FILE *stream) { typedef int FILE; return __builtin___fprintf_chk(stream, 1, \"%d\", 7); }";
+    assert_eq!(returned_call(source), ("__fprintf_chk".to_owned(), 4));
+    rejects("void f(void *p) { __builtin___clear_cache(p); }", "E2909");
+    rejects(
+        "void f(void *p) { __builtin___clear_cache(p, 42); }",
+        "E2913",
+    );
+    rejects(
+        "int f(char *p) { return __builtin___printf_chk(p, p); }",
+        "E2913",
+    );
+}
+
+#[test]
 fn checked_builtins_have_their_library_prototypes() {
     rejects(
         &format!("{SIZE_T}void *f(void *d) {{ return __builtin___memcpy_chk(d, d, 1); }}"),

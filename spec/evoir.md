@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.5.0** | **Pinned ground truth** | Corrected the equality-saturation and trusted-base text on 2026-10-14
+**Revision 2.6.8** | **Pinned ground truth** | Function vectorization restrictions on 2026-10-19
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -898,8 +898,9 @@ two ranges must be identical or disjoint; any other overlap reports `E3027`.
 Access checks are those of `store` on both ranges (`E3009`-`E3013`). `copy`
 is the lowering of every C aggregate copy: assignment, copy-initialization,
 argument passing and return by value of a record or union (10.1.3); no other
-source form produces it, and no rewrite family may introduce, remove or
-reorder one. Ordinary `copy` is not volatile. Exact-width whole-union access
+source form produces it, and no EqSat rewrite family may introduce, remove or
+reorder one. The bounded C lowering in Section 10.1.3 can replace a complete,
+initialized private integer-cell copy. Ordinary `copy` is not volatile. Exact-width whole-union access
 uses `copy.volatile.read`, `copy.volatile.write` or `copy.volatile.readwrite`
 with the same operands and results: these require N in {1,2,4,8} and A >= N,
 emit one source read and/or one destination write respectively (read first),
@@ -1433,7 +1434,7 @@ it ineligible as a region root or witness, so no rewrite can reach it.
 
 | Field | Description |
 |---|---|
-| `%ap` | A `ptr<AS>` to a **list object**: 32 bytes at alignment 8, the lowering of one `__builtin_va_list` (10.1.5). |
+| `%ap` | A `ptr<AS>` to a **list object**, the lowering of one `__builtin_va_list` (10.1.5): 32 bytes on Linux, 8 on Darwin, alignment 8 on both targets (10.5). |
 | `Type` | For `va_arg`: one of `bits<32>`, `bits<64>`, `bits<128>`, `f64`, `f128`, `ptr<AS>`, `fnptr<Sig>` or an integer `vec<L, bits<N>>`, the promoted types of Section 3.10. |
 
 **Semantics.** A variadic function receives, besides its listed parameters,
@@ -1458,11 +1459,15 @@ scalar pointer argument, and report `E3038` on a mismatch or an invalid list.
 
 **The list object's bytes.** Between `va_start` and `va_end` the object
 representation of the list is unspecified. A `copy` (Section 3.8) of the
-whole 32 bytes produces a second list denoting the same sequence at the same
+whole target-sized representation produces a second list denoting the same sequence at the same
 position, which is how `__builtin_va_copy` lowers (10.1.3); any narrower
 `load`, `store` or partial `copy` of those bytes is undefined, and the
 interpreters may keep their own representation inside them.
-`__builtin_va_list` is a 32-byte structure on this target. A `va_list` passed
+The module's selected target fixes this size; the allocation's remaining
+capacity must not determine it. This same layout bounds cursor access,
+complete copies and overlap checks, including adjacent list subobjects.
+`__builtin_va_list` is a 32-byte structure on Linux and an 8-byte pointer
+representation on Darwin. A `va_list` passed
 by value is a record parameter (10.1.3): the caller passes the address of a
 copy, and the callee's `%ap` is that address.
 
@@ -2178,6 +2183,9 @@ address, or an addressable parameter. A `no_stack_protector` attribute on the
 definition or a final `-fno-stack-protector` clears it. The options that
 choose the guard's symbol or system-register source, return-address signing
 and general-register-only code act independently of the field.
+After private-cell promotion (10.1.3), C lowering can clear the request only
+if every fixed allocation is promoted and no dynamic allocation or frame-address
+operation remains. Native emission must still honor an explicit IR request.
 
 **Patchable entries.** The final `-fpatchable-function-entry=N[,M]` sets a
 default with `0 <= M <= N <= 65535`; an omitted `M` is 0. A function's
@@ -2502,7 +2510,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E0104` | `error-directive` | preprocessor |
 | `E0105` | `include-not-found` | preprocessor |
 | `E0106` | `feature-query-malformed` | preprocessor |
-| `E0107` | `pragma-pack-unsupported` | preprocessor |
+| `E0107` | `pragma-pack-unsupported` | preprocessor; front end for placement inside a record |
 | `E0108` | `poisoned-identifier-used` | preprocessor |
 | `E0109` | `counter-overflow` | preprocessor |
 | `E0110` | `invalid-token-paste` | preprocessor |
@@ -2561,12 +2569,15 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2943` | `invalid-or-conflicting-symbol-attribute` | front end |
 | `E2944` | `ordinary-builtin-binding-conflict` | front end |
 | `E2945` | `jump-into-variable-type-scope` | front end |
-| `E2946` | `builtin-local-binding-conflict` | front end |
+| `E2946` | `builtin-local-binding-conflict` | front end; lowering for a library-symbol/object collision |
 | `E2947` | `invalid-atomic-memory-order` | front end |
 | `E2948` | `integer-complex-division-oracle-conflict` | front end |
 | `E2949` | `unknown-builtin` | front end |
 | `E2950` | `invalid-va-arg-pack` | front end; lowering, for a body that keeps the pack |
 | `E2951` | `builtin-argument-type` | front end |
+| `E2952` | `unsupported-function-attribute` | front end |
+| `E2953` | `incompatible-record-cast` | front end |
+| `E2954` | `constant-string-binding-conflict` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -3521,10 +3532,26 @@ before a nonempty module (Section 9.3). Today that target is
 `aarch64-apple-darwin`, whose data layout Section 10.5 states; `--emit=evoir`
 writes its line. A reader serves one target: `parse_section9_module` refuses
 text that names a target, and `parse_target_module` refuses text that does not
-name the target it was asked for. The checker of a rewrite chain reads only
-the implicit target, so the driver refuses `-Oeq-scalar`, `--eq-proof-dir` and
-the EqSat options for `aarch64-apple-darwin`. Taking a target from the
-environment is never an allowed interpretation.
+name the target it was asked for. The rewrite checker admits the implicit
+Linux profile and the explicit `aarch64-apple-darwin` profile. The bytes of
+`before.evo` select the profile; `after.evo` and the independently reconstructed
+output must use that same profile. The target line is included in both
+certificate digests, chain identity and canonical reassembly. The persistent
+state is bound to the selected target and cannot change it during a chain.
+Unknown or mixed text profiles are malformed input (exit 2); changing the
+profile of both files without a matching certificate gives exit 3. The explicit
+legacy reader remains Linux-only. No host default or environment variable
+selects the meaning of these bytes.
+
+All five registries (`p0.scalar.v1` through `p0.scalar.v4` and `g0.ub.v1`) are
+admitted for both profiles. Each rule uses total `bits<1..64>` operations or
+the seven total integer guard forms. Widths and signed comparison/shift
+choices are explicit in the terms. Their denotations and known-bits transfers
+do not read a C type layout, ABI, pointer representation or floating-point
+format. Eligibility still excludes pointer, memory and floating-point
+rewrites; those instructions and their metadata remain subject to exact
+whole-module reassembly. This adds no rule and does not extend the separate
+`core-v1` proof-required target profile.
 
 ### 9.2 Lexical Structure
 
@@ -4181,6 +4208,30 @@ source-level pointer-arithmetic result is followed by `pointer_valid`, and every
 executed dereference is immediately preceded by a matching
 `access_in_bounds`. Scope and frame exits end automatic lifetimes.
 
+**Private integer cells.** Optimized C lowering can replace the ordinary
+loads and stores of a private fixed object with local SSA values and block
+arguments. The admitted cells are nonoverlapping, complete `bits<8>`,
+`bits<16>`, `bits<32>` or `bits<64>` representations at constant offsets.
+The pointer must not escape, and every incoming edge, including backedges,
+must agree on its object and offset. Each allocation site must execute at
+most once. The pass keeps `alloca`, `lifetime.end`, pointer and bounds checks.
+It must show that every removed store consumes initialized bits and that
+every removed load is preceded by initialization on all incoming paths.
+Allocation and lifetime end clear initialization facts. Uninitialized SSA
+seeds are transport only; they must not reach a semantic read.
+
+A nonvolatile `copy` can participate only when its source is one complete,
+initialized private integer cell of 1, 2, 4 or 8 bytes. The replacement must
+retain source and destination access checks. A private destination becomes
+an SSA assignment; an external destination keeps an ordinary store. Private
+copy endpoints are admitted together or retained together. This excludes
+padding, pointer representations, partial cells, unknown source bytes,
+overlap other than an identical cell, volatile and atomic accesses, escaped
+addresses and assembly. The bounded implementation admits at most 64 objects,
+64 cells and 4096 added block arguments; excess cases retain their memory
+operations. This is a C lowering optimization, not a certified EqSat rule or
+an extension of the proof-required profile.
+
 Before either interpretation or scalar replacement, C-HIR derives one shared
 allocation-site manifest over allocation-bearing semantic objects, not raw
 declaration nodes. A file-scope/linkage object appears exactly once, keyed by
@@ -4243,7 +4294,7 @@ source of the `declare` for a builtin.
 `__builtin_memset` and the other library builtins of 10.1.14 lowers to a
 call of the library function's symbol with the prototype 10.1.14 gives it,
 but declares nothing in the source: `static int memset = 3;` after
-`__builtin_memset(p, 0, 1)` is accepted, and `memset(p, 0, 1)` after it is an
+`__builtin_memset(p, 0, 1)` parses, and `memset(p, 0, 1)` after it is an
 implicit declaration. The prototype the front end synthesizes therefore
 lives in the builtin namespace, keyed by the library function's name, once
 per unit, visible in no scope, and never in a function's scope: the manifest
@@ -4251,7 +4302,12 @@ carries it as a unit-level function symbol, exactly as it carries a function
 the unit declares at file scope and calls without defining. It is compared
 against a visible declaration of the same library function only through
 `E2927`, and a source object or function named like it is a different
-symbol.
+symbol. If lowering would emit both a library function declaration and a
+same-named linked object, it refuses with `E2946` at the object's declaration.
+It does not rename a source object or let an object satisfy a function call.
+An automatic or block-static object with the same source name does not cause
+this collision; block-static storage has a separate emitted name. This is a
+lowering limit, not a source namespace error or a claim that the program has UB.
 
 **Declarations with an incomplete enumeration return type.**
 `enum e f(unsigned int);` with `e` not yet complete is an accepted
@@ -4297,7 +4353,8 @@ a member type; a narrow bit-field member does not match, a full-width one does.
 In a static initializer the member value must be constant. In both forms the
 operand is evaluated once and the result is not an lvalue; lowering uses the
 existing aggregate allocation and copy forms and keeps volatile source
-accesses. A cast between distinct record tags is not admitted. A union cast
+accesses. A cast to a struct type from an incompatible type, including a
+different struct tag, is `E2953` (`incompatible-record-cast`). A union cast
 with no compatible member, or one that would need an assignment conversion, a
 different tag or the loss of nested pointer qualifiers, is `E2942`
 (`incompatible-union-cast`).
@@ -4305,10 +4362,23 @@ different tag or the loss of nested pointer qualifiers, is `E2942`
 **Pointer difference.** `a - b` on two pointers to `T` has type `long`
 (`ptrdiff_t`); on two `void *` the scale is 1. Lowering: `ptr.to_int` of each operand,
 `sub.bits<64>`, then `sdiv.bits<64>` by `sizeof(T)` (1 for `void`), which
-is exact whenever the program is defined. C's same-object obligation is
-not a value the EvoIR interpreters can check after `ptr.to_int`, so it is
-carried by the C-HIR interpreter alone, which executes the same-object
-form and reports `E3013` otherwise; the machine computes the subtraction.
+is exact whenever the program is defined. A `divisor_nonzero` predicate and
+`ub.assume.division_by_zero` precede the division. If `T` is zero-sized,
+both interpreters report `E3002`, and checked native code traps with `brk #3002`.
+C's same-object obligation cannot be checked after this lowering loses pointer
+identity through `ptr.to_int`. The C-HIR interpreter checks the enclosing
+memory-object identity and exact element difference. It refuses distinct
+objects or a non-exact difference with `E3007` and an
+`unsupported-interpreter-expression` reason; these are not `E3013` findings.
+Its object identity check is not a complete C subobject relation.
+
+`--check` executes the lowered EvoIR, not the C-HIR interpreter. It does not
+check the same-object or exact-element obligations of pointer subtraction, or
+the same-object obligation of ordered pointer comparison. Thus `&x[3]-&y`,
+`&a<&b` for distinct objects, and a non-exact element difference can complete
+without a finding. The completion record states these limits. The machine
+also computes addresses and differences without these checks. This does not
+remove the separate pointer formation, access, lifetime or zero-stride checks.
 
 **128-bit execution.** `__int128` and `unsigned __int128` values are
 `bits<128>` scalars. A `bits<128>` value lowers, is interpreted and is
@@ -4596,7 +4666,7 @@ pointer or aggregate conversion there is `E2202`. The check evaluates nothing.
 Unprototyped arguments and the anonymous variadic tail keep the default
 argument promotions. Signed and unsigned `__int128` count as integer types for
 null pointer constants, pointer arithmetic and conditional pointer typing, and
-a `__builtin_va_list` argument keeps the 32-byte record copy of 3.12.
+a `__builtin_va_list` argument keeps the target-sized copy of 3.12.
 
 **Unprototyped function pointers.** A pointer to a function type with an
 unspecified parameter list keeps its address and provenance in storage; it is
@@ -4749,6 +4819,29 @@ arguments, after their ordinary call conversions, give the size or its product.
 This adds no alias, alignment, lifetime or bounds-check exemption; the original
 call and argument effects still execute exactly once.
 
+**Unsupported execution and calling conventions.** The GNU attributes `naked`,
+`interrupt`, `interrupt_handler`, `pcs`, `aarch64_vector_pcs`,
+`aarch64_sve_pcs`, `preserve_all`, `preserve_most`, `preserve_none`,
+`no_callee_saved_registers`, `no_caller_saved_registers`, `ms_abi`, `sysv_abi`,
+`stdcall`, `fastcall`, `thiscall`, `vectorcall`, `regcall`, `swiftcall`,
+`swiftasynccall`, `regparm`, `sseregparm`, `callee_pop_aggregate_return`,
+`returns_twice`, `target`, `target_clones`, `target_version` and `optimize`
+are `E2952` (`unsupported-function-attribute`). This also applies to names
+enclosed in `__` and to the `gnu` and `__gnu__` bracket namespaces. It applies
+to every placement, including prototypes, type names and unused definitions,
+on both targets. A warning option cannot suppress this error. No ordinary
+frame or default calling convention may stand in for one of these contracts.
+Unrelated bracket namespaces do not denote these GNU attributes.
+
+The sole accepted `optimize` form has one or more ordinary string arguments
+whose comma-separated options are all `no-tree-vectorize`,
+`no-tree-loop-vectorize` or `no-tree-slp-vectorize`, optionally prefixed by
+`-f`. String concatenation and escapes have their ordinary C meaning. Empty
+options and all other options remain `E2952`, including a mixture of supported
+and unsupported options. EvoCC does not automatically vectorize scalar code,
+so these restrictions require no code change. They do not disable explicit
+vector operations or permit any other per-function semantic option.
+
 **`cleanup`.** `cleanup(function)` on an automatic object
 resolves a function at the declaration and calls it with the object's address
 when execution leaves that object's scope. The callback must accept that
@@ -4864,7 +4957,7 @@ compound literals, and a front end must not emit it.
 | Code | Condition |
 |---|---|
 | `E2903` | argument list does not parse, position not in the table, or `aligned` argument not a representable power of two |
-| `E2904` | a `typeof` expression operand of variably modified type other than a variable-length array |
+| `E2904` | a `typeof` type-name bound requires a runtime capture outside an admitted function-body scope |
 | `E2905` | `({ ... })` at file scope or where a constant expression is required |
 | `E2906` | designator names a member the type lacks, a member ambiguous between two anonymous members, or an index at or beyond a fixed bound |
 | `E2907` | two `_Generic` associations name compatible types, or `default` appears twice |
@@ -4903,23 +4996,36 @@ compound literals, and a front end must not emit it.
 | `E2942` | a cast to a union type with no compatible member |
 | `E2944` | a recognized ordinary `alloca` call whose name the unit defines or renames |
 | `E2945` | a jump into the scope of a variably modified declaration |
-| `E2946` | a nonliteral `__builtin_strcmp` with a visible same-named `static` function |
+| `E2946` | a nonliteral `__builtin_strcmp` with a visible same-named `static` function, or lowering a library symbol that collides with a linked object |
 | `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_` (10.1.14) |
 | `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
 | `E2951` | a floating comparison or classification builtin with an operand of the wrong type (3.13.1) |
+| `E2952` | an unsupported execution or calling-convention attribute (10.1.9) |
+| `E2953` | a cast to a struct type from an incompatible operand type (10.1.3) |
+| `E2954` | a declaration makes a previously folded string object's binding weak, aliased or assembly-renamed (10.1.17) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
 `typeof(type-name)` and `typeof(expression)` denote a type. `__typeof__` and
 `__typeof` are the same construct. The result of `typeof(expression)` is the type of the expression
 before lvalue conversion: an array-typed lvalue yields the array type, not a
-pointer, and qualifiers are retained. The operand expression is not evaluated,
-so `typeof(i++)` names `int` and leaves `i` unchanged. An expression operand of
-variable-length array type is the exception: it is evaluated once and keeps its
-operand-local declaration scope. An expression operand of another variably
-modified type, such as a pointer to a variable-length array, is `E2904`. In a
-`typeof` type name, variable bounds are captured once when the declaration
-executes (10.1.19).
+pointer, and qualifiers are retained. An expression operand is evaluated if and
+only if its type is variably modified. This includes a pointer to a VLA formed
+by address-of, array conversion, cast, conditional or statement expression.
+Otherwise it is not evaluated: `typeof(i++)` names `int` and leaves `i` unchanged.
+An evaluated operand runs exactly once when its declaration, typedef or cast
+executes, before a declaration's initializer. Its value is discarded, and its
+local declarations keep their own scope. The resulting type keeps its bound
+captures; bounds written inside the operand are captured during that evaluation.
+For a parameter of a function definition, these captures execute at function
+entry before the body. Function prototypes, including nested callback
+prototypes, do not execute parameter captures.
+An enclosing unevaluated context, such as `sizeof` of a non-VLA type or an
+unselected `__builtin_choose_expr` arm, suppresses this evaluation. An identifier
+of the resulting variably modified type keeps the jump restriction E2945.
+In a `typeof` type name, variable bounds are captured once when the declaration
+executes (10.1.19); a bound that needs such a capture outside an admitted
+function-body scope is E2904.
 
 `typeof` produces a type and is fully resolved by the front end; nothing of it
 survives into EvoIR. A statement expression inside a `typeof` operand is a
@@ -4932,8 +5038,8 @@ a typedef naming a function type may (10.1.18): `extern typeof(g) g;` declares
 
 `__typeof_unqual__` is `typeof` with the top-level qualifiers removed: `const`,
 `volatile`, `restrict` and `_Atomic` are dropped from the resulting type, and
-nothing else changes. Its operand is a type name or an unevaluated expression,
-exactly as for `typeof`, and it is likewise fully resolved by the front end.
+nothing else changes. Its operand is a type name or an expression, with the
+same evaluation rule as `typeof`; it is fully resolved by the front end.
 `const int`, `volatile int`, `const volatile int` and `_Atomic int` all give
 `int`, and the result is writable; `int *const` gives `int *`, while
 `const int *` and `const char *const` keep the pointee qualifier; a `const`
@@ -5315,12 +5421,14 @@ each is an external call through the unit's builtin namespace with each
 argument evaluated once, and `E2909`, `E2913` and `E2927` apply.
 
 **Object-size checked builtins.** The fortified headers of glibc and of the
-macOS SDK select the GCC 14 checked builtins for a GNU compiler. Each one
+macOS SDK select the checked builtins below. Each one
 names a C library function and its checked entry point, and has the
 prototype of that entry point:
 
 | Builtin | Checked entry point prototype |
 |---|---|
+| `__builtin___memccpy_chk` | `void *(void *, const void *, int, size_t len, size_t size)` |
+| `__builtin___strlcpy_chk`, `__builtin___strlcat_chk` | `size_t (char *, const char *, size_t len, size_t size)` |
 | `__builtin___memcpy_chk`, `__builtin___memmove_chk`, `__builtin___mempcpy_chk` | `void *(void *, const void *, size_t len, size_t size)` |
 | `__builtin___memset_chk` | `void *(void *, int, size_t len, size_t size)` |
 | `__builtin___strcpy_chk`, `__builtin___stpcpy_chk`, `__builtin___strcat_chk` | `char *(char *, const char *, size_t size)` |
@@ -5330,6 +5438,10 @@ prototype of that entry point:
 | `__builtin___vsprintf_chk` | `int (char *, int flag, size_t size, const char *, va_list)` |
 | `__builtin___snprintf_chk` | `int (char *, size_t len, int flag, size_t size, const char *, ...)` |
 | `__builtin___vsnprintf_chk` | `int (char *, size_t len, int flag, size_t size, const char *, va_list)` |
+| `__builtin___printf_chk` | `int (int flag, const char *, ...)` |
+| `__builtin___vprintf_chk` | `int (int flag, const char *, va_list)` |
+| `__builtin___fprintf_chk` | `int (FILE *, int flag, const char *, ...)` |
+| `__builtin___vfprintf_chk` | `int (FILE *, int flag, const char *, va_list)` |
 
 The checked entry point is `__X_chk` for the builtin `__builtin___X_chk`, and
 the plain function is `X`. Its prototype is the checked one without `flag`
@@ -5349,9 +5461,30 @@ to both prototypes. Example: in `char b[8];`,
 `__builtin___memcpy_chk(b, s, 8, __builtin_object_size(b, 0))` calls
 `memcpy`, and `__builtin___memcpy_chk(b, s, n, __builtin_object_size(b, 0))`
 calls `__memcpy_chk(b, s, n, 8)`. `__builtin___memccpy_chk`,
-`__builtin___strlcpy_chk` and `__builtin___strlcat_chk` are not GCC 14
-builtins and are not implemented; `__has_builtin` reports them as absent
-(10.5), so the macOS SDK keeps the plain functions for them.
+`__builtin___strlcpy_chk` and `__builtin___strlcat_chk` use the Clang/macOS
+extension prototypes; the same bound rule applies to them. The `len` of
+`strlcat` bounds the total destination capacity, unlike that of `strncat`.
+
+For `strcpy` and `stpcpy`, a narrow string literal supplies a second sufficient
+condition: its byte count through the first NUL is no greater than the constant
+destination size. The implicit terminating NUL counts. An embedded NUL stops
+the count, and adjacent literal fragments retain their C decoding. This condition
+does not apply to `strcat`, which also reads the destination's current length.
+
+The four stream-output builtins have no size argument. They retain the checked
+entry point and the flag, including flag zero. The stream type uses the
+file-scope `FILE` typedef if it is present, otherwise an opaque `void *`.
+No library runtime is added by these builtins: the selected target library must
+provide any checked entry point that remains. Unsupported external calls in
+the interpreters remain refusals; native success does not extend that model.
+
+**Instruction cache refresh.** `__builtin___clear_cache` has the prototype
+`void (void *begin, void *end)`. It evaluates each argument once and calls the
+target runtime's `__clear_cache` for the half-open range `[begin, end)`. It is
+an effectful external call, not a prefetch hint or a no-op. The target runtime
+owns the cache maintenance and synchronization. An interpreter without that
+external model refuses the call. Arity and operand-type errors use E2909 and
+E2913, as for other library builtins.
 
 **GNU argument pack.** `__builtin_va_arg_pack ()` stands for the anonymous
 arguments of the enclosing variadic function. It is valid only as the last
@@ -5702,34 +5835,60 @@ it.
   applied to `T` (so `va_arg(ap, char)` and `va_arg(ap, short)`, undefined in
   C, are `E2929` at the type), followed by
   the conversion to `T`; `__builtin_va_end(ap)` to `va_end`; and
-  `__builtin_va_copy(dst, src)` to a 32-byte `copy` (Section 3.12). A
+  `__builtin_va_copy(dst, src)` to a target-sized `copy` (Section 3.12). A
   `va_arg` of a record or union type lowers to `va_arg.byval`, and such an
   anonymous argument carries the call-site `byval` mark (3.10, 3.12); a shape
   that 3.10 does not admit stays `E3030` (`not-lowered: varargs`). `E3030` is no longer reported for a variadic declaration or call.
 - **Empty records.** A struct or union whose member list declares no member
   (for instance one containing only a `_Static_assert`) is a GNU extension with
   `sizeof` 0 and alignment 1.
-- `__builtin_strlen(s)`: with a string-literal operand, an integer constant
-  expression of type `size_t` equal to the number of code units before the
-  literal's first NUL. With any other operand it is an ordinary call
-  to the external function `strlen` with the prototype the builtin carries
-  (10.1.14, `size_t (const char *)`), whether or not a declaration of
-  `strlen` is visible; a visible declaration of `strlen` with an
-  incompatible type is `E2927` (`builtin-library-declaration-incompatible`).
+- `__builtin_strlen(s)`: a constant string designator gives an extended integer
+  constant expression of type `size_t`. Its value counts bytes from the
+  designated position to the first NUL in the innermost character array.
+  The operand is not evaluated and no function is called. This rule applies
+  on both targets, at every optimization level and in every ICE context.
+  Parentheses and casts to character pointers preserve admission. The forms are:
+  a narrow literal (no prefix or `u8`); decay of an immutable file-scope
+  character array, including its constant-index rows and record-member arrays;
+  an immutable file-scope character pointer; `d + k`, `k + d` and `&d[k]`
+  with an integer-constant index and character-element stride; and a conditional
+  with an integer-constant condition and an admitted selected arm. Every
+  intermediate position must stay inside the same innermost array; one-past
+  positions and a missing terminating NUL do not qualify.
+  An admitted object has an explicit initializer before the use, static
+  storage duration at file scope, and a const-qualified type (including an
+  array's element type), without volatile or atomic access. It is not
+  thread-local, weak, aliased or assembly-renamed. Its designated array bytes
+  come only from narrow string literals, integer constant expressions and
+  initialization zero fill; an inactive union member or aggregate copy does
+  not supply those bytes. A character pointer object has type `T *const` and
+  an admitted address initializer; at most one pointer object is read. A
+  preceding const integer object's value does not become an ICE in an index
+  or byte initializer. A later declaration that changes an admitted object's
+  binding to weak, alias or an assembly name is E2954, not a stale constant.
+  Automatic objects, block-scope statics, `__func__`, pointer-array elements,
+  pointer members, comma expressions and statement expressions do not qualify.
+  Every other operand keeps an ordinary call of `strlen`, with each operand
+  effect executed once and with the builtin prototype
+  (10.1.14, `size_t (const char *)`), whether or not a declaration is visible.
+  A visible incompatible declaration on that call path is E2927. The plain
+  spelling `strlen(...)` remains an ordinary call.
   Except for the explicitly resolved `__builtin_isdigit` and
   `__builtin_extract_return_addr` operations, the same
   holds for every library builtin of 10.1.14: the builtin's
   prototype is the call's type, and the call names the external function.
-  No intrinsic reaches EvoIR. A user-defined `strlen` is called for a
-  non-literal operand.
-- `__builtin_frame_address(n)`: type `void *`; `n` must be an integer
-  constant expression. `(0)` lowers to `frame_address` (Section 3.7); a depth
-  `n` from 1 to 65535 lowers to `frame_address depth=n` (Section 3.7). The
-  depth of both stack-address builtins is first converted to `unsigned int`,
-  and a wider constant that narrows to an admitted depth uses that depth. A
-  depth of 65536 or more, including a negative one, is `E2913`.
-- `__builtin_return_address(0)`: type `void *`; lowers to `return_address`
-  (Section 3.7). An argument other than the constant `0` is `E2913`.
+  No intrinsic reaches EvoIR. A user-defined `strlen` is called for an
+  operand outside the constant-string rule.
+- `__builtin_frame_address(n)` and `__builtin_return_address(n)` have type
+  `void *`. Their operand must be an integer constant expression, converted
+  to `unsigned int`. A converted depth above 65535 is E2913. A wider constant
+  that narrows to an admitted depth uses that depth, including narrowing to zero.
+  Depth zero lowers to `frame_address` or `return_address`, respectively
+  (Section 3.7). A depth from 1 to 65535 yields null with `Null` provenance on
+  both targets and in both interpreters. No ancestor frame is read. The builtin
+  expression is not an integer constant expression, a null pointer constant
+  or an address constant. This source rule does not change the low-level
+  `frame_address depth=n` operation for independently supplied EvoIR.
 - `__builtin_extract_return_addr(p)`: evaluates `p` exactly once and returns
   the same address with the same provenance; it is not an external call.
 - `__auto_type`: exactly one declarator, which must be a plain identifier (no
@@ -5924,9 +6083,10 @@ lowering failure must be given a code of its own.
 accepted on parameters and block-scope objects and has no effect beyond
 forbidding `&` on the object, which is `E2928` (`address-of-register-object`)
 at the `&`. `__builtin_va_list` is an object type that may
-be a member, an array element or a typedef target; on the target it occupies
-32 bytes at alignment 8 (a structure holding one pointer and one `va_list` is
-40 bytes at 8). An element of an array of
+be a member, an array element or a typedef target; it occupies
+32 bytes on Linux and 8 on Darwin, at alignment 8. A structure holding one
+pointer and one `va_list` is 40 bytes on Linux and 16 on Darwin, at alignment
+8. An element of an array of
 `__uint128_t` or `__int128_t` is a modifiable lvalue like any element, and
 `*__builtin_va_arg(ap, T *)` is a modifiable lvalue of type `T`; both
 execute (Section 3.12, 10.1.3).
@@ -6009,6 +6169,8 @@ definition with this profile's extensions, and the same evaluator:
 - `__builtin_offsetof`, `__builtin_types_compatible_p`, `__builtin_constant_p`,
   `__builtin_choose_expr` and the constant-operand bit builtins (10.1.14,
   10.1.17);
+- `__builtin_strlen` of a constant string designator (10.1.17), as an
+  extended integer constant expression;
 - casts to an integer type, the unary and binary arithmetic, bitwise,
   relational and logical operators, and the conditional operator, applied to
   the above.
@@ -6024,7 +6186,8 @@ a 4-byte enumeration. This is the
 constant evaluator's arithmetic rule, and it also applies outside contexts
 that require a constant: an add, subtract, multiply or negation of integer
 constant expressions wraps in its promoted type before any surrounding cast or
-runtime operation, and object values never become constant knowledge. Signed
+runtime operation. Object reads do not become integer constants; the bounded
+string-initializer rule above is an explicit exception for that builtin. Signed
 add/subtract/multiply of runtime values, division by zero and executed signed
 `MIN / -1` retain their obligations; signed shifts follow the GNU truncation
 rule of 6.1, so executed `1 << 31` needs only a valid count. IR modules that
@@ -6073,13 +6236,16 @@ including before other members, and does not make the record flexible:
 4, `char pad[20 - 2*sizeof(long) - sizeof(unsigned)]` is a valid empty member
 whose successor is at offset 0, and a file-scope `int g[0]` has `sizeof` 0.
 
-A bound that folds to a **negative** value is `E2923` (`invalid-array-bound`). A bound that is not an integer constant expression makes the type variably
+A noninteger bound is `E2923` (`invalid-array-bound`) in every context. This
+type check precedes the constant-expression and storage checks. An integer
+bound that folds to a **negative** value is also `E2923`. A remaining integer
+bound that is not an integer constant expression makes the type variably
 modified. That is `E2203` (`variable-length-object`) at file scope, on a static
 or linked object, on any declaration with linkage, and on a record member whose
 canonical type is variably modified, including through a typedef or a pointer
 to a variable array. Dimensions inside a member's function-pointer parameter
-prototype do not make the member variably modified. A noninteger bound is
-`E2923`. `E2203` has one message, `variable-length-object`, at every site.
+prototype do not make the member variably modified. `E2203` has one message,
+`variable-length-object`, at every site.
 
 **Variable-length arrays.** At block scope a variable bound is admitted. Each
 variable bound written in an executed declaration, typedef, pointer
@@ -6671,15 +6837,20 @@ proof.evp     the certificate
 
 It performs, in order:
 
-1. Parse `before.evo` and `after.evo` under Section 9 (with
-   `--legacy-pre-fenv`, under the legacy reader of Section 4.6), rejecting
-   either under Section 9.5 rather than repairing it.
+1. Read the target profile from `before.evo` under Section 9.1, then parse
+   both files with that target's reader (with `--legacy-pre-fenv`, use the
+   Linux-only legacy reader of Section 4.6). Reject either file under
+   Section 9.5 rather than repairing it or changing its target.
 2. Verify the certificate's input digest against `before.evo`'s bytes.
 3. Recompute the ordered eligible regions and their witness and seed manifests
    from parsed `before.evo`, per Sections 8.5 through 8.7, using its own
    implementation. Verify that the certificate names a duplicate-free
    subsequence and that every named manifest is exact; an omitted eligible
-   region is a permitted decision not to optimize it.
+   region is a permitted decision not to optimize it. A reader may derive only
+   the named roots, in module order, if it independently checks eligibility and
+   the complete closure for each. An identity certificate needs no region or
+   seed-fact analysis. Input size must not become recursive traversal depth;
+   a manifest count cannot allocate more entries than its input can contain.
 4. Replay every merge against the trusted registry of Section 11.6, recomputing
    constant folds rather than accepting claimed results.
 5. Verify the structural rules of the extraction map (Section 11.3:
@@ -6992,8 +7163,10 @@ exit non-zero for reasons outside this table.
 
 ### 11.5 Dependency Boundary
 
-This is a normative constraint, not a convention, and is enforced by a test that
-reads the dependency closure.
+This is a normative constraint, not a convention. The Cargo test
+`crates/evocc-proofcheck/tests/normal_dependencies.rs` reads Cargo's normal-edge
+dependency closure with all features and targets. Dev-only dependencies do not
+enter this closure.
 
 ```text
 evocc-evoir        IR types, Section 9 parser and renderer, validator, interpreter
@@ -7517,6 +7690,56 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.6.8, 2026-10-19.** Section 10.1.9 admits only the three disabling
+automatic-vectorization options in `optimize`. All other options still fail
+closed, including semantic options mixed into the same attribute.
+
+**Revision 2.6.5, 2026-10-16.** Section 10.1.10 evaluates every variably
+modified `typeof` expression operand once, including pointer types, under
+the existing scope and unevaluated-context rules. Section 10.1.17 gives both
+activation-address builtins a runtime null result at converted depths 1..65535
+on both targets. Depth zero and independently supplied EvoIR retain their
+semantics. No registry, Core subset or Lean theorem domain changes.
+
+**Revision 2.6.4, 2026-10-16.** Sections 10.1.17 and 10.1.19 admit the reviewed
+file-scope string-constant rule. The query uses written initializers, preserves
+ordinary calls outside the rule and refuses late interposition with E2954.
+No interpreter, IR operation, registry or Lean rule domain changes.
+
+**Revision 2.6.3, 2026-10-16.** Section 10.1.14 adds three Clang checked-string
+builtins, four GNU checked-output builtins, literal copy bounds and the runtime
+cache-flush call. External library availability remains a target requirement.
+Section 11.5 identifies the normal-dependency test; all five printed registries
+have digest tests. No registry bytes or Lean rule domain change.
+
+**Revision 2.6.2, 2026-10-16.** Source diagnostics use E2918 for jumps into
+statement expressions and E0107 for pack directives inside records. Member
+lookup reports E2906 at an absent or ambiguous name. Section 10.1.19 checks
+the bound's integer type before storage restrictions. Section 10.1.3 names
+E2953 for incompatible struct casts and the E2946 lowering limit for a library
+symbol that collides with a linked source object. Builtin namespaces and
+same-type record casts retain their existing meaning.
+
+**Revision 2.6.1, 2026-10-16.** Section 10.1.3 names the pointer subtraction
+and ordering obligations that EvoIR execution does not check. Completed checks
+report only findings from implemented checks. The C-HIR refusal for these
+unsupported relations is E3007, not E3013; this is not full C subobject checking.
+
+**Revision 2.6.0, 2026-10-15.** Sections 9.1 and 11.2 admit target-bound Darwin
+rewrite chains beside the unchanged implicit Linux format. The five integer
+registries are layout-independent; their printed bytes and digests do not
+change. The checker binds the input, output and reconstruction to one profile.
+The Lean `core-v1` compilation profile remains Linux-only.
+The checker derives only claimed regions and uses iterative witness traversal.
+Typed parse errors preserve the malformed/invalid distinction of Sections 9.5
+and 11.4; input counts and class references are checked before allocation or use.
+
+**Revision 2.5.1, 2026-10-15.** Section 10.1.9 names the execution and
+calling-convention attributes that the front end refuses with `E2952`.
+In particular, a `naked` function cannot silently receive an ordinary frame.
+Section 6.3 adds the diagnostic authority row.
+Section 10.1.3 states the division obligation for zero-sized pointer differences.
 
 **Revision 2.5.0, 2026-10-14.** The text of equality saturation and of the
 checker states what the code does. Reaching a bound keeps the admitted

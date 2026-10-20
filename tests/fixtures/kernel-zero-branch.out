@@ -1,0 +1,44 @@
+Private copied zero-test selection — 2026-10-19
+
+Machine selection replaces a private copy followed by a final compare with
+zero and an equal/not-equal branch with CBZ/CBNZ on the source value. Both
+the copied value and flags must have one definition and one use. W/W, W/X
+and X/X copies preserve the zero test; X/W narrowing is excluded. Targets,
+edge arguments and execution obligations do not change. This is ordinary
+machine selection, not a certified EqSat rewrite or guard removal.
+
+Unchanged sources and kernel argv, 100000 calls per case:
+Symbol           Before/call After/call GCC14/call Before bytes After bytes
+theta                    171        171         94          728         728
+pte_offset_map            52         46         23          276         252
+folio_state               32         32          9          152         152
+Three container and three TCG executions agree on the retained checksums,
+with no dropped or irregular blocks. GCC counts are retained, not rerun.
+The final gate-built compiler reproduces all three measured assemblies byte
+for byte. The array and record meet their stated 2x GCC instruction limits.
+Library-only executed-path refusals remain non-PASS. The projected kernel
+argv still discloses unsupported -fno-delete-null-pointer-checks and
+-fno-common; this is not a claim of complete Kbuild option parity.
+
+Tests cover both targets, W/X transport, high-bit boundaries, narrowing,
+shared values, outgoing arguments, signed comparisons and changed branches.
+The real proof-required path checks final assembly; wrong branch polarity
+or operands are rejected at lowering. The Lean zero-test lemma is width
+parameterized and adds no axiom. Full acceptance: 458 Rust suites, 3473
+passed, zero failed, eight ignored, Clippy and formatting pass. All six Lean
+steps pass: 88434 vectors, 62 rule theorems, 36 analysis rows, 576 enumerated
+instances and 11 named expectations. The 975 whole-environment axioms are
+not a TCB count. The separate six-group correspondence campaign was not
+rerun. The shared tree is dirty, so this is not clean release acceptance.
+
+Measured compiler SHA-256:
+77d08d9a26b6d4ac46a1d3b42127d9f0c5baf5685ab27187c34125998b8699e5
+Capture: .evidence/kernel-codegen-replay-20261019/ (500 MiB cap).
+Measurements: zero-branch-reductions/counts.json and readback.json.
+Gates: full-workspace-zero-branch.log and lean-zero-branch.log.
+The capture used 184700 KiB before retaining the new Linux compiler. No
+isolated disk baseline exists for this slice; its net increase is unknown.
+The previous Image/config/vmlinux hashes were checked in the archive at
+.build/reference/evocc-retained-20261019.tar.gz. No runtime pair was deleted.
+Claim ceiling: these reductions and the supported machine proof profile.
+Fresh kernel build, boot and original selftest results are separate.

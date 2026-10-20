@@ -1,0 +1,69 @@
+Live-range holes in unchanged kernel reductions — 2026-10-16
+
+Interference and call survival use sorted inclusive per-block live segments.
+The hull only orders and expires intervals. Fixed bindings, early clobbers
+and call constraints remain. Eviction must free every conflicting occupant
+of a chosen register. Identity-copy removal unites complete same-class,
+same-location name components, including both incoming definitions at a join.
+No independent checker or Lean proof profile is weakened or extended.
+
+Instructions count only the named symbol, not its callees. The loop has 100
+calls; every other row has 100,000. Inputs and GCC-built drivers are unchanged.
+Reduction                   Before/call  After/call  GCC14/call  After/GCC
+loop-carried-transport            29734       28710        8236      3.486
+leaf-helper-call                     55          55           9      6.111
+local-array-constant-index          239         239          94      2.543
+struct-value-through-stack          115         114          23      4.957
+asm-goto-live-transport             154         153          67      2.284
+
+Function text bytes, before -> after (GCC14):
+free_ok:          456 ->  444 (288).
+folio_state:      244 ->  244 (36).
+theta:           1008 -> 1008 (376).
+pte_offset_map:   576 ->  572 (120).
+fault:            704 ->  688 (348).
+
+All 15 Linux-container and 15 TCG runs exit zero. Each source has the same
+checksum in all three variants. Every profile reports dropped=0, irregular=0.
+Executable load addresses do not overlap init. The existing GCC kernel and
+snapshot disk are reused. One CPU and the current QEMU are diagnostic
+overrides; these runs do not establish historical kernel acceptance, latency
+or all-input equivalence. N08 and N10 remain open; their 2x exits are not met.
+
+Capture: .evidence/live-range-holes-20261016/ (500 MiB limit).
+before.json and after.json bind source, compiler, command and assembly.
+runtime/counts.json and run-*/result.json bind executable and runtime inputs.
+The final compiler differs after rebuilding and the tag-lookup repair;
+final.json records byte-identical assembly for all five measured reductions.
+
+Focused allocation and transport tests: 65 PASS. The two new live-segment
+tests first failed with the old hull policy. Existing loop and branch tests
+then exposed the join-copy naming defect; their failures are retained.
+All four changed variadic snapshots match their prior hashes with the old
+hull policy on identical EvoIR. Reviewed differences are temporary register
+choices and moves, not frame layout, ABI save areas, guards or control edges.
+
+The first original KVM MMU probe reaches the 180-second limit. A diagnostic
+repeat finishes in 156.327 seconds; both early samples are in parser tag
+lookup, not allocation. That lookup nested a scope-tag scan and a global
+binding scan. It now uses the existing per-scope index. A 128/512-tag parser
+test changes from 10.839/714.658 ms (RED) to 1.512/5.799 ms (GREEN); separate
+tests retain shadowing, forward completion, invalid-scope and rollback rules.
+Original units compile and assemble with the final parser: page_alloc in
+39.477 s (528,064 object bytes), KVM mmu in 41.902 s (703,544 bytes), and
+sha3_generic in 24.846 s (253,720 bytes). The 41 projected Kbuild omissions
+per unit are disclosed, with zero unreviewed omissions. This is not exact
+argv parity or a kernel boot. Hashed probe intermediates are retired;
+commands, source/output hashes, runtime payloads and failed captures remain.
+
+The first full gate has 3,424 passes, three failures and eight ignores.
+All failures are proof-required tests: two stale edits changed no byte, and
+the pilot expected an old allocation snapshot. Require a nonempty mutation,
+retain a stale-edit regression and review the changed output. Three actual
+allocation mutants are independently rejected; all 23 corrected tests pass.
+Final combined acceptance: 451 suites, 3436 PASS, zero failures and eight
+retained ignores; Clippy, formatting and all six Lean gate steps pass.
+Logs: .evidence/private-helper-20261016/{workspace-final,lean-final}.log.
+The shared worktree is dirty; this is not clean-release acceptance.
+Frontend cache plus these three new captures grew by 1340848 KiB from 07:15;
+shared cache growth is not sole task attribution. About 42 GiB remains free.

@@ -29,7 +29,7 @@ use evocc_eqopt::{run_scalar_chain_with_checker, EqualityState, ExtractionPolicy
 use evocc_evoir::{InterpreterLimits as EvoIrLimits, Module, RuntimeValue};
 use evocc_lex::{Lexer, TokenKind};
 use evocc_mir::emit::{CodegenOptions, StackGuard};
-use evocc_mir::{compile_module_with_options, NativeStop, RelocationModel, Target as MirTarget};
+use evocc_mir::{compile_module_with_entries, NativeStop, RelocationModel, Target as MirTarget};
 use evocc_parser::Parser;
 use evocc_types::{EvoIRType, Region, TargetDataLayout};
 
@@ -187,8 +187,6 @@ struct DriverOptions {
     automatic_zero: bool,
     tls_model: evocc_types::TlsModel,
     stack_protector: bool,
-    /// The leaf scope of return signing was requested; see `__ARM_FEATURE_PAC_DEFAULT`.
-    sign_leaf_returns: bool,
     patchable_entry: Option<(u16, u16)>,
     minimum_function_alignment: u32,
     codegen: CodegenOptions,
@@ -431,7 +429,7 @@ fn main() -> ExitCode {
         );
         eprintln!("       evocc --interpret-evoir [--target={SUPPORTED_TARGET}] <file>");
         eprintln!(
-            "       evocc --check [--error-format=text|short|json] [--color=auto|always|never] <file>"
+            "       evocc --check [--error-format=text|short|json|concise] [--color=auto|always|never] <file>"
         );
         eprintln!("       evocc --explain E3xxx");
         eprintln!("       -Oeq-scalar [--eq-policy=NAME | --eq-weights=VECTOR]");
@@ -562,7 +560,6 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     let mut automatic_zero = false;
     let mut tls_model = evocc_types::TlsModel::default();
     let mut stack_protector = false;
-    let mut sign_leaf_returns = false;
     let mut patchable_entry = None;
     let mut minimum_function_alignment = 4;
     let mut codegen = CodegenOptions::default();
@@ -871,22 +868,19 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
                     pair.ok_or_else(|| format!("invalid patchable function entry `{value}`"))?,
                 );
             }
-            // Return signing covers every function, leaves included, so the
-            // non-leaf and leaf scopes give the same code. The requested scope
-            // only selects the ACLE `__ARM_FEATURE_PAC_DEFAULT` value. As in
-            // GCC 14, `-msign-return-address` has no effect; BTI and the B key
-            // stay unsupported, so Kbuild probes for them fail.
+            // Share the effective signing scope with native emission and the
+            // ACLE macro. BTI and the B key remain outside this profile.
             "-mbranch-protection=pac-ret" => {
                 codegen.sign_returns = true;
-                sign_leaf_returns = false;
+                codegen.sign_leaf_returns = false;
             }
             "-mbranch-protection=pac-ret+leaf" => {
                 codegen.sign_returns = true;
-                sign_leaf_returns = true;
+                codegen.sign_leaf_returns = true;
             }
             "-mbranch-protection=none" => {
                 codegen.sign_returns = false;
-                sign_leaf_returns = false;
+                codegen.sign_leaf_returns = false;
             }
             "-mgeneral-regs-only" => codegen.general_registers_only = true,
             "-mno-general-regs-only" => codegen.general_registers_only = false,
@@ -1040,16 +1034,28 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     if repair_mode.is_some() && mode != DriverMode::ParseOnly {
         return Err("--repair requires --parse-only".into());
     }
+    // A plan record has a JSON and a text form only. Refuse before any edit,
+    // so that no half-concise plan appears.
+    if repair_mode.is_some() && error_format == Some(diagnostics::Format::Concise) {
+        return Err("--repair does not support --error-format=concise".into());
+    }
     if source_from_stdin && (!lenient || mode != DriverMode::ParseOnly || repair_mode.is_some()) {
         return Err("--source-from-stdin requires -fsyntax-only without --repair".into());
     }
     let proof = proof_arguments.admit(proof_required::Admission {
-        emit_asm: mode == DriverMode::EmitAsm,
+        // The proof command publishes only assembly text and its record.
+        // cc actions translate -S/-c/link into EmitAsm internally, but their
+        // extra output destinations are not part of that publication contract.
+        emit_asm: mode == DriverMode::EmitAsm && !lenient,
         entries: &core_entries,
         baseline: optimization == 0 && !standard_builtins,
         rewrites: optimize_scalar_evoir,
         rewrite_checker_pinned: eq_checker_digest.is_some(),
         unchanged_backend: opt_passes.is_empty()
+            && !signed_wrapping
+            && !dynamic_rounding
+            && !stack_protector
+            && !automatic_zero
             && pass_report.is_none()
             && (optimize_scalar_evoir || (eq_proof_dir.is_none() && !eq_options))
             && !frame_variants_selected
@@ -1130,14 +1136,6 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         return Err("--regalloc-opt is native-only and has no meaning for --check".into());
     }
     let target = target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu);
-    // EvoIR Section 9.1: the checker of a rewrite chain reads the EvoIR text
-    // of the implicit Linux target only. Darwin text names its target, and
-    // no checker reads it.
-    if target.is_darwin() && (optimize_scalar_evoir || eq_proof_dir.is_some() || eq_options) {
-        return Err(format!(
-            "-Oeq-scalar, --eq-proof-dir and the EqSat options are not available for target `{DARWIN_TARGET}`: its EvoIR text has no checker"
-        ));
-    }
     // Apple's arm64 convention passes every anonymous argument on the stack,
     // and its `va_list` is one pointer.
     codegen.anonymous_on_stack = target.is_darwin();
@@ -1183,7 +1181,6 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         automatic_zero,
         tls_model,
         stack_protector,
-        sign_leaf_returns,
         patchable_entry,
         minimum_function_alignment,
         codegen,
@@ -1355,7 +1352,11 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
         (
             "__ARM_FEATURE_PAC_DEFAULT",
             options.codegen.sign_returns,
-            if options.sign_leaf_returns { "5" } else { "1" },
+            if options.codegen.sign_leaf_returns {
+                "5"
+            } else {
+                "1"
+            },
         ),
     ] {
         pp.undefine(name);
@@ -1930,7 +1931,11 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                     }
                 } else {
                     if let Some(path) = &options.eq_proof_dir {
-                        if let Err(detail) = evocc_eqopt::write_identity_chain(&module, path) {
+                        if let Err(detail) = evocc_eqopt::write_target_identity_chain(
+                            &module,
+                            options.target.triple(),
+                            path,
+                        ) {
                             options
                                 .error_format
                                 .usage(&format!("identity-chain publication failed: {detail}"));
@@ -1950,8 +1955,9 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                             &module,
                             rewrites.as_ref(),
                             resolved,
+                            &pp,
                         ),
-                        None => emit_asm(options, &module, resolved),
+                        None => emit_asm(options, &module, resolved, &pp),
                     },
                     ParsedAction::InterpretEvoIr => interpret_evoir(
                         options,
@@ -1971,10 +1977,20 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                     consume,
                 )
             } else {
-                evocc_lower::lower_unit_with_source(
+                let entries = if options.proof.is_some() {
+                    options
+                        .core_entries
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                evocc_lower::lower_unit_with_entries(
                     &unit,
                     &target,
                     options.optimization != 0,
+                    &entries,
                     |source, module| {
                         consume(source, module, evocc_lower::SourceLocations::default())
                     },
@@ -2047,7 +2063,7 @@ fn optimize_scalar_evoir(
     .with_expected_digest(options.eq_checker_digest.clone()
         .or_else(|| std::env::var("EVOCC_CHECKER_SHA256").ok())
         .ok_or("-Oeq-scalar requires --eq-checker-sha256 or EVOCC_CHECKER_SHA256 from a trusted build/release")?);
-    let mut equality = EqualityState::for_module(&module)?;
+    let mut equality = EqualityState::for_target_module(&module, options.target.triple())?;
     match run_scalar_chain_with_checker(&module, &mut equality, &options.eq_policy, &checker) {
         Ok(run) => {
             if let Some(path) = &options.eq_proof_dir {
@@ -2178,8 +2194,13 @@ fn emit_evoir(module: &Module, target: &str) -> ExitCode {
 /// a survey over the kernel can count what stopped each translation unit.
 /// Lowering refusals carry their own EvoMIR codes; the remaining stops are
 /// driver-level reports of an internal stage that declined.
-fn emit_asm(options: &DriverOptions, module: &Module, unit: &evocc_chir::CHirUnit<'_>) -> ExitCode {
-    let text = match assemble(options, module, unit) {
+fn emit_asm(
+    options: &DriverOptions,
+    module: &Module,
+    unit: &evocc_chir::CHirUnit<'_>,
+    pp: &Preprocessor,
+) -> ExitCode {
+    let text = match assemble(options, module, unit, pp) {
         Ok(text) => text,
         Err(code) => return code,
     };
@@ -2194,6 +2215,7 @@ fn assemble(
     options: &DriverOptions,
     module: &Module,
     unit: &evocc_chir::CHirUnit<'_>,
+    pp: &Preprocessor,
 ) -> Result<String, ExitCode> {
     let (target, relocation) = match options.target {
         DriverTarget::Aarch64UnknownLinuxGnu => {
@@ -2204,19 +2226,63 @@ fn assemble(
             (MirTarget::Darwin, RelocationModel::PositionIndependent)
         }
     };
-    let mut text = match compile_module_with_options(
+    let entries = if options.proof.is_some() {
+        options
+            .core_entries
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let mut text = match compile_module_with_entries(
         target,
         module,
         &|_| true,
         relocation,
         &options.codegen,
+        &entries,
     ) {
         Ok(text) => text,
         Err(stop) => {
             match &stop {
-                NativeStop::Lowering(codes) => {
-                    for code in codes {
-                        options.emit_error(&options.input, 0, 0, code, "evomir-lowering-refused");
+                NativeStop::Lowering(refusals) => {
+                    for refusal in refusals {
+                        let message = refusal.message();
+                        let span = unit.iter().find_map(|declaration| {
+                            let evocc_chir::CHirDecl::Function(function) = declaration else {
+                                return None;
+                            };
+                            function.body?;
+                            let linkage = unit.symbol_linkage().ok()?;
+                            let name =
+                                linkage.function_name(function.symbol, &function.name.spelling);
+                            // The assembler label may be on an earlier prototype.
+                            // Match the same Darwin prefix removal as emission.
+                            let labeled = unit.iter().any(|declaration| {
+                                matches!(declaration,
+                                evocc_chir::CHirDecl::Function(prior)
+                                if prior.symbol == function.symbol && prior.asm_label.is_some())
+                            });
+                            let name = if options.target.is_darwin() && labeled {
+                                name.strip_prefix('_')
+                                    .filter(|name| !name.is_empty())
+                                    .unwrap_or(name)
+                            } else {
+                                name
+                            };
+                            (name == refusal.function).then_some(function.name.span)
+                        });
+                        if let Some(span) = span {
+                            options.emit_span(
+                                pp.source_path(span.file).unwrap_or(&options.input),
+                                span,
+                                refusal.code,
+                                &message,
+                            );
+                        } else {
+                            options.emit_error(&options.input, 0, 0, refusal.code, &message);
+                        }
                     }
                 }
                 other => options.emit_error(
@@ -2269,9 +2335,10 @@ fn interpret_evoir(
         }
     };
     let mut site = None;
-    let outcome = match evocc_evoir::interpret_program_with_site(
+    let outcome = match evocc_evoir::interpret_program_with_target_and_site(
         module,
         &arguments,
+        &options.target_layout(),
         EvoIrLimits::new(100_000),
         &mut site,
     ) {

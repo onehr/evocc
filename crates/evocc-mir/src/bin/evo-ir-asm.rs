@@ -81,7 +81,7 @@ fn emit(args: &[String]) -> Result<String, String> {
         .map_err(|e| format!("{e:?}"))?;
         if mode == evocc_mir::core_machine_export::CoreMachineMode::PostSsa {
             for function in &mut lowered.functions {
-                *function = evocc_mir::regalloc::out_of_ssa(function);
+                *function = evocc_mir::regalloc::checked_out_of_ssa(function, true)?;
             }
         }
         return evocc_mir::core_machine_export::export_core_machine(&lowered, mode);
@@ -143,7 +143,7 @@ fn emit(args: &[String]) -> Result<String, String> {
             }
             before += f.blocks.iter().map(|b| b.insts.len()).sum::<usize>();
             dead_before += evocc_mir::regalloc::dead_computation_count(f);
-            let lowered = evocc_mir::regalloc::out_of_ssa_with_dce(f, !retain_dead);
+            let lowered = evocc_mir::regalloc::checked_out_of_ssa(f, !retain_dead)?;
             after += lowered.blocks.iter().map(|b| b.insts.len()).sum::<usize>();
             dead_after += evocc_mir::regalloc::dead_computation_count(&lowered);
             let protected = module
@@ -161,7 +161,8 @@ fn emit(args: &[String]) -> Result<String, String> {
                     allocation
                 },
             )?;
-            evocc_mir::verify_allocation_for(target, &allocated).map_err(|e| format!("{e:?}"))?;
+            evocc_mir::verify_allocation_against(target, &lowered, &allocated)
+                .map_err(|e| format!("{e:?}"))?;
             dead_allocated += evocc_mir::regalloc::dead_computation_count(&evocc_mir::MFunction {
                 name: allocated.name,
                 blocks: allocated.blocks,

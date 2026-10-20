@@ -242,6 +242,102 @@ fn leaf_parameter_conversions_reads_and_argument_effects_remain_once() {
 }
 
 #[test]
+fn private_scalar_locals_use_the_existing_call_substitution() {
+    let source = "static int next(int x){int n=x+1; return n;}\n\
+        int main(void){int n=4; if(next(n++)!=5 || n!=5)return 1;\n\
+        return next(n)!=6 || next(-2)!=-1;}";
+    let text = ir(source);
+    assert!(
+        !text.contains("call @next"),
+        "local leaf was not substituted"
+    );
+    assert!(
+        !text.contains("func @next("),
+        "unused local leaf was retained"
+    );
+    for level in ["-O0", "-O2"] {
+        for mode in ["--interpret-c-hir", "--interpret-evoir", "--emit=asm"] {
+            let output = run(source, level, mode);
+            assert!(output.status.success(), "{level} {mode}: {output:?}");
+            if mode.starts_with("--interpret") {
+                assert_eq!(output.stdout, b"0\n");
+            }
+        }
+    }
+    let reduction =
+        include_str!("../../../tests/fixtures/kernel-codegen-reductions/leaf-helper-call.c");
+    assert!(!ir(reduction).contains("call @const_folio_flags"));
+}
+
+#[test]
+fn exhausted_local_leaf_budget_keeps_a_callable_definition() {
+    // All calls are live and have effects. The budget must not leave a call
+    // to a removed definition or restart for each caller or inline expansion.
+    let calls = std::iter::repeat_n("sum += next(&n);", 200).collect::<String>();
+    let source = format!(
+        "static unsigned next(unsigned *p){{unsigned n=++*p;return n;}}\n\
+        unsigned many(unsigned *p){{unsigned n=*p, sum=0; {calls} *p=n; return sum;}}\n\
+        int main(void){{unsigned n=0;return many(&n)!=20100 || n!=200;}}"
+    );
+    let text = ir(&source);
+    let remaining = text.matches("call @next").count();
+    assert!(
+        remaining > 0 && remaining < 200,
+        "expected partial expansion: {remaining}"
+    );
+    assert!(
+        text.contains("func @next("),
+        "budget exhaustion removed the fallback"
+    );
+    let expanded = 200 - remaining;
+    let second_caller =
+        format!("unsigned also(unsigned *p){{unsigned n=*p, sum=0; {calls} *p=n; return sum;}}");
+    let two_callers = ir(&format!("{source}{second_caller}"));
+    assert_eq!(
+        400 - two_callers.matches("call @next").count(),
+        expanded,
+        "the expansion budget restarted at a second caller"
+    );
+    let output = run(&source, "-O2", "--interpret-evoir");
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(output.stdout, b"0\n");
+}
+
+#[test]
+fn local_leaf_substitution_preserves_checked_errors() {
+    for (source, code) in [
+        ("static int f(int x){int n=x+1;return n;} int main(void){volatile int n=2147483647;return f(n);}", "E3004"),
+        ("static int f(int x){int n;if(x)n=x;return n;} int main(void){return f(0);}", "E3001"),
+        ("static int f(int *p){int n=*p;return n;} int main(void){return f(0);}", "E3009"),
+    ] {
+        assert!(!ir(source).contains("call @f"));
+        for mode in ["--interpret-c-hir", "--interpret-evoir"] {
+            let output = run(source, "-O2", mode);
+            assert!(!output.status.success(), "{mode}: {source}");
+            assert!(String::from_utf8_lossy(&output.stderr).contains(code), "{output:?}");
+        }
+    }
+}
+
+#[test]
+fn local_leaf_admission_keeps_storage_and_attribute_barriers() {
+    for source in [
+        "static int f(int x){volatile int n=x;return n;} int g(int x){return f(x);}",
+        "static int f(int x){int a[x];a[0]=x;return a[0];} int g(int x){return f(x);}",
+        "static int f(int x){int a[2]={x,0};return a[0];} int g(int x){return f(x);}",
+        "static int *f(int x){int n=x;return &n;} int *g(int x){return f(x);}",
+        "static int f(int x){int *p=__builtin_alloca(4);*p=x;return *p;} int g(int x){return f(x);}",
+        "static int f(int x){static int n;n=x;return n;} int g(int x){return f(x);}",
+        "static int f(int x){int n=x;return n;} static int f(int) __attribute__((noipa)); int g(int x){return f(x);}",
+        "static int f(int) __attribute__((section(\".special\"))); static int f(int x){int n=x;return n;} int g(int x){return f(x);}",
+    ] {
+        let text = ir(source);
+        assert!(text.contains("call @f"), "unexpected admission: {source}");
+        assert!(text.contains("func @f("), "lost definition: {source}");
+    }
+}
+
+#[test]
 fn private_leaf_substitution_does_not_erase_execution_errors() {
     for (source, code) in [
         ("static int add(int x,int y){return x+y;} int main(void){volatile int x=2147483647;return add(x,1);}", "E3004"),
@@ -273,7 +369,6 @@ fn private_leaf_admission_is_bounded_and_does_not_remove_frame_identity() {
         "static int f(int x){asm volatile(\"\" : \"+r\"(x));return x;} int g(int x){return f(x);}",
         "static int f(int x){while(x>3)x--;return x;} int g(int x){return f(x);}",
         "static int f(int x){static int n;n+=x;return n;} int g(int x){return f(x);}",
-        "static int f(int x){int n=x;return n;} int g(int x){return f(x);}",
         "static int f(int x){return x?f(x-1):0;} int g(int x){return f(x);}",
         "static int f(int x){return x+1;} int a(int) __attribute__((alias(\"f\"))); int g(int x){return f(x);}",
     ] {

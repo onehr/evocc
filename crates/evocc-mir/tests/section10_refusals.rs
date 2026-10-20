@@ -28,6 +28,25 @@ fn a_non_pair_ninety_six_bit_integer_is_e4003() {
     assert_eq!(codes(WIDE_INTEGER), vec!["E4003"]);
 }
 
+#[test]
+fn tuple_values_are_refused_as_e4004_not_a_register_class() {
+    // Section 9 has no tuple instruction spelling. Exercise the in-memory
+    // lowering interface with a well-typed identity over a tuple parameter.
+    let mut module = parse_section9_module(FLOATING_POINT.as_bytes()).unwrap();
+    let tuple = evocc_types::EvoIRType::Tuple(vec![evocc_types::EvoIRType::Bits(32)]);
+    let function = &mut module.functions[0];
+    function.params[0].ty = tuple.clone();
+    function.ret_tys[0] = tuple.clone();
+    function.blocks[0].args[0].value.ty = tuple.clone();
+    if let evocc_evoir::Inst::Ret(values) = &mut function.blocks[0].terminator {
+        values[0].ty = tuple;
+    }
+    evocc_evoir::validate_module(&module).unwrap();
+    let refusals = lower_module(&module).unwrap_err();
+    assert!(!refusals.is_empty());
+    assert!(refusals.iter().all(|refusal| refusal.code == "E4004"));
+}
+
 const PREDICATE: &str = "\
 func @main(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<1>, mem<all>, world) cc = target_default
     effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
@@ -134,4 +153,15 @@ fn a_refusal_names_the_instruction_it_was_reported_at() {
     let refusals = lower_module(&module).expect_err("refused");
     assert_eq!(refusals[0].function, "main");
     assert_eq!(refusals[0].name, "not-lowered: wide-integer");
+}
+
+#[test]
+fn native_lowering_preserves_each_refusal_record() {
+    let module = parse_section9_module(WIDE_INTEGER.as_bytes()).unwrap();
+    for target in [evocc_mir::Target::Darwin, evocc_mir::Target::Linux] {
+        let expected = evocc_mir::lower_module_for(target, &module, &|_| false).unwrap_err();
+        let error = evocc_mir::compile_module_for(target, &module, &|_| true).unwrap_err();
+        assert_eq!(error, evocc_mir::NativeStop::Lowering(expected));
+        assert!(error.detail().contains("@main block 0 instruction"));
+    }
 }

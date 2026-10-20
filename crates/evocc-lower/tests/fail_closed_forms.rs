@@ -206,13 +206,13 @@ fn return_address_lowers_to_an_activation_address() {
 }
 
 #[test]
-fn ancestor_frame_address_lowers_and_execution_fails_closed_with_e3031() {
-    assert_lowering_error(
-        "void *f(void) { return __builtin_frame_address(1); }\n",
-        8,
-        "E3031",
-        "not-executed: frame-address",
+fn ancestor_addresses_lower_to_null_and_not_to_machine_frame_reads() {
+    let ir = asm_binding_ir("void *f(void) { return __builtin_frame_address(1); } void *g(void) { return __builtin_return_address(65535); }", false);
+    assert!(
+        !ir.contains("frame_address") && !ir.contains("return_address"),
+        "{ir}"
     );
+    assert_eq!(ir.matches("ptr.null").count(), 2, "{ir}");
 }
 
 #[test]

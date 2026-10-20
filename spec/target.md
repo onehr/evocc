@@ -1,6 +1,6 @@
 # EvoCC Target Description
 
-**Revision 1.0.1** | **Pinned ground truth** | Stabilized from revision 2 on 2026-10-06
+**Revision 1.1.0** | **Pinned ground truth** | Stabilized from revision 2 on 2026-10-06
 
 ## Status and scope
 
@@ -115,9 +115,10 @@ derived from encoding facts and are not widened to the architectural maximum.
    `crates/evocc-mir/tests/target_boundary.rs` checks the first sentence by
    a scan of `generic/` for instruction-set names, register names,
    mnemonics, target types and imports from outside `generic/`. It checks
-   the second sentence only for a fixed list of migrated declarations
-   (register-set arrays and ABI constants and functions), which must have
-   one owner; it finds no literal immediate range or clobber list. Appendix A
+   the second sentence for a fixed list of migrated declarations
+   (register-set arrays and ABI constants and functions), and for the named
+   constants in `costs.rs`, `encodings.rs` and `patterns.rs`. Each must have
+   one owner; the scan does not find unnamed literal ranges or clobber lists. Appendix A
    lists the known gaps.
 3. **The verifier and the allocator read the same `insts`.** Two hand-written
    copies of instruction facts can agree on a wrong answer; one generated copy
@@ -240,14 +241,26 @@ constant names are the stable anchors; line numbers drift.
   being in `RESERVED`, outside every candidate set.
 - `asm_ast.rs` derives `SCALED_LIMIT` with a literal access size, and its
   `IMM12` duplicates the one in `emit.rs` (Rule 1). The boundary test does
-  not check immediate literals in hand-written ISA code, and its
-  generated-file filter misses the first-line form of `costs.rs`,
-  `encodings.rs` and `patterns.rs`, which it therefore scans.
+  not check immediate literals in hand-written ISA code. It does check copies
+  of the named constants from `costs.rs`, `encodings.rs` and `patterns.rs`;
+  generated owners are identified by their path, not exempted from that check
+  by a first-line comment.
 - The AAPCS64 variadic save areas and the even-register rounding of a
   `bits<128>` argument apply under both ABI profiles without a table fact;
   EvoMIR Sections 6.1 and 6.5 state the resulting Darwin limits.
 
 ## Revision
+
+**Revision 1.1.0, 2026-10-16.** A terminator's `forwarding` fact can name
+`body.fixed`: it prevents forwarding only when its assembly body has a fixed
+register binding. The body must exist. Generated selectors retain indirect
+dispatch's unconditional exclusion. EvoMIR Section 9.2.1 checks the actual
+SSA transport before allocation.
+
+**Revision 1.0.2, 2026-10-16.** The boundary tests cover named constants from
+the cost, encoding and pattern tables. The older migrated-declaration scan
+recognizes both generated-header forms. The remaining literal-range limit is
+unchanged; no target fact or code-generation rule changes.
 
 **Revision 1.0.1, 2026-10-14.** Corrections that make the text state what
 the code and the tables do; no component, rule or obligation changes. Section

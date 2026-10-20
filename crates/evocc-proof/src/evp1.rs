@@ -349,6 +349,14 @@ fn parse_region(lines: &[&str]) -> Result<(EvpRegion, usize), EvpParseError> {
     let root_value = parse_value(header[3])?;
     let witness_count = usize_from(header[5])?;
     let seed_count = usize_from(header[7])?;
+    // Counts are untrusted. Each item needs at least one input line; reject
+    // impossible manifests before reserving memory or adding the counts.
+    if witness_count
+        .checked_add(seed_count)
+        .is_none_or(|count| count > lines.len().saturating_sub(1))
+    {
+        return Err(EvpParseError::new("manifest count exceeds remaining input"));
+    }
     let mut position = 1;
 
     let mut witnesses = Vec::with_capacity(witness_count);

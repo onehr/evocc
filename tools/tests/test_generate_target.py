@@ -412,6 +412,15 @@ class InstructionDescriptionTest(unittest.TestCase):
         changed = self.mutate_row(b"inst Mov ", lambda row: row.replace(b"flags=false ", b"flags=maybe ", 1))
         self.assert_structural_rejection(changed, "flags")
 
+    def test_fixed_operand_forwarding_requires_an_assembly_body(self):
+        changed = self.mutate_row(b"term B ", lambda row: row.replace(b"forwarding=false", b"forwarding=body.fixed", 1))
+        self.assert_structural_rejection(changed, "forwarding")
+
+    def test_assembly_goto_forwarding_reads_fixed_operands(self):
+        rendered = gen.render_instructions(self.decoded(self.original))
+        body = rendered.split("fn prevents_forwarding(&self) -> bool {", 1)[1]
+        self.assertIn("Self::AsmGoto { body, .. } => body.numbered().iter().any(|operand| operand.fixed_register.is_some())", body)
+
     def test_dce_fact_mutation_changes_the_generated_consumer(self):
         # A syntactically valid changed fact is not hidden by a handwritten
         # duplicate. Rust's frozen conformance vectors reject its old meaning.

@@ -40,6 +40,9 @@ impl Work {
             "overflow.c",
             "pack.c",
             "unistd.c",
+            "extra-strings.c",
+            "checked-print.c",
+            "cache-flush.c",
         ] {
             std::fs::copy(fixture(name), path.join(name)).unwrap();
         }
@@ -280,6 +283,36 @@ fn argument_packs_are_substituted_at_each_call() {
     );
 }
 
+#[test]
+fn additional_checked_builtins_are_advertised_and_cache_flush_is_a_real_call() {
+    for name in [
+        "__builtin___memccpy_chk",
+        "__builtin___strlcpy_chk",
+        "__builtin___strlcat_chk",
+        "__builtin___printf_chk",
+        "__builtin___vprintf_chk",
+        "__builtin___fprintf_chk",
+        "__builtin___vfprintf_chk",
+        "__builtin___clear_cache",
+    ] {
+        succeeded(&run_stdin(
+            &["-x", "c", "-fsyntax-only"],
+            &format!("_Static_assert(__has_builtin({name}), \"{name}\");"),
+        ));
+    }
+    for (target, callee) in [
+        ("aarch64-apple-darwin", "___clear_cache"),
+        ("aarch64-unknown-linux-gnu", "__clear_cache"),
+    ] {
+        let output = run_stdin(
+            &["--emit=asm", &format!("--target={target}")],
+            "void flush(void *a, void *b) { __builtin___clear_cache(a, b); }",
+        );
+        succeeded(&output);
+        assert_eq!(calls(&String::from_utf8(output.stdout).unwrap()), [callee]);
+    }
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn argument_packs_run_natively() {
@@ -353,6 +386,59 @@ fn fortified_calls_with_the_host_sdk_match_apple_clang() {
     }
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn additional_string_checks_and_cache_flush_match_apple_clang() {
+    let work = Work::new(&std::env::temp_dir(), "extra-host");
+    for program in ["extra-strings", "cache-flush"] {
+        succeeded(
+            &Command::new("clang")
+                .current_dir(&work.0)
+                .args([
+                    "-O2",
+                    &format!("{program}.c"),
+                    "-o",
+                    &format!("{program}-clang"),
+                ])
+                .output()
+                .unwrap(),
+        );
+    }
+    for level in ["-O0", "-O2"] {
+        for program in ["extra-strings", "cache-flush"] {
+            succeeded(&work.evocc(&[level, &format!("{program}.c"), "-o", program]));
+        }
+        for operation in ["0", "1", "2"] {
+            for length in ["0", "1", "3", "8", "9"] {
+                let run = |program: &str| {
+                    Command::new(work.file(program))
+                        .args([length, operation])
+                        .output()
+                        .unwrap()
+                };
+                let expected = run("extra-strings-clang");
+                let actual = run("extra-strings");
+                assert_eq!(
+                    shell_status(&actual),
+                    shell_status(&expected),
+                    "{level} {operation} {length}: {}",
+                    String::from_utf8_lossy(&actual.stderr)
+                );
+                assert_eq!(
+                    actual.stdout, expected.stdout,
+                    "{level} {operation} {length}"
+                );
+                assert_eq!(actual.status.success(), length != "9");
+            }
+        }
+        for program in ["cache-flush", "cache-flush-clang"] {
+            let output = Command::new(work.file(program)).output().unwrap();
+            succeeded(&output);
+            assert_eq!(output.stdout, b"returned=17\nreturned=18\n");
+        }
+    }
+}
+
 /// Compile with EvoCC for Linux, then assemble, link and run both the EvoCC
 /// output and the gcc-14 build of the same source in the sealed image.
 #[test]
@@ -364,7 +450,13 @@ fn linux_fortified_programs_match_gcc_14() {
     let sysroot = root().join("sysroot/aarch64-unknown-linux-gnu");
     let sysroot = format!("--sysroot={}", sysroot.display());
     for level in ["2", "3"] {
-        for program in ["calls", "overflow", "unistd"] {
+        for program in [
+            "calls",
+            "overflow",
+            "unistd",
+            "checked-print",
+            "cache-flush",
+        ] {
             let output = work.evocc(&[
                 "-S",
                 "-O2",
@@ -381,14 +473,25 @@ fn linux_fortified_programs_match_gcc_14() {
     let script = r#"set -eu
 cd /work
 for level in 2 3; do
-  for program in calls overflow unistd; do
+  for program in calls overflow unistd checked-print cache-flush; do
     gcc-14 -O2 -D_FORTIFY_SOURCE=$level $program.c -o $program-gcc-$level
     gcc-14 $program-evocc-$level.s -o $program-evocc-$level
   done
-  for program in calls unistd; do
+  for program in calls unistd checked-print cache-flush; do
     ./$program-gcc-$level > gcc.out
     ./$program-evocc-$level > evocc.out
     cmp gcc.out evocc.out
+  done
+  for operation in p f v s; do
+    set +e
+    ./checked-print-gcc-$level $operation > gcc.out 2> gcc.err; gcc=$?
+    ./checked-print-evocc-$level $operation > evocc.out 2> evocc.err; evocc=$?
+    set -e
+    test "$gcc" = 134
+    test "$evocc" = "$gcc"
+    cmp gcc.out evocc.out
+    cmp gcc.err evocc.err
+    echo "level $level [writable-format $operation] status $evocc: $(cat evocc.err)"
   done
   set +e
   ./unistd-gcc-$level much-too-long read > gcc.out 2> gcc.err; gcc=$?

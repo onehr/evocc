@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
-Updated **2026-10-07**, initially audited against `a83d803`; current clauses are
-EvoIR **2.0.0** and EvoMIR **1.0.1** (pinned in `spec/`). This is the Git-tracked execution backlog,
+Updated **2026-10-18**, initially audited against `a83d803`; current clauses are
+EvoIR **2.6.7** and EvoMIR **1.3.7** (pinned in `spec/`). This is the Git-tracked execution backlog,
 not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -134,11 +134,11 @@ was found in the read-only process check at this planning checkpoint.
 <!-- closure-queues:start -->
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
-| KERNEL | K01, K02, K03, K04, K07, K10, K11, K11f, K12, N08, N09, N10, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L08, L09, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
+| APPLICATION | B08, B08b, L03, L04, L05, L05b, L06, L07, L11a, L11b, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22 is separate, not started. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | T03, T03k, T03l, T03m, T03n, T03o, T03p, T03q, T03s, T03t, T03u, T03v, T03x, T03z, D09, D10, D11, D12 | V00-V08 are complete in the frozen scope. T03 preserves the wider semantic/acceptance boundaries; frozen EqSat studies are unchanged. D01-D05 are the code defects of the 2026-10-06 specification review. D10 follows the Darwin target line of T03i. |
-| ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05j, R05k, R05l | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| AUDIT |  | D01-D14 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -1116,6 +1116,13 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   B](docs/archive/notebook/agent-feedback-20261013/protocols.md), 96 sessions
   and about 7 percent of the weekly Kimi quota, waits for the owner's approval;
   it cannot detect effort changes below about 16 percent.
+  October 16 compatibility correction: T03s changes the completion scope in
+  both forms to name unchecked pointer relations. Historical feedback fixtures
+  and their byte counts remain unchanged. Current records are no longer
+  byte-identical to those completions; the regression permits only this exact
+  scope correction and scratch paths. Historical replays need their recorded
+  compiler. This correction does not authorize a new experiment or change a
+  frozen protocol.
 
 - [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`, P1.
   All 24 items qualify: six each of E3001/E3010/E3011 and two each of
@@ -1305,10 +1312,12 @@ reliable reductions and the numerical decisions have an accepted contract.
 
 Immediate boundaries that affect the schedule:
 
-- **K02/K03:** the current pair times out at 7/10 reference versus 3/10 subject;
-  the retained smaller trace has 87 matching fault-handler entries and zero
-  dropped events, but cost is distributed. Inspect that trace and emitted hot
-  functions before another speculative peephole or 7,008-object rebuild. Keep
+- **K02/K03:** October 19's latest original demand-paging and memslot-stress
+  pairs each complete 10/10 modes on GCC and 7/10 on EvoCC. Both EvoCC runs
+  time out. The fixed 256 MiB diagnostic has identical page-fault counts per
+  pair and zero dropped records. EvoCC executes 2.61 times the total
+  instructions and 2.79/2.80 times the kernel instructions. Inspect the
+  retained hot functions before another speculative peephole or rebuild. Keep
   the 1 GiB / ten-mode / 120-second original gate; do not replace it with a
   quiet-host guess or the passing reduced workload.
 - **B08b:** warning requests already survive both adapters. Current faithful
@@ -1519,6 +1528,19 @@ KUnit, and it closes none of those separate tasks.
   time-scaled waiting that the slowdown amplifies. The
   [reductions](tests/fixtures/kernel-codegen-reductions/) isolate the causes;
   N08 to N11 hold the repairs. Replay the unchanged original after them.
+  October 19's [direct-build replay](tests/contracts/kernel-direct-virt-receipt.json)
+  includes the current N08-N11 changes in all 2,799 target C objects, rebuilt
+  with one retained compiler snapshot. Both boot lanes and all 125 paired
+  selected subtests pass. The original 120-second demand-paging run completes
+  10/10 modes on GCC but only 7/10 on EvoCC, then times out. K02 stays open;
+  the fixed-work instruction profile is diagnostic, not a replacement exit.
+  The unchanged 256 MiB diagnostic completes on both kernels: each has
+  65,682 `__handle_mm_fault` entries. EvoCC/GCC execute 1,754,085,900 /
+  672,400,059 total instructions (2.61x), including 1,683,998,173 /
+  602,619,606 kernel instructions (2.79x). Long transport runs account for
+  6.09% / 1.96% of kernel instructions. Dropped and irregular records are zero.
+  This is an integrated checkpoint, not causal attribution to one repair or
+  native timing; the diagnostic's 1,200-second budget is not the original exit.
 
   - [x] **K02a — Remove redundant negated-truth materialization**, 2026-09-23.
     [Minimal C case](tests/fixtures/negated-truth-branch.c) went RED → GREEN;
@@ -1658,6 +1680,18 @@ KUnit, and it closes none of those separate tasks.
   MiB of work EvoCC executes 5.43 times GCC's instructions, with K02's ranking.
   Memslot code is under 1 percent of the excess, so K03 shares K02's fault,
   allocate and unmap cause. It stays open until the unchanged original passes.
+  October 19's [direct-build replay](tests/contracts/kernel-direct-virt-receipt.json)
+  completes 10/10 original modes on GCC and 7/10 on EvoCC before the unchanged
+  120-second limit. Both kernels shut down normally. This replaces the earlier
+  6/10 versus 3/10 checkpoint, whose logs remain retained; it does not establish
+  a native speedup. K03 stays open.
+  The unchanged 256 MiB diagnostic completes on both kernels: each has
+  65,679 `__handle_mm_fault` entries. EvoCC/GCC execute 1,761,065,434 /
+  674,646,195 total instructions (2.61x), including 1,690,958,878 /
+  604,819,730 kernel instructions (2.80x). Long transport runs account for
+  6.07% / 1.96% of kernel instructions. Dropped and irregular records are zero.
+  Snapshot 7 covers VM creation through destruction. This remains a diagnostic,
+  with full translated blocks charged at entry and concurrent waits included.
 
   - [x] **K03a — Substitute bounded private leaf helpers**, 2026-09-23.
     The [small C case](tests/fixtures/private-leaf-substitution.c) goes RED → GREEN
@@ -1796,9 +1830,9 @@ KUnit, and it closes none of those separate tasks.
   not K13/K14 or untested IOMMU hardware.
   [Identities and scope](tests/fixtures/iopf-enabled-reference.out), [run ledger][kernel].
 
-- [ ] **K07 — Define and implement nonliteral strlen ICE admission** — `OPEN`, P1.
-  Filtered FORTIFY is 25/26 PASS with two assertions left; current §10.1.18 grants
-  ICE only to literal operands. Use the existing [19-line fixture][strlen] and
+- [x] **K07 — Define and implement nonliteral strlen ICE admission** — `DONE`, P1, 2026-10-16.
+  Historical filtered FORTIFY was 25/26 PASS with two assertions left; the
+  former contract granted ICE only to literal operands. Use the existing [19-line fixture][strlen] and
   [oracle record][strlen-out] to define a bounded static-constant-object rule,
   preserving ordinary-call effects and negative controls. Close with reviewed
   wording, shared classification tests and the unchanged 26-case kernel suite;
@@ -1810,6 +1844,22 @@ KUnit, and it closes none of those separate tasks.
   block-scope objects stay ordinary calls.
   [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/k07-nonliteral-strlen-ice.md).
+  EvoIR 2.6.4 Section 10.1.17 now states the approved rule. Sparse byte facts
+  keep large arrays bounded; subobject limits, pointer stride, effects and
+  late weak/alias/assembly bindings have negative tests. The unchanged source
+  in a new minimal paired kernel configuration passes **26/26 on GCC and
+  26/26 on EvoCC**, with only the FORTIFY test unit replaced. Its first 25/26
+  replay exposed a separate single-trip macro byte-fact loss; that failure
+  and Image remain retained. [Replay](tests/fixtures/fortify-static-string-replay.out).
+  Full offline workspace: **448 suites, 3,408 PASS / 0 FAIL / 8 ignored**,
+  Clippy and formatting pass. The new ignored Linux test was explicitly run:
+  36 native results pass, as do 36 Darwin results and 144 interpreter runs.
+  Lean's six-step gate passes; 75 document/contract tests pass. Captures:
+  `.evidence/correctness-20261015/strlen-*-final.log` and
+  `.evidence/fortify-constant-20261016/`. No new Lean semantic coverage, full
+  kernel composition, K13/K14 or complete kselftest claim. Scoped frontend
+  cache plus these captures grew by 258,544 KiB; the reused tiny tree's net
+  change was not measured. About 39 GiB is free. No new tree or VM disk.
 
 - [x] **K08 — Disposition the seven shared EL1 breakpoint failures** — `DONE`, P1, 2026-09-23.
   All seven cases are mapped to their first task-bound kernel-address allocation.
@@ -1959,6 +2009,11 @@ KUnit, and it closes none of those separate tasks.
     builds it as one 1,329,200-byte function that runs about 1,700 instructions
     per page-table slot. It stays open until N08 to N11 land and the final pair
     passes.
+    October 19's current 2,799-object pair again completes the unchanged
+    45-second original with 7 PASS / 1 SKIP on both kernels. The shared skip
+    is a coverage gap, not a reference failure or an EvoCC regression. The
+    comparison now records it separately; a new subject-only skip still
+    fails. This does not close the historical timeout or full-campaign exit.
 
   - [x] **K11g — Attribute delayed dying-memcg release** — `DONE`, P1, 2026-09-26.
     The [small frozen-workload control](tests/fixtures/cgroup-stock-displacement.c)
@@ -2955,7 +3010,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l07-integer-complex-division.md).
 
-- [ ] **L08 — Pointer-to-VLA typeof operand evaluation** — `OPEN`, P2.
+- [x] **L08 — Pointer-to-VLA typeof operand evaluation** — `DONE`, P2, 2026-10-16.
   Oracles disagree on a side-effect counter (GCC 0, Clang 1); agreed array forms,
   bound capture and allocation/lifetime cases already work. Decide expression
   categories and evaluation/capture rules, then close with scope, side-effect and
@@ -2966,8 +3021,17 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   modified (C23 6.7.3.6p4; GCC 15 fixes GCC 14's skip, bug c/114831).
   [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l08-pointer-vla-typeof.md).
+  Implemented VM operand evaluation, capture placement and compatible VLA
+  pointer subtraction. Captures execute at definition entry for parameters,
+  not in prototypes or unevaluated type queries. Preserve scope, stride,
+  provenance and lifetime checks. The combined L08/L09 replay passes 46 native
+  executions per target and 104 interpreter runs, including ten pinned original
+  source files at O0/O2. The final offline workspace gate passes 3,436 tests,
+  zero failures and eight retained ignores, plus Clippy and formatting; all
+  six Lean steps pass. Exact-context interpreter refusals and timeouts remain
+  separate, not passes. [Record](tests/fixtures/variable-type-activation-semantics.out).
 
-- [ ] **L09 — Nonzero-depth return-address support boundary** — `OPEN`, P2.
+- [x] **L09 — Nonzero-depth return-address support boundary** — `DONE`, P2, 2026-10-16.
   GCC returns zero while Clang reads an ancestor LR in the retained probe.
   Define target frame/PAC/optimization assumptions and distinguish reached-only
   unsupported execution from UB. Close with native and interpreter boundary
@@ -2978,6 +3042,12 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   from 1 to 65535 give a null pointer on both targets and in both interpreters,
   as GCC does. [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l09-ancestor-return-address.md).
+  Both builtins now implement that source rule after unsigned-int conversion.
+  Depth zero keeps its existing meaning; invalid depths report E2913. The
+  result is neither an ICE nor a C null pointer constant. The raw EvoIR frame
+  walk is unchanged. Boundary tests and unchanged originals pass in both
+  interpreters and on both native targets; the combined gate and bounded
+  scope are recorded under L08. This is not arbitrary ancestor-frame access.
 
 - [x] **L10 — LLVM pr23135 source-definedness decision** — `DONE`, P1, 2026-10-13.
   GCC UBSan reports vector signed overflow while Clang instrumentation is silent.
@@ -3097,13 +3167,22 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   [Adapter record](tests/fixtures/kernel-kunit-adapter.out),
   [current usage](book/src/evaluate.md#the-ladder).
 
-- [ ] **T03 — Spec/implementation/acceptance consistency audit** — `OPEN`, P1.
+- [x] **T03 — Spec/implementation/acceptance consistency audit** — `DONE`, P1, 2026-10-16.
   Map current clauses to positive/negative tests and original evidence. Start with
   stale EvoMIR E4006/E4008 diagnostic text versus implemented indirect branches
   and pointer differences; distinguish errata from new authority. Include operand
   traversal, effects, metadata mutation and independent proof reconstruction.
   Close discrepancies or assign specific child tasks, not a blanket “spec done”.
   [EvoIR](spec/evoir.md), [EvoMIR](spec/evomir.md).
+  Closed within the recorded audit: T03a through T03z have their stated
+  repairs, tests or explicit scope corrections. The final offline workspace
+  gate passes 447 suites: 3,400 passed, zero failed and seven existing ignores;
+  Clippy and formatting pass. The Lean gate passes all six steps, including
+  the audit of 62 rule theorems and 36 analysis rows, with a receipt bound to
+  EvoIR 2.6.3. Logs are `.evidence/correctness-20261015/remaining-audit-workspace.log`
+  and `remaining-audit-lean.log`. The prior failed UI snapshot run is retained.
+  These are working-tree gates, not a clean release, full kernel replay or
+  proof of the compiler outside its named verification profiles.
 
   - [x] **T03a — Synchronize retired diagnostic boundaries**.
     Errata align E3033/E4003 with Appendix D's approved hosted 128-bit division,
@@ -3183,6 +3262,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   The commit adds that line, and the suite then passes alone. Clippy and
   formatting pass. Evidence: `.evidence/rust-batch2-20261013/`.
 
+  October 15 closure: the final full offline workspace gate passes 444 suites,
+  with 3,366 passed, zero failed and seven existing ignores, followed by
+  Clippy and formatting. `tools/gate-lean.sh` passes and binds EvoIR 2.6.0.
+  Logs: `.evidence/correctness-20261015/workspace-closure.log` and
+  `lean-accepted.log` in that directory. Failed intermediate runs remain there.
+  This accepts the repaired entries below, not the open allocation-verifier,
+  kernel, application or release work. The tree includes another team's
+  changes; this is not a clean-release receipt.
+
   - [x] **T03g — Save the callee-saved registers that `asm` clobbers** — `DONE`, P1, 2026-10-14.
     (A01; the `asm` rule of A13). Probe P1 shows a host caller that loses `x19`.
     Next action: add P1 as a native regression for both targets. Then add the
@@ -3234,8 +3322,9 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     `%Lf` through the macOS C library, and calls in both directions, agree with
     Apple clang (`crates/evocc/tests/darwin_long_double.rs`). Darwin EvoIR text
     starts with the line `target aarch64-apple-darwin`. The Linux reader refuses
-    that text, and the driver refuses `-Oeq-scalar` and the EqSat options for
-    Darwin; D10 tracks the checker. EvoIR 2.4.0 sections 9.1, 9.3 and 10.5 state
+    that text, and the driver initially refused `-Oeq-scalar` and the EqSat
+    options for Darwin. D10 closes that separate checker gap on October 15.
+    EvoIR 2.4.0 sections 9.1, 9.3 and 10.5 state
     the rules. Without `--target`, `--emit=evoir` and the interpreters still use
     the Linux layout, as the guide states.
 
@@ -3249,14 +3338,21 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     (`crates/evocc-parser/tests/fail_closed_reads_and_ranges.rs`). General
     atomics stay with L11a.
 
-  - [ ] **T03k — Keep the division rule of a zero-size pointer difference** — `OPEN`, P2.
+  - [x] **T03k — Keep the division rule of a zero-size pointer difference** — `DONE`, P2, 2026-10-15.
     (A08). Exit: for P9, EvoIR has `divisor_nonzero` and
     `ub.assume.division_by_zero` before the `sdiv`, or the front end refuses
     with a stated code. The checked native build traps with `brk #3002`.
     `--interpret-c-hir` reports a diagnostic instead of a panic. A lowering test
     covers `struct e {}` and `int (*)[0]`.
+    Closed: the C-HIR interpreter reports E3002 before dividing by the zero
+    element size, and lowering emits the same obligation before `sdiv`.
+    `zero_sized_pointer_difference.rs` checks both forms, including the native
+    SIGTRAP and `brk #3002`; the 37 lowering address tests pass. The full
+    offline workspace gate passes: 440 suites, 3,341 passed, zero failed,
+    seven existing ignores, Clippy and formatting. No pointer-provenance
+    claim follows; T03s stays open.
 
-  - [ ] **T03l — Closed checker statuses and the certificate rule matrix** — `OPEN`, P2.
+  - [x] **T03l — Closed checker statuses and the certificate rule matrix** — `DONE`, P2, 2026-10-15.
     (A09, A28). Exit: a new test in `crates/evocc-proofcheck/tests` submits six
     hostile certificates: an out-of-range `class:` reference, extraction class
     and root class; a witness count and a seed count of `2^64 - 1`; and a
@@ -3264,8 +3360,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     rehashed mutant for each status-2 and status-3 rule of §11.3 exits with its
     stated status. An `after.evo` that fails validation gives the status that
     §9.5 and §11.4 both state.
+    Closed: `hostile_certificate.rs` covers these cases and the rehashed
+    rejection matrix. Counts are bounded before allocation; class references
+    are checked before lookup. Requested roots retain independently derived
+    full closures and module order, with an iterative traversal. A zero-region
+    certificate needs no region search. Typed parse errors distinguish malformed
+    bytes (2) from readable invalid modules (3). The 50,000-instruction tests
+    complete without a panic or timeout. Full workspace and Lean gates pass.
 
-  - [ ] **T03m — Enforce the checks that the specs name** — `OPEN`, P2.
+  - [x] **T03m — Enforce the checks that the specs name** — `DONE`, P2, 2026-10-16.
     (A25, A32, A47). Exit: a Cargo test reads the normal-dependency closure. It
     fails when `evocc-eqopt` or `evocc-egraph` enters the closure of
     `evocc-proofcheck`, or `evocc-egraph` enters that of `evocc-evoir`.
@@ -3274,8 +3377,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     tools.tests.test_generate_target` and `tools/generate-target.py --check`, or
     each sentence that claims this enforcement is removed. `registry_digests.rs`
     covers all five registries.
+    Closed: `normal_dependencies.rs` checks Cargo's all-target, all-feature
+    normal dependency graph, with negative controls. Dev-only replay producers
+    do not enter that graph. Both registry tests cover all five digests and
+    keep the guard registry independent of the P0 successor chain. The spec
+    now states which grammar/Python checks are manual; no CI change is claimed.
+    The 54 grammar cases and 72 Python checks pass in addition to the shared
+    full workspace gate above.
 
-  - [ ] **T03n — Proof-required publication and admission** — `OPEN`, P1.
+  - [x] **T03n — Proof-required publication and admission** — `DONE`, P1, 2026-10-15.
     (A10, A11, A35, the compiler digest of A36). Exit: a
     `crates/evocc/tests/proof_required.rs` test with a checker that blocks
     `record.json` asserts exit 4, no `output.s` and no `record.json`. `-S -o`
@@ -3283,25 +3393,58 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     states. A driver test asserts the stated exit for `-fwrapv`,
     `-frounding-math`, `-fstack-protector-strong` and a zero-initialized object.
     The record holds a 64-hex compiler digest, or the run exits 4.
+    Closed: failure to publish the record removes both reserved output files;
+    compiler-read failure cannot produce an empty digest. The cc actions and
+    non-baseline options are refused before publication. All 21 proof-required
+    tests pass, including actual Lean replay and the blocked-record case.
+    Verification 1.1.2 states these exits. The full offline workspace gate
+    (3,341/0/7, Clippy, formatting) and `tools/gate-lean.sh` pass. The overall
+    worktree contains another team's edits; this is not a clean-release claim.
 
-  - [ ] **T03o — Report EvoMIR refusals where §10 says** — `OPEN`, P2.
+  - [x] **T03o — Report EvoMIR refusals where §10 says** — `DONE`, P2, 2026-10-15.
     (A12, A39). Exit: the driver reports P10 at the refused function with its
     block, index and Section 10 name. A Darwin function with a section, TLS or a
     patchable entry gives E4009. UI snapshots pin both. The owner of the n03a
     receipts updates them.
+    Closed: the native pipeline keeps complete `Refusal` records. The driver
+    resolves function names, including assembler labels, to source definitions
+    and preserves block/index details. `backend_refusals.rs` and UI snapshots
+    cover source/header locations and E4009 profile refusals. The current ABI
+    snapshot updates five refusal rows; every assembly hash stays unchanged.
+    Dated N03a receipts remain historical, not rewritten measurements. The full
+    offline workspace gate passes.
 
-  - [ ] **T03p — Make the allocation verifier match §9.2** — `OPEN`, P2.
+  - [x] **T03p — Make the allocation verifier match §9.2** — `DONE`, P2, 2026-10-16.
     (A13, A45). Exit: in
     `crates/evocc-mir/tests/section7_allocation_verifier.rs`, these forged
     allocations each get E4020: swapped entry parameters, a reload from the
     wrong slot, two live slots merged, an early-clobber violation, and a
     symbolic operand outside `i`.
+    Closed: retain the original allocator input and bind it to the caller's
+    program. Independently relate entry arguments, physical registers and
+    private spill slots through copies, calls and CFG bridges to a fixed point.
+    Narrow transports preserve only their known low bits. Simultaneous results
+    must have separate physical destinations: a pair-load mutation exposed and
+    closed a false-equality path. All 17 allocation tests pass, including the
+    requested forgeries, changed operations, frame extents and replacement of
+    both compared programs. EvoMIR 1.2.4 states the ordinary Rust check and its
+    target-table trust boundary; the Lean profile is unchanged. Full offline
+    workspace: 445 suites, 3,376 passed, 0 failed, 7 existing ignores, Clippy and
+    formatting pass. Log: `.evidence/correctness-20261015/allocation-workspace-pair-fixed.log`.
 
-  - [ ] **T03q — Make EvoMIR validation a gate** — `OPEN`, P2.
+  - [x] **T03q — Make EvoMIR validation a gate** — `DONE`, P2, 2026-10-15.
     (A14, A37, A38). Exit: `validate_module` refuses `tst.x %v0, #5` and `tst.x
     %v0, #0`. The native entry refuses lowered EvoMIR that fails validation.
     EvoMIR tests cover an invalid indirect target (E3048 in the EvoMIR
     interpreter) and empty or unsorted indirect successors.
+    Closed: native compilation validates the complete lowered module before
+    allocation. The gate exposed non-SSA asm ties, missing asm.goto result
+    definitions in validation/text, and a false flags-clobber rejection.
+    Outputs now have fresh SSA identities; tied copies occur after SSA
+    destruction, and asm.goto output definitions round-trip with their edges.
+    All 16 verifier, 56 source asm and 13 machine asm tests pass. The full
+    offline workspace gate passes (3,341/0/7, Clippy, formatting). This does
+    not close the allocation-checker obligations of T03p.
 
   - [x] **T03r — Refuse ABI-changing options on the cc path** — `DONE`, P2, 2026-10-14.
     (A15). Exit: `evocc -S -fpack-struct` and `evocc -S -mabi=ilp32` exit 1 with
@@ -3312,13 +3455,23 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     at the option, also under `-w` (`crates/evocc/tests/cc_abi_options.rs`).
     EvoMIR 1.2.0 section 6.14 lists them.
 
-  - [ ] **T03s — State and test the clean-check scope for pointer relations** — `OPEN`, P2.
+  - [x] **T03s — State and test the clean-check scope for pointer relations** — `DONE`, P2, 2026-10-16.
     (A16). Exit: `--check` reports `&x[3]-&y`, `&a<&b` and a non-exact
     difference as the spec states, or the clean-check text and EvoIR §10.1.3
     name these unchecked cases. The C-HIR code equals the code that the spec
     names. A negative test pins each case.
+    Closed by the documented-scope alternative, not new pointer checks. All
+    three original examples complete under EvoIR execution and refuse with
+    E3007 under C-HIR execution. `pointer_relation_scope.rs` pins both paths
+    and defined same-object controls. The completion text and EvoIR 2.6.1
+    explicitly exclude pointer subtraction and ordering obligations. Diagnostic
+    snapshots and the book match. Historical agent feedback stays unchanged;
+    the current comparison permits only the named completion-scope correction.
+    Full offline workspace passes (3,376/0/7, Clippy, formatting); the Lean gate
+    passes with a receipt bound to EvoIR 2.6.1. This is not native memory safety
+    or a clean-release claim for the shared dirty worktree.
 
-  - [ ] **T03t — Front-end refusals that EvoIR §10.1 and §10.5 name** — `OPEN`, P2.
+  - [x] **T03t — Front-end refusals that EvoIR §10.1 and §10.5 name** — `DONE`, P2, 2026-10-16.
     (A17, A18, A40). Exit: parser or driver tests show: a `const` pointee gives
     E2913 at the third operand; `__has_builtin` is 1 for `__builtin_memset`,
     `__builtin_clz`, `__builtin_trap` and `__builtin_offsetof`; the `static int
@@ -3327,8 +3480,13 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     code is withdrawn; `pack` inside a record gives E0107; a cast between record
     tags gets a dedicated code; the E2203 and E2923 precedence is stated and
     tested.
+    Closed: `front_end_refusals.rs` tests all named cases on Darwin and Linux.
+    E2953 identifies incompatible struct casts; noninteger bounds get E2923
+    before the storage/VLA E2203 check. The unknown-member UI snapshots now
+    name E2906 and the member span, not the old lowering-time E2102. All eight
+    matrix tests and the 12 check-product tests pass in the full gate above.
 
-  - [ ] **T03u — Make the EvoIR validator match its rules** — `OPEN`, P2.
+  - [x] **T03u — Make the EvoIR validator match its rules** — `DONE`, P2, 2026-10-15.
     (A19 to A22, A41). Exit: `validate_module` or `parse_section9_module`
     rejects each of: the P14 module; `const.bits<8> 256`; `global_addr` with
     `ptr<stack>`; `lifetime.end` of a global; a pointer load with a `[size=4]`
@@ -3337,12 +3495,26 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     interfaces with `asm`, strict FP and `asm.goto`. Each negative test lives in
     `crates/evocc-evoir/tests`. `InvalidLifetimeEnd` reports E3018, and the two
     unit tests assert it. The E3062 tests assert the code.
+    Closed: ten `module_validation.rs` tests cover the rejected forms and legal
+    controls, including packed pointer access and nested function pointers.
+    Static lifetime rejection follows known local definitions; unknown origins
+    retain the runtime check. The lifetime and atomic tests pin E3018/E3062.
+    Full testing exposed negative enum constants that bypassed width masking;
+    lowering now uses the shared constant builder. Negative, packed and wide
+    enum regressions pass. Full workspace and Lean gates pass; this does not
+    establish native pointer safety or close T03s.
 
-  - [ ] **T03v — Key persistent e-nodes by result sort** — `OPEN`, P2.
+  - [x] **T03v — Key persistent e-nodes by result sort** — `DONE`, P2, 2026-10-15.
     (A23). Exit: a test ingests `zext.bits<32> %x` and `zext.bits<64> %x` and
     asserts two classes. Pointer, `mem` and `world` values stay outside the
     persistent P0 classes. `day8_persistent_state_contract` and `verified_chain`
     stay green.
+    Closed: persistent operators use the operator and result width as their
+    key; ingestion and emitted replacements use that same key. Only scalar
+    `bits<1..64>` values enter the persistent state. `persistent_sorts.rs`
+    covers distinct extension widths, equal sorts and excluded value kinds.
+    The 27 focused persistent/chain tests and full offline workspace gate
+    pass (3,341/0/7, Clippy, formatting).
 
   - [x] **T03w — EvoIR errata for §4.4, §6.4, §6.5, §7.2, §8, §10.2, §10.3 and §11** — `DONE`, P2, 2026-10-14.
     (A26, A27, the text of A29, A30, A31, A42, A47, A51). Exit: one revision
@@ -3363,7 +3535,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     The exit `rg` pattern finds nothing. [Errata
     note](docs/archive/notebook/spec-errata-20261014.md).
 
-  - [ ] **T03x — EvoMIR and `target.md` errata** — `OPEN`, P2.
+  - [x] **T03x — EvoMIR and `target.md` errata** — `DONE`, P2, 2026-10-15.
     (A34, A48, A50, the text of A44 and A46). Exit: revisions with updated pins.
     The §5.1 guard rows say that native code relies on the C rule and checks no
     memory fault. `randomized_semantic_gate.rs` accepts only active Section 10
@@ -3372,8 +3544,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     on the C rule for `ptr.offset` and the guards and checks no memory fault,
     states one GOT rule, keeps `spill.*` and `arg.*` out of the interpreter, and
     says that a refusal leaves the whole translation unit without assembly;
-    target 1.0.1 gives the real version lines. Open: the randomized gate still
-    accepts withdrawn codes, and `evocc-eqopt` still reuses E4001 and E4002.
+    target 1.0.1 gives the real version lines. October 15 closes the code part:
+    the randomized gate accepts only active Section 10 codes, and the EqSat
+    bridge uses `EQ_EFFECT_EXCLUDED` and `EQ_OPERATOR_EXCLUDED`, not E4001/E4002.
+    EvoMIR 1.2.3 records the change; specification pins, the seven bridge tests
+    and the full offline workspace gate pass.
 
   - [x] **T03y — `verification.md`, receipt binding and `spec/README.md`** — `DONE`, P2, 2026-10-14.
     (A33, A46, A49, A52). Exit: a check (in `tools/render-status.py --check` or
@@ -3388,7 +3563,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     the pin (`tools/tests/test_render_status_binding.py`). `tools/gate-lean.sh`
     then refreshed the receipt for EvoIR 2.5.0.
 
-  - [ ] **T03z — Missing negative-test matrices** — `OPEN`, P2.
+  - [x] **T03z — Missing negative-test matrices** — `DONE`, P2, 2026-10-16.
     (A29, A36, A43, A44, A45). Exit: these tests exist and pass. Seven refusal
     fixtures in `lean/EvoIR/Rewrite/Tests.lean`. Table-driven failure cases in
     `crates/evocc/tests/proof_required.rs`. `evoir-sem --list-stages` equals
@@ -3405,6 +3580,15 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     code. `evoir-sem --list-stages` prints five rows; the Rust comparison with
     `STAGES` is open. The full Lean gate waits for free disk space.
     [Note](docs/archive/notebook/lean-rewrite-refusals-20261014.md).
+    Closed: the Rust driver compares its private stage table with the compiled
+    Lean checker's five stage rows. Seven malformed/failing checker responses
+    cannot publish output. A test-only fixture enumerates all 59 instruction
+    variants and checks each use/result field through the independent checker
+    remap, checker mutable traversal and producer renumbering. Both arms of
+    conditional, indirect and asm-goto edges have poison controls. Tuple E4004,
+    nonliteral alias-truth retention and duplicate generated cost/encoding/
+    pattern owners are tested. The full workspace and Lean gates above pass;
+    the boundary scan does not claim to find unnamed literal constants.
 
 - [ ] **T04 — Bind final kernel claims to the actual final composition** — `OPEN`, P1.
   The September 26 common bench uses release `e8bddc0a…` for the reviewed
@@ -4145,16 +4329,26 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     Closed on 2026-10-14. book/src/install.md documents the quarantine attribute
     of a browser download, says that the programs are not notarized, and gives
     the `xattr` commands that clear it.
-  - [ ] **R05j — Print versions from every binary** — `OPEN`, P3.
+  - [x] **R05j — Print versions from every binary** — `DONE`, P3, 2026-10-19.
     Exit: `evocc-checker --version` and `evoir-sem --version` print the
     release version.
+    Both commands now print their binary name and `0.1.0`, exit zero and
+    leave stderr empty. Two process tests run them from an empty directory;
+    the Lean identity must match Cargo's workspace version. All 14 CLI tests,
+    the 3,475-test full-workspace gate (zero failures, eight existing ignores),
+    Clippy, formatting and all six Lean steps pass. This is working-tree
+    acceptance, not clean-tree release or Linux-archive acceptance.
   - [ ] **R05k — Date, tag and publish 0.1.0** — `OPEN`, P1.
     The owner tags and pushes. Exit: CHANGELOG dates 0.1.0, tag `v0.1.0`
     exists, one merged `SHA256SUMS` is published, and the README download
     URLs resolve.
-  - [ ] **R05l — Name the proof profile in the README** — `OPEN`, P2.
+  - [x] **R05l — Name the proof profile in the README** — `DONE`, P2, 2026-10-15.
     Exit: the README names `core-v1` where it states what the proofs cover,
     as the owner decides.
+    Closed: the introduction, highlight, proof example, architecture and limits
+    name `core-v1`. The text names the Linux target and typed Core to assembly
+    text boundary; it does not claim proofs of parsing, assembly, linking or
+    every accepted C program. The normative verification contract is linked.
 
 - [x] **R06 — Pinned Doom integration** — `DONE`, 2026-09-28, bounded headless profile.
   doomgeneric `dcb7a8db...` plus Freedoom 0.13.0 Phase 1: all 80 engine units
@@ -5036,7 +5230,7 @@ refusal; changing the P13 demo does not close it.
   overflows abort with glibc's message. The full workspace gate passes: 429
   suites, 3,281 passed, 0 failed, 6 ignored. D09 holds the builtins that remain.
 
-- [ ] **D09 — Check the remaining fortified builtins** — `OPEN`, P2.
+- [x] **D09 — Check the remaining fortified builtins** — `DONE`, P2, 2026-10-16.
   D08 leaves out the clang-only `__builtin___memccpy_chk`,
   `__builtin___strlcpy_chk` and `__builtin___strlcat_chk`, so the macOS 26
   SDK leaves those calls unchecked where Apple clang checks them. GCC's
@@ -5045,9 +5239,21 @@ refusal; changing the P13 demo does not close it.
   that GCC drops. Next action: implement them with the D08 rules. Exit: each
   builtin has a crossed test against Apple clang or gcc-14, and
   `__has_builtin` reports it.
+  Closed: the three checked string builtins, four checked printf-family
+  builtins and `__builtin___clear_cache` are admitted; the builtin inventory
+  is 287. Literal strcpy/stpcpy sources discharge only a proven fitting copy.
+  Stream formatting keeps the checked entry and flag. Clear-cache calls the
+  target runtime helper; it is not a no-op. Nine parser tests and ten driver
+  tests pass. The explicit sealed Linux test also passes against GCC 14 at
+  fortify levels 2 and 3, including writable-format rejection and executable
+  cache-flush checks. Darwin compares the checked string cases with Apple
+  clang. Evidence: `fortify-parser-final.log`, `fortify-driver-final.log` and
+  `fortify-linux-final.log` under `.evidence/correctness-20261015/`, plus the
+  full workspace/Lean gates recorded at T03. No arbitrary external-call
+  interpreter model or new Lean domain is claimed.
 
-- [ ] **D10 — Check `-Oeq-scalar` rewrites of Darwin EvoIR text** — `OPEN`, P1.
-  T03i gave Darwin EvoIR text a target line. The driver now refuses
+- [x] **D10 — Check `-Oeq-scalar` rewrites of Darwin EvoIR text** — `DONE`, P1, 2026-10-15.
+  T03i gave Darwin EvoIR text a target line. The driver initially refused
   `-Oeq-scalar`, `--eq-proof-dir` and the EqSat options for
   `aarch64-apple-darwin`, because the rewrite checker reads only the text of the
   implicit Linux target. Darwin is the default target on a macOS host, so the
@@ -5058,8 +5264,17 @@ refusal; changing the P13 demo does not close it.
   that do. Exit: the README example passes on macOS, a test checks a Darwin
   rewrite chain end to end, and the checker refuses a certificate whose text
   names another target.
+  Closed: target identity follows the persistent state, each transaction,
+  identity chains and independent reassembly. All five integer registries
+  replay under both text profiles; mixed-target and rehashed target-switch
+  certificates are refused. No rule, digest or floating-point domain changes.
+  `target_rewrite.rs` and `checker_admission.rs` cover replay and publication.
+  The README example passes natively on Darwin: only `add w0, w0, #0` is
+  removed, and both executables exit 0. EvoIR 2.6.0, the full offline workspace
+  gate (3,366/0/7, Clippy, formatting) and the Lean gate pass. The separate
+  proof-required Core profile remains Linux-only.
 
-- [ ] **D11 — `naked` functions get a frame record** — `OPEN`, P1.
+- [x] **D11 — `naked` functions get a frame record** — `DONE`, P1, 2026-10-15.
   Found on 2026-10-14 by the performance analysis. EvoCC accepts
   `__attribute__((naked))` without a warning and ignores it. The function gets
   `stp x29, x30, [sp, #-16]!` before its `asm` body, so an `asm` `ret` returns
@@ -5073,8 +5288,14 @@ refusal; changing the P13 demo does not close it.
   the ABI and that EvoCC ignores, and refuse each one. Exit: the probe gives the
   GCC 14 code or the refusal on both targets, also under `-w`, and a test pins
   each listed attribute.
+  Closed by E2952, not a partial naked implementation. EvoIR 2.5.1 lists the
+  28 refused execution/ABI attributes. Three driver tests cover their GNU
+  spellings and placements on both targets, also under `-w`. The unchanged
+  representation-access fixture with `optimize` now has an explicit refusal
+  test, not a claimed execution pass. Full offline workspace: 3,341 passed,
+  zero failed, seven existing ignores; Clippy and formatting pass.
 
-- [ ] **D12 — Caller-constant specialization breaks a proof-required entry** — `OPEN`, P2.
+- [x] **D12 — Caller-constant specialization breaks a proof-required entry** — `DONE`, P2, 2026-10-15.
   Found on 2026-10-14 by the performance analysis. Specialization from caller
   constants (`crates/evocc-chir/src/inline.rs:706-814`) makes a proof-required
   entry fail: `g(a,3)+g(a+1,3)` with the entries `g` and `f` exits 3 for `g`,
@@ -5083,6 +5304,53 @@ refusal; changing the P13 demo does not close it.
   unspecialized body for the checked stage or teach the stage the
   specialization. Exit: both cases exit 0 with checked output, or the refusal
   names the specialization.
+  Closed: explicit proof entries keep their full parameter domain and remain
+  live through source lowering, native selection and assembly export. Only
+  the selected entries lose caller-derived constants; ordinary inlining is
+  unchanged. Both 3/3 and 3/4 cases, and an uncalled private entry, pass the
+  actual Lean pipeline. All 21 proof-required tests, the full offline
+  workspace gate (3,341/0/7) and the full Lean gate pass. No new proof subset
+  or checker rule was admitted.
+
+- [x] **D13 — Use the target variadic-list size in both interpreters** — `DONE`, P1, 2026-10-16.
+  The return-signing runtime fixture exposes an E3011 at `va_start` on
+  Darwin at O0 and O2 in both interpreters. Darwin allocates an eight-byte
+  `__builtin_va_list`, but `MemoryState::with_argument_list`, cursor copy and
+  cursor overlap checks assume 32 bytes. The C-HIR `va_copy` path also uses
+  32 bytes. Linux's checks and native executions pass. Minimal original input
+  and exact commands are in `.evidence/return-signing-20261016/minimal-va.c`
+  and `darwin-boundaries.json`; Apple clang executes it with exit zero.
+  Next action: carry the already selected target layout into the opaque
+  cursor representation and use it for start, access, whole copies and
+  overlap rejection. Exit: both interpreters pass the unchanged runtime
+  fixture on both targets, with negative tests for partial copies, ended
+  cursors and adjacent subobjects. This does not reopen D05's native ABI result.
+  October 16: the memory and C-HIR fixes exposed a second cause in EvoIR's
+  program-lifecycle entry, which rebuilt a Linux layout. It now receives the
+  driver's target. The unchanged programs pass on both interpreters and both
+  native targets; 42 memory and 47 driver/ABI tests pass. Combined acceptance
+  passes 3,454 tests, zero failures, eight ignores, Clippy/fmt and all six Lean
+  steps. [Repair record](tests/fixtures/darwin-arguments.out).
+
+- [x] **D14 — Do not fill an unused argument bank for Darwin stack words** — `DONE`, P2, 2026-10-16.
+  A call with nine named integer arguments is refused under
+  `--target=aarch64-apple-darwin -mgeneral-regs-only`: E4002, "a SIMD register
+  class is not admitted under -mgeneral-regs-only". `record_plan` flushes
+  both banks even when every named stack word is a GPR value. The ninth
+  argument needs only the general bank exhausted. A minimal source and
+  exact command are retained in `.evidence/return-signing-20261016/` as
+  `minimal-stack-argument.c` and `darwin-boundaries.json`; both interpreters
+  and Apple clang pass. Next action: exhaust only the banks used by the
+  packed named stack words, and let later anonymous arguments exhaust their
+  own banks as needed. Exit: unchanged integer case passes with no SIMD
+  instruction, crossed mixed/packed/variadic stack cases still pass, and real
+  floating/vector inputs are still refused under the general-only restriction.
+  October 16: stack packing now fills only used banks. Crossed integer,
+  packed and mixed/variadic cases pass at O0/O2, while real floating/vector
+  arguments still refuse general-only mode. The unchanged original runtime
+  also compiles and executes under that restriction on both targets. Combined
+  acceptance passes 3,454 tests, zero failures, eight ignores, Clippy/fmt and
+  all six Lean steps. [Repair record](tests/fixtures/darwin-arguments.out).
 
 ## Codegen quality track — next quarter
 
@@ -5537,6 +5805,30 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   SSA destruction, because the Lean transport check needs equal definitions. The
   2x exit for `loop-carried-transport.c` also needs Boolean threading and guard
   hoisting, which need their own checker.
+  October 16: the independent SSA/post-SSA transport checker now rejects
+  altered operands, opcodes, returns, effects, edge transport and asm outputs.
+  Assembly-goto without fixed bindings permits identical-value forwarding;
+  fixed bindings and computed branches remain excluded. On unchanged sources,
+  the loop falls from 179,130 to 29,734 instructions per call (GCC 8,236),
+  and `fault` from 488 to 171 (GCC 67). Counts exclude callees and use
+  disjoint executable addresses; the earlier overlapping-init count is not
+  used. The constant-address follow-up reduces `fault` further to 154.
+  Original `mm/page_alloc.c` and `arch/arm64/kvm/mmu.c` compile and assemble;
+  their objects were not installed or booted. The combined full-workspace
+  gate passes 3,423 tests, zero failures and eight ignores, plus Clippy and
+  formatting; all six Lean steps pass. The 2x exit and K02 replay remain open.
+  [Transport record](tests/fixtures/kernel-ssa-transport.out).
+  The live-segment follow-up reduces the loop further to 28,710 and `fault`
+  to 153 instructions per call. All 15 container and 15 TCG comparisons pass
+  with matching checksums and no dropped records. Interference uses per-block
+  segments; copy-name unions retain both incoming definitions. A parser tag
+  index also removes the observed quadratic lookup in the original KVM unit.
+  The combined gate passes 3,436 tests, zero failures and eight ignores, plus
+  Clippy, formatting and all six Lean steps. The 2x exit and K02 replay are
+  still not met. [Live-segment record](tests/fixtures/kernel-live-segments.out).
+  October 19 integration now supplies the current kernel profile: long transport
+  runs occupy 6.09% of executed kernel instructions (GCC 1.96%) in demand paging.
+  The original K02 workload still times out on EvoCC, so N08 remains open.
 
 - [ ] **N09 — Inline small static helpers by default** — `OPEN`, P1.
   The K02 fault path makes about 204 calls to small helpers that GCC
@@ -5556,8 +5848,27 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   instead of 85. Next action: admit such helpers to the size-bounded class with
   a per-unit growth cap; the exit also needs the N10 offset fold and constant
   shift guards.
+  October 16: small private leaves with fixed scalar locals now use the
+  existing substitution, with a unit-wide 1,024 source-node budget and retained
+  callable definitions on budget exhaustion. Storage, attribute, escape and
+  activation barriers remain. The unchanged reduction falls from 73 to 37
+  instructions per call including its helper (GCC 9); function text falls
+  from 268 to 172 bytes. Three container and three TCG runs agree. Three
+  original kernel units compile and assemble, but are not installed or booted.
+  The combined 3,436-test workspace gate and six Lean steps pass. N09 stays
+  open: the 2x exit and all-ladder result/size parity remain unmet.
+  [Helper record](tests/fixtures/kernel-private-helper.out).
+  October 19: the unchanged helper now takes 32 instructions per call and
+  152 function bytes, versus GCC's retained nine-instruction result. Three
+  container and three TCG executions agree; final compiler readback is
+  byte-identical. Five constant-count shift checks still execute 15
+  instructions. Their removal is not admitted by ordinary machine selection:
+  EvoMIR Section 5.2 requires a direct canonical true operand before it omits
+  a trap. Keep those obligations until the proof path establishes them. The
+  18-instruction exit and all-ladder result/size parity remain open.
+  [Current reduction](tests/fixtures/kernel-zero-branch.out).
 
-- [ ] **N10 — Keep one-word records and small arrays in registers** — `OPEN`, P1.
+- [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to
   slot and guarded by a stack canary.
   `tests/fixtures/kernel-codegen-reductions/struct-value-through-stack.c`
@@ -5572,6 +5883,64 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   instructions. Next action: promote one-word objects and small constant-indexed
   arrays, decide the canary after it, fold a constant offset into `add #imm`,
   and drop the guard of a constant shift.
+  October 16: constant pointer offsets now select add/sub immediate after
+  width, sign, scale and direction decoding. The unchanged array reduction
+  falls from 329 to 239 instructions per call (GCC 94); the record reduction
+  stays at 115 (GCC 23). All nine before/after/GCC container runs and nine
+  TCG runs exit zero with matching checksums. The combined full-workspace gate
+  passes 3,423 tests, zero failures and eight ignores, plus Clippy and formatting;
+  all six Lean steps pass. Object promotion and the 2x exit
+  remain open. [Address record](tests/fixtures/kernel-constant-address.out).
+  The later live-segment change reduces the record case to 114; the array
+  remains at 239. The combined 3,436-test workspace gate and six Lean steps
+  pass. [Follow-up](tests/fixtures/kernel-live-segments.out).
+  The next bounded lowering slice promotes private initialized integer cells
+  and complete one-word copies across CFG edges. The original array/record
+  cases fall to 200/61 instructions per call; GCC remains 94/23. Six native
+  and six TCG runs agree. The subsequent leaf-signing change brings the array
+  to 195; the record stays 61. Both 2x exits remain open. Three original kernel
+  units compile and assemble, but are not installed or booted. Combined
+  acceptance passes: 3,449 tests, zero failures, eight ignores, Clippy/fmt and
+  all six Lean steps. [Storage record](tests/fixtures/kernel-private-storage.out).
+  Literal integer conversion selection then reduces the record to 55
+  instructions and 288 function bytes; the array stays at 195/824. Three
+  container and three TCG runs agree, and the original hot units compile and
+  assemble. A separate ordinary-label merge proposal raises the array to 238
+  instructions by extending address live ranges; it was withdrawn. Full
+  acceptance found one stale assembly snapshot; its 18 exact diffs have been
+  reviewed, and the corrected snapshot passes. Combined October 18 acceptance
+  passes 3,460 tests, zero failures, eight ignores, Clippy/fmt and all six
+  Lean steps. The first failed run remains in the capture.
+  Both 2x exits stay open for that variant.
+  [Literal-selection record](tests/fixtures/kernel-literal-casts.out).
+  October 18: a later access can reuse the immediate address formed by the
+  first matching access in the same machine block. All accesses, volatile
+  events and guard splits stay. The unchanged array reduction falls from
+  195 to 171 instructions per call (GCC 94), meeting its 2x threshold. The
+  record stays at 55 (GCC 23), so N10 stays open. Three container and three
+  TCG runs agree. Combined acceptance passes 456 Rust suites with 3,460 tests,
+  zero failures, eight ignores, Clippy/fmt and all six Lean steps. The 15
+  relevant Python tests pass. Original hot units compile and assemble, but
+  are not installed or booted. This does not close kernel/runtime acceptance.
+  [Reuse record](tests/fixtures/kernel-reused-address.out).
+  October 19: zero-upper-bit selection across all incoming edges reduces the
+  unchanged record to 52 instructions per call and 276 function bytes; the
+  array stays at 171/728. Three container and three TCG executions agree.
+  The final compiler reproduces the measured assembly byte for byte. Full
+  acceptance passes 3,467 tests, zero failures, eight ignores, Clippy/fmt and
+  all six Lean steps. Original hot units compile and assemble; they are not
+  installed or booted. The record still exceeds 46 instructions, so N10
+  remains open. [Width record](tests/fixtures/kernel-integer-width.out).
+  The final copied-zero selection replaces a private copy and zero comparison
+  with CBZ/CBNZ, without changing any obligation or edge. The unchanged record
+  reaches 46 instructions per call (GCC 23); the array stays at 171 (GCC 94).
+  Both stated 2x exits now pass. Three container and three TCG executions agree,
+  and the gate-built compiler reproduces all three measured assemblies byte
+  for byte. Acceptance: 458 Rust suites, 3,473 passed, zero failures, eight
+  ignores, Clippy/fmt and all six Lean steps. Real lowering/assembly checks and
+  wrong-polarity/wrong-operand rejection tests pass. This closes the bounded
+  reductions, not kernel runtime acceptance; a fresh Image replay is separate.
+  [Zero-branch record](tests/fixtures/kernel-zero-branch.out).
 
 - [ ] **N11 — Sign only the returns that need a signature** — `OPEN`, P2.
   K15 signs every function, leaves included, for `-mbranch-protection=pac-ret`.
@@ -5588,6 +5957,25 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   `-mno-omit-leaf-frame-pointer` keep leaf frames at the kernel flags, as GCC 14
   does, and leave frameless leaves unsigned under `pac-ret`. Kernel stack
   traces, ftrace and kprobes need the acceptance lane.
+  October 16: allocated leaf admission now separates the leaf-frame request
+  from the other protected variants. The two PAC scopes and ACLE macro share
+  one effective policy. Sixteen target-native runs and eight TCG runs pass;
+  the existing Linux unwind/canary test passes all eight combinations. The
+  original page allocator/MMU probes omit 19/15 unused records; every saved
+  x30 remains signed. Combined acceptance passes 3,449 tests with zero failures,
+  eight ignores, Clippy/fmt and all six Lean steps. Kernel
+  tracing acceptance remains NOT_RUN. D13/D14 separately close the Darwin
+  failures found by the runtime fixture, with their own acceptance record.
+  [Signing record](tests/fixtures/kernel-return-signing.out).
+  October 19 integration: the retained 2,799-target-C virtconfig kernel builds
+  directly with these changes and boots on both HVF (pointer authentication
+  enabled) and TCG cortex-a72 (no pointer authentication). Nine paired programs,
+  125 subtests per kernel, pass. The build-specific full-workspace gate passes
+  3,473 tests, zero failures, eight ignores, Clippy/fmt; all six Lean steps
+  pass. The one compiler snapshot and all per-object counts are retained in the
+  [direct-build receipt](tests/contracts/kernel-direct-virt-receipt.json).
+  This dirty incremental build does not close tracing acceptance: ftrace and
+  kprobes are disabled in this configuration and remain NOT_RUN.
 
 ## Benchmark coverage index
 

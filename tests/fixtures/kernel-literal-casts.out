@@ -1,0 +1,57 @@
+Literal integer conversion selection — 2026-10-16
+
+Lowering selects sext/zext/trunc of literal bits<1..64> values as constants.
+It masks the source before extending and masks the result at its own width.
+Dynamic parameters, poison, symbolic addresses and 128-bit values keep the
+existing path. No EvoIR operation, guard, effect or EqSat rule is removed.
+A literal conversion to true does not qualify as a canonical true obligation.
+
+Targeted tests cover 1,764 width/value/target evaluations, all narrow sign
+boundaries, truncation high bits, a constant-valued incoming edge and the
+canonical-guard boundary. Existing selection and proof-required tests pass.
+Combined acceptance on October 18 passes 456 Rust suites: 3460 passed,
+zero failed, eight ignored, plus Clippy, formatting and all six Lean steps.
+The first full run had one stale ABI snapshot failure. All 18 changed hashes
+were reproduced against retained old assembly and their diffs reviewed:
+literal extensions and three immediate stores change; ABI placement, calls,
+frames and guard branches do not. The failed run remains in workspace.log.
+The passing combined logs are in .evidence/reused-address-20261018/.
+
+Unchanged reductions, original kernel flags and 100,000 calls per case:
+Symbol           Instructions/call before after GCC14   Function bytes before after
+theta                              195   195      94                    824   824
+pte_offset_map                      61    55      23                    312   288
+folio_state                         32    32       9                    152   152
+Three container executions and three TCG runs pass with the prior checksums.
+The TCG runs use the retained GCC kernel, disjoint executable addresses and
+zero dropped/irregular blocks. The GCC counts are retained, not newly rerun.
+The library-only reductions have no main: their --check refusals are retained,
+not counted as successful executed-path checks. N09/N10's 2x exits stay open.
+
+Three original hot units compile and assemble, without installation or boot:
+Unit                       Whole object bytes before after
+mm/page_alloc.o                               527104 524992
+arch/arm64/kvm/mmu.o                            703048 701832
+crypto/sha3_generic.o                          253720 253712
+These are object bytes, not the S1 .text metric. Each probe retains the same
+41 disclosed option omissions; none is unreviewed.
+
+Rejected experiment: merging ordinary label continuations preserves the
+tested results but raises theta from 195 to 238 instructions and adds a frame.
+Local address reuse extends live ranges across the merged block. That change
+and its one-block test expectation were withdrawn; no name-based exception
+or block-size threshold was added. Its first capture remains separate.
+
+Capture: .evidence/linear-constants-20261016/, maximum 500 MiB.
+casts-only/counts.json records the accepted variant; reductions/counts.json
+records the rejected joined-block variant. Original-unit probe records use
+the literalcasts suffix in .evidence/live-range-holes-20261016/.
+The six hashed compile-only .s/.o probe files (11,398,896 bytes) are retired
+after a no-open-handle check. Exact intermediate files must be regenerated;
+all logs, measurements, original inputs and current kernel runtimes remain.
+Small reduction object files are also retired after hashing and checking
+open handles; the combined retirement list is in the October 18 capture.
+Disk accounting is combined with kernel-reused-address.out, since both
+changes share the same target cache and final acceptance run.
+Claim ceiling: bounded ordinary lowering, not a new certified rewrite,
+whole-kernel acceptance, performance parity or a clean release build.

@@ -1,0 +1,12 @@
+error[E4002]: not-lowered: vector: @bad block 0 instruction 0: sub-8-byte vector ABI differs between the sealed compilers
+  --> $ROOT/tests/ui/check/backend-vector.h:2:6
+   |
+ 2 | v4u8 bad(v4u8 x) { return x; }
+   |      ^^^ not-lowered: vector: @bad block 0 instruction 0: sub-8-byte vector ABI differs between the sealed compilers
+   |
+error[E4002]: not-lowered: vector: @bad block 0 instruction 0: sub-8-byte vector ABI differs between the sealed compilers
+  --> $ROOT/tests/ui/check/backend-vector.h:2:6
+   |
+ 2 | v4u8 bad(v4u8 x) { return x; }
+   |      ^^^ not-lowered: vector: @bad block 0 instruction 0: sub-8-byte vector ABI differs between the sealed compilers
+   |

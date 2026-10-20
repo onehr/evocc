@@ -1,6 +1,6 @@
 # Verification Contract
 
-**Revision 1.1.1** | **Pinned ground truth** | **2026-10-14**
+**Revision 1.1.2** | **Pinned ground truth** | **2026-10-15**
 
 ## Status and scope
 
@@ -35,7 +35,9 @@ ordinary output, which has no proof label; speed or size.
 The target must be `aarch64-unknown-linux-gnu` (LP64); the source export starts with `["core-v1",
 "aarch64-unknown-linux-gnu", "checked", ...]`, where `checked` is the UB profile. The command line
 must have `--emit=asm`, `--proof-required=NEW_DIR`, at least one `--core-entry=NAME`, `-O0` and
-`-fno-builtin` (a checked call of `abs` calls the source definition, not a builtin). It must not
+`-fno-builtin` (a checked call of `abs` calls the source definition, not a builtin).
+The cc actions `-S`, `-c` and linking are not this command: with `--proof-required`
+they give exit 1 before creating a proof directory or an output file. It must not
 have a development pass, a pass report, a frame, selection or allocation variant, an unchecked UB
 profile, or an EqSat option without `-Oeq-scalar`. The front-end profile must not have signed
 wrapping, a runtime floating-point environment, a stack protector or zero-initialization of
@@ -79,7 +81,9 @@ A construct outside `core-v1` gives exit 6.
 
 Each `--core-entry=NAME` selects one entry, a C identifier. For each entry, the driver exports one
 source tree with the entry and its direct-call closure, callees first; each pipeline check has
-exactly one selected entry (`Pipeline.selectEntry`). Each function in the output must be an entry. A
+exactly one selected entry (`Pipeline.selectEntry`). A selected internal function is retained
+through emission. Its argument domain must not be narrowed to constants from its C callers.
+Each function in the output must be an entry. A
 proposal is an untrusted file of loop cutpoints, `--proof-proposal=NAME=PATH`: `core-cutpoints-v1`
 or `-v2` (the entry) or `core-call-cutpoints-v1` (closure functions by symbol), with a budget from 1
 to 4096, read by `Core.Symbolic.readCutpoints` and `readCallCutpoints` (`Core/CutpointInput.lean`).
@@ -593,7 +597,12 @@ refresh each receipt that it makes stale.
 
 ## 11. Revision
 
-This is revision 1.1.1 of 2026-10-14. It corrects the text to what the driver and Lean do: every
+Revision 1.1.2 of 2026-10-15 makes the assembly-only command boundary explicit
+and states that selected entries retain their full argument domains and bodies.
+The driver removes both publication files if either final write fails, and
+refuses a run if it cannot read its executable for the compiler digest.
+
+Revision 1.1.1 of 2026-10-14 corrects the text to what the driver and Lean do: every
 EqSat option that the driver admits with `-Oeq-scalar` (Section 2.1), the `zeroMask` exception, the
 callee-saved save slots and the entry structure of `checkAsm` (Section 4.6), the whitespace and
 escapes that the readers accept (Section 6) and the rule of `all_stages_checked` (Section 7.5).

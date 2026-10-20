@@ -61,6 +61,13 @@ pub fn validate_function(function: &MFunction) -> Result<(), String> {
                 }
             }
         }
+        if let MTerm::AsmGoto { body, .. } = &block.term {
+            for reg in crate::isa::aarch64::insts::assembly_defs(body) {
+                if !defined.insert(reg.id) {
+                    return Err(format!("@{name}: %v{} is defined twice", reg.id));
+                }
+            }
+        }
     }
 
     for block in &function.blocks {
@@ -146,8 +153,24 @@ fn validate_block(
             }
         }
     }
-    for reg in term_uses(&block.term) {
-        check(&live, reg)?;
+    if let MTerm::AsmGoto { body, .. } = &block.term {
+        // Assembly inputs precede its outputs. Its edge operands can use
+        // those fresh outputs, but its own inputs cannot read them early.
+        for reg in crate::isa::aarch64::insts::assembly_uses(body) {
+            check(&live, reg)?;
+        }
+        for reg in crate::isa::aarch64::insts::assembly_defs(body) {
+            live.insert(reg.id, reg.class);
+        }
+        for (_, args) in term_edges(&block.term) {
+            for &reg in args {
+                check(&live, reg)?;
+            }
+        }
+    } else {
+        for reg in term_uses(&block.term) {
+            check(&live, reg)?;
+        }
     }
     validate_term_shape(name, id, &block.term)?;
 
@@ -188,6 +211,11 @@ fn validate_block(
             .filter(|reg| reg.class == RegClass::Flags)
             .map(|reg| reg.id)
             .collect();
+        // A call or opaque assembly can clobber physical flags without
+        // defining a flags value. A later compare is valid in that case.
+        if produced.is_empty() {
+            continue;
+        }
         let consumes = inst_uses(&pair[1])
             .into_iter()
             .any(|reg| reg.class == RegClass::Flags && produced.contains(&reg.id));
@@ -541,9 +569,18 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             expect_general(name, block, *lhs, "an adcs/sbcs operand")?;
             expect_general(name, block, *rhs, "an adcs/sbcs operand")
         }
-        MInst::TstImm { dst, lhs, .. } => {
+        MInst::TstImm {
+            dst,
+            lhs,
+            imm,
+            width,
+        } => {
             expect_flags(name, block, *dst, "a tst result")?;
-            expect_general(name, block, *lhs, "a tst operand")
+            expect_general(name, block, *lhs, "a tst operand")?;
+            if !crate::isa::aarch64::encodings::logical_mask(*imm, *width) {
+                return Err(format!("@{name} block {block}: unencodable tst immediate"));
+            }
+            Ok(())
         }
         MInst::WideMultiply { dst, lhs, rhs, .. } => {
             if dst.class != RegClass::Gpr64 {

@@ -1,0 +1,47 @@
+Constant machine addresses in unchanged kernel reductions — 2026-10-16
+
+Selection decodes a constant 1..64-bit index, applies scale and direction,
+and selects add/sub immediate for a displacement of magnitude at most 4095.
+Zero aliases the base. The dynamic, large and 128-bit paths stay unchanged.
+No EvoIR obligation or memory access is removed. No Lean profile is extended.
+
+Each row measures 100,000 calls. Instructions count only the named symbol;
+callees are excluded. The source and GCC-built driver are unchanged.
+Reduction                   Before/call  After/call  GCC14/call  After/GCC
+local-array-constant-index          329         239          94      2.543
+struct-value-through-stack         115         115          23      5.000
+asm-goto-live-transport             171         154          67      2.299
+
+Function text bytes:
+theta:          1368 -> 1008; GCC14 376.
+pte_offset_map:  576 ->  576; GCC14 120.
+fault:          772 ->  704; GCC14 348.
+
+Nine Linux-container runs and nine TCG runs exit zero. For each source, all
+three executables have the same checksum: theta 654e1e058060eadf,
+pte_offset_map 79667c280c300960, fault af7e366cb7e1e280. All profiles report
+dropped=0 and irregular=0. Executable load addresses are disjoint from init.
+The existing GCC kernel and snapshot disk were reused. One CPU and the
+current QEMU binary are diagnostic overrides, not historical kernel acceptance.
+This is fixed-workload execution evidence, not latency or all-input equivalence.
+Neither N08 nor N10 meets its 2x count exit. Record promotion is not implemented.
+
+Capture: .evidence/constant-address-20261016/ (500 MiB limit).
+before.json and after.json retain compiler/source/assembly hashes and argv.
+runtime/counts.json and run-*/result.json retain the executables' hashes,
+commands, counts and unchanged runtime inputs.
+Focused tests: 8 PASS. Includes all index widths, sign and direction pairs,
+scale overflow, zero and immediate boundaries, dynamic and wide fallback,
+access attributes, guard splits, assembly and allocation checks.
+Original crypto/sha3_generic.c compiles and assembles: 41 classified command
+omissions, zero unreviewed omissions. Object: 253720 bytes; keccakf: 3304
+bytes. No kernel object was installed, relinked or booted by this probe.
+Full offline workspace gate: 450 suites / 3423 PASS / 0 FAIL / 8 ignored;
+Clippy and formatting PASS. All six Lean steps PASS: 62 rule theorems,
+36 analysis rows and 576 enumerated instances. The shared worktree is dirty;
+this is not clean-release acceptance. Logs: workspace-final.log, lean-final.log.
+Seven changed ABI assembly snapshots were reviewed against the retained old
+compiler and identical lowered input; argument/result/frame layout is unchanged.
+The first complete gate's snapshot failure remains in workspace.log.
+Scoped frontend cache plus this and the SSA capture: +481764 KiB from the
+05:52 baseline, including shared-cache changes. About 45 GiB free afterward.

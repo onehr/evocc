@@ -37,13 +37,15 @@ pub mod verify_alloc;
 
 use std::fmt;
 
-pub use allocverify::{verify_allocation, verify_allocation_for, VerifierRefusal};
+pub use allocverify::{
+    verify_allocation, verify_allocation_against, verify_allocation_for, VerifierRefusal,
+};
 pub use emit::{
     emit_module, emit_module_for, emit_module_unit, frame_of, frame_of_for, Frame, RelocationModel,
     Target,
 };
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
-pub use linkage::emitted_functions;
+pub use linkage::{emitted_functions, emitted_functions_with_entries};
 pub use linscan::{
     allocate, allocate_for, allocate_for_with_options, render_allocated, Allocated, CALLEE_SAVED,
     CALLER_SAVED,
@@ -53,8 +55,9 @@ pub use lower::{
     UbCheckProfile,
 };
 pub use native::{
-    compile_module, compile_module_for, compile_module_with, compile_module_with_options,
-    compile_module_with_relocation, native_corpus_entry, Driver, NativeStop, Toolchain,
+    compile_module, compile_module_for, compile_module_with, compile_module_with_entries,
+    compile_module_with_options, compile_module_with_relocation, native_corpus_entry, Driver,
+    NativeStop, Toolchain,
 };
 pub use regalloc::out_of_ssa;
 pub use text::render_module;
@@ -1073,8 +1076,8 @@ pub enum MInst {
     VaSaveArea {
         named: u8,
     },
-    /// The `asm` of EvoIR Section 3.11, "carried through unchanged: the
-    /// template, its operands with their constraints, its clobbers".
+    /// The `asm` of EvoIR Section 3.11. Lowering separates input and output
+    /// SSA identities while keeping the template's physical constraints.
     ///
     /// The interpreter does not execute it; emission writes the template with
     /// each operand reference replaced by the operand's assigned register,
@@ -1219,8 +1222,8 @@ impl AsmImmediate {
 
 /// One row of EvoIR Section 3.11's constraint table.
 ///
-/// The vocabulary is closed: it is the one the configured kernel uses, and a
-/// constraint outside it is refused before EvoMIR sees it.
+/// The source vocabulary is closed by EvoIR. Lowering also creates numeric
+/// ties for read-write outputs, including output indices above nine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AsmConstraint {
     /// `r`, `=r`, `+r`: any register of the operand's class.
@@ -1239,7 +1242,8 @@ pub enum AsmConstraint {
         /// `Qo` rather than `Q`.
         offsettable: bool,
     },
-    /// A digit: the same register as the output that digit names.
+    /// An output index: the same register as that output. Lowering can append
+    /// a tie above nine for a read-write output without changing its number.
     Tied(u8),
     /// `I`, `J`, `K`, `L`, `i`, `n`: an immediate written literally.
     Immediate(AsmImmediate),
@@ -1274,10 +1278,8 @@ impl AsmConstraint {
     /// Read one constraint string, or nothing when it is outside the table.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
-        if text.len() == 1 {
-            if let Some(digit) = text.chars().next().and_then(|c| c.to_digit(10)) {
-                return Some(Self::Tied(u8::try_from(digit).ok()?));
-            }
+        if !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()) {
+            return text.parse().ok().map(Self::Tied);
         }
         if text == "rZ" {
             return Some(Self::RegisterOrZero);

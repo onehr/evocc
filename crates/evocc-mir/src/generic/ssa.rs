@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::machine::{MachInst, MachTerm, MachineBlock, MachineFunction};
 use super::register::{RegisterClass, VirtualReg};
+use super::ssa_check::{BlockPlan, TransportPlan};
 
 pub trait SsaInst: MachInst + Clone {
     fn copy(dst: Self::Reg, src: Self::Reg) -> Self;
@@ -31,6 +32,21 @@ pub fn out_of_ssa_with_dce<I, T, C>(
     eliminate_dead: bool,
     forwarding_input_valid: bool,
 ) -> MachineFunction<I, T, C>
+where
+    C: RegisterClass,
+    I: SsaInst<Reg = VirtualReg<C>>,
+    T: SsaTerm<Reg = VirtualReg<C>>,
+{
+    out_of_ssa_with_plan(function, eliminate_dead, forwarding_input_valid).0
+}
+
+/// The plan records proposed correspondence only. Its presence is not
+/// acceptance; `ssa_check::verify` checks it against both actual programs.
+pub fn out_of_ssa_with_plan<I, T, C>(
+    function: &MachineFunction<I, T, C>,
+    eliminate_dead: bool,
+    forwarding_input_valid: bool,
+) -> (MachineFunction<I, T, C>, TransportPlan<C>)
 where
     C: RegisterClass,
     I: SsaInst<Reg = VirtualReg<C>>,
@@ -129,20 +145,44 @@ where
     }
 
     let entry = split.blocks.first().map(|block| block.id);
+    let original_ids: BTreeSet<_> = function.blocks.iter().map(|b| b.id).collect();
+    let mut plans = BTreeMap::new();
     let mut blocks = Vec::new();
     for block in &split.blocks {
         let mut insts = prefix.remove(&block.id).unwrap_or_default();
-        insts.extend(
-            block
-                .insts
-                .iter()
-                .filter(|inst| {
-                    !eliminate_dead
-                        || !inst.discardable()
-                        || inst.defs().iter().any(|dst| needed.contains(&dst.id))
-                })
-                .cloned(),
-        );
+        let prefix_length = insts.len();
+        let alignment = block
+            .insts
+            .iter()
+            .map(|inst| {
+                if !eliminate_dead
+                    || !inst.discardable()
+                    || inst.defs().iter().any(|dst| needed.contains(&dst.id))
+                {
+                    let position = insts.len();
+                    insts.push(inst.clone());
+                    Some(position)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if original_ids.contains(&block.id) {
+            plans.insert(
+                block.id,
+                BlockPlan {
+                    prefix: prefix_length,
+                    bindings: block
+                        .args
+                        .iter()
+                        .copied()
+                        .filter(|r| needed.contains(&r.id))
+                        .map(|r| (r, source(r)))
+                        .collect(),
+                    alignment,
+                },
+            );
+        }
         insts.extend(suffix.remove(&block.id).unwrap_or_default());
         let mut term = block.term.clone();
         if let Some(saved) = indirect_targets.get(&block.id) {
@@ -172,10 +212,16 @@ where
             term,
         });
     }
-    MachineFunction {
-        name: function.name.clone(),
-        blocks,
-    }
+    (
+        MachineFunction {
+            name: function.name.clone(),
+            blocks,
+        },
+        TransportPlan {
+            needed,
+            blocks: plans,
+        },
+    )
 }
 
 fn forwarded_parameters<I, T, C>(

@@ -1,0 +1,56 @@
+Allocated leaf return signing — 2026-10-16
+
+pac-ret omits signing only for an allocated frameless leaf whose x30 never
+leaves its register. Every stored x30 is signed. pac-ret+leaf also signs the
+frameless leaf. Only -mno-omit-leaf-frame-pointer forces an unnecessary leaf
+record. Calls, spills, fixed storage, dynamic allocation, activation reads,
+incoming stack arguments, variadic areas, canaries and opaque assembly keep
+the record. Other optional selection/allocation/frame protection is unchanged.
+CFI tracks the actual frame and signing state. Option order also controls the
+ACLE macro through the same effective policy.
+
+Three policy tests cover both targets at O0/O2, both PAC scopes and both leaf
+requests. Lowering-inserted 128-bit helper calls and patchable NOP entries are
+included. The existing sealed Linux unwind/canary test passes all eight
+unsigned/signed and frame-variant combinations.
+
+Sixteen native executions pass: both scopes, leaf requests and O0/O2 on
+Darwin's normal ABI and Linux with -mgeneral-regs-only. The unchanged runtime
+fixture includes nested calls, multiple returns, nine arguments, varargs,
+dynamic storage and activation addresses. Four Linux source-path checks pass.
+Four Darwin source checks fail at va_start (the memory model assumes a 32-byte
+list). A separate Darwin general-only compilation refuses synthetic SIMD
+fillers for the ninth named integer argument. Neither refusal is a PASS or silently discarded input.
+The retained record separates these pre-existing boundaries from PAC behavior.
+
+Original hot units compile and assemble; nothing is installed or booted:
+Unit                        Saved x30 before/after   Object bytes before/after
+mm/page_alloc.o                          168 / 149            527664 / 527104
+arch/arm64/kvm/mmu.o                       89 / 74            703416 / 703048
+crypto/sha3_generic.o                       6 / 6             253720 / 253720
+Each saved-x30 count equals its paciasp count. Object bytes are not .text.
+The same 41 disclosed probe omissions remain, zero unreviewed omissions.
+
+Capture: .evidence/return-signing-20261016/ (500 MiB cap).
+baseline.json preserves the old leaf behavior. runtime.json records every
+command, source and binary; both failed attempts remain separately. Probe
+records are kernel-probes.signing.json and kernel-assembly.signing.json under
+.evidence/live-range-holes-20261016/. Their six hashed .s/.o intermediates
+total 11415685 bytes and are retired after a no-open-handle check. Exact
+intermediate probe files are no longer retained; current runtimes remain.
+All eight Linux runtime programs also exit zero in one TCG run with the
+retained GCC kernel and neoverse-n2 CPU; input hashes stay unchanged. This is
+execution coverage, not a new-kernel boot or tracing result.
+The unchanged array reduction is now 195 instructions/call and 824 function
+bytes (200/844 before signing admission); the record remains 61/312. The
+helper reduction is 32/152 (37/172 before). All three container and three TCG
+runs exit zero with their prior checksums, zero dropped/irregular blocks and
+disjoint executable addresses. Both N09/N10 2x thresholds remain unmet.
+Combined acceptance: 454 Rust suites, 3449 passed, zero failed, eight ignored;
+Clippy and formatting pass. All six Lean steps pass. These gates do not
+extend the checked proof subset to Darwin or return authentication.
+Private-storage/signing captures use 84300 KiB together. The existing target
+cache grows 336432 KiB from the 09:12 baseline; probe captures add 96 KiB net.
+The helper capture shrinks 60 KiB. Combined measured growth is 420768 KiB;
+shared-cache growth is not attributed to signing alone. Free space: 50 GiB.
+Kernel stack traces, ftrace and kprobes remain separate acceptance obligations.

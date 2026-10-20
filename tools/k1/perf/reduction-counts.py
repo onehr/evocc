@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 import re
 import shlex
+import struct
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -56,6 +57,36 @@ def symbols(binary, names):
     return found
 
 
+def executable_segments(path):
+    """Read the load ranges used by this static AArch64 profiling lane."""
+    data = path.read_bytes()
+    if len(data) < 64 or data[:7] != b'\x7fELF\x02\x01\x01':
+        raise ValueError('profiling requires ELF64 little-endian')
+    kind, machine = struct.unpack_from('<HH', data, 16)
+    offset, = struct.unpack_from('<Q', data, 32)
+    stride, count = struct.unpack_from('<HH', data, 54)
+    if (kind != 2 or machine != 183 or stride != 56 or not count
+            or offset + count * stride > len(data)):
+        raise ValueError('profiling requires a static AArch64 executable')
+    ranges = []
+    for i in range(count):
+        ty, flags, _, address, _, _, size, _ = struct.unpack_from('<IIQQQQQQ', data, offset + i*stride)
+        if ty == 1 and flags & 1 and size:
+            ranges.append((address, address + size))
+    if not ranges:
+        raise ValueError('executable has no code segment')
+    return ranges
+
+
+def require_disjoint_code(binary, init):
+    # tbprof has code words but no process identity. Normal static binaries
+    # share 0x400000 with /init, so a PC-only sum includes unrelated init code.
+    for lo, hi in executable_segments(binary):
+        for other_lo, other_hi in executable_segments(init):
+            if lo < other_hi and other_lo < hi:
+                raise ValueError('reduction and init executable addresses overlap')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', action='append', required=True, metavar='FILE.c:FUNC[,FUNC]')
@@ -77,7 +108,7 @@ def main():
         script += [f'gcc-14 {flags} -c /src/{source.name} -o /work/{stem}.gcc.o',
                    f'gcc-14 -O2 -fno-PIE -DREDUCTION_DRIVER -c /src/{source.name} -o /work/{stem}.driver.o']
         for compiler in ('evocc', 'gcc'):
-            script.append(f'gcc-14 -static /work/{stem}.{compiler}.o /work/{stem}.driver.o '
+            script.append(f'gcc-14 -static -Wl,-Ttext-segment=0x10000000 /work/{stem}.{compiler}.o /work/{stem}.driver.o '
                           f'-o /work/root/{stem}.{compiler}')
             jobs.append((stem, compiler, names.split(','), source))
     (work / 'root').mkdir()
@@ -96,6 +127,8 @@ def main():
     if len(sources) != 1:
         raise SystemExit('keep all reductions in one directory')
     container(work, '\n'.join(script), sources.pop())
+    for ident in ids:
+        require_disjoint_code(work / 'root' / ident, work / 'root/init')
     subprocess.run(['/opt/homebrew/opt/e2fsprogs/sbin/mke2fs', '-q', '-F', '-t', 'ext4', '-b', '1024',
                     str(work / 'scratch.img'), '8192'], check=True)
     system_map = Path(args.image).parents[3] / 'System.map'

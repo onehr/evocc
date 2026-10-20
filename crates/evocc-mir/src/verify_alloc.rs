@@ -15,8 +15,9 @@ use std::fmt::Write as _;
 use crate::core_machine_export::{export_core_machine, CoreMachineMode};
 use crate::generic::allocation::AllocationOptions;
 use crate::{
-    allocate_for_with_options, inst_defs, inst_uses, term_uses, verify_allocation_for, Allocated,
-    LoadKind, MFunction, MInst, MModule, MTerm, RegClass, StoreKind, Target, VReg, Width,
+    allocate_for_with_options, inst_defs, inst_uses, term_uses, verify_allocation_against,
+    Allocated, LoadKind, MFunction, MInst, MModule, MTerm, RegClass, StoreKind, Target, VReg,
+    Width,
 };
 
 type Result<T> = std::result::Result<T, String>;
@@ -750,7 +751,7 @@ pub fn export_core_allocation(post_ssa: &MModule) -> Result<String> {
         let allocated =
             allocate_for_with_options(Target::Linux, function, AllocationOptions::default())
                 .map_err(|detail| format!("@{}: {detail}", function.name))?;
-        verify_allocation_for(Target::Linux, &allocated)
+        verify_allocation_against(Target::Linux, function, &allocated)
             .map_err(|refusal| format!("@{}: {}", function.name, refusal.detail))?;
         functions.push(allocated_function(function, &allocated)?);
     }

@@ -1,11 +1,52 @@
 //! Explanation pages are executable examples, not a second diagnostic registry.
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// The codes of the diagnostic authority table.
+fn authority() -> BTreeSet<String> {
+    let spec = std::fs::read_to_string(root().join("spec/evoir.md")).unwrap();
+    let table = spec
+        .split_once("### 6.3 Diagnostic Authority")
+        .unwrap()
+        .1
+        .split_once("### 6.4")
+        .unwrap()
+        .0;
+    table
+        .lines()
+        .filter(|line| line.starts_with("| `E") || line.starts_with("| `W"))
+        .map(|line| {
+            line.split('|')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .trim_matches('`')
+                .to_owned()
+        })
+        .collect()
+}
+
+/// The `CODE<TAB>HINT` lines of the concise repair hints.
+fn hints() -> BTreeMap<String, String> {
+    let text = std::fs::read_to_string(root().join("crates/evocc/explain/hints.txt")).unwrap();
+    text.lines()
+        .map(|line| {
+            let (code, hint) = line.split_once('\t').expect("CODE<TAB>HINT");
+            (code.to_owned(), hint.to_owned())
+        })
+        .collect()
+}
+
+/// A JSON string for page text, which has no control characters.
+fn json_string(text: &str) -> String {
+    assert!(!text.chars().any(char::is_control), "{text}");
+    format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 fn run(args: &[&str], source: &str) -> Output {
@@ -22,26 +63,8 @@ fn run(args: &[&str], source: &str) -> Output {
 
 #[test]
 fn every_authoritative_page_has_tested_examples_and_exact_cli_text() {
-    let spec = std::fs::read_to_string(root().join("spec/evoir.md")).unwrap();
-    let table = spec
-        .split_once("### 6.3 Diagnostic Authority")
-        .unwrap()
-        .1
-        .split_once("### 6.4")
-        .unwrap()
-        .0;
-    let codes: BTreeSet<_> = table
-        .lines()
-        .filter(|line| line.starts_with("| `E") || line.starts_with("| `W"))
-        .map(|line| {
-            line.split('|')
-                .nth(1)
-                .unwrap()
-                .trim()
-                .trim_matches('`')
-                .to_owned()
-        })
-        .collect();
+    let codes = authority();
+    let hints = hints();
     let directory = root().join("crates/evocc/explain");
     let pages: BTreeSet<_> = std::fs::read_dir(&directory)
         .expect("explanation pages")
@@ -112,6 +135,23 @@ fn every_authoritative_page_has_tested_examples_and_exact_cli_text() {
                             .starts_with(&format!("{{\"code\":\"{code}\",")),
                         "{code}: first diagnostic: {diagnostics}"
                     );
+                    // The concise record takes `why` from the page and `fix` from the hints.
+                    flags[1] = "--error-format=concise";
+                    let concise = String::from_utf8(run(&flags, &source).stderr).unwrap();
+                    let first = concise.lines().next().unwrap_or("");
+                    let why = page.split("\n\n").nth(1).unwrap().lines().next().unwrap();
+                    assert!(
+                        first.starts_with(&format!("{{\"code\":\"{code}\","))
+                            && first.contains(&format!(",\"why\":{}", json_string(why))),
+                        "{code}: concise why: {first}"
+                    );
+                    match hints.get(&code) {
+                        Some(hint) => assert!(
+                            first.contains(&format!(",\"fix\":{}", json_string(hint))),
+                            "{code}: concise fix: {first}"
+                        ),
+                        None => assert!(!first.contains(",\"fix\":"), "{code}: {first}"),
+                    }
                 }
             } else if block.is_some() {
                 source.push_str(line);
@@ -138,6 +178,32 @@ fn every_authoritative_page_has_tested_examples_and_exact_cli_text() {
         }
     }
     println!("Trigger: none: {}", untriggered.join(", "));
+}
+
+#[test]
+fn hints_are_one_short_action_line_per_authority_code() {
+    let codes = authority();
+    let text = std::fs::read_to_string(root().join("crates/evocc/explain/hints.txt")).unwrap();
+    assert!(text.ends_with('\n') && !text.contains("\n\n") && !text.contains('\r'));
+    let mut seen = BTreeSet::new();
+    for line in text.lines() {
+        let (code, hint) = line.split_once('\t').expect("CODE<TAB>HINT");
+        assert!(codes.contains(code), "{code}: not in the authority table");
+        assert!(seen.insert(code), "{code}: more than one hint");
+        assert!(
+            !hint.is_empty() && hint.len() <= 120,
+            "{code}: a hint has 1 to 120 bytes"
+        );
+        assert!(
+            hint.ends_with('.') && !hint.contains('\t'),
+            "{code}: a hint is one line that ends with a period"
+        );
+    }
+    // P17a registers a different E3004 text separately. This hint keeps the
+    // action sentence of the page.
+    let page = std::fs::read_to_string(root().join("crates/evocc/explain/E3004.md")).unwrap();
+    let sentence = page.split("\n\n").nth(2).unwrap().lines().last().unwrap();
+    assert_eq!(hints()["E3004"], sentence);
 }
 
 #[test]

@@ -1,0 +1,55 @@
+Variable-type evaluation and activation-address semantics — 2026-10-16
+
+Scope: the owner decisions of 2026-10-13; EvoIR specification 2.6.5.
+No Core, EqSat, Lean, raw EvoIR frame-walk or native memory-safety extension.
+
+typeof evaluates a variably modified expression once at its declaration or
+cast. Bound captures and operand scope remain. Fixed sizeof, alignment and
+type-compatibility queries do not execute a nested capture. A runtime VLA
+sizeof sequences captures on its own expression path, including short-circuit
+and nested sizeof. Compatible VLA pointer subtraction does not require the
+same hidden capture ID; existing stride/provenance/lifetime checks remain.
+Scope entry remains E2945. A dereference after VLA lifetime remains E3010.
+Parameter captures execute at definition entry; ordinary and nested callback
+prototypes do not execute them or leak hidden objects to file scope. Repeated
+calls retain their own captured bounds when a later operand changes a parameter.
+
+Both source activation-address builtins return null for unsigned-int depths
+1..65535; zero keeps its existing meaning. Range checking follows conversion.
+The result remains neither an ICE nor a C null pointer constant. Invalid
+depths are E2913. No ancestor frame is read. This is the owner's target rule,
+not a claim that GCC frame_address has the same rule on every target.
+
+                                        Darwin O0/O2    Linux O0/O2
+Eight typeof probes                       16/16           16/16
+Two ancestor-address probes                4/4             4/4
+Three evaluation/type/boundary fixtures    6/6             6/6
+Ten pinned original source files          20/20           20/20
+Native total                              46/46           46/46
+
+Both interpreters: 104/104 probe runs match expected main values. The ten
+original files are eight GCC torture sources, LLVM's unchanged 2003-03-23
+source and c-testsuite 00207. All original native exits are zero; 00207's
+stdout matches its pinned expected bytes. The original ancestor probe's
+nonzero main values are expected outcomes, not test failures.
+
+Capture: .evidence/variable-type-activation-20261016/ (500 MiB limit).
+original-sources.json retains URLs, commits and source hashes. native-host.json
+and native-linux.json retain the actual compilation, link and execution.
+parameter-native-host.json/parameter-native-linux.json add four native runs
+for the parameter case. post-helper-emission.json binds the later compiler
+to all 92 byte-identical executed assemblies and repeats the 104 interpreter
+checks plus four execution checks. Initial refusals and all three discovered
+regressions are retained as RED evidence.
+
+Exact-context execution checks: 64 complete, 12 outside interpreter support,
+12 reach the 20-second limit. The default evo wrapper also retains its header,
+dialect and execution limits separately. Initial wrapper usage errors are not
+source checks. None of these limits is reported as an interpreter PASS or UB.
+Final combined acceptance: 451 suites, 3436 PASS, zero failures and eight
+retained ignores; Clippy and formatting pass. All six Lean gate steps pass.
+Logs: .evidence/private-helper-20261016/{workspace-final,lean-final}.log.
+The shared worktree is dirty; this is not clean-release acceptance.
+The frontend cache plus these three new captures grew by 1340848 KiB from
+the 07:15 baseline; this includes shared cache changes, not sole attribution.
+About 42 GiB remains free. No target, kernel tree or VM disk was added.

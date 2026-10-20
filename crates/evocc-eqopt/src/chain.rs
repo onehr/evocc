@@ -3,7 +3,7 @@
 //! callbacks. No caller-owned persistent state is committed before the whole
 //! chain succeeds, including replay of its terminal zero-region transaction.
 
-use evocc_evoir::{render_module, validate_module, Module};
+use evocc_evoir::{render_target_module, validate_module, Module, IMPLICIT_TARGET};
 use evocc_proof::{render_evp1, sha256_hex};
 
 use crate::{
@@ -185,6 +185,7 @@ impl TransactionRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedScalarChain {
     pub module: Module,
+    pub target: String,
     pub policy: ExtractionPolicy,
     pub checker_digest: Option<String>,
     pub checker_timeout_ms: Option<u128>,
@@ -338,7 +339,8 @@ impl VerifiedScalarChain {
             || (self.stop == ChainStop::TransactionLimit
                 && self.transactions.len() != self.max_transactions)
             || previous != &self.output_digest
-            || sha256_hex(render_module(&self.module).as_bytes()) != self.output_digest
+            || sha256_hex(render_target_module(&self.module, &self.target).as_bytes())
+                != self.output_digest
         {
             return Err("chain stop or final codegen identity mismatch".into());
         }
@@ -411,7 +413,7 @@ fn run_with_checker(
         .map_err(|detail| ChainFailure {
             detail,
             policy: *policy,
-            input_digest: sha256_hex(render_module(module).as_bytes()),
+            input_digest: sha256_hex(state.render(module).as_bytes()),
             checker_digest: None,
             checker_timeout_ms: Some(checker.timeout().as_millis()),
             rejection_reason: if checker.binary().is_file() {
@@ -492,7 +494,7 @@ fn run_chain_staged(
     let mut verified_prefix = 0;
     let mut optimizer_wall_nanos = 0;
     let mut resources = ChainResources::default();
-    let input_digest = sha256_hex(render_module(module).as_bytes());
+    let input_digest = sha256_hex(staged.render(module).as_bytes());
     macro_rules! fail {
         ($message:expr) => {
             return Err(Box::new(ChainFailure {
@@ -543,11 +545,11 @@ fn run_chain_staged(
     let mut current = module.clone();
     let mut stop = ChainStop::TransactionLimit;
     for index in 0..schedule.max_transactions {
-        let before = render_module(&current);
+        let before = staged.render(&current);
         let started = std::time::Instant::now();
         let outcome = producer(&current, &mut staged, policy);
         optimizer_wall_nanos += started.elapsed().as_nanos();
-        let after = render_module(&outcome.module);
+        let after = staged.render(&outcome.module);
         let proof = render_evp1(&outcome.certificate);
         let rollback = outcome.report.fell_back || outcome.report.proof_replay_failed;
         let result = if rollback {
@@ -627,8 +629,9 @@ fn run_chain_staged(
         }
     }
     let run = VerifiedScalarChain {
-        output_digest: sha256_hex(render_module(&current).as_bytes()),
+        output_digest: sha256_hex(staged.render(&current).as_bytes()),
         module: current,
+        target: staged.target().to_owned(),
         chain_id,
         policy: *policy,
         checker_digest: None,
@@ -814,8 +817,16 @@ fn write_records(
 /// Variant A provenance: exact identity, zero transactions, no asserted EVP
 /// proof or checker success. It does not disable existing lowering passes.
 pub fn write_identity_chain(module: &Module, destination: &std::path::Path) -> Result<(), String> {
-    validate_module(module)?;
-    let input = render_module(module);
+    write_target_identity_chain(module, IMPLICIT_TARGET, destination)
+}
+
+pub fn write_target_identity_chain(
+    module: &Module,
+    target: &str,
+    destination: &std::path::Path,
+) -> Result<(), String> {
+    let state = EqualityState::for_target_module(module, target)?;
+    let input = state.render(module);
     let digest = sha256_hex(input.as_bytes());
     let chain_id = sha256_hex(format!("identity-chain-v1\n{digest}\n").as_bytes());
     let record = format!("{{\"attempted_transactions\":0,\"chain_id\":\"{chain_id}\",\"input_digest\":\"{digest}\",\"mode\":\"eqsat-off\",\"output_digest\":\"{digest}\",\"publication\":\"IDENTITY_VERIFIED\",\"schema\":\"evocc-identity-chain-v1\",\"transactions\":[]}}");

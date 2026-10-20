@@ -5,9 +5,11 @@ read a variable that it never wrote, or read past the end of an array. The C sta
 what happens then. A usual compiler may assume that these things never happen, and when they do
 happen, the program can do anything, often with no sign of a problem.
 
-EvoCC makes undefined behavior explicit. Its interpreters stop at undefined behavior and give it a
-name and a number. In the compiled program, each condition that C requires stays as a check. This
-chapter shows both.
+EvoCC records supported undefined-behavior obligations explicitly. Its interpreters stop when an
+implemented check fails and report a diagnostic. Checked native code retains supported scalar
+checks. This is not complete UB detection: `--check` does not check the same-object or exact-element
+obligations of pointer subtraction, or same-object ordering. This chapter shows the checks it does
+implement; a completed execution is not a safety proof.
 
 ## Four mistakes
 
@@ -146,7 +148,7 @@ finding, `--check` writes a record of the result instead. Here is `sum.c` from c
 
 ```console
 $ evocc --check --error-format=json sum.c
-{"schema":"evocc.check.v1","kind":"check","status":"completed","main_return":"55","claim":"executed-path-only","scope":"No undefined behavior was found on the executed path. This does not check that the results are correct."}
+{"schema":"evocc.check.v1","kind":"check","status":"completed","main_return":"55","claim":"executed-path-only","scope":"No finding from the implemented checks on the executed path. Pointer subtraction and ordering obligations are not checked. This does not check that the results are correct."}
 ```
 
 ## What `--check` does not tell you

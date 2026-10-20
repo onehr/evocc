@@ -1,55 +1,5 @@
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
+//! Public persistent-state API contract, exercised without a nested Cargo build.
 
-static NEXT_CLIENT: AtomicU64 = AtomicU64::new(0);
-
-struct ClientProject(PathBuf);
-
-impl ClientProject {
-    fn new() -> Self {
-        let id = NEXT_CLIENT.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "evocc-day8-state-client-{}-{id}",
-            std::process::id()
-        ));
-        fs::create_dir_all(root.join("src")).expect("create state client");
-
-        let eqopt = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let crates = eqopt.parent().expect("eqopt lives under crates");
-        let manifest = format!(
-            r#"[package]
-name = "day8-state-client"
-version = "0.0.0"
-edition = "2021"
-
-[workspace]
-
-[dependencies]
-evocc-eqopt = {{ path = {:?} }}
-evocc-evoir = {{ path = {:?} }}
-evocc-proof = {{ path = {:?} }}
-evocc-types = {{ path = {:?} }}
-"#,
-            eqopt,
-            crates.join("evocc-evoir"),
-            crates.join("evocc-proof"),
-            crates.join("evocc-types")
-        );
-        fs::write(root.join("Cargo.toml"), manifest).expect("write state client manifest");
-        fs::write(root.join("src/main.rs"), CLIENT).expect("write state client source");
-        Self(root)
-    }
-}
-
-impl Drop for ClientProject {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
-const CLIENT: &str = r#"
 use evocc_eqopt::{
     optimize_scalar_module_certified_persistent, EqualityState, ProofAuthority, ScalarEqBudget,
 };
@@ -58,7 +8,10 @@ use evocc_proof::{parse_evp1, render_evp1};
 use evocc_types::EvoIRType;
 
 fn bits(id: u32) -> Value {
-    Value { id, ty: EvoIRType::Bits(32) }
+    Value {
+        id,
+        ty: EvoIRType::Bits(32),
+    }
 }
 
 fn input_module() -> Module {
@@ -102,7 +55,8 @@ fn input_module() -> Module {
     }
 }
 
-fn main() {
+#[test]
+fn persistent_equality_accumulation_and_transaction_contract() {
     let input = input_module();
     let mut state = EqualityState::for_module(&input).expect("bind canonical identity");
     assert_eq!(state.revision(), 0);
@@ -118,7 +72,9 @@ fn main() {
     assert!(!first.report.fell_back);
     assert!(matches!(
         first.report.proof_authority,
-        ProofAuthority::Reviewed { registry: "p0.scalar.v1" }
+        ProofAuthority::Reviewed {
+            registry: "p0.scalar.v1"
+        }
     ));
     assert_ne!(first.module, input);
     assert_eq!(first.certificate.regions.len(), 1);
@@ -174,26 +130,4 @@ fn main() {
     );
     assert_eq!(fallback.audit(), before_failure);
     assert_eq!(fallback.revision(), 0);
-}
-"#;
-
-#[test]
-fn day8_persistent_equality_accumulation_and_transaction_contract() {
-    let client = ClientProject::new();
-    let output = Command::new(env!("CARGO"))
-        // Path dependencies do not inherit their repository's Cargo config.
-        .arg("--config")
-        .arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.cargo/config.toml"))
-        .args(["run", "--quiet", "--offline"])
-        .current_dir(&client.0)
-        .env("CARGO_TARGET_DIR", client.0.join("target"))
-        .output()
-        .expect("run persistent-state client");
-    assert_eq!(
-        output.status.code(),
-        Some(0),
-        "client stdout={}, stderr={}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
 }

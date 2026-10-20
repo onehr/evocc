@@ -33,3 +33,5 @@ long v_after_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6
                    long a7, char c, int i, ...);
 long sum_list(int n, va_list list);
 long forward(int n, ...);
+double v_after_vector_stack(double, double, double, double, double, double,
+                            double, double, double, ...);

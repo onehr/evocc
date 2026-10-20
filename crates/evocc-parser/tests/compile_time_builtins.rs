@@ -308,12 +308,24 @@ fn builtin_unreachable_is_a_void_expression_statement() {
 }
 
 #[test]
-fn builtin_return_address_accepts_only_constant_zero() {
-    accepts("void *f(void) { return __builtin_return_address(0); }\n");
-    rejects(
-        "void *f(void) { return __builtin_return_address(1); }\n",
-        "E2913",
-    );
+fn activation_address_depths_convert_to_unsigned_int_without_becoming_constants() {
+    for builtin in ["__builtin_return_address", "__builtin_frame_address"] {
+        for depth in ["0", "1", "65535", "0x100000001UL", "-4294967295L"] {
+            accepts(&format!("void *f(void) {{ return {builtin}({depth}); }}"));
+        }
+        for depth in ["-1", "65536", "0x1ffffUL", "n", "1.0"] {
+            rejects(
+                &format!("void *f(int n) {{ return {builtin}({depth}); }}"),
+                "E2913",
+            );
+        }
+        // A runtime null pointer value is not a C null pointer constant.
+        accepts(&format!("int x; _Static_assert(__builtin_types_compatible_p(typeof(1 ? &x : {builtin}(1)), void *), \"pointer type\");"));
+        rejects(
+            &format!("_Static_assert({builtin}(1) == 0, \"not an ICE\");"),
+            "E2912",
+        );
+    }
 }
 
 #[test]

@@ -1,0 +1,560 @@
+{
+  "schema": "agent-repair.concise-feedback.v1",
+  "form": "concise-1",
+  "qualification": {
+    "path": "tests/fixtures/agent-repair-4/qualification.json",
+    "sha256": "9c98c41cc4d9942a013e49bfa07181b112382c6e2d29a6168f7df99e19471fef"
+  },
+  "command": [
+    "evo",
+    "check",
+    "--json",
+    "--form=concise-1",
+    "<scratch>/input.c"
+  ],
+  "version": "evocc 0.1.0 (d362bde096cc 2026-10-14)",
+  "binaries": {
+    "evo": {
+      "path": "target/frontend/release/evo",
+      "sha256": "7519053bdbeffe376618cce3dae161f845cf2acfe970dbdfa4afd21f77fb22ad"
+    },
+    "evocc": {
+      "path": "target/frontend/release/evocc",
+      "sha256": "1e17b55eccd382bde07c8e428d72eaa46c0bdad5fd9723326c24f3661467b51b"
+    }
+  },
+  "bytes": {
+    "full-1": 46760,
+    "concise-1": 12539
+  },
+  "items": [
+    {
+      "item": "adler-byte",
+      "code": "E3011",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-2_udu4tl",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3011\",\"message\":\"out-of-bounds-memory-access\",\"at\":\"input.c:36:12\",\"source\":\"view->data[index + 1]\",\"why\":\"The executed access extends outside the object's permitted storage.\",\"fix\":\"Check indices and access sizes before reading or writing.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1475,
+            "concise-1": 323
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-1jkk80_g",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "adler-reset",
+      "code": "E3001",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-f273xmne",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3001\",\"message\":\"read-of-uninitialized-object\",\"at\":\"input.c:31:5\",\"source\":\"view->seed += seed\",\"why\":\"The executed path reads object bytes that have not been initialized.\",\"fix\":\"Initialize the object on every path before reading it.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1461,
+            "concise-1": 318
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-27v0dwh1",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "adler-view",
+      "code": "E3010",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-ozyeczxa",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3010\",\"message\":\"dangling-pointer-access\",\"at\":\"input.c:43:12\",\"source\":\"view->data[index]\",\"why\":\"The pointer refers to an object whose lifetime has ended.\",\"fix\":\"Keep the object alive until its last use or copy its value before leaving its scope.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1554,
+            "concise-1": 332
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-bylsb1b3",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "crc-byte",
+      "code": "E3011",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-tq86c3rj",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3011\",\"message\":\"out-of-bounds-memory-access\",\"at\":\"input.c:36:12\",\"source\":\"view->data[index + 1]\",\"why\":\"The executed access extends outside the object's permitted storage.\",\"fix\":\"Check indices and access sizes before reading or writing.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1475,
+            "concise-1": 323
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-jbcpq1qe",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "crc-reset",
+      "code": "E3001",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-joofp12e",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3001\",\"message\":\"read-of-uninitialized-object\",\"at\":\"input.c:31:5\",\"source\":\"view->seed += seed\",\"why\":\"The executed path reads object bytes that have not been initialized.\",\"fix\":\"Initialize the object on every path before reading it.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1461,
+            "concise-1": 318
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-fsuw12qi",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "crc-view",
+      "code": "E3010",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-o8h94zxp",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3010\",\"message\":\"dangling-pointer-access\",\"at\":\"input.c:43:12\",\"source\":\"view->data[index]\",\"why\":\"The pointer refers to an object whose lifetime has ended.\",\"fix\":\"Keep the object alive until its last use or copy its value before leaving its scope.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1554,
+            "concise-1": 332
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-q1gwux6y",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "increment-limit",
+      "code": "E3004",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-lerp0zlc",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3004\",\"message\":\"signed-integer-overflow\",\"at\":\"input.c:39:12\",\"source\":\"value + 1\",\"why\":\"An executed signed integer operation has a result outside its permitted range.\",\"fix\":\"Check the range before the operation, or use a suitable wider arithmetic type.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1660,
+            "concise-1": 339
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-40d1me9w",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"32\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "left-count",
+      "code": "E3005",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-jto9uosj",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3005\",\"message\":\"invalid-shift-count\",\"at\":\"input.c:39:12\",\"source\":\"(unsigned)value << parameter\",\"why\":\"The shift count is negative or at least the width of the promoted left operand.\",\"fix\":\"Check the count before shifting instead of relying on hardware count masking.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1547,
+            "concise-1": 354
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-px3lnki7",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"32\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "magnitude-limit",
+      "code": "E3004",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-oi8be7ro",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3004\",\"message\":\"signed-integer-overflow\",\"at\":\"input.c:39:24\",\"source\":\"-value\",\"why\":\"An executed signed integer operation has a result outside its permitted range.\",\"fix\":\"Check the range before the operation, or use a suitable wider arithmetic type.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1686,
+            "concise-1": 336
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-vuivnpto",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"32\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "mean-empty",
+      "code": "E3002",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-yet78mc2",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3002\",\"message\":\"integer-division-by-zero\",\"at\":\"input.c:39:12\",\"source\":\"value / (int)parameter\",\"help\":[\"check the divisor before the division or remainder operation\"],\"why\":\"The executed integer division has a zero divisor.\",\"fix\":\"Check the divisor and choose the required error behavior before dividing.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1638,
+            "concise-1": 391
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-3kch1y0r",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"32\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "minify-byte",
+      "code": "E3011",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-h_xmzhad",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3011\",\"message\":\"out-of-bounds-memory-access\",\"at\":\"input.c:36:12\",\"source\":\"view->data[index + 1]\",\"why\":\"The executed access extends outside the object's permitted storage.\",\"fix\":\"Check indices and access sizes before reading or writing.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1475,
+            "concise-1": 323
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-sy2qvxyk",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "minify-reset",
+      "code": "E3001",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-wsgzmu62",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3001\",\"message\":\"read-of-uninitialized-object\",\"at\":\"input.c:31:5\",\"source\":\"view->seed += seed\",\"why\":\"The executed path reads object bytes that have not been initialized.\",\"fix\":\"Initialize the object on every path before reading it.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1461,
+            "concise-1": 318
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-oq4492z3",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "minify-view",
+      "code": "E3010",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-zqui85ro",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3010\",\"message\":\"dangling-pointer-access\",\"at\":\"input.c:43:12\",\"source\":\"view->data[index]\",\"why\":\"The pointer refers to an object whose lifetime has ended.\",\"fix\":\"Keep the object alive until its last use or copy its value before leaving its scope.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1554,
+            "concise-1": 332
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-uzxastk0",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "pointer-byte",
+      "code": "E3011",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-2z0v1tyw",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3011\",\"message\":\"out-of-bounds-memory-access\",\"at\":\"input.c:36:12\",\"source\":\"view->data[index + 1]\",\"why\":\"The executed access extends outside the object's permitted storage.\",\"fix\":\"Check indices and access sizes before reading or writing.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1475,
+            "concise-1": 323
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-hpxvhbxy",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "pointer-reset",
+      "code": "E3001",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-0o8jmcmn",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3001\",\"message\":\"read-of-uninitialized-object\",\"at\":\"input.c:31:5\",\"source\":\"view->seed += seed\",\"why\":\"The executed path reads object bytes that have not been initialized.\",\"fix\":\"Initialize the object on every path before reading it.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1461,
+            "concise-1": 318
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-j5vqc5_n",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "pointer-view",
+      "code": "E3010",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-i64isemb",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3010\",\"message\":\"dangling-pointer-access\",\"at\":\"input.c:43:12\",\"source\":\"view->data[index]\",\"why\":\"The pointer refers to an object whose lifetime has ended.\",\"fix\":\"Keep the object alive until its last use or copy its value before leaving its scope.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1554,
+            "concise-1": 332
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-b928eio7",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "right-count",
+      "code": "E3005",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-1a6mbz5s",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3005\",\"message\":\"invalid-shift-count\",\"at\":\"input.c:39:12\",\"source\":\"(unsigned)value >> parameter\",\"why\":\"The shift count is negative or at least the width of the promoted left operand.\",\"fix\":\"Check the count before shifting instead of relying on hardware count masking.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1547,
+            "concise-1": 354
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-srcwocg_",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"32\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "scale-empty",
+      "code": "E3002",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-5ysi5vby",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3002\",\"message\":\"integer-division-by-zero\",\"at\":\"input.c:39:12\",\"source\":\"value / (int)parameter\",\"help\":[\"check the divisor before the division or remainder operation\"],\"why\":\"The executed integer division has a zero divisor.\",\"fix\":\"Check the divisor and choose the required error behavior before dividing.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1638,
+            "concise-1": 391
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-f_h_wfl3",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"32\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "xxh32-byte",
+      "code": "E3011",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-4fynup_l",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3011\",\"message\":\"out-of-bounds-memory-access\",\"at\":\"input.c:36:12\",\"source\":\"view->data[index + 1]\",\"why\":\"The executed access extends outside the object's permitted storage.\",\"fix\":\"Check indices and access sizes before reading or writing.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1475,
+            "concise-1": 323
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-xjpr_j3x",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "xxh32-reset",
+      "code": "E3001",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-rdmk0yo0",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3001\",\"message\":\"read-of-uninitialized-object\",\"at\":\"input.c:31:5\",\"source\":\"view->seed += seed\",\"why\":\"The executed path reads object bytes that have not been initialized.\",\"fix\":\"Initialize the object on every path before reading it.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1461,
+            "concise-1": 318
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-0x_kqhad",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "xxh32-view",
+      "code": "E3010",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-ezdnwoqo",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3010\",\"message\":\"dangling-pointer-access\",\"at\":\"input.c:43:12\",\"source\":\"view->data[index]\",\"why\":\"The pointer refers to an object whose lifetime has ended.\",\"fix\":\"Keep the object alive until its last use or copy its value before leaving its scope.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1554,
+            "concise-1": 332
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-xrgwuqox",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "xxh64-byte",
+      "code": "E3011",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-7fxjz4rd",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3011\",\"message\":\"out-of-bounds-memory-access\",\"at\":\"input.c:36:12\",\"source\":\"view->data[index + 1]\",\"why\":\"The executed access extends outside the object's permitted storage.\",\"fix\":\"Check indices and access sizes before reading or writing.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1475,
+            "concise-1": 323
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-de7niqne",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "xxh64-reset",
+      "code": "E3001",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-mpqkl1a1",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3001\",\"message\":\"read-of-uninitialized-object\",\"at\":\"input.c:31:5\",\"source\":\"view->seed += seed\",\"why\":\"The executed path reads object bytes that have not been initialized.\",\"fix\":\"Initialize the object on every path before reading it.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1461,
+            "concise-1": 318
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-ck0ttlo5",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    },
+    {
+      "item": "xxh64-view",
+      "code": "E3010",
+      "feedback": {
+        "program.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-4uvkwnhx",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"stopped\",\"diagnostics\":[{\"code\":\"E3010\",\"message\":\"dangling-pointer-access\",\"at\":\"input.c:43:12\",\"source\":\"view->data[index]\",\"why\":\"The pointer refers to an object whose lifetime has ended.\",\"fix\":\"Keep the object alive until its last use or copy its value before leaving its scope.\"}],\"exit_code\":1}\n",
+          "bytes": {
+            "full-1": 1554,
+            "concise-1": 332
+          }
+        },
+        "fixed.c": {
+          "scratch": "/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/silent-feedback-kziclx6c",
+          "concise-1": "{\"form\":\"concise-1\",\"status\":\"completed\",\"main_return\":\"16\",\"scope\":\"No undefined behavior was found on the executed path. This does not check that the results are correct.\",\"exit_code\":0}\n",
+          "bytes": {
+            "full-1": 421,
+            "concise-1": 189
+          }
+        }
+      }
+    }
+  ]
+}

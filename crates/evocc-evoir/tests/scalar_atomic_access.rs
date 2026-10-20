@@ -30,22 +30,34 @@ fn atomic_order_roundtrips_and_is_not_interchangeable_with_volatile() {
 #[test]
 fn atomic_validation_rejects_invalid_orders_widths_alignment_and_tokens() {
     parse_section9_module(SOURCE.as_bytes()).expect("positive control");
-    for changed in [
-        SOURCE.replace("load acquire", "load release"),
-        SOURCE.replace("store release", "store acquire"),
-        SOURCE.replace("load acquire", "load made_up"),
-        SOURCE
-            .replace("bits<32>", "bits<128>")
-            .replace("size=4, align=4", "size=16, align=16"),
-        SOURCE.replace("align=4", "align=1"),
-        SOURCE.replace("volatile %v7, %v6", "volatile %v2, %v6"),
-        SOURCE.replace("volatile %v7, %v6", "volatile %v7, %v3"),
-        SOURCE.replace("atomic=true", "atomic=false"),
+    for (changed, atomic_fault) in [
+        (SOURCE.replace("load acquire", "load release"), true),
+        (SOURCE.replace("store release", "store acquire"), true),
+        (SOURCE.replace("load acquire", "load made_up"), false),
+        (
+            SOURCE
+                .replace("bits<32>", "bits<128>")
+                .replace("size=4, align=4", "size=16, align=16"),
+            true,
+        ),
+        (SOURCE.replace("align=4", "align=1"), true),
+        (
+            SOURCE.replace("volatile %v7, %v6", "volatile %v2, %v6"),
+            true,
+        ),
+        (
+            SOURCE.replace("volatile %v7, %v6", "volatile %v7, %v3"),
+            false,
+        ),
+        (SOURCE.replace("atomic=true", "atomic=false"), false),
     ] {
-        assert!(
-            parse_section9_module(changed.as_bytes()).is_err(),
-            "accepted malformed atomic module: {changed}"
-        );
+        let error = parse_section9_module(changed.as_bytes()).expect_err(&changed);
+        if atomic_fault {
+            assert!(
+                error.contains("E3062: invalid-atomic-access"),
+                "{error}: {changed}"
+            );
+        }
     }
 }
 

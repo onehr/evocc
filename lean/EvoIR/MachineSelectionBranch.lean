@@ -38,11 +38,6 @@ private theorem operand_bits_read {Γ : Var → Nat} (bank : Bank Γ) (reg : Evo
   rw [EvoIR.Machine.operandValue_readOperand] at value
   simp only [EvoIR.Machine.readBits, value, bind, Except.bind, pure, Except.pure]
 
-private theorem encoded_nonzero (value : BitVec 1) (width : EvoIR.Machine.Width) :
-    ((value.setWidth 64).setWidth width.bits != 0) = value.getLsbD 0 := by
-  rw [one_bit_reify value]
-  cases value.getLsbD 0 <;> cases width <;> rfl
-
 private def guardTestUnder {Γ : Var → Nat} (checks : List (Guard Γ))
     (source : Term Γ 1) (flags : FlagExpr Γ) (cond : EvoIR.Machine.Cond) :
     Option {passWhen : Bool // ∀ σ, guards σ checks = .ok () →
@@ -133,33 +128,31 @@ def branchChoiceUnder {Γ : Var → Nat} (p : EvoIR.Machine.Program)
           | none => none
           | some width => some ⟨width, found⟩
         let operand ← wordOperand bank reg
-        let equal ← checkWordUnder checks ⟨1, condition⟩ operand.val
+        let tested ← zeroTestUnder checks condition operand.val width.val
         let first ← jumpBank f bank taken takenArgs
         let second ← jumpBank f bank untaken untakenArgs
         let yes : BranchArm Γ f bank := ⟨taken, takenArgs, first.val, first.property⟩
         let no : BranchArm Γ f bank := ⟨untaken, untakenArgs, second.val, second.property⟩
-        let choice := if nonzero then (⟨yes, no⟩ : BranchChoice Γ f bank) else ⟨no, yes⟩
+        let choice := if nonzero == tested.val then (⟨yes, no⟩ : BranchChoice Γ f bank) else ⟨no, yes⟩
         return ⟨choice, by
           intro σ owner nextFrame incoming stack memory passed
           have read := operand_bits_read bank reg operand.val operand.property σ
-          have truth : ((operand.val.denote σ).setWidth width.val.bits != 0) =
-              (denoteTerm σ condition).getLsbD 0 := by
-            rw [equal.down σ passed]
-            exact encoded_nonzero _ _
+          have truth := tested.property σ passed
           have firstJump := first.property.2.2 σ owner incoming b.id b.insts.length
           have secondJump := second.property.2.2 σ owner incoming b.id b.insts.length
-          cases nonzero <;> cases bit : (denoteTerm σ condition).getLsbD 0
+          cases selected : tested.val <;> cases nonzero <;> cases bit : (denoteTerm σ condition).getLsbD 0
           all_goals
             have step := EvoIR.Machine.Selection.step_branch_zero .ssa p
               (machineState σ f b b.insts.length bank owner nextFrame incoming stack memory)
               ⟨f.name, b.id, b.insts.length, bankDenote σ bank, owner, incoming⟩
               f b _ reg taken takenArgs untaken untakenArgs width.val (operand.val.denote σ) _
               rfl function block rfl term width.property read
-              (by simpa only [truth, bit, beq_self_eq_true, Bool.false_eq_true,
-                ↓reduceIte]
+              (by simpa only [truth, selected, bit, Bool.not_false, Bool.not_true,
+                  Bool.false_eq_true, beq_self_eq_true, ↓reduceIte]
                 using (by first | exact firstJump | exact secondJump))
-            simpa only [choice, yes, no, bit, Bool.false_eq_true,
-              ↓reduceIte, machineState, first.property.2.1, second.property.2.1] using step⟩
+            simpa only [choice, selected, yes, no, bit, Bool.false_eq_true,
+              beq_self_eq_true, Bool.true_beq, Bool.false_beq, Bool.not_true, Bool.not_false, ↓reduceIte,
+              machineState, first.property.2.1, second.property.2.1] using step⟩
       | _ => none
     else none
   else none

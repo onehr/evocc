@@ -29,7 +29,7 @@ fn emit(args: &[String]) -> Result<String, String> {
     )
     .map_err(|e| format!("{e:?}"))?;
     for function in &mut lowered.functions {
-        *function = evocc_mir::regalloc::out_of_ssa(function);
+        *function = evocc_mir::regalloc::checked_out_of_ssa(function, true)?;
     }
     evocc_mir::verify_alloc::export_core_allocation(&lowered)
 }

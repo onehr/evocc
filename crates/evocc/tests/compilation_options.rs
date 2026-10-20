@@ -256,8 +256,9 @@ fn individual_symbol_sections_are_not_silently_ignored_on_darwin() {
             },
         )
         .unwrap_err();
-        assert!(matches!(error, evocc_mir::NativeStop::Assembly(message)
-            if message == "individual function/data sections require the Linux ELF target"));
+        assert!(matches!(error, evocc_mir::NativeStop::Lowering(refusals)
+            if refusals.len() == 1 && refusals[0].code == "E4009"
+            && refusals[0].detail == "individual function/data sections require the Linux ELF target"));
     }
 }
 
@@ -918,23 +919,26 @@ fn return_signing_matches_frame_lifetime_and_final_override() {
 }
 
 #[test]
-fn every_return_signing_spelling_signs_each_function_and_sets_the_acle_scope() {
+fn return_signing_scope_controls_frameless_leaves_and_the_acle_macro() {
     let source =
         "extern int g(int); int f(int n) { return g(n) + 1; } int leaf(int n) { return n & 7; }";
-    for (option, scope) in [
-        ("-mbranch-protection=pac-ret", "1"),
-        ("-mbranch-protection=pac-ret+leaf", "5"),
+    for (option, scope, signed) in [
+        ("-mbranch-protection=pac-ret", "1", 1),
+        ("-mbranch-protection=pac-ret+leaf", "5", 2),
     ] {
         let asm = successful(run(&["--emit=asm", option], source));
-        // Both functions sign, the leaf included, and every return authenticates first.
-        assert_eq!(asm.matches("paciasp").count(), 2, "{option}: {asm}");
+        assert_eq!(asm.matches("paciasp").count(), signed, "{option}: {asm}");
         let lines: Vec<&str> = asm.lines().collect();
         let returns: Vec<usize> = (1..lines.len())
             .filter(|&i| lines[i].trim() == "ret")
             .collect();
         assert!(!returns.is_empty(), "{option}: {asm}");
-        assert!(
-            returns.iter().all(|&i| lines[i - 1].trim() == "autiasp"),
+        assert_eq!(
+            returns
+                .iter()
+                .filter(|&&i| lines[i - 1].trim() == "autiasp")
+                .count(),
+            signed,
             "{option}: {asm}"
         );
         let defined = successful(run(&["-E", option], "__ARM_FEATURE_PAC_DEFAULT\n"));
@@ -955,6 +959,15 @@ fn every_return_signing_spelling_signs_each_function_and_sets_the_acle_scope() {
         "__ARM_FEATURE_PAC_DEFAULT\n",
     ));
     assert_eq!(defined.trim(), "__ARM_FEATURE_PAC_DEFAULT");
+    let narrowed = successful(run(
+        &[
+            "--emit=asm",
+            "-mbranch-protection=pac-ret+leaf",
+            "-mbranch-protection=pac-ret",
+        ],
+        source,
+    ));
+    assert_eq!(narrowed.matches("paciasp").count(), 1, "{narrowed}");
 }
 
 #[test]
@@ -962,6 +975,26 @@ fn general_register_only_varargs_never_save_vector_registers() {
     let source = "long f(int n, ...) { __builtin_va_list a; __builtin_va_start(a,n); long x=__builtin_va_arg(a,long); __builtin_va_end(a); return x; }";
     let asm = successful(run(&["--emit=asm", "-mgeneral-regs-only"], source));
     assert!(!asm.contains("stp q"), "{asm}");
+}
+
+#[test]
+fn general_register_only_still_refuses_real_vector_and_floating_arguments() {
+    for target in [
+        "--target=aarch64-apple-darwin",
+        "--target=aarch64-unknown-linux-gnu",
+    ] {
+        for source in [
+            "double f(double x) { return x + 1; }",
+            "typedef int V __attribute__((vector_size(16))); V f(V x) { return x; }",
+        ] {
+            let output = run(&["--emit=asm", target, "-mgeneral-regs-only"], source);
+            assert!(!output.status.success(), "{output:?}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains("E4002"),
+                "{output:?}"
+            );
+        }
+    }
 }
 
 #[test]

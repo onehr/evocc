@@ -1,0 +1,51 @@
+Zero-upper-bit integer selection — 2026-10-19
+
+A descending worklist tracks upper zero bits of integer SSA values. A join
+uses every incoming edge; entry values remain unknown. Copies, constants,
+comparisons, masks and extensions supply bounds. An extension or mask that
+cannot change the value becomes a copy of the same destination and class.
+W-register copies remain explicit: their high-bit clearing is observable.
+No guard, memory access, effect, CFG edge or EvoIR fact changes. This is
+ordinary machine selection, not a new certified EqSat rewrite.
+
+Unchanged sources and kernel argv, 100000 calls per case:
+Symbol           Before/call After/call GCC14/call Before bytes After bytes
+theta                    171        171         94          728         728
+pte_offset_map            55         52         23          288         276
+folio_state               32         32          9          152         152
+Three container and three TCG executions agree on the retained checksums;
+no dropped or irregular blocks occur. GCC counts are retained, not rerun.
+The final gate-built compiler reproduces all three measured assembly files
+byte for byte. The record remains above its 46-instruction exit threshold.
+Library-only executed-path check refusals remain non-PASS.
+
+Tests cover joins, loops, signed boundaries, widths 1..63, both targets and
+W/X transport. The first full gate exposed stale code-shape expectations and
+container sandbox failures. Its failed log remains. All 46 ABI cases were
+compared against the old selection: EvoIR is unchanged, and only two target
+variants replace a Boolean mask with a W copy. The adjusted snapshots retain
+that exact change; no acceptance threshold is weakened.
+
+Final acceptance: 457 Rust suites, 3467 passed, zero failed, eight ignored,
+Clippy and formatting pass. All six Lean steps pass: 88434 vectors, 62 rules,
+36 analysis rows, 576 enumerated instances and 11 named expectations. The
+975 whole-environment axioms are not a TCB count. The separate six-group
+Rust/Lean correspondence campaign was not rerun. The shared tree is dirty.
+
+Original hot units compile and assemble, without installation or boot:
+Unit                       Before whole object bytes After bytes
+mm/page_alloc.o                                  524600      523104
+arch/arm64/kvm/mmu.o                             701792      701224
+crypto/sha3_generic.o                            253616      253616
+These are object sizes, not S1 .text measurements. The projected original
+commands retain their disclosed option omissions. They are not whole Kbuild
+command parity. The driver SHA-256 is
+03b342ebc1ab3aa36949c6916fb46e49dd2f7f384c901cb309a1f8c5325ef864.
+
+Capture: .evidence/kernel-codegen-replay-20261019/ (500 MiB cap).
+Probe records: .evidence/live-range-holes-20261016/*integer-width*.
+At acceptance the captures use 161988 and 115052 KiB, and target/frontend
+uses 22704520 KiB. This slice has no isolated pre-run disk baseline, so its
+net disk increase is not known. No required runtime pair was removed.
+Claim ceiling: these reductions, original compile probes and the existing
+supported proof profile. No new kernel runtime or full application claim.

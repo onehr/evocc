@@ -117,11 +117,18 @@ fn effect_nodes_are_refused_at_the_bridge_boundary() {
         volatile: false,
     };
     let error = ingest_scalar_inst(&load).expect_err("load must not enter scalar egraph");
-    assert_eq!(error.code(), "E4001");
+    assert_eq!(error.code(), "EQ_EFFECT_EXCLUDED");
     assert_eq!(
         error.message(),
         "effect-bearing-instruction-is-not-scalar-egraph-eligible"
     );
+}
+
+#[test]
+fn excluded_scalar_operators_do_not_reuse_machine_refusal_codes() {
+    let division = Inst::SDiv(bits(2), bits(0), bits(1));
+    let error = ingest_scalar_inst(&division).expect_err("division is outside P0");
+    assert_eq!(error.code(), "EQ_OPERATOR_EXCLUDED");
 }
 
 #[test]

@@ -31,6 +31,7 @@ fn assembly_boundaries_survive_direct_edge_identity_reduction() {
         );
         let ir = evocc_evoir::parse_section9_module(&out.stdout).unwrap();
         let mir = evocc_mir::lower_module_for(evocc_mir::Target::Linux, &ir, &|_| false).unwrap();
+        evocc_mir::validate_module(&mir).expect("assembly lowering preserves SSA");
         for function in &mir.functions {
             let after = evocc_mir::out_of_ssa(function);
             let observations = |f: &evocc_mir::MFunction| {

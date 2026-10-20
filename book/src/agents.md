@@ -61,6 +61,7 @@ data. Non-UTF-8 program arguments remain byte-exact at the CLI boundary.
 | `help` | `usage`: string; `exit_code`: integer |
 | `run` | `exit_code`: integer; `stdout`, `stderr`: captured command output strings |
 | `check` | `exit_code`: integer; `completion`: the compiler completion object or null; `diagnostics`: array of diagnostic records |
+| `check --form=concise-1` | In this order: `form`, `status`: strings; `main_return`, `scope`: strings when main returned; `diagnostics`, `repairs`: arrays of concise records when nonempty; `exit_code`: integer. `--form=full-1` is the default `check` record |
 | `explain` | `code`, `title`, `text`: strings; `exit_code`: integer |
 | `prove` | `result`: record result string or null; `stages`: array of `{id,status}` strings; `record_path`: string or null; `proof_directory`: string; `checker`: chosen absolute path or null; `exit_code`: integer; `stderr`: string |
 | `build` | The same object as `evo-build-receipt.json`: `version`, `target`: strings; `sources`: string array; `warnings`: code-to-count object; `failing_command`: string array or null; `exit_code`: integer |
@@ -99,7 +100,7 @@ the later, per-request-metadata protocol.
 | Tool | Arguments | Command |
 |---|---|---|
 | `run` | `file`: string; optional `args`: string array | `evo run FILE --json [-- ARGS]` |
-| `check` | `file`: string | `evo check FILE --json` |
+| `check` | `file`: string; optional `form`: `full-1` or `concise-1` | `evo check FILE --json [--form=FORM]` |
 | `explain` | `code`: string | `evo explain CODE --json` |
 | `prove` | `file`, `output`: strings; optional `entries`: string array | `evo prove FILE -o OUTPUT --json [--entry NAME ...]` |
 | `fix_plan` | `file`: string | `evo fix FILE --plan --json` |

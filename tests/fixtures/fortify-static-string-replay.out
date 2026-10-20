@@ -1,0 +1,35 @@
+2026-10-16: unchanged Linux 6.18.44 FORTIFY KUnit, paired minimal configuration.
+Source: lib/tests/fortify_kunit.c
+Source SHA256: 484fa5e1997fed431d634a0580b34b2a8828df228d8f128ee947bc2a3944cbb0
+
+The full source identity and command records are in the existing expanded
+KUnit receipt's fortify/minimal-pair follow-up. This is not the retired
+expanded configuration or a complete Linux acceptance result.
+
+                         PASS  FAIL  SKIP  QEMU exit
+GCC 14 reference           26     0     0       0
+First EvoCC subject       25     1     0       0
+Repaired EvoCC subject    26     0     0       0
+
+Only lib/tests/fortify_kunit.o is replaced in the subject. All other C units,
+assembly and linking use the reference toolchain. The original 26 assertions
+are unchanged. Both successful runs power off normally, within the unchanged
+120-second limit, with zero upstream KUnit parser errors or crashes.
+
+The approved static-string ICE rule fixes the two historical assertions at
+lines 95 and 101. The first replay exposed a separate byte-fact loss at line
+90 after a single-trip KUnit assertion macro. The final replay includes that
+repair. The first failed Image, log and summary remain in the capture.
+
+Reference Image SHA256:
+5bb6be7784f3398e389ebd80062cd9de694d2907ede0317387374b5ed762bd90
+Subject Image SHA256:
+2f2d9d53494021de8033750117ee88807da0219c02f8c6b9c12d8d4a53c123f8
+Capture: .evidence/fortify-constant-20261016/
+Receipt: tests/contracts/kernel-expanded-kunit-receipt.json
+
+Capture retention: plans, inputs, hashes, logs, both successful Images, the
+failed Image and the prior tiny runtime remain. The two copied intermediate
+objects and emitted assembly were hashed, checked for open handles and
+deleted. They can be regenerated; there is no Trash copy.
+Compiler package acceptance is recorded separately in TODO.md.

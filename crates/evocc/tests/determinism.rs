@@ -53,6 +53,8 @@ cases = (
     ('fix plan', ['fix', str(buggy), '--plan'], 0),
     ('explain', ['explain', 'E3004'], 0),
     ('positive check', ['check', str(positive)], 0),
+    ('concise check', ['check', str(buggy), '--form=concise-1'], 1),
+    ('concise positive check', ['check', str(positive), '--form=concise-1'], 0),
     ('run', ['run', str(positive)], 0),
     ('prove', ['prove', str(proof_source)], 0),
 )
@@ -85,6 +87,16 @@ for name, arguments, expected in cases:
                 assert result['diagnostics'] == []
                 assert result['completion']['claim'] == 'executed-path-only'
                 assert result['completion']['main_return'] == '0'
+            elif name == 'concise check':
+                assert list(result) == ['form', 'status', 'diagnostics', 'repairs', 'exit_code'], result
+                assert result['form'] == 'concise-1' and result['status'] == 'stopped'
+                assert [d['code'] for d in result['diagnostics']] == ['W0004', 'E3004']
+                assert {r['id'] for r in result['repairs']} == {
+                    'W0004.insert-int', 'W0001.remove-declaration'}
+            elif name == 'concise positive check':
+                assert list(result)[:4] == ['form', 'status', 'main_return', 'scope'], result
+                assert result['status'] == 'completed' and result['main_return'] == '0'
+                assert 'diagnostics' not in result and list(result)[-1] == 'exit_code'
             elif name == 'run':
                 assert result == {'exit_code': 0, 'stdout': '', 'stderr': ''}
             else:

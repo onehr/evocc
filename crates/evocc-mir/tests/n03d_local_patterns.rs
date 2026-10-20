@@ -11,6 +11,10 @@ fn r(id: u32, width: Width) -> VReg {
 
 fn function(insts: Vec<MInst>) -> Allocated {
     Allocated {
+        input: evocc_mir::MFunction {
+            name: "probe".into(),
+            blocks: vec![],
+        },
         name: "probe".into(),
         blocks: vec![MBlock {
             id: 0,

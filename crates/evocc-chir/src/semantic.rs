@@ -690,6 +690,17 @@ impl SymbolTable {
         Ok(None)
     }
 
+    /// Look up a tag in exactly this scope, without searching its parents.
+    /// A tag definition or forward declaration can shadow an enclosing tag;
+    /// it must not reuse the nearest declaration from an outer scope.
+    pub fn tag_in_scope(
+        &self,
+        scope: ScopeId,
+        spelling: &str,
+    ) -> Result<Option<TagId>, SymbolTableError> {
+        Ok(self.scope(scope)?.tag_names.get(spelling).copied())
+    }
+
     /// Resolve the nearest tag declaration independently of ordinary names.
     pub fn resolve_tag(
         &self,

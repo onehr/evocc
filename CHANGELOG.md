@@ -9,6 +9,19 @@ The first public version.
 
 ### Added
 
+- `evo check FILE.c --json --form=concise-1` prints one short record: the check result, each
+  diagnostic with its location, a one-line explanation and a repair hint, and the plan's repairs.
+  `full-1` stays the default. The MCP `check` tool takes the same optional `form`.
+- `__builtin_strlen` of an immutable file-scope character array with static storage, or of a
+  `const` file-scope pointer into one, is an integer constant expression on both targets, as in
+  GCC. Every other operand stays an ordinary call with its effects.
+- `typeof` evaluates its operand exactly when the operand's type is variably modified, as C23
+  requires.
+- `__builtin_return_address(n)` and `__builtin_frame_address(n)` with `n` from 1 to 65535 return
+  a null pointer on both targets and in both interpreters, as GCC does. An invalid depth is E2913.
+- Three more checked string builtins of the macOS 26 SDK (`__builtin___memccpy_chk`,
+  `__builtin___strlcpy_chk`, `__builtin___strlcat_chk`), four checked `printf`-family builtins
+  and `__builtin___clear_cache`, which calls the target's runtime helper.
 - A registered repair-effort replication with 96 small-program sessions and 48
   larger-program sessions. EvoCC feedback used fewer steps and tokens on the
   selected small silent defects and fewer steps on the larger items. The three
@@ -111,6 +124,23 @@ The first public version.
 
 ### Changed
 
+- A clean check now states that it did not check pointer relations, in both `full-1` and
+  `concise-1`. Records of earlier versions keep their old scope sentence, so a replay of a
+  frozen experiment needs its recorded compiler.
+- The backend checks each SSA destruction against its input with an independent validator, and
+  the allocation verifier relates the input program to the allocated registers and slots.
+  Functions whose `asm goto` binds no fixed register now forward unchanged block arguments, and
+  live ranges have holes, so fewer values pass through the stack at joins.
+- One-word private records and small arrays indexed only by constants live in registers. A
+  function whose protected objects all became registers needs no stack canary.
+- `-mbranch-protection=pac-ret` signs every function that stores its return address and leaves
+  a leaf that keeps it in `x30` unsigned, as GCC 14 does; `pac-ret+leaf` signs every function.
+- Integer machine selection removes masks and extensions whose upper bits
+  are already zero on every incoming path. It preserves W-register clearing,
+  execution checks, memory effects and control-flow edges.
+- Integer zero tests can use CBZ/CBNZ through a private width-preserving copy.
+  The machine proof checker accepts the selection and rejects changed branch
+  operands or polarity. Execution obligations and branch arguments stay intact.
 - `evo prove` can find the Lean checker from a source checkout without an override.
   Its JSON record names the chosen checker; demo scripts use the same discovery path.
 - The project license changed from the placeholder GPL-2.0-only to Apache-2.0.
@@ -124,6 +154,16 @@ The first public version.
 
 ### Fixed
 
+- `evocc-checker --version` and `evoir-sem --version` report the release
+  version without reading files from a source checkout.
+- Repeated inline-assembly operands keep their own constraints when one operand
+  has a fixed register. Only a numeric tie propagates that binding. This fixes
+  the allocation refusal in Linux's 128-bit compare-exchange code without
+  weakening the independent allocation check.
+- Function `optimize` attributes can disable automatic tree, loop or SLP
+  vectorization, which EvoCC does not perform. Other optimization settings,
+  including a supported restriction mixed with an unknown setting, still fail
+  with E2952. The unchanged Linux zstd source now compiles.
 - An `asm` statement that clobbers `x19` to `x28` no longer loses the caller's value: the
   prologue saves the register and every epilogue restores it. A clobber of `x29` is refused
   (E4009).
@@ -132,8 +172,17 @@ The first public version.
   take their natural size and alignment, and a 128-bit argument does not start at an even
   register. Before, these shapes passed wrong values.
 - On macOS, `long double` is binary64 with size and alignment 8, as with Apple clang. Darwin
-  EvoIR text now names its target. Until the rewrite checker reads that text, `-Oeq-scalar` and
-  the EqSat options are refused for `aarch64-apple-darwin`.
+  EvoIR text names its target, and the rewrite checker reads it, so `-Oeq-scalar` works for
+  `aarch64-apple-darwin`. A certificate whose texts name different targets is refused.
+- `__attribute__((naked))` and the other function attributes that change the code or the
+  calling convention are refused with E2952. Before, a naked function got a frame record, so its
+  `asm` `ret` returned with the stack pointer moved.
+- On macOS, both interpreters use the eight-byte `va_list`, and named stack arguments fill only
+  the argument registers that the call uses.
+- A proof-required entry that is also called with constant arguments keeps its full parameter
+  domain, so the checked stages accept it.
+- A cast to a struct type from another type is E2953. A later declaration that changes an object
+  used by a constant string query is E2954.
 - More shapes fail closed instead of compiling wrongly: a read of an `_Atomic` object (E2702), a
   nonconstant range-designator initializer (E2917), a record of floating vectors at a function
   boundary (E3049), and ABI-changing options such as `-fpack-struct` and `-mabi=ilp32`, also

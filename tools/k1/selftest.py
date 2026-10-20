@@ -302,22 +302,28 @@ def parse_transcript(text, nonce, programs):
 def compare(reference, subject):
     if [r['id'] for r in reference] != [r['id'] for r in subject]:
         raise ValueError('reference and subject test denominators differ')
-    regressions, baseline_failures = [], []
+    regressions, baseline_failures, coverage_gaps = [], [], []
     for before, after in zip(reference, subject):
         if (before['outcome'] not in ('PASS', 'SKIP')
-                or before.get('nestedFailureSummaries') or before.get('nestedSkipSummaries')):
+                or before.get('nestedFailureSummaries')):
             baseline_failures.append(before['id'])
+        # The original pidfd test skips recycled PIDs on both kernels. Keep
+        # that missing coverage without reporting an identical skip as failure.
+        old_skips, new_skips = before.get('nestedSkipSummaries', []), after.get('nestedSkipSummaries', [])
+        if old_skips or new_skips:
+            coverage_gaps.append(before['id'])
         old_cases = {r['number']: r['outcome'] for r in before['cases']}
         new_cases = {r['number']: r['outcome'] for r in after['cases']}
         lost_pass = any(value == 'PASS' and new_cases.get(n) != 'PASS' for n, value in old_cases.items())
         if (after['outcome'] not in ('PASS', 'SKIP') or lost_pass
                 or before['outcome'] == 'PASS' and after['outcome'] != 'PASS'
                 or before.get('planned') != after.get('planned')
-                or after.get('nestedFailureSummaries') or after.get('nestedSkipSummaries')):
+                or after.get('nestedFailureSummaries') or new_skips and new_skips != old_skips):
             regressions.append(after['id'])
     return {'status': 'PASS' if reference and not regressions and not baseline_failures
-            and any(r['outcome'] == 'PASS' for r in subject) else 'INCOMPLETE',
+            and not coverage_gaps and any(r['outcome'] == 'PASS' for r in subject) else 'INCOMPLETE',
             'regressions': regressions, 'baselineFailures': baseline_failures,
+            'coverageGaps': coverage_gaps,
             'outcomes': dict(Counter(r['outcome'] for r in subject))}
 
 

@@ -30,6 +30,14 @@ impl RegisterClass for Class {
 }
 
 impl AllocClass for Class {
+    fn value_bits(self) -> u16 {
+        match self {
+            Self::Pair => 128,
+            Self::Half => 32,
+            Self::Word => 64,
+            Self::Condition => 4,
+        }
+    }
     fn bank(self) -> u8 {
         u8::from(self == Self::Pair)
     }
@@ -269,6 +277,21 @@ impl SsaInst for Inst {
 
 impl AllocInst for Inst {
     type Body = Body;
+    fn stack_argument(&self) -> Option<SpillView<Reg>> {
+        match self {
+            Self::Incoming(reg, slot) => Some(SpillView {
+                kind: SpillKind::Reload,
+                reg: *reg,
+                slot: *slot,
+            }),
+            Self::Outgoing(reg, slot) => Some(SpillView {
+                kind: SpillKind::Store,
+                reg: *reg,
+                slot: *slot,
+            }),
+            _ => None,
+        }
+    }
     fn copy_operands(&self) -> Option<(Reg, Reg)> {
         if let Self::Copy(dst, src) = self {
             Some((*dst, *src))
@@ -779,6 +802,10 @@ fn n03c_reload_reuse_stops_at_clobbers_slot_writes_and_opaque_effects() {
         let on = allocate_reload_reuse(&source);
         assert_eq!(reload_count(&on), reload_count(&off), "{label}: {on:?}");
         assert_eq!(reload_count(&on), 2, "{label}");
+        if label == "other memory" {
+            assert_eq!(off.outgoing, TINY.abi().outgoing_area_bytes(1));
+            assert_eq!(on.outgoing, off.outgoing);
+        }
         if let Some(value) = value {
             assert_eq!(straight_result(&off, BTreeMap::new()), vec![value]);
             assert_eq!(straight_result(&on, BTreeMap::new()), vec![value]);
@@ -1003,6 +1030,92 @@ fn pressure_spills_and_a_removed_reload_is_independently_rejected() {
         block.insts.retain(|i| !matches!(i, Inst::Restore(..)));
     }
     assert!(verify_allocation(&TINY, &missing).is_err());
+}
+
+#[test]
+fn branch_local_values_reuse_a_register_that_is_live_only_on_the_other_edge() {
+    // The two pair registers suffice on each execution path. In layout order,
+    // the lifetime of %0 surrounds the whole first successor, but %0 is not
+    // live in that successor. A single interval hull invents a third value.
+    let entry = Block {
+        id: 0,
+        args: vec![],
+        insts: vec![Inst::Value(q(0), 9)],
+        term: Term::Constraint {
+            body: Body::default(),
+            edges: vec![(1, vec![]), (2, vec![])],
+        },
+    };
+    let left = Block {
+        id: 1,
+        args: vec![],
+        insts: vec![
+            Inst::Value(q(1), 10),
+            Inst::Value(q(2), 11),
+            Inst::Add(q(3), q(1), q(2)),
+        ],
+        term: Term::Return(vec![q(3)]),
+    };
+    let right = Block {
+        id: 2,
+        args: vec![],
+        insts: vec![Inst::Add(q(4), q(0), q(0))],
+        term: Term::Return(vec![q(4)]),
+    };
+    for successors in [[left.clone(), right.clone()], [right, left]] {
+        let source = Function {
+            name: "disjoint_successors".into(),
+            blocks: vec![entry.clone(), successors[0].clone(), successors[1].clone()],
+        };
+        let allocated = allocate(&TINY, &source).unwrap();
+        verify_allocation(&TINY, &allocated).unwrap();
+        assert_eq!(allocated.spilled, 0, "noninterfering branch values spilled");
+        assert_eq!(allocated.frame_slots, 0);
+        assert_eq!(allocated, allocate(&TINY, &source).unwrap());
+    }
+}
+
+#[test]
+fn a_call_on_a_disjoint_edge_does_not_make_a_value_live_across_that_call() {
+    // Pair registers have no callee-saved pool on this target. %0 reaches
+    // only block 2, so the call in block 1 cannot require a spill of %0.
+    let source = Function {
+        name: "disjoint_call".into(),
+        blocks: vec![
+            Block {
+                id: 0,
+                args: vec![],
+                insts: vec![Inst::Value(q(0), 9)],
+                term: Term::Constraint {
+                    body: Body::default(),
+                    edges: vec![(1, vec![]), (2, vec![])],
+                },
+            },
+            Block {
+                id: 1,
+                args: vec![],
+                insts: vec![Inst::Call {
+                    args: vec![],
+                    results: vec![],
+                    opaque: 5,
+                }],
+                term: Term::Return(vec![]),
+            },
+            Block {
+                id: 2,
+                args: vec![],
+                insts: vec![Inst::Add(q(1), q(0), q(0))],
+                term: Term::Return(vec![q(1)]),
+            },
+        ],
+    };
+    let allocated = allocate(&TINY, &source).unwrap();
+    verify_allocation(&TINY, &allocated).unwrap();
+    assert_eq!(
+        allocated.spilled, 0,
+        "call on a disjoint path caused a spill"
+    );
+    assert_eq!(allocated.frame_slots, 0);
 }
 
 #[test]

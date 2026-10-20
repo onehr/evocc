@@ -22,18 +22,28 @@ struct Definition {
     instruction_index: usize,
 }
 
+#[cfg(test)]
 pub(crate) fn derive_eligible_regions(module: &Module) -> Vec<EligibleRegion> {
     let mut regions = Vec::new();
     for function in &module.functions {
-        derive_function(function, &mut regions, false);
+        derive_function(function, &mut regions, false, None);
     }
     regions
 }
 
-pub(crate) fn derive_guard_regions(module: &Module) -> Vec<EligibleRegion> {
+/// Omitted regions make no claim. Recompute only the named roots, but keep
+/// module order and independently derive every witness, seed and exclusion.
+/// Filtering cannot make an unknown root eligible or reorder two claims.
+pub(crate) fn derive_requested_regions(
+    module: &Module,
+    requested: &HashSet<EvpRegionId>,
+    guards: bool,
+) -> Vec<EligibleRegion> {
     let mut regions = Vec::new();
     for function in &module.functions {
-        derive_function(function, &mut regions, true);
+        if requested.iter().any(|id| id.function == function.name) {
+            derive_function(function, &mut regions, guards, Some(requested));
+        }
     }
     regions
 }
@@ -59,7 +69,12 @@ fn guard_root(inst: &Inst) -> bool {
     }
 }
 
-fn derive_function(function: &Function, regions: &mut Vec<EligibleRegion>, guards: bool) {
+fn derive_function(
+    function: &Function,
+    regions: &mut Vec<EligibleRegion>,
+    guards: bool,
+    requested: Option<&HashSet<EvpRegionId>>,
+) {
     let definitions = definitions(function);
     let block_arguments = function
         .blocks
@@ -71,6 +86,11 @@ fn derive_function(function: &Function, regions: &mut Vec<EligibleRegion>, guard
 
     for (block_index, block) in function.blocks.iter().enumerate() {
         for (instruction_index, instruction) in block.insts.iter().enumerate() {
+            if requested.is_some_and(|ids| {
+                !ids.contains(&region_id(function, block_index, instruction_index))
+            }) {
+                continue;
+            }
             if !(if guards {
                 guard_root(instruction)
             } else {
@@ -186,25 +206,22 @@ fn collect_witness_closure(
     instruction_index: usize,
     closure: &mut HashSet<usize>,
 ) {
-    if !closure.insert(instruction_index) {
-        return;
-    }
-    let instruction = &function.blocks[root_block].insts[instruction_index];
-    for operand in inst_operands(instruction) {
-        let Some(definition) = definitions.get(&operand.id) else {
+    // Depth is controlled by the input program, not the process stack.
+    let mut pending = vec![instruction_index];
+    while let Some(index) = pending.pop() {
+        if !closure.insert(index) {
             continue;
-        };
-        if definition.block_index == root_block
-            && definition.instruction_index < instruction_index
-            && allowlisted(&function.blocks[root_block].insts[definition.instruction_index])
-        {
-            collect_witness_closure(
-                function,
-                definitions,
-                root_block,
-                definition.instruction_index,
-                closure,
-            );
+        }
+        for operand in inst_operands(&function.blocks[root_block].insts[index]) {
+            let Some(definition) = definitions.get(&operand.id) else {
+                continue;
+            };
+            if definition.block_index == root_block
+                && definition.instruction_index < index
+                && allowlisted(&function.blocks[root_block].insts[definition.instruction_index])
+            {
+                pending.push(definition.instruction_index);
+            }
         }
     }
 }
@@ -671,6 +688,87 @@ mod tests {
         assert_eq!(root.seeds.len(), 1);
         assert_eq!(root.seeds[0].value, 7);
         assert_eq!(root.seeds[0].origin, EvpSeedOrigin::Input);
+        // Selected derivation has exactly the full derivation's contents and
+        // order. An unrecognized root must not enter the checker manifest.
+        let mut requested = HashSet::from([root.id.clone()]);
+        assert_eq!(
+            derive_requested_regions(&module, &requested, false),
+            vec![root.clone()]
+        );
+        requested.insert(EvpRegionId {
+            instruction: u64::MAX,
+            ..root.id.clone()
+        });
+        assert_eq!(
+            derive_requested_regions(&module, &requested, false),
+            vec![root.clone()]
+        );
+        requested.extend(regions.iter().rev().map(|region| region.id.clone()));
+        assert_eq!(
+            derive_requested_regions(&module, &requested, false),
+            regions
+        );
+    }
+
+    #[test]
+    fn every_branch_edge_keeps_poison_out_of_eligible_roots() {
+        // Test both outgoing edges, including asm.goto's distinct fallthrough.
+        // The clean control must still expose both add roots. Validation comes
+        // first: an invalid CFG is not evidence about checker eligibility.
+        for branch in ["conditional", "indirect", "assembly"] {
+            for poison_edge in [None, Some(0), Some(1)] {
+                let first = if poison_edge == Some(0) { "%v3" } else { "%v4" };
+                let second = if poison_edge == Some(1) { "%v3" } else { "%v4" };
+                let terminator = match branch {
+                    "conditional" => format!("cond_br %v0, ^b1({first}, %v1, %v2), ^b2({second}, %v1, %v2)"),
+                    "indirect" => format!("br.indirect %v5 [^b1({first}, %v1, %v2), ^b2({second}, %v1, %v2)]"),
+                    _ => format!("(%v7, %v8) = asm.goto \"\" %v1, %v2 outputs [] inputs [] clobbers [] labels [(\"taken\", ^b1({first}, %v7, %v8))] fallthrough ^b2({second}, %v7, %v8)"),
+                };
+                let effects = if branch == "assembly" {
+                    "reads={all}, writes={all}, volatile=true, atomic=false, io=true, fenv=true, may_trap=true, may_unwind=false"
+                } else if branch == "indirect" {
+                    "reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false"
+                } else {
+                    "reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false"
+                };
+                let text = format!(
+                    r#"func @f(%arg0: bits<1>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<all>, world) cc = target_default
+    effects {{ {effects} }}
+{{
+^entry(%v0: bits<1>, %v1: mem<all>, %v2: world):
+    %v3 = uninitialized.bits<32>
+    %v4 = const.bits<32> 7
+    %v5 = block_addr ^b1 : ptr<generic>
+    %v6 = block_addr ^b2 : ptr<generic>
+    {terminator}
+
+^b1(%v20: bits<32>, %v21: mem<all>, %v22: world):
+    %v23 = const.bits<32> 0
+    %v24 = add.bits<32> %v20, %v23
+    ret %v24, %v21, %v22
+
+^b2(%v30: bits<32>, %v31: mem<all>, %v32: world):
+    %v33 = const.bits<32> 0
+    %v34 = add.bits<32> %v30, %v33
+    ret %v34, %v31, %v32
+}}
+"#
+                );
+                let module = evocc_evoir::parse_section9_module(text.as_bytes()).unwrap();
+                evocc_evoir::validate_module(&module).unwrap();
+                let roots: HashSet<_> = derive_eligible_regions(&module)
+                    .iter()
+                    .map(|region| region.root_value)
+                    .collect();
+                for (edge, root) in [(0, 24), (1, 34)] {
+                    assert_eq!(
+                        roots.contains(&root),
+                        poison_edge != Some(edge),
+                        "{branch} poison={poison_edge:?} root={root}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

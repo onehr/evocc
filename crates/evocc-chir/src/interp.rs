@@ -4289,10 +4289,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 .copy_bytes(
                     list,
                     source,
-                    AccessLayout {
-                        size_bytes: 32,
-                        align_bytes: 8,
-                    },
+                    AccessLayout::from_type_layout(self.target.va_list_layout()),
                 )
                 .map_err(fault)?;
             return Ok(());
@@ -4731,7 +4728,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CHirExpr::BuiltinTrap { .. } => {
                 return Err(InterpreterError::BuiltinTrapReached { span });
             }
-            CHirExpr::BuiltinReturnAddress { .. }
+            CHirExpr::BuiltinReturnAddress { depth: 0, .. }
             | CHirExpr::BuiltinFrameAddress { depth: 0, .. } => {
                 let frame =
                     self.memory_frame
@@ -4766,7 +4763,25 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     ty,
                 });
             }
-            CHirExpr::BuiltinFrameAddress { .. } => {
+            CHirExpr::BuiltinReturnAddress { depth, .. }
+            | CHirExpr::BuiltinFrameAddress { depth, .. }
+                if u16::try_from(*depth).is_ok() =>
+            {
+                let ty = PointerTypeDesc::from_expression(
+                    self.unit.symbols(),
+                    self.unit.types(),
+                    expression,
+                )
+                .map_err(|_| InterpreterError::UnsupportedExpression {
+                    feature: "activation address has no pointer type",
+                    span,
+                })?;
+                values.push(CValue::Pointer {
+                    value: Pointer::NULL,
+                    ty,
+                });
+            }
+            CHirExpr::BuiltinReturnAddress { .. } | CHirExpr::BuiltinFrameAddress { .. } => {
                 return Err(InterpreterError::FrameAddressUnavailable { span });
             }
             CHirExpr::BuiltinVarArgs { .. } => self.schedule_varargs(expression, tasks)?,
@@ -8862,7 +8877,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     value: right,
                     ty: right_ty,
                 },
-            ) if operator == BinaryOp::Sub && left_ty == right_ty => {
+            ) if operator == BinaryOp::Sub
+                && self
+                    .unit
+                    .types()
+                    .compatible_ignoring_top_qualifiers(left_ty.pointee(), right_ty.pointee()) =>
+            {
+                // Distinct declarations can capture the same runtime array
+                // bound under different symbol IDs. C requires compatible
+                // pointees, not identical interned types; the left capture
+                // still supplies the stride and all memory checks remain.
                 self.subtract_pointer_values(left, right, left_ty, span)
             }
             (
@@ -9176,6 +9200,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     feature: "pointer subtraction scale is not representable",
                     span,
                 })?;
+        // GNU empty records and zero-length arrays have a zero byte stride.
+        // Pointer subtraction still divides by that stride; report its C
+        // obligation before evaluating host remainder or division.
+        if scale == 0 {
+            return Err(InterpreterError::Integer {
+                error: IntegerError::DivisionByZero,
+                span,
+            });
+        }
         if byte_delta % scale != 0 {
             return Err(InterpreterError::UnsupportedExpression {
                 feature: "pointer subtraction is not an exact element difference",

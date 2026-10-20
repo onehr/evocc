@@ -55,9 +55,6 @@ fn the_has_builtin_table_lists_exactly_the_resolved_builtins() {
     }
     for name in [
         "__builtin_alloca_uninitialized",
-        "__builtin___memccpy_chk",
-        "__builtin___strlcpy_chk",
-        "__builtin___printf_chk",
         "__builtin_aarch64_absdi",
         "__builtin_aarch64_ld2v16qi",
         "__builtin_puts",

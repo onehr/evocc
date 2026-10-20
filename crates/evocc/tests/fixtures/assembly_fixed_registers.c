@@ -33,6 +33,14 @@ static long branch(int take, long n) {
 done:
     return result + 2;
 }
+static long repeated_address(long *pointer) {
+    register long *fixed __asm__("x4") = pointer;
+    long result;
+    __asm__ volatile("ldr %0, %1"
+                     : "=&r"(result)
+                     : "Q"(*pointer), "r"(fixed), "r"(pointer));
+    return result;
+}
 int main(void) {
     if (input(37) != 37 || input(103) != 103) return 1;
     if (output() != 42) return 2;
@@ -40,5 +48,7 @@ int main(void) {
     if (readwrite(37) != 46) return 4;
     if (narrow(37) != 44) return 5;
     if (branch(0, 37) != 43 || branch(1, 37) != 44) return 6;
+    long value = 117;
+    if (repeated_address(&value) != value) return 7;
     return 0;
 }

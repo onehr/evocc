@@ -105,6 +105,42 @@ fn invariant_loop_arguments_share_their_one_reaching_value() {
 }
 
 #[test]
+fn assembly_goto_keeps_unrelated_invariant_values_without_edge_copies() {
+    let mut before = loop_sum(false);
+    let MTerm::B { target, args } = before.blocks[2].term.clone() else {
+        unreachable!()
+    };
+    before.blocks[2].term = MTerm::AsmGoto {
+        body: AsmBody {
+            template: "cbnz %w0, %l1".into(),
+            volatile: true,
+            outputs: vec![],
+            inputs: vec![AsmOperand::reg(
+                AsmConstraint::Register(AsmDirection::Read),
+                w(10),
+            )],
+            clobbers: vec![],
+        },
+        labels: vec![(target, args.clone())],
+        fallthrough: target,
+        fallthrough_args: args,
+    };
+    evocc_mir::validate::validate_function(&before).unwrap();
+    let after = evocc_mir::regalloc::checked_out_of_ssa(&before, true).unwrap();
+    let stable = [4, 5, 6, 10, 11, 12];
+    assert!(
+        after
+            .blocks
+            .iter()
+            .flat_map(|b| &b.insts)
+            .all(|inst| { !matches!(inst, MInst::Mov { dst, .. } if stable.contains(&dst.id)) }),
+        "asm goto still disables unrelated invariant-value forwarding"
+    );
+    let allocated = evocc_mir::allocate(&after).unwrap();
+    evocc_mir::verify_allocation_against(evocc_mir::Target::Darwin, &after, &allocated).unwrap();
+}
+
+#[test]
 fn ordinary_assembly_retains_effects_but_not_unrelated_identity_copies() {
     let mut before = loop_sum(false);
     let assembly = AsmBody {

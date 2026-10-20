@@ -856,7 +856,23 @@ fn a_tied_operand_shares_its_output_register() {
     let case = tied_operand();
     let allocated = allocate(&out_of_ssa(&case.function)).expect("allocation");
     verify_allocation(&allocated).expect("the allocation verifies");
-    assert_eq!(allocated.assignment[&1], allocated.assignment[&10]);
+    // Check the operand occurrence, not the original SSA input: allocation
+    // may copy that input to preserve its value after the assembly.
+    let body = allocated
+        .blocks
+        .iter()
+        .flat_map(|block| &block.insts)
+        .find_map(|inst| match inst {
+            MInst::Asm(body) => Some(body),
+            _ => None,
+        })
+        .unwrap();
+    let input = body.inputs[0].register().unwrap();
+    let output = body.outputs[0].register().unwrap();
+    assert_eq!(
+        allocated.assignment[&input.id],
+        allocated.assignment[&output.id]
+    );
 }
 
 /// Section 7: a clobbered register holds no operand and no value across the

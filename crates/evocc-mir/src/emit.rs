@@ -44,6 +44,8 @@ pub struct CodegenOptions {
     pub unwind_tables: bool,
     pub strict_alignment: bool,
     pub sign_returns: bool,
+    /// With return signing enabled, also sign a leaf that never stores x30.
+    pub sign_leaf_returns: bool,
     pub general_registers_only: bool,
     pub stack_guard: StackGuard,
     /// Opt-in frame variants (EvoMIR revision 0.56); all off by default.
@@ -68,7 +70,9 @@ pub struct CodegenOptions {
 }
 
 impl CodegenOptions {
-    /// Existing profile protection shared by allocation and emission variants.
+    /// Protection for allocation, selection, paired saves and shared exits.
+    /// Leaf-frame admission is separate: it inspects the allocated function
+    /// and the independent leaf-frame request, not these broader controls.
     pub fn protects_codegen(&self, patchable_entry: Option<(u16, u16)>) -> bool {
         self.frame_pointer_required
             || self.leaf_frame_pointer_required
@@ -1337,7 +1341,6 @@ fn emit_function(
     let abi = target.abi();
     let mut frame = frame_of_for(target, allocated);
     frame.unwind_tables = options.unwind_tables;
-    frame.sign_returns = options.sign_returns;
     frame.strict_alignment = options.strict_alignment;
     frame.general_registers_only = options.general_registers_only;
     let protected = options.protects_codegen(patchable_entry);
@@ -1349,8 +1352,17 @@ fn emit_function(
         frame.stack_guard = Some((frame.size, options.stack_guard.clone()));
         frame.size += KERNEL.stack_guard_slot_bytes;
     }
-    frame.frameless =
-        options.frame.leaf_frames && !protected && is_frameless_leaf(allocated, &frame);
+    // A frame-pointer request applies to functions that need a frame. Only
+    // the independent leaf-frame request keeps an otherwise unused record.
+    // Inspect the allocated function: lowering may have introduced a helper
+    // call or allocation may have introduced a spill after the C leaf test.
+    frame.frameless = (options.frame.leaf_frames || options.sign_returns)
+        && !options.leaf_frame_pointer_required
+        && is_frameless_leaf(allocated, &frame);
+    // Every framed function stores x30, including a leaf with local storage.
+    // Never omit signing on that path. An admitted frameless leaf leaves x30
+    // in its register, so only the explicit leaf-signing scope signs it.
+    frame.sign_returns = options.sign_returns && (!frame.frameless || options.sign_leaf_returns);
     let prefix = target.symbol_prefix();
     // Section 8 (revision 0.16): "An EvoIR function or global whose
     // `visibility` is `internal` is emitted without `.globl`, so its symbol is
@@ -3418,6 +3430,10 @@ mod paired_save_tests {
         let mut frame = frame_of_for(
             Target::Linux,
             &Allocated {
+                input: crate::MFunction {
+                    name: "boundary".into(),
+                    blocks: Vec::new(),
+                },
                 name: "boundary".into(),
                 blocks: Vec::new(),
                 assignment: BTreeMap::new(),

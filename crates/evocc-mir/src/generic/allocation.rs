@@ -11,6 +11,7 @@ use super::ssa::{SsaInst, SsaTerm, SCRATCH_BASE, SCRATCH_LIMIT};
 pub trait AllocClass: RegisterClass + 'static {
     fn bank(self) -> u8;
     fn spill_words(self) -> u32;
+    fn value_bits(self) -> u16;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +78,8 @@ pub trait AllocInst: SsaInst {
     fn is_indirect_result(&self) -> bool;
     fn exclusive_result(&self) -> Option<Self::Reg>;
     fn spill(&self) -> Option<SpillView<Self::Reg>>;
+    /// An incoming load or outgoing store, using the ABI's stack-word offset.
+    fn stack_argument(&self) -> Option<SpillView<Self::Reg>>;
     fn spill_slot_mut(&mut self) -> Option<&mut u32>;
     fn spill_store(src: Self::Reg, slot: u32) -> Self;
     fn spill_reload(dst: Self::Reg, slot: u32) -> Self;
@@ -108,6 +111,9 @@ pub trait AllocationTarget<C: AllocClass> {
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Allocated<I, T, C> {
+    /// Unchanged input, captured before boundary copies or spill rewriting.
+    /// This is the program being checked, not an allocator analysis or hint.
+    pub input: MachineFunction<I, T, C>,
     pub name: String,
     pub blocks: Vec<MachineBlock<I, T, C>>,
     pub assignment: BTreeMap<u32, u8>,
@@ -251,6 +257,7 @@ where
                     .into_iter()
                     .collect();
                 return Ok(Allocated {
+                    input: function.clone(),
                     name: compacted.name,
                     blocks: compacted.blocks,
                     parameters,
@@ -345,6 +352,18 @@ where
         }
         let mut indirect_call = false;
         for (offset, inst) in block.insts.iter().enumerate() {
+            // Machine-level inputs may already contain outgoing stores. They
+            // need the same reserved area as stores introduced for a call.
+            if let Some(access) = inst.stack_argument() {
+                if access.kind == SpillKind::Store {
+                    outgoing_slots = outgoing_slots.max(
+                        access
+                            .slot
+                            .checked_add(access.reg.class.spill_words())
+                            .ok_or("outgoing argument area overflows")?,
+                    );
+                }
+            }
             if index == 0 && offset == 0 && inst.is_indirect_result() {
                 insts.push(inst.clone());
                 continue;
@@ -460,6 +479,36 @@ where
     I: AllocInst<Reg = VirtualReg<C>>,
     A: AllocationTarget<C>,
 {
+    // Source SSA keeps an input distinct from the value produced by asm.
+    // After SSA destruction, give each tied operand a private two-address
+    // occurrence. Do not coalesce the original input: it can be live after
+    // the asm, or supplied to another output at a different location.
+    let mut normalized = source.clone();
+    let mut initialized_ties = BTreeMap::new();
+    for index in 0..normalized.inputs().len() {
+        let input = &normalized.inputs()[index];
+        let Some(output_index) = input.tied_output() else {
+            continue;
+        };
+        let output = normalized
+            .outputs()
+            .get(usize::from(output_index))
+            .and_then(|operand| operand_register(operand.value()))
+            .ok_or("tied assembly operand has no register output")?;
+        let incoming =
+            operand_register(input.value()).ok_or("tied assembly operand has no input register")?;
+        if initialized_ties
+            .insert(output.id, incoming)
+            .is_some_and(|old| old != incoming)
+        {
+            return Err("conflicting tied assembly input values".into());
+        }
+        if incoming != output {
+            before.push(I::copy(output, incoming));
+            normalized.inputs_mut()[index].set_register(output);
+        }
+    }
+    let source = &normalized;
     // A value is not a physical operand occurrence: `a` may be supplied in
     // both fixed locations. Split independent fixed inputs only where their
     // location requirements differ. Tied operands keep the output's identity
@@ -544,19 +593,30 @@ where
         .filter_map(|reg| copies.get(&reg.id).map(|pinned| I::copy(reg, *pinned)))
         .collect();
     let mut body = source.clone();
-    let rewrite = |operand: &mut <I::Body as ConstraintBody>::Operand| {
+    let tied_outputs: BTreeSet<_> = source
+        .inputs()
+        .iter()
+        .filter_map(|operand| operand.tied_output().map(usize::from))
+        .collect();
+    let rewrite = |operand: &mut <I::Body as ConstraintBody>::Operand, tied: bool| {
         if let Some(reg) = operand_register(operand.value()) {
             if let Some(pinned) = copies.get(&reg.id) {
                 operand.set_register(*pinned);
-                operand.set_fixed_register(requested.get(&reg.id).copied());
+                // Only a tie implies the other operand's binding. Sharing a
+                // value with a fixed input can reuse its register, but must
+                // not add a constraint to an independent input or memory use.
+                if tied {
+                    operand.set_fixed_register(requested.get(&reg.id).copied());
+                }
             }
         }
     };
-    for operand in body.outputs_mut() {
-        rewrite(operand);
+    for (index, operand) in body.outputs_mut().iter_mut().enumerate() {
+        rewrite(operand, tied_outputs.contains(&index));
     }
     for operand in body.inputs_mut() {
-        rewrite(operand);
+        let tied = operand.tied_output().is_some();
+        rewrite(operand, tied);
     }
     Ok((body, after))
 }
@@ -1199,12 +1259,15 @@ where
     reads
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Interval<C> {
     value: u32,
     class: C,
     start: usize,
     end: usize,
+    /// Sorted inclusive segments. The hull orders and expires intervals; only
+    /// these segments establish interference or liveness across a call.
+    segments: Vec<(usize, usize)>,
     spans_call: bool,
 }
 
@@ -1217,7 +1280,7 @@ where
     let ranges = numbering(function);
     let live_in = liveness(function);
 
-    let mut bounds: BTreeMap<u32, (usize, usize, C)> = BTreeMap::new();
+    let mut local_bounds = BTreeMap::new();
     let touch = |value: VirtualReg<C>, at: usize, bounds: &mut BTreeMap<u32, (usize, usize, C)>| {
         bounds
             .entry(value.id)
@@ -1230,6 +1293,7 @@ where
 
     let mut calls: Vec<usize> = Vec::new();
     for block in &function.blocks {
+        let bounds = local_bounds.entry(block.id).or_insert_with(BTreeMap::new);
         let (start, end) = ranges[&block.id];
         for (offset, inst) in block.insts.iter().enumerate() {
             let read = start + 2 * offset;
@@ -1238,10 +1302,10 @@ where
                 calls.push(read);
             }
             for reg in inst.uses() {
-                touch(reg, read, &mut bounds);
+                touch(reg, read, bounds);
             }
             for reg in inst.defs() {
-                touch(reg, write, &mut bounds);
+                touch(reg, write, bounds);
             }
             // Section 7: `=&r` and `+&r` want "a register no input operand of
             // the same `asm` holds". An ordinary destination may reuse an
@@ -1249,44 +1313,38 @@ where
             // early clobber may not, so its interval starts where the reads do.
             if let Some(body) = inst.assembly() {
                 for reg in early_clobbers(body) {
-                    touch(reg, read, &mut bounds);
+                    touch(reg, read, bounds);
                 }
             }
             if let Some(dst) = inst.exclusive_result() {
                 // The exclusive retry loop writes its old-value result
                 // before consuming the address, comparison and update inputs.
-                touch(dst, read, &mut bounds);
+                touch(dst, read, bounds);
             }
         }
         for reg in block.term.uses() {
-            touch(reg, end - 2, &mut bounds);
+            touch(reg, end - 2, bounds);
         }
         if let Some(body) = block.term.assembly() {
             for reg in body.defined() {
-                touch(reg, end - 1, &mut bounds);
+                touch(reg, end - 1, bounds);
             }
             for reg in early_clobbers(body) {
-                touch(reg, end - 2, &mut bounds);
+                touch(reg, end - 2, bounds);
             }
         }
     }
 
-    // Section 7: an interval is "extended across any block in which it is live
-    // on entry to cover the whole block". A value live on entry that dies
-    // inside the block covers only as far as its last read: the sentence is
-    // about a value passing through, and stretching one that ends here would
-    // hold its register for the whole block. The boundary registers of Section
-    // 6 are exactly such values, and stretching them would leave the parameters
-    // unable to keep the registers they arrive in.
-    //
-    // This is a pass of its own rather than the tail of the one above, because
-    // a value is only extendable once its definitions and uses are all known.
-    // Folded into the discovery pass, the extension reached only the values
-    // some earlier block had already mentioned, and a value first mentioned
-    // after the block it lives through kept an interval that began inside it:
-    // thirty-two of the day-7 programs handed one register to a pointer that
-    // lived across a block and to a dead flag-setting result inside it.
+    // A value has a segment only in blocks that define, read or carry it.
+    // Extend live-in values to entry and live-out values to exit, including
+    // empty pass-through blocks and back edges. Discover every class first:
+    // layout order need not place a definition before a block that carries it.
+    let classes: BTreeMap<_, _> = local_bounds
+        .values()
+        .flat_map(|bounds| bounds.iter().map(|(&id, &(_, _, class))| (id, class)))
+        .collect();
     for block in &function.blocks {
+        let bounds = local_bounds.get_mut(&block.id).unwrap();
         let (start, end) = ranges[&block.id];
         let live_out: BTreeSet<u32> = block
             .term
@@ -1296,34 +1354,41 @@ where
             .flat_map(|entering| entering.iter().copied())
             .collect();
         for value in &live_in[&block.id] {
-            if let Some((first, _, _)) = bounds.get_mut(value) {
-                *first = (*first).min(start);
-            }
+            touch(VirtualReg::new(*value, classes[value]), start, bounds);
         }
-        // A value that leaves the block on any edge holds its register to the
-        // end of the block, whether it entered the block or was defined in it.
-        // Reaching only the values that entered leaves a value defined in a
-        // block and read after the back edge expiring at that definition, and
-        // the register goes to the next interval while the loop still needs it:
-        // the allocation verifier found exactly that, on a pointer carried
-        // around a loop whose register a spill store then took.
         for value in &live_out {
-            if let Some((_, last, _)) = bounds.get_mut(value) {
-                *last = (*last).max(end - 1);
-            }
+            touch(VirtualReg::new(*value, classes[value]), end - 1, bounds);
         }
     }
 
-    let mut result: Vec<Interval<C>> = bounds
+    let mut segments: BTreeMap<u32, Vec<(usize, usize)>> = BTreeMap::new();
+    // Visit layout order, not block-ID order. Adjacent segments have no hole.
+    for block in &function.blocks {
+        for (&value, &(start, end, _)) in &local_bounds[&block.id] {
+            let parts = segments.entry(value).or_default();
+            if let Some(last) = parts
+                .last_mut()
+                .filter(|last| last.1 >= start.saturating_sub(1))
+            {
+                last.1 = end;
+            } else {
+                parts.push((start, end));
+            }
+        }
+    }
+    let mut result: Vec<Interval<C>> = segments
         .into_iter()
-        .map(|(value, (start, end, class))| Interval {
+        .map(|(value, segments)| Interval {
             value,
-            class,
-            start,
-            end,
-            spans_call: calls
-                .get(calls.partition_point(|at| *at < start))
-                .is_some_and(|at| *at < end),
+            class: classes[&value],
+            start: segments[0].0,
+            end: segments.last().unwrap().1,
+            spans_call: segments.iter().any(|&(start, end)| {
+                calls
+                    .get(calls.partition_point(|at| *at < start))
+                    .is_some_and(|at| *at < end)
+            }),
+            segments,
         })
         .collect();
     // Walk by start point, ties by virtual register number.
@@ -1385,6 +1450,7 @@ where
                     class,
                     start,
                     end,
+                    segments: vec![(start, end)],
                     spans_call: false,
                 },
                 number,
@@ -1490,7 +1556,7 @@ where
     }
     let mut assignment: BTreeMap<u32, u8> = BTreeMap::new();
     let mut fixed = asm_interferences(target, function);
-    let mut held: Vec<(Interval<C>, u8)> = Vec::new();
+    let mut held: Vec<(&Interval<C>, u8)> = Vec::new();
     let mut victims: Vec<u32> = Vec::new();
 
     for interval in &all {
@@ -1502,7 +1568,7 @@ where
         }
         if let Some(number) = pins.get(&interval.value).copied() {
             assignment.insert(interval.value, number);
-            fixed.push((*interval, number));
+            fixed.push((interval.clone(), number));
         }
     }
 
@@ -1516,7 +1582,7 @@ where
         reserved
             .entry(number)
             .or_default()
-            .push((interval.start, interval.end));
+            .extend(interval.segments);
     }
     for ranges in reserved.values_mut() {
         ranges.sort_unstable();
@@ -1543,21 +1609,22 @@ where
         if let Some(output) = tied.get(&interval.value) {
             if let Some(number) = assignment.get(output).copied() {
                 assignment.insert(interval.value, number);
-                held.push((*interval, number));
+                held.push((interval, number));
                 continue;
             }
         }
-        let mut taken: BTreeSet<u8> = held
-            .iter()
-            .filter(|(other, _)| overlaps(other, interval))
-            .map(|(_, number)| *number)
-            .collect();
+        let mut blockers: BTreeMap<u8, usize> = BTreeMap::new();
+        for (_, number) in held.iter().filter(|(other, _)| overlaps(other, interval)) {
+            *blockers.entry(*number).or_default() += 1;
+        }
+        let mut taken: BTreeSet<u8> = blockers.keys().copied().collect();
         let mut pinned_here = BTreeSet::new();
         for (number, ranges) in &reserved {
-            if ranges
-                .get(ranges.partition_point(|(_, end)| *end < interval.start))
-                .is_some_and(|(start, _)| *start <= interval.end)
-            {
+            if interval.segments.iter().any(|&(start, end)| {
+                ranges
+                    .get(ranges.partition_point(|(_, last)| *last < start))
+                    .is_some_and(|(first, _)| *first <= end)
+            }) {
                 taken.insert(*number);
                 pinned_here.insert(*number);
             }
@@ -1587,7 +1654,7 @@ where
         match selected {
             Some(number) => {
                 assignment.insert(interval.value, number);
-                held.push((*interval, number));
+                held.push((interval, number));
             }
             None => {
                 // Spill the overlapping interval whose next use is furthest
@@ -1611,6 +1678,10 @@ where
                             && !pinned_here.contains(number)
                             && !pins.contains_key(&other.value)
                             && other.value < CLOBBER_BASE
+                            // A register can now hold several disjoint ranges.
+                            // Evicting one frees it only if it is the sole range
+                            // that conflicts with the incoming value.
+                            && blockers[number] == 1
                     })
                     .max_by_key(|(other, _)| priority(other.value))
                     .map(|(other, number)| (*other, *number));
@@ -1620,7 +1691,7 @@ where
                         held.retain(|(entry, _)| entry.value != other.value);
                         victims.push(other.value);
                         assignment.insert(interval.value, number);
-                        held.push((*interval, number));
+                        held.push((interval, number));
                     }
                     _ => victims.push(interval.value),
                 }
@@ -1646,8 +1717,20 @@ where
     }
 }
 
-const fn overlaps<C>(left: &Interval<C>, right: &Interval<C>) -> bool {
-    left.start <= right.end && right.start <= left.end
+fn overlaps<C>(left: &Interval<C>, right: &Interval<C>) -> bool {
+    if left.start > right.end || right.start > left.end {
+        return false;
+    }
+    let mut right_parts = right.segments.iter().peekable();
+    for &(start, end) in &left.segments {
+        while right_parts.peek().is_some_and(|(_, last)| *last < start) {
+            right_parts.next();
+        }
+        if right_parts.peek().is_some_and(|(first, _)| *first <= end) {
+            return true;
+        }
+    }
+    false
 }
 
 fn drop_identity_moves<I, T, C>(
@@ -1664,13 +1747,31 @@ where
         for inst in &block.insts {
             if let Some((dst, src)) = inst.copy_operands() {
                 if dst.class == src.class && assignment.get(&dst.id) == assignment.get(&src.id) {
-                    let source = resolve(&merged, src);
-                    merged.insert(dst.id, source);
+                    // The destination can have different incoming copies on
+                    // different edges. Unite both classes of names, not only
+                    // the last written destination. Every member already has
+                    // the same physical location and class. Rewriting all its
+                    // definitions preserves the value on each incoming path.
+                    let destination = resolve(&mut merged, dst);
+                    let source = resolve(&mut merged, src);
+                    if destination != source {
+                        merged.insert(destination.id, source);
+                    }
                 }
             }
         }
     }
 
+    // Flatten before rewriting. Roots are united only with distinct roots,
+    // so the forest is acyclic and needs no arbitrary chain-length limit.
+    let members: Vec<_> = merged
+        .iter()
+        .map(|(&id, reg)| VirtualReg::new(id, reg.class))
+        .collect();
+    for member in members {
+        resolve(&mut merged, member);
+    }
+    let representative = |reg: VirtualReg<C>| merged.get(&reg.id).copied().unwrap_or(reg);
     let blocks = function
         .blocks
         .iter()
@@ -1685,16 +1786,16 @@ where
                 }
                 let mut rewritten = inst.clone();
                 for slot in rewritten.operand_slots(false) {
-                    *slot = resolve(&merged, *slot);
+                    *slot = representative(*slot);
                 }
                 for slot in rewritten.operand_slots(true) {
-                    *slot = resolve(&merged, *slot);
+                    *slot = representative(*slot);
                 }
                 insts.push(rewritten);
             }
             let mut term = block.term.clone();
             for slot in term.operand_slots() {
-                *slot = resolve(&merged, *slot);
+                *slot = representative(*slot);
             }
             MachineBlock {
                 id: block.id,
@@ -1712,15 +1813,17 @@ where
 }
 
 fn resolve<C: AllocClass>(
-    merged: &BTreeMap<u32, VirtualReg<C>>,
+    merged: &mut BTreeMap<u32, VirtualReg<C>>,
     reg: VirtualReg<C>,
 ) -> VirtualReg<C> {
     let mut current = reg;
-    for _ in 0..64 {
-        match merged.get(&current.id) {
-            Some(next) if next.id != current.id => current = *next,
-            _ => return VirtualReg::new(current.id, reg.class),
-        }
+    let mut path = Vec::new();
+    while let Some(next) = merged.get(&current.id) {
+        path.push(current.id);
+        current = *next;
     }
-    VirtualReg::new(current.id, reg.class)
+    for id in path {
+        merged.insert(id, current);
+    }
+    current
 }

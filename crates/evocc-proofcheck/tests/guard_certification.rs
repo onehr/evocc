@@ -190,12 +190,9 @@ fn splice_cannot_delete_obligations_or_weaken_effects() {
         }
         let mut proof = out.certificate.clone();
         proof.output_digest = sha256_hex(render_module(&after).as_bytes());
-        // A false effect summary is malformed IR (exit 2), not a checked
-        // equality counterexample (exit 3). Keep those buckets distinct.
-        assert_eq!(
-            check(&before, &after, &proof),
-            if mutation == 0 { 3 } else { 2 }
-        );
+        // Both have valid syntax. Deleting the obligation fails reassembly;
+        // weakening its effect fails module validation (Sections 9.5/11.4).
+        assert_eq!(check(&before, &after, &proof), 3);
     }
 }
 

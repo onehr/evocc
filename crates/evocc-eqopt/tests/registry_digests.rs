@@ -5,8 +5,9 @@
 //! "Digests" fixes the recipe -- the SHA-256 of the printed bytes starting at
 //! the first rule id and including the newline after the last rule. A digest
 //! copied into the producer by hand is a digest nobody recomputed, so this
-//! recomputes all four from the printed blocks and compares them to the
-//! constants the producer and the checker carry.
+//! recomputes all five from the printed blocks and compares them to the
+//! reviewed digests pinned below. Replay tests separately bind the producer
+//! and checker to these registry identities.
 //!
 //! It also checks the containment Section 11.6 states: a revision includes
 //! every rule of the registry it revises, unchanged and in the same order,
@@ -16,7 +17,7 @@
 use evocc_proof::sha256_hex;
 
 /// The digests as Section 11.6 prints them.
-const PRINTED: [(&str, &str); 4] = [
+const PRINTED: [(&str, &str); 5] = [
     (
         "p0.scalar.v1",
         "ebdf519184f7dd3eae0daea8b54342692ec98493e04bf506c6a1e963ed8648f9",
@@ -32,6 +33,10 @@ const PRINTED: [(&str, &str); 4] = [
     (
         "p0.scalar.v4",
         "1a5391603386e18e18bfb1b2fc61985c9eb252c6e65bcb3259104bd49b2a9d74",
+    ),
+    (
+        "g0.ub.v1",
+        "c49a0caac284fe276cf1605b312f45a8ddb5378b61dc0aaf352e03a41d21cc84",
     ),
 ];
 
@@ -68,8 +73,13 @@ fn every_printed_registry_digest_reproduces_from_the_specification() {
     let specification = specification();
     for (registry, digest) in PRINTED {
         let block = printed_block(&specification, registry);
+        let first = if registry == "g0.ub.v1" {
+            "g0_001_nonzero "
+        } else {
+            "p0_001_add_zero_rhs "
+        };
         assert!(
-            block.starts_with("p0_001_add_zero_rhs "),
+            block.starts_with(first),
             "{registry} must start at the first rule id, not at {:?}",
             block.chars().take(24).collect::<String>()
         );
@@ -91,6 +101,8 @@ fn each_revision_contains_its_predecessor_unchanged_and_in_order() {
     let specification = specification();
     let blocks = PRINTED
         .iter()
+        // Guard folding is an independent registry, not a successor of P0.
+        .filter(|(registry, _)| registry.starts_with("p0.scalar."))
         .map(|(registry, _)| rules(&printed_block(&specification, registry)))
         .collect::<Vec<_>>();
     for window in blocks.windows(2) {

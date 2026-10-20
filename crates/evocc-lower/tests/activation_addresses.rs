@@ -11,6 +11,8 @@ fn activation_addresses_lower_and_have_stable_nondereferenceable_identity() {
         ("unsigned long f(void){return (unsigned long)__builtin_frame_address(0);} int main(void){return f()==f();}", None),
         ("int main(void){return *(int *)__builtin_return_address(0);}", Some("E3013")),
         ("int main(void){return *(int *)__builtin_frame_address(0);}", Some("E3013")),
+        ("int main(void){return *(int *)__builtin_frame_address(1);}", Some("E3009")),
+        ("int main(void){return *(int *)__builtin_return_address(1);}", Some("E3009")),
         ("int unused(void){return __builtin_frame_address(1)==0;}int main(void){if(0)return unused();return 0;}", None),
         ("int main(void){return __builtin_frame_address(0x100000000UL)==0 || __builtin_return_address(0x100000000UL)==0;}", None),
     ] {
@@ -40,9 +42,9 @@ fn activation_addresses_lower_and_have_stable_nondereferenceable_identity() {
 }
 
 #[test]
-fn ancestor_frames_lower_but_require_native_execution() {
-    for (argument, depth) in [("1", 1), ("2", 2), ("16", 16), ("0x100000001UL", 1)] {
-        let source = format!("int main(void){{return (__builtin_frame_address({argument}))==0;}}");
+fn ancestor_addresses_lower_to_null_without_reading_frames() {
+    for argument in ["1", "2", "16", "65535", "0x100000001UL", "-4294967295L"] {
+        let source = format!("int main(void){{return (__builtin_frame_address({argument}))!=0 || (__builtin_return_address({argument}))!=0;}}");
         let arena = Arena::default();
         let file = FileId::new(45021);
         let mut lexer = Lexer::new(file, &source);
@@ -50,40 +52,53 @@ fn ancestor_frames_lower_but_require_native_execution() {
         let mut parser = Parser::new(tokens, file, &source);
         let unit = parser.parse_translation_unit_in(&arena);
         assert!(!parser.had_error(), "{:?}", parser.diagnostic());
-        let module = evocc_lower::lower_unit(&unit, &TargetDataLayout::aarch64_unknown_linux_gnu())
-            .expect("ancestor frame has native lowering");
-        let text = evocc_evoir::render_module(&module);
-        assert!(
-            text.contains(&format!("frame_address depth={depth} : ptr<generic>")),
-            "{text}"
-        );
-        let main = module.functions.iter().find(|f| f.name == "main").unwrap();
-        let args = main
-            .params
-            .iter()
-            .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
-            .collect::<Vec<_>>();
-        assert_eq!(
-            evocc_evoir::interpret_module(
-                &module,
-                "main",
-                &args,
-                evocc_evoir::InterpreterLimits::new(1000)
-            )
-            .unwrap_err()
-            .code(),
-            "E3031"
-        );
-        let symbol = unit
-            .symbols()
-            .resolve(unit.symbols().file_scope(), "main")
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            interp::interpret_scalar_function(&unit, symbol, interp::InterpreterLimits::new(1000))
-                .unwrap_err()
-                .code(),
-            "E3031"
-        );
+        for target in [
+            TargetDataLayout::aarch64_unknown_linux_gnu(),
+            TargetDataLayout::aarch64_apple_darwin(),
+        ] {
+            let module = evocc_lower::lower_unit(&unit, &target)
+                .expect("ancestor address has null lowering");
+            let text = evocc_evoir::render_module(&module);
+            assert!(
+                !text.contains("frame_address") && !text.contains("return_address"),
+                "{text}"
+            );
+            assert!(text.contains("ptr.null"), "{text}");
+            let main = module.functions.iter().find(|f| f.name == "main").unwrap();
+            let args = main
+                .params
+                .iter()
+                .map(|p| evocc_evoir::RuntimeValue::new(p.ty.clone(), 0))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                evocc_evoir::interpret_module(
+                    &module,
+                    "main",
+                    &args,
+                    evocc_evoir::InterpreterLimits::new(1000)
+                )
+                .unwrap()
+                .return_values[0]
+                    .raw_bits,
+                0
+            );
+            let symbol = unit
+                .symbols()
+                .resolve(unit.symbols().file_scope(), "main")
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                interp::interpret_scalar_function(
+                    &unit,
+                    symbol,
+                    interp::InterpreterLimits::new(1000)
+                )
+                .unwrap()
+                .return_value
+                .unwrap()
+                .raw_bits,
+                0
+            );
+        }
     }
 }

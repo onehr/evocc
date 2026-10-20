@@ -4,6 +4,7 @@ import importlib.util
 import copy
 from contextlib import redirect_stderr, redirect_stdout
 import io
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -929,6 +930,16 @@ class StatusAsciiTest(unittest.TestCase):
             (root / "spec/evoir.md").write_text("**Revision 1.9.104**")
             (root / "spec/evomir.md").write_text("**Revision 0.34**")
             (root / "tests/contracts").mkdir(parents=True)
+            # --check also checks the Lean receipt binding. Give this isolated
+            # rendering fixture its own matching pin and receipt, rather than
+            # depending on the live checkout's unrelated proof checkpoint.
+            digest = hashlib.sha256((root / "spec/evoir.md").read_bytes()).hexdigest()
+            (root / "spec/pins.json").write_text(json.dumps({"pins": {
+                "spec/evoir.md": {"revision": "1.9.104", "sha256": digest},
+            }}))
+            (root / "tests/contracts/lean-p0-receipt.json").write_text(json.dumps({
+                "binding": {"spec_revision": "**Revision 1.9.104**", "spec_sha256": digest},
+            }))
             output = root / "docs/status.md"
             with patch.object(self.renderer, "ROOT", root), patch.object(self.renderer, "OUT", output), \
                     redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):

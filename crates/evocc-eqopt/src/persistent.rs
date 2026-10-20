@@ -6,20 +6,22 @@ use evocc_egraph::{
     EClassId, Egraph, EgraphSnapshot, MergeOutcome, NodeId, OpId, Pattern, PatternChild,
     ProofContext, RuleSnapshot,
 };
-use evocc_evoir::{inst_results, render_module, validate_module, Inst, Module, Value};
+use evocc_evoir::{
+    inst_results, render_target_module, validate_module, Inst, Module, Value, IMPLICIT_TARGET,
+};
 use evocc_proof::{parse_evp1, render_evp1, sha256, sha256_hex};
 use evocc_types::EvoIRType;
 
 use crate::evp1::{
-    optimize_scalar_module_with_evp1_transaction, policy_for, CertifiedScalarEqOutcome,
+    optimize_scalar_module_with_evp1_transaction_for_target, policy_for, CertifiedScalarEqOutcome,
 };
 use crate::scalar_eq::{
-    ingest_scalar_inst, mask_raw, operator_id, scalar_operands, scalar_result, AppliedRewrite,
-    EmittedOperand, Replacement, ScalarOperator,
+    ingest_scalar_inst, mask_raw, operator_id, scalar_operands, scalar_result, scalar_width,
+    AppliedRewrite, EmittedOperand, Replacement, ScalarOperator,
 };
 use crate::{ExtractionPolicy, ScalarEqBudget, ScalarEqOutcome};
 
-const FIRST_LEAF_OP: OpId = 20_000;
+const FIRST_PERSISTENT_OP: OpId = 20_000;
 const FIRST_INSTANCE_RULE: u32 = 100_000;
 const REVIEWED_REGISTRY: &str = "p0.scalar.v1";
 const FROZEN_LAYOUT_IDENTITY: [u8; 32] = [
@@ -87,6 +89,7 @@ pub struct EqualityAudit {
 /// certificate and the reviewed instances replay successfully.
 #[derive(Clone)]
 pub struct EqualityState {
+    target: String,
     translation_unit_identity: [u8; 32],
     current_module_identity: [u8; 32],
     target_layout_identity: [u8; 32],
@@ -96,7 +99,8 @@ pub struct EqualityState {
     graph: Egraph,
     values: HashMap<(String, u32), ValueBinding>,
     leaves: HashMap<LeafKey, ValueBinding>,
-    next_leaf_op: OpId,
+    operators: HashMap<(OpId, u16), OpId>,
+    next_op: OpId,
     next_rule: u32,
     history: Vec<HistoryRecord>,
 }
@@ -105,20 +109,36 @@ impl EqualityState {
     /// Bind a fresh state to the first canonical module and frozen target
     /// layout. No e-node is added and revision zero is observable.
     pub fn for_module(module: &Module) -> Result<Self, String> {
+        Self::for_target_module(module, IMPLICIT_TARGET)
+    }
+
+    /// Bind the complete text profile, not the host that runs the optimizer.
+    /// Both admitted layouts use the same total integer rules; the explicit
+    /// target remains part of every module and certificate identity.
+    pub fn for_target_module(module: &Module, target: &str) -> Result<Self, String> {
+        if !matches!(target, IMPLICIT_TARGET | "aarch64-apple-darwin") {
+            return Err(format!("unsupported rewrite target `{target}`"));
+        }
         validate_module(module)?;
-        let canonical_input = render_module(module);
+        let canonical_input = render_target_module(module, target);
         let translation_unit_identity = sha256(canonical_input.as_bytes());
         Ok(Self {
+            target: target.to_owned(),
             translation_unit_identity,
             current_module_identity: translation_unit_identity,
-            target_layout_identity: FROZEN_LAYOUT_IDENTITY,
+            target_layout_identity: if target == IMPLICIT_TARGET {
+                FROZEN_LAYOUT_IDENTITY
+            } else {
+                sha256(b"aarch64-apple-darwin/evoir-layout-v1-long-double-binary64\n")
+            },
             canonical_input,
             revision: 0,
             ingested: false,
             graph: Egraph::new(),
             values: HashMap::new(),
             leaves: HashMap::new(),
-            next_leaf_op: FIRST_LEAF_OP,
+            operators: HashMap::new(),
+            next_op: FIRST_PERSISTENT_OP,
             next_rule: FIRST_INSTANCE_RULE,
             history: Vec::new(),
         })
@@ -129,8 +149,16 @@ impl EqualityState {
         self.revision
     }
 
+    pub fn target(&self) -> &str {
+        &self.target
+    }
+
+    pub(crate) fn render(&self, module: &Module) -> String {
+        render_target_module(module, &self.target)
+    }
+
     pub(crate) fn matches_module(&self, module: &Module) -> bool {
-        self.current_module_identity == sha256(render_module(module).as_bytes())
+        self.current_module_identity == sha256(self.render(module).as_bytes())
     }
 
     pub(crate) fn is_ingested(&self) -> bool {
@@ -141,7 +169,7 @@ impl EqualityState {
     /// Re-ingestion of the same module is an idempotent no-op.
     pub fn ingest_module(&mut self, module: &Module) -> Result<(), String> {
         validate_module(module)?;
-        if render_module(module) != self.canonical_input {
+        if self.render(module) != self.canonical_input {
             return Err("module does not match EqualityState canonical identity".to_owned());
         }
         if self.ingested {
@@ -161,6 +189,9 @@ impl EqualityState {
         for function in &module.functions {
             for block in &function.blocks {
                 for argument in &block.args {
+                    if scalar_width(&argument.value.ty).is_none() {
+                        continue;
+                    }
                     let binding = self.leaf(LeafKey::Binder {
                         function: function.name.clone(),
                         value: argument.value.id,
@@ -282,6 +313,9 @@ impl EqualityState {
         let Some(result) = scalar_result(inst) else {
             return Ok(());
         };
+        let Some(width) = scalar_width(&result.ty) else {
+            return Ok(());
+        };
         let operands = scalar_operands(inst)
             .into_iter()
             .map(|value| self.values.get(&(function.to_owned(), value.id)).copied())
@@ -292,10 +326,13 @@ impl EqualityState {
             // outside P0 rather than a malformed module.
             return Ok(());
         };
-        let inserted = self.graph.insert_with_node(
-            operator_id(operator),
-            operands.iter().map(|binding| binding.class).collect(),
-        );
+        // The e-graph itself is untyped. Operand classes distinguish input
+        // sorts, but conversions can have the same input and different result
+        // sorts. Intern the result width as part of the operator identity.
+        let op = self.typed_operator(operator, width)?;
+        let inserted = self
+            .graph
+            .insert_with_node(op, operands.iter().map(|binding| binding.class).collect());
         self.bind_value(
             function,
             result,
@@ -331,11 +368,7 @@ impl EqualityState {
         if let Some(binding) = self.leaves.get(&key) {
             return Ok(*binding);
         }
-        let op = self.next_leaf_op;
-        self.next_leaf_op = self
-            .next_leaf_op
-            .checked_add(1)
-            .ok_or_else(|| "persistent scalar leaf operator space exhausted".to_owned())?;
+        let op = self.fresh_operator()?;
         let inserted = self.graph.insert_with_node(op, Vec::new());
         let binding = ValueBinding {
             class: inserted.eclass,
@@ -343,6 +376,24 @@ impl EqualityState {
         };
         self.leaves.insert(key, binding);
         Ok(binding)
+    }
+
+    fn fresh_operator(&mut self) -> Result<OpId, String> {
+        let op = self.next_op;
+        self.next_op = op
+            .checked_add(1)
+            .ok_or_else(|| "persistent scalar operator space exhausted".to_owned())?;
+        Ok(op)
+    }
+
+    fn typed_operator(&mut self, operator: ScalarOperator, width: u16) -> Result<OpId, String> {
+        let key = (operator_id(operator), width);
+        if let Some(&op) = self.operators.get(&key) {
+            return Ok(op);
+        }
+        let op = self.fresh_operator()?;
+        self.operators.insert(key, op);
+        Ok(op)
     }
 
     fn constant(&mut self, raw: u64, ty: &EvoIRType) -> Result<Option<ValueBinding>, String> {
@@ -441,9 +492,10 @@ impl EqualityState {
                     };
                     children.push(binding.class);
                 }
-                let inserted = self
-                    .graph
-                    .insert_with_node(operator_id(term.operator), children);
+                let width = scalar_width(&term.result_ty)
+                    .ok_or_else(|| "emitted result sort is outside P0".to_owned())?;
+                let op = self.typed_operator(term.operator, width)?;
+                let inserted = self.graph.insert_with_node(op, children);
                 node.replace(inserted.node);
                 ValueBinding {
                     class: inserted.eclass,
@@ -566,7 +618,8 @@ pub fn optimize_scalar_module_certified_persistent_with_policy(
     state: &mut EqualityState,
     policy: &ExtractionPolicy,
 ) -> CertifiedScalarEqOutcome {
-    let transaction = optimize_scalar_module_with_evp1_transaction(module, policy);
+    let transaction =
+        optimize_scalar_module_with_evp1_transaction_for_target(module, policy, state.target());
     let outcome = transaction.outcome;
     if outcome.report.fell_back {
         return outcome;
@@ -576,17 +629,24 @@ pub fn optimize_scalar_module_certified_persistent_with_policy(
     {
         return certified_persistent_fallback(
             module,
+            state,
             outcome,
             "certificate/event count mismatch".into(),
         );
     }
     let proof = render_evp1(&outcome.certificate);
     if parse_evp1(proof.as_bytes()).as_ref() != Ok(&outcome.certificate) {
-        return certified_persistent_fallback(module, outcome, "certificate text mismatch".into());
+        return certified_persistent_fallback(
+            module,
+            state,
+            outcome,
+            "certificate text mismatch".into(),
+        );
     }
     if !state.matches_module(module) {
         return certified_persistent_fallback(
             module,
+            state,
             outcome,
             "persistent input identity mismatch".into(),
         );
@@ -595,7 +655,12 @@ pub fn optimize_scalar_module_certified_persistent_with_policy(
         return outcome;
     }
     if !state.ingested {
-        return certified_persistent_fallback(module, outcome, "unseeded persistent state".into());
+        return certified_persistent_fallback(
+            module,
+            state,
+            outcome,
+            "unseeded persistent state".into(),
+        );
     }
 
     let mut staged = state.clone();
@@ -603,7 +668,7 @@ pub fn optimize_scalar_module_certified_persistent_with_policy(
     for event in transaction.events {
         match staged.apply(event) {
             Ok(applied) => changed |= applied,
-            Err(detail) => return certified_persistent_fallback(module, outcome, detail),
+            Err(detail) => return certified_persistent_fallback(module, state, outcome, detail),
         }
     }
     staged.graph.rebuild();
@@ -612,22 +677,23 @@ pub fn optimize_scalar_module_certified_persistent_with_policy(
         .and_then(|()| staged.bind_new_definitions(&outcome.module))
         .and_then(|()| staged.verify_history())
     {
-        return certified_persistent_fallback(module, outcome, detail);
+        return certified_persistent_fallback(module, state, outcome, detail);
     }
     if changed {
         staged.revision = staged.revision.saturating_add(1);
     }
-    staged.current_module_identity = sha256(render_module(&outcome.module).as_bytes());
+    staged.current_module_identity = sha256(staged.render(&outcome.module).as_bytes());
     *state = staged;
     outcome
 }
 
 fn certified_persistent_fallback(
     module: &Module,
+    state: &EqualityState,
     mut outcome: CertifiedScalarEqOutcome,
     detail: String,
 ) -> CertifiedScalarEqOutcome {
-    let input = render_module(module);
+    let input = state.render(module);
     let digest = sha256_hex(input.as_bytes());
     outcome.module = module.clone();
     outcome.certificate.input_digest = digest.clone();

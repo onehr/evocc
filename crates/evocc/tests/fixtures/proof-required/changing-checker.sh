@@ -5,10 +5,10 @@
 stage=$2
 for binding in "$@"; do
     case "$binding" in
-        ir=*) ir=${binding#ir=} ;;
+        source=*) inputs=$(dirname "${binding#source=}") ;;
+        ir=*) ir=${binding#ir=}; inputs=$(dirname "$ir") ;;
     esac
 done
-inputs=$(dirname "$ir")
 case "$EVOCC_TEST_ACTION" in
     change-ir)
         # abs returns its argument instead of the absolute value.
@@ -16,6 +16,13 @@ case "$EVOCC_TEST_ACTION" in
         ;;
     remove-ssa)
         rm -f "$inputs/ssa-evomir.json"
+        ;;
+    block-record)
+        # A dangling link makes create_new fail but is not an output record.
+        # Keep the assembly path free to expose a partial publication.
+        if [ ! -L "$inputs/../record.json" ]; then
+            ln -s "$inputs/missing-record" "$inputs/../record.json"
+        fi
         ;;
     change-ir-after-acceptance)
         if [ "$stage" = lowering ]; then

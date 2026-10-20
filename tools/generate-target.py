@@ -497,9 +497,12 @@ def validate_instructions(description: InstructionDescription):
             for key in ("defs", "uses", "rewrite_defs", "rewrite_uses"):
                 if key in row:
                     validate_operand(row[key], shape)
-            for key in ("discardable", "call", "exit", "forwarding", "indirect_result", "spill_bridge"):
+            for key in ("discardable", "call", "exit", "indirect_result", "spill_bridge"):
                 if key in row and row[key] not in ("true", "false"):
                     raise TargetDescriptionError(f"invalid {key} fact: {name}")
+            if "forwarding" in row and row["forwarding"] not in ("true", "false"):
+                if row["forwarding"] != "body.fixed" or shape.get("body") != "a":
+                    raise TargetDescriptionError(f"invalid forwarding fact: {name}")
             if "flags" in row and row["flags"] not in ("true", "false"):
                 if row["flags"] != "body.flags" or shape.get("body") != "a":
                     raise TargetDescriptionError(f"invalid flags fact: {name}")
@@ -653,8 +656,9 @@ def render_bool_method(name: str, column: str, rows: dict) -> str:
     out = [f"    fn {name}(&self) -> bool {{\n        match self {{\n"]
     for family, row in rows.items():
         value = row[column]
-        pattern = inst_pattern(family, {"body"} if value == "body.flags" else set())
-        expression = "assembly_writes_flags(body)" if value == "body.flags" else value
+        pattern = inst_pattern(family, {"body"} if value in ("body.flags", "body.fixed") else set())
+        expression = {"body.flags": "assembly_writes_flags(body)",
+                      "body.fixed": "body.numbered().iter().any(|operand| operand.fixed_register.is_some())"}.get(value, value)
         out.append(f"            {pattern} => {expression},\n")
     out.append("        }\n    }\n")
     return "".join(out)
@@ -765,6 +769,11 @@ def render_allocation(description: InstructionDescription) -> str:
     out.append(render_bool_method("is_indirect_result", "indirect_result", rows))
     out.append(render_allocation_view("exclusive_result", "exclusive", rows, "Self::Reg", lambda p: "*" + p[0]))
     out.append(render_allocation_view("spill", "spill", rows, "SpillView<Self::Reg>", lambda p: f"SpillView {{ kind: SpillKind::{p[0].title()}, reg: *{p[1]}, slot: *{p[2]} }}"))
+    arguments = {name: {**row, "stack_argument":
+                 ("reload:" + row["incoming"] if row["incoming"] != "-" else
+                  "store:" + row["outgoing"] if row["outgoing"] != "-" else "-")}
+                 for name, row in rows.items()}
+    out.append(render_allocation_view("stack_argument", "stack_argument", arguments, "SpillView<Self::Reg>", lambda p: f"SpillView {{ kind: SpillKind::{p[0].title()}, reg: *{p[1]}, slot: *{p[2]} }}", selected_fields=lambda p: p[1:]))
     out.append(render_allocation_view("spill_slot_mut", "spill", rows, "&mut u32", lambda p: p[2], True,
                                       selected_fields=lambda p: (p[2],)))
     for kind, name, value in (("store", "spill_store", "src"), ("reload", "spill_reload", "dst")):

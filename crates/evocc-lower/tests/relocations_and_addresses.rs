@@ -79,6 +79,18 @@ fn string_literal_addresses_retain_array_extent_and_storage() {
 }
 
 #[test]
+fn enumerator_constants_use_their_declared_bit_width() {
+    for source in [
+        "enum E { MINUS = -1 }; int main(void) { return MINUS != -1; }",
+        "enum E { LOW = -2147483647 - 1 }; int main(void) { return LOW != (-2147483647 - 1); }",
+        "enum __attribute__((packed)) E { MINUS = -128, PLUS = 127 }; int main(void) { enum E x = MINUS; return x != -128 || PLUS != 127; }",
+        "enum E { LOW = -9223372036854775807L - 1, HIGH = 0x100000000L }; int main(void) { return LOW != (-9223372036854775807L - 1) || HIGH != 0x100000000L; }",
+    ] {
+        check(source, Ok(0), &[]);
+    }
+}
+
+#[test]
 fn copying_from_an_addressed_literal_does_not_load_its_first_character() {
     check(
         "int main(void){char dst[4];__builtin_memcpy(dst,&\"abc\",4);return dst[0]!='a'||dst[2]!='c'||dst[3]!=0;}",
@@ -140,6 +152,16 @@ fn zero_sized_pointer_offsets_do_not_discard_poison_indices() {
         Err("E3001"),
         &[],
     );
+}
+
+#[test]
+fn zero_sized_pointer_subtraction_reports_division_by_zero() {
+    for source in [
+        "struct empty {}; struct empty objects[2]; int main(void){return &objects[1]-&objects[0];}",
+        "int objects[2][0]; int main(void){return &objects[1]-&objects[0];}",
+    ] {
+        check(source, Err("E3002"), &[]);
+    }
 }
 
 #[test]

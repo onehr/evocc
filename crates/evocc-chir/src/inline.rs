@@ -533,6 +533,13 @@ fn inspect_ordered<'a>(
 pub fn retained_functions(
     unit: &CHirUnit<'_>,
 ) -> Result<BTreeSet<SymbolId>, crate::linkage::LinkageError> {
+    retained_functions_with_entries(unit, &[])
+}
+
+fn retained_functions_with_entries(
+    unit: &CHirUnit<'_>,
+    entries: &[&str],
+) -> Result<BTreeSet<SymbolId>, crate::linkage::LinkageError> {
     let linkage = unit.symbol_linkage()?;
     let mut definitions: BTreeMap<_, Vec<_>> = BTreeMap::new();
     for declaration in unit.iter() {
@@ -563,6 +570,7 @@ pub fn retained_functions(
     for (&symbol, bodies) in &definitions {
         let function = bodies[0];
         if !function.has_internal_linkage(unit.symbols())
+            || entries.contains(&function.name.spelling.as_str())
             || function.attributes.iter().any(|a| {
                 matches!(
                     a.semantic_name(),
@@ -622,7 +630,16 @@ pub fn retained_functions(
 pub fn without_unreferenced_functions<'u, 'a>(
     unit: &'u CHirUnit<'a>,
 ) -> Result<std::borrow::Cow<'u, CHirUnit<'a>>, crate::linkage::LinkageError> {
-    let retained = retained_functions(unit)?;
+    without_unreferenced_functions_with_entries(unit, &[])
+}
+
+/// Selected proof entries are external roots even when C gives them internal
+/// linkage. Keep their transitive call closure as well as ordinary roots.
+pub fn without_unreferenced_functions_with_entries<'u, 'a>(
+    unit: &'u CHirUnit<'a>,
+    entries: &[&str],
+) -> Result<std::borrow::Cow<'u, CHirUnit<'a>>, crate::linkage::LinkageError> {
+    let retained = retained_functions_with_entries(unit, entries)?;
     let keep = |declaration: &&CHirDecl<'_>| {
         !matches!(declaration, CHirDecl::Function(function)
             if function.body.is_some() && !retained.contains(&function.symbol))
@@ -886,6 +903,17 @@ pub fn substitute<'a>(
     substitute_for_execution(unit, arena, target, false)
 }
 
+/// A selected entry must keep its meaning for every argument, independently
+/// of the arguments supplied by callers in this translation unit.
+pub fn substitute_with_entries<'a>(
+    unit: &CHirUnit<'a>,
+    arena: &'a Arena,
+    target: &TargetDataLayout,
+    entries: &[&str],
+) -> Result<CHirUnit<'a>, InlineError> {
+    substitute_with_context(unit, arena, target, false, entries)
+}
+
 /// Keep definitions when the reference interpreter can request any function
 /// as its entry. The value/query rewriting is otherwise the lowering pass.
 pub(crate) fn substitute_for_execution<'a>(
@@ -893,6 +921,16 @@ pub(crate) fn substitute_for_execution<'a>(
     arena: &'a Arena,
     target: &TargetDataLayout,
     keep_definitions: bool,
+) -> Result<CHirUnit<'a>, InlineError> {
+    substitute_with_context(unit, arena, target, keep_definitions, &[])
+}
+
+fn substitute_with_context<'a>(
+    unit: &CHirUnit<'a>,
+    arena: &'a Arena,
+    target: &TargetDataLayout,
+    keep_definitions: bool,
+    entries: &[&str],
 ) -> Result<CHirUnit<'a>, InlineError> {
     let roles = crate::function_definitions::FunctionDefinitions::derive(unit).map_err(|e| {
         InlineError {
@@ -930,12 +968,26 @@ pub(crate) fn substitute_for_execution<'a>(
             }
         }
     }
-    let parameter_values = common_parameter_values(unit, target, &uses, &linkage);
+    let mut parameter_values = common_parameter_values(unit, target, &uses, &linkage);
+    // An explicit entry is callable independently of this unit's callers.
+    // Keep ordinary call-site inlining: it does not specialize the retained
+    // entry body and is also needed to resolve inline-only query helpers.
+    for declaration in unit.iter() {
+        if let CHirDecl::Function(function) = declaration {
+            if entries.contains(&function.name.spelling.as_str()) {
+                parameter_values.remove(&function.symbol);
+            }
+        }
+    }
     // An optimization barrier can be written on another declaration of the
     // same symbol. Do not infer permission from the definition node alone.
     let mut no_optional_substitution = BTreeSet::new();
+    let mut attributed_functions = BTreeSet::new();
     for_each_declaration_ordered(unit, |declaration| {
         if let CHirDecl::Function(function) = declaration {
+            if !function.attributes.is_empty() || function.asm_label.is_some() {
+                attributed_functions.insert(function.symbol);
+            }
             if function.attributes.iter().any(|attribute| {
                 matches!(
                     attribute.semantic_name(),
@@ -983,16 +1035,15 @@ pub(crate) fn substitute_for_execution<'a>(
     };
     // Small private predicates need not carry an inline spelling to benefit
     // from the existing, shared substitution. Keep this first cost model leaf
-    // only: no transitive growth, loop duplication, local storage/lifetimes,
+    // only: no transitive growth, loop duplication, escaping local storage,
     // label identity, assembly or activation-dependent builtin semantics.
     // Reads and argument effects still execute at the selected call site.
-    let private_leaf = |function: &FunctionDecl<'_>| {
+    let private_leaf_shape = |function: &FunctionDecl<'_>| {
         let body = &bodies[&function.symbol];
         function.has_internal_linkage(unit.symbols())
             && body.nodes <= 48
             && !body.has_calls
             && !body.has_loops
-            && !body.has_local_objects
             && body.exposed_objects.is_empty()
             && !body.activation_sensitive
             && !body.entry_labels
@@ -1001,6 +1052,9 @@ pub(crate) fn substitute_for_execution<'a>(
             && !body.constant_queries
             && body.assembly.is_empty()
             && !no_optional_substitution.contains(&function.symbol)
+    };
+    let private_leaf = |function: &FunctionDecl<'_>| {
+        private_leaf_shape(function) && !bodies[&function.symbol].has_local_objects
     };
     // A variadic callee is substituted only when it must be, and only when
     // its body reaches its anonymous arguments through the GNU argument pack
@@ -1114,6 +1168,59 @@ pub(crate) fn substitute_for_execution<'a>(
         })
         .collect();
     eligible.extend(extra);
+    // Extend optional substitution to small private scalar locals. Keep the
+    // existing explicit-inline paths unchanged. This new class excludes
+    // storage, attributes and type captures whose lifetime or ABI needs a
+    // wider contract. Each admitted call pays its source-node cost from one
+    // unit-wide budget, including calls reached inside another expansion.
+    // The cost is a growth heuristic, not a bound on emitted machine bytes.
+    let local_leaf_costs: BTreeMap<_, _> = candidates
+        .iter()
+        .filter_map(|(&symbol, &function)| {
+            let body = &bodies[&symbol];
+            if eligible.contains_key(&symbol)
+                || !private_leaf_shape(function)
+                || !body.has_local_objects
+                || body.fenv_access
+                || uses.addresses.contains(&symbol)
+                || attributed_functions.contains(&symbol)
+                || !matches!(
+                    function.parameters,
+                    ParameterSyntax::Prototype {
+                        variadic: false,
+                        ..
+                    }
+                )
+            {
+                return None;
+            }
+            let mut scalar_locals = true;
+            inspect_with_declarations([Node::Stmt(function.body?)], &mut |declaration| {
+                if let CHirDecl::Object(object) = declaration {
+                    scalar_locals &= matches!(
+                        object.storage,
+                        StorageClass::None | StorageClass::Auto | StorageClass::Register
+                    ) && object.cleanup.is_none()
+                        && object.asm_label.is_none()
+                        && object.attributes.is_empty()
+                        && !object.name.spelling.starts_with("__evocc.extent.")
+                        && unit.types.get(object.ty).is_some_and(|ty| {
+                            !ty.qualifiers.is_volatile
+                                && !ty.qualifiers.is_atomic
+                                && matches!(
+                                    ty.kind,
+                                    TypeKind::Int(_)
+                                        | TypeKind::GnuInt128(_)
+                                        | TypeKind::Enum(_)
+                                        | TypeKind::Pointer(_)
+                                )
+                        });
+                }
+            });
+            scalar_locals.then_some((symbol, body.nodes))
+        })
+        .collect();
+    eligible.extend(local_leaf_costs.keys().map(|&s| (s, candidates[&s])));
     let pure_constants = eligible
         .values()
         .filter_map(|f| pure_loop_result(unit, f, target).map(|value| (f.symbol, value)))
@@ -1127,6 +1234,8 @@ pub(crate) fn substitute_for_execution<'a>(
         arena,
         target,
         eligible,
+        local_leaf_costs,
+        local_leaf_budget: 1024,
         globals: BTreeMap::new(),
         static_values: BTreeMap::new(),
         static_byte_objects: BTreeMap::new(),
@@ -1257,8 +1366,10 @@ pub(crate) fn substitute_for_execution<'a>(
                 let mut rewritten = pass.stmt(body, &mut c)?;
                 pass.active.pop();
                 if !keep_definitions
+                    && !entries.contains(&f.name.spelling.as_str())
                     && f.has_internal_linkage(pass.unit.symbols())
                     && pass.eligible.contains_key(&f.symbol)
+                    && !pass.local_leaf_costs.contains_key(&f.symbol)
                     && !uses.addresses.contains(&f.symbol)
                 {
                     continue;
@@ -1284,6 +1395,18 @@ pub(crate) fn substitute_for_execution<'a>(
     }
     pass.unit.declarations = declarations;
     pass.unit.resolved_linkage.take();
+    if !keep_definitions && !pass.local_leaf_costs.is_empty() {
+        // A budget can leave some calls intact. Remove a new optional leaf
+        // only after checking the rewritten unit's complete reference closure.
+        let retained = retained_functions_with_entries(&pass.unit, entries)
+            .map_err(|error| pass.error(error.span, error.message))?;
+        pass.unit.declarations.retain(|declaration| {
+            !matches!(declaration, CHirDecl::Function(function)
+                if pass.local_leaf_costs.contains_key(&function.symbol)
+                    && !retained.contains(&function.symbol))
+        });
+        pass.unit.resolved_linkage.take();
+    }
     Ok(pass.unit)
 }
 
@@ -1467,6 +1590,8 @@ struct Substitution<'a, 't> {
     arena: &'a Arena,
     target: &'t TargetDataLayout,
     eligible: BTreeMap<SymbolId, &'a FunctionDecl<'a>>,
+    local_leaf_costs: BTreeMap<SymbolId, usize>,
+    local_leaf_budget: usize,
     globals: BTreeMap<SymbolId, SymbolId>,
     static_values: BTreeMap<SymbolId, &'a CHirExpr<'a>>,
     static_byte_objects: BTreeMap<SymbolId, literal_queries::Bytes<'a>>,
@@ -1563,7 +1688,7 @@ impl<'a> Substitution<'a, '_> {
             };
             u64::try_from(value.cast(ty).raw_bits()).ok()
         };
-        if !builtin.check_is_redundant(constant) {
+        if !builtin.check_with_source(constant, builtin.literal_copy_size(args)) {
             return;
         }
         let Ok(entry) = self.unit.symbols.symbol(plain) else {
@@ -2954,7 +3079,15 @@ impl<'a> Substitution<'a, '_> {
                         .get(symbol)
                         .copied()
                         .filter(|_| c.expand_calls && !unexpanded)
+                        .filter(|_| {
+                            self.local_leaf_costs
+                                .get(symbol)
+                                .is_none_or(|cost| *cost <= self.local_leaf_budget)
+                        })
                     {
+                        if let Some(cost) = self.local_leaf_costs.get(symbol) {
+                            self.local_leaf_budget -= cost;
+                        }
                         let argument_bounds = args
                             .iter()
                             .map(|arg| self.pointer_bounds(arg, c, 0))
@@ -3246,19 +3379,19 @@ impl<'a> Substitution<'a, '_> {
         c: &mut Context<'a>,
     ) -> Result<&'a CHirStmt<'a>, InlineError> {
         let memory_before = c.memory.clone();
-        let one_trip_loop = if let CHirStmt::DoWhile(body, test, _) = s {
+        let (one_trip_loop, byte_one_trip) = if let CHirStmt::DoWhile(body, test, _) = s {
             let uses = inspect([Node::Stmt(body)]);
-            !uses.jumps
-                && !uses.entry_labels
+            let once = !uses.entry_labels
                 && crate::constant::eval_executable_integer_constant(
                     test,
                     &self.unit.types,
                     &self.unit.symbols,
                     self.target,
                 )
-                .is_some_and(|v| !v.truth())
+                .is_some_and(|v| !v.truth());
+            (once && !uses.jumps, once)
         } else {
-            false
+            (false, false)
         };
         if matches!(
             s,
@@ -3279,7 +3412,15 @@ impl<'a> Substitution<'a, '_> {
             if !one_trip_loop {
                 self.invalidate_memory_write(c);
             }
-            c.byte_objects.clear();
+            // These facts describe only dominating array initializers. A
+            // single-trip body cannot revisit a query after a later write.
+            // Keep its incoming facts and let the ordinary write/call rules
+            // remove them. Break and continue do not write memory. Unlike
+            // scalar memory facts, byte facts are never established by an
+            // assignment, so an early exit cannot export a skipped write.
+            if !byte_one_trip && !matches!(s, CHirStmt::Break(..) | CHirStmt::Continue(..)) {
+                c.byte_objects.clear();
+            }
             c.memo.clear();
         }
         let mut out = s.clone();
@@ -3396,7 +3537,7 @@ impl<'a> Substitution<'a, '_> {
                             result.push(CHirBlockItem::Statement(rewritten));
                             if !incoming {
                                 c.declaration_prefix = true;
-                                if definitely_returns(rewritten, c.end.as_ref()) {
+                                if definitely_leaves_sequence(rewritten, c.end.as_ref()) {
                                     unreachable = Some(c.clone());
                                 }
                             }
@@ -4009,6 +4150,22 @@ fn definitely_returns(statement: &CHirStmt<'_>, inline_end: Option<&SpannedName>
             definitely_returns(yes, inline_end) && definitely_returns(no, inline_end)
         }
         _ => false,
+    }
+}
+
+/// A loop jump ends this lexical sequence, not the enclosing function. Do
+/// not descend into loops or switches: they consume their own loop jumps.
+fn definitely_leaves_sequence(statement: &CHirStmt<'_>, inline_end: Option<&SpannedName>) -> bool {
+    match statement {
+        CHirStmt::Break(..) | CHirStmt::Continue(..) => true,
+        CHirStmt::Compound(items, _, _) => items.iter().any(|item| {
+            matches!(item, CHirBlockItem::Statement(s) if definitely_leaves_sequence(s, inline_end))
+        }),
+        CHirStmt::If(_, yes, Some(no), _) => {
+            definitely_leaves_sequence(yes, inline_end)
+                && definitely_leaves_sequence(no, inline_end)
+        }
+        _ => definitely_returns(statement, inline_end),
     }
 }
 

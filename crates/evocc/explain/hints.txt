@@ -1,0 +1,122 @@
+E0102	Give each `#if`, `#ifdef` and `#ifndef` one matching `#endif`.
+E0104	Correct the configuration instead of removing a required check.
+E0105	Install the header or correct its name and include path.
+E0106	Write the query in its required form, for example `__has_attribute(name)`.
+E0107	Use a supported packing request and restore it after the affected declarations.
+E0108	Replace the forbidden name with the permitted interface.
+E0109	Reduce `__COUNTER__` expansions or split the translation unit before the limit.
+E0110	Use separate tokens for an arithmetic operation.
+E0111	Use an integer condition instead of a floating constant.
+E0112	Remove the stray character or correct the macro that produced it.
+E0113	Move a pragma outside the macro invocation so its position is explicit.
+E1003	Add the operand, or remove an operator that you did not intend to use.
+E1005	Declare pointers when an array must refer to functions.
+E1207	Return a value of the required type, or declare a void function when appropriate.
+E2001	Declare the object or function before use, and check the spelling of its name.
+E2002	Correct the conflicting declaration instead of casting each use.
+E2202	Use a compatible value rather than a cast that hides the type error.
+E2203	Create the array first and assign its elements during execution.
+E2208	Move the computation into a function that runs before the value is used.
+E2702	Keep the atomic requirement and use a compiler that supports this operation.
+E2903	Correct the attribute syntax and arguments so the attribute has its intended meaning.
+E2904	Put the variable-length type in a function body, where the bound can execute.
+E2905	Use a constant initializer at file scope, or move the statements into a function.
+E2906	Use a member or index that exists in the declared type.
+E2907	Remove the duplicate and keep one result for each compatible type.
+E2908	Add the needed type association or a suitable default result.
+E2909	Use the documented operand count instead of relying on ordinary variadic calls.
+E2910	Invoke the builtin directly instead of storing its name as a value.
+E2911	Correct the violated requirement and keep a useful assertion for that requirement.
+E2912	Use an integer constant expression or move a runtime check into executable code.
+E2913	Supply an operand of the required kind instead of hiding the mismatch with a cast.
+E2914	Correct the operands and constraints before asking the backend to emit assembly.
+E2915	Add an initializer or write the object's type explicitly.
+E2916	Correct the bounds and remove overlapping or duplicate cases.
+E2917	Use a nonnegative integer constant expression within the array's bounds.
+E2918	Use ordinary function-scope control flow instead of a label inside an expression.
+E2919	Use a fixed-size array when an automatic object must contain initialized elements.
+E2920	Correct the label name or add the intended destination.
+E2922	Specify the required hardware access operations before replacing this copy.
+E2923	Use a valid size and check runtime sizes before creating variable-length arrays.
+E2924	Put the attribute on a permitted statement instead of treating it as a prefix.
+E2925	Choose the mode that describes the required query rather than an arbitrary integer.
+E2926	Use it only in a function whose declaration ends with `...`.
+E2927	Use the correct declaration, normally from the library's header.
+E2928	Remove `register` when the program needs the object's address.
+E2929	Read the promoted type, then convert the value if a narrower type is needed.
+E2930	Define the enumeration before a use that needs that information.
+E2931	Provide a prototype and make the calls agree with the definition.
+E2932	Remove the requirement or rewrite the recursion as bounded control flow.
+E2933	Return from `main` when that ends the program correctly; test other termination paths natively.
+E2934	Remove the specifier from the object declaration.
+E2935	Use the library's ordinary declared interface for native compilation.
+E2936	Supply a valid positive line number and an optional quoted filename.
+E2937	Call the intended function instead of a variable with a similar name.
+E2938	Use a supported alignment that is at least as strict as the natural alignment.
+E2939	Use an explicit ordinary integer conversion when that is the intended arithmetic type.
+E2940	Use explicit byte encoding when a data format needs a particular byte order.
+E2941	Use a direct type selection when the program needs a portable type distinction.
+E2942	Use a compatible member value or an explicit member initializer.
+E2943	Correct the conflicting settings or balance the visibility directive stack.
+E2944	Give an unrelated helper a distinct name and preserve the intended call target.
+E2945	Enter the scope normally before reaching the label.
+E2946	Use distinct names for local objects or helpers and the library operation.
+E2947	Choose an order permitted by the operation and sufficient for the synchronization protocol.
+E2948	Choose an explicit arithmetic contract before replacing integer-complex division.
+E2949	Test `__has_builtin` before you call a builtin that a compiler can lack.
+E2950	Forward the pack only from an `always_inline` variadic function, as the last call argument.
+E2951	Convert an integer operand to a floating type, or use an ordinary integer comparison.
+E2953	Use the original struct type, or initialize the destination fields explicitly.
+E2954	Keep the string object's binding fixed, or use a runtime call after its final declaration.
+E3001	Initialize the object on every path before reading it.
+E3002	Check the divisor and choose the required error behavior before dividing.
+E3003	Handle zero separately before evaluating `%`.
+E3004	Check the range before the operation, or use a suitable wider arithmetic type.
+E3005	Check the count before shifting instead of relying on hardware count masking.
+E3006	Check the shift count and the shifted value before a signed left shift.
+E3007	Write an explicit return on each path that needs a result.
+E3008	Inspect long-running loops and use a finite workload when testing termination.
+E3009	Provide a live object or handle the null case before accessing memory.
+E3010	Keep the object alive until its last use or copy its value before leaving its scope.
+E3011	Check indices and access sizes before reading or writing.
+E3012	Use aligned storage or copy bytes into an aligned object before a typed read.
+E3013	Use a pointer derived from a live object instead of inventing an address.
+E3014	Use a writable copy when the program needs to change the data.
+E3015	Initialize the callback or handle a missing callback before calling it.
+E3016	Pass a real function pointer with the required signature.
+E3017	Fix the IR producer so the instruction uses the declared interface.
+E3018	Correct the producer of the lifetime operation rather than suppressing the check.
+E3019	Keep the pointer type consistent with the function definition.
+E3021	Test this path as a native program; do not remove assembly that does required work.
+E3022	Handle zero before calling the builtin.
+E3023	For a zero operand to a restricted count builtin, handle the input or expect E3022.
+E3024	Handle the reachable case explicitly instead of declaring it impossible.
+E3025	Pass the required caller information explicitly instead of inspecting its return address.
+E3026	Choose an encoding that the target relocation format can represent.
+E3027	Use `memmove` when overlap is part of the intended operation.
+E3030	Use an implemented interface that preserves the required data and calling contract.
+E3031	Pass required data explicitly instead of depending on an ancestor's frame address.
+E3032	Subtract pointers only when the operation meets its object and range requirements.
+E3033	Use a supported operation or provide an explicit implementation for the required width.
+E3034	Prefer an actual function pointer when selecting a function to call.
+E3037	Fix the producer so it emits this operation only in a variadic function.
+E3038	Keep the caller's types, the argument count, and the callee's reads consistent.
+E3039	Supply a supported definition or use native compilation with the required library.
+E3040	Provide the object's definition or test the linked native program instead.
+E3041	Keep either the alias role or the separate definition, according to the intended linkage.
+E3043	Use the correct pointer kind and preserve the identity of the actual target.
+E3045	Use pointers within the relationships permitted by the source and target profile.
+E3047	Inspect the condition that selected this path before changing the trap.
+E3048	Keep an original label value instead of constructing an arbitrary branch address.
+E3049	Use a compiler that implements the required interface or redesign that interface explicitly.
+E3050	Use an implemented arithmetic contract that preserves both components and special values.
+E3060	Remove weak binding from a private definition, or deliberately give the symbol external linkage.
+E3061	Define the target in the same translation unit and make the alias agree with it.
+E3062	Fix the IR producer so each atomic access has a valid type, width, alignment and order.
+E3066	Write no more bytes than the destination holds.
+E3101	Reduce unexpected failures to a small source example and report them with the full diagnostic.
+W0001	Remove the variable, or use it where its value is needed.
+W0002	Use the parameter, or mark it `__attribute__((unused))` when the interface requires it.
+W0003	Declare the function before its first call, normally by including its header.
+W0004	Write an explicit type specifier, such as `int`.
+W0005	Return a value on each path, or change the result type to `void`.

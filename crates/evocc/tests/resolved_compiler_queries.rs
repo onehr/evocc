@@ -247,6 +247,27 @@ fn initialized_byte_queries_survive_unrelated_volatile_location_stores() {
 }
 
 #[test]
+fn byte_queries_keep_only_unchanged_facts_across_single_trip_macros() {
+    assert_constant_program(include_str!(
+        "../../../tests/fixtures/fortify-single-trip-query.c"
+    ));
+    for source in [
+        "int main(void){char a[]=\"abc\";do{continue;a[0]='z';}while(0);return !__builtin_constant_p(a[0])||a[0]!='a';}",
+        "int main(void){char a[]=\"abc\";do{if(1)break;a[0]='z';}while(0);return !__builtin_constant_p(a[0])||a[0]!='a';}",
+        "int main(void){char a[]=\"abc\";volatile char z='z';do{a[0]=z;break;}while(0);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){char a[]=\"abc\";char*p=a;volatile char z='z';do{*p=z;continue;}while(0);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){char a[]=\"abc\";volatile int c=0;volatile char z='z';do{if(c)break;a[0]=z;}while(0);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){char a[]=\"abc\";volatile int c=1;volatile char z='z';do{a[0]=z;}while(c--);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){char a[]=\"abc\";volatile char z='z';goto entry;do{a[0]='a';entry:a[0]=z;break;}while(0);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "static void change(char*p){volatile char z='z';*p=z;}int main(void){char a[]=\"abc\";do{change(a);break;}while(0);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "int main(void){char a[]=\"abc\";volatile char z='z';do{do{break;}while(0);a[0]=z;}while(0);return __builtin_constant_p(a[0])||a[0]!='z';}",
+        "static void cleanup(char**p){volatile char z='z';**p=z;}int main(void){char a[]=\"abc\";do{char*p __attribute__((cleanup(cleanup)))=a;break;}while(0);return __builtin_constant_p(a[0])||a[0]!='z';}",
+    ] {
+        assert_constant_program(source);
+    }
+}
+
+#[test]
 fn static_extent_uses_the_proved_size_at_the_allocation_not_a_later_assignment() {
     assert_constant_program(
         "typedef unsigned long size_t;char storage[128];\

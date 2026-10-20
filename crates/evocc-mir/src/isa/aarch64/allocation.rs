@@ -26,6 +26,14 @@ impl Aarch64Allocation {
 }
 
 impl AllocClass for RegClass {
+    fn value_bits(self) -> u16 {
+        match self {
+            Self::Gpr32 | Self::Simd32 => 32,
+            Self::Gpr64 | Self::Simd64 => 64,
+            Self::Simd128 => 128,
+            Self::Flags => 4,
+        }
+    }
     fn bank(self) -> u8 {
         u8::from(self.is_simd())
     }

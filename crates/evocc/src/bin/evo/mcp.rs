@@ -18,7 +18,7 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "check",
         description: "Check the executed path of one C main.",
-        fields: &["file"],
+        fields: &["file", "form"],
     },
     Tool {
         name: "explain",
@@ -37,17 +37,28 @@ const TOOLS: &[Tool] = &[
     },
 ];
 
+/// The check records; spec/diagnostics.md section 5.2. Omission is `full-1`.
+const FORMS: [&str; 2] = ["full-1", "concise-1"];
+
 fn is_array(field: &str) -> bool {
     matches!(field, "args" | "entries")
+}
+
+fn is_optional(field: &str) -> bool {
+    is_array(field) || field == "form"
 }
 
 fn tools() -> String {
     let rows = TOOLS.iter().map(|tool| {
         let properties = tool.fields.iter().map(|field| {
-            let schema = if is_array(field) { r#"{"type":"array","items":{"type":"string"}}"# } else { r#"{"type":"string"}"# };
+            let schema = match *field {
+                _ if is_array(field) => r#"{"type":"array","items":{"type":"string"}}"#.to_owned(),
+                "form" => format!(r#"{{"type":"string","enum":[{}]}}"#, FORMS.map(quote).join(",")),
+                _ => r#"{"type":"string"}"#.to_owned(),
+            };
             format!("{}:{schema}", quote(field))
         }).collect::<Vec<_>>().join(",");
-        let required = tool.fields.iter().filter(|f| !is_array(f)).map(|s| quote(s)).collect::<Vec<_>>().join(",");
+        let required = tool.fields.iter().filter(|f| !is_optional(f)).map(|s| quote(s)).collect::<Vec<_>>().join(",");
         format!("{{\"name\":{},\"description\":{},\"inputSchema\":{{\"type\":\"object\",\"properties\":{{{properties}}},\"required\":[{required}],\"additionalProperties\":false}}}}", quote(tool.name), quote(tool.description))
     }).collect::<Vec<_>>().join(",");
     format!("{{\"tools\":[{rows}]}}")
@@ -72,11 +83,13 @@ fn command(params: &Json) -> Result<Command> {
                     v.string()?;
                 }
             }
-        } else {
-            fields
-                .get(*field)
-                .ok_or("missing tool argument")?
-                .string()?;
+        } else if let Some(value) = fields.get(*field) {
+            if *field == "form" && !FORMS.contains(&value.string()?) {
+                return Err("form must be full-1 or concise-1".into());
+            }
+            value.string()?;
+        } else if !is_optional(field) {
+            return Err("missing tool argument".into());
         }
     }
     let mut command = Command::new(std::env::current_exe()?);
@@ -87,6 +100,9 @@ fn command(params: &Json) -> Result<Command> {
         command.arg(std::path::absolute(fields["file"].string()?)?);
     }
     command.arg("--json");
+    if let Some(form) = fields.get("form") {
+        command.arg(format!("--form={}", form.string()?));
+    }
     if name == "fix_plan" {
         command.arg("--plan");
     }

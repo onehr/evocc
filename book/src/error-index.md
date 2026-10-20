@@ -431,28 +431,23 @@ int main(void) { Aligned value = 0; return value; }
 
 ### E2904: not-covered: variably-modified-typeof
 
-This `typeof` operand has a variable type and an unsupported evaluation form.
-EvoCC cannot safely preserve the operand's required side effects in that form.
+This `typeof` type name needs a runtime bound outside a function body.
+EvoCC cannot capture that bound in the declared scope.
 
-A GNU `typeof` operand of variably modified type can require evaluation.
-Separate the side effect from the type query so its execution is explicit.
+A GNU `typeof` operand of variably modified type requires evaluation.
+Put the variable-length type in a function body, where the bound can execute.
 
 ```c
-int main(void) {
-    int n = 2, calls = 0;
-    int a[n];
-    typeof((calls++, &a)) p = &a;
-    return 0;
-}
+int n = 2;
+typeof(int[n]) *p;
+int main(void) { return 0; }
 ```
 
 ```c
 int main(void) {
-    int n = 2, calls = 0;
-    int a[n];
-    ++calls;
-    int (*p)[n] = &a;
-    return calls != 1;
+    int n = 2;
+    typeof(int[n]) a;
+    return sizeof a != 2 * sizeof(int);
 }
 ```
 
@@ -691,10 +686,13 @@ This skips the normal entry and evaluation of the expression.
 GNU statement expressions do not permit jumps into their bodies.
 Use ordinary function-scope control flow instead of a label inside an expression.
 
-Trigger: none
-Reason: the current parser reports E1003 for this jump instead of E2918.
-
-The authority table assigns E2918, but the implementation does not emit it.
+```c
+int main(void) {
+    goto inside;
+    ({ inside: 1; });
+    return 0;
+}
+```
 
 ```c
 int main(void) {
@@ -1209,11 +1207,14 @@ inside:
 
 ### E2946: builtin-local-binding-conflict
 
-A builtin library operation conflicts with an internal-linkage function of the same name.
-EvoCC refuses to choose silently between the local body and the library operation.
+A builtin library operation conflicts with a same-named function or linked object.
+EvoCC does not choose silently between a local body and the library operation,
+or emit an object under the name of a called library function.
 
 The two implementations can have different behavior even with compatible types.
 Use a distinct name for the local helper and call it explicitly.
+For an object collision, use a distinct object name. A block-local object does
+not have this linked-name conflict.
 
 ```c
 static int strcmp(const char *a, const char *b) { return 0; }
@@ -1331,6 +1332,78 @@ int main(void) { return __builtin_isgreater(1, 2); }
 
 ```c
 int main(void) { return __builtin_isgreater(1.0, 2.0); }
+```
+
+### E2952: unsupported-function-attribute
+
+EvoCC does not implement this execution rule or calling convention.
+An ordinary function is not a safe replacement.
+The error also applies to prototypes, function types and unused definitions.
+`-w` does not suppress it.
+
+A naked assembly function must not get an ordinary compiler frame. Keep such
+a function in a separate assembly file, or use ordinary C if no special
+calling convention is required. Do not remove an ABI attribute from a function
+that must match an external caller.
+
+```c
+__attribute__((naked)) int value(void) { __asm__("mov w0, #7\n\tret"); }
+int main(void) { return value() != 7; }
+```
+
+```c
+int value(void) { return 7; }
+int main(void) { return value() != 7; }
+```
+
+### E2953: incompatible-record-cast
+
+A cast to a struct type has an operand of a different type.
+Matching fields do not make two distinct struct tags compatible.
+
+Use the original struct type, or initialize the destination's fields explicitly.
+A cast to the same struct type is allowed and does not change its value.
+
+```c
+struct A { int x; };
+struct B { int x; };
+int main(void) {
+    struct A a = { 3 };
+    struct B b = (struct B)a;
+    return b.x - 3;
+}
+```
+
+```c
+struct A { int x; };
+struct B { int x; };
+int main(void) {
+    struct A a = { 3 };
+    struct B b = { a.x };
+    return b.x - 3;
+}
+```
+
+### E2954: constant-string-binding-conflict
+
+A later declaration changes an object used by a constant string query.
+A weak, alias or assembly-name declaration can replace that
+object, so its earlier initializer cannot remain the source of a constant.
+
+Keep the binding fixed. If replacement is needed, declare the binding before
+use and use an ordinary runtime call instead of an integer constant expression.
+
+```c
+const char text[] = "abc";
+enum { length = __builtin_strlen(text) };
+extern const char text[] __attribute__((weak));
+int main(void) { return length - 3; }
+```
+
+```c
+const char text[] = "abc";
+enum { length = __builtin_strlen(text) };
+int main(void) { return length - 3; }
 ```
 
 ## E3xxx
@@ -1774,7 +1847,7 @@ An ancestor's return address depends on machine frames and calling conventions.
 EvoCC must not invent that address when the requested level is unsupported.
 
 Trigger: none
-Reason: the current front end rejects nonzero return-address levels with E2913 before lowering.
+Reason: depth zero has activation-address lowering, admitted nonzero depths yield null, and out-of-range depths are E2913.
 
 Pass the required caller information explicitly instead of inspecting its return address.
 
@@ -1859,15 +1932,14 @@ Replacing the argument type with `double` does not preserve this interface.
 
 ### E3031: not-lowered: frame-address
 
-The requested frame address is not available on the selected path.
-The interpreter rejects a request for a nonzero frame depth when it executes it.
+The requested low-level frame address is not available on the selected path.
+The EvoIR interpreter rejects a nonzero `frame_address` depth when it executes it.
 
 Frame layout is target-specific and cannot be guessed from source call structure.
 Pass required data explicitly instead of depending on an ancestor's frame address.
 
-```c
-int main(void) { return __builtin_frame_address(1) != 0; }
-```
+Trigger: none
+Reason: C activation-address builtins return null for admitted nonzero depths; this code remains for independently supplied EvoIR and invalid C-HIR.
 
 ```c
 int read_value(const int *p) { return *p; }

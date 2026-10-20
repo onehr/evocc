@@ -1,7 +1,7 @@
 //! Independent allocated-machine dataflow and operand-constraint verification.
 //!
-//! This pass reads only the allocated blocks, assignment and target facts. It
-//! never consumes the allocator's intervals, pins, liveness or spill decisions.
+//! This pass checks local constraints and then relates the unchanged input to
+//! allocated registers and slots. It does not consume allocator analyses.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -184,8 +184,8 @@ pub fn verify_allocation<I, T, C, A>(
 ) -> Result<(), VerifierRefusal>
 where
     C: AllocClass,
-    I: AllocInst<Reg = VirtualReg<C>>,
-    T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body>,
+    I: AllocInst<Reg = VirtualReg<C>> + PartialEq,
+    T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body> + PartialEq,
     A: AllocationTarget<C>,
 {
     let refuse = |block: u32, detail: String| VerifierRefusal {
@@ -296,8 +296,9 @@ where
     if let Some(first) = allocated.blocks.first() {
         incoming.insert(first.id, entry);
     }
-    // Preserve the original traversal and fixed-point bound.
-    for _ in 0..(allocated.blocks.len() + 1) * 4 {
+    // A discovered state can only lose known holders, so this finite lattice
+    // converges. Do not accept a partial result at an iteration limit.
+    loop {
         let mut changed = false;
         for block in &allocated.blocks {
             let Some(state) = incoming.get(&block.id).cloned() else {
@@ -427,7 +428,7 @@ where
             }
         }
     }
-    Ok(())
+    super::allocation_relation::verify(target, allocated).map_err(|detail| refuse(0, detail))
 }
 
 fn meet(left: &State, right: &State) -> State {

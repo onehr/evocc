@@ -142,6 +142,38 @@ fn version_reports_the_underlying_compiler() {
     assert_eq!(output.stdout, expected.stdout);
 }
 
+fn checker_version(binary: &Path, name: &str) {
+    // An installed checker must not read a source manifest to report its version.
+    let directory = Scratch::new();
+    let output = Command::new(binary)
+        .arg("--version")
+        .current_dir(&directory.0)
+        .output()
+        .unwrap();
+    success(&output);
+    assert_eq!(
+        output.stdout,
+        format!("{name} {}\n", env!("CARGO_PKG_VERSION")).as_bytes()
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn packaged_certificate_checker_reports_the_release_version() {
+    checker_version(
+        Path::new(env!("CARGO_BIN_EXE_evocc-checker")),
+        "evocc-checker",
+    );
+}
+
+#[test]
+fn lean_checker_reports_the_release_version() {
+    checker_version(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lean/.lake/build/bin/evoir-sem"),
+        "evoir-sem",
+    );
+}
+
 #[test]
 fn prove_checks_all_definitions_and_keeps_the_record() {
     let temp = Scratch::new();

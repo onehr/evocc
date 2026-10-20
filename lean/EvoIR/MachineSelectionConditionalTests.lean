@@ -46,4 +46,17 @@ theorem checked_variable_shift (σ : Subst Γ) (passed : guards σ checks = .ok 
   | none => simp [found] at accepted
   | some proof => exact proof.down σ passed
 
+private def widened : Term Γ 64 := .cast .zext 64 lhs
+private def zeroEqual : Term Γ 1 := .cmp .eq widened (.const 64 0)
+private def zeroDifferent : Term Γ 1 := .cmp .ne widened (.const 64 0)
+private def testedWord : WordExpr Γ := .input ⟨32, lhs⟩
+
+example : (zeroTestUnder [] zeroEqual testedWord .w).map Subtype.val = some false := by decide
+example : (zeroTestUnder [] zeroDifferent testedWord .w).map Subtype.val = some true := by decide
+example : (zeroTestUnder [] zeroEqual (.input ⟨32, input "y" 32⟩) .w).isNone := by decide
+
+-- Testing all 64 bits is not a replacement for testing the low 32 bits.
+example : (zeroTestUnder [] zeroEqual (.input ⟨64, .var "x" 64 rfl⟩) .x).isNone := by decide
+example : (zeroTestUnder [] (.cmp .slt widened (.const 64 0)) testedWord .w).isNone := by decide
+
 end EvoIR.Core.Symbolic.MachineSelection.ConditionalTests

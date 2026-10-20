@@ -7,7 +7,7 @@ For the separately tracked execution schedule, run `python3 tools/render-status.
 Benchmark orchestrator run: `20260928T122910.089006Z`; checkout `69c1b7638427`; dirty tree: `True`. Each application row retains its own measurement and compiler identity; the current kernel run does not remeasure applications.
 
 ```text
-EvoCC roadmap checkpoint | EvoIR 2.5.0 | EvoMIR 1.2.1
+EvoCC roadmap checkpoint | EvoIR 2.6.8 | EvoMIR 1.3.9
 =========================================================================================================
 APPLICATIONS - each lane keeps its own frozen measurement
   4 INCOMPLETE | 10 PASS | 1 PROFILE_CLEAN
@@ -37,7 +37,7 @@ KERNEL - configurations and runtime populations remain separate
   K6 bpf    PASS        7,008/7,008 target-C; link=PASS; boot=PASS
     run=20260928T075419Z
   Direct Kbuild: BUILD_BOOT_SELECTED_SELFTEST_PASS; 2799 target-C
-    selected tests=PASS; programs=9; subtests={'PASS': 125, 'FAIL': 0, 'SKIP': 0}
+    selected tests=PASS; programs=9; subtests={'PASS': 125}
     New virtconfig replay; not the historical 7008-unit or full K7 acceptance.
   BPF module link/BTF: PASS; 848 modules (not a load-every-driver claim)
   K7 selected PASS: 125 PASS / 0 FAIL / 0 SKIP; run=20260913T144437Z
@@ -58,6 +58,7 @@ KERNEL - configurations and runtime populations remain separate
     follow-up fortify (26 tests): 23 PASS / 3 FAIL / 0 SKIP; filtered; not a full KUnit rerun
     follow-up fortify (26 tests): 24 PASS / 2 FAIL / 0 SKIP; filtered; not a full KUnit rerun
     follow-up fortify (26 tests): 25 PASS / 1 FAIL / 0 SKIP; filtered; not a full KUnit rerun
+    follow-up fortify/minimal-pair (26 tests): 26 PASS / 0 FAIL / 0 SKIP; filtered; not a full KUnit rerun
   Unified KUnit bench: NOT_RUN; executionComplete=False; run=unmeasured
 
 ARCHITECTURE / REMAINING ROADMAP GATES (bounded evidence, not a completion percentage)
@@ -118,7 +119,7 @@ R02a/b/d's registered Linux pilot is separate from final R02/Q2, G2 and Q3 accep
 
 Expanded KUnit composition: Full-suite/module-tested composition, not a single-compiler survey: 6,914 base objects, Poly1305 from the padding repair, and FORTIFY from the query repair. All 6,916 installed object hashes survived that flight's relink. The later one-object filtered composition is recorded separately in targetedFollowups.
 
-Expanded KUnit remaining: Last full-suite/module-tested flight: all 1,504 built-in cases and all 765 module cases executed. Four FORTIFY query cases and one timing-sensitive PM runtime case differ from reference PASS; one upstream switch-entry XFAIL differs as SKIP. Seven ARM64 per-task EL1 breakpoint failures are common. Subsequent filtered FORTIFY follow-ups reach 25/26 PASS with one failure containing two nonliteral strlen ICE assertions. They do not recompute the 1,504-case totals or update module acceptance. Retain all raw FAIL/SKIP results; this is not all-tests PASS.
+Expanded KUnit remaining: Last full-suite/module-tested flight: all 1,504 built-in cases and all 765 module cases executed. Four FORTIFY query cases and one timing-sensitive PM runtime case differ from reference PASS; one upstream switch-entry XFAIL differs as SKIP. Seven ARM64 per-task EL1 breakpoint failures are common. Historical filtered follow-ups reached 25/26 PASS. On 2026-10-16 a separately recorded minimal pair runs the unchanged 26-case FORTIFY suite: GCC 26 PASS, EvoCC 26 PASS, with only the test unit compiled by EvoCC. This does not recompute the historical 1,504-case totals or update module acceptance. Retain all raw FAIL/SKIP results; this is not all-tests PASS.
 
 Full kselftest counts are program-level outer verdicts, not nested assertion counts. SKIP, TIMEOUT, INVALID_OUTPUT, INCOMPLETE and NOT_RUN are not PASS. Reference failures do not excuse a subject regression. A RUNNING receipt means the last recorded campaign state; use its capture/process to confirm liveness.
 

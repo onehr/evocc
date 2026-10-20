@@ -80,11 +80,6 @@ def PrivateBranchDiagram {Γ : Var → Nat} (p : EvoIR.Machine.Program)
     EvoIR.Machine.step .ssa p (privateMachineState f b b.insts.length regs owner nextFrame incoming stack memory) =
       some ⟨.running entered, stack, nextFrame, memory⟩
 
-private theorem private_encoded_nonzero (value : BitVec 1) (width : EvoIR.Machine.Width) :
-    ((value.setWidth 64).setWidth width.bits != 0) = value.getLsbD 0 := by
-  rw [one_bit_reify value]
-  cases value.getLsbD 0 <;> cases width <;> rfl
-
 private theorem private_false_beq_true : (false == true) = false := rfl
 
 private theorem private_true_beq_false : (true == false) = false := rfl
@@ -153,26 +148,24 @@ def privateBranchChoiceUnder {Γ : Var → Nat} (p : EvoIR.Machine.Program)
           | some width => some ⟨width, found⟩
         let operand ← wordOperand bank reg
         if present : (bank.lookup reg.id).isSome = true then
-          let equal ← checkWordUnder checks ⟨1, condition⟩ operand.val
+          let tested ← zeroTestUnder checks condition operand.val width.val
           let yes : PrivateBranchArm := ⟨taken, takenArgs⟩
           let no : PrivateBranchArm := ⟨untaken, untakenArgs⟩
-          let choice := if nonzero then (⟨yes, no⟩ : PrivateBranchChoice) else ⟨no, yes⟩
+          let choice := if nonzero == tested.val then (⟨yes, no⟩ : PrivateBranchChoice) else ⟨no, yes⟩
           return ⟨choice, by
             intro σ regs owner nextFrame incoming stack memory entered models passed jumped
             have read := private_word_read bank reg operand.val operand.property present σ regs models
-            have truth : ((operand.val.denote σ).setWidth width.val.bits != 0) =
-                (denoteTerm σ condition).getLsbD 0 := by
-              rw [equal.down σ passed]
-              exact private_encoded_nonzero _ _
-            cases nonzero <;> cases bit : (denoteTerm σ condition).getLsbD 0
+            have truth := tested.property σ passed
+            cases selected : tested.val <;> cases nonzero <;> cases bit : (denoteTerm σ condition).getLsbD 0
             all_goals
               apply EvoIR.Machine.Selection.step_branch_zero .ssa p
                 (privateMachineState f b b.insts.length regs owner nextFrame incoming stack memory)
                 ⟨f.name, b.id, b.insts.length, regs, owner, incoming⟩
                 f b _ reg taken takenArgs untaken untakenArgs width.val (operand.val.denote σ) entered
                 rfl function block rfl term width.property read
-              simpa only [choice, yes, no, truth, bit, beq_self_eq_true,
-                private_false_beq_true, private_true_beq_false, Bool.false_eq_true, ↓reduceIte] using jumped⟩
+              simpa only [choice, selected, yes, no, truth, bit, Bool.not_false,
+                Bool.not_true, Bool.false_eq_true, beq_self_eq_true,
+                Bool.true_beq, Bool.false_beq, ↓reduceIte] using jumped⟩
         else none
       | _ => none
     else none

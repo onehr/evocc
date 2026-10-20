@@ -1,0 +1,57 @@
+Reuse of formed immediate addresses — 2026-10-18
+
+The first ordinary load/store must still follow its constant pointer offset
+without an intervening effect or computation. After that matching access,
+later accesses in the same machine block can use its base and displacement.
+The pre-allocation SSA base is immutable. Every access and volatile event
+stays; no fact crosses a guard split. Different first addresses and calls
+before the first access do not qualify. Atomic accesses keep their path.
+This is ordinary instruction selection, not a new certified rewrite.
+
+Unchanged sources and kernel argv, 100000 calls per case:
+Symbol           Before/call After/call GCC14/call Before bytes After bytes
+theta                    195        171         94          824         728
+pte_offset_map            55         55         23          288         288
+folio_state               32         32          9          152         152
+Three container and three TCG runs agree on the retained checksums. The
+plugin reports no dropped or irregular blocks and uses disjoint executable
+addresses. GCC counts are retained, not rerun. The array meets its 2x exit;
+the record and helper do not. No latency or whole-kernel result is claimed.
+
+The address fixture covers positive/negative and packed offsets, a call and
+another address before the first access, and a guard split. Both target
+profiles and O0/O2 are checked. Four native target/optimization executions
+and one Clang control pass under strict alignment. The three library-only
+reductions have no main; their executed-path check refusals remain non-PASS.
+Targeted tests: 4 address, 1 ABI snapshot and 23 proof-required tests pass.
+Combined acceptance passes 456 Rust suites: 3460 passed, zero failed, eight
+ignored, plus Clippy, formatting and all six Lean steps. The 15 relevant
+Python tests, spec pins and generated status check pass. The working tree is
+shared and dirty; this is not clean-tree release acceptance.
+
+Original hot units compile and assemble without installation or boot:
+Unit                       Previous whole object bytes After bytes
+mm/page_alloc.o                                  524992      524600
+arch/arm64/kvm/mmu.o                             701832      701792
+crypto/sha3_generic.o                            253712      253616
+These are object bytes, not the S1 .text metric. Each probe keeps the same
+41 disclosed option omissions and zero unreviewed omissions. All three use
+one unchanged compiler. The first assembler run started before compilation
+finished and failed on a missing record. Its log is retained; the complete
+run above starts from all three finished compile records.
+
+Capture: .evidence/reused-address-20261018/, maximum 500 MiB. Original hot
+unit probes use the reused suffix under .evidence/live-range-holes-20261016/.
+The six hashed compile-only .s/.o files (11395833 bytes) are retired after
+a no-open-handle check. Exact intermediate files must be regenerated; all
+logs, measurements, source inputs and current kernel runtimes remain.
+The 18 small reduction object files (34088 bytes) are also retired after
+hashing and a no-open-handle check; retired-intermediates.txt records them.
+Their source, assembly and linked runtime programs remain.
+Combined scoped disk net since the literal-cast slice is +226676 KiB for
+target/frontend and these two new capture directories. The shared older
+probe capture is excluded: its per-slice baseline is not independently
+available. This capture retains 25128 KiB, below its 500 MiB cap; host free
+space is about 62 GiB. No whole-machine disk delta is attributed to this work.
+Claim ceiling: the measured reductions and existing supported proof profile;
+not a kernel boot, full application acceptance, parity or clean release build.

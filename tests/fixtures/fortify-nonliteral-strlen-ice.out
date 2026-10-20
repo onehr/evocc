@@ -1,4 +1,5 @@
-Unresolved specification boundary, not a passing compiler regression.
+Historical specification boundary. See fortify-static-string-replay.out for
+the approved rule and the 2026-10-16 original kernel replay.
 2026-09-23: fixed offline ARM64 GCC 14.2.0-19 and Clang 19.1.7, GNU11.
 The exit value is the ICE classification bitmask; no strlen call executes.
 Bits: 0 literal; 1 static const array; 2 static const pointer; 3 mutable

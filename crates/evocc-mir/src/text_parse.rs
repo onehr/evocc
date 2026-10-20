@@ -416,9 +416,8 @@ fn split_width(mnemonic: &str) -> Option<(&str, Width)> {
 ///
 /// The spelling is the one `text.rs` renders: an optional result list, the
 /// keyword, the quoted template, then the three operand lists and, for the
-/// terminator, its labels and fall-through. Appendix A gives no production for
-/// either form; this mirrors EvoIR Section 3.11's own, and the round trip is
-/// what pins it.
+/// terminator, its labels and fall-through. Appendix A uses the same result
+/// prefix for both forms: an asm.goto can define values passed on its edges.
 fn parse_assembly(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Option<Parsed>, String> {
     let mut rest = body;
     let mut results: Vec<VReg> = Vec::new();
@@ -476,6 +475,11 @@ fn parse_assembly(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Option
             })
         })
         .collect::<Result<_, String>>()?;
+    if assigned.next().is_some() {
+        return Err(format!(
+            "more assembly results than register outputs in '{body}'"
+        ));
+    }
     let inputs: Vec<AsmOperand> = inputs
         .into_iter()
         .map(|(constraint, fixed_register, name, value)| {
@@ -502,10 +506,16 @@ fn parse_assembly(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Option
         return Ok(Some(Parsed::Inst(MInst::Asm(assembly))));
     }
 
+    // Result definitions become available only after the asm inputs. Edges
+    // can pass the fresh result even when no preceding instruction defines it.
+    let mut edge_classes = classes.clone();
+    for result in assembly.defined() {
+        edge_classes.insert(result.id, result.class);
+    }
     let mut scan = Scan::new(
         rest.strip_prefix(" labels [")
             .ok_or_else(|| format!("an asm.goto needs its labels in '{body}'"))?,
-        classes,
+        &edge_classes,
     );
     let mut labels = Vec::new();
     if !scan.text.starts_with(']') {

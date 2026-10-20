@@ -260,10 +260,26 @@ fn mutually_exclusive_spills_do_not_depend_on_block_layout() {
     };
     let allocated = allocate(&function).expect("each arm can spill");
     verify_allocation(&allocated).expect("every branch reloads its own values");
-    assert!(
-        allocated.spilled > 400,
-        "fixture must exercise many spill identities"
-    );
+    // Each arm has forty simultaneously live values. Do not require the
+    // extra spills caused by overlapping interval hulls of different arms.
+    let minimum_per_arm = 40 - evocc_mir::isa::aarch64::regfile::GPR_ALLOCATABLE.len();
+    assert!(allocated.spilled >= 24 * minimum_per_arm);
+    for arm in 0..24 {
+        let block = allocated
+            .blocks
+            .iter()
+            .find(|block| block.id == 100 + arm)
+            .unwrap();
+        let stores = block
+            .insts
+            .iter()
+            .filter(|inst| matches!(inst, MInst::SpillStore { .. }))
+            .count();
+        assert!(
+            stores >= minimum_per_arm,
+            "arm {arm} must exercise spill storage"
+        );
+    }
     assert!(
         allocated.frame_slots <= 40,
         "mutually exclusive arms retained {} physical spill slots",

@@ -2,24 +2,24 @@
   "format": "evocc-spec-pins-v1",
   "pins": {
     "spec/diagnostics.md": {
-      "revision": "1.3.0",
-      "sha256": "eb63f6366ae68948228dd0b3147a8579a9abc1884799318cff17444b784ba29c"
+      "revision": "1.4.1",
+      "sha256": "772ee506e130683c927d466519a809f993bf5234b7572a8cfaffc4f19c42d249"
     },
     "spec/evoir.md": {
-      "revision": "2.5.0",
-      "sha256": "dd6afdfe60ee08a7943a93be43f422fdfe4b03b62f5067f795e9f044f2d4d2f2"
+      "revision": "2.6.8",
+      "sha256": "ac3af6d12682576f08a3712c7cedafd8bb1d9e6ff4747f476d56864634ee05a9"
     },
     "spec/evomir.md": {
-      "revision": "1.2.1",
-      "sha256": "4d84a850feffbabed48804e3fd55c59fed79e2b51e5979491da93ed889e5a36f"
+      "revision": "1.3.9",
+      "sha256": "fe52e86165fd051987fc081c568f4d3b21f2bd579bbdff58de12c0cbf2072aab"
     },
     "spec/target.md": {
-      "revision": "1.0.1",
-      "sha256": "8218ae7bddcaaa757cafa04d3875d544d58fe2892dd147d0a7cb6ed9d7a4dfaf"
+      "revision": "1.1.0",
+      "sha256": "2815831c72a9bf4ddca4349f18aa9b9a1970e15178f360a7656cfcad411fdaea"
     },
     "spec/verification.md": {
-      "revision": "1.1.1",
-      "sha256": "54678ea98ff0e0337211c4bffb38ebfbe03bde27c0b10263dfa0969b11903921"
+      "revision": "1.1.2",
+      "sha256": "a2c7a182e3efdacb5b7d7ff4ab6de0a136b4eda4e0c98df682e17fea2785cbc4"
     }
   }
 }

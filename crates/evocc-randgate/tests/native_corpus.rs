@@ -221,9 +221,13 @@ fn the_native_campaign_agrees_with_the_interpreter() {
             Ok(text) => text,
             Err(stop) => {
                 *stopped.entry(stop.component()).or_default() += 1;
-                if let NativeStop::Lowering(codes) = &stop {
-                    for code in codes {
-                        *refusal_codes.entry(*code).or_default() += 1;
+                if let NativeStop::Lowering(refusals) = &stop {
+                    for code in refusals
+                        .iter()
+                        .map(|r| r.code)
+                        .collect::<std::collections::BTreeSet<_>>()
+                    {
+                        *refusal_codes.entry(code).or_default() += 1;
                     }
                 }
                 continue;

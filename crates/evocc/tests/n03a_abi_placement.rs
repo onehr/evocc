@@ -6,7 +6,23 @@
 //! result, variadic, frame and profile facts moved into target descriptions.
 //! The comparison restores only the historical Linux producer version; the
 //! driver tests separately require the emitted version to match this release.
-//! Extraction must reproduce every entry; this is not an ABI oracle.
+//! This is an assembly regression snapshot, not an ABI oracle.
+//! The October 15 diagnostic repair retains complete lowering records and
+//! reports profile refusals as E4009. The October 16 constant-address selection
+//! changes seven assembly entries in four record shapes. A replay of the
+//! retained compiler reproduces their old hashes; the reviewed diffs replace
+//! constant offset preparation only, including a zero-offset alias. Argument,
+//! result and frame placement, calls, guards and refusal records are unchanged.
+//! Live-range holes then change four variadic entries: temporary registers and
+//! identity moves differ, but ABI save areas, frame offsets and guards do not.
+//! The old hull policy reproduces all four prior hashes on the same EvoIR.
+//! Literal conversion selection changes eighteen entries: literal extensions
+//! become constants, which also allows three stores to use an immediate
+//! address. Exact prior assembly hashes and reviewed diffs are retained.
+//! Calls, argument positions, frame layouts and checked branches do not change.
+//! Zero-upper-bit selection changes only the two dynamic-stack entries: the
+//! mask after Cset becomes a W-to-X copy. The complete before/after comparison
+//! has no other assembly difference, and all preceding hashes reproduce.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -283,64 +299,64 @@ v4 vgive(v4 x) { return vsink4(x, x, x, x, x, x, x, x, x, x + x); }",
     },
 ];
 
-/// Recorded at the step-2 tip (`e5c05b23`), before ABI and frame extraction.
+/// Started at `e5c05b23`; the reviewed updates are listed above.
 const RECORDED: &[(&str, &str, &str)] = &[
     (
         "integer_stack_arguments",
-        "stop lowering E4010",
-        "asm d345d4293f05ac4dd55dab825a34f928e1ad979e53844f8a991770114c637687",
+        "stop lowering E4010 abi: too-many-register-arguments: @take10 block 0 instruction 0: @take10 takes 10 register arguments\nE4010 abi: too-many-register-arguments: @give10 block 0 instruction 24: a call to @sink10 passes 10 arguments",
+        "asm a406d0e1fce5b61ad495a8d428e69df53b7b910bd5180f63dd9121b4e256809f",
     ),
     (
         "eight_integer_arguments",
-        "asm 1f20b12d62465bd06c9d74da06b137c6aec1afd7ff8410a331484a4e417acbe5",
-        "asm fb04858c96783a889600623beff1ecb184a8a1661a67d087a000f241c53ab796",
+        "asm d6974ad601e4f09f87d428156150959336314ec37581f6f10e5d4db046180728",
+        "asm 5ccc975a2add96110d30bae0e2c760618a86ce5861b007775bca07d7cc7147e0",
     ),
     (
         "mixed_register_banks",
-        "asm a966eaeded7e5dd26ff6c131b493989b3f9474b22fdab3afae31000cb540c639",
-        "asm fe147537cdc5d74cf4eaa4bca55635440d30b59a9e0b73463a6b1ffdf444782b",
+        "asm 7406c7cff5b130141059aebb5a94b6e494e91f2f8263f88e1b1d7d6155b7966d",
+        "asm d2058ba43fdf22db6e777dc1936d5c8872d1f3d182a148412c066ac8bf64c5de",
     ),
     (
         "homogeneous_floating_records",
-        "asm b9d4afd4ae151cfcc08adc6d629752b605577d9fa36685af7ba70b54e0749cd0",
-        "asm 2ed26c4459616e583ebcac9dce9515e091442d71d6109cd8215a432520d266e4",
+        "asm f6e73ed2074400c8938f1736c37488378a1f00316746c60357fd0463bdd14639",
+        "asm 32cc199cf432a42267e229aa8bc839b7b353af352b0cda4d170b89abda3079b8",
     ),
     (
         "small_records",
-        "asm e9b4e248128a6a3a7104e3ef4b3ab35376e46971b737c24e91c4474eae7681e3",
-        "asm f813d90724f82ed67b566f537df065362e510f3cc67d79dc3c86bf99fabc96aa",
+        "asm 6e21e51dc847ddb7157d6c7630a700d9b09f955087b7b9a730d3eaed174a8a09",
+        "asm 786727c0be418f7841f0b5066943187cdeba8918c5415231943e1114e132bedc",
     ),
     (
         "record_register_exhaustion",
-        "stop lowering E4010",
-        "asm 5b7d22089b66b565eb6522a32a68cf5c4c32f068c8d634c114f6a8023a24c3c4",
+        "stop lowering E4010 abi: too-many-register-arguments: @xtake block 0 instruction 0: @xtake takes 13 register arguments\nE4010 abi: too-many-register-arguments: @xcall block 0 instruction 28: a call to @xsink passes 13 arguments",
+        "asm a232235b6479cd7da16393819c059a7e41bcb9c5cca61138992112b0277a0f0a",
     ),
     (
         "large_records",
-        "asm dded81bf82715333374fe1d6792e93f9f7a87ccbd9702f58e27d735c1a550ec9",
-        "asm 4e1d569f9a3259a144dd815939448bcdcc8c08f5b6cc066cbc75cb2f2a1def62",
+        "asm c92606e223958ae8eaf71cdf34eed35fd02d8c6d752c363f1fb7dc82e0b4b2de",
+        "asm 7d542175c8320223eb78ff9e81cc0ae8c6749915276c7f376dec3a2909a4751c",
     ),
     (
         "integer_pairs",
         // D04: the Darwin profile places a `bits<128>` argument in the next
         // two registers, as Apple clang does, with no even-register filler.
-        "asm 6d72b0c14208c0202dbe973b250a33fcdb6cdb00abed9947ceabed6537d09e68",
-        "asm f75ebb5240a5df406f19d84d92a4ced25b6f39076975946c3e5042cdf8f43ee1",
+        "asm 075eb5e962eb5fb2ad372de1faa8befee4efb7aafe521f1466b426f3ac3c9842",
+        "asm 5cd61d1e45226367b66ec2906a1137975224c46c019a1b0fe92da8c429cbd25e",
     ),
     (
         "variadic_callee",
-        "asm 0e6c9c9a96c0d04b994e0842da8e18ec98205729a851703f1ca91835c9576a1d",
-        "asm f917c22273765afdf4feffad0786d3454b9e079146fe780a1cd6b4b638d2b9f6",
+        "asm 7c92e102771fde57e20e976c670f14e9bd16a2053650a3b16fc96581ce78efcb",
+        "asm 893af468dd0873f11632fbca0f08a220b1209c5a47b49b8eff5d37314e2d049f",
     ),
     (
         "variadic_callee_general_only",
-        "asm f891f5dc2a01514bdd0fca67ee120e1d6cf2d49953ac25df9e68dce986f164e5",
-        "asm 515c12204a4a20c173a88c5d5ebb264f654c5634c303ed9eeedaf4d6aa294ff8",
+        "asm a410ef804c70b1b6253300c12768596d11462615571c8650a0f7c431a741d67e",
+        "asm b1ba2d1c874b6581b77c59db8cdb2157d3c1cecccb7f355d768e9ad602a98e0e",
     ),
     (
         "variadic_caller",
-        "asm 026ef5ea6ab1e0f08c6ba66080ab48cb22e6f17c2d752e2bfbcc985d662b16cc",
-        "asm 2a77134f6d1fb9956b416129f8c5ea79334f9504e4bdca03696d18d2a6cd69d7",
+        "asm d6d9978c113eed8aa5523bd8e3dcf12d2817640853dd11c8ceed48c37f8cb9bb",
+        "asm fa8296bd3047b7e2edba83723dedce3baa27131c37cc490791d5b4baaa274028",
     ),
     (
         "frame_objects_and_spills",
@@ -354,8 +370,8 @@ const RECORDED: &[(&str, &str, &str)] = &[
     ),
     (
         "dynamic_stack",
-        "asm f10ca40a5a6ce2459cb39cdb54cca03ceb914a3b71526c821ec0fea1f574ff02",
-        "asm 8e34ef2c72a04a1a474c29c9c89e122f3f8587f21518d3e126859190d947032f",
+        "asm 3b13aa251fe09e71b24b552d46ab1245ac6d8f02548b88b6b882f15c7ef9d41c",
+        "asm 4c68f880e44a5fcf0eb3dfea53ef970c99cf32973acf924f72bf6e284fd9556d",
     ),
     (
         "over_aligned_frame",
@@ -394,17 +410,17 @@ const RECORDED: &[(&str, &str, &str)] = &[
     ),
     (
         "binary128",
-        "stop lowering E4009",
+        "stop lowering E4009 not-lowered: unsupported-form: @ld block 0 instruction 0: binary128 ABI is qualified only for Linux\nE4009 not-lowered: unsupported-form: @ld block 0 instruction 0: binary128 is qualified only for Linux\nE4009 not-lowered: unsupported-form: @ld block 0 instruction 1: binary128 is qualified only for Linux",
         "asm 7038bbfade2ddce9a0386ad65e002413b19f7651d4a62d3188375eb3565f0305",
     ),
     (
         "patchable_entry",
-        "stop emission patchable function entries require the Linux ELF target",
+        "stop lowering E4009 not-lowered: unsupported-form: @pe block 0 instruction 0: patchable function entries require the Linux ELF target",
         "asm 7e59255147e04af5f708f90e3cb414794246c5ae9ff8cd5dad6e15c69ba0c6db",
     ),
     (
         "elf_sections",
-        "stop emission individual function/data sections require the Linux ELF target",
+        "stop lowering E4009 not-lowered: unsupported-form: individual function/data sections require the Linux ELF target",
         "asm b22bfb1790657856807259f2c68a1d1727a6039ccde5b997b290623fc70de429",
     ),
 ];
@@ -458,7 +474,7 @@ fn outcome(target: Target, shape: &Shape, ir: &str) -> String {
                     "{}",
                     shape.name
                 );
-                // Compare the unchanged historical hashes in memory. Never
+                // Compare the recorded hashes in memory. Never
                 // rewrite emitted artifacts or relax any instruction bytes.
                 text.replace(
                     &producer,

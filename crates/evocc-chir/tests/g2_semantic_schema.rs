@@ -315,6 +315,11 @@ fn tag_namespace_payloads_and_rollback_remain_source_exact() {
     let for_scope = symbols
         .create_scope(file, ScopeKind::For, Some(span(4)))
         .unwrap();
+    assert_eq!(symbols.tag_in_scope(for_scope, "same").unwrap(), None);
+    assert_eq!(
+        symbols.resolve_tag(for_scope, "same").unwrap(),
+        Some(outer_tag)
+    );
     symbols
         .declare_tag(for_scope, "same", inner_tag, span(5))
         .unwrap();
@@ -333,6 +338,11 @@ fn tag_namespace_payloads_and_rollback_remain_source_exact() {
         symbols.resolve_tag(for_scope, "same").unwrap(),
         Some(inner_tag)
     );
+    assert_eq!(
+        symbols.tag_in_scope(for_scope, "same").unwrap(),
+        Some(inner_tag)
+    );
+    assert_eq!(symbols.tag_in_scope(file, "same").unwrap(), Some(outer_tag));
     assert_eq!(
         symbols.symbol(ordinary).unwrap().storage_class(),
         Some(StorageClass::Static)
@@ -359,6 +369,11 @@ fn tag_namespace_payloads_and_rollback_remain_source_exact() {
     assert_eq!(symbols.symbols_in_source_order().len(), 2);
     assert_eq!(symbols.tags_in_source_order().len(), 1);
     assert_eq!(symbols.resolve_tag(file, "same").unwrap(), Some(outer_tag));
+    assert_eq!(symbols.tag_in_scope(file, "same").unwrap(), Some(outer_tag));
+    assert!(matches!(
+        symbols.tag_in_scope(for_scope, "same"),
+        Err(SymbolTableError::UnknownScope(_))
+    ));
 }
 
 #[test]
@@ -507,6 +522,7 @@ fn parser_transactions_are_lifo_and_undo_every_symbol_table_mutation() {
     assert_eq!(symbols.scopes_in_source_order().len(), 2);
     assert_eq!(symbols.tags_in_source_order(), &[]);
     assert_eq!(symbols.resolve_tag(file, "temporary").unwrap(), None);
+    assert_eq!(symbols.tag_in_scope(file, "temporary").unwrap(), None);
 
     let foreign = SymbolTable::new().begin_transaction();
     assert_eq!(

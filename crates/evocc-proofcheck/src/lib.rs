@@ -10,7 +10,6 @@ mod reassemble;
 mod replay;
 mod seed_facts;
 
-use eligibility::derive_eligible_regions;
 use reassemble::reassemble;
 use replay::{replay_region, RegionReplacement, Registry};
 use seed_facts::SeedFacts;
@@ -61,17 +60,27 @@ pub fn main() -> ExitCode {
     let Ok(proof) = read(&arguments[2]) else {
         return ExitCode::from(2);
     };
-    let parse = if legacy {
-        evocc_evoir::parse_pre_fenv_module
+    // The input bytes select one of the two closed text profiles. Use that
+    // same profile for the output and reassembly; neither host defaults nor
+    // a certificate may reinterpret the module under a different target.
+    let target = if before.starts_with(b"target aarch64-apple-darwin\n") {
+        "aarch64-apple-darwin"
     } else {
-        evocc_evoir::parse_section9_module
+        evocc_evoir::IMPLICIT_TARGET
+    };
+    let parse = |bytes: &[u8]| {
+        if legacy {
+            evocc_evoir::parse_pre_fenv_module_detailed(bytes)
+        } else {
+            evocc_evoir::parse_target_module_detailed(bytes, target)
+        }
     };
     let before_module = match parse(&before) {
         Ok(module) => module,
-        Err(_) => return ExitCode::from(2),
+        Err(error) => return module_error_status(error),
     };
-    if parse(&after).is_err() {
-        return ExitCode::from(2);
+    if let Err(error) = parse(&after) {
+        return module_error_status(error);
     }
     let certificate = match parse_evp1(&proof) {
         Ok(certificate) => certificate,
@@ -84,41 +93,47 @@ pub fn main() -> ExitCode {
     if certificate.input_digest != sha256_hex(&before) || !scheduler_record_holds(&certificate) {
         return ExitCode::from(3);
     }
-    let eligible = if registry == Registry::Guards {
-        eligibility::derive_guard_regions(&before_module)
+    let rebuilt = if certificate.regions.is_empty() {
+        // An identity claim needs parsing, validation, registry/budget and
+        // byte binding, but no rewrite search or seed-fact premise. Render
+        // the parsed module below: identifiers in the input may have gaps.
+        before_module
     } else {
-        derive_eligible_regions(&before_module)
-    };
-    // Section 8.10: what a block argument knows, recomputed here rather than
-    // read off the certificate.
-    let seed_facts = SeedFacts::of(&before_module);
-    // The table is the checker's own, so this is a self-check rather than a
-    // judgement on the certificate: entry arguments are top, each instruction's
-    // transfer is at least as precise as the fact recorded for its result, and
-    // each edge carries facts at least as precise as the destination's
-    // arguments. A table that failed would be one no premise should be
-    // confirmed against, so the answer is a refusal and not a repair.
-    if seed_facts.inductive(&before_module).is_err() {
-        return ExitCode::from(3);
-    }
-    let rebuilt = match claim(
-        &certificate,
-        &before_module,
-        &eligible,
-        &seed_facts,
-        registry,
-    ) {
-        // Section 11.3: a certificate with no region claims that after.evo is
-        // the canonical rendering of the module parsed from before.evo, and
-        // nothing else. Comparing against the raw input bytes instead would
-        // refuse every gapped or otherwise non-canonical input the producer had
-        // merely rendered.
-        Ok(Claim::Zero) => before_module,
-        Ok(Claim::Regions(replacements)) => match reassemble(&before_module, replacements) {
-            Ok(module) => module,
+        let requested = certificate
+            .regions
+            .iter()
+            .map(|region| region.id.clone())
+            .collect();
+        let eligible = eligibility::derive_requested_regions(
+            &before_module,
+            &requested,
+            registry == Registry::Guards,
+        );
+        // Section 8.10: what a block argument knows, recomputed here rather than
+        // read off the certificate.
+        let seed_facts = SeedFacts::of(&before_module);
+        // The table is the checker's own, so this is a self-check rather than a
+        // judgement on the certificate: entry arguments are top, each instruction's
+        // transfer is at least as precise as the fact recorded for its result, and
+        // each edge carries facts at least as precise as the destination's
+        // arguments. A table that failed would be one no premise should be
+        // confirmed against, so the answer is a refusal and not a repair.
+        if seed_facts.inductive(&before_module).is_err() {
+            return ExitCode::from(3);
+        }
+        match claim(
+            &certificate,
+            &before_module,
+            &eligible,
+            &seed_facts,
+            registry,
+        ) {
+            Ok(replacements) => match reassemble(&before_module, replacements) {
+                Ok(module) => module,
+                Err(()) => return ExitCode::from(3),
+            },
             Err(()) => return ExitCode::from(3),
-        },
-        Err(()) => return ExitCode::from(3),
+        }
     };
     let reassembled_module = if legacy {
         match evocc_evoir::render_pre_fenv_module(&rebuilt) {
@@ -126,7 +141,7 @@ pub fn main() -> ExitCode {
             Err(_) => return ExitCode::from(3),
         }
     } else {
-        evocc_evoir::render_module(&rebuilt).into_bytes()
+        evocc_evoir::render_target_module(&rebuilt, target).into_bytes()
     };
     if certificate.output_digest != sha256_hex(&reassembled_module) || reassembled_module != after {
         return ExitCode::from(3);
@@ -205,9 +220,11 @@ fn read(path: &impl AsRef<Path>) -> Result<Vec<u8>, ()> {
     fs::read(path).map_err(|_| ())
 }
 
-enum Claim {
-    Zero,
-    Regions(Vec<RegionReplacement>),
+fn module_error_status(error: evocc_evoir::ModuleParseError) -> ExitCode {
+    match error {
+        evocc_evoir::ModuleParseError::Malformed(_) => ExitCode::from(2),
+        evocc_evoir::ModuleParseError::Invalid(_) => ExitCode::from(3),
+    }
 }
 
 fn claim(
@@ -216,10 +233,7 @@ fn claim(
     eligible: &[eligibility::EligibleRegion],
     seed_facts: &SeedFacts,
     registry: Registry,
-) -> Result<Claim, ()> {
-    if certificate.regions.is_empty() {
-        return Ok(Claim::Zero);
-    }
+) -> Result<Vec<RegionReplacement>, ()> {
     let mut replacements = Vec::new();
     let mut previous = None;
     for region in &certificate.regions {
@@ -239,5 +253,5 @@ fn claim(
             registry,
         )?);
     }
-    Ok(Claim::Regions(replacements))
+    Ok(replacements)
 }

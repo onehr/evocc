@@ -171,18 +171,21 @@ exists, it also compares the excerpt with the log.
   Unity test programs run 216 tests: none fails, and upstream marks one as
   ignored. The Unity framework itself is GCC-built.
 - **Linux.** The serial log comes from a kernel that Kbuild built directly
-  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `add1c4874e28d2f1…`, on
+  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `4543b721a0b69fe8…`, on
   the host boot lane. Its version banner names `evocc 0.1.0`. All 2,799 target
   C objects come from EvoCC. The receipt ties each object to its compile
-  command in the build log, and no GCC target C object remains. GNU tools
+  command and compiler hash in the build log. This incremental build uses two
+  retained dirty-worktree compiler snapshots: 1,158 C objects from the first
+  and 1,641 from the second. It is not a clean single-compiler release build.
+  No GCC target C object remains. GNU tools
   assemble the 67 assembly files, link the kernel, build the host programs and
   preprocess one device-tree source. The configuration is the frozen GCC
   kernel configuration after `olddefconfig` with EvoCC. Only compiler
   capability probes differ, and the hardening features behind them are off in
   the GCC configuration too. Both configurations ask for kernel return-address
   signing. Kbuild passes `-mbranch-protection=pac-ret` to every target C
-  object, and EvoCC signs the return address of every function: the Image has
-  77,584 `paciasp` instructions. The host lane enables pointer
+  object. EvoCC signs a return address that leaves `x30`; an allocated leaf
+  that keeps it in `x30` does not need a signature. The host lane enables pointer
   authentication, so this boot runs the signed code. Eight compiler options
   have no effect, and the receipt lists them. The kernel also boots on the TCG
   lane, whose CPU model has no pointer authentication. Nine paired upstream
@@ -191,7 +194,10 @@ exists, it also compares the excerpt with the log.
   QEMU contract; the receipt allows and records this drift. The console prints
   the kernel's earlier messages late, so the `EVO_*` lines of the test init
   program appear before `Run /init` in the log. The card leaves them out. The
-  older 7,008-unit build used object substitution after a GCC Kbuild run; it
+  unchanged original KVM tests are reported separately: demand-paging passes
+  on GCC and times out on EvoCC; memslot-stress times out on both. These are
+  not part of the 125 passing subtests. The older 7,008-unit build used object
+  substitution after a GCC Kbuild run; it
   keeps its own receipt, but its raw configuration is no longer available.
   Full kselftest and KUnit runs remain open.
 - **Toybox.** The original `make tests` recipe ran 1,669 tests: 1,648 pass, 1

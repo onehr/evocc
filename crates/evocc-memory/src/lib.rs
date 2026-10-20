@@ -422,6 +422,7 @@ pub struct WorldLimits {
 pub struct MemoryConfig {
     byte_order: ByteOrder,
     pointer_layout: AccessLayout,
+    argument_list_layout: AccessLayout,
     function_alignment: u32,
     limits: MemoryLimits,
 }
@@ -443,6 +444,9 @@ impl MemoryConfig {
         Ok(Self {
             byte_order,
             pointer_layout,
+            // Untargeted callers retain the original Linux memory profile.
+            // Interpreter entry points must use `for_target` instead.
+            argument_list_layout: AccessLayout::new(32, 8),
             function_alignment: 16,
             limits,
         })
@@ -452,11 +456,13 @@ impl MemoryConfig {
         target: &TargetDataLayout,
         limits: MemoryLimits,
     ) -> Result<Self, MemoryFault> {
-        Self::new(
+        let mut config = Self::new(
             target.byte_order(),
             AccessLayout::from_type_layout(target.pointer_layout()),
             limits,
-        )
+        )?;
+        config.argument_list_layout = AccessLayout::from_type_layout(target.va_list_layout());
+        Ok(config)
     }
 
     /// A module-wide stride keeps every function aligned without changing its
@@ -1015,7 +1021,7 @@ impl MemoryFault {
                 message: "external-call-not-executable",
             },
             Self::InvalidLifetimeEnd { .. } => MemoryDiagnostic {
-                code: "E3007",
+                code: "E3018",
                 message: "invalid-lifetime-end",
             },
             Self::UninitializedRead { .. } => MemoryDiagnostic {
@@ -2185,7 +2191,8 @@ impl MemoryState {
         for (pointer, identity) in &self.argument_lists {
             if pointer.object == source.object
                 && pointer.byte_offset >= source.byte_offset
-                && i128::from(pointer.byte_offset) + 32
+                && i128::from(pointer.byte_offset)
+                    + i128::from(self.config.argument_list_layout.size_bytes)
                     <= i128::from(source.byte_offset) + i128::from(access.size_bytes)
             {
                 let relocated =
@@ -2211,7 +2218,7 @@ impl MemoryState {
             .filter(|pointer| pointer.object == address.object)
         {
             let list_start = i128::from(pointer.byte_offset);
-            let list_end = list_start + 32;
+            let list_end = list_start + i128::from(self.config.argument_list_layout.size_bytes);
             if start < list_end
                 && list_start < end
                 && (!copying || start > list_start || end < list_end)
@@ -2225,13 +2232,7 @@ impl MemoryState {
     /// The list representation is opaque; ordinary complete copies preserve its identity.
     pub fn argument_list(&self, address: Pointer) -> Result<usize, MemoryFault> {
         let address = self.resolve_pointer(address)?;
-        self.checked_range(
-            address,
-            AccessLayout {
-                size_bytes: 32,
-                align_bytes: 8,
-            },
-        )?;
+        self.checked_range(address, self.config.argument_list_layout)?;
         self.argument_lists
             .get(&address)
             .copied()
@@ -2244,10 +2245,7 @@ impl MemoryState {
         identity: Option<usize>,
     ) -> Result<Self, MemoryFault> {
         let address = self.resolve_pointer(address)?;
-        let access = AccessLayout {
-            size_bytes: 32,
-            align_bytes: 8,
-        };
+        let access = self.config.argument_list_layout;
         let range = self.checked_store_range(address, access)?;
         self.check_argument_list_access(address, access, true)?;
         let mut next = self.clone();
@@ -3097,6 +3095,74 @@ mod tests {
     }
 
     #[test]
+    fn argument_list_ranges_follow_target_layout_and_do_not_overlap_neighbors() {
+        for target in [
+            TargetDataLayout::aarch64_apple_darwin(),
+            TargetDataLayout::aarch64_unknown_linux_gnu(),
+        ] {
+            let config = MemoryConfig::for_target(&target, limits()).unwrap();
+            let layout = AccessLayout::from_type_layout(target.va_list_layout());
+            let (memory, storage) = MemoryState::new(config)
+                .unwrap()
+                .allocate_static(
+                    1,
+                    AccessLayout::new(16 + 2 * layout.size_bytes, 8),
+                    InitialState::Zeroed,
+                )
+                .unwrap();
+            let first = storage.checked_offset(8).unwrap();
+            let second = first.checked_offset(layout.size_bytes as i64).unwrap();
+            let after = second.checked_offset(layout.size_bytes as i64).unwrap();
+            let memory = memory.with_argument_list(first, Some(3)).unwrap();
+            let memory = memory.copy_bytes(second, first, layout).unwrap();
+            let memory = memory.with_argument_list(first, Some(4)).unwrap();
+            let memory = memory
+                .store_integer(storage, PTR, 23)
+                .unwrap()
+                .store_integer(after, PTR, 29)
+                .unwrap();
+            assert_eq!(memory.argument_list(first).unwrap(), 4);
+            assert_eq!(memory.argument_list(second).unwrap(), 3);
+            assert_eq!(memory.load_integer(after, PTR).unwrap(), 29);
+            for address in [first, first.checked_offset(4).unwrap(), second] {
+                assert_fault(
+                    memory.load_integer(address, U32),
+                    MemoryFaultKind::InvalidArgumentList,
+                );
+                assert_fault(
+                    memory.store_integer(address, U32, 0),
+                    MemoryFaultKind::InvalidArgumentList,
+                );
+                assert_fault(
+                    memory.copy_bytes(storage, address, U32),
+                    MemoryFaultKind::InvalidArgumentList,
+                );
+                assert_fault(
+                    memory.copy_bytes(address, storage, U32),
+                    MemoryFaultKind::InvalidArgumentList,
+                );
+            }
+            let ended = memory.with_argument_list(first, None).unwrap();
+            assert_fault(
+                ended.argument_list(first),
+                MemoryFaultKind::InvalidArgumentList,
+            );
+            assert_eq!(ended.argument_list(second).unwrap(), 3);
+            let (memory, small) = memory
+                .allocate_static(
+                    2,
+                    AccessLayout::new(layout.size_bytes - 1, 8),
+                    InitialState::Zeroed,
+                )
+                .unwrap();
+            assert_fault(
+                memory.with_argument_list(small, Some(0)),
+                MemoryFaultKind::OutOfBounds,
+            );
+        }
+    }
+
+    #[test]
     fn null_is_reserved_and_object_ids_are_monotonic_and_never_reused() {
         assert!(ObjectId::NULL.is_null());
         assert_eq!(Pointer::NULL.object(), ObjectId::NULL);
@@ -3713,7 +3779,7 @@ mod tests {
         let memory = memory.store_integer(automatic, BYTE, 0).unwrap();
         let (memory, foreign_frame, _) = memory.begin_frame().unwrap();
         let invalid_lifetime_diagnostic = Some(MemoryDiagnostic {
-            code: "E3007",
+            code: "E3018",
             message: "invalid-lifetime-end",
         });
         let fault = assert_fault(
@@ -3771,12 +3837,19 @@ mod tests {
         let address = Pointer::base(object);
         let cases = [
             (
+                MemoryFault::InvalidAtomicAccess,
+                MemoryDiagnostic {
+                    code: "E3062",
+                    message: "invalid-atomic-access",
+                },
+            ),
+            (
                 MemoryFault::InvalidLifetimeEnd {
                     address,
                     reason: InvalidLifetimeEndReason::NonBasePointer,
                 },
                 MemoryDiagnostic {
-                    code: "E3007",
+                    code: "E3018",
                     message: "invalid-lifetime-end",
                 },
             ),

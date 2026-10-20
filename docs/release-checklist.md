@@ -50,7 +50,7 @@ an input that this audit did not have.
 | Deliverable | State | Evidence |
 |---|---|---|
 | Version of `evocc` and `evo` | Done. Both print `evocc 0.1.0 (<commit> <date>)`. | `evocc --version`, `evo version` |
-| Version of `evocc-checker` and `evoir-sem` | Open. `evocc-checker --version` exits 2 with no output. `evoir-sem --version` prints the usage text. | The two commands |
+| Version of `evocc-checker` and `evoir-sem` | Done on 2026-10-19 in the working tree. Both print their binary name and `0.1.0`, exit zero and leave stderr empty. Tests run both from an empty directory and compare with Cargo's version. This does not certify a release archive. | [`crates/evocc/tests/evo_cli.rs`](../crates/evocc/tests/evo_cli.rs); full workspace: 3,475 passed, zero failed, eight ignored; all six Lean steps passed |
 | Version policy | Done. `tools/release.sh` accepts only a `0.y.z` version with a matching heading in `CHANGELOG.md`. | [`tools/release.sh`](../tools/release.sh) |
 | Package description | Done. It describes the compiler without internal lab names. | [`crates/evocc/Cargo.toml`](../crates/evocc/Cargo.toml) |
 | Changelog and tag | Partial. The heading `## [0.1.0] - Unreleased` has no date. No `v0.1.0` tag exists. | [`CHANGELOG.md`](../CHANGELOG.md) |

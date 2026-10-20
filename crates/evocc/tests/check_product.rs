@@ -6,7 +6,7 @@ use std::process::{Command, Output, Stdio};
 
 /// The scope statement of every completed check, in text and in JSON.
 const SCOPE: &str =
-    "No undefined behavior was found on the executed path. This does not check that the results are correct.";
+    "No finding from the implemented checks on the executed path. Pointer subtraction and ordering obligations are not checked. This does not check that the results are correct.";
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")

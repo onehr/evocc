@@ -115,6 +115,22 @@ class KernelSelftest(unittest.TestCase):
             self.assertEqual(rows[0]['outcome'], 'PASS', 'wrapper result is preserved')
             self.assertNotEqual(lane.compare(rows, rows)['status'], 'PASS')
 
+    def test_matching_pidfd_nested_skip_is_a_coverage_gap_not_a_regression(self):
+        output = ('1..8\n' + ''.join(f'ok {n} signal check\n' for n in range(1, 8))
+                  + 'ok 8 recycled pid # SKIP pid namespace limit\n'
+                  + '# Totals: pass:7 fail:0 xfail:0 xpass:0 skip:1 error:0\n')
+        rows = lane.parse_transcript(self.transcript(output), 'flight', ['memory'])
+        result = lane.compare(rows, rows)
+        self.assertEqual(result['status'], 'INCOMPLETE')
+        self.assertEqual(result['regressions'], [])
+        self.assertEqual(result['baselineFailures'], [])
+        self.assertEqual(result['coverageGaps'], ['memory'])
+        self.assertEqual(rows[0]['subtests'], {'PASS': 7, 'FAIL': 0, 'SKIP': 1})
+        clean = output.replace('ok 8 recycled pid # SKIP pid namespace limit', 'ok 8 recycled pid')
+        clean = clean.replace('pass:7', 'pass:8').replace('skip:1', 'skip:0')
+        reference = lane.parse_transcript(self.transcript(clean), 'flight', ['memory'])
+        self.assertEqual(lane.compare(reference, rows)['regressions'], ['memory'])
+
     def test_ublk_background_failures_survive_a_successful_parent(self):
         fixture = PATH.parents[2] / 'tests/fixtures/ublk-background-exit.sh'
         for mode in ('failure', 'helper-exit'):

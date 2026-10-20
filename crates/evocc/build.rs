@@ -1,6 +1,7 @@
-//! Build the explanation catalogue from the existing diagnostic authority,
-//! and record the source revision that `evocc --version` prints.
-use std::collections::BTreeSet;
+//! Build the explanation catalogue and the repair hints from the existing
+//! diagnostic authority, and record the source revision that `evocc --version`
+//! prints.
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::path::Path;
 use std::process::Command;
@@ -80,12 +81,36 @@ fn main() {
     }
     assert!(!entries.is_empty());
     let mut generated = String::from("const CATALOGUE: &[(&str, &str)] = &[\n");
-    for code in entries {
+    for code in &entries {
         let page = root.join(format!("crates/evocc/explain/{code}.md"));
         println!("cargo:rerun-if-changed={}", page.display());
         writeln!(generated, "({code:?}, include_str!({page:?})),").unwrap();
     }
     generated.push_str("] ;\n");
+    // One `CODE<TAB>HINT` line per code. A hint must name an authority code.
+    let path = root.join("crates/evocc/explain/hints.txt");
+    println!("cargo:rerun-if-changed={}", path.display());
+    let text = std::fs::read_to_string(path).unwrap();
+    let mut hints = BTreeMap::new();
+    for line in text.lines() {
+        let (code, hint) = line
+            .split_once('\t')
+            .filter(|(_, hint)| !hint.is_empty() && !hint.contains('\t'))
+            .unwrap_or_else(|| panic!("malformed repair hint: {line:?}"));
+        assert!(
+            entries.contains(code),
+            "repair hint for a code outside the diagnostic authority: {code}"
+        );
+        assert!(
+            hints.insert(code, hint).is_none(),
+            "duplicate repair hint: {code}"
+        );
+    }
+    generated.push_str("const HINTS: &[(&str, &str)] = &[\n");
+    for (code, hint) in hints {
+        writeln!(generated, "({code:?}, {hint:?}),").unwrap();
+    }
+    generated.push_str("];\n");
     let output = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     std::fs::write(output.join("diagnostic_catalogue.rs"), generated).unwrap();
 }

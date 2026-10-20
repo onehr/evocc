@@ -17,7 +17,8 @@
 
 EvoCC is a C compiler for AArch64 Linux and macOS, written from scratch in Rust. Use it in place of
 `cc`. When your program breaks a rule of C on a path that it runs, `evo check` shows you the line and
-the reason. EvoCC can also prove, with Lean 4, that a compilation is correct.
+the reason. For the supported `core-v1` subset, EvoCC can also check a compilation with Lean 4,
+from typed Core source to final assembly text.
 
 <p align="center">
   <img src="docs/images/readme/highlights.svg" alt="Four terminal sessions. evocc builds zlib, and zlib passes its tests. evo check finds a signed overflow in a binary search. GCC 14 with UBSan gives no report and the program returns a wrong value, but evo check finds the uninitialized read. evo prove checks the compilation of abs, and the checked assembly traps on overflow.">
@@ -35,8 +36,8 @@ the reason. EvoCC can also prove, with Lean 4, that a compilation is correct.
   that GCC's warnings and UBSan do not report.
 - **Every error explained.** Each diagnostic has a stable code, a tested explanation
   (`evo explain E3001`) and a JSON form.
-- **Proof-carrying compilation.** `evo prove` writes assembly only when Lean 4 checks every stage of
-  the compilation.
+- **Proof-carrying compilation.** For the supported `core-v1` subset, `evo prove` writes assembly
+  only when Lean 4 checks every stage from typed Core source to final assembly text.
 - **Made for agents.** JSON output, safe automatic repairs and an MCP server. On bugs that GCC and
   UBSan miss, a coding agent needs about a third fewer steps with EvoCC.
 
@@ -129,8 +130,10 @@ $ evo prove abs.c -o abs.s
 checked from typed Core source to final assembly text: …/checked/record.json
 ```
 
-Lean 4 checks each stage of this compilation, from the typed C source to the assembly text. If a
-check fails, `evo prove` writes no output. `abs(INT_MIN)` has no valid result in C, so the checked
+This program is in the `core-v1` proof profile for `aarch64-unknown-linux-gnu`. Lean 4 checks each
+stage from typed Core source to assembly text; this does not prove parsing or every C program
+that EvoCC accepts. If a check
+fails, `evo prove` writes no output. `abs(INT_MIN)` has no valid result in C, so the checked
 assembly traps instead of returning a wrong value:
 
 ```asm
@@ -206,8 +209,8 @@ Each image is real program output, a plot of it, or an excerpt of a recorded tes
   remove work, but never a check.
 - **EvoMIR** treats the machine as data. Registers, calling conventions and instruction encodings
   are tables in [`targets/aarch64/`](targets/aarch64/).
-- **Lean 4** proves the 62 rewrite rules of the optimizer. For a subset of C, five Lean checkers
-  compare the input and the output of each stage, and one theorem covers the whole chain.
+- **Lean 4** proves the 62 rewrite rules of the optimizer. For `core-v1` on AArch64 Linux, five
+  Lean checkers compare the input and output of each stage, and one theorem covers that chain.
 
 AI agents wrote EvoCC in about two months, under the direction of one engineer.
 [The paper](docs/paper.md) tells that story and describes the design and the evaluation.
@@ -416,7 +419,9 @@ EvoCC 0.1.0 is experimental.
 - It targets AArch64 only, on Linux and macOS.
 - Its code is 2 to 2.7 times the size of GCC `-O2` output, and it is not tuned for speed.
 - `evo check` runs programs that do not call the C library.
-- Proofs cover a subset of C: integer functions without pointers, arrays or recursion.
+- Proofs cover `core-v1`: integer functions without pointers, arrays or recursion. See the
+  [exact profile and trust boundary](spec/verification.md), including the typed Core input and
+  final assembly text boundary. Assembly, linking and arbitrary accepted C programs are not proved.
 - GNU C support is broad but not complete.
 
 ## Learn more

@@ -187,24 +187,29 @@ fn darwin_evoir_names_its_target_and_has_no_binary128() {
     evocc_evoir::parse_section9_module(linux.as_bytes()).expect("Linux text");
 }
 
-/// The checker of `-Oeq-scalar` reads the Linux format only, so the driver
-/// refuses the option and the proof directory for the Darwin target.
+/// Scalar rewrites retain the Darwin profile even when the surrounding
+/// program contains its binary64 long-double operations and objects.
 #[test]
-fn scalar_equality_saturation_refuses_the_darwin_target() {
+fn scalar_equality_saturation_preserves_the_darwin_layout() {
     let work = Work::new("eqsat");
     work.write("layout.c", LAYOUT);
-    for extra in [&["-Oeq-scalar"][..], &["--eq-proof-dir=chain"][..]] {
+    let pin = format!(
+        "--eq-checker-sha256={}",
+        evocc_proof::sha256_hex(&std::fs::read(env!("CARGO_BIN_EXE_evocc-checker")).unwrap())
+    );
+    for extra in [
+        &["-Oeq-scalar", pin.as_str()][..],
+        &["--eq-proof-dir=chain"][..],
+    ] {
         let mut args = vec![DARWIN, "--emit=evoir"];
         args.extend_from_slice(extra);
         args.push("layout.c");
         let output = work.evocc(&args);
-        assert_eq!(output.status.code(), Some(1), "{extra:?}: {output:?}");
-        assert!(
-            String::from_utf8_lossy(&output.stderr).contains("aarch64-apple-darwin"),
-            "{extra:?}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(output.stdout.is_empty());
+        succeeded(&output);
+        evocc_evoir::parse_target_module(&output.stdout, "aarch64-apple-darwin").unwrap();
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("f64"), "{text}");
+        assert!(!text.contains("f128"), "{text}");
     }
 }
 

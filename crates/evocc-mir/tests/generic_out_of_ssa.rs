@@ -308,7 +308,17 @@ fn target_adapter_preserves_assembly_edge_order_and_forwarding_exclusions() {
         fallthrough: 12,
         fallthrough_args: vec![value],
     };
-    assert!(SsaTerm::prevents_forwarding(&original));
+    assert!(!SsaTerm::prevents_forwarding(&original));
+    let mut fixed = original.clone();
+    if let MTerm::AsmGoto { body, .. } = &mut fixed {
+        let mut operand = evocc_mir::AsmOperand::reg(
+            evocc_mir::AsmConstraint::Register(evocc_mir::AsmDirection::Read),
+            value,
+        );
+        operand.fixed_register = Some(0);
+        body.inputs.push(operand);
+    }
+    assert!(SsaTerm::prevents_forwarding(&fixed));
     for position in 0..3 {
         let mut changed = original.clone();
         SsaTerm::retarget(&mut changed, position, 99);

@@ -19,6 +19,16 @@ pub fn out_of_ssa_with_dce(function: &MFunction, eliminate_dead: bool) -> MFunct
     crate::generic::ssa::out_of_ssa_with_dce(function, eliminate_dead, forwarding_input_valid)
 }
 
+/// Native callers use this entry point. The ordinary check independently
+/// binds the actual result to the validated input before allocation starts.
+pub fn checked_out_of_ssa(function: &MFunction, eliminate_dead: bool) -> Result<MFunction, String> {
+    crate::validate::validate_function(function)?;
+    let (output, plan) = crate::generic::ssa::out_of_ssa_with_plan(function, eliminate_dead, true);
+    crate::generic::ssa_check::verify(function, &output, &plan)
+        .map_err(|error| format!("E4021 SSA transport refused: {error}"))?;
+    Ok(output)
+}
+
 pub(crate) fn unused_parameters(function: &MFunction) -> Vec<bool> {
     crate::generic::ssa::unused_parameters(function)
 }

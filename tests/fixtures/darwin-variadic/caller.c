@@ -50,5 +50,6 @@ int main(void)
     CHECK(10, v_after_stack(1, 2, 3, 4, 5, 6, 7, 8, (char)m, 9, 2.5, 100L, -3)
                   == 1 + 8 - 3 + 45 + 17 + 1100 - 39);
     CHECK(11, forward(3, 10L, 20L, 30L) == 10 + 40 + 90);
+    CHECK(12, v_after_vector_stack(1, 2, 3, 4, 5, 6, 7, 8, 9, 52L) == 97);
     return 0;
 }

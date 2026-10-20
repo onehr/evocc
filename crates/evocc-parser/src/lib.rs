@@ -4,6 +4,7 @@ pub mod builtins;
 mod complex;
 mod floating;
 mod neon;
+mod string_constants;
 mod vector;
 
 fn legacy_atomic(
@@ -273,6 +274,8 @@ struct DeclarationTransaction {
     entity_attribute_undo: usize,
     member_attribute_undo: usize,
     initialized_const_undo: usize,
+    initialized_string_undo: usize,
+    string_constant_uses: usize,
     side_declarations: usize,
     builtin_declarations: usize,
 }
@@ -370,6 +373,11 @@ pub struct Parser<'src, 'arena> {
     /// static initialization consults this index; it never grants ICE status.
     initialized_const_integers: HashMap<SymbolId, CInteger>,
     initialized_const_undo: Vec<(SymbolId, Option<CInteger>)>,
+    /// Written, preceding file-scope initializers. Keep these before the GNU
+    /// static-integer substitution: that substitution does not grant ICE status.
+    initialized_strings: HashMap<SymbolId, InitPlan<'arena>>,
+    initialized_string_undo: Vec<(SymbolId, Option<InitPlan<'arena>>)>,
+    string_constant_uses: Vec<(SymbolId, SourceSpan)>,
     declaration_transaction_depth: usize,
     side_declarations: Vec<&'arena CHirDecl<'arena>>,
     builtin_declarations: Vec<&'arena CHirDecl<'arena>>,
@@ -504,6 +512,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             member_attribute_undo: Vec::new(),
             initialized_const_integers: HashMap::new(),
             initialized_const_undo: Vec::new(),
+            initialized_strings: HashMap::new(),
+            initialized_string_undo: Vec::new(),
+            string_constant_uses: Vec::new(),
             declaration_transaction_depth: 0,
             side_declarations: Vec::new(),
             builtin_declarations: Vec::new(),
@@ -634,6 +645,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .is_some_and(|state| state.has_definition || state.assembly_named)
             {
                 self.report("E2944", "ordinary-builtin-binding-conflict", span);
+            }
+        }
+        // A later weak/alias declaration cannot leave a previously folded
+        // object's initializer as the authority for a replaceable definition.
+        for (symbol, span) in std::mem::take(&mut self.string_constant_uses) {
+            if !self.string_object_binding_is_fixed(symbol) {
+                self.report("E2954", "constant-string-binding-conflict", span);
             }
         }
         let definitions = decls
@@ -1124,6 +1142,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             entity_attribute_undo: self.entity_attribute_undo.len(),
             member_attribute_undo: self.member_attribute_undo.len(),
             initialized_const_undo: self.initialized_const_undo.len(),
+            initialized_string_undo: self.initialized_string_undo.len(),
+            string_constant_uses: self.string_constant_uses.len(),
             side_declarations: self.side_declarations.len(),
             builtin_declarations: self.builtin_declarations.len(),
         }
@@ -1147,10 +1167,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.entity_attribute_undo.clear();
             self.member_attribute_undo.clear();
             self.initialized_const_undo.clear();
+            self.initialized_string_undo.clear();
         }
     }
 
     fn rollback_declaration_transaction(&mut self, transaction: &DeclarationTransaction) {
+        self.string_constant_uses
+            .truncate(transaction.string_constant_uses);
+        while self.initialized_string_undo.len() > transaction.initialized_string_undo {
+            let (symbol, previous) = self
+                .initialized_string_undo
+                .pop()
+                .expect("bounded undo marker");
+            if let Some(previous) = previous {
+                self.initialized_strings.insert(symbol, previous);
+            } else {
+                self.initialized_strings.remove(&symbol);
+            }
+        }
         while self.initialized_const_undo.len() > transaction.initialized_const_undo {
             let (symbol, previous) = self
                 .initialized_const_undo
@@ -1247,6 +1281,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.entity_attribute_undo.clear();
             self.member_attribute_undo.clear();
             self.initialized_const_undo.clear();
+            self.initialized_string_undo.clear();
         }
     }
 
@@ -1673,22 +1708,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn tag_in_current_scope(&self, spelling: &str) -> Option<TagId> {
         self.symbols
-            .scope_tags(self.current_scope)
+            .tag_in_scope(self.current_scope, spelling)
             .expect("the parser current scope is always live")
-            .iter()
-            .rev()
-            .copied()
-            .find(|tag| {
-                self.symbols
-                    .tags_in_source_order()
-                    .iter()
-                    .rev()
-                    .any(|binding| {
-                        binding.scope() == self.current_scope
-                            && binding.tag() == *tag
-                            && binding.spelling() == spelling
-                    })
-            })
     }
 
     fn facts_for_symbol(&self, symbol: SymbolId) -> ExprFacts {
@@ -2264,6 +2285,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     &written_initializer,
                     context == DeclarationContext::File,
                 )?;
+                if context == DeclarationContext::File
+                    && asm_label.is_none()
+                    && !storage.is_thread_local()
+                    && self.types.is_const_qualified_object(full_type)
+                {
+                    let previous = self.initialized_strings.insert(symbol, plan.clone());
+                    if self.declaration_transaction_depth > 0 {
+                        self.initialized_string_undo.push((symbol, previous));
+                    }
+                }
                 if self.initializer_has_static_storage(context, storage) {
                     plan = self.resolve_static_integer_initializers(plan);
                     self.validate_static_initializer_plan(&plan)?;
@@ -5052,10 +5083,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2945", "jump-into-variable-type-scope", reference.span);
                 return None;
             }
-            // Revision 1.9.12 makes the construct malformed but does not
-            // assign a dedicated diagnostic. Keep the established generic
-            // syntax diagnostic until that contract gap is adjudicated.
-            self.report("E1003", "expected-expression", reference.span);
+            self.report("E2918", "jump-into-statement-expression", reference.span);
             return None;
         }
         Some(())
@@ -5266,6 +5294,49 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
                 let gnu_name = matches!(&syntax, AttributeSyntax::Gnu)
                     || matches!(&syntax, AttributeSyntax::Brackets { namespace: Some(ns) } if matches!(ns.as_str(), "gnu" | "__gnu__"));
+                // These attributes change the execution or call contract, not
+                // just optimization advice. In particular, a naked asm body
+                // cannot return through our ordinary frame. Reject the written
+                // contract even on a prototype, an unused definition or a type:
+                // a later declaration must not hide an unsupported convention.
+                if gnu_name
+                    && matches!(
+                        name.as_str(),
+                        "naked"
+                            | "interrupt"
+                            | "interrupt_handler"
+                            | "pcs"
+                            | "aarch64_vector_pcs"
+                            | "aarch64_sve_pcs"
+                            | "preserve_all"
+                            | "preserve_most"
+                            | "preserve_none"
+                            | "no_callee_saved_registers"
+                            | "no_caller_saved_registers"
+                            | "ms_abi"
+                            | "sysv_abi"
+                            | "stdcall"
+                            | "fastcall"
+                            | "thiscall"
+                            | "vectorcall"
+                            | "regcall"
+                            | "swiftcall"
+                            | "swiftasynccall"
+                            | "regparm"
+                            | "sseregparm"
+                            | "callee_pop_aggregate_return"
+                            | "returns_twice"
+                            | "target"
+                            | "target_clones"
+                            | "target_version"
+                    )
+                {
+                    self.report(
+                        "E2952",
+                        format!("unsupported-function-attribute: {name}"),
+                        name_token.span,
+                    );
+                }
                 if gnu_name && name == "scalar_storage_order" {
                     self.defer_profile_refusal(
                         "E2940",
@@ -5305,6 +5376,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         }
                         None => return attributes,
                     }
+                }
+                // Automatic vectorization is absent from this compiler. Its
+                // three disabling options are therefore satisfied already.
+                // Inspect every option after parsing: one permitted option
+                // must not hide a request for wrapping or aliasing semantics.
+                if gnu_name && name == "optimize" && !disables_only_vectorization(&arguments) {
+                    self.report(
+                        "E2952",
+                        "unsupported-function-attribute: optimize",
+                        name_token.span,
+                    );
                 }
                 if bracketed
                     && gnu_name
@@ -5967,28 +6049,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let evaluated = resolved
                     .as_ref()
                     .is_some_and(|(_, ty, _)| self.type_is_variably_modified(*ty));
-                if evaluated
-                    && resolved.as_ref().is_some_and(|(_, ty, _)| {
-                        !matches!(
-                            self.types.get(*ty).map(|ty| &ty.kind),
-                            Some(TypeKind::Array { .. })
-                        )
-                    })
-                {
-                    // The frozen compilers disagree about evaluating an
-                    // expression of pointer-to-VLA type. Array operands and
-                    // newly written type-name bounds have a shared contract.
-                    self.symbols
-                        .rollback_transaction(&transaction)
-                        .expect("temporary typeof bindings are table-local and LIFO");
-                    self.rollback_declaration_transaction(&declaration_transaction);
-                    self.report(
-                        "E2904",
-                        "not-covered: variably-modified-typeof",
-                        keyword.span,
-                    );
-                    return None;
-                }
                 if evaluated {
                     self.symbols
                         .commit_transaction(&transaction)
@@ -6349,7 +6409,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .peek()
             .is_some_and(|token| self.token_starts_type_name(token))
         {
-            let (ty, tag_event) = self.parse_type_name()?;
+            let (ty, tag_event) = self.parse_unevaluated_type_name()?;
             if let Some(event) = tag_event {
                 let declaration = self.finish_tag_event(event, keyword.span, Vec::new());
                 self.side_declarations.push(declaration);
@@ -6637,6 +6697,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut members = Vec::new();
         let mut canonical = Vec::new();
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
+            // A pack marker changes layout between declarations, not midway
+            // through the member list of one record. Do not mutate the pack
+            // stack before reporting this unsupported placement.
+            if self.peek().and_then(pragma_pack_action).is_some() {
+                self.report("E0107", "pragma-pack-unsupported", self.span());
+                return None;
+            }
             if self.match_kind(TokenKind::Semicolon) {
                 continue;
             }
@@ -7386,6 +7453,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.parse_type_name_with_vla_error(None)
     }
 
+    fn parse_unevaluated_type_name(&mut self) -> Option<(TypeId, Option<PendingTag<'arena>>)> {
+        let side_start = self.side_declarations.len();
+        let result = self.parse_type_name()?;
+        // Keep bindings needed by the resolved type, but do not execute a
+        // nested typeof operand in a query that only inspects that type.
+        self.take_extent_evaluations(side_start);
+        Some(result)
+    }
+
     fn parse_type_name_with_vla_error(
         &mut self,
         vla_error_span: Option<SourceSpan>,
@@ -7497,6 +7573,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     )> {
         let side_start = self.side_declarations.len();
         let (ty, tag, _) = self.parse_type_name_details(None, false, self.in_function_scope())?;
+        let evaluations = self.take_extent_evaluations(side_start);
+        Some((ty, tag, evaluations))
+    }
+
+    /// Move hidden capture initializers onto the expression that needs them.
+    /// Keeping an initializer in side_declarations would execute it even if
+    /// sizeof, a conditional, or short-circuit evaluation skips that expression.
+    fn take_extent_evaluations(&mut self, side_start: usize) -> Vec<&'arena CHirExpr<'arena>> {
         let mut evaluations = Vec::new();
         for declaration in self.side_declarations.split_off(side_start) {
             if let CHirDecl::Object(object) = declaration {
@@ -7532,7 +7616,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             self.side_declarations.push(declaration);
         }
-        Some((ty, tag, evaluations))
+        evaluations
     }
 
     // ── declarators ────────────────────────────────────────────────────
@@ -7628,6 +7712,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn classify_array_bound(&mut self, expression: &CHirExpr<'_>) -> ArrayBound {
+        // Check the expression's type before classifying an integer bound as
+        // constant or variable. A noninteger bound is invalid in every storage
+        // context; it must not become a VLA and get a different diagnostic.
+        if self
+            .converted_expression_type(expression)
+            .is_some_and(|inferred| !is_integer_class(self.operand_type_class(inferred.ty)))
+        {
+            self.report("E2923", "invalid-array-bound", expression.span());
+            return ArrayBound::Fixed(0);
+        }
         match self.eval_integer_constant_expression(expression) {
             Ok(value)
                 if value
@@ -8178,6 +8272,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 variadic = true;
                 break;
             }
+            let side_start = self.side_declarations.len();
             let storage_span = self.peek().map(|token| token.span);
             let storage = self.parse_storage_class();
             if !matches!(storage, StorageClass::None | StorageClass::Register) {
@@ -8294,11 +8389,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
             self.validate_array_parameter_modifiers(&derived, true);
             self.validate_variable_array_bounds(&derived, true);
-            if self
+            let definition = self
                 .symbols
                 .scope(self.current_scope)
-                .is_ok_and(|scope| scope.kind() == ScopeKind::Function)
-            {
+                .is_ok_and(|scope| scope.kind() == ScopeKind::Function);
+            // A VM typeof specifier can create captures before the written
+            // parameter declarator does. They belong to this definition's
+            // entry, in source order, not to the enclosing declaration list.
+            // Prototypes (including nested callback prototypes) have no
+            // runtime entry and must not execute these captures.
+            for declaration in self.side_declarations.split_off(side_start) {
+                if matches!(declaration, CHirDecl::Object(object)
+                    if object.name.spelling.starts_with("__evocc.extent."))
+                {
+                    if definition {
+                        entry_bounds.push(declaration);
+                    }
+                } else {
+                    self.side_declarations.push(declaration);
+                }
+            }
+            if definition {
                 if let Some(captures) = self.capture_array_bounds(&mut derived) {
                     entry_bounds.extend(captures);
                     written = self.written_derived(&derived, written.span);
@@ -11817,8 +11928,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let token = self.advance().unwrap();
             if self.looks_like_parenthesized_type() {
                 self.advance();
+                let side_start = self.side_declarations.len();
                 let (ty, tag_event, dynamic_size) =
                     self.parse_type_name_details(None, true, false)?;
+                let evaluations = self.take_extent_evaluations(side_start);
                 let end = self.peek().map(|token| token.span).unwrap_or(token.span);
                 self.expect(TokenKind::RParen)?;
                 let span = self.merge_span(token.span, end);
@@ -11826,13 +11939,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let declaration = self.finish_tag_event(event, span, Vec::new());
                     self.side_declarations.push(declaration);
                 }
-                if let Some(size) = dynamic_size {
-                    return Some(size);
-                }
-                if self.initialized_array_contains_vla(ty) {
-                    if let Some(size) = self.captured_size_expression(ty, span) {
-                        return Some(size);
+                let runtime_size = dynamic_size.or_else(|| {
+                    self.initialized_array_contains_vla(ty)
+                        .then(|| self.captured_size_expression(ty, span))
+                        .flatten()
+                });
+                if let Some(mut size) = runtime_size {
+                    for evaluation in evaluations.into_iter().rev() {
+                        size = self.alloc_node(CHirExpr::Comma(evaluation, size, span));
                     }
+                    return Some(size);
                 }
                 return Some(self.alloc_node(CHirExpr::SizeOf(ty, span)));
             }
@@ -11873,7 +11989,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .peek()
                 .is_some_and(|token| self.token_starts_type_name(token))
             {
-                self.parse_type_name()
+                self.parse_unevaluated_type_name()
             } else {
                 let operand = self.parse_expression()?;
                 let inferred = self.expression_type(operand).or_else(|| {
@@ -11960,7 +12076,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
-            let operand = self.resolve_union_cast_operand(ty, operand, span)?;
+            let operand = self.resolve_record_cast_operand(ty, operand, span)?;
             if matches!(
                 self.types.get(ty).map(|ty| &ty.kind),
                 Some(TypeKind::Vector { .. })
@@ -11996,17 +12112,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.parse_postfix()
     }
 
-    /// GNU member casts construct a union value, not a reinterpretation of an
-    /// arbitrary operand. Reuse the checked initializer and allocation paths;
-    /// the surrounding Cast keeps the result non-addressable/non-modifiable.
-    fn resolve_union_cast_operand(
+    /// A record cast preserves type identity. GNU union member casts can also
+    /// construct a union value, but cannot reinterpret an arbitrary operand.
+    /// Reuse checked initialization; Cast keeps the result non-modifiable.
+    fn resolve_record_cast_operand(
         &mut self,
         target: TypeId,
         operand: &'arena CHirExpr<'arena>,
         span: SourceSpan,
     ) -> Option<&'arena CHirExpr<'arena>> {
-        let TypeKind::Union(tag) = self.types.get(target)?.kind else {
-            return Some(operand);
+        let (tag, union) = match self.types.get(target)?.kind {
+            TypeKind::Struct(tag) => (tag, false),
+            TypeKind::Union(tag) => (tag, true),
+            _ => return Some(operand),
         };
         let inferred = self.converted_expression_type(operand)?;
         let source = self.materialize_inferred_type(inferred.ty, Some(operand))?;
@@ -12015,6 +12133,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .compatible_ignoring_top_qualifiers(target, source)
         {
             return Some(operand);
+        }
+        if !union {
+            self.report("E2953", "incompatible-record-cast", span);
+            return None;
         }
         let member = match &self.types.tag(tag)?.state {
             TagState::Complete(TagDefinition::Union(fields)) => fields
@@ -12297,6 +12419,37 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         break;
                     }
                     let name = self.token_text(&member).to_owned();
+                    let record_ty = if pointer {
+                        self.converted_expression_type(expression)
+                            .and_then(|inferred| match self.operand_type_class(inferred.ty) {
+                                OperandTypeClass::Pointer(pointer) => Some(pointer.pointee),
+                                _ => None,
+                            })
+                    } else {
+                        self.expression_type(expression)
+                            .and_then(|inferred| match inferred.ty {
+                                InferredType::Canonical(ty) => Some(ty),
+                                _ => None,
+                            })
+                    };
+                    // Resolve the name while its own span is available. This
+                    // also checks members of record-valued expressions, which
+                    // do not pass through the lvalue projection path. An
+                    // incomplete tag has no member inventory yet; leave its
+                    // existing incomplete-projection diagnostic unchanged.
+                    if record_ty.is_some_and(|ty| {
+                        let tag = match self.types.get(ty).map(|ty| &ty.kind) {
+                            Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => *tag,
+                            _ => return false,
+                        };
+                        self.types
+                            .tag(tag)
+                            .is_some_and(|tag| matches!(tag.state, TagState::Complete(_)))
+                            && self.record_member_path(ty, &name).is_none()
+                    }) {
+                        self.report("E2906", "designator-outside-object", member.span);
+                        return None;
+                    }
                     let span = self.merge_span(expression.span(), member.span);
                     let projected = if pointer {
                         self.alloc_node(CHirExpr::PtrMember(expression, name, span))
@@ -12917,12 +13070,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         self.advance();
-        let (left, left_tag) = self.parse_type_name()?;
+        let (left, left_tag) = self.parse_unevaluated_type_name()?;
         if !self.match_kind(TokenKind::Comma) {
             self.report("E2909", "builtin-arity", keyword.span);
             return None;
         }
-        let (right, right_tag) = self.parse_type_name()?;
+        let (right, right_tag) = self.parse_unevaluated_type_name()?;
         if self.peek_kind() != Some(TokenKind::RParen) {
             self.report("E2909", "builtin-arity", keyword.span);
             return None;
@@ -12997,7 +13150,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         self.advance();
-        let (mut current_ty, tag_event) = self.parse_type_name()?;
+        let (mut current_ty, tag_event) = self.parse_unevaluated_type_name()?;
         if !self.match_kind(TokenKind::Comma) {
             self.report("E2909", "builtin-arity", keyword.span);
             return None;
@@ -13368,21 +13521,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             result,
             designator_span,
         )?;
-        let redundant = builtin.check_is_redundant(|index| {
-            let ty = match builtin.parameters.get(index)? {
-                evocc_chir::fortify::Param::Size => CIntegerType::ULONG,
-                evocc_chir::fortify::Param::Int => CIntegerType::INT,
-                _ => return None,
-            };
-            let argument = arguments.get(index)?;
-            // A query that substitution can still answer differently, such as
-            // the object size of a parameter, is not yet a constant.
-            if !settled_constant_operand(argument) {
-                return None;
-            }
-            let value = self.eval_integer_constant_expression(argument).ok()?;
-            u64::try_from(value.cast(ty).raw_bits()).ok()
-        });
+        let redundant = builtin.check_with_source(
+            |index| {
+                let ty = match builtin.parameters.get(index)? {
+                    evocc_chir::fortify::Param::Size => CIntegerType::ULONG,
+                    evocc_chir::fortify::Param::Int => CIntegerType::INT,
+                    _ => return None,
+                };
+                let argument = arguments.get(index)?;
+                // A query that substitution can still answer differently, such as
+                // the object size of a parameter, is not yet a constant.
+                if !settled_constant_operand(argument) {
+                    return None;
+                }
+                let value = self.eval_integer_constant_expression(argument).ok()?;
+                u64::try_from(value.cast(ty).raw_bits()).ok()
+            },
+            builtin.literal_copy_size(&arguments),
+        );
         let (symbol, spelling) = if redundant {
             arguments = arguments
                 .into_iter()
@@ -13416,6 +13572,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             parser.intern(TypeKind::Pointer(pointee), Qualifiers::default())
         };
         match parameter {
+            Param::Stream => {
+                // A header owns FILE's representation. Resolve the file-scope
+                // typedef, not a block-local alias that can shadow its name.
+                // Before that declaration, the builtin accepts an opaque pointer.
+                let file = self
+                    .symbols
+                    .resolve(self.symbols.file_scope(), "FILE")
+                    .ok()
+                    .flatten()
+                    .and_then(|id| self.symbols.symbol(id).ok())
+                    .filter(|symbol| symbol.kind() == SymbolKind::Typedef)
+                    .map(|symbol| symbol.ty());
+                match file {
+                    Some(ty) => self.intern(TypeKind::Pointer(ty), Qualifiers::default()),
+                    None => pointer(self, TypeKind::Void, false),
+                }
+            }
             Param::Pointer => pointer(self, TypeKind::Void, false),
             Param::ConstPointer => pointer(self, TypeKind::Void, true),
             Param::Chars => pointer(self, TypeKind::Int(IntRank::Char), false),
@@ -13528,6 +13701,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             parameter_types.as_slice()
         };
         self.validate_builtin_argument_types(&arguments, validation_types)?;
+        if builtin == "__builtin_strlen" {
+            if let Some((length, dependencies)) = self.constant_string_length(arguments[0]) {
+                self.string_constant_uses
+                    .extend(dependencies.into_iter().map(|id| (id, span)));
+                return Some(self.size_literal(length, span));
+            }
+        }
         if variable_prefetch_arity {
             self.promote_call_arguments(&mut arguments[1..])?;
         } else if variadic_library {
@@ -13860,6 +14040,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 )
             }
             "__sync_synchronize" => ("__sync_synchronize", void_ty, Vec::new()),
+            "__builtin___clear_cache" => {
+                ("__clear_cache", void_ty, vec![void_pointer, void_pointer])
+            }
             "__builtin_prefetch" => (
                 "__builtin_prefetch",
                 void_ty,
@@ -14142,7 +14325,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .peek()
             .is_some_and(|token| self.token_starts_type_name(token));
         let (operand, tag_event) = if is_type_name {
-            let (_, tag_event) = self.parse_type_name()?;
+            let (_, tag_event) = self.parse_unevaluated_type_name()?;
             (None, tag_event)
         } else {
             (Some(self.parse_argument_expression()?), None)
@@ -14533,17 +14716,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let close = self.advance().expect("peeked builtin closing parenthesis");
         // Both builtins take unsigned int, including narrowing a wider ICE.
-        // Clang bounds stack depths to 16 bits; disagreements are refused.
+        // The source profile bounds both depths to 16 bits. Nonzero depths
+        // remain builtin nodes, not C null pointer constants, until execution.
         let depth = self
             .eval_integer_constant_expression(argument)
             .map(|value| value.cast(CIntegerType::UINT).raw_bits());
-        if !depth.as_ref().is_ok_and(|value| {
-            if frame_address {
-                *value <= u128::from(u16::MAX)
-            } else {
-                *value == 0
-            }
-        }) {
+        if !depth
+            .as_ref()
+            .is_ok_and(|value| *value <= u128::from(u16::MAX))
+        {
             self.report("E2913", "builtin-operand-not-convertible", argument.span());
             return None;
         }
@@ -14558,7 +14739,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 span,
             }
         } else {
-            CHirExpr::BuiltinReturnAddress { facts, span }
+            CHirExpr::BuiltinReturnAddress {
+                depth: depth.expect("validated constant depth"),
+                facts,
+                span,
+            }
         }))
     }
 
@@ -14616,7 +14801,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2913", "builtin-operand-not-convertible", target.span());
             return None;
         };
-        if target_integer == CIntegerType::BOOL {
+        if target_integer == CIntegerType::BOOL
+            || self.types.is_const_qualified_object(pointer.pointee)
+        {
             self.report("E2913", "builtin-operand-not-convertible", target.span());
             return None;
         }
@@ -15284,9 +15471,9 @@ fn collect_jump_regions_stmt(
             next_region.check_switch_entry(regions, *span);
             collect_jump_regions_stmt(body, regions, next_region, labels, gotos);
         }
-        CHirStmt::Goto(label, _) => gotos.push(JumpRegionReference {
+        CHirStmt::Goto(label, span) => gotos.push(JumpRegionReference {
             name: label.spelling.clone(),
-            span: label.span,
+            span: *span,
             regions: regions.clone(),
             checks_region_entry: true,
         }),
@@ -15936,6 +16123,30 @@ fn nan_builtin_suffix(name: &str) -> Option<FloatSuffix> {
     }
 }
 
+fn disables_only_vectorization(arguments: &[AttributeArgument]) -> bool {
+    !arguments.is_empty()
+        && arguments.iter().all(|argument| {
+            let Some(units) = argument
+                .string_literal()
+                .and_then(|literal| literal.decoded_units())
+            else {
+                return false;
+            };
+            units.split(|unit| *unit == u32::from(b',')).all(|option| {
+                let option = option
+                    .strip_prefix(&[u32::from(b'-'), u32::from(b'f')])
+                    .unwrap_or(option);
+                [
+                    "no-tree-vectorize",
+                    "no-tree-loop-vectorize",
+                    "no-tree-slp-vectorize",
+                ]
+                .iter()
+                .any(|name| option.iter().copied().eq(name.bytes().map(u32::from)))
+            })
+        })
+}
+
 fn nan_literal_payload(literal: &StringLit) -> Option<u128> {
     if !matches!(literal.prefix, StringPrefix::None | StringPrefix::U8) {
         return None;
@@ -16131,7 +16342,8 @@ fn respan_expr<'arena>(inner: &CHirExpr<'arena>, paren_span: SourceSpan) -> CHir
             facts: *facts,
             span: paren_span,
         },
-        CHirExpr::BuiltinReturnAddress { facts, .. } => CHirExpr::BuiltinReturnAddress {
+        CHirExpr::BuiltinReturnAddress { depth, facts, .. } => CHirExpr::BuiltinReturnAddress {
+            depth: *depth,
             facts: *facts,
             span: paren_span,
         },

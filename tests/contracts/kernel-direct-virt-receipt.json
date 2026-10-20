@@ -1,44 +1,9 @@
 {
   "mode": "direct-kbuild",
   "status": "BUILD_BOOT_SELECTED_SELFTEST_PASS",
-  "recordedAt": "2026-10-13T09:41:53.556350+00:00",
+  "recordedAt": "2026-10-19T09:20:06.465358+00:00",
   "kernelVersion": "6.18.44",
   "configuration": "Retained arm64 virtconfig input, olddefconfig with EvoCC; capability changes disclosed below.",
-  "returnSigning": {
-    "scope": "Kbuild probes -mbranch-protection=pac-ret+leaf, then passes -mbranch-protection=pac-ret. EvoCC signs and authenticates the return address of every function, leaves included; GCC 14 signs non-leaf functions for this option. The hvf-host lane enables pointer authentication; the tcg-cortex-a72 lane has none and runs the same instructions as NOPs.",
-    "compileOptions": {
-      "evoccCObjects": {
-        "-mbranch-protection=pac-ret": 2799
-      },
-      "evoccCToAssemblyHelpers": {
-        "-mbranch-protection=pac-ret": 5
-      }
-    },
-    "subjectImage": {
-      "imageSha256": "add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f",
-      "paciasp": 77584,
-      "autiasp": 158196
-    },
-    "referenceImage": {
-      "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
-      "paciasp": 46775,
-      "autiasp": 60282
-    },
-    "k15Image": {
-      "imageSha256": "16a87d16bc1e621247d84c207e7a50dfb7c6a65076e339f25ca872fc291fd191",
-      "paciasp": 77584,
-      "autiasp": 158196
-    },
-    "unsignedDirectImage": {
-      "imageSha256": "ce7bd3e3ba06290b259c6d428daa0b362f58702cbc8e9f957d9dc2a227802e1d",
-      "paciasp": 0,
-      "autiasp": 0
-    },
-    "pointerAuthenticationLanes": [
-      "reference-boot-hvf",
-      "subject-boot-hvf"
-    ]
-  },
   "sourceRoot": ".build/case/kbuild-probe/src",
   "sourceAudit": {
     "archive": ".toolchain/artifacts/linux-6.18.44.tar.xz",
@@ -52,80 +17,67 @@
   "outputRoot": ".build/case/kbuild-probe/out-k16",
   "inputConfig": ".toolchain/records/frozen-kernel-gcc.config",
   "inputConfigSha256": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d",
-  "subjectConfig": ".evidence/kbuild-direct-k16k17-20261013/subject.config",
-  "configSha256": "14679920b47d26bb697d209f48331a10b2e908f886bc309f8cad6eaf815b576a",
+  "subjectConfig": ".evidence/kernel-codegen-replay-20261019/subject.config",
+  "configSha256": "c69a7be8d33dca1d4359a5161d5f976cd29cf9e6b2362fdd17206f0619e32eeb",
   "configChanges": {
-    "ARCH_SUPPORTS_SHADOW_CALL_STACK": {
+    "CONFIG_ARCH_SUPPORTS_SHADOW_CALL_STACK": {
       "reference": "y",
-      "subject": null
+      "subject": "n"
     },
-    "CC_HAS_AUTO_VAR_INIT_PATTERN": {
+    "CONFIG_CC_HAS_AUTO_VAR_INIT_PATTERN": {
       "reference": "y",
-      "subject": null
+      "subject": "n"
     },
-    "CC_HAS_BRANCH_PROT_PAC_RET_BTI": {
+    "CONFIG_CC_HAS_BRANCH_PROT_PAC_RET_BTI": {
       "reference": "y",
-      "subject": null
+      "subject": "n"
     },
-    "CC_HAS_KASAN_GENERIC": {
+    "CONFIG_CC_HAS_KASAN_GENERIC": {
       "reference": "y",
-      "subject": null
+      "subject": "n"
     },
-    "CC_HAS_KASAN_SW_TAGS": {
+    "CONFIG_CC_HAS_KASAN_SW_TAGS": {
       "reference": "y",
-      "subject": null
+      "subject": "n"
     },
-    "CC_HAS_MULTIDIMENSIONAL_NONSTRING": {
-      "reference": null,
+    "CONFIG_CC_HAS_MULTIDIMENSIONAL_NONSTRING": {
+      "reference": "n",
       "subject": "y"
     },
-    "CC_HAS_ZERO_CALL_USED_REGS": {
+    "CONFIG_CC_HAS_ZERO_CALL_USED_REGS": {
       "reference": "y",
-      "subject": null
+      "subject": "n"
     },
-    "CC_HAVE_SHADOW_CALL_STACK": {
+    "CONFIG_CC_HAVE_SHADOW_CALL_STACK": {
       "reference": "y",
-      "subject": null
+      "subject": "n"
     },
-    "CC_VERSION_TEXT": {
+    "CONFIG_CC_VERSION_TEXT": {
       "reference": "\"gcc-14 (Debian 14.2.0-19) 14.2.0\"",
-      "subject": "\"evocc 0.1.0 (820bfa2964b2 2026-10-13)\""
+      "subject": "\"evocc 0.1.0 (f6c6f5e15460 2026-10-14)\""
     },
-    "HAVE_KCSAN_COMPILER": {
+    "CONFIG_HAVE_KCSAN_COMPILER": {
       "reference": "y",
-      "subject": null
-    },
-    "INIT_STACK_ALL_PATTERN": {
-      "reference": "n",
-      "subject": null
-    },
-    "SHADOW_CALL_STACK": {
-      "reference": "n",
-      "subject": null
-    },
-    "ZERO_CALL_USED_REGS": {
-      "reference": "n",
-      "subject": null
+      "subject": "n"
     }
   },
-  "compilerCommit": "820bfa2964b2",
-  "compiler": "target/frontend/aarch64-unknown-linux-musl/release/evocc",
-  "compilerSha256": "f2c378a288a71f1d325008002a994dcc32e2100a713eefa46e4f3cf042d17305",
-  "compilerUnchangedDuringBuild": true,
-  "hostCompiler": {
-    "path": "target/frontend/release/evocc",
-    "commit": "820bfa2964b2",
-    "sha256": "a8894f7342534d2bc5577b1c7af7f88f2af802c5b243c4989ca375092e561df2"
+  "compiler": "EvoCC 0.1.0; one retained dirty-worktree snapshot, identified per object",
+  "compilerCommit": "f6c6f5e1546036eaf5bfc48ca14de63e694a1de4",
+  "compilerSnapshots": {
+    "c16bdb1c61d79a9a3aef03b82e2410194a5e70643c8f785ee3b8a98d11265a6e": "evocc-zero-branch.gz"
   },
-  "imageSha256": "add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f",
-  "imageBytes": 59537920,
-  "vmlinuxSha256": "f679dbd2b542b1b54960132c8d6f679afc4d46674c9c1d2fcd312d86bc77c09d",
-  "vmlinuxBytes": 1145347032,
+  "targetCObjectsByCompilerSha256": {
+    "c16bdb1c61d79a9a3aef03b82e2410194a5e70643c8f785ee3b8a98d11265a6e": 2799
+  },
+  "compilerUnchangedWithinEachBuildInvocation": true,
+  "compilerUnchangedDuringBuild": true,
+  "hostCompiler": "gcc-14",
+  "buildImage": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+  "buildCommand": "make -C /work/src O=/work/out ARCH=arm64 HOSTCC=gcc-14 CC=/work/selected-compiler/evocc -j2 V=1 Image",
   "buildExitCode": 0,
   "buildTimeoutSeconds": 7200,
   "jobs": 2,
-  "buildCommand": "make -C /work/src O=/work/out ARCH=arm64 HOSTCC=gcc-14 CC=/work/compiler/evocc -j2 V=1 Image",
-  "buildProvenance": "One uninterrupted Kbuild run from an empty output tree after olddefconfig with the same compiler. No target object was seeded. Every final C object and C-to-assembly helper matches its compiler invocation in build.log.",
+  "buildProvenance": "existing build directory; changed compiler path recompiles every target C unit with one recorded compiler; not a clean build; every final target C command is accounted for in the retained logs. Compiler snapshot files are lossless gzip; their keys hash decompressed bytes.",
   "counts": {
     "evoccCObjects": 2799,
     "assemblyObjects": 67,
@@ -138,65 +90,15 @@
     "missingRecordedOutputs": 0,
     "unaccountedCurrentCompilerInvocations": 0
   },
-  "objectProvenance": ".evidence/kbuild-direct-k16k17-20261013/object-provenance.json",
-  "objectProvenanceSha256": "9dca2f3e47fbdce8f5fd4ca2a584fb9674cc4e105b77690c71c943fd9000bd29",
-  "toolchainScope": "EvoCC compiles target C. GNU tools build host programs, assemble and link; GCC also preprocesses one device-tree source. Userspace test programs are GCC-built.",
-  "buildImage": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
-  "buildLogWarnings": {
-    "scope": "Warnings in build.log that K16 (used after a pointer star) and K17 (ignored-option labels) address, measured the same way in the K15 log of the same configuration.",
-    "k15Log": ".evidence/kbuild-direct-pac-20261013/build.log",
-    "k15LogSha256": "fd71cb63efa5c4a25db7416efb13e7acbd596f4eac5dad8935ae042c906063d2",
-    "k15": {
-      "logBytes": 87412452,
-      "unusedVariableWarnings": 13601,
-      "ignoredOptionWarnings": 19634,
-      "ignoredOptionWarningBytes": 78084182,
-      "fixedX18Warnings": 2,
-      "unusedVariableDistinctLines": 13577,
-      "unusedVariableExamples": [
-        "ACPI_EXPORT_SYMBOL(acpi_acquire_mutex)",
-        "ACPI_EXPORT_SYMBOL(acpi_attach_data)",
-        "ACPI_EXPORT_SYMBOL(acpi_bios_error)",
-        "ACPI_EXPORT_SYMBOL(acpi_bios_exception)",
-        "ACPI_EXPORT_SYMBOL(acpi_bios_warning)",
-        "ACPI_EXPORT_SYMBOL(acpi_buffer_to_resource)",
-        "ACPI_EXPORT_SYMBOL(acpi_check_address_range)",
-        "ACPI_EXPORT_SYMBOL(acpi_current_gpe_count)",
-        "ACPI_EXPORT_SYMBOL(acpi_dbg_layer)",
-        "ACPI_EXPORT_SYMBOL(acpi_dbg_level)",
-        "ACPI_EXPORT_SYMBOL(acpi_debug_print)",
-        "ACPI_EXPORT_SYMBOL(acpi_debug_print_raw)",
-        "ACPI_EXPORT_SYMBOL(acpi_decode_pld_buffer)",
-        "ACPI_EXPORT_SYMBOL(acpi_detach_data)",
-        "ACPI_EXPORT_SYMBOL(acpi_enter_sleep_state)",
-        "ACPI_EXPORT_SYMBOL(acpi_enter_sleep_state_prep)",
-        "ACPI_EXPORT_SYMBOL(acpi_error)",
-        "ACPI_EXPORT_SYMBOL(acpi_evaluate_object)",
-        "ACPI_EXPORT_SYMBOL(acpi_evaluate_object_typed)",
-        "ACPI_EXPORT_SYMBOL(acpi_exception)"
-      ]
-    },
-    "subject": {
-      "logBytes": 10696552,
-      "unusedVariableWarnings": 0,
-      "ignoredOptionWarnings": 19632,
-      "ignoredOptionWarningBytes": 4694538,
-      "fixedX18Warnings": 0,
-      "unusedVariableDistinctLines": 0,
-      "unusedVariableExamples": []
-    }
+  "objectProvenance": ".evidence/kernel-codegen-replay-20261019/object-provenance-zero-branch.json",
+  "objectProvenanceSha256": "d2c24c1d97c90f5e8acb0250b0c8752d3e0371894be32e19ba0cb26ce795ecd6",
+  "buildLogs": {
+    "build-zero-branch.log": "03f8d7a42639c3c5150f127dc33bb9df7327d387175425f1e0ae6bf6e1103357"
   },
-  "changedObjectsSinceK15": {
-    "scope": "Recorded build outputs whose bytes differ from the K15 run of the same configuration. The comparison covers every output in object-provenance.json.",
-    "k15ObjectProvenance": ".evidence/kbuild-direct-pac-20261013/object-provenance.json",
-    "compared": 2922,
-    "count": 3,
-    "units": [
-      "init/version-timestamp.o",
-      "init/version.o",
-      "kernel/configs.o"
-    ]
-  },
+  "imageBytes": 40860160,
+  "imageSha256": "63087e1283ac58ba5a8843b924918ece3cda1d09072a932c3519dd1363945853",
+  "vmlinuxBytes": 1126637960,
+  "vmlinuxSha256": "214230c309d2561026468c35778a00c9bf860eb6458f9d345204626f040cc1b1",
   "unsupportedOptions": [
     "-fconserve-stack",
     "-femit-struct-debug-baseonly",
@@ -207,50 +109,47 @@
     "-fno-var-tracking",
     "-fverbose-asm"
   ],
-  "evidence": ".evidence/kbuild-direct-k16k17-20261013",
+  "evidence": ".evidence/kernel-codegen-replay-20261019",
   "captureLimitBytes": 524288000,
-  "buildLogs": {
-    "build.log": "331acefb2322f9c50b9895716d9044d1e55c96a97e1c8d8e0968c9d4f7a44391"
-  },
   "boots": {
     "reference-boot-hvf": {
       "verdict": "PASS",
       "bootLane": "hvf-host",
       "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
-      "nonce": "k1-20261013T074539Z-5554c204",
-      "serialLogSha256": "4365d2123a8354443db3c899a9162e2754d15f2274579f8153487efc8c1e9e35",
-      "flownAt": "2026-10-13T07:45:39Z",
-      "receipt": ".evidence/kbuild-direct-k16k17-20261013/reference-boot-hvf/boot.json",
+      "nonce": "k1-20261019T090424Z-b00849cb",
+      "serialLogSha256": "39a94e2042d72b4dde004ad6f5a396f3866d41b3c19fd9226151caadcec6ddb4",
+      "flownAt": "2026-10-19T09:04:25Z",
+      "receipt": ".evidence/kernel-codegen-replay-20261019/zero-branch-reference-boot-hvf-host/boot.json",
       "pointerAuthentication": true
     },
     "reference-boot-tcg": {
       "verdict": "PASS",
       "bootLane": "tcg-cortex-a72",
       "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
-      "nonce": "k1-20261013T074539Z-fa7f1053",
-      "serialLogSha256": "d7183a0ccd267f155a2dee9dbe18ca9ede0bf0566a99e857e4eb8902db7f1d5e",
-      "flownAt": "2026-10-13T07:45:41Z",
-      "receipt": ".evidence/kbuild-direct-k16k17-20261013/reference-boot-tcg/boot.json",
+      "nonce": "k1-20261019T090425Z-3137c71c",
+      "serialLogSha256": "593a8838607ec2d20cd8c1b069cf9786fc05263098634170cab552d22bad948b",
+      "flownAt": "2026-10-19T09:04:26Z",
+      "receipt": ".evidence/kernel-codegen-replay-20261019/zero-branch-reference-boot-tcg-cortex-a72/boot.json",
       "pointerAuthentication": false
     },
     "subject-boot-hvf": {
       "verdict": "PASS",
       "bootLane": "hvf-host",
-      "imageSha256": "add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f",
-      "nonce": "k1-20261013T093903Z-3ffb52ab",
-      "serialLogSha256": "be87a34a72d32e8cef34b12d2a603d02e4ffd6940d173c67e5bd499a79e4e5d4",
-      "flownAt": "2026-10-13T09:39:04Z",
-      "receipt": ".evidence/kbuild-direct-k16k17-20261013/subject-boot-hvf/boot.json",
+      "imageSha256": "63087e1283ac58ba5a8843b924918ece3cda1d09072a932c3519dd1363945853",
+      "nonce": "k1-20261019T090426Z-1c694e11",
+      "serialLogSha256": "de5365c0374c8b747625e9c4340f3dd5c24d3a0db9572538b8a2b44da823f406",
+      "flownAt": "2026-10-19T09:04:26Z",
+      "receipt": ".evidence/kernel-codegen-replay-20261019/zero-branch-subject-boot-hvf-host/boot.json",
       "pointerAuthentication": true
     },
     "subject-boot-tcg": {
       "verdict": "PASS",
       "bootLane": "tcg-cortex-a72",
-      "imageSha256": "add1c4874e28d2f1342d2ffa96fcbef8a7f2476416a761f356eda92c4034537f",
-      "nonce": "k1-20261013T093908Z-823ef12c",
-      "serialLogSha256": "aa3a7bb29b5964de94799121db8636eaff055e1b382f27cc847030b94da1e831",
-      "flownAt": "2026-10-13T09:39:10Z",
-      "receipt": ".evidence/kbuild-direct-k16k17-20261013/subject-boot-tcg/boot.json",
+      "imageSha256": "63087e1283ac58ba5a8843b924918ece3cda1d09072a932c3519dd1363945853",
+      "nonce": "k1-20261019T090426Z-d5f44fea",
+      "serialLogSha256": "85942ec7aabb228756e22bc0c6c6ddce8894405ea6f3e21ace6838456f7ee539",
+      "flownAt": "2026-10-19T09:04:28Z",
+      "receipt": ".evidence/kernel-codegen-replay-20261019/zero-branch-subject-boot-tcg-cortex-a72/boot.json",
       "pointerAuthentication": false
     }
   },
@@ -272,30 +171,10 @@
     "payloadCompiler": "gcc-14",
     "initramfsSha256": "9a783037c335043a846070c6c0d32051c9aac44d4cd727ab30e3a9555a4361e8",
     "scratchSha256": "fdc5bea1306f5d8582f0763e9f5e4e86b00686cf230ae33818fa301b34b86c09",
-    "reference": {
-      "programs": {
-        "PASS": 9,
-        "FAIL": 0,
-        "SKIP": 0
-      },
-      "subtests": {
-        "PASS": 125,
-        "FAIL": 0,
-        "SKIP": 0
-      }
-    },
-    "subject": {
-      "programs": {
-        "PASS": 9,
-        "FAIL": 0,
-        "SKIP": 0
-      },
-      "subtests": {
-        "PASS": 125,
-        "FAIL": 0,
-        "SKIP": 0
-      }
-    },
+    "regressions": [],
+    "baselineFailures": [],
+    "summary": ".evidence/kernel-codegen-replay-20261019/zero-branch-selftests/summary.json",
+    "summarySha256": "555baa6436ac985b4817028d13bde3f8ac458d447b19c996a5f95768b728d799",
     "programs": [
       {
         "id": "mincore.mincore_selftest",
@@ -433,37 +312,567 @@
         }
       }
     ],
-    "regressions": [],
-    "baselineFailures": [],
-    "summary": ".evidence/kbuild-direct-k16k17-20261013/selftests/summary.json",
-    "summarySha256": "bf187dd97d4d1f26d55384fa832b5e5e674ae55cf0a3fb6c21dedfe2b1f39ab6",
     "serialLogSha256": {
-      "reference": "5d8547ac24fc17e3bdd643bf2625cc7e696063cedab5ab6c885c10b9eacc1e18",
-      "subject": "e2e0513835857f07c9b0a4fdeca8048817a969dedf33b950590c1475dbb33c78"
+      "reference": "3945bad22a0ac28edaf90c1d16ca4ef46131331a054c7ff4fb08f67ba7775655",
+      "subject": "95c62f3701ecfda9d1c36e389acff5e90f278fc888228b43f39fdb7f3d9c45b5"
+    },
+    "reference": {
+      "programs": {
+        "PASS": 9
+      },
+      "subtests": {
+        "PASS": 125
+      }
+    },
+    "subject": {
+      "programs": {
+        "PASS": 9
+      },
+      "subtests": {
+        "PASS": 125
+      }
     }
+  },
+  "originalKvm": {
+    "record": ".evidence/kernel-codegen-replay-20261019/zero-branch-original-kvm/runtime.json",
+    "sha256": "e536d57a0936e8300396960715dea10473f52fcf8faac56ac99b306ced0c2711",
+    "results": [
+      {
+        "side": "gcc",
+        "program": "kvm.demand_paging_test",
+        "bootExit": 0,
+        "testExit": 0,
+        "modesStarted": 10,
+        "modesCompleted": 10,
+        "modes": [
+          "PA-bits:48,  VA-bits:48,  4K pages",
+          "PA-bits:48,  VA-bits:48, 16K pages",
+          "PA-bits:48,  VA-bits:48, 64K pages",
+          "PA-bits:40,  VA-bits:48,  4K pages",
+          "PA-bits:40,  VA-bits:48, 16K pages",
+          "PA-bits:40,  VA-bits:48, 64K pages",
+          "PA-bits:36,  VA-bits:48,  4K pages",
+          "PA-bits:36,  VA-bits:48, 16K pages",
+          "PA-bits:36,  VA-bits:48, 64K pages",
+          "PA-bits:36,  VA-bits:47, 16K pages"
+        ],
+        "uptimeBefore": "17:05  up 3 days, 22:05, 13 users, load averages: 4.13 4.58 4.91"
+      },
+      {
+        "side": "evocc",
+        "program": "kvm.demand_paging_test",
+        "bootExit": 0,
+        "testExit": 124,
+        "modesStarted": 7,
+        "modesCompleted": 7,
+        "modes": [
+          "PA-bits:48,  VA-bits:48,  4K pages",
+          "PA-bits:48,  VA-bits:48, 16K pages",
+          "PA-bits:48,  VA-bits:48, 64K pages",
+          "PA-bits:40,  VA-bits:48,  4K pages",
+          "PA-bits:40,  VA-bits:48, 16K pages",
+          "PA-bits:40,  VA-bits:48, 64K pages",
+          "PA-bits:36,  VA-bits:48,  4K pages"
+        ],
+        "uptimeBefore": "17:06  up 3 days, 22:07, 13 users, load averages: 4.13 4.56 4.87"
+      },
+      {
+        "side": "gcc",
+        "program": "kvm.memslot_modification_stress_test",
+        "bootExit": 0,
+        "testExit": 0,
+        "modesStarted": 10,
+        "modesCompleted": 10,
+        "modes": [
+          "PA-bits:48,  VA-bits:48,  4K pages",
+          "PA-bits:48,  VA-bits:48, 16K pages",
+          "PA-bits:48,  VA-bits:48, 64K pages",
+          "PA-bits:40,  VA-bits:48,  4K pages",
+          "PA-bits:40,  VA-bits:48, 16K pages",
+          "PA-bits:40,  VA-bits:48, 64K pages",
+          "PA-bits:36,  VA-bits:48,  4K pages",
+          "PA-bits:36,  VA-bits:48, 16K pages",
+          "PA-bits:36,  VA-bits:48, 64K pages",
+          "PA-bits:36,  VA-bits:47, 16K pages"
+        ],
+        "uptimeBefore": "17:08  up 3 days, 22:09, 13 users, load averages: 3.10 4.05 4.63"
+      },
+      {
+        "side": "evocc",
+        "program": "kvm.memslot_modification_stress_test",
+        "bootExit": 0,
+        "testExit": 124,
+        "modesStarted": 7,
+        "modesCompleted": 7,
+        "modes": [
+          "PA-bits:48,  VA-bits:48,  4K pages",
+          "PA-bits:48,  VA-bits:48, 16K pages",
+          "PA-bits:48,  VA-bits:48, 64K pages",
+          "PA-bits:40,  VA-bits:48,  4K pages",
+          "PA-bits:40,  VA-bits:48, 16K pages",
+          "PA-bits:40,  VA-bits:48, 64K pages",
+          "PA-bits:36,  VA-bits:48,  4K pages"
+        ],
+        "uptimeBefore": "17:10  up 3 days, 22:10, 13 users, load averages: 3.49 3.89 4.51"
+      }
+    ],
+    "scope": "Two original KVM programs, unchanged arguments and payload, 120 seconds per program. Boot success is not test success."
+  },
+  "equalWorkDiagnostics": {
+    "pairs": [
+      {
+        "program": "kvm.demand_paging_256m",
+        "snapshot": 7,
+        "mode": 3,
+        "bytesPerVcpu": 268435456,
+        "attribution": ".evidence/kernel-codegen-replay-20261019/zero-branch-demand256-inline.json",
+        "sides": {
+          "gcc": {
+            "result": ".evidence/kernel-codegen-replay-20261019/zero-branch-equal-work-gcc-kvm.demand_paging_256m/result.json",
+            "resultSha256": "3f64a11165a26d1cee24b8bdd39ef8890dc26cd184ef6d7b744b915ef1e155b8",
+            "kernelInstructions": 602619606,
+            "userGuestInstructions": 69780453,
+            "totalInstructions": 672400059,
+            "transportRunInstructions": 11821298,
+            "transportFraction": 0.019616517422103255,
+            "entries": {
+              "__handle_mm_fault": 65682,
+              "___pte_offset_map": 327878
+            }
+          },
+          "evocc": {
+            "result": ".evidence/kernel-codegen-replay-20261019/zero-branch-equal-work-evocc-kvm.demand_paging_256m/result.json",
+            "resultSha256": "08a84014239a1f82bf012e393cba35644d16a83b98f77c68d92647512ac4f0b4",
+            "kernelInstructions": 1683998173,
+            "userGuestInstructions": 70087727,
+            "totalInstructions": 1754085900,
+            "transportRunInstructions": 102494358,
+            "transportFraction": 0.060863699048680615,
+            "entries": {
+              "__handle_mm_fault": 65682,
+              "___pte_offset_map": 327880
+            }
+          }
+        },
+        "totalInstructionRatio": 2.6086938520033653,
+        "kernelInstructionRatio": 2.794462968401994
+      },
+      {
+        "program": "kvm.memslot_256m",
+        "snapshot": 7,
+        "mode": 3,
+        "bytesPerVcpu": 268435456,
+        "attribution": ".evidence/kernel-codegen-replay-20261019/zero-branch-memslot256-inline.json",
+        "sides": {
+          "gcc": {
+            "result": ".evidence/kernel-codegen-replay-20261019/zero-branch-equal-work-gcc-kvm.memslot_256m/result.json",
+            "resultSha256": "3b9a00f62e50e78d70861a8a69370da279191e23236d7bc5d607a3bbd7afa4fc",
+            "kernelInstructions": 604819730,
+            "userGuestInstructions": 69826465,
+            "totalInstructions": 674646195,
+            "transportRunInstructions": 11875606,
+            "transportFraction": 0.019634951392872056,
+            "entries": {
+              "__handle_mm_fault": 65679,
+              "___pte_offset_map": 327883
+            }
+          },
+          "evocc": {
+            "result": ".evidence/kernel-codegen-replay-20261019/zero-branch-equal-work-evocc-kvm.memslot_256m/result.json",
+            "resultSha256": "fe616b6331aacbcbe5fddc4b4b4719e7c43b330defbfcb37251104e4a17423bf",
+            "kernelInstructions": 1690958878,
+            "userGuestInstructions": 70106556,
+            "totalInstructions": 1761065434,
+            "transportRunInstructions": 102720449,
+            "transportFraction": 0.06074686400505122,
+            "entries": {
+              "__handle_mm_fault": 65679,
+              "___pte_offset_map": 327883
+            }
+          }
+        },
+        "totalInstructionRatio": 2.610354059730523,
+        "kernelInstructionRatio": 2.795806409952929
+      }
+    ],
+    "scope": "Retained fixed-work -m 3 -b 256M payload, four vCPUs, snapshot 7 from VM creation to destruction. Diagnostic timeout is 1200 seconds, not the original 120-second acceptance budget. Counts charge the full translated block on entry, including faulting blocks; concurrent waits and interrupts remain. Long transport means at least six consecutive frame accesses or moves. This is not native timing or causal attribution to an individual repair."
   },
   "gate": {
     "command": "tools/gate-changed.sh --full-workspace --offline",
     "exitCode": 0,
-    "suites": 425,
-    "passed": 3259,
+    "suites": 458,
+    "passed": 3473,
     "failed": 0,
-    "ignored": 5,
-    "logSha256": "d374289beb6ed3462fe964c5f32036e4522705bd5c4e09739b520381ce3be24e"
+    "ignored": 8,
+    "log": ".evidence/kernel-codegen-replay-20261019/full-workspace-zero-branch.log",
+    "logSha256": "0b50eea38d454addaaee4c22a9c775c0a2aa7974440f6f67b73da6742c2b6f79",
+    "cleanTree": false
   },
+  "leanGate": {
+    "command": "tools/gate-lean.sh",
+    "exitCode": 0,
+    "log": ".evidence/kernel-codegen-replay-20261019/lean-zero-branch.log",
+    "logSha256": "554774bb38fa4185634466414eca543bd36754b73bd253fcf6c05aa8dce11660",
+    "cleanTree": false
+  },
+  "returnSigning": {
+    "scope": "pac-ret omits signing only when the allocated return address stays in x30; any stored return address remains signed. pac-ret+leaf remains distinct. This run checks boot with and without pointer authentication, not ftrace or kprobes.",
+    "compileOptions": {
+      "evoccCObjects": {
+        "-mbranch-protection=pac-ret": 2799
+      },
+      "evoccCToAssemblyHelpers": {
+        "-mbranch-protection=pac-ret": 5
+      }
+    }
+  },
+  "toolchainScope": "EvoCC compiles target C. GNU tools build host programs, assemble and link; GCC also preprocesses one device-tree source. Userspace test programs are GCC-built.",
   "storage": {
-    "captureLimitBytes": 524288000,
-    "captureAllocatedKiB": 13476,
-    "outputTreeAllocatedKiB": 5094092,
-    "hostFreeKiB": 28749160,
-    "caseVolumeFreeKiB": 5879380,
-    "removed": "No tree was removed for this run.",
-    "retained": "Image, vmlinux and objects in the output tree, raw config, source, reference runtime, selected selftest payload, the K15 and earlier direct build trees and both compilers."
+    "hostFreeBytes": 76908912640,
+    "caseVolumeFreeBytes": 60265324544,
+    "captureAllocatedKiB": 282856,
+    "retained": "The previous accepted runtime is retained in .build/reference/evocc-retained-20261019.tar.gz; its Image, vmlinux and config hashes match result.json. The October 13 runtime, GCC reference, current output tree, exact payloads and compressed compiler snapshots also remain.",
+    "removed": "No runtime, source tree or sealed fixture removed. Compiler snapshots were losslessly compressed."
   },
   "notRun": [
     "Historical 7008-unit configuration: raw config and runtime pair remain unavailable.",
     "Full 970-program kselftest acceptance.",
-    "KUnit: disabled in this configuration."
+    "KUnit, ftrace, kprobes, sched_ext and ublk: disabled in this configuration.",
+    "Clean single-compiler release build."
   ],
-  "claimCeiling": "Direct build of the target C objects counted below, two boot lanes and nine paired upstream programs, with kernel return signing. No full Linux acceptance or formal kernel-correctness claim. Unsupported compiler options and configuration differences remain explicit."
+  "claimCeiling": "Every target C unit was rebuilt with one identified compiler in the existing build directory. Two boot lanes and nine paired upstream programs are checked. Original KVM and pidfd outcomes are separate; a timeout is not PASS. No full Linux acceptance, clean release or formal kernel-correctness claim.",
+  "originalPidfd": {
+    "record": ".evidence/kernel-codegen-replay-20261019/zero-branch-original-pidfd/summary.json",
+    "sha256": "8c0fc4b1ea81bf53974f5e7e7e0e1fdb56299b9a79bb9ed7c454e66ed960cdc1",
+    "status": "INCOMPLETE",
+    "scope": "One unchanged upstream pidfd program on the retained virtconfig pair; 45-second program and 105-second boot limits. Not the deleted 7008-unit composition or full kselftest acceptance.",
+    "protocol": {
+      "perProgramTimeoutSeconds": 45,
+      "bootOverheadSeconds": 60,
+      "consoleLoglevel": 5,
+      "hugePages": 1
+    },
+    "payload": {
+      "compiler": "gcc-14",
+      "image": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+      "commands": [
+        [
+          "mkdir",
+          "-p",
+          "/work/selftest/srcw/arch/arm64",
+          "/work/selftest/srcw/scripts"
+        ],
+        [
+          "cp",
+          "-a",
+          "/work/src/scripts/subarch.include",
+          "/work/selftest/srcw/scripts/"
+        ],
+        [
+          "cp",
+          "-a",
+          "/work/src/tools",
+          "/work/selftest/srcw/tools"
+        ],
+        [
+          "cp",
+          "-a",
+          "/work/src/arch/arm64/tools",
+          "/work/selftest/srcw/arch/arm64/tools"
+        ],
+        [
+          "make",
+          "-s",
+          "-C",
+          "/work/src",
+          "O=/work/selftest/headers-build",
+          "ARCH=arm64",
+          "HOSTCC=gcc-14",
+          "headers_install",
+          "INSTALL_HDR_PATH=/work/selftest/headers"
+        ],
+        [
+          "make",
+          "-s",
+          "-C",
+          "/work/selftest/srcw/tools/testing/selftests/pidfd",
+          "OUTPUT=/work/selftest/build/pidfd",
+          "ARCH=arm64",
+          "CC=gcc-14",
+          "KHDR_INCLUDES=-isystem /work/selftest/headers/include",
+          "LDFLAGS=-static",
+          "/work/selftest/build/pidfd/pidfd_test"
+        ],
+        [
+          "cp",
+          "/work/selftest/build/pidfd/pidfd_test",
+          "/work/selftest/root/pidfd.pidfd_test"
+        ],
+        [
+          "gcc-14",
+          "-static",
+          "-O2",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/work/harness/perf/sleep.c",
+          "-o",
+          "/work/selftest/root/bin-sleep"
+        ],
+        [
+          "gcc-14",
+          "-static",
+          "-O2",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-isystem",
+          "/work/selftest/headers/include",
+          "/work/harness/perf/bpf-load-proxy.c",
+          "-o",
+          "/work/selftest/root/bpf.load_proxy"
+        ],
+        [
+          "gcc-14",
+          "-static",
+          "-O2",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/work/harness/selftest-init.c",
+          "-o",
+          "/work/selftest/root/init"
+        ]
+      ],
+      "container": [
+        "/usr/local/bin/container",
+        "run",
+        "--rm",
+        "--platform",
+        "linux/arm64",
+        "--network",
+        "none",
+        "-v",
+        "/Users/onehrxn/dev/30days/c30/.build/case/kbuild-probe/src:/work/src:ro",
+        "-v",
+        "/Users/onehrxn/dev/30days/c30/.build/case/kbuild-probe/scratch/k2-perf/payload-pidfd-bpf4:/work/selftest",
+        "-v",
+        "/Users/onehrxn/dev/30days/c30/tools/k1:/work/harness:ro",
+        "-v",
+        "/Users/onehrxn/dev/30days/c30/.build/reference/gcc-lane-1/usr/gen_init_cpio:/work/bin/gen_init_cpio:ro",
+        "evo-nexlab:sealed",
+        "sh",
+        "-c",
+        "set -eu\nmkdir -p /work/selftest/srcw/arch/arm64 /work/selftest/srcw/scripts\ncp -a /work/src/scripts/subarch.include /work/selftest/srcw/scripts/\ncp -a /work/src/tools /work/selftest/srcw/tools\ncp -a /work/src/arch/arm64/tools /work/selftest/srcw/arch/arm64/tools\nmake -s -C /work/src O=/work/selftest/headers-build ARCH=arm64 HOSTCC=gcc-14 headers_install INSTALL_HDR_PATH=/work/selftest/headers\nmake -s -C /work/selftest/srcw/tools/testing/selftests/pidfd OUTPUT=/work/selftest/build/pidfd ARCH=arm64 CC=gcc-14 'KHDR_INCLUDES=-isystem /work/selftest/headers/include' LDFLAGS=-static /work/selftest/build/pidfd/pidfd_test\ncp /work/selftest/build/pidfd/pidfd_test /work/selftest/root/pidfd.pidfd_test\ngcc-14 -static -O2 -Wall -Wextra -Werror /work/harness/perf/sleep.c -o /work/selftest/root/bin-sleep\ngcc-14 -static -O2 -Wall -Wextra -Werror -isystem /work/selftest/headers/include /work/harness/perf/bpf-load-proxy.c -o /work/selftest/root/bpf.load_proxy\ngcc-14 -static -O2 -Wall -Wextra -Werror /work/harness/selftest-init.c -o /work/selftest/root/init\n/work/bin/gen_init_cpio -t 1786299935 /work/selftest/spec.txt > /work/selftest/initramfs.cpio\n"
+      ],
+      "initSourceSha256": "08ee4ccb471c287e1cb18480c3fe69e99a317d83ee28234630159ded00735d6b",
+      "filesystemCommand": [
+        "/opt/homebrew/opt/e2fsprogs/sbin/mke2fs",
+        "-q",
+        "-F",
+        "-t",
+        "ext4",
+        "-b",
+        "1024",
+        "-E",
+        "lazy_itable_init=0,lazy_journal_init=0",
+        "/Users/onehrxn/dev/30days/c30/.build/case/kbuild-probe/scratch/k2-perf/payload-pidfd-bpf4/scratch.img",
+        "65536"
+      ],
+      "filesystemToolSha256": "099fbe0688569037d9ee5dcf19273b9bbae4fbab6a7841e5a1196fe88ed6542c",
+      "initramfsSha256": "9fc1da06e4f17a47925f5d987342ec5c46de85bcb91def21a54f8ba1c40b5f32",
+      "scratchSha256": "a01f6ef91444e026608d3e781534118c7704ccf083b5d1e19992f5e5d68fae6c",
+      "sourceRoot": "/Users/onehrxn/dev/30days/c30/.build/case/kbuild-probe/src",
+      "perProgramTimeoutSeconds": 45,
+      "hugePages": 1,
+      "wrappers": [],
+      "extras": [
+        {
+          "id": "bpf.load_proxy",
+          "source": "tools/k1/perf/bpf-load-proxy.c",
+          "sourceSha256": "f939e2c34fb4b8952d1428d39e6e5eb8e51191a92f6ef0bc63200b9b2ce900ba",
+          "timeoutSeconds": 600,
+          "binarySha256": "73245167963ce1290d6ece468ba7bd4a7286c3734c152b49700593f6b8bcfd6f"
+        }
+      ],
+      "bins": [
+        {
+          "path": "/bin/sleep",
+          "source": "tools/k1/perf/sleep.c",
+          "sourceSha256": "e251113a3809e629c94ea378ed139054d4406edcc1e437aa1eb4f9be2183d5a5",
+          "binarySha256": "2962e5f74454f8d8f29c3b877e3abf54e17b8aa0cc9ecc3e66dc0a1c0bdc64de"
+        }
+      ],
+      "programs": [
+        {
+          "id": "pidfd.pidfd_test",
+          "source": "tools/testing/selftests/pidfd/pidfd_test.c",
+          "sourceSha256": "ad83b9ed85e8f6f204563e7960048e896a94338043c91297f3cb4c53c5e17514",
+          "binarySha256": "fd0355e0c94439f88f6daadd7629994fab0da17465ad6efadaae509d1365fe7b"
+        }
+      ]
+    },
+    "regressions": [],
+    "baselineFailures": [],
+    "coverageGaps": [
+      "pidfd.pidfd_test"
+    ],
+    "classificationCorrection": "Comparison recomputed from the retained program records. The original summary is unchanged. Identical nested SKIP is missing coverage, not failure or regression; overall status remains INCOMPLETE.",
+    "results": {
+      "reference": {
+        "exitCode": 0,
+        "programs": [
+          {
+            "id": "pidfd.pidfd_test",
+            "outcome": "PASS",
+            "subtests": {
+              "PASS": 7,
+              "FAIL": 0,
+              "SKIP": 1
+            },
+            "cases": [
+              {
+                "number": 1,
+                "name": "pidfd_poll check for premature notification on child thread exec test: Passed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 2,
+                "name": "pidfd_poll check for premature notification on child thread exec test: Passed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 3,
+                "name": "pidfd_poll check for premature notification on non-emptygroup leader exit test: Passed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 4,
+                "name": "pidfd_poll check for premature notification on non-emptygroup leader exit test: Passed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 5,
+                "name": "pidfd_send_signal check for support test: pidfd_send_signal() syscall is supported. Tests can be executed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 6,
+                "name": "pidfd_send_signal send SIGUSR1 test: Sent signal",
+                "outcome": "PASS"
+              },
+              {
+                "number": 7,
+                "name": "pidfd_send_signal signal exited process test: Failed to send signal as expected",
+                "outcome": "PASS"
+              },
+              {
+                "number": 8,
+                "name": "# SKIP pidfd_send_signal signal recycled pid test: Skipping test",
+                "outcome": "SKIP"
+              }
+            ],
+            "planned": 8,
+            "valid": true,
+            "nestedFailureSummaries": [],
+            "nestedSkipSummaries": [
+              {
+                "line": "# Totals: pass:7 fail:0 xfail:0 xpass:0 skip:1 error:0",
+                "passed": 7,
+                "skipped": 1
+              }
+            ],
+            "nestedSummaryErrors": [],
+            "bpfSummaries": [],
+            "fpuSummaries": [],
+            "exitCode": 0
+          }
+        ],
+        "outcomes": {
+          "PASS": 1
+        },
+        "subtests": {
+          "PASS": 7,
+          "SKIP": 1
+        }
+      },
+      "subject": {
+        "exitCode": 0,
+        "programs": [
+          {
+            "id": "pidfd.pidfd_test",
+            "outcome": "PASS",
+            "subtests": {
+              "PASS": 7,
+              "FAIL": 0,
+              "SKIP": 1
+            },
+            "cases": [
+              {
+                "number": 1,
+                "name": "pidfd_poll check for premature notification on child thread exec test: Passed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 2,
+                "name": "pidfd_poll check for premature notification on child thread exec test: Passed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 3,
+                "name": "pidfd_poll check for premature notification on non-emptygroup leader exit test: Passed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 4,
+                "name": "pidfd_poll check for premature notification on non-emptygroup leader exit test: Passed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 5,
+                "name": "pidfd_send_signal check for support test: pidfd_send_signal() syscall is supported. Tests can be executed",
+                "outcome": "PASS"
+              },
+              {
+                "number": 6,
+                "name": "pidfd_send_signal send SIGUSR1 test: Sent signal",
+                "outcome": "PASS"
+              },
+              {
+                "number": 7,
+                "name": "pidfd_send_signal signal exited process test: Failed to send signal as expected",
+                "outcome": "PASS"
+              },
+              {
+                "number": 8,
+                "name": "# SKIP pidfd_send_signal signal recycled pid test: Skipping test",
+                "outcome": "SKIP"
+              }
+            ],
+            "planned": 8,
+            "valid": true,
+            "nestedFailureSummaries": [],
+            "nestedSkipSummaries": [
+              {
+                "line": "# Totals: pass:7 fail:0 xfail:0 xpass:0 skip:1 error:0",
+                "passed": 7,
+                "skipped": 1
+              }
+            ],
+            "nestedSummaryErrors": [],
+            "bpfSummaries": [],
+            "fpuSummaries": [],
+            "exitCode": 0
+          }
+        ],
+        "outcomes": {
+          "PASS": 1
+        },
+        "subtests": {
+          "PASS": 7,
+          "SKIP": 1
+        }
+      }
+    }
+  }
 }

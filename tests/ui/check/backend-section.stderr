@@ -1,0 +1,6 @@
+error[E4009]: not-lowered: unsupported-form: @placed block 0 instruction 0: explicit function sections require the Linux ELF target
+  --> tests/ui/check/backend-section.c:3:5
+   |
+ 3 | int placed(void) { return 0; }
+   |     ^^^^^^ not-lowered: unsupported-form: @placed block 0 instruction 0: explicit function sections require the Linux ELF target
+   |

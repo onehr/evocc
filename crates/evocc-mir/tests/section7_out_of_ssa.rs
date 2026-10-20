@@ -28,6 +28,39 @@ fn moves(block: &MBlock) -> Vec<(u32, u32)> {
 }
 
 #[test]
+fn dead_fixed_addresses_do_not_reserve_storage_but_used_addresses_do() {
+    let address = VReg::new(0, RegClass::Gpr64);
+    for live in [false, true] {
+        let function = MFunction {
+            name: "fixed_address".into(),
+            blocks: vec![MBlock {
+                id: 0,
+                args: vec![],
+                insts: vec![MInst::FrameSlot {
+                    dst: address,
+                    origin: 0,
+                    size: 8,
+                    align: 8,
+                }],
+                term: MTerm::Ret {
+                    values: if live { vec![address] } else { vec![] },
+                },
+            }],
+        };
+        let after = evocc_mir::regalloc::checked_out_of_ssa(&function, true).unwrap();
+        assert_eq!(after.blocks[0].insts.len(), usize::from(live));
+        let allocated = evocc_mir::allocate(&after).unwrap();
+        evocc_mir::verify_allocation(&allocated).unwrap();
+        assert_eq!(
+            evocc_mir::emit::frame_of_for(evocc_mir::Target::Linux, &allocated)
+                .slots
+                .len(),
+            usize::from(live)
+        );
+    }
+}
+
+#[test]
 fn dce_attribution_retains_the_same_dead_witnesses_only_in_the_off_control() {
     let function = MFunction {
         name: "dce_control".into(),

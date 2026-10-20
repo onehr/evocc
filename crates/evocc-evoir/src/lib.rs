@@ -40,7 +40,8 @@ pub use text::{
     validate_section9_bytes, IMPLICIT_TARGET,
 };
 pub use text_parse::{
-    parse_global_text, parse_pre_fenv_module, parse_section9_module, parse_target_module,
+    parse_global_text, parse_pre_fenv_module, parse_pre_fenv_module_detailed,
+    parse_section9_module, parse_target_module, parse_target_module_detailed, ModuleParseError,
 };
 
 // ---------------------------------------------------------------------------
@@ -251,7 +252,7 @@ pub enum Inst {
         fallthrough: AssemblyEdge,
     },
     /// `Const(result, bits)`: define `result` from a non-negative raw bit
-    /// pattern. The result type determines how many low bits are retained.
+    /// pattern. The complete pattern must fit the declared result width.
     Const(Value, u64),
 
     /// Define an ordinary typed SSA value whose source object has not been
@@ -904,7 +905,9 @@ pub struct LifecycleRegistration {
 }
 
 mod lifecycle;
-pub use lifecycle::{interpret_program, interpret_program_with_site};
+pub use lifecycle::{
+    interpret_program, interpret_program_with_site, interpret_program_with_target_and_site,
+};
 mod tls;
 pub use tls::{TlsAddress, TlsModel, TlsSymbol};
 
@@ -1411,6 +1414,7 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
             .collect();
         let mut effects = EffectState::from_block_args(block)?;
         let mut access_guards: HashMap<u32, (u32, AccessLayout)> = HashMap::new();
+        let mut static_pointers = HashSet::new();
 
         for (index, inst) in block.insts.iter().enumerate() {
             if is_terminator(inst) {
@@ -1440,6 +1444,32 @@ pub fn validate_ssa(func: &Function) -> Result<(), String> {
                 require_local_value(&local, used, block.id, "instruction")?;
             }
             validate_instruction_types(inst, block.id)?;
+            // These definitions preserve a statically named object's origin.
+            // Unknown pointers still need the runtime lifetime check; a cast
+            // or an offset cannot turn a known static object into an alloca.
+            match inst {
+                Inst::GlobalAddr { result, .. } => {
+                    static_pointers.insert(result.id);
+                }
+                Inst::TlsAddr(access) => {
+                    static_pointers.insert(access.result.id);
+                }
+                Inst::PointerCast { result, operand }
+                | Inst::PtrOffset {
+                    result,
+                    base: operand,
+                    ..
+                } if static_pointers.contains(&operand.id) => {
+                    static_pointers.insert(result.id);
+                }
+                Inst::LifetimeEnd { pointer, .. } if static_pointers.contains(&pointer.id) => {
+                    return Err(format!(
+                        "lifetime.end in block {} cannot end a static object",
+                        block.id
+                    ));
+                }
+                _ => {}
+            }
             if matches!(
                 inst,
                 Inst::VaAccess(VariadicAccess {
@@ -1729,10 +1759,9 @@ pub fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, Strin
         EvoIRType::F32 => 4,
         EvoIRType::F64 => 8,
         EvoIRType::F128 => 16,
-        // Pointer size/alignment is target data, so target-independent module
-        // validation checks only pointer identity. Lowering and interpretation
-        // use the explicit guard layout produced from TargetDataLayout.
-        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => return Ok(None),
+        // Both admitted AArch64 profiles use eight-byte pointers aligned to
+        // eight bytes. Packed members may lower the alignment, not the size.
+        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => 8,
         _ => {
             return Err(format!(
                 "Day 7 memory type {ty:?} has no scalar access layout"
@@ -1983,7 +2012,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
         }
         let mut previous_end = 0;
         for relocation in &global.relocs {
-            if tls_symbols.contains(relocation.symbol.as_str()) {
+            if tls_symbols.contains(module.symbol_target(&relocation.symbol)) {
                 return Err("a TLS address is not a static relocation".into());
             }
             let code_target = relocation
@@ -2112,7 +2141,7 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
     let mut effect_participants = HashSet::new();
     for function in &module.functions {
         for block in &function.blocks {
-            for instruction in &block.insts {
+            for instruction in block.insts.iter().chain(std::iter::once(&block.terminator)) {
                 match instruction {
                     Inst::Call { callee, .. } => {
                         effect_participants.insert(function.name.as_str());
@@ -2125,6 +2154,9 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                         effect_participants.insert(module.symbol_target(symbol));
                     }
                     Inst::Load { .. }
+                    | Inst::Asm(_)
+                    | Inst::AsmGoto { .. }
+                    | Inst::StrictFloating(_)
                     | Inst::VaAccess(_)
                     | Inst::Atomic(_)
                     | Inst::TlsAddr(_)
@@ -2156,7 +2188,9 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                     Inst::TlsAddr(a) if !tls_symbols.contains(a.symbol.as_str()) => {
                         return Err(format!("tls_addr names non-TLS object '{}'", a.symbol));
                     }
-                    Inst::GlobalAddr { symbol, .. } if tls_symbols.contains(symbol.as_str()) => {
+                    Inst::GlobalAddr { symbol, .. }
+                        if tls_symbols.contains(module.symbol_target(symbol)) =>
+                    {
                         return Err(format!("global_addr cannot name TLS object '{symbol}'"));
                     }
                     Inst::GlobalAddr { symbol, .. }
@@ -2895,7 +2929,16 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
         Inst::AsmGoto {
             assembly, labels, ..
         } => assembly.validate(labels),
-        Inst::Const(result, _) => expect_bits(&result.ty, "const result", block),
+        Inst::Const(result, bits) => {
+            expect_bits(&result.ty, "const result", block)?;
+            if !integer_constant_fits(&result.ty, *bits) {
+                return Err(format!(
+                    "constant {bits} does not fit {:?} in block {block}",
+                    result.ty
+                ));
+            }
+            Ok(())
+        }
         Inst::Uninitialized(result) => expect_data_type(&result.ty, "uninitialized result", block),
         Inst::Add(result, lhs, rhs)
         | Inst::Sub(result, lhs, rhs)
@@ -2989,9 +3032,13 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             }
         }
         Inst::PtrNull(result) => expect_pointer_value(&result.ty, "null-pointer result", block),
-        Inst::GlobalAddr { result, .. } => {
-            expect_pointer(&result.ty, "global-address result", block)
-        }
+        Inst::GlobalAddr { result, .. } => match result.ty {
+            EvoIRType::Ptr(AddressSpace::Generic) => Ok(()),
+            _ => Err(format!(
+                "global-address result in block {block} has type {:?}, expected ptr<generic>",
+                result.ty
+            )),
+        },
         Inst::FuncAddr { result, .. } => match result.ty {
             EvoIRType::FnPtr { .. } => Ok(()),
             _ => Err(format!(
@@ -3265,12 +3312,16 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
 }
 
 fn validate_layout(layout: AccessLayout, operation: &str, block: BlockId) -> Result<(), String> {
-    if layout.align_bytes == 0 || !layout.align_bytes.is_power_of_two() {
+    if layout.size_bytes > i64::MAX as u64 || !layout.align_bytes.is_power_of_two() {
         return Err(format!(
             "{operation} in block {block} has invalid size/alignment {layout:?}"
         ));
     }
     Ok(())
+}
+
+fn integer_constant_fits(ty: &EvoIRType, bits: u64) -> bool {
+    matches!(ty, EvoIRType::Bits(width) if *width != 0 && (*width >= 64 || bits < (1_u64 << width)))
 }
 
 fn expect_day7_memory_tokens(
@@ -3481,7 +3532,7 @@ pub fn validate_type_well_formed(ty: &EvoIRType) -> Result<(), String> {
                 if params[..parameter_split]
                     .iter()
                     .chain(&results[..result_split])
-                    .any(|ty| matches!(ty, EvoIRType::Mem(_) | EvoIRType::World | EvoIRType::Void))
+                    .any(|ty| matches!(ty, EvoIRType::Void) || contains_effect_token_unchecked(ty))
                 {
                     return Err(
                         "fnptr ordinary parameters/results cannot be effect tokens or void"
@@ -3535,23 +3586,24 @@ fn ensure_value_type(ty: &EvoIRType, role: &str) -> Result<(), String> {
 
 fn contains_effect_token(ty: &EvoIRType) -> Result<bool, String> {
     validate_type_well_formed(ty)?;
-    let mut pending = vec![(ty, 0_usize)];
-    while let Some((current, depth)) = pending.pop() {
-        if depth > MAX_TYPE_NESTING {
-            return Err(format!(
-                "type nesting exceeds the limit of {MAX_TYPE_NESTING}"
-            ));
-        }
+    Ok(contains_effect_token_unchecked(ty))
+}
+
+// Function pointers are ordinary values. Their own trailing effect interface
+// is checked separately, not mistaken for a token inside the outer value.
+fn contains_effect_token_unchecked(ty: &EvoIRType) -> bool {
+    let mut pending = vec![ty];
+    while let Some(current) = pending.pop() {
         match current {
-            EvoIRType::Mem(_) | EvoIRType::World => return Ok(true),
+            EvoIRType::Mem(_) | EvoIRType::World => return true,
             EvoIRType::Tuple(elements) => {
-                pending.extend(elements.iter().map(|element| (element, depth + 1)));
+                pending.extend(elements);
             }
-            EvoIRType::Vec(_, element) => pending.push((element, depth + 1)),
+            EvoIRType::Vec(_, element) => pending.push(element),
             _ => {}
         }
     }
-    Ok(false)
+    false
 }
 
 fn expect_effect_tokens(

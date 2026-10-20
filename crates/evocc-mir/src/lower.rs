@@ -11,7 +11,9 @@
 //! below reads a hash map in iteration order, a clock, or an address.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+mod integer_width;
 mod quad;
+mod zero_test;
 
 use evocc_evoir::{
     call_argument_marks, inst_results, inst_uses, BitOp, Block, CmpOp, Function, InlineAssembly,
@@ -24,9 +26,9 @@ use crate::isa::aarch64::abi::{
 };
 use crate::isa::aarch64::encodings;
 use crate::{
-    inst_defs, AsmBody, AsmClobber, AsmConstraint, AsmOperand, AsmValue, BinOp, CarryOp, Cond,
-    ExtOp, FlagOp, FramePlace, LoadKind, MBlock, MFunction, MInst, MModule, MTerm, RegClass,
-    StoreKind, SymbolKind, Target, UnaryOp, VReg, WideMul, Width,
+    inst_defs, AsmBody, AsmClobber, AsmConstraint, AsmDirection, AsmOperand, AsmValue, BinOp,
+    CarryOp, Cond, ExtOp, FlagOp, FramePlace, LoadKind, MBlock, MFunction, MInst, MModule, MTerm,
+    RegClass, StoreKind, SymbolKind, Target, UnaryOp, VReg, WideMul, Width,
 };
 
 /// One EvoIR form this revision does not lower, reported at the instruction.
@@ -38,6 +40,20 @@ pub struct Refusal {
     pub code: &'static str,
     pub name: &'static str,
     pub detail: String,
+}
+
+impl Refusal {
+    /// Keep the machine location even when only the source function is known.
+    pub fn message(&self) -> String {
+        if self.function.is_empty() {
+            format!("{}: {}", self.name, self.detail)
+        } else {
+            format!(
+                "{}: @{} block {} instruction {}: {}",
+                self.name, self.function, self.block, self.index, self.detail
+            )
+        }
+    }
 }
 
 /// The Section 10 table.
@@ -1021,7 +1037,7 @@ struct Lowerer {
     named_arguments: Option<(u8, u8, u64)>,
     /// The Apple variadic convention (`CodegenOptions::anonymous_on_stack`).
     anonymous_on_stack: bool,
-    /// Every `const` this function has lowered, by value id.
+    /// Literal definitions and their integer conversions, by value id.
     ///
     /// EvoIR Section 3.11 admits immediate assembly operands (`I`, `J`, `K`,
     /// `L`, `i`, `n`), which emission "writes literally"; the constant is a
@@ -1091,18 +1107,37 @@ impl Lowerer {
         let Some(&(base, offset, after)) = self.address_preparation.memory.get(&address.id) else {
             return Ok((original, 0));
         };
-        // Select one already-computed ptr.offset, not an arbitrary integer
-        // expression or a chain of offsets. Do not move pointer formation over
-        // a call, access, asm, guard, or other potentially failing computation.
-        // AddressPreparation is also cleared on every machine-block boundary.
-        let uninterrupted = insts[after..]
+        // The first access must still form the pointer before any effect or
+        // possibly failing computation. After that access, the same immutable
+        // base and offset already formed successfully on this path. Later
+        // accesses may use that address again; they retain their own memory
+        // checks and volatile events. Loads/stores are never discarded by DCE.
+        // No fact crosses a machine-block boundary, including a guard split.
+        let following = &insts[after..];
+        let first = following
             .iter()
-            .all(|inst| matches!(inst, MInst::MovImm { .. }));
+            .find(|inst| !matches!(inst, MInst::MovImm { .. }));
+        let formed = match first {
+            None => true,
+            Some(
+                MInst::Load {
+                    base: prior_base,
+                    offset: prior_offset,
+                    ..
+                }
+                | MInst::Store {
+                    base: prior_base,
+                    offset: prior_offset,
+                    ..
+                },
+            ) => *prior_base == base && *prior_offset == offset,
+            _ => false,
+        };
         let encodable = encodings::memory_offset(offset, size);
         // Strict-align emission may expand the access to byte instructions.
         // Every byte offset must fit too, even if the wide scaled offset fits.
         let byte_safe = u64::from(align) >= size || encodings::memory_byte_expansion(offset, size);
-        Ok(if uninterrupted && encodable && byte_safe {
+        Ok(if formed && encodable && byte_safe {
             (base, offset)
         } else {
             (original, 0)
@@ -1805,6 +1840,8 @@ fn lower_function(
         thread_destination(&mut lowerer.blocks, slot, &readers, &mut next);
         lowerer.next_vreg = next;
     }
+    integer_width::select(&mut lowerer.blocks);
+    zero_test::select(&mut lowerer.blocks);
     Ok(MFunction {
         name: function.name.clone(),
         blocks: lowerer.blocks,
@@ -3146,6 +3183,35 @@ fn lower_terminator(
     }
 }
 
+/// Decode only literal integer conversions. Mask before sign extension:
+/// a narrow EvoIR value does not acquire the spare bits of its register.
+/// Block parameters, poison, symbolic addresses and 128-bit values do not
+/// enter this path. The original EvoIR and its obligations are unchanged.
+fn literal_integer_cast<'a>(
+    inst: &'a Inst,
+    constants: &HashMap<u32, u64>,
+) -> Option<(&'a Value, u64)> {
+    let (result, source, ty) = match inst {
+        Inst::SExt(result, source, ty)
+        | Inst::ZExt(result, source, ty)
+        | Inst::Trunc(result, source, ty) => (result, source, ty),
+        _ => return None,
+    };
+    let (EvoIRType::Bits(from @ 1..=64), EvoIRType::Bits(to @ 1..=64)) = (&source.ty, &result.ty)
+    else {
+        return None;
+    };
+    if ty != &result.ty {
+        return None;
+    }
+    let mask = u64::MAX >> (64 - from);
+    let mut raw = constants.get(&source.id)? & mask;
+    if matches!(inst, Inst::SExt(..)) && raw & (1_u64 << (from - 1)) != 0 {
+        raw |= !mask;
+    }
+    Some((result, raw & (u64::MAX >> (64 - to))))
+}
+
 #[allow(clippy::too_many_lines)]
 fn lower_inst(
     target: Target,
@@ -3198,6 +3264,14 @@ fn lower_inst(
     }
     if let Inst::Const(result, bits) = inst {
         lowerer.constants.insert(result.id, *bits);
+    }
+    if let Some((result, bits)) = literal_integer_cast(inst, &lowerer.constants) {
+        let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+        let dst = lowerer.fresh(class);
+        insts.push(MInst::MovImm { dst, imm: bits });
+        lowerer.bind(result, dst);
+        lowerer.constants.insert(result.id, bits);
+        return Ok(());
     }
     if !lowerer.literal_only.is_empty()
         && inst_results(inst)
@@ -3414,21 +3488,38 @@ fn lower_inst(
             scale,
         } => {
             let base = lowerer.reg(base)?;
-            let delta = lowerer.pointer_delta(insts, index, *signedness, *scale)?;
-            let dst = lowerer.fresh(RegClass::Gpr64);
-            insts.push(MInst::Binary {
-                op: match direction {
-                    evocc_evoir::OffsetDirection::Add => BinOp::Add,
-                    evocc_evoir::OffsetDirection::Subtract => BinOp::Sub,
-                },
-                dst,
-                lhs: base,
-                rhs: delta,
-                width: Width::X,
-            });
-            if let Some(offset) =
-                lowerer.immediate_pointer_delta(index, *direction, *signedness, *scale)
-            {
+            let offset = lowerer.immediate_pointer_delta(index, *direction, *signedness, *scale);
+            // Decode at the index's width before applying scale and direction.
+            // This selects the same machine address; it does not remove the
+            // following EvoIR pointer_valid obligation or move any access.
+            let dst = if offset == Some(0) {
+                base
+            } else if let Some(offset) = offset.filter(|offset| offset.unsigned_abs() <= 4095) {
+                let dst = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::BinaryImm {
+                    op: if offset < 0 { BinOp::Sub } else { BinOp::Add },
+                    dst,
+                    lhs: base,
+                    imm: offset.unsigned_abs(),
+                    width: Width::X,
+                });
+                dst
+            } else {
+                let delta = lowerer.pointer_delta(insts, index, *signedness, *scale)?;
+                let dst = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::Binary {
+                    op: match direction {
+                        evocc_evoir::OffsetDirection::Add => BinOp::Add,
+                        evocc_evoir::OffsetDirection::Subtract => BinOp::Sub,
+                    },
+                    dst,
+                    lhs: base,
+                    rhs: delta,
+                    width: Width::X,
+                });
+                dst
+            };
+            if let Some(offset) = offset {
                 lowerer
                     .address_preparation
                     .memory
@@ -4843,10 +4934,10 @@ fn assembly_vocabulary(assembly: &InlineAssembly) -> Result<(), String> {
 /// EvoIR Section 3.11: "Each register output defines one fresh SSA result, in
 /// output-list order. A memory output instead carries its place's pointer as
 /// the incoming value and its type is that pointer's type; it defines no
-/// scalar result". A read-write output and a tied input each name one
-/// register the template both reads and writes, so the incoming value is moved
-/// into it before the assembly, which is the form Section 4's own fixtures
-/// use.
+/// scalar result". Inputs and outputs have distinct SSA identities, even when
+/// the template needs one physical register. Read-write outputs use appended
+/// tied inputs. Original template operand numbers therefore do not change.
+/// Allocation inserts the two-address copies after SSA destruction.
 fn lower_assembly(
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
@@ -4854,10 +4945,11 @@ fn lower_assembly(
 ) -> Result<AsmBody, String> {
     let named = |name: &str| -> Option<String> { (!name.is_empty()).then(|| name.to_owned()) };
     let mut outputs: Vec<AsmOperand> = Vec::new();
+    let mut read_write_inputs = Vec::new();
     let mut results = assembly.results.iter();
     for output in &assembly.outputs {
         let (base, fixed_register) = evocc_evoir::assembly_register_binding(&output.constraint)?;
-        let constraint = AsmConstraint::parse(base)
+        let mut constraint = AsmConstraint::parse(base)
             .ok_or_else(|| format!("an assembly output constraint '{}'", output.constraint))?;
         if let AsmConstraint::Memory { .. } = constraint {
             let place = output
@@ -4879,7 +4971,23 @@ fn lower_assembly(
         let register = lowerer.fresh(class);
         if let Some(incoming) = &output.incoming {
             let src = lowerer.reg(incoming)?;
-            insts.push(MInst::Mov { dst: register, src });
+            read_write_inputs.push(AsmOperand {
+                constraint: AsmConstraint::Tied(
+                    u8::try_from(outputs.len()).map_err(|_| "too many assembly outputs")?,
+                ),
+                fixed_register,
+                name: None,
+                value: AsmValue::Reg(src),
+            });
+            constraint = match constraint {
+                AsmConstraint::Register(_) => AsmConstraint::Register(AsmDirection::Write),
+                AsmConstraint::EarlyClobber(_) => AsmConstraint::EarlyClobber(AsmDirection::Write),
+                AsmConstraint::Simd(_) => AsmConstraint::Simd(AsmDirection::Write),
+                AsmConstraint::SimdEarlyClobber(_) => {
+                    AsmConstraint::SimdEarlyClobber(AsmDirection::Write)
+                }
+                _ => return Err("a read-write output without a register constraint".into()),
+            };
         }
         lowerer.bind(result, register);
         outputs.push(AsmOperand {
@@ -4937,12 +5045,22 @@ fn lower_assembly(
                 let output = outputs.get(usize::from(digit)).ok_or_else(|| {
                     format!("a tied operand names output {digit}, which is absent")
                 })?;
-                let register = output.register().ok_or_else(|| {
+                let output_register = output.register().ok_or_else(|| {
                     format!("a tied operand names output {digit}, which holds no register")
                 })?;
                 let src = lowerer.reg(&input.value)?;
-                insts.push(MInst::Mov { dst: register, src });
-                AsmValue::Reg(register)
+                if src.class == output_register.class {
+                    AsmValue::Reg(src)
+                } else {
+                    // The source has already selected the output width. Keep
+                    // its existing low-part conversion as a separate SSA def.
+                    let converted = lowerer.fresh(output_register.class);
+                    insts.push(MInst::Mov {
+                        dst: converted,
+                        src,
+                    });
+                    AsmValue::Reg(converted)
+                }
             }
             _ => AsmValue::Reg(lowerer.reg(&input.value)?),
         };
@@ -4953,6 +5071,7 @@ fn lower_assembly(
             value,
         });
     }
+    inputs.extend(read_write_inputs);
 
     let mut clobbers = Vec::new();
     for clobber in &assembly.clobbers {
@@ -6213,8 +6332,20 @@ fn record_plan(
         if words.is_empty() {
             return;
         }
-        fill.0 = general.saturating_sub(usize::from(cursor.used(general_bank())));
-        fill.1 = vectors.saturating_sub(usize::from(cursor.used(vector_bank())));
+        // Only a bank used by the packed words must be exhausted to place
+        // those words on the stack. Filling the other bank creates a false
+        // dependency on SIMD for integer-only calls. Anonymous arguments
+        // later exhaust their own banks from this updated cursor.
+        fill.0 = if words.iter().any(|class| !class.is_simd()) {
+            general.saturating_sub(usize::from(cursor.used(general_bank())))
+        } else {
+            0
+        };
+        fill.1 = if words.iter().any(|class| class.is_simd()) {
+            vectors.saturating_sub(usize::from(cursor.used(vector_bank())))
+        } else {
+            0
+        };
         for _ in 0..fill.0 {
             let _ = place(cursor, RegClass::Gpr64);
         }
@@ -6862,7 +6993,7 @@ fn apple_word_piece(
 }
 
 /// The caller's side of the Apple named stack area: the zero fillers that
-/// exhaust both argument banks, then the area, one eight-byte word (or one
+/// exhaust the banks used by its words, then the area, one eight-byte word (or one
 /// sixteen-byte vector) per element, so that each element takes the next
 /// stack slot (Section 6.6).
 fn push_apple_stack_words(

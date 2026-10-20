@@ -303,7 +303,7 @@ impl<'a> Replay<'a> {
                 Some(self.proof_node(EvpProofRef::Node(node), rewrite.rhs_pre)?)
             }
             EvpProofRef::Class(class) => {
-                if self.find(class) != rewrite.rhs_pre {
+                if !self.class_exists(class) || self.find(class) != rewrite.rhs_pre {
                     return Err(());
                 }
                 None
@@ -519,6 +519,9 @@ impl<'a> Replay<'a> {
         // exactly the rule.
         let mut costs = HashMap::new();
         for extraction in &self.region.extractions {
+            if !self.class_exists(extraction.class) {
+                return Err(());
+            }
             let class = self.find(extraction.class);
             if class != extraction.class || choices.contains_key(&class) {
                 return Err(());
@@ -572,6 +575,9 @@ impl<'a> Replay<'a> {
                 class,
                 choice: selected,
             });
+        }
+        if !self.class_exists(self.region.root_class) {
+            return Err(());
         }
         let root_class = self.find(self.region.root_class);
         if root_class != self.region.root_class || !choices.contains_key(&root_class) {

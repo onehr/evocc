@@ -249,20 +249,7 @@ pub fn render_inst(inst: &MInst) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        MInst::Asm(body) => {
-            let results = body
-                .defined()
-                .into_iter()
-                .map(|reg| reg.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let prefix = if results.is_empty() {
-                String::new()
-            } else {
-                format!("{results} = ")
-            };
-            format!("{prefix}asm{}", render_asm_body(body))
-        }
+        MInst::Asm(body) => format!("{}asm{}", asm_definitions(body), render_asm_body(body)),
         MInst::Mov { dst, src } => format!("{}mov {}", defined(*dst), use_of(*src)),
         MInst::Aes { dst, op, args } => format!(
             "{}crypto.{} ({})",
@@ -718,6 +705,20 @@ fn edge(function: &MFunction, target: u32, args: &[VReg]) -> String {
     format!("{}({})", label(function, target), uses(args))
 }
 
+fn asm_definitions(body: &AsmBody) -> String {
+    let results = body
+        .defined()
+        .into_iter()
+        .map(|reg| reg.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    if results.is_empty() {
+        String::new()
+    } else {
+        format!("{results} = ")
+    }
+}
+
 /// Render one terminator without its indent.
 #[must_use]
 pub fn render_term(function: &MFunction, term: &MTerm) -> String {
@@ -734,7 +735,8 @@ pub fn render_term(function: &MFunction, term: &MTerm) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             format!(
-                "asm.goto{} labels [{targets}] fallthrough {}",
+                "{}asm.goto{} labels [{targets}] fallthrough {}",
+                asm_definitions(body),
                 render_asm_body(body),
                 edge(function, *fallthrough, fallthrough_args)
             )
