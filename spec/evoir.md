@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.14.0** | **Pinned ground truth** | `__has_include_next` on 2026-10-21
+**Revision 2.15.0** | **Pinned ground truth** | `__builtin_fpclassify` on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -1614,6 +1614,15 @@ function `fabs` or `fabsf` with its exact one-argument prototype uses the
 corresponding builtin; static functions, function-pointer calls, other
 prototypes, `-fno-builtin` and `-ffreestanding` keep ordinary call semantics.
 
+`__builtin_fpclassify(nan, infinite, normal, subnormal, zero, x)` returns the
+class argument that names the class of `x`, as GCC 14 documents it: NaN,
+infinity, normal, subnormal or zero, in that argument order. The result has
+type `int`. It inspects the representation of `x` in the type of `x`, with no
+promotion, so a `float` subnormal is subnormal. The five class arguments must
+be integer constant expressions, and each converts to `int`. `x` must have
+type `float`, `double` or `long double`, and it is evaluated once. glibc's
+`<math.h>` defines `fpclassify` with this builtin.
+
 `__builtin_nanf`, `__builtin_nan` and `__builtin_nanl` with a string-literal
 operand yield a quiet binary32/64/128 NaN whose low significand bits hold the
 payload. An empty string means payload zero; a complete unsigned decimal,
@@ -1711,7 +1720,8 @@ in source order and return `int` 0 or 1; only `isunordered` is true for
 unordered operands. Wrong arity is `E2909`. An operand pair without a floating
 type after the usual arithmetic conversions is `E2951` (`builtin-argument-type`),
 and so is a classification builtin of this section with an operand that is
-not floating.
+not floating. A class argument of `__builtin_fpclassify` that is not an
+integer constant expression, and an `x` of another type, are `E2951` too.
 
 Integer conversions still truncate toward zero regardless of dynamic rounding;
 nonrepresentable C conversions retain E3063 and the distinct pure guard. An
@@ -5133,7 +5143,7 @@ compound literals, and a front end must not emit it.
 | `E2947` | a constant memory order that an atomic builtin does not admit (10.1.14) |
 | `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_` (10.1.14) |
 | `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
-| `E2951` | a floating comparison or classification builtin with an operand of the wrong type (3.13.1) |
+| `E2951` | a floating comparison or classification builtin with an operand of the wrong type, or a class argument of `__builtin_fpclassify` that is not an integer constant expression (3.13.1) |
 | `E2952` | an execution or calling-convention attribute where 10.1.9 does not accept it, or a definition or use of a function that it marks (10.1.9) |
 | `E2953` | a cast to a struct type from an incompatible operand type (10.1.3) |
 | `E2954` | a declaration makes a previously folded string object's binding weak, aliased or assembly-renamed (10.1.17) |
@@ -8064,6 +8074,13 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.15.0, 2026-10-21.** Section 3.13.1 adds `__builtin_fpclassify`
+as GCC 14 documents it. It returns the class argument that names the class of
+`x`, with no promotion of `x`, and `__has_builtin` reports it. A class
+argument that is not an integer constant expression, or an `x` that is not
+`float`, `double` or `long double`, is `E2951`. This repairs `fpclassify` of
+glibc's `<math.h>`. No EvoIR operation, registry or Lean rule domain changes.
 
 **Revision 2.14.0, 2026-10-21.** Section 10.5 adds `__has_include_next`, the
 fifth feature query, and states the search of `#include_next`. The search

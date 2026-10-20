@@ -14,6 +14,7 @@ pub(super) const BUILTINS: &[&str] = &[
     "__builtin_isinf_sign",
     "__builtin_isfinite",
     "__builtin_isnormal",
+    "__builtin_fpclassify",
     "__builtin_signbit",
     "__builtin_signbitf",
     "__builtin_signbitl",
@@ -81,6 +82,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         span: SourceSpan,
     ) -> Option<&'arena CHirExpr<'arena>> {
         use FloatingBuiltin::*;
+        if name == "__builtin_fpclassify" {
+            return self.resolve_fpclassify(&operands, span);
+        }
         let infinity = name.starts_with("__builtin_inf") || name.starts_with("__builtin_huge_val");
         let op = match name {
             "__builtin_isnan" => IsNan,
@@ -180,6 +184,64 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(self.alloc_node(CHirExpr::Floating(FloatingExpr {
             op,
             operands,
+            facts: ExprFacts::value(result),
+            span,
+        })))
+    }
+
+    /// `__builtin_fpclassify(nan, infinite, normal, subnormal, zero, x)`, as
+    /// GCC 14 documents it. The five class arguments are integer constant
+    /// expressions, converted to `int`. `x` is type-generic: it keeps its
+    /// own type, so a `float` subnormal stays subnormal.
+    fn resolve_fpclassify(
+        &mut self,
+        operands: &[&'arena CHirExpr<'arena>],
+        span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let [classes @ .., value] = operands else {
+            self.report("E2909", "builtin-arity", span);
+            return None;
+        };
+        if classes.len() != 5 {
+            self.report("E2909", "builtin-arity", span);
+            return None;
+        }
+        let mut values = [0_i32; 5];
+        for (class, operand) in values.iter_mut().zip(classes) {
+            let integer = matches!(self.expression_type(operand)?.ty, InferredType::Integer(_))
+                || matches!(
+                    self.expression_type(operand)?.ty,
+                    InferredType::Canonical(ty) if self.canonical_integer_type(ty).is_ok()
+                );
+            let Some(constant) = integer
+                .then(|| self.eval_integer_constant_expression(operand).ok())
+                .flatten()
+            else {
+                self.report("E2951", "builtin-argument-type", operand.span());
+                return None;
+            };
+            // The conversion to `int` keeps the low 32 bits, as GCC 14's does.
+            *class = constant.mathematical_value() as i32;
+        }
+        let real = match self.expression_type(value)?.ty {
+            InferredType::Real(kind) => Some(kind),
+            InferredType::Canonical(ty) => match self.types.get(ty)?.kind {
+                TypeKind::Float(kind) => Some(kind),
+                _ => None,
+            },
+            _ => None,
+        };
+        if !matches!(
+            real,
+            Some(FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
+        ) {
+            self.report("E2951", "builtin-argument-type", value.span());
+            return None;
+        }
+        let result = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        Some(self.alloc_node(CHirExpr::Floating(FloatingExpr {
+            op: FloatingBuiltin::FpClassify(values),
+            operands: vec![*value],
             facts: ExprFacts::value(result),
             span,
         })))

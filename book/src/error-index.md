@@ -1322,6 +1322,7 @@ The comparison builtins need two real operands with a floating type after the us
 
 `__builtin_isgreater` and its family compare floating values without signaling on a quiet NaN.
 Classification builtins such as `__builtin_isnan` inspect a floating representation.
+`__builtin_fpclassify` also needs five class arguments that are integer constant expressions.
 Convert an integer operand to a floating type, or use an ordinary integer comparison.
 
 ```c

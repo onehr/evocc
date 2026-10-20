@@ -218,6 +218,7 @@ __builtin_fabsl
 __builtin_ffs
 __builtin_ffsl
 __builtin_ffsll
+__builtin_fpclassify
 __builtin_frame_address
 __builtin_free
 __builtin_has_attribute

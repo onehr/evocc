@@ -206,6 +206,30 @@ impl<'a> FunctionLowerer<'a> {
             this.emit(state, Inst::ICmp(result.clone(), op, a, b))?;
             Ok::<_, LowerError>(result)
         };
+        if let FpClassify(classes) = expression.op {
+            // The tests run from the last class to the first, so a NaN or an
+            // infinity, whose exponent field is also nonzero, selects last.
+            let nan = compare(self, state, CmpOp::ULt, exponent.clone(), magnitude.clone())?;
+            let infinite = compare(self, state, CmpOp::Eq, magnitude.clone(), exponent.clone())?;
+            let field = self.emit_raw_binary(state, Inst::And, &magnitude, &exponent)?;
+            let normal = compare(self, state, CmpOp::Ne, field, zero.clone())?;
+            let nonzero = compare(self, state, CmpOp::Ne, magnitude, zero)?;
+            let class = |this: &mut Self, state: &State, index: usize| {
+                this.constant(state, CIntegerType::INT, u64::from(classes[index] as u32))
+                    .map(|constant| constant.value)
+            };
+            let subnormal = class(self, state, 3)?;
+            let zero_class = class(self, state, 4)?;
+            let mut result = self.select_bits(state, &nonzero, &subnormal, &zero_class)?;
+            for (predicate, index) in [(normal, 2), (infinite, 1), (nan, 0)] {
+                let selected = class(self, state, index)?;
+                result = self.select_bits(state, &predicate, &selected, &result)?;
+            }
+            return Ok(ExprValue {
+                value: result,
+                integer: CIntegerType::INT,
+            });
+        }
         let predicate = match expression.op {
             IsNan => compare(self, state, CmpOp::ULt, exponent, magnitude)?,
             IsInf | IsInfSign => compare(self, state, CmpOp::Eq, magnitude, exponent)?,
@@ -221,7 +245,7 @@ impl<'a> FunctionLowerer<'a> {
                 compare(self, state, CmpOp::Ne, field, zero.clone())?
             }
             Abs | CopySign | IsGreater | IsGreaterEqual | IsLess | IsLessEqual | IsLessGreater
-            | IsUnordered => unreachable!(),
+            | IsUnordered | FpClassify(_) => unreachable!(),
         };
         let mut result = self.cast(
             ExprValue {

@@ -20,6 +20,10 @@ pub enum FloatingBuiltin {
     IsLessEqual,
     IsLessGreater,
     IsUnordered,
+    /// `__builtin_fpclassify`: the class value for NaN, infinity, normal,
+    /// subnormal and zero, in that order. They were integer constant
+    /// expressions in the source, converted to `int`.
+    FpClassify([i32; 5]),
 }
 
 impl FloatingBuiltin {
@@ -93,6 +97,20 @@ pub fn evaluate(op: FloatingBuiltin, arguments: &[FloatBits]) -> Option<u128> {
         }
         IsFinite => u128::from(magnitude < exponent),
         IsNormal => u128::from(magnitude & exponent != 0 && magnitude < exponent),
+        FpClassify(classes) => {
+            let class = if magnitude > exponent {
+                classes[0]
+            } else if magnitude == exponent {
+                classes[1]
+            } else if magnitude & exponent != 0 {
+                classes[2]
+            } else if magnitude != 0 {
+                classes[3]
+            } else {
+                classes[4]
+            };
+            u128::from(class as u32)
+        }
         SignBit => u128::from(bits & sign != 0),
         Abs => magnitude,
         CopySign => {
