@@ -1,8 +1,8 @@
 {
   "schema": "agent-repair.protocol.a1",
   "name": "P17a Protocol A: E3004 guidance and the response budget",
-  "status": "unregistered",
-  "status_note": "Machine form of the proposal. Nothing is registered. The owner fixes the provider, approves the measured run and registers it with a commit and a tag. The measured phase refuses to run while the status is unregistered. A harness change after the pilot needs a new pilot.",
+  "status": "registered",
+  "status_note": "Registered on 2026-10-20. The owner approved the measured run after the pilot of 2026-10-20 met every go criterion, and fixed the provider as AtlasCloud with no fallbacks. The registration commit carries the tag agent-repair-experiment-6. The first 16 hexadecimal digits of that commit seed the measured order in protocol-6-order.json. A harness change after the pilot needs a new pilot.",
   "source": "docs/archive/notebook/agent-feedback-20261013/protocols.md",
   "corpus_tag": "agent-repair-corpus-2",
   "corpus_commit": "7eed5eac064e0993d0d26a967b50dc94c71cc55b",

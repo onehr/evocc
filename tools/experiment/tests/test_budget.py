@@ -165,7 +165,8 @@ class BudgetTests(unittest.TestCase):
                          ({"L16": 16384, "L4": 4096}, 0, "deepseek/deepseek-v4.1-flash"))
         self.assertIn("Model " + PROTOCOL["model"] + " through OpenRouter", flat)
         self.assertEqual(budget.repair.digest(ROOT / PROTOCOL["prompt_file"]), PROTOCOL["prompt_sha256"])
-        self.assertEqual(PROTOCOL["status"], "unregistered")
+        # Registered on 2026-10-20 with the pinned provider.
+        self.assertEqual(PROTOCOL["status"], "registered")
 
     def test_payload_pins_the_provider_and_limit_and_sends_no_reasoning(self):
         run = self.campaign([ok(), ok()], trials=[PILOT[0], PILOT[7]])
@@ -397,8 +398,11 @@ class BudgetTests(unittest.TestCase):
             path.write_text(json.dumps(dict(seed=seed, trials=budget.order(PROTOCOL, seed))))
             with patch.object(budget.repair, "load_key", side_effect=AssertionError("key")), \
                  patch.object(budget, "send", side_effect=AssertionError("network")):
+                unregistered = Path(tmp) / "protocol.json"
+                unregistered.write_text(json.dumps(dict(copy.deepcopy(PROTOCOL), status="unregistered")))
                 with self.assertRaisesRegex(budget.Failure, "protocol_not_registered"):
-                    budget.main(["run", "--phase", "measured", "--order", str(path), "--out", str(Path(tmp) / "out")])
+                    budget.main(["--protocol", str(unregistered), "run", "--phase", "measured", "--order", str(path),
+                                 "--out", str(Path(tmp) / "out")])
                 registered = dict(copy.deepcopy(PROTOCOL), status="registered")
                 plan = json.loads(path.read_text())
                 plan["trials"][0], plan["trials"][1] = plan["trials"][1], plan["trials"][0]

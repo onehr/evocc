@@ -1,7 +1,9 @@
 # Proposed registered experiments for P17a and P22
 
-Status: proposal. Nothing here is registered. No model or API request was
-made to write it. The owner must approve each pilot and each full run.
+Status: Protocol A is registered on 2026-10-20, with the provider fixed as
+AtlasCloud; the tag `agent-repair-experiment-6` marks the registration commit.
+Protocol B is not registered. No model or API request was made to write this
+document. The owner must approve each pilot and each full run.
 
 Evidence: `p17a-trace-analysis.md` and `p22-feedback-design.md` in this
 directory.
