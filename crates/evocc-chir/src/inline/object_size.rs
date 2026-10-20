@@ -39,7 +39,11 @@ pub(super) fn allocation_sizes(unit: &CHirUnit<'_>) -> BTreeMap<SymbolId, Vec<us
             _ => &[],
         };
         for attribute in function.attributes.iter().chain(return_pointer_attributes) {
-            if attribute.semantic_name() != Some("alloc_size") {
+            // A parenthesized declarator's attribute is preserved and never
+            // applied (10.1.9).
+            if attribute.semantic_name() != Some("alloc_size")
+                || attribute.placement == AttributePlacement::ParenthesizedDeclarator
+            {
                 continue;
             }
             let indices: Option<Vec<_>> = attribute

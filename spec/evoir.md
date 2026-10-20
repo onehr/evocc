@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.16.0** | **Pinned ground truth** | Fixed enumeration types on 2026-10-21
+**Revision 2.17.0** | **Pinned ground truth** | Parenthesized declarator attributes on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -4815,6 +4815,7 @@ accepts them, and each position fixes what the attribute attaches to:
 | immediately after a declarator | that declarator alone |
 | immediately before a declarator that follows a comma in a declarator list | that declarator alone |
 | after `*` (and its qualifiers) inside a pointer declarator, before the rest of the declarator | the pointer type formed by that `*`; preserved, never applied (10.1.14), except that `weak`, `alias`, `section`, `used` and `retain` in a named declarator mark the declared object or function (Section 5.2), and that the `unused-variable` lint (Section 6.3) reads `unused` on the pointer next to a variable's name, as GCC 14 does |
+| after the `(` of a parenthesized declarator, before the inner declarator | the declared entity; preserved, never applied (see below) |
 | after `struct`, `union` or `enum` keyword, or after the closing brace | the tag type |
 | after a member declarator | that member |
 | after a parameter declarator | that parameter |
@@ -4825,6 +4826,26 @@ accepts them, and each position fixes what the attribute attaches to:
 | in a type name | the type being named |
 
 An attribute in a position not in this table is malformed and reports `E2903`.
+
+**Parenthesized declarators.** GCC 14 and Apple clang accept GNU attributes
+right after the `(` of a parenthesized declarator, as libxml writes
+`typedef void *(__attribute__((alloc_size(1))) *xmlMallocFunc)(size_t);`.
+Both refuse an attribute after the inner declarator and a bracketed attribute
+there. GCC 14 attaches such an attribute to the type that the declarator has
+formed at that point, or to the declaration when the inner declarator is its
+identifier. Apple clang attaches some of them elsewhere: it applies `aligned`
+in `int (__attribute__((aligned(16))) *p);` to `p`, not to `*p`, and it
+ignores `weak` on an object there. In a named declarator, such an attribute
+therefore attaches to the declared entity and is preserved without effect.
+The `unused-variable` lint reads `unused` there, as both compilers do. An
+attribute that this section gives an effect on a declaration or a type is
+`E2903` in this position: `aligned`, `packed`, `mode`, `vector_size`,
+`transparent_union`, `weak`, `weakref`, `alias`, `section`, `used`, `retain`,
+`visibility`, `cleanup`, `tls_model`, `uninitialized`, `constructor`,
+`destructor`, `always_inline`, `gnu_inline`, `noinline`, `noipa`, `noclone`,
+`patchable_function_entry` and `no_stack_protector`. An attribute that this
+section refuses keeps its code, such as `E2952` and `E2940`. In an abstract
+declarator, the position is the type-name position.
 
 **Representation.** C-HIR carries every attribute losslessly on the entity it
 attaches to: name as written, arguments as written, source span, and the
@@ -5102,7 +5123,7 @@ compound literals, and a front end must not emit it.
 
 | Code | Condition |
 |---|---|
-| `E2903` | argument list does not parse, position not in the table, or `aligned` argument not a representable power of two |
+| `E2903` | argument list does not parse, position not in the table, `aligned` argument not a representable power of two, or an attribute with an effect after the `(` of a parenthesized declarator |
 | `E2904` | a `typeof` type-name bound requires a runtime capture outside an admitted function-body scope |
 | `E2905` | `({ ... })` at file scope or where a constant expression is required |
 | `E2906` | designator names a member the type lacks, a member ambiguous between two anonymous members, or an index at or beyond a fixed bound |
@@ -8115,6 +8136,14 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.17.0, 2026-10-21.** Section 10.1.9 accepts GNU attributes after
+the `(` of a parenthesized declarator, where GCC 14 and Apple clang accept
+them. In a named declarator, such an attribute attaches to the declared
+entity and is preserved without effect. An attribute with an effect is
+`E2903` there, and a refused attribute keeps its code. This repairs 53 libxml
+and libexslt headers of the Darwin SDK. No EvoIR operation, registry or Lean
+rule domain changes.
 
 **Revision 2.16.0, 2026-10-21.** Section 10.1.14 admits enumerations with a
 fixed underlying type (C23 6.7.2.2) in every language mode. The type sets the

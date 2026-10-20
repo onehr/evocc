@@ -1454,6 +1454,9 @@ pub enum AttributePlacement {
     TypeName,
     /// After `*` and its qualifiers, before the rest of the declarator.
     PointerDeclarator,
+    /// After the `(` of a parenthesized declarator, before the inner
+    /// declarator: attaches to the declared entity and is never applied.
+    ParenthesizedDeclarator,
     /// Bracketed attribute after a function's parameter list, on its type.
     FunctionType,
     /// Bracketed attribute after an array's bound, on its type.
@@ -1477,6 +1480,7 @@ impl AttributePlacement {
             Self::Enumerator => "enumerator",
             Self::TypeName => "type-name",
             Self::PointerDeclarator => "pointer-declarator",
+            Self::ParenthesizedDeclarator => "parenthesized-declarator",
             Self::FunctionType => "function-type",
             Self::ArrayType => "array-type",
         }

@@ -360,6 +360,37 @@ struct ConventionAttribute {
     state: ConventionState,
 }
 
+/// The attributes that EvoIR 10.1.9 gives an effect on a declaration or a
+/// type. After the `(` of a parenthesized declarator, GCC 14 attaches one to
+/// the type formed at that point and Apple clang attaches some elsewhere, so
+/// this profile refuses them there.
+const PARENTHESIZED_EFFECT_ATTRIBUTES: [&str; 24] = [
+    "aligned",
+    "packed",
+    "mode",
+    "vector_size",
+    "transparent_union",
+    "weak",
+    "weakref",
+    "alias",
+    "section",
+    "used",
+    "retain",
+    "visibility",
+    "cleanup",
+    "tls_model",
+    "uninitialized",
+    "constructor",
+    "destructor",
+    "always_inline",
+    "gnu_inline",
+    "noinline",
+    "noipa",
+    "noclone",
+    "patchable_function_entry",
+    "no_stack_protector",
+];
+
 /// What kind of declaration settles a deferred list attribute.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Settlement {
@@ -8732,8 +8763,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         } else if self.peek_kind() == Some(TokenKind::LParen) {
             let open = self.advance().expect("peeked left parenthesis");
+            // GNU attributes may open a parenthesized declarator (10.1.9).
+            // A bracketed attribute may not: GCC 14 and Apple clang refuse it.
+            let mut grouped = if self.peek_kind() == Some(TokenKind::Attribute) {
+                self.parse_attribute_specifiers(AttributePlacement::ParenthesizedDeclarator)
+            } else {
+                Vec::new()
+            };
+            // An abstract parameter declarator returns here and is parsed
+            // again, so the attributes are checked only for a named one.
             let mut inner = self.parse_declarator(function_definition_possible)?;
             let close = self.expect(TokenKind::RParen)?;
+            for attribute in &grouped {
+                if attribute
+                    .semantic_name()
+                    .is_some_and(|name| PARENTHESIZED_EFFECT_ATTRIBUTES.contains(&name))
+                {
+                    self.report("E2903", "malformed-attribute", attribute.span);
+                }
+            }
+            grouped.append(&mut inner.attributes);
+            inner.attributes = grouped;
             inner.span = self.merge_span(open.span, close.span);
             inner
         } else {
