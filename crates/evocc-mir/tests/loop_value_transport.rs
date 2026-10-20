@@ -350,6 +350,7 @@ fn distinct_fixed_inputs_preserve_values_under_real_spilling() {
                         clobbers: vec![],
                     }),
                     MInst::Bl {
+                        returns_twice: false,
                         fp_mode: None,
                         symbol: "consume".into(),
                         args: (0..33).map(r).collect(),
@@ -467,6 +468,7 @@ fn forwarding_is_bit_exact_for_every_register_class_and_still_spills() {
                     id: 1,
                     args: (32..64).map(r).collect(),
                     insts: vec![MInst::Bl {
+                        returns_twice: false,
                         fp_mode: None,
                         symbol: "consume".into(),
                         args: (32..64).map(r).collect(),

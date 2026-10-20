@@ -143,6 +143,7 @@ fn calling() -> MFunction {
             args: vec![w(0)],
             insts: vec![
                 MInst::Bl {
+                    returns_twice: false,
                     fp_mode: None,
                     symbol: "other".to_owned(),
                     args: vec![w(0)],

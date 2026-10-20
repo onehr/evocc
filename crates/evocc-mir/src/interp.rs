@@ -369,11 +369,15 @@ pub fn interpret_module_with_fp_environment(
             let inst = inst.clone();
             frames[top].next += 1;
             match inst {
+                // A second return needs an external jump, which this
+                // interpreter never executes. A returns-twice call to a module
+                // function therefore returns once here, as a call.
                 MInst::Bl {
                     ref symbol,
                     ref args,
                     ref results,
                     fp_mode,
+                    returns_twice: _,
                 } => {
                     let values = read_all(&frames[top], args)?;
                     let index = module

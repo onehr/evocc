@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use evocc_mir::generic::abi::AbiFacts;
 use evocc_mir::generic::allocation::{
     allocate, AllocClass, AllocInst, AllocTerm, Allocated, AllocationTarget, ConstraintBody,
-    ConstraintOperand, ConstraintValue, SpillKind, SpillView,
+    ConstraintOperand, ConstraintValue, SecondReturn, SpillKind, SpillView,
 };
 use evocc_mir::generic::allocverify::verify_allocation;
 use evocc_mir::generic::machine::{MachInst, MachTerm, MachineBlock, MachineFunction};
@@ -272,6 +272,13 @@ impl SsaInst for Inst {
     }
     fn has_fixed_binding(&self) -> bool {
         matches!(self, Self::Constraint(body) if body.outputs.iter().chain(&body.inputs).any(|o| o.fixed.is_some()))
+    }
+}
+
+// This test target has no call that returns twice.
+impl SecondReturn for Inst {
+    fn returns_twice(&self) -> bool {
+        false
     }
 }
 

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.11.1** | **Pinned ground truth** | Prototype returns_twice marks on 2026-10-20
+**Revision 2.13.0** | **Pinned ground truth** | Prototype convention marks on 2026-10-20
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -1189,6 +1189,30 @@ An indirect `call` names its callee by value rather than by symbol. Validation
 checks arguments and results against the pointer's signature; there is no symbol
 to resolve and no declaration to consult.
 
+```text
+(%ret_vals..., %m1, %w1) = call.returns_twice @callee(args..., %m0, %w0)
+```
+
+**Calls that return twice.** The mark `.returns_twice` makes a direct call
+one that returns twice (10.1.9). After the call returns, a later jump can
+resume its continuation once more, with new results: `longjmp` resumes
+`setjmp`, `setcontext` resumes `getcontext`, and the parent resumes after
+`vfork`. Only a direct call carries the mark. An indirect call is an
+ordinary call. In every execution that this specification defines, the call
+has the semantics of `call`. Only external code makes a second return, and
+the interpreters refuse an external callee (`E3039`), so they never run one.
+
+The mark is a contract with the machine. A second return resumes the
+continuation with the memory as the jump found it and with no register value
+of the caller. The machine therefore keeps every value that is live across
+the call in a stack slot that no other value writes at any point that the
+call reaches, and reloads the value after the call (EvoMIR Section 7.4). An
+automatic object that is not volatile and changed between the call and the
+jump is indeterminate after the second return (C11 7.13.2.1p3). The call
+takes the top effect summary (4.6) whatever its callee is, because the second
+return follows code that the call does not bound. No transformation duplicates, merges, removes or reorders a call that
+returns twice (4.4). A call that returns twice is outside `core-v1`.
+
 **Anonymous arguments.** When the callee's signature is
 variadic, the arguments between the last listed parameter and `%m0` are
 anonymous. Each has one of the types `bits<32>`, `bits<64>`, `bits<128>`,
@@ -2016,7 +2040,8 @@ reordered across a volatile access it cannot see.
 An indirect call contributes the **top** summary, which reads and writes `all`
 and sets every boolean, because the callee is not known statically. A function
 containing an indirect call therefore has at least the top summary, and so does
-everything that calls it.
+everything that calls it. A call that returns twice (3.10) contributes the top
+summary too, whatever its callee is.
 
 **Validation.** The validator recomputes the fixed point from the module and
 compares it to the recorded summaries. A summary weaker than the recomputed one
@@ -2621,6 +2646,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2954` | `constant-string-binding-conflict` | front end |
 | `E2955` | `invalid-atomic-type` | front end |
 | `E2956` | `atomic-member-access` | front end |
+| `E2957` | `always-inline-returns-twice` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -3798,6 +3824,7 @@ inst_body :=
   | value_name " = frame_address depth=" positive_int " : " type
   | value_name " = ptr.from_int." type " " value_name
   | "(" result_list ") = call " callee "(" call_arg_list ")"
+  | "(" result_list ") = call.returns_twice " symbol "(" call_arg_list ")"
   | "(" result_list ") = va_start " value_name ", " value_name ", " value_name
   | "(" result_list ") = va_arg." type " " value_name ", " value_name ", " value_name
   | "(" result_list ") = va_arg.byval " value_name ", " value_name ", " value_name
@@ -3963,7 +3990,7 @@ ub.assume.<> <>
 <> = return_address : <>
 <> = frame_address : <>
 <> = ptr.from_int.<> <>
-(<>) = call @<>(<>)
+(<>) = call<> @<>(<>)
 (<>) = call <>(<>)
 (<>) = va_start <>, <>, <>
 (<>) = va_arg.<> <>, <>, <>
@@ -3985,9 +4012,10 @@ effects { reads=<>, writes=<>, volatile=<>, atomic=<>, io=<>, fenv=<>, may_trap=
 ```
 
 `load<>` and `store<>` show the optional volatile marker, which is either empty
-or one space followed by `volatile`. `ret` appears twice because a function
-returning nothing emits the mnemonic alone; a grammar admitting only the second
-form could not represent a legal module.
+or one space followed by `volatile`. `call<> @` shows the optional mark of a
+direct call, which is either empty or `.returns_twice` (3.10). `ret` appears
+twice because a function returning nothing emits the mnemonic alone; a grammar
+admitting only the second form could not represent a legal module.
 
 #### 9.3.2 Shapes Not Yet Emitted
 
@@ -4075,6 +4103,7 @@ Rejected as **malformed**, meaning the bytes are not a module at all:
   neither of which exists.
 - A `volatile` marker outside the positions specified for load/store, atomic
   access and assembly. Volatile copies instead use their explicit suffix.
+- A `.returns_twice` mark on an indirect call, or any other suffix of `call`.
 - An effect region set with a duplicate or whose members are not in the
   canonical order `all, unknown, global, stack, heap, escaped`.
 - Any byte after the final newline.
@@ -4672,8 +4701,9 @@ semantics; reserving storage or transporting its address never runs the zeroing.
 #### 10.1.7 Function Call Lowering
 
 C function calls lower to EvoIR `call` instructions. Attributes (10.1.9) never
-refine a call summary in this revision; `typeof` (10.1.10) and statement
-expressions (10.1.11) are resolved before this lowering sees a call.
+refine a call summary in this revision, and a call that returns twice takes
+the top summary (3.10); `typeof` (10.1.10) and statement expressions (10.1.11)
+are resolved before this lowering sees a call.
 
 **Effects.** Section 4.6 is the only authority. A call's summary is the callee's
 summary, and a function's summary is the least fixed point over its call graph;
@@ -4874,29 +4904,66 @@ call and argument effects still execute exactly once.
 `stdcall`, `fastcall`, `thiscall`, `vectorcall`, `regcall`, `swiftcall`,
 `swiftasynccall`, `regparm`, `sseregparm`, `callee_pop_aggregate_return`,
 `returns_twice`, `target`, `target_clones`, `target_version` and `optimize`
-are `E2952` (`unsupported-function-attribute`). This also applies to names
-enclosed in `__` and to the `gnu` and `__gnu__` bracket namespaces. It applies
-to every placement, including prototypes, type names and unused definitions,
-on both targets, with the one `returns_twice` exception below. A warning
-option cannot suppress this error. No ordinary frame or default calling
-convention may stand in for one of these contracts. Unrelated bracket
-namespaces do not denote these GNU attributes.
+are `E2952` (`unsupported-function-attribute`) where this paragraph does not
+accept them. This also applies to names enclosed in `__` and to the `gnu` and
+`__gnu__` bracket namespaces, on both targets. A warning option cannot
+suppress this error. No ordinary frame or default calling convention may
+stand in for one of these contracts. Unrelated bracket namespaces do not
+denote these GNU attributes.
 
-`returns_twice` on a function declaration that is not a definition is
-accepted among the declaration specifiers and directly before or after the
-declarator. The front end records it on that function. For example, glibc's `<pthread.h>`
-declares `__sigsetjmp_cancel` in this way. EvoCC has no execution rule for a
-second return. `E2952` is therefore reported at each definition of a function
-that any of its declarations marks. It is also reported at each use of the
-function's designator: a call, an address or any other operand, evaluated or
-not. A call through a pointer cannot be checked, so a call is not the only use
-that counts. The result does not depend on declaration order: a later
-declaration that adds the mark still refuses an earlier definition or use. A
-use outside a function body is reported. A use in a function body is a
-deferred front-end profile refusal. It is not reported for a function that the
-unreferenced internal function rule of 10.1.16 drops. Neither interpreter
-enters such a body, and the lowering does not emit it. `returns_twice` on any
-other declaration or in any other placement is `E2952` at the attribute.
+One of these attributes on a function declaration that is not a definition
+is accepted among the declaration specifiers and directly before or after
+the declarator. The front end records it on that function. For example,
+glibc's `<math.h>` declares its vector functions with `aarch64_vector_pcs`,
+and Clang's `bounds_safety_soft_traps.h` declares two functions with
+`preserve_all`. Every other placement is `E2952` at the attribute: a type
+name, a typedef, a function pointer declarator, an object, a parameter, a
+member and a statement. A function that any declaration marks is checked
+when the unit is complete, in any declaration order:
+
+- Each definition is `E2952`, at the attribute when the definition carries
+  it and at the defined name otherwise. `returns_twice` is the exception.
+- Each use of the function's designator is `E2952`: a call, an address or
+  any other operand, evaluated or not. A call through a pointer cannot be
+  checked, so a call is not the only use that counts. A use outside a
+  function body is reported at once. A use in a function body is a deferred
+  front-end profile refusal. It is not reported for a function that the
+  unreferenced internal function rule of 10.1.16 drops. Neither interpreter
+  enters such a body, and the lowering does not emit it.
+- A use of a function marked `returns_twice`, `aarch64_vector_pcs`,
+  `preserve_all` or `preserve_most` is accepted. A callee marked with one of
+  the last three takes its arguments as the base AAPCS64 does and preserves a
+  superset of the base callee-saved registers. A caller relies only on the
+  base set, so a call of it is an ordinary base-PCS call. `aarch64_sve_pcs`,
+  `preserve_none` and every other attribute of the list keep `E2952` at each
+  use.
+- The message names the first attribute of the list, in the order above,
+  that refuses the definition or the use.
+
+**`returns_twice`.** A function returns twice when a declaration of it
+carries `returns_twice`, or by GCC 14's name rule (`special_function_p` in
+`calls.cc`). By that rule, the function has external linkage, and its C
+identifier has at most 11 bytes and either equals `setjmp` or `sigsetjmp`
+after one leading `__` or `_` is removed, or equals `savectx`, `vfork` or
+`getcontext`. The identifier counts, not an assembler name: after
+`int h(void) __asm__("setjmp");` a call `h()` is ordinary. A `static`
+function does not count. GCC 14 counts only a file-scope declaration. EvoCC
+also counts a block-scope declaration with external linkage; this addition is
+conservative, because it only gives more calls the treatment of 3.10. A
+definition of a function that returns twice and every use of its designator
+are accepted. A direct call of it lowers to `call.returns_twice` (3.10). A
+call through `*f`, `&f` or any chain of them on its designator `f` is direct,
+because GCC folds them. A call through a pointer object is an ordinary call. No function that
+makes such a call is substituted for a call of it, and no function that
+returns twice is substituted either. An `always_inline` function that makes
+such a call is `E2957` (`always-inline-returns-twice`) at that call:
+substitution would move the second return into the caller, and an ordinary
+call would return from the frame that the jump needs. The result of a
+function that returns twice is never a known constant. glibc's
+`pthread_cleanup_push` and `pthread_cleanup_pop` macros call
+`__sigsetjmp_cancel`, which its prototype marks, so they compile. The
+interpreters refuse its external call (`E3039`), as they refuse `setjmp`,
+`vfork` and `getcontext`.
 
 The sole accepted `optimize` form has one or more ordinary string arguments
 whose comma-separated options are all `no-tree-vectorize`,
@@ -4961,7 +5028,8 @@ substituted: the former is lowered as an ordinary call, the cycle is
 `E2932` (`always-inline-cycle`). The exception is a variadic callee whose
 body forwards its anonymous arguments only through the GNU argument pack
 and uses no `va_start`, `va_arg`, `va_end` or `va_copy`; it is substituted
-like a fixed callee. Each anonymous argument of the call, after the default
+like a fixed callee. A callee that makes a call that returns twice is not
+substituted; it is `E2957` (`returns_twice` below). Each anonymous argument of the call, after the default
 argument promotions, becomes a fresh automatic object of its promoted type,
 initialized after the named parameters in argument order. Each
 `__builtin_va_arg_pack ()` in the body becomes those objects, in order, and
@@ -5066,11 +5134,12 @@ compound literals, and a front end must not emit it.
 | `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_` (10.1.14) |
 | `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
 | `E2951` | a floating comparison or classification builtin with an operand of the wrong type (3.13.1) |
-| `E2952` | an unsupported execution or calling-convention attribute, or a definition or use of a function marked `returns_twice` (10.1.9) |
+| `E2952` | an execution or calling-convention attribute where 10.1.9 does not accept it, or a definition or use of a function that it marks (10.1.9) |
 | `E2953` | a cast to a struct type from an incompatible operand type (10.1.3) |
 | `E2954` | a declaration makes a previously folded string object's binding weak, aliased or assembly-renamed (10.1.17) |
 | `E2955` | `_Atomic` names an array, function, atomic or qualified type, or an atomic bit-field (10.1.21) |
 | `E2956` | an evaluated member access of an atomic record or union (10.1.21) |
+| `E2957` | an `always_inline` function that makes a call that returns twice (10.1.9) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -7934,6 +8003,7 @@ Section 3 defines each instruction and Section 9.3 gives its exact spelling.
 | | `vec.bitcast` | same-size integer/vector representation | source value | no |
 | | `vec.aese`, `vec.aesd` / `vec.aesmc`, `vec.aesimc` | `vec<16, bits<8>>` | data and key / one value | no |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
+| | `call.returns_twice @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends; top effects (3.10) |
 | | `call %fptr(args..., %m, %w)` | ret values, `mem`, `world` | callee value, args, memory, world | depends |
 | Varargs | `va_start %ap, %m, %w` | `mem<all>`, `world` | list object, memory, world | `E3037` at validation |
 | | `va_arg.Type %ap, %m, %w` | Type, `mem<all>`, `world` | list object, memory, world | yes; `E3038` |
@@ -7982,6 +8052,26 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.13.0, 2026-10-20.** Section 10.1.9 accepts every execution and
+calling-convention attribute of its list on a function declaration that is not
+a definition, and records it. A definition and each use of a function that
+such a mark records stay `E2952`, in any declaration order. A use of a
+function marked `aarch64_vector_pcs`, `preserve_all` or `preserve_most` is
+accepted, and a call of it is an ordinary base-PCS call. Every other placement
+keeps `E2952` at the attribute. This repairs every Linux unit that includes
+glibc's `<math.h>` or `<tgmath.h>`. No EvoIR operation, registry or Lean rule
+domain changes.
+
+**Revision 2.12.0, 2026-10-20.** Section 3.10 adds `call.returns_twice`, a
+direct call that can return a second time, with the top effect summary.
+Section 10.1.9 marks a function by its `returns_twice` attribute or by GCC
+14's name rule, which EvoCC also applies to block-scope declarations. It
+accepts the definition and the uses of such a function and lowers its direct
+calls to the new form. A function that makes such a call, or that returns
+twice, is never substituted; an `always_inline` one is `E2957`, which is new.
+Section 9 adds the grammar, the shape and the field; text without the mark is
+unchanged. No registry or Lean rule domain changes.
 
 **Revision 2.11.1, 2026-10-20.** Section 10.1.9 accepts `returns_twice` on a
 function declaration that is not a definition and records it. `E2952` moves

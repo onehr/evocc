@@ -184,3 +184,33 @@ fn wrong_target_and_nonbaseline_source_options_refuse() {
         CoreRefusal::Profile
     );
 }
+
+#[test]
+fn a_call_that_returns_twice_is_outside_the_profile() {
+    // EvoIR 3.10. GCC's name rule marks a definition that has no attribute,
+    // so the mark itself is refused, at the callee and at the entry.
+    refused(
+        "int vfork(void) { return 0; } int f(void) { return vfork(); }",
+        CoreRefusal::ReturnsTwice,
+    );
+    refused(
+        "int _setjmp(int x) { return x; } int f(int x) { return _setjmp(x); }",
+        CoreRefusal::ReturnsTwice,
+    );
+    refused(
+        "int getcontext(int x); int f(int x) { return getcontext(x); }",
+        CoreRefusal::ReturnsTwice,
+    );
+    // A name outside GCC's rule is an ordinary direct call.
+    let arena = Arena::default();
+    let unit = parse(
+        "int fork(void) { return 0; } int f(void) { return fork(); }",
+        &arena,
+    );
+    assert!(inspect_core(
+        &unit,
+        &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        &["f"]
+    )
+    .is_ok());
+}

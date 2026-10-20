@@ -949,6 +949,10 @@ pub enum MInst {
         results: Vec<VReg>,
         /// None is an ordinary call, including ordinary libm calls.
         fp_mode: Option<FpCallMode>,
+        /// `bl.returns_twice`: the callee can resume the call a second time
+        /// (EvoIR Section 3.10). Section 7.4 keeps every value live across
+        /// it in a private stack slot.
+        returns_twice: bool,
     },
     /// `blr rn(args) -> results`.
     Blr {

@@ -220,6 +220,7 @@ fn effects_and_fp_admission_end_the_available_segment() {
     let w = Width::X;
     for barrier in [
         MInst::Bl {
+            returns_twice: false,
             symbol: "external".into(),
             args: vec![],
             results: vec![],

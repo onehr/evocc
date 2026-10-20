@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D16, D17, D18, D19 | D16 and D17 are in rust-r6; D18 and D19 come next, from the header sweep of 2026-10-20. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D17, D18, D19, D20 | D17 waits for a header sweep with the new compiler; D18 to D20 come next. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -5486,7 +5486,7 @@ refusal; changing the P13 demo does not close it.
   3,526 tests, zero failures and 14 ignores, plus Clippy and formatting.
   [Tests](crates/evocc/tests/returns_twice_attribute.rs).
 
-- [ ] **D16 — Calls that return twice by name** — `OPEN`, P1.
+- [x] **D16 — Calls that return twice by name** — `DONE`, P1, 2026-10-21.
   Found on 2026-10-20 during D15. GCC 14 treats `setjmp`, `sigsetjmp`,
   `savectx`, `vfork` and `getcontext`, also with leading underscores, as
   returning twice by name. EvoCC compiles them as ordinary calls: `setjmp(b)`
@@ -5510,6 +5510,26 @@ refusal; changing the P13 demo does not close it.
   line. The rust-r6 RED probe shows the defect: on Darwin at O0 and O2 a shared
   stack slot makes a program return a wrong sum after `longjmp`, and Apple clang
   is right. In progress in rust-r6.
+  Closed on 2026-10-21 (EvoIR 2.12.0, EvoMIR 1.6.0), with the owner's GCC 14
+  rule. A direct call of a function that returns twice, also through `*` and
+  `&`, is `call.returns_twice` in EvoIR and `bl.returns_twice` in EvoMIR; a call
+  through a pointer object stays ordinary. No such function, and no caller of
+  one, is inlined; an `always_inline` caller is E2957. Every value live across
+  the call stays in a private stack slot and gets no register. The independent
+  allocation check keeps no register fact after the call and refuses a store of
+  another value into a guarded slot at every point that the call reaches. EvoCC
+  also counts a block-scope declaration with external linkage, a conservative
+  addition to GCC's file-scope rule. The Darwin RED probe returned a wrong sum
+  at O0 and O2 with the compiler of 537e745a; it now agrees with Apple clang. In
+  the sealed lane six programs exit 0 at O0 and O2 with GCC 14 and with EvoCC:
+  the RED probe, `setjmp`, `_setjmp` and `sigsetjmp` jumps with a loop and
+  volatile objects, `vfork`, `getcontext`, pthread cancellation and a user
+  `returns_twice` prototype. zlib's puff and blast give GCC 14's exit status in
+  all 40 input and level pairs. musl's `timer_create.c` compiles; a regression
+  test pins the allocation-check rule that it needed.
+  [Tests](crates/evocc/tests/returns_twice_calls.rs). The lead's full-workspace
+  gate of 2026-10-21 passes 470 suites, 3,555 tests, zero failures and 17
+  ignores, plus Clippy and formatting.
 
 - [ ] **D17 — Accept vector-PCS prototypes so `<math.h>` compiles on Linux** — `OPEN`, P1.
   Found on 2026-10-20 by the header sweep (`.evidence/header-sweep-20261020/`).
@@ -5527,6 +5547,17 @@ refusal; changing the P13 demo does not close it.
   compiles at O0 and O2 with and without `_GNU_SOURCE` and `<tgmath.h>` without
   it; a crossed call of a libmvec vector-PCS function matches GCC 14; a new
   header sweep shows no regression. In progress in rust-r6.
+  October 21 (EvoIR 2.13.0): every attribute of the 10.1.9 list is accepted on a
+  function prototype and recorded. A definition and each use stay E2952, except
+  uses of functions marked `aarch64_vector_pcs`, `preserve_all` or
+  `preserve_most`, which are ordinary base-PCS calls. `<math.h>` and
+  `cJSON_Utils.c` compile on Linux at O0 and O2. A sealed-lane call of a
+  GCC-compiled vector-PCS callee agrees with GCC 14; it takes integers, because
+  EvoCC refuses floating vectors (E3050).
+  [Tests](crates/evocc/tests/convention_attribute_prototypes.rs). The lead's
+  full-workspace gate of 2026-10-21 passes 470 suites, 3,555 tests, zero
+  failures and 17 ignores, plus Clippy and formatting. The header sweep with the
+  new compiler is the remaining exit.
 
 - [ ] **D18 — Implement `__has_include_next` so Darwin `<limits.h>` reaches the SDK** — `OPEN`, P1.
   Found on 2026-10-20 by the header sweep; also present in the compiler of
@@ -5552,6 +5583,16 @@ refusal; changing the P13 demo does not close it.
   decide each group, following Apple clang where the SDK depends on it, then
   implement it or refuse it with a named diagnostic. Exit: the sweep's Darwin
   gap count falls to the refusals that a rule keeps.
+
+- [ ] **D20 — Implement `__builtin_tgmath` for glibc `<tgmath.h>`** — `OPEN`, P2.
+  Found on 2026-10-21 during D17. glibc's `<tgmath.h>` defines its type-generic
+  macros with GCC's `__builtin_tgmath` when the compiler reports GCC 8 or later,
+  and EvoCC reports GCC 14. EvoCC does not implement the builtin, so a call such
+  as `sqrt(x)` through `<tgmath.h>` is E2949. The header alone compiles. Next
+  action: implement `__builtin_tgmath` as GCC 14 documents it, or refuse it with
+  a named diagnostic at the macro call. Exit: `<tgmath.h>` calls with real
+  floating and integer arguments agree with GCC 14 on Linux; complex arguments
+  follow L04.
 
 ## Codegen quality track — next quarter
 

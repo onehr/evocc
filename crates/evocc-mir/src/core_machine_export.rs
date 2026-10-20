@@ -316,11 +316,14 @@ fn instruction(inst: &MInst) -> Result<Node> {
             ],
         ),
         MInst::StackRelease { address } => Node::tagged("stack_release", [reg(*address)?]),
+        // `core-mir-v1` has the ordinary `bl` only. A returns-twice call is
+        // outside the profile (EvoIR Section 3.10).
         MInst::Bl {
             symbol,
             args,
             results,
             fp_mode: None,
+            returns_twice: false,
         } => Node::tagged(
             "bl",
             [Node::text(symbol), regs(args)?, regs(results)?, Node::Null],

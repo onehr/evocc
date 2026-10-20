@@ -306,6 +306,7 @@ fn nonprivate_branch_values_flags_and_other_bits_decline() {
             _ => f.blocks[0].insts.insert(
                 1,
                 MInst::Bl {
+                    returns_twice: false,
                     symbol: "opaque".into(),
                     args: vec![],
                     results: vec![],
@@ -375,6 +376,7 @@ fn interval_domains_and_observable_intermediates_do_not_expand() {
             10 => f.blocks[0].insts.insert(
                 2,
                 MInst::Bl {
+                    returns_twice: false,
                     symbol: "opaque".into(),
                     args: vec![],
                     results: vec![],
@@ -453,6 +455,7 @@ fn intervening_effects_and_floating_producers_are_opaque() {
             volatile: true,
         },
         MInst::Bl {
+            returns_twice: false,
             symbol: "opaque".into(),
             args: vec![],
             results: vec![],

@@ -68,7 +68,13 @@ pub type CallOperandsMut<'a, R> = (&'a mut Vec<R>, &'a mut Vec<R>);
 type PinnedFunction<I, T, C> = (MachineFunction<I, T, C>, BTreeMap<u32, u8>, u64);
 type CallCopies<C> = (Vec<VirtualReg<C>>, Vec<(VirtualReg<C>, VirtualReg<C>)>);
 
-pub trait AllocInst: SsaInst {
+/// Section 7.4: whether an instruction is a call that can resume a second
+/// time. Each target implements it by hand, beside its generated tables.
+pub trait SecondReturn {
+    fn returns_twice(&self) -> bool;
+}
+
+pub trait AllocInst: SsaInst + SecondReturn {
     type Body: ConstraintBody<Reg = Self::Reg>;
     fn copy_operands(&self) -> Option<(Self::Reg, Self::Reg)>;
     fn call_operands(&self) -> Option<CallOperands<'_, Self::Reg>>;
@@ -878,6 +884,10 @@ where
     // of thousands of short, disjoint spill lifetimes; a dense NxN matrix
     // would allocate gigabytes even though its interference graph is sparse.
     let mut conflicts: Vec<BTreeMap<usize, u64>> = vec![BTreeMap::new(); slots.len()];
+    // Section 7.4: a slot live across a returns-twice call is private. No
+    // other value may write its storage after the call, because a second
+    // return reads the slot again.
+    let mut private = BTreeSet::new();
     let live_in = live_on_entry(function, &uses, &defs);
     for block in &function.blocks {
         let mut live: BTreeMap<usize, u64> = BTreeMap::new();
@@ -890,6 +900,15 @@ where
             }
         }
         for inst in block.insts.iter().rev() {
+            if inst.returns_twice() {
+                for (word, bits) in &live {
+                    let mut pending = *bits;
+                    while pending != 0 {
+                        private.insert(word * 64 + pending.trailing_zeros() as usize);
+                        pending &= pending - 1;
+                    }
+                }
+            }
             let Some(spill) = inst.spill() else {
                 continue;
             };
@@ -937,7 +956,9 @@ where
         .iter()
         .map(|row| row.values().map(|word| word.count_ones()).sum())
         .collect();
-    let mut order: Vec<_> = (0..slots.len()).collect();
+    let mut order: Vec<_> = (0..slots.len())
+        .filter(|index| !private.contains(index))
+        .collect();
     order.sort_unstable_by_key(|index| (Reverse(degrees[*index]), slots[*index]));
     let mut mapping = BTreeMap::new();
     let mut count = 0;
@@ -962,6 +983,14 @@ where
             })
             .unwrap();
         count = count.max(location + size);
+        mapping.insert(slot, location);
+    }
+    // Private slots follow every shared one, each in storage of its own.
+    for index in private {
+        let slot = slots[index];
+        let size = sizes[&slot];
+        let location = count.next_multiple_of(size);
+        count = location + size;
         mapping.insert(slot, location);
     }
     for inst in function
@@ -1269,6 +1298,8 @@ struct Interval<C> {
     /// these segments establish interference or liveness across a call.
     segments: Vec<(usize, usize)>,
     spans_call: bool,
+    /// Section 7.4: a value live across a returns-twice call gets no register.
+    spans_second_return: bool,
 }
 
 fn intervals<I, T, C>(function: &MachineFunction<I, T, C>) -> Vec<Interval<C>>
@@ -1292,6 +1323,7 @@ where
     };
 
     let mut calls: Vec<usize> = Vec::new();
+    let mut second_returns: Vec<usize> = Vec::new();
     for block in &function.blocks {
         let bounds = local_bounds.entry(block.id).or_insert_with(BTreeMap::new);
         let (start, end) = ranges[&block.id];
@@ -1300,6 +1332,9 @@ where
             let write = read + 1;
             if inst.is_call() {
                 calls.push(read);
+            }
+            if inst.returns_twice() {
+                second_returns.push(read);
             }
             for reg in inst.uses() {
                 touch(reg, read, bounds);
@@ -1376,6 +1411,13 @@ where
             }
         }
     }
+    let spans = |points: &[usize], segments: &[(usize, usize)]| {
+        segments.iter().any(|&(start, end)| {
+            points
+                .get(points.partition_point(|at| *at < start))
+                .is_some_and(|at| *at < end)
+        })
+    };
     let mut result: Vec<Interval<C>> = segments
         .into_iter()
         .map(|(value, segments)| Interval {
@@ -1383,11 +1425,8 @@ where
             class: classes[&value],
             start: segments[0].0,
             end: segments.last().unwrap().1,
-            spans_call: segments.iter().any(|&(start, end)| {
-                calls
-                    .get(calls.partition_point(|at| *at < start))
-                    .is_some_and(|at| *at < end)
-            }),
+            spans_call: spans(&calls, &segments),
+            spans_second_return: spans(&second_returns, &segments),
             segments,
         })
         .collect();
@@ -1452,6 +1491,7 @@ where
                     end,
                     segments: vec![(start, end)],
                     spans_call: false,
+                    spans_second_return: false,
                 },
                 number,
             ));
@@ -1631,8 +1671,13 @@ where
         }
         // Section 7: "a call clobbers every caller-saved register, so an
         // interval live across a call is assigned a callee-saved register or
-        // spilled."
-        let candidates = target.candidates(interval.class, interval.spans_call);
+        // spilled." A second return restores no register that a later read
+        // can trust, so a value live across a returns-twice call is spilled.
+        let candidates = if interval.spans_second_return {
+            &[]
+        } else {
+            target.candidates(interval.class, interval.spans_call)
+        };
         let ordinary = candidates
             .iter()
             .copied()

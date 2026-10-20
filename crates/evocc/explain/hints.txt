@@ -69,6 +69,7 @@ E2953	Use the original struct type, or initialize the destination fields explici
 E2954	Keep the string object's binding fixed, or use a runtime call after its final declaration.
 E2955	Write `_Atomic` on an unqualified object type that is not an array or function type.
 E2956	Make each member an atomic object, or copy the whole atomic object first.
+E2957	Call setjmp in the function that jumps back to it, not in an always_inline helper.
 E3001	Initialize the object on every path before reading it.
 E3002	Check the divisor and choose the required error behavior before dividing.
 E3003	Handle zero separately before evaluating `%`.

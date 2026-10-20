@@ -177,10 +177,15 @@ The first public version.
 
 ### Fixed
 
-- Linux programs that include `<pthread.h>` compile again. A `returns_twice` prototype is
-  accepted and recorded. A definition, a call or any other use of such a function is E2952,
-  because EvoCC has no rule for a second return. This includes the glibc `pthread_cleanup_push`
-  and `pthread_cleanup_pop` macros.
+- Linux programs that include `<pthread.h>` or `<math.h>` compile again. The execution and
+  calling-convention attributes of EvoIR 10.1.9 are accepted on a function prototype and
+  recorded. A definition and each use stay E2952, except for functions that return twice and
+  calls of `aarch64_vector_pcs`, `preserve_all` and `preserve_most` functions, which are
+  ordinary base-PCS calls.
+- A value that is live across a call of `setjmp`, `sigsetjmp`, `vfork`, `getcontext`, `savectx` or
+  a `returns_twice` function keeps its value after the second return, as with GCC 14. Before, a
+  shared stack slot could change it. Such a function is never inlined, and an `always_inline`
+  one is E2957. The glibc `pthread_cleanup_push` and `pthread_cleanup_pop` macros compile.
 - A compound update of a real integer by an integer-complex value, such as `x *= 2 + 1i`, now
   stores the converted complex result. Native code stored a wrong value before. A floating or
   pointer target is E2102.

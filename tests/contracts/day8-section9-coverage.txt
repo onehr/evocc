@@ -77,7 +77,7 @@ Inst.Alloca(result,mem_in,world_in,mem_out,world_out,origin,layout)|(%v1310, %v1
 Inst.DynamicAlloca(result,mem_in,world_in,mem_out,world_out,origin,size,align)|(%v1900, %v1903, %v1904) = alloca.dynamic %v1901, %v1902, %v1905 [origin=1901901, align=32]
 Inst.And(result,lhs,rhs)|%v1100 = and.bits<37> %v1101, %v1102
 Inst.Br(target,args)|br ^b4242(%v1250, %v1251)
-Inst.Call(results,callee,args,arg_marks,mem_in,world_in,mem_out,world_out)|(%v1380, %v1381, %v1386, %v1387) = call @sentinel_direct_callee(%v1382, %v1383 byval(24, 8), %v1384, %v1385)
+Inst.Call(results,callee,args,arg_marks,returns_twice,mem_in,world_in,mem_out,world_out)|(%v1380, %v1381, %v1386, %v1387) = call.returns_twice @sentinel_direct_callee(%v1382, %v1383 byval(24, 8), %v1384, %v1385)
 Inst.CondBr(condition,true_target,true_args,false_target,false_args)|cond_br %v1260, ^b4242(%v1261), ^b4343(%v1262)
 Inst.IndirectBr(target,edges)|br.indirect %v1252 [^b4242(%v1253, %v1254, %v1255)]
 Inst.Const(result,immediate)|%v1000 = const.bits<37> 987654321

@@ -1336,20 +1336,21 @@ int main(void) { return __builtin_isgreater(1.0, 2.0); }
 
 EvoCC does not implement this execution rule or calling convention.
 An ordinary function is not a safe replacement.
-The error also applies to prototypes, function types and unused definitions.
-The one exception is `returns_twice` on a prototype: EvoCC records it. The
-error then marks each definition of that function and each use of its name,
-such as a call or an address, in code that the unit keeps.
+A prototype can carry the attribute: EvoCC records it on that function.
+The error then marks each definition of that function and each use of its
+name, such as a call or an address, in code that the unit keeps.
+A type, a typedef, an object or a member with the attribute is an error too.
 `-w` does not suppress it.
+
+Three attributes keep ordinary uses. A callee marked `aarch64_vector_pcs`,
+`preserve_all` or `preserve_most` preserves more registers than its caller
+relies on, so a call of it is an ordinary call. `returns_twice` is never this
+error on a function: EvoCC gives its calls the rule of GCC 14.
 
 A naked assembly function must not get an ordinary compiler frame. Keep such
 a function in a separate assembly file, or use ordinary C if no special
 calling convention is required. Do not remove an ABI attribute from a function
 that must match an external caller.
-
-EvoCC has no rule for a second return from a `returns_twice` call. The glibc
-macros `pthread_cleanup_push` and `pthread_cleanup_pop` make such a call, so a
-function that uses them is refused.
 
 ```c
 __attribute__((naked)) int value(void) { __asm__("mov w0, #7\n\tret"); }
@@ -1453,6 +1454,25 @@ int main(void) { return whole.a; }
 ```
 
 Make each member an atomic object when the members change one at a time.
+
+### E2957: always-inline-returns-twice
+
+An `always_inline` function makes a call that returns twice.
+Inlining would move the second return of the call into the caller.
+An ordinary call would return from a frame that no longer exists when the
+jump comes. GCC 14 refuses such a function too.
+
+```c
+int setjmp(void *);
+static char point[512];
+static inline __attribute__((always_inline)) int mark(void) { return setjmp(point); }
+int main(void) { return mark(); }
+```
+
+Fix: none
+
+Remove `always_inline` and call `setjmp` in the function that later jumps
+back to it.
 
 ## E3xxx
 

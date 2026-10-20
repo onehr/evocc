@@ -934,7 +934,10 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 volatile,
             }));
         }
-        if matches!(mnemonic, "bl" | "bl.strict_fp" | "bl.fixed_fp") {
+        if matches!(
+            mnemonic,
+            "bl" | "bl.strict_fp" | "bl.fixed_fp" | "bl.returns_twice"
+        ) {
             let symbol = scan.symbol()?;
             let args = scan.use_list()?;
             let results = scan.result_list()?;
@@ -945,6 +948,7 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                     "bl.fixed_fp" => Some(crate::FpCallMode::Fixed),
                     _ => None,
                 },
+                returns_twice: mnemonic == "bl.returns_twice",
                 symbol,
                 args,
                 results,

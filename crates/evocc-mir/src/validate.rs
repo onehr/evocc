@@ -428,11 +428,18 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
                 Err("invalid SIMD store shape".into())
             }
         }
+        // A numeric helper returns once; only a source call returns twice.
+        MInst::Bl {
+            fp_mode: Some(_),
+            returns_twice: true,
+            ..
+        } => Err("an FP helper call cannot return twice".into()),
         MInst::Bl {
             symbol,
             args,
             results,
             fp_mode: Some(_),
+            returns_twice: false,
         } => {
             let helper = crate::floating::helpers::qualified(symbol)
                 .ok_or("strict FP call requires a qualified numeric helper")?;

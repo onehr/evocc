@@ -510,6 +510,7 @@ fn instruction_cases() -> Vec<InstCase> {
         case(
             "Bl",
             MInst::Bl {
+                returns_twice: false,
                 symbol: "callee".into(),
                 args: vec![g(2), d(3)],
                 results: vec![g(1), d(4)],

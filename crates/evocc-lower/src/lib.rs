@@ -334,6 +334,8 @@ struct FunctionInfo {
     return_type: Option<FunctionValueType>,
     constant_result: Option<CInteger>,
     participant: bool,
+    /// EvoIR 10.1.9: a direct call of this function returns twice.
+    returns_twice: bool,
     span: SourceSpan,
 }
 
@@ -3214,6 +3216,7 @@ fn index_functions(
                 return_type,
                 constant_result: None,
                 participant: variadic,
+                returns_twice: false,
                 span: entry.span(),
             },
         );
@@ -3267,7 +3270,14 @@ fn index_functions(
             info.participant = true;
         }
     }
+    // A second return can deliver another value, so a returns-twice result
+    // is never a known constant (EvoIR 3.10).
+    let returns_twice = evocc_chir::returns_twice::returns_twice_functions(unit);
     for (ordinal, (symbol, info)) in definitions.iter_mut().enumerate() {
+        if returns_twice.contains(symbol) {
+            info.returns_twice = true;
+            info.constant_result = None;
+        }
         info.section = linkage.function_sections.get(symbol).cloned();
         info.patchable_entry = linkage.patchable_entries.get(symbol).copied();
         info.name = linkage.function_name(*symbol, &info.name).to_owned();
@@ -3490,6 +3500,7 @@ fn function_info(
             parameters,
             FunctionParameters::Prototype { variadic: true, .. }
         ),
+        returns_twice: false,
         span: function.span,
     })
 }
@@ -13444,7 +13455,12 @@ impl<'a> FunctionLowerer<'a> {
                         })?,
                 )
             }
-            _ => None,
+            // GCC folds `*f` and `&f` of a function designator, so such a
+            // call of a returns-twice function is direct (EvoIR 3.10). Every
+            // other designator keeps its indirect lowering.
+            _ => evocc_chir::returns_twice::designated_function(callee)
+                .and_then(|symbol| self.functions.get(&symbol))
+                .filter(|function| function.returns_twice),
         };
         let function_ty = self.call_designator_function_type(callee).ok_or(
             LowerError::UnsupportedExpression {
@@ -13680,6 +13696,7 @@ impl<'a> FunctionLowerer<'a> {
                 callee,
                 args,
                 arg_marks,
+                returns_twice: direct.is_some_and(|function| function.returns_twice),
                 mem_in,
                 world_in,
                 mem_out: mem_out.clone(),

@@ -394,6 +394,7 @@ fn instruction(inst: &MInst, locs: &Locations<'_>) -> Result<String> {
             args,
             results,
             fp_mode: None,
+            returns_twice: false,
         } => format!(
             "[\"bl\",{},{},{}]",
             text(symbol),

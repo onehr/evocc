@@ -334,6 +334,7 @@ fn forwarder(name: &str, callee: &str, shapes: &[Shape]) -> Function {
     let mem_out = builder.value(MEM());
     let world_out = builder.value(WORLD());
     builder.push(Inst::Call {
+        returns_twice: false,
         arg_marks: Vec::new(),
         results: vec![result.clone()],
         callee: callee.to_owned(),

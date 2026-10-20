@@ -3,12 +3,12 @@
 use super::regfile;
 use crate::generic::abi::AbiFacts;
 use crate::generic::allocation::{
-    AllocClass, AllocationTarget, ConstraintBody, ConstraintOperand, ConstraintValue,
+    AllocClass, AllocationTarget, ConstraintBody, ConstraintOperand, ConstraintValue, SecondReturn,
 };
 use crate::generic::register::RegisterBank;
 use crate::{
-    AsmBody, AsmConstraint, AsmDirection, AsmImmediate, AsmOperand, AsmValue, RegClass, Target,
-    VReg,
+    AsmBody, AsmConstraint, AsmDirection, AsmImmediate, AsmOperand, AsmValue, MInst, RegClass,
+    Target, VReg,
 };
 
 /// The register pools and constraint views of AArch64 under one OS ABI.
@@ -22,6 +22,19 @@ impl Aarch64Allocation {
         Self {
             abi: &target.abi().facts,
         }
+    }
+}
+
+/// EvoMIR Section 4.5: only `bl.returns_twice` resumes a second time.
+impl SecondReturn for MInst {
+    fn returns_twice(&self) -> bool {
+        matches!(
+            self,
+            Self::Bl {
+                returns_twice: true,
+                ..
+            }
+        )
     }
 }
 

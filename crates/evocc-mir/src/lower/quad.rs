@@ -109,6 +109,7 @@ fn call(
         } else {
             crate::FpCallMode::Fixed
         }),
+        returns_twice: false,
     });
     Ok(results)
 }

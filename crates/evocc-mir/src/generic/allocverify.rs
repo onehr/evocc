@@ -485,6 +485,11 @@ fn apply<I, C, A>(
             state.remove(number);
         }
     }
+    // Section 9.2: after a second return no register holds a value that the
+    // function put there before the call. A later read needs a reload.
+    if inst.returns_twice() {
+        state.clear();
+    }
     // An assembly body writes every register of its clobber list, wherever
     // it stands in its block.
     if let Some(body) = inst.assembly() {

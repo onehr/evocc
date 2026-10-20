@@ -148,6 +148,7 @@ fn proposals_cannot_supply_missing_demand_or_invent_entry_equalities() {
 fn calls_cannot_be_deleted_as_dead_results() {
     let mut before = source();
     before.blocks[0].insts.push(MInst::Bl {
+        returns_twice: false,
         symbol: "touch".into(),
         args: vec![w(0)],
         results: vec![],
@@ -293,6 +294,7 @@ fn administrative_blocks_cannot_hide_effects_or_cycles() {
     assert!(evocc_mir::generic::ssa_check::verify(&before, &changed, &plan).is_err());
     let mut changed = after;
     changed.blocks[index].insts.push(MInst::Bl {
+        returns_twice: false,
         symbol: "extra".into(),
         args: vec![],
         results: vec![],

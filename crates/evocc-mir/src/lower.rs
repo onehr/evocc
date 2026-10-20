@@ -3794,6 +3794,7 @@ fn lower_inst(
             callee,
             args,
             arg_marks,
+            returns_twice,
             ..
         } => {
             let marks = call_argument_marks(signatures.marks(callee), arg_marks, args.len());
@@ -3823,6 +3824,7 @@ fn lower_inst(
                 args: arguments,
                 results: outputs,
                 fp_mode: None,
+                returns_twice: *returns_twice,
             });
             insts.extend(narrowed);
             insts.extend(after);
@@ -4528,6 +4530,7 @@ fn lower_floating(
             } else {
                 crate::FpCallMode::Fixed
             }),
+            returns_twice: false,
         });
         return Ok(());
     }
@@ -4924,6 +4927,7 @@ fn divide(
             args,
             results,
             fp_mode: None,
+            returns_twice: false,
         });
         return Ok(());
     }

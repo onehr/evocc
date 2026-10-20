@@ -55,7 +55,25 @@ impl<C> From<VirtualReg<C>> for Value<C> {
 }
 
 type State<C> = BTreeSet<(Place, Value<C>)>;
+/// Section 9.2: spill places that hold a source value live across a
+/// returns-twice call. A second return reads such a place again, and any point
+/// that the call reaches can jump back. No other value may write the place at
+/// such a point.
+type Guards<C> = BTreeSet<(Place, Value<C>)>;
 type Check = Result<(), String>;
+
+/// What a walk does besides transporting equations.
+enum Mode<'a, C> {
+    /// A fixpoint round: no read is checked.
+    Explore,
+    /// A walk from a final state that collects the guards of each
+    /// returns-twice call in the block. No read is checked.
+    Collect(&'a mut Guards<C>),
+    /// The final walk: every read is checked, and each spill store must keep
+    /// every guard that reaches it. The walk collects the guards of each
+    /// returns-twice call in the block.
+    Check(&'a mut Guards<C>),
+}
 
 fn overlaps<C: AllocClass>(left: Location<C>, right: Location<C>) -> bool {
     let offsets = match (left.place, right.place) {
@@ -197,6 +215,13 @@ fn shape<I: AllocInst<Reg = VirtualReg<C>>, C: Copy>(inst: &I) -> I {
 struct Relation<'a, I, T, C, A> {
     target: &'a A,
     allocated: &'a Allocated<I, T, C>,
+    /// Source identities live at the exit of each input block. Only a
+    /// function with a returns-twice call needs them, so others leave them
+    /// empty.
+    live_out: BTreeMap<u32, BTreeSet<Identity>>,
+    /// Spill words that the allocated program reads after the exit of each
+    /// of its blocks before it writes them; empty like `live_out`.
+    slots_out: BTreeMap<u32, BTreeSet<u32>>,
 }
 
 impl<I, T, C, A> Relation<'_, I, T, C, A>
@@ -338,6 +363,147 @@ where
         Ok(false)
     }
 
+    /// Source identities live after original instruction `index` of `block`.
+    fn live_after(&self, block: &MachineBlock<I, T, C>, index: usize) -> BTreeSet<Identity> {
+        let mut live = self.live_out.get(&block.id).cloned().unwrap_or_default();
+        for reg in block.term.defs() {
+            live.remove(&Identity::Register(reg.id));
+        }
+        for reg in block.term.uses() {
+            if !reg.class.is_flags() {
+                live.insert(Identity::Register(reg.id));
+            }
+        }
+        for inst in block.insts[index + 1..].iter().rev() {
+            step_backward(&mut live, inst);
+        }
+        live
+    }
+
+    /// Spill words that the allocated program reads after instruction `index`
+    /// of `block` before it writes them.
+    fn slots_after(&self, block: &MachineBlock<I, T, C>, index: usize) -> BTreeSet<u32> {
+        let mut live = self.slots_out.get(&block.id).cloned().unwrap_or_default();
+        for inst in block.insts[index + 1..].iter().rev() {
+            slot_step_backward(&mut live, inst);
+        }
+        live
+    }
+
+    /// Section 9.2: a second return of `call` keeps no register. Every source
+    /// value live across the call must be in a stack slot. A slot that holds
+    /// such a value and that the allocated program reads after the call is
+    /// guarded: no other value may write it at a point that the call reaches,
+    /// because a jump back can occur there. A slot that only a copy of the
+    /// value occupies, and that nothing reads after the call, is not the
+    /// value's slot.
+    fn second_return(
+        &self,
+        state: &mut State<C>,
+        block: &MachineBlock<I, T, C>,
+        index: usize,
+        actual: &MachineBlock<I, T, C>,
+        position: usize,
+        check: bool,
+    ) -> Result<Guards<C>, String> {
+        state.retain(|(place, _)| matches!(place, Place::Spill(_) | Place::Incoming(_)));
+        let defined: BTreeSet<_> = block.insts[index]
+            .defs()
+            .iter()
+            .map(|reg| Identity::Register(reg.id))
+            .collect();
+        let live = self.live_after(block, index);
+        for identity in live.difference(&defined) {
+            if check && !state.iter().any(|(_, value)| value.id == *identity) {
+                return Err(match identity {
+                    Identity::Register(id) => format!(
+                        "%v{id} is live across a returns-twice call, and no stack slot holds it"
+                    ),
+                    Identity::Slot(slot) => format!(
+                        "logical slot {slot} is live across a returns-twice call, and no stack slot holds it"
+                    ),
+                });
+            }
+        }
+        let read = self.slots_after(actual, position);
+        Ok(state
+            .iter()
+            .copied()
+            .filter(|(place, value)| {
+                let Place::Spill(slot) = place else {
+                    return false;
+                };
+                live.contains(&value.id)
+                    && !defined.contains(&value.id)
+                    && (*slot..slot.saturating_add(value.class.spill_words()))
+                        .any(|word| read.contains(&word))
+            })
+            .collect())
+    }
+
+    /// Section 9.2: at a point that a returns-twice call reaches, a spill store
+    /// keeps each guard. A store into a guarded slot must write the full
+    /// guarded value into that exact slot. `pending` holds the source
+    /// instructions from the walk's source position: the walk renames their
+    /// leading copies after this store, and the store can implement such a
+    /// copy, for example when it spills the copy's result directly.
+    fn guard_store(&self, state: &State<C>, guards: &Guards<C>, pending: &[I], inst: &I) -> Check {
+        let Some(access) = inst
+            .spill()
+            .filter(|access| access.kind == SpillKind::Store)
+        else {
+            return Ok(());
+        };
+        let written = Location {
+            place: Place::Spill(access.slot),
+            class: access.reg.class,
+        };
+        let hits: Vec<_> = guards
+            .iter()
+            .filter(|(place, value)| {
+                overlaps(
+                    written,
+                    Location {
+                        place: *place,
+                        class: value.class,
+                    },
+                )
+            })
+            .collect();
+        if hits.is_empty() {
+            return Ok(());
+        }
+        let mut renamed = state.clone();
+        for source in pending {
+            if !rename_source(&mut renamed, source) {
+                break;
+            }
+        }
+        let register = self.location(access.reg)?.place;
+        for (place, value) in hits {
+            let keeps = *place == written.place
+                && access.reg.class.value_bits() >= value.class.value_bits()
+                && renamed.iter().any(|(held_place, held)| {
+                    *held_place == register
+                        && held.id == value.id
+                        && held.class.value_bits() >= value.class.value_bits()
+                });
+            if !keeps {
+                let Place::Spill(slot) = place else {
+                    unreachable!("only spill places are guarded");
+                };
+                let name = match value.id {
+                    Identity::Register(id) => format!("%v{id}"),
+                    Identity::Slot(logical) => format!("logical slot {logical}"),
+                };
+                return Err(format!(
+                    "slot {slot} holds {name}, which is live across a returns-twice call, and another value overwrites it"
+                ));
+            }
+        }
+        Ok(())
+    }
+
     fn boundary(
         &self,
         state: &State<C>,
@@ -396,8 +562,9 @@ where
         original: &MachineBlock<I, T, C>,
         actual: &MachineBlock<I, T, C>,
         state: &mut State<C>,
-        check: bool,
+        mode: &mut Mode<'_, C>,
     ) -> Check {
+        let check = matches!(mode, Mode::Check(_));
         let (mut i, mut j) = (0, 0);
         let mut indirect = false;
         loop {
@@ -415,33 +582,21 @@ where
                             .get(i)
                             .and_then(AllocInst::stack_argument)
                             .is_some());
-                if !paired_argument && self.transport(state, inst)? {
-                    j += 1;
-                    continue;
+                if !paired_argument {
+                    if let Mode::Check(guards) = mode {
+                        self.guard_store(state, guards, &original.insts[i..], inst)?;
+                    }
+                    if self.transport(state, inst)? {
+                        j += 1;
+                        continue;
+                    }
                 }
             }
-            if let Some((dst, src)) = original.insts.get(i).and_then(AllocInst::copy_operands) {
-                if dst.class == src.class {
-                    rename(state, dst.into(), src.into());
-                    i += 1;
-                    continue;
-                }
-            }
-            // Public machine-level allocator tests also supply explicit spill
-            // traffic. Relate their logical slots, independently of compaction,
-            // with a separate identity namespace from virtual registers.
-            if let Some(access) = original.insts.get(i).and_then(AllocInst::spill) {
-                let slot = Value {
-                    id: Identity::Slot(access.slot),
-                    class: access.reg.class,
-                };
-                let reg = access.reg.into();
-                let (dst, src) = if access.kind == SpillKind::Store {
-                    (slot, reg)
-                } else {
-                    (reg, slot)
-                };
-                rename(state, dst, src);
+            if original
+                .insts
+                .get(i)
+                .is_some_and(|source| rename_source(state, source))
+            {
                 i += 1;
                 continue;
             }
@@ -472,6 +627,12 @@ where
                             Place::Flags | Place::Outgoing(_) => false,
                             _ => true,
                         });
+                        if before.returns_twice() {
+                            let added = self.second_return(state, original, i, actual, j, check)?;
+                            if let Mode::Collect(guards) | Mode::Check(guards) = mode {
+                                guards.extend(added);
+                            }
+                        }
                         self.define(state, results, outputs)?;
                         indirect = false;
                     } else {
@@ -525,8 +686,25 @@ where
     T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body> + PartialEq,
     A: AllocationTarget<C>,
 {
-    let relation = Relation { target, allocated };
     let input = &allocated.input;
+    let returns_twice = input
+        .blocks
+        .iter()
+        .any(|block| block.insts.iter().any(|inst| inst.returns_twice()));
+    let relation = Relation {
+        target,
+        allocated,
+        live_out: if returns_twice {
+            input_live_out(input)
+        } else {
+            BTreeMap::new()
+        },
+        slots_out: if returns_twice {
+            slot_live_out(&allocated.blocks)
+        } else {
+            BTreeMap::new()
+        },
+    };
     let source: BTreeMap<_, _> = input.blocks.iter().map(|b| (b.id, b)).collect();
     let output: BTreeMap<_, _> = allocated.blocks.iter().map(|b| (b.id, b)).collect();
     if source.len() != input.blocks.len()
@@ -638,7 +816,7 @@ where
             let Some(mut state) = incoming.get(&before.id).cloned() else {
                 continue;
             };
-            relation.walk(before, output[&before.id], &mut state, false)?;
+            relation.walk(before, output[&before.id], &mut state, &mut Mode::Explore)?;
             for (index, (successor, _)) in before.term.edges().iter().enumerate() {
                 let mut exit = state.clone();
                 for bridge in &paths[&(before.id, index)] {
@@ -662,12 +840,237 @@ where
             break;
         }
     }
+    // Section 9.2: a guard holds at every point that its returns-twice call
+    // reaches, so guards join by union along each edge. They come from the
+    // final states only, so no guard of a partial solution remains.
+    let mut guarded = BTreeMap::<u32, Guards<C>>::new();
+    if returns_twice {
+        let mut added = BTreeMap::new();
+        for before in &input.blocks {
+            if let Some(mut state) = incoming.get(&before.id).cloned() {
+                let mut guards = Guards::new();
+                relation.walk(
+                    before,
+                    output[&before.id],
+                    &mut state,
+                    &mut Mode::Collect(&mut guards),
+                )?;
+                added.insert(before.id, guards);
+            }
+        }
+        loop {
+            let mut changed = false;
+            for before in &input.blocks {
+                let Some(own) = added.get(&before.id) else {
+                    continue;
+                };
+                let mut exit = guarded.get(&before.id).cloned().unwrap_or_default();
+                exit.extend(own.iter().copied());
+                if exit.is_empty() {
+                    continue;
+                }
+                for (successor, _) in before.term.edges().iter() {
+                    let joined = guarded.entry(*successor).or_default();
+                    let count = joined.len();
+                    joined.extend(exit.iter().copied());
+                    changed |= joined.len() != count;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+    }
     for before in &input.blocks {
         if let Some(mut state) = incoming.get(&before.id).cloned() {
+            let mut guards = guarded.get(&before.id).cloned().unwrap_or_default();
             relation
-                .walk(before, output[&before.id], &mut state, true)
+                .walk(
+                    before,
+                    output[&before.id],
+                    &mut state,
+                    &mut Mode::Check(&mut guards),
+                )
                 .map_err(|reason| format!("block {}: {reason}", before.id))?;
+            if guards.is_empty() {
+                continue;
+            }
+            // Bridges hold only transports, so only their spill stores can
+            // break a guard.
+            for index in 0..before.term.edges().len() {
+                let mut exit = state.clone();
+                for bridge in &paths[&(before.id, index)] {
+                    for inst in &output[bridge].insts {
+                        relation
+                            .guard_store(&exit, &guards, &[], inst)
+                            .and_then(|()| relation.transport(&mut exit, inst).map(drop))
+                            .map_err(|reason| format!("block {bridge}: {reason}"))?;
+                    }
+                }
+            }
         }
     }
     Ok(())
+}
+
+/// Apply a source copy or a source spill as a renaming of source values.
+/// Return false for any other source instruction.
+fn rename_source<I, C>(state: &mut State<C>, inst: &I) -> bool
+where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+{
+    if let Some((dst, src)) = inst.copy_operands() {
+        if dst.class == src.class {
+            rename(state, dst.into(), src.into());
+            return true;
+        }
+    }
+    // Public machine-level allocator tests also supply explicit spill
+    // traffic. Relate their logical slots, independently of compaction,
+    // with a separate identity namespace from virtual registers.
+    let Some(access) = inst.spill() else {
+        return false;
+    };
+    let slot = Value {
+        id: Identity::Slot(access.slot),
+        class: access.reg.class,
+    };
+    let reg = access.reg.into();
+    let (dst, src) = if access.kind == SpillKind::Store {
+        (slot, reg)
+    } else {
+        (reg, slot)
+    };
+    rename(state, dst, src);
+    true
+}
+
+/// One backward step of source liveness over an input instruction. Logical
+/// spill slots of a machine-level input are source identities too.
+fn step_backward<I, C>(live: &mut BTreeSet<Identity>, inst: &I)
+where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+{
+    if let Some(access) = inst.spill() {
+        match access.kind {
+            SpillKind::Store => {
+                live.remove(&Identity::Slot(access.slot));
+            }
+            SpillKind::Reload => {
+                live.insert(Identity::Slot(access.slot));
+            }
+        }
+    }
+    for reg in inst.defs() {
+        live.remove(&Identity::Register(reg.id));
+    }
+    for reg in inst.uses() {
+        if !reg.class.is_flags() {
+            live.insert(Identity::Register(reg.id));
+        }
+    }
+}
+
+/// One backward step of spill-word liveness over an allocated instruction.
+fn slot_step_backward<I, C>(live: &mut BTreeSet<u32>, inst: &I)
+where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+{
+    if let Some(access) = inst.spill() {
+        let words = access.slot..access.slot.saturating_add(access.reg.class.spill_words());
+        match access.kind {
+            SpillKind::Store => {
+                for word in words {
+                    live.remove(&word);
+                }
+            }
+            SpillKind::Reload => live.extend(words),
+        }
+    }
+}
+
+/// Spill words that each allocated block reads after its exit before it
+/// writes them, through every allocated edge, transport blocks included.
+fn slot_live_out<I, T, C>(blocks: &[MachineBlock<I, T, C>]) -> BTreeMap<u32, BTreeSet<u32>>
+where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+    T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body>,
+{
+    let mut live_in = BTreeMap::<u32, BTreeSet<u32>>::new();
+    let mut live_out = BTreeMap::<u32, BTreeSet<u32>>::new();
+    loop {
+        let mut changed = false;
+        for block in blocks.iter().rev() {
+            let out: BTreeSet<u32> = block
+                .term
+                .edges()
+                .iter()
+                .filter_map(|(target, _)| live_in.get(target))
+                .flatten()
+                .copied()
+                .collect();
+            let mut live = out.clone();
+            for inst in block.insts.iter().rev() {
+                slot_step_backward(&mut live, inst);
+            }
+            if live_in.get(&block.id) != Some(&live) {
+                live_in.insert(block.id, live);
+                changed = true;
+            }
+            live_out.insert(block.id, out);
+        }
+        if !changed {
+            return live_out;
+        }
+    }
+}
+
+/// Source liveness of the unchanged input, independent of the allocation.
+fn input_live_out<I, T, C>(
+    input: &super::machine::MachineFunction<I, T, C>,
+) -> BTreeMap<u32, BTreeSet<Identity>>
+where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+    T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body>,
+{
+    let mut live_in = BTreeMap::<u32, BTreeSet<Identity>>::new();
+    let mut live_out = BTreeMap::<u32, BTreeSet<Identity>>::new();
+    loop {
+        let mut changed = false;
+        for block in input.blocks.iter().rev() {
+            let out: BTreeSet<_> = block
+                .term
+                .edges()
+                .iter()
+                .filter_map(|(target, _)| live_in.get(target))
+                .flatten()
+                .copied()
+                .collect();
+            let mut live = out.clone();
+            for reg in block.term.defs() {
+                live.remove(&Identity::Register(reg.id));
+            }
+            for reg in block.term.uses() {
+                if !reg.class.is_flags() {
+                    live.insert(Identity::Register(reg.id));
+                }
+            }
+            for inst in block.insts.iter().rev() {
+                step_backward(&mut live, inst);
+            }
+            if live_in.get(&block.id) != Some(&live) {
+                live_in.insert(block.id, live);
+                changed = true;
+            }
+            live_out.insert(block.id, out);
+        }
+        if !changed {
+            return live_out;
+        }
+    }
 }

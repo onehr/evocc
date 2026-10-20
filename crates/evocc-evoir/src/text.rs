@@ -294,6 +294,23 @@ pub fn render_pre_fenv_module(module: &Module) -> Result<String, String> {
     {
         return Err("strict FP and FMA have no pre-fenv text representation".into());
     }
+    if module
+        .functions
+        .iter()
+        .flat_map(|f| &f.blocks)
+        .flat_map(|b| &b.insts)
+        .any(|inst| {
+            matches!(
+                inst,
+                Inst::Call {
+                    returns_twice: true,
+                    ..
+                }
+            )
+        })
+    {
+        return Err("a returns-twice call has no pre-fenv text representation".into());
+    }
     let mut legacy = String::new();
     for line in render_module(module).split_inclusive('\n') {
         if line.starts_with("    effects { ") {
@@ -963,6 +980,7 @@ impl FunctionRenderer {
                 callee,
                 args,
                 arg_marks,
+                returns_twice,
                 mem_in,
                 world_in,
                 mem_out,
@@ -975,8 +993,9 @@ impl FunctionRenderer {
                 rendered_args.push(render_value(mem_in));
                 rendered_args.push(render_value(world_in));
                 format!(
-                    "({}) = call @{callee}({})",
+                    "({}) = call{} @{callee}({})",
                     rendered_results.join(", "),
+                    if *returns_twice { ".returns_twice" } else { "" },
                     rendered_args.join(", ")
                 )
             }
@@ -1642,6 +1661,7 @@ mod tests {
             ),
             (
                 Inst::Call {
+                    returns_twice: false,
                     arg_marks: Vec::new(),
                     results: vec![bits(0)],
                     callee: "callee".to_owned(),

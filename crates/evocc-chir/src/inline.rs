@@ -56,6 +56,9 @@ struct Uses<'a> {
     statics: BTreeMap<SymbolId, &'a ObjectDecl<'a>>,
     owns_statements: bool,
     calls: Vec<(SymbolId, &'a [&'a CHirExpr<'a>])>,
+    /// Every call that names its callee directly, also through `*` or `&`,
+    /// with the call span (EvoIR 3.10).
+    designated_calls: Vec<(SymbolId, SourceSpan)>,
 }
 
 impl Uses<'_> {
@@ -186,6 +189,12 @@ pub(crate) fn addressed_label_names(body: &CHirStmt<'_>) -> BTreeSet<String> {
 
 pub(crate) fn expression_has_statements(expression: &CHirExpr<'_>) -> bool {
     inspect([Node::Expr(expression, false)]).owns_statements
+}
+
+/// Every call in `body` that names its callee directly, with its span. A
+/// call through `*f` or `&f` of a function designator `f` names `f`.
+pub fn designated_calls(body: &CHirStmt<'_>) -> Vec<(SymbolId, SourceSpan)> {
+    inspect([Node::Stmt(body)]).designated_calls
 }
 
 fn inspect_with_declarations<'a>(
@@ -423,10 +432,13 @@ fn inspect_ordered<'a>(
                             work.push(Node::Expr(operand, false));
                         }
                     }
-                    CHirExpr::Call(f, args, _) => {
+                    CHirExpr::Call(f, args, span) => {
                         uses.has_calls = true;
                         if let CHirExpr::Ident { symbol, .. } = f {
                             uses.calls.push((*symbol, args));
+                        }
+                        if let Some(symbol) = crate::returns_twice::designated_function(f) {
+                            uses.designated_calls.push((symbol, *span));
                         }
                         work.push(Node::Expr(f, true));
                         for a in args {
@@ -1056,6 +1068,19 @@ fn substitute_with_context<'a>(
     let private_leaf = |function: &FunctionDecl<'_>| {
         private_leaf_shape(function) && !bodies[&function.symbol].has_local_objects
     };
+    // EvoIR 3.10: a function that makes a call that returns twice is never
+    // substituted, because the second return needs its own activation; the
+    // front end refuses such a callee that is `always_inline` (E2957). A
+    // function that returns twice is never substituted either: that would
+    // remove the call that returns twice.
+    let returns_twice = crate::returns_twice::returns_twice_functions(unit);
+    let calls_twice = |symbol: SymbolId| {
+        returns_twice.contains(&symbol)
+            || bodies[&symbol]
+                .designated_calls
+                .iter()
+                .any(|(callee, _)| returns_twice.contains(callee))
+    };
     // A variadic callee is substituted only when it must be, and only when
     // its body reaches its anonymous arguments through the GNU argument pack
     // alone. Each call site supplies the pack; a `va_list` over the absent
@@ -1078,6 +1103,7 @@ fn substitute_with_context<'a>(
         .map(|(&symbol, &function)| (symbol, function))
         .filter(|(_, f)| {
             f.body.is_some()
+                && !calls_twice(f.symbol)
                 && (roles.always_inline.contains(&f.symbol)
                     || (!no_optional_substitution.contains(&f.symbol)
                         && (constant_inline_return(unit, f, target).is_some()
@@ -1119,6 +1145,7 @@ fn substitute_with_context<'a>(
             let caller_function = candidates.get(caller)?;
             if function.inline_spans.is_empty()
                 || !function.has_internal_linkage(unit.symbols())
+                || calls_twice(symbol)
                 || no_optional_substitution.contains(&symbol)
                 || uses.addresses.contains(&symbol)
                 || !caller_function.inline_spans.is_empty()
@@ -1180,6 +1207,7 @@ fn substitute_with_context<'a>(
             let body = &bodies[&symbol];
             if eligible.contains_key(&symbol)
                 || !private_leaf_shape(function)
+                || calls_twice(symbol)
                 || !body.has_local_objects
                 || body.fenv_access
                 || uses.addresses.contains(&symbol)

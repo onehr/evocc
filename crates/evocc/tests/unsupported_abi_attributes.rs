@@ -48,7 +48,8 @@ fn naked_functions_and_unsupported_calling_conventions_are_refused() {
             "regparm(3)",
             "sseregparm",
             "callee_pop_aggregate_return(1)",
-            "returns_twice",
+            // D16 accepts a `returns_twice` definition; see
+            // returns_twice_attribute.rs.
             "target(\"+sve\")",
             "target_clones(\"default\")",
             "target_version(\"sve\")",

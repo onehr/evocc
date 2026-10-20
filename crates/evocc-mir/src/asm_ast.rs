@@ -590,9 +590,12 @@ impl Builder<'_> {
                     cond(*c),
                 ],
             ),
+            // `core-asm-v1` has the ordinary call only; a call that returns
+            // twice is outside the profile.
             MInst::Bl {
                 symbol,
                 fp_mode: None,
+                returns_twice: false,
                 ..
             } => self.inst("bl", vec![Node::text(symbol)]),
             MInst::FrameSlot { dst, origin, .. } => {

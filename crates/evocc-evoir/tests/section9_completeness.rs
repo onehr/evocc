@@ -720,6 +720,7 @@ fn inst_schema(inst: &Inst) -> &'static str {
         }
         Inst::Call {
             arg_marks,
+            returns_twice,
             results,
             callee,
             args,
@@ -729,9 +730,17 @@ fn inst_schema(inst: &Inst) -> &'static str {
             world_out,
         } => {
             let _ = (
-                results, callee, args, arg_marks, mem_in, world_in, mem_out, world_out,
+                results,
+                callee,
+                args,
+                arg_marks,
+                returns_twice,
+                mem_in,
+                world_in,
+                mem_out,
+                world_out,
             );
-            "Inst.Call(results,callee,args,arg_marks,mem_in,world_in,mem_out,world_out)"
+            "Inst.Call(results,callee,args,arg_marks,returns_twice,mem_in,world_in,mem_out,world_out)"
         }
         Inst::IndirectCall {
             arg_marks,

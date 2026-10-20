@@ -340,22 +340,269 @@ struct DeclarationTransaction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ReturnsTwiceState {
+enum ConventionState {
     Open,
     Accepted,
     Refused,
 }
 
-/// A GNU `returns_twice` attribute in a declaration position. Only the
-/// declaration that receives it knows whether it declares a function.
+/// A GNU attribute of the EvoIR 10.1.9 list in a declaration position. Only
+/// the declaration that receives it knows whether it declares a function.
 #[derive(Debug, Clone, Copy)]
-struct ReturnsTwiceAttribute {
+struct ConventionAttribute {
+    /// The semantic attribute name, as the list spells it.
+    attribute: &'static str,
     /// The complete attribute span, which the declaration receives.
     span: SourceSpan,
     /// The attribute name, where E2952 is reported.
     name: SourceSpan,
     preceding: usize,
-    state: ReturnsTwiceState,
+    state: ConventionState,
+}
+
+/// What kind of declaration settles a deferred list attribute.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Settlement {
+    /// A function declaration that is not a definition.
+    Prototype,
+    /// A function definition.
+    Definition,
+    /// Every other declaration, type name and member.
+    Other,
+}
+
+/// The execution and calling-convention attributes of EvoIR 10.1.9, with the
+/// E2952 message of each. The order is the order of the specification list.
+const CONVENTION_ATTRIBUTES: [(&str, &str); 28] = [
+    ("naked", "unsupported-function-attribute: naked"),
+    ("interrupt", "unsupported-function-attribute: interrupt"),
+    (
+        "interrupt_handler",
+        "unsupported-function-attribute: interrupt_handler",
+    ),
+    ("pcs", "unsupported-function-attribute: pcs"),
+    (
+        "aarch64_vector_pcs",
+        "unsupported-function-attribute: aarch64_vector_pcs",
+    ),
+    (
+        "aarch64_sve_pcs",
+        "unsupported-function-attribute: aarch64_sve_pcs",
+    ),
+    (
+        "preserve_all",
+        "unsupported-function-attribute: preserve_all",
+    ),
+    (
+        "preserve_most",
+        "unsupported-function-attribute: preserve_most",
+    ),
+    (
+        "preserve_none",
+        "unsupported-function-attribute: preserve_none",
+    ),
+    (
+        "no_callee_saved_registers",
+        "unsupported-function-attribute: no_callee_saved_registers",
+    ),
+    (
+        "no_caller_saved_registers",
+        "unsupported-function-attribute: no_caller_saved_registers",
+    ),
+    ("ms_abi", "unsupported-function-attribute: ms_abi"),
+    ("sysv_abi", "unsupported-function-attribute: sysv_abi"),
+    ("stdcall", "unsupported-function-attribute: stdcall"),
+    ("fastcall", "unsupported-function-attribute: fastcall"),
+    ("thiscall", "unsupported-function-attribute: thiscall"),
+    ("vectorcall", "unsupported-function-attribute: vectorcall"),
+    ("regcall", "unsupported-function-attribute: regcall"),
+    ("swiftcall", "unsupported-function-attribute: swiftcall"),
+    (
+        "swiftasynccall",
+        "unsupported-function-attribute: swiftasynccall",
+    ),
+    ("regparm", "unsupported-function-attribute: regparm"),
+    ("sseregparm", "unsupported-function-attribute: sseregparm"),
+    (
+        "callee_pop_aggregate_return",
+        "unsupported-function-attribute: callee_pop_aggregate_return",
+    ),
+    (
+        "returns_twice",
+        "unsupported-function-attribute: returns_twice",
+    ),
+    ("target", "unsupported-function-attribute: target"),
+    (
+        "target_clones",
+        "unsupported-function-attribute: target_clones",
+    ),
+    (
+        "target_version",
+        "unsupported-function-attribute: target_version",
+    ),
+    ("optimize", "unsupported-function-attribute: optimize"),
+];
+
+/// The list entry for a semantic attribute name.
+fn convention_attribute(name: &str) -> Option<(&'static str, &'static str)> {
+    CONVENTION_ATTRIBUTES
+        .iter()
+        .copied()
+        .find(|(attribute, _)| *attribute == name)
+}
+
+/// EvoIR 10.1.9: whether a function that a declaration marks with a list
+/// attribute can have a definition, and whether its designator can be used.
+/// Every attribute is accepted on a prototype.
+fn convention_permits(attribute: &str, definition: bool) -> bool {
+    match attribute {
+        // D16: a second return has a rule (EvoIR 3.10), so the function can
+        // be defined, called and named.
+        "returns_twice" => true,
+        // D17: the callee takes its arguments as the base AAPCS64 does and
+        // preserves a superset of the base callee-saved registers. A caller
+        // relies only on the base set, so an ordinary call is correct. EvoCC
+        // cannot compile a body to the stronger contract.
+        "aarch64_vector_pcs" | "preserve_all" | "preserve_most" => !definition,
+        _ => false,
+    }
+}
+
+/// E2957: an `always_inline` function makes a call that returns twice
+/// (EvoIR 10.1.9). Substitution would move the second return into the
+/// caller, and an ordinary call would return from the frame that the jump
+/// needs. GCC 14 refuses such a function too. The refusal is deferred, so
+/// only a retained function reports it, at its first such call.
+fn always_inline_returns_twice(
+    unit: &CHirUnit<'_>,
+    uses: &[FunctionUse],
+    end: usize,
+) -> Vec<DeferredRefusal> {
+    let Ok(roles) = evocc_chir::function_definitions::FunctionDefinitions::derive(unit) else {
+        return Vec::new();
+    };
+    if roles.always_inline.is_empty() {
+        return Vec::new();
+    }
+    let returns_twice = evocc_chir::returns_twice::returns_twice_functions(unit);
+    let mut refusals = Vec::new();
+    for symbol in &roles.always_inline {
+        let Some(body) = roles
+            .definitions
+            .get(symbol)
+            .or_else(|| roles.inline_bodies.get(symbol))
+            .and_then(|function| function.body)
+        else {
+            continue;
+        };
+        let Some((callee, span)) = evocc_chir::inline::designated_calls(body)
+            .into_iter()
+            .find(|(callee, _)| returns_twice.contains(callee))
+        else {
+            continue;
+        };
+        let preceding = uses
+            .iter()
+            .find(|usage| usage.owner == Some(*symbol) && usage.function == callee)
+            .map_or(end, |usage| usage.preceding);
+        refusals.push((
+            evocc_chir::ProfileRefusal {
+                function: *symbol,
+                code: "E2957",
+                message: "always-inline-returns-twice",
+                span,
+            },
+            preceding,
+            None,
+        ));
+    }
+    refusals
+}
+
+/// The identity of a span: its file and byte range.
+type SpanKey = (u32, u32, u32);
+
+fn span_key(span: SourceSpan) -> SpanKey {
+    (span.file.raw(), span.byte_start, span.byte_end)
+}
+
+/// The list attributes of a unit after parsing: refusals of unsettled
+/// attributes, the spans that a declaration accepted, and the definitions and
+/// function designators in encounter order.
+struct ConventionRecords {
+    unsettled: Vec<(&'static str, SourceSpan, usize)>,
+    accepted: HashSet<SpanKey>,
+    definitions: Vec<FunctionUse>,
+    uses: Vec<FunctionUse>,
+}
+
+/// E2952 for the list attributes after the whole unit is known. A function is
+/// marked by every accepted list attribute on any of its declarations, in any
+/// order. A definition and a use outside any function body are reported at
+/// once; a use inside a body is deferred, so only a retained function reports
+/// it. The first list attribute that forbids the definition or the use names
+/// the refusal.
+fn convention_refusals(
+    unit: &CHirUnit<'_>,
+    records: ConventionRecords,
+) -> (Vec<(&'static str, SourceSpan, usize)>, Vec<DeferredRefusal>) {
+    let ConventionRecords {
+        mut unsettled,
+        accepted,
+        definitions,
+        uses,
+    } = records;
+    let mut marks = HashMap::<SymbolId, HashSet<&'static str>>::new();
+    if !accepted.is_empty() {
+        evocc_chir::inline::for_each_declaration(unit, |declaration| {
+            if let CHirDecl::Function(function) = declaration {
+                for attribute in &function.attributes {
+                    if let Some((name, _)) = accepted
+                        .contains(&span_key(attribute.span))
+                        .then(|| attribute.semantic_name().and_then(convention_attribute))
+                        .flatten()
+                    {
+                        marks.entry(function.symbol).or_default().insert(name);
+                    }
+                }
+            }
+        });
+    }
+    let refusal = |names: &HashSet<&'static str>, definition: bool| {
+        CONVENTION_ATTRIBUTES
+            .iter()
+            .find(|(name, _)| names.contains(name) && !convention_permits(name, definition))
+            .map(|(_, message)| *message)
+    };
+    let functions = marks
+        .iter()
+        .map(|(symbol, names)| (*symbol, (refusal(names, true), refusal(names, false))))
+        .collect::<HashMap<_, _>>();
+    for definition in definitions {
+        if let Some((Some(message), _)) = functions.get(&definition.function) {
+            unsettled.push((message, definition.span, definition.preceding));
+        }
+    }
+    let mut deferred = Vec::new();
+    for usage in uses {
+        let Some((_, Some(message))) = functions.get(&usage.function) else {
+            continue;
+        };
+        match usage.owner {
+            Some(function) => deferred.push((
+                evocc_chir::ProfileRefusal {
+                    function,
+                    code: "E2952",
+                    message,
+                    span: usage.span,
+                },
+                usage.preceding,
+                None,
+            )),
+            None => unsettled.push((message, usage.span, usage.preceding)),
+        }
+    }
+    (unsettled, deferred)
 }
 
 /// A function designator or a function definition, in parse encounter order.
@@ -490,10 +737,11 @@ pub struct Parser<'src, 'arena> {
     )>,
     /// Attributes on labels and type names, which have no declaration node.
     detached_attributes: Vec<Attribute>,
-    /// Deferred `returns_twice` attributes until their declarations settle them.
-    returns_twice_attributes: Vec<ReturnsTwiceAttribute>,
-    /// A later declaration can add `returns_twice` to a function. Its uses and
-    /// definitions are therefore checked when the unit is complete.
+    /// Deferred list attributes of EvoIR 10.1.9 until their declarations
+    /// settle them.
+    convention_attributes: Vec<ConventionAttribute>,
+    /// A later declaration can add a list attribute to a function. Its uses
+    /// and definitions are therefore checked when the unit is complete.
     function_uses: Vec<FunctionUse>,
     function_definitions: Vec<FunctionUse>,
     generic_selections: Vec<GenericSelectionRecord>,
@@ -627,7 +875,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             current_function_parameters: None,
             profile_refusals: Vec::new(),
             detached_attributes: Vec::new(),
-            returns_twice_attributes: Vec::new(),
+            convention_attributes: Vec::new(),
             function_uses: Vec::new(),
             function_definitions: Vec::new(),
             generic_selections: Vec::new(),
@@ -784,12 +1032,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 observed.insert(symbol, parameters);
             }
         }
-        let (late_refusals, mut returns_twice_uses) = self.returns_twice_refusals();
+        let conventions = self.take_convention_records();
         let mut unit = CHirUnit::new(
             decls,
             std::mem::take(&mut self.types),
             std::mem::take(&mut self.symbols),
         );
+        let mut inline_refusals =
+            always_inline_returns_twice(&unit, &conventions.uses, self.diagnostics.len());
+        let (late_refusals, mut convention_uses) = convention_refusals(&unit, conventions);
         unit.set_gnu_inline(self.gnu_inline);
         if self.lint_declarations {
             self.lint_findings.extend(evocc_chir::lints::check(
@@ -812,7 +1063,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         unit.set_front_end_builtins(std::mem::take(&mut self.front_end_builtins));
         unit.set_unprototyped_parameters(observed);
         let mut refusals = std::mem::take(&mut self.profile_refusals);
-        refusals.append(&mut returns_twice_uses);
+        refusals.append(&mut convention_uses);
+        refusals.append(&mut inline_refusals);
         refusals.sort_by_key(|(_, preceding, _)| *preceding);
         unit.set_profile_refusals(
             refusals
@@ -822,14 +1074,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         );
         let mut late = late_refusals
             .into_iter()
-            .map(|(span, preceding)| {
-                (
-                    "E2952",
-                    "unsupported-function-attribute: returns_twice",
-                    span,
-                    preceding,
-                )
-            })
+            .map(|(message, span, preceding)| ("E2952", message, span, preceding))
             .collect::<Vec<_>>();
         if !refusals.is_empty() {
             let retained = evocc_chir::inline::retained_functions(&unit);
@@ -1071,92 +1316,67 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    /// A function prototype accepts the deferred `returns_twice` attributes it
-    /// receives. Any other declaration refuses them at the attribute name.
-    fn settle_returns_twice(&mut self, attributes: &[Attribute], accept: bool) {
+    /// A function prototype accepts the deferred list attributes it receives.
+    /// A definition accepts only the attributes whose functions can have a
+    /// definition. Any other declaration refuses them at the attribute name.
+    fn settle_convention_attributes(&mut self, attributes: &[Attribute], settlement: Settlement) {
         for attribute in attributes {
-            if attribute.semantic_name() != Some("returns_twice") {
+            let Some((name, message)) = attribute.semantic_name().and_then(convention_attribute)
+            else {
                 continue;
-            }
+            };
+            let accept = match settlement {
+                Settlement::Prototype => true,
+                Settlement::Definition => convention_permits(name, true),
+                Settlement::Other => false,
+            };
             let mut refused = None;
-            for entry in &mut self.returns_twice_attributes {
+            for entry in &mut self.convention_attributes {
                 if entry.span != attribute.span {
                     continue;
                 }
                 match (accept, entry.state) {
-                    (true, ReturnsTwiceState::Open) => entry.state = ReturnsTwiceState::Accepted,
-                    (false, ReturnsTwiceState::Open | ReturnsTwiceState::Accepted) => {
-                        entry.state = ReturnsTwiceState::Refused;
+                    (true, ConventionState::Open) => entry.state = ConventionState::Accepted,
+                    (false, ConventionState::Open | ConventionState::Accepted) => {
+                        entry.state = ConventionState::Refused;
                         refused.get_or_insert(entry.name);
                     }
                     _ => {}
                 }
             }
-            if let Some(name) = refused {
-                self.report(
-                    "E2952",
-                    "unsupported-function-attribute: returns_twice",
-                    name,
-                );
+            if let Some(span) = refused {
+                self.report("E2952", message, span);
             }
         }
     }
 
-    /// E2952 for `returns_twice` after the whole unit is known: an attribute
-    /// that no declaration settled, a definition, and a use outside any
-    /// function body are reported at once; a use inside a body is deferred,
-    /// so only a retained function reports it.
-    fn returns_twice_refusals(&mut self) -> (Vec<(SourceSpan, usize)>, Vec<DeferredRefusal>) {
-        let mut reported = Vec::new();
+    /// Take the list-attribute records of the unit. An attribute that no
+    /// declaration settled is reported at once.
+    fn take_convention_records(&mut self) -> ConventionRecords {
+        let mut records = ConventionRecords {
+            unsettled: Vec::new(),
+            accepted: HashSet::new(),
+            definitions: std::mem::take(&mut self.function_definitions),
+            uses: std::mem::take(&mut self.function_uses),
+        };
         let mut unsettled = Vec::new();
-        for entry in std::mem::take(&mut self.returns_twice_attributes) {
-            if entry.state == ReturnsTwiceState::Open && !unsettled.contains(&entry.span) {
-                unsettled.push(entry.span);
-                reported.push((entry.name, entry.preceding));
+        for entry in std::mem::take(&mut self.convention_attributes) {
+            match entry.state {
+                ConventionState::Open if !unsettled.contains(&entry.span) => {
+                    unsettled.push(entry.span);
+                    let (_, message) =
+                        convention_attribute(entry.attribute).expect("deferred list attribute");
+                    records
+                        .unsettled
+                        .push((message, entry.name, entry.preceding));
+                }
+                ConventionState::Accepted => {
+                    records.accepted.insert(span_key(entry.span));
+                }
+                _ => {}
             }
         }
-        let functions = self
-            .entity_attributes
-            .iter()
-            .filter(|(symbol, names)| {
-                names.contains("returns_twice")
-                    && self
-                        .symbols
-                        .symbol(**symbol)
-                        .is_ok_and(|entry| entry.kind() == SymbolKind::Function)
-            })
-            .map(|(symbol, _)| *symbol)
-            .collect::<HashSet<_>>();
-        let definitions = std::mem::take(&mut self.function_definitions);
-        let uses = std::mem::take(&mut self.function_uses);
-        if functions.is_empty() {
-            return (reported, Vec::new());
-        }
-        for definition in definitions {
-            if functions.contains(&definition.function) {
-                reported.push((definition.span, definition.preceding));
-            }
-        }
-        let mut deferred = Vec::new();
-        for usage in uses {
-            if !functions.contains(&usage.function) {
-                continue;
-            }
-            match usage.owner {
-                Some(function) => deferred.push((
-                    evocc_chir::ProfileRefusal {
-                        function,
-                        code: "E2952",
-                        message: "unsupported-function-attribute: returns_twice",
-                        span: usage.span,
-                    },
-                    usage.preceding,
-                    None,
-                )),
-                None => reported.push((usage.span, usage.preceding)),
-            }
-        }
-        (reported, deferred)
+        records
     }
 
     fn token_text<'a>(&'a self, tok: &'a Token) -> &'a str {
@@ -2075,7 +2295,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             }
             let mut declarations = self.side_declarations.split_off(side_start);
-            self.settle_returns_twice(&attributes, false);
+            self.settle_convention_attributes(&attributes, Settlement::Other);
             if let Some(event) = specifier.tag_event {
                 self.detached_attributes.extend(attributes);
                 declarations.push(self.finish_tag_event(
@@ -2186,7 +2406,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             )
             && self.peek_kind() == Some(TokenKind::LBrace)
         {
-            self.settle_returns_twice(&attributes, false);
+            self.settle_convention_attributes(&attributes, Settlement::Definition);
             let (mut parameters, parameter_scope, inherited_from_specifier) =
                 self.function_declaration_parameters(&declarator, &specifier, full_type)?;
             // An unspecified declaration can compose with a prototype, but
@@ -2429,7 +2649,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2202", "invalid-initializer-type", declarator.span);
                 return None;
             }
-            self.settle_returns_twice(&attributes, is_function);
+            self.settle_convention_attributes(
+                &attributes,
+                if is_function {
+                    Settlement::Prototype
+                } else {
+                    Settlement::Other
+                },
+            );
             let parsed_function_parameters = if is_function {
                 Some(self.function_declaration_parameters(&declarator, &specifier, full_type)?)
             } else {
@@ -5026,7 +5253,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     parameter_attributes.extend(declaration.attributes.iter().cloned());
                     parameter_attributes
                         .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
-                    self.settle_returns_twice(&parameter_attributes, false);
+                    self.settle_convention_attributes(&parameter_attributes, Settlement::Other);
                     let ty =
                         self.apply_declaration_attributes(ty, &mut parameter_attributes, false);
                     parameter.ty = ty;
@@ -5559,59 +5786,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     || matches!(&syntax, AttributeSyntax::Brackets { namespace: Some(ns) } if matches!(ns.as_str(), "gnu" | "__gnu__"));
                 // These attributes change the execution or call contract, not
                 // just optimization advice. In particular, a naked asm body
-                // cannot return through our ordinary frame. Reject the written
-                // contract even on a prototype, an unused definition or a type:
-                // a later declaration must not hide an unsupported convention.
-                // `returns_twice` in a declaration position waits for its
-                // declaration: a prototype records it, and the uses and the
-                // definition of that function are refused instead.
-                let deferred_returns_twice = gnu_name
-                    && name == "returns_twice"
-                    && matches!(
-                        placement,
-                        AttributePlacement::DeclarationSpecifiers
-                            | AttributePlacement::BeforeDeclarator
-                            | AttributePlacement::AfterDeclarator
-                    );
+                // cannot return through our ordinary frame. EvoIR 10.1.9
+                // accepts one on a function declaration that is not a
+                // definition and records it; the definition and the uses of
+                // that function are checked when the unit is complete. Every
+                // other placement is refused here: a type, a typedef or an
+                // object must not hide an unsupported convention.
+                let declaration_position = matches!(
+                    placement,
+                    AttributePlacement::DeclarationSpecifiers
+                        | AttributePlacement::BeforeDeclarator
+                        | AttributePlacement::AfterDeclarator
+                        | AttributePlacement::FunctionDefinition
+                );
+                let mut convention = convention_attribute(&name)
+                    .filter(|(attribute, _)| gnu_name && *attribute != "optimize");
                 let preceding = self.diagnostics.len();
-                if gnu_name
-                    && !deferred_returns_twice
-                    && matches!(
-                        name.as_str(),
-                        "naked"
-                            | "interrupt"
-                            | "interrupt_handler"
-                            | "pcs"
-                            | "aarch64_vector_pcs"
-                            | "aarch64_sve_pcs"
-                            | "preserve_all"
-                            | "preserve_most"
-                            | "preserve_none"
-                            | "no_callee_saved_registers"
-                            | "no_caller_saved_registers"
-                            | "ms_abi"
-                            | "sysv_abi"
-                            | "stdcall"
-                            | "fastcall"
-                            | "thiscall"
-                            | "vectorcall"
-                            | "regcall"
-                            | "swiftcall"
-                            | "swiftasynccall"
-                            | "regparm"
-                            | "sseregparm"
-                            | "callee_pop_aggregate_return"
-                            | "returns_twice"
-                            | "target"
-                            | "target_clones"
-                            | "target_version"
-                    )
-                {
-                    self.report(
-                        "E2952",
-                        format!("unsupported-function-attribute: {name}"),
-                        name_token.span,
-                    );
+                if let Some((_, message)) = convention.filter(|_| !declaration_position) {
+                    self.report("E2952", message, name_token.span);
                 }
                 if gnu_name && name == "scalar_storage_order" {
                     self.defer_profile_refusal(
@@ -5658,11 +5850,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 // Inspect every option after parsing: one permitted option
                 // must not hide a request for wrapping or aliasing semantics.
                 if gnu_name && name == "optimize" && !disables_only_vectorization(&arguments) {
-                    self.report(
-                        "E2952",
-                        "unsupported-function-attribute: optimize",
-                        name_token.span,
-                    );
+                    convention = convention_attribute("optimize");
+                    if !declaration_position {
+                        self.report(
+                            "E2952",
+                            "unsupported-function-attribute: optimize",
+                            name_token.span,
+                        );
+                    }
                 }
                 if bracketed
                     && gnu_name
@@ -5681,12 +5876,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 {
                     self.report("E2903", "malformed-attribute", name_token.span);
                 }
-                if deferred_returns_twice {
-                    self.returns_twice_attributes.push(ReturnsTwiceAttribute {
+                if let Some((attribute, _)) = convention.filter(|_| declaration_position) {
+                    self.convention_attributes.push(ConventionAttribute {
+                        attribute,
                         span,
                         name: name_token.span,
                         preceding,
-                        state: ReturnsTwiceState::Open,
+                        state: ConventionState::Open,
                     });
                 }
                 attributes.push(Attribute {
@@ -7133,7 +7329,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
                 member_attributes
                     .extend(self.parse_attribute_specifiers(AttributePlacement::Member));
-                self.settle_returns_twice(&member_attributes, false);
+                self.settle_convention_attributes(&member_attributes, Settlement::Other);
                 // Representation changes use the same resolver as object,
                 // typedef and parameter declarations. Member alignment stays
                 // on the member, never on its canonical type identity.
@@ -7875,7 +8071,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.side_declarations.extend(captures);
         }
         type_attributes.extend(self.parse_attribute_specifiers(AttributePlacement::TypeName));
-        self.settle_returns_twice(&type_attributes, false);
+        self.settle_convention_attributes(&type_attributes, Settlement::Other);
         for attribute in &mut type_attributes {
             attribute.placement = AttributePlacement::TypeName;
         }
@@ -8795,7 +8991,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let mut parameter_attributes = specifier_attributes;
             parameter_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::Parameter));
-            self.settle_returns_twice(&parameter_attributes, false);
+            self.settle_convention_attributes(&parameter_attributes, Settlement::Other);
             self.validate_alignment_specifiers(ty, &parameter_attributes, false);
             let ty = self.apply_declaration_attributes(ty, &mut parameter_attributes, false);
             params.push(ParameterDecl {

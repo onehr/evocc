@@ -491,6 +491,9 @@ pub fn sentinel_instructions() -> Vec<Inst> {
         },
         Inst::Call {
             arg_marks: vec![ParamMark::None, ParamMark::ByVal(RecordShape::new(24, 8))],
+            // Revision 2.12.0: the sentinel call returns twice, so the field
+            // has its non-default spelling `call.returns_twice`.
+            returns_twice: true,
             results: vec![bits(1380), bits(1381)],
             callee: "sentinel_direct_callee".to_owned(),
             args: vec![bits(1382), bits(1383)],

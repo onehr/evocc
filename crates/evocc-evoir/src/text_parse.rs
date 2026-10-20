@@ -1718,7 +1718,14 @@ fn parse_tuple_instruction(
             volatile,
         });
     }
-    if let Some(rest) = rhs.strip_prefix("call ") {
+    let call = rhs
+        .strip_prefix("call ")
+        .map(|rest| (rest, false))
+        .or_else(|| {
+            rhs.strip_prefix("call.returns_twice ")
+                .map(|rest| (rest, true))
+        });
+    if let Some((rest, returns_twice)) = call {
         let open = rest.find('(').ok_or_else(|| "malformed call".to_owned())?;
         let callee_text = &rest[..open];
         let args_text = rest[open + 1..]
@@ -1730,7 +1737,18 @@ fn parse_tuple_instruction(
             let signature = signatures.get(symbol).ok_or_else(|| {
                 ModuleParseError::Invalid(format!("call to missing function '{symbol}'"))
             })?;
-            return build_direct_call(result_ids, symbol, args, arg_marks, signature);
+            return build_direct_call(
+                result_ids,
+                symbol,
+                args,
+                arg_marks,
+                returns_twice,
+                signature,
+            );
+        }
+        // Section 3.10: only a direct call can return twice.
+        if returns_twice {
+            return Err("call.returns_twice must name its callee as @symbol".into());
         }
         let callee = use_value(callee_text, values)?;
         let EvoIRType::FnPtr {
@@ -1760,6 +1778,7 @@ fn build_direct_call(
     symbol: &str,
     args: Vec<Value>,
     arg_marks: Vec<ParamMark>,
+    returns_twice: bool,
     signature: &Signature,
 ) -> ParseResult<Inst> {
     let (ordinary_results, mem_out, world_out) = call_results(result_ids, signature)?;
@@ -1769,6 +1788,7 @@ fn build_direct_call(
         callee: symbol.to_owned(),
         args: ordinary_args,
         arg_marks,
+        returns_twice,
         mem_in,
         world_in,
         mem_out,

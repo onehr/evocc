@@ -1,10 +1,11 @@
-//! GNU `returns_twice` (EvoIR 10.1.9). EvoCC has no execution rule for a
-//! second return, so a call of such a function must not compile as an
-//! ordinary call. A prototype only records the attribute: glibc's
-//! `<pthread.h>` declares `__sigsetjmp_cancel` with it. A definition, a call
-//! and every other use of the designator are E2952, in any declaration
-//! order. A use inside a function that the unit never retains is not
-//! reported, as for the other execution-only refusals.
+//! GNU `returns_twice` (EvoIR 10.1.9). A function that a declaration marks
+//! returns twice, and D16 gives a direct call of it GCC 14's rule (EvoIR 3.10).
+//! A prototype, a definition, a call and every other use of the designator
+//! are therefore accepted, in any declaration order. glibc's `<pthread.h>`
+//! declares `__sigsetjmp_cancel` with the attribute, so its cancellation
+//! macros compile. Every other placement of the attribute stays E2952. The
+//! interpreters run no second return: they refuse an external callee with
+//! E3039, as they refuse every external call.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -13,6 +14,7 @@ const LINUX: &str = "aarch64-unknown-linux-gnu";
 const DARWIN: &str = "aarch64-apple-darwin";
 const TARGETS: [&str; 2] = [LINUX, DARWIN];
 const MESSAGE: &str = "error[E2952]: unsupported-function-attribute: returns_twice";
+const EXTERNAL: &str = "error[E3039]: external-call-not-executable";
 
 /// Every driver path that must agree: native assembly at two levels, the
 /// syntax check, `evo check` and both interpreters.
@@ -99,7 +101,11 @@ fn position(source: &str, needle: &str) -> (usize, usize) {
 }
 
 fn accepted(source: &Path, target: &str, options: &[&str]) {
-    for mode in MODES {
+    accepted_in(&MODES, source, target, options);
+}
+
+fn accepted_in(modes: &[&[&str]], source: &Path, target: &str, options: &[&str]) {
+    for &mode in modes {
         let output = evocc(source, target, mode, options);
         let label = format!("{} {target} {mode:?} {options:?}", source.display());
         assert!(output.status.success(), "{label}\n{}", text(&output));
@@ -112,8 +118,19 @@ fn accepted(source: &Path, target: &str, options: &[&str]) {
 }
 
 fn refused_at(source: &Path, target: &str, options: &[&str], line: usize, column: usize) {
-    let expected = format!("{}:{line}:{column}: {MESSAGE}", source.display());
-    for mode in MODES {
+    refused_in(&MODES, source, target, options, (line, column), MESSAGE);
+}
+
+fn refused_in(
+    modes: &[&[&str]],
+    source: &Path,
+    target: &str,
+    options: &[&str],
+    (line, column): (usize, usize),
+    message: &str,
+) {
+    let expected = format!("{}:{line}:{column}: {message}", source.display());
+    for &mode in modes {
         let output = evocc(source, target, mode, options);
         let label = format!("{} {target} {mode:?} {options:?}", source.display());
         assert_eq!(output.status.code(), Some(1), "{label}\n{}", text(&output));
@@ -144,7 +161,7 @@ fn prototypes_record_the_attribute_without_a_refusal() {
         "extern int f(int) __asm__(\"h\") __attribute__((__nothrow__)) __attribute__((returns_twice));\n",
         "typedef int F(void);\nF f __attribute__((returns_twice));\n",
         "int f(void) __attribute__((returns_twice));\nint f(void) __attribute__((returns_twice));\n",
-        // Only retained functions report their uses.
+        // Unused helpers that call or name the function.
         "int f(void) __attribute__((returns_twice));\nstatic inline int g(void) { return f(); }\n",
         "int f(void);\nstatic inline int g(void) { return f(); }\nint f(void) __attribute__((returns_twice));\n",
         "int f(void) __attribute__((returns_twice));\nstatic inline int (*g(void))(void) { return &f; }\n",
@@ -166,30 +183,32 @@ fn prototypes_record_the_attribute_without_a_refusal() {
     }
 }
 
+/// The native and syntax modes, which run nothing.
+const COMPILE: [&[&str]; 3] = [
+    &["-O0", "--emit=asm"],
+    &["-O2", "--emit=asm"],
+    &["-fsyntax-only"],
+];
+
+/// `evo check` and both interpreters, which run `main`.
+const EXECUTE: [&[&str]; 3] = [&["--check"], &["--interpret-c-hir"], &["--interpret-evoir"]];
+
+/// The EvoIR text of `source`.
+fn evoir(source: &Path, target: &str) -> String {
+    let output = evocc(source, target, &["-O2", "--emit=evoir"], &[]);
+    assert!(output.status.success(), "{}", text(&output));
+    String::from_utf8(output.stdout).unwrap()
+}
+
 #[test]
-fn every_use_of_a_returns_twice_function_is_refused_at_the_use() {
+fn every_use_of_a_returns_twice_function_is_accepted() {
     let work = Work::new("uses");
     let prototype = "int f(void) __attribute__((returns_twice));\n";
+    // Each call runs: the interpreters refuse the external callee, at the call.
     for (index, (source, needle)) in [
         (
             format!("{prototype}int main(void) {{ return f(); }}\n"),
             "f(); }",
-        ),
-        (
-            format!("{prototype}int main(void) {{ int (*p)(void) = f; return p == 0; }}\n"),
-            "f; return",
-        ),
-        (
-            format!("{prototype}int main(void) {{ return &f == 0; }}\n"),
-            "f == 0",
-        ),
-        (
-            format!("{prototype}int (*p)(void) = f;\nint main(void) {{ return p == 0; }}\n"),
-            "f;\n",
-        ),
-        (
-            format!("{prototype}int main(void) {{ return sizeof(f()) == 0; }}\n"),
-            "f()) == 0",
         ),
         (
             format!(
@@ -197,17 +216,11 @@ fn every_use_of_a_returns_twice_function_is_refused_at_the_use() {
             ),
             "f(); }\nint main",
         ),
-        // A later declaration that adds the attribute still refuses the call.
+        // A later declaration that adds the attribute marks the earlier call.
         (
             "int f(void);\nint main(void) { return f(); }\nint f(void) __attribute__((returns_twice));\n"
                 .to_owned(),
             "f(); }",
-        ),
-        (
-            "int f(void);\nint main(void) { int (*p)(void) = f; return p == 0; }\n\
-             int f(void) __attribute__((returns_twice));\n"
-                .to_owned(),
-            "f; return",
         ),
         (
             "int main(void) {\n    extern int f(void) __attribute__((returns_twice));\n    return f();\n}\n"
@@ -224,51 +237,62 @@ fn every_use_of_a_returns_twice_function_is_refused_at_the_use() {
     .enumerate()
     {
         let path = work.source(index, &source);
-        let (line, column) = position(&source, needle);
+        let position = position(&source, needle);
         for target in TARGETS {
-            refused_at(&path, target, &[], line, column);
+            accepted_in(&COMPILE, &path, target, &[]);
+            refused_in(&EXECUTE, &path, target, &[], position, EXTERNAL);
+            let text = evoir(&path, target);
+            assert!(text.contains(" = call.returns_twice @f("), "{source}\n{text}");
+        }
+    }
+    // A use that calls nothing runs in every mode.
+    for (index, source) in [
+        format!("{prototype}int main(void) {{ int (*p)(void) = f; return p == 0; }}\n"),
+        format!("{prototype}int main(void) {{ return &f == 0; }}\n"),
+        format!("{prototype}int (*p)(void) = f;\nint main(void) {{ return p == 0; }}\n"),
+        format!("{prototype}int main(void) {{ return sizeof(f()) == 0; }}\n"),
+        "int f(void);\nint main(void) { int (*p)(void) = f; return p == 0; }\n\
+         int f(void) __attribute__((returns_twice));\n"
+            .to_owned(),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let path = work.source(10 + index, &source);
+        for target in TARGETS {
+            accepted(&path, target, &[]);
         }
     }
 }
 
 #[test]
-fn definitions_of_a_returns_twice_function_are_refused() {
+fn definitions_of_a_returns_twice_function_are_accepted() {
     let work = Work::new("definitions");
-    let main = "int main(void) { return 0; }\n";
-    for (index, (declarations, needle)) in [
-        (
-            "int f(void) __attribute__((returns_twice));\nint f(void) { return 0; }\n",
-            "f(void) { return",
-        ),
-        (
-            "int f(void) { return 0; }\nint f(void) __attribute__((returns_twice));\n",
-            "f(void) { return",
-        ),
-        (
-            "static int f(void) { return 0; }\nstatic int f(void) __attribute__((returns_twice));\n",
-            "f(void) { return",
-        ),
-        (
-            "__attribute__((returns_twice)) int f(void) { return 0; }\n",
-            "returns_twice",
-        ),
-        (
-            "[[gnu::returns_twice]] int f(void) { return 0; }\n",
-            "gnu::returns_twice",
-        ),
-        (
-            "int f(void) __attribute__((returns_twice)) { return 0; }\n",
-            "returns_twice",
-        ),
+    // `main` calls the definition. A module function returns once in EvoIR,
+    // so every interpreter runs the call.
+    let main = "int main(void) { return f(); }\n";
+    for (index, declarations) in [
+        "int f(void) __attribute__((returns_twice));\nint f(void) { return 0; }\n",
+        "int f(void) { return 0; }\nint f(void) __attribute__((returns_twice));\n",
+        "static int f(void) { return 0; }\nstatic int f(void) __attribute__((returns_twice));\n",
+        "__attribute__((returns_twice)) int f(void) { return 0; }\n",
+        "[[gnu::returns_twice]] int f(void) { return 0; }\n",
+        // GCC 14 rejects any attribute in this position; EvoCC accepts every
+        // attribute there, this one too.
+        "int f(void) __attribute__((returns_twice)) { return 0; }\n",
     ]
     .into_iter()
     .enumerate()
     {
         let source = format!("{declarations}{main}");
         let path = work.source(index, &source);
-        let (line, column) = position(&source, needle);
         for target in TARGETS {
-            refused_at(&path, target, &[], line, column);
+            accepted(&path, target, &[]);
+            let text = evoir(&path, target);
+            assert!(
+                text.contains(" = call.returns_twice @f("),
+                "{source}\n{text}"
+            );
         }
     }
 }
@@ -332,11 +356,19 @@ fn linux_pthread_header_compiles_without_cancellation_macros() {
 }
 
 #[test]
-fn linux_cleanup_macros_are_refused_at_the_cancellation_call() {
+fn linux_cleanup_macros_compile_and_the_interpreters_refuse_the_external_call() {
     let path = fixture("returns-twice-pthread-cleanup.c");
     let source = std::fs::read_to_string(&path).unwrap();
-    let (line, column) = position(&source, "pthread_cleanup_push(release");
-    refused_at(&path, LINUX, &[], line, column);
+    accepted_in(&COMPILE, &path, LINUX, &[]);
+    let position = position(&source, "pthread_cleanup_push(release");
+    refused_in(&EXECUTE, &path, LINUX, &[], position, EXTERNAL);
+    // The macro calls `__sigsetjmp_cancel`, whose assembler name is
+    // `__sigsetjmp`; the attribute on its prototype marks the call.
+    let text = evoir(&path, LINUX);
+    assert!(
+        text.contains(" = call.returns_twice @__sigsetjmp("),
+        "{text}"
+    );
 }
 
 /// Linux: EvoCC assembly that includes `<pthread.h>` links with GCC 14 and

@@ -497,6 +497,9 @@ pub enum Inst {
         /// Call-site byval marks for anonymous records; fixed marks live on
         /// the callee signature. Empty, or one mark per ordinary argument.
         arg_marks: Vec<ParamMark>,
+        /// `call.returns_twice` (Section 3.10): the callee can resume this
+        /// call a second time, as `setjmp` does after a `longjmp`.
+        returns_twice: bool,
         mem_in: Value,
         world_in: Value,
         mem_out: Value,
@@ -1009,6 +1012,12 @@ pub fn derive_effect_summaries(module: &Module) -> Vec<EffectSummary> {
             let mut summary = local[index];
             for inst in function.blocks.iter().flat_map(|block| &block.insts) {
                 match inst {
+                    // A second return resumes the caller after code that this
+                    // call does not bound, so the call takes the top summary.
+                    Inst::Call {
+                        returns_twice: true,
+                        ..
+                    } => summary.join(EffectSummary::top()),
                     Inst::Call { callee, .. } => summary.join(
                         positions
                             .get(callee.as_str())
@@ -2242,11 +2251,14 @@ pub fn validate_module(module: &Module) -> Result<(), String> {
                     }
                     _ => {}
                 }
+                // The returns-twice mark changes no signature rule. It selects
+                // the top effect summary, which the last check below compares.
                 let Inst::Call {
                     results,
                     callee,
                     args,
                     arg_marks,
+                    returns_twice: _,
                     mem_in,
                     world_in,
                     mem_out,
@@ -4700,11 +4712,15 @@ fn interpret_module_execution(
         match action {
             FrameAction::Instruction(instruction) => {
                 frames[frame_index].next_instruction += 1;
+                // A second return needs an external jump such as `longjmp`,
+                // which no interpreter executes. A returns-twice call to a
+                // module function therefore returns once here, as a call.
                 if let Inst::Call {
                     results,
                     callee,
                     args,
                     arg_marks,
+                    returns_twice: _,
                     mem_in,
                     world_in,
                     mem_out,
@@ -7168,6 +7184,7 @@ mod tests {
                     argument("world", world_in.clone()),
                 ],
                 insts: vec![Inst::Call {
+                    returns_twice: false,
                     arg_marks: Vec::new(),
                     results: vec![],
                     callee: "side_effect".to_owned(),
@@ -7449,6 +7466,7 @@ mod tests {
 
         let mut stale = function.clone();
         stale.blocks[0].insts.push(Inst::Call {
+            returns_twice: false,
             arg_marks: Vec::new(),
             results: vec![],
             callee: "stale".to_owned(),
@@ -7872,6 +7890,7 @@ mod tests {
                 insts: vec![
                     Inst::Const(argument_value.clone(), 41),
                     Inst::Call {
+                        returns_twice: false,
                         arg_marks: Vec::new(),
                         results: vec![result.clone()],
                         callee: "identity".to_owned(),
@@ -8072,6 +8091,7 @@ mod tests {
                         Inst::Const(one.clone(), 1),
                         Inst::Sub(next_n.clone(), recur_n, one),
                         Inst::Call {
+                            returns_twice: false,
                             arg_marks: Vec::new(),
                             results: vec![result.clone()],
                             callee: "countdown".to_owned(),

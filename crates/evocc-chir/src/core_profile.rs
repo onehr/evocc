@@ -32,6 +32,8 @@ pub enum CoreRefusal {
     ExternalCall,
     Recursion,
     Fallthrough,
+    /// EvoIR 3.10: a call that returns twice is outside `core-v1`.
+    ReturnsTwice,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -87,6 +89,7 @@ pub fn inspect_core(
     let mut walker = Closure {
         unit,
         declarations: BTreeMap::new(),
+        returns_twice: crate::returns_twice::returns_twice_functions(unit),
         active: BTreeSet::new(),
         done: BTreeSet::new(),
         functions: Vec::new(),
@@ -130,6 +133,7 @@ pub fn inspect_core(
 struct Closure<'u, 'a> {
     unit: &'u CHirUnit<'a>,
     declarations: BTreeMap<SymbolId, Vec<&'u FunctionDecl<'a>>>,
+    returns_twice: BTreeSet<SymbolId>,
     active: BTreeSet<SymbolId>,
     done: BTreeSet<SymbolId>,
     functions: Vec<CoreFunctionInventory>,
@@ -150,6 +154,14 @@ impl Closure<'_, '_> {
             reason: CoreRefusal::ExternalCall,
             span: None,
         })?;
+        // A definition by GCC's name rule has no attribute to refuse, so the
+        // mark itself is refused for every function of the closure.
+        if self.returns_twice.contains(&symbol) {
+            return Err(CoreProfileError {
+                reason: CoreRefusal::ReturnsTwice,
+                span: chain.first().map(|declaration| declaration.span),
+            });
+        }
         for declaration in chain {
             if !declaration.attributes.is_empty()
                 || declaration.asm_label.is_some()

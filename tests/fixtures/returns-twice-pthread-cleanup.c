@@ -1,7 +1,8 @@
 /* pthread_cleanup_push expands to a call of __sigsetjmp_cancel, which glibc
-   declares with returns_twice. EvoCC has no execution rule for a second
-   return, so the call is E2952. With UNUSED, the macros appear only in a
-   static inline function that the unit never retains. */
+   declares with returns_twice. The call is a returns-twice call (EvoIR 3.10);
+   the interpreters refuse it as an external call (E3039). With UNUSED, the
+   macros appear only in a static inline function that the unit never
+   retains. */
 #include <pthread.h>
 
 static void release(void *argument) {

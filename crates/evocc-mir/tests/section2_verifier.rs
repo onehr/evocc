@@ -43,6 +43,7 @@ fn call_flag_clobber_can_precede_a_new_compare() {
         vec![g(0)],
         vec![
             MInst::Bl {
+                returns_twice: false,
                 fp_mode: None,
                 symbol: "touch".into(),
                 args: vec![],

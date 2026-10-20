@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.5.0** | **Pinned ground truth** | Atomic object copies on 2026-10-20
+**Revision 1.6.0** | **Pinned ground truth** | Calls that return twice on 2026-10-20
 
 ## Status and scope
 
@@ -483,6 +483,7 @@ both successors with their argument lists.
 | `br rn [^a(args), ^b(args), ...]` | Indirect transfer through a `gpr64` code address, with the complete ordered successor edges from EvoIR; binds only the parameters of the selected edge. An invalid target in the interpreter is `E3048`. |
 | `bl @f(args) -> results` / `blr rn(args) -> results` | Call. The argument and result registers are explicit operands, fixed for the allocator (Section 7.4). The call writes `x30` and clobbers the call-clobbered registers (Section 6.7). |
 | `bl.fixed_fp`, `bl.strict_fp @f(...)` | Call of an FP helper (Section 2.6). |
+| `bl.returns_twice @f(args) -> results` | The EvoIR `call.returns_twice` (EvoIR Section 3.10): a call that can resume a second time. It is emitted as `bl`. Section 7.4 keeps every value live across it in a private stack slot. An FP helper call never returns twice. |
 | `ret rs...` | Return with the listed result registers. |
 | `brk #imm16` | Trap. The immediate is the decimal part of the EvoIR diagnostic of the trap or assumption reason (`trap.unreachable_reached` is `brk #3024`). |
 | `asm.goto` | The EvoIR `asm goto` terminator (Section 4.6). |
@@ -1311,6 +1312,16 @@ across-call set for a range that spans a call). Argument and result
 registers, `x8` for an indirect result and the scratch pins are pre-assigned.
 Allocation is deterministic.
 
+**Calls that return twice.** A range that spans a `bl.returns_twice` gets no
+register. A second return resumes the continuation of the call with the
+memory as the jump found it, and the allocator does not trust a register that
+the jump restores. The range is therefore spilled: its value is stored after
+each definition and reloaded before each use, also before each use after the
+call. GCC 14 makes the same choice on AArch64: IRA gives no hard register to
+an allocno that crosses a setjmp call. No pass of this document duplicates,
+merges, removes or moves a call, and the backend makes no tail or sibling
+call, so the frame that the second return needs stays in place.
+
 **Spills.** When no register is free, the allocator considers overlapping
 ranges whose individual removal frees a candidate register over every segment
 of the current range. A register held by several disjoint ranges is not freed
@@ -1328,7 +1339,10 @@ operands got the same register. All definitions and uses in each connected
 component of these copies receive one consistent name, including copies from
 different predecessors of a join. This renames physical-location identities,
 not the source SSA definitions. It does no other coalescing. Then it compacts the logical
-spill slots: slots that are never live at the same time share storage.
+spill slots: slots that are never live at the same time share storage. A
+slot that is live after a `bl.returns_twice` is private: it shares storage
+with no other slot, so no other value writes it at any point that the call
+reaches. Private slots follow the shared ones in slot order.
 
 ### 7.5 What the allocation must satisfy
 
@@ -1567,8 +1581,9 @@ liveness or spill decisions of the allocator. It refuses (`E4020`) when:
 - a value live on entry is not in its ABI argument register, or two entry
   values share a register;
 - a register read does not hold the expected virtual register on every path
-  (a call clears the call-clobbered registers; every `asm`, in a block or as
-  its terminator, clears its clobbers);
+  (a call clears the call-clobbered registers, and a `bl.returns_twice`
+  clears every register; every `asm`, in a block or as its terminator, clears
+  its clobbers);
 - a spill reload does not preserve its source value, including a reload from
   the wrong initialized slot or overlapping live slots;
 - a non-transport instruction, its attributes or a control-flow destination
@@ -1595,6 +1610,22 @@ Explicit logical spill slots in machine-level inputs have their own identity
 space; they are not assumed to have the compacted physical slot numbers.
 Tied assembly operands compare the fixed binding implied by the tie; repeating
 that binding on both operands does not change the constraint.
+After a `bl.returns_twice`, the relation keeps no register fact. Every source
+value that the input program reads after the call, by its own liveness, must
+be in a spill slot or an incoming stack argument at the call. A spill slot
+that holds such a value and that the allocated program reads after the call,
+by its own spill liveness, is guarded through loops and transport blocks: at
+each point that the returns-twice call reaches, a spill store into the slot
+must write that source value at its full width, because a jump back can start
+at such a point. The store can write the value under the name that a source
+copy gives it before the next source operation, because the allocator can
+spill the result of a copy directly. Guards come from the final states and
+join by union. A slot that holds only a copy of the value and that nothing
+reads after the call is not guarded. The check therefore refuses an
+allocation that keeps such a value only in a register and one in which
+another value writes its slot at a point that the call reaches. The
+allocator's private slots are stronger: no other value writes them at any
+point.
 This Rust check is not a Lean theorem or a proof of instruction selection,
 frame emission, or the complete native path. Section 9.3 keeps those limits.
 
@@ -1752,7 +1783,7 @@ cond            := "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "lo" | "ls" | "hi" 
 atomic-kind     := "b" | "h" | "w" | "x" | "p" | "pf"
 atomic-order    := "relaxed" | "consume" | "acquire" | "release" | "acq_rel" | "seq_cst"
 rmw-op          := "add" | "sub" | "and" | "or" | "xor" | "nand" | "exchange" | "cmpxchg"
-call-form       := ("bl" | "bl.fixed_fp" | "bl.strict_fp") " @" ident "(" uses ")" [results]
+call-form       := ("bl" | "bl.fixed_fp" | "bl.strict_fp" | "bl.returns_twice") " @" ident "(" uses ")" [results]
                  | "blr " use "(" uses ")" [results]
 results         := " -> " def ("," " " def)*
 uses            := [use ("," " " use)*]
@@ -1837,11 +1868,18 @@ and the checked UB-check profile; each exporter refuses other forms.
 
 | Format | Producer | Reader | Content |
 |---|---|---|---|
-| `core-mir-v1` | `crates/evocc-mir/src/core_machine_export.rs` | `lean/EvoIR/MachineReader.lean` | EvoMIR before allocation: classes `gpr32`, `gpr64`, `flags`; `mov`, `mov #imm`, binary and flag-setting arithmetic, `smull`/`smulh`/`umulh`, `msub`, `madd`, extensions, bitfield extracts, `cmp`, `tst`, `cset`, `csel`, W and X loads and stores, `frame.slot`, `stack.release`, ordinary `bl`; terminators `b`, `b.cond`, `cbz`/`cbnz`, `tbz`/`tbnz`, `ret`, `brk` |
+| `core-mir-v1` | `crates/evocc-mir/src/core_machine_export.rs` | `lean/EvoIR/MachineReader.lean` | EvoMIR before allocation: classes `gpr32`, `gpr64`, `flags`; `mov`, `mov #imm`, binary and flag-setting arithmetic, `smull`/`smulh`/`umulh`, `msub`, `madd`, extensions, bitfield extracts, `cmp`, `tst`, `cset`, `csel`, W and X loads and stores, `frame.slot`, `stack.release`, ordinary `bl` (not `bl.returns_twice`); terminators `b`, `b.cond`, `cbz`/`cbnz`, `tbz`/`tbnz`, `ret`, `brk` |
 | `core-alloc-v1`, `core-alloc-pair-v1` | `crates/evocc-mir/src/verify_alloc.rs` (`evo-alloc-export`) | `lean/EvoIR/Alloc/Reader.lean` | The post-SSA program and its allocation, with spill, reload and stack-argument forms |
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.6.0, 2026-10-20.** Sections 4.5 and A add `bl.returns_twice`,
+the form of EvoIR's `call.returns_twice`. Section 7.4 spills every range that
+spans it and gives each slot live after it storage of its own. Section 9.2
+clears every register fact after it and guards those slots wherever the call
+reaches. `core-mir-v1` and the allocation export refuse the form. Text without
+the form is unchanged.
 
 **Revision 1.5.0, 2026-10-20.** Section 4.2 lowers the `atomic.copy` forms
 of EvoIR Section 3.8 to the existing atomic forms and ordinary buffer

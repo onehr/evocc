@@ -24,6 +24,7 @@ pub mod inline;
 pub mod lifecycle;
 pub mod linkage;
 pub mod lints;
+pub mod returns_twice;
 
 /// A use recorded before an incomplete array's later declaration retains its
 /// source type. Completion changes only the outer bound, never the element or

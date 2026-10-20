@@ -186,12 +186,20 @@ fn inspect_calls(
     for function in &module.functions {
         for inst in function.blocks.iter().flat_map(|b| &b.insts) {
             let Inst::Call {
-                callee, arg_marks, ..
+                callee,
+                arg_marks,
+                returns_twice,
+                ..
             } = inst
             else {
                 continue;
             };
             report.candidates += 1;
+            // EvoIR 3.10: substitution would remove a call that returns twice.
+            if *returns_twice {
+                report.decline("returns-twice-call");
+                continue;
+            }
             let shape = definitions
                 .get(callee.as_str())
                 .copied()

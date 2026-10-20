@@ -560,12 +560,14 @@ pub fn render_inst(inst: &MInst) -> String {
             args,
             results: outputs,
             fp_mode,
+            returns_twice,
         } => format!(
             "{} @{symbol}({}){}",
-            match fp_mode {
-                Some(crate::FpCallMode::Strict) => "bl.strict_fp",
-                Some(crate::FpCallMode::Fixed) => "bl.fixed_fp",
-                None => "bl",
+            match (fp_mode, returns_twice) {
+                (Some(crate::FpCallMode::Strict), _) => "bl.strict_fp",
+                (Some(crate::FpCallMode::Fixed), _) => "bl.fixed_fp",
+                (None, true) => "bl.returns_twice",
+                (None, false) => "bl",
             },
             uses(args),
             results(outputs)
