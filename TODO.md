@@ -953,6 +953,15 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   [receipt](tests/contracts/agent-repair-6-pilot-20261014.json) record it.
   AtlasCloud was degraded during the run. Next action: the owner raises the key
   limit or supplies a key; then the same 10 requests run again.
+  October 20: after the owner raised the key limit, the same 10 pilot requests
+  ran with the compiler of `7fec1ce5`, whose G0 feedback is byte-identical to
+  P17 for 5/5 items. All 10 completed from AtlasCloud with no retry, and all
+  five go criteria hold: 9 delivered, valid and correct responses; one L4 G0
+  response stopped at the 4,096-token limit; the largest L16 completion used
+  9,715 tokens. Reported cost USD 0.018.
+  [Receipt](tests/contracts/agent-repair-6-pilot-20261020.json). Next action:
+  the owner approves registration and the 400-request measured run (cap USD
+  3.50), or stops here.
 
 - [x] **P21 — Replicate repair effort and test larger programs** — `DONE`, P1.
   Keep experiment 4 repetition 1 descriptive. Register two new repetitions

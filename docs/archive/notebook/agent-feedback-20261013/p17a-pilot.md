@@ -1,9 +1,10 @@
 # P17a: the Protocol A pilot
 
-Status: stopped at request 1 of 10. OpenRouter refused the request with HTTP
-403, because the API key had reached its total spending limit. No model
-response exists. The go criteria do not hold. The owner must decide on the key
-before a new pilot. Nothing is registered.
+Status: the rerun of 2026-10-20 completed all 10 requests and holds every go
+criterion, for a reported USD 0.018. The first run of 2026-10-14 stopped at
+request 1, because the OpenRouter key had reached its total limit; the owner
+then raised the limit. Nothing is registered. The measured run needs the
+owner's approval.
 
 The protocol is Protocol A in `protocols.md`. Its machine form is
 `tools/experiment/protocol-6.json`, with the status `unregistered`. The receipt
@@ -30,6 +31,40 @@ is `tests/contracts/agent-repair-6-pilot-20261014.json`.
 - Corpus: the five E3004 items at tag `agent-repair-corpus-2` (`7eed5eac`). The
   working files equal the tag.
 - Captures: `.evidence/p17a-pilot-20261014/`, 1.0 MiB, ignored by Git.
+
+## Rerun of 2026-10-20
+
+- Compiler: `evocc 0.1.0 (7fec1ce553a3 2026-10-20)`, release `evocc`
+  `49ddc244`, `evo` `7519053b`, at commit `7fec1ce5`. The harness, protocol
+  file and prompt hashes equal those of the first run.
+- Free check: `compare-g0` gives 5/5 G0 feedback byte-identical to P17
+  repetition 1, round 1, with the current compiler.
+- Receipt: `tests/contracts/agent-repair-6-pilot-20261020.json`. Raw
+  responses: `.evidence/p17a-pilot-20261020/pilot/` (ignored by Git).
+
+| Request | Item | Arm | Limit | Finish | Completion tokens | Reasoning tokens | Delivered | Correct | USD |
+| ---: | --- | --- | --- | --- | ---: | ---: | --- | --- | ---: |
+| 1 | `ub-addition-overflow` | G0 | L16 | stop | 9,715 | 9,439 | yes | yes | 0.00535 |
+| 2 | `ub-addition-overflow` | G1 | L16 | stop | 4,639 | 4,494 | yes | yes | 0.00259 |
+| 3 | `ub-negation-overflow` | G0 | L16 | stop | 4,900 | 4,762 | yes | yes | 0.00275 |
+| 4 | `ub-negation-overflow` | G1 | L16 | stop | 1,097 | 990 | yes | yes | 0.00068 |
+| 5 | `ub-subtraction-overflow` | G0 | L16 | stop | 1,098 | 950 | yes | yes | 0.00070 |
+| 6 | `ub-subtraction-overflow` | G1 | L16 | stop | 1,497 | 1,346 | yes | yes | 0.00089 |
+| 7 | `ub-multiplication-overflow` | G0 | L4 | length | 4,096 | 4,096 | no | no | 0.00232 |
+| 8 | `ub-multiplication-overflow` | G1 | L4 | stop | 3,569 | 3,427 | yes | yes | 0.00201 |
+| 9 | `ub-quotient-overflow` | G0 | L4 | stop | 673 | 567 | yes | yes | 0.00047 |
+| 10 | `ub-quotient-overflow` | G1 | L4 | stop | 672 | 563 | yes | yes | 0.00045 |
+
+Every response came from AtlasCloud and the registered model, with no retry.
+Go criteria: all five hold. The provider accepted `max_tokens` 16,384; the
+largest completion used 9,715 tokens. Nine responses were delivered, and all
+nine were valid and correct. The cost was USD 0.018 against the USD 0.30 cap,
+with no unknown-cost reserve.
+
+Descriptive only, not an effect estimate: three of the six L16 responses were
+longer than 4,096 completion tokens (two of three in G0, one of three in G1),
+and one L4 response stopped at the limit before its answer. Pilot data stay
+out of the measured analysis.
 
 ## Free checks before the pilot
 
