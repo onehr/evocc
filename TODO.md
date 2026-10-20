@@ -139,7 +139,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW | D16 | Decide the rule for calls that return twice by name (D16). No other rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT |  | D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
-| LATER | R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
+| LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
 ## Diagnostics and command-line product work
@@ -3837,6 +3837,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   historical ignores, **274 K1 + 315 ladder tests**, Clippy/fmt/Ruff, both layout
   corpora, 54 grammar shapes and thirteen isolated offline replays. The same
   final-campaign boundaries apply.
+  October 20: on the owner's request the release documents are refreshed before
+  this gate. The results section of `CHANGELOG.md` names the date of each result
+  and carries the current workspace and Lean gates; `docs/release-checklist.md`
+  is updated. T05 stays open until the last semantic repair.
 
   - [x] **T05a — Preserve multiline benchmark command failures**.
     Six RED assertions showed that trailing newlines/comments detached log
@@ -4452,6 +4456,17 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     name `core-v1`. The text names the Linux target and typed Core to assembly
     text boundary; it does not claim proofs of parsing, assembly, linking or
     every accepted C program. The normative verification contract is linked.
+  - [ ] **R05m — Make the hosted CI and release workflows pass** — `LATER`, P1.
+    Paused by the owner on 2026-10-20. No run of `ci.yml`, `nightly.yml` or
+    `release.yml` has succeeded; since 2026-10-07 GitHub refuses every job
+    because of the account's billing state. Known causes after billing: the Rust
+    job runs the tests that need `lean/.lake/build/bin/evoir-sem` without
+    building it (six test files, 25 tests in `proof_required.rs` alone), and the
+    older SDK of the macOS runner can expose the `__builtin___*_chk` failures of
+    the macOS 15 SDK. The relative-link check passes on a clean checkout. The
+    release workflow builds the Linux archive (R05a) and merges the checksum
+    files (R05k). Exit: one green run of each workflow, and of `release.yml` for
+    a test tag.
 
 - [x] **R06 — Pinned Doom integration** — `DONE`, 2026-09-28, bounded headless profile.
   doomgeneric `dcb7a8db...` plus Freedoom 0.13.0 Phase 1: all 80 engine units

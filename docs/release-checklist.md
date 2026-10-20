@@ -2,8 +2,11 @@
 
 This page audits the first release, EvoCC 0.1.0, against the repository. It covers the two
 archives, checksums, notices, install and build instructions, reproducibility, version strings,
-the changelog and the proof-claim boundary. CI is out of scope. The audit ran on 2026-10-13 on
-macOS (AArch64), at commit `366fd796` with the release-hygiene changes of the same day.
+the changelog and the proof-claim boundary. The audit ran on 2026-10-13 on macOS (AArch64), at
+commit `366fd796` with the release-hygiene changes of the same day. It was updated on 2026-10-20
+at commit `537e745a`; a row that changed names its date. Hosted CI is paused by the owner since
+2026-10-20 (TODO R05m). The release workflow builds the Linux archive and the merged checksum
+file, so both wait for it.
 
 **Done** means that this audit checked it. **Partial** means that a part works, and the row names
 the rest. **Open** means that it is missing. **Not verified** means that the check needs a host or
@@ -13,15 +16,15 @@ an input that this audit did not have.
 
 | Deliverable | State | Evidence |
 |---|---|---|
-| macOS archive `evocc-0.1.0-aarch64-apple-darwin.tar.gz` | Done as a packaging check. `tools/release.sh --skip-build` packaged binaries from a shared working tree, not from a clean tag. | [`tools/release.sh`](../tools/release.sh) |
+| macOS archive `evocc-0.1.0-aarch64-apple-darwin.tar.gz` | Done as a packaging check. `tools/release.sh --skip-build` packaged binaries from a shared working tree, not from a clean tag. On 2026-10-20 the local release binaries are from `7fec1ce5` and have the `<pthread.h>` defect that D15 fixes, so the release archive must be built again from the tagged commit. | [`tools/release.sh`](../tools/release.sh) |
 | Smoke test of the macOS archive | Done. On 2026-10-14, after the header trim and with the runtime license texts, all 1,696 entries of the inner `SHA256SUMS` match. `evocc --version` prints `evocc 0.1.0 (366fd796613e 2026-10-13)`. The interpreter hello prints 12. `evoir-sem --selftest` exits 0. | The smoke commands, run on the extracted archive |
 | Linux object from the macOS archive | Done. The bundled sysroot gives an ELF object. The object links and prints `hello from EvoCC on Linux` in the sealed Linux image. On 2026-10-14 this passed again with the trimmed sysroot. | `evocc -v --target=aarch64-unknown-linux-gnu` prints the bundled sysroot |
-| Linux archive `evocc-0.1.0-aarch64-unknown-linux-gnu.tar.gz` | Not verified. The build needs an AArch64 Linux host, the Rust target `aarch64-unknown-linux-musl` and Lake. | [`tools/release.sh`](../tools/release.sh) |
+| Linux archive `evocc-0.1.0-aarch64-unknown-linux-gnu.tar.gz` | Not verified. The build needs an AArch64 Linux host, the Rust target `aarch64-unknown-linux-musl` and Lake. The release workflow builds it on a hosted runner, and hosted CI is paused (2026-10-20). | [`tools/release.sh`](../tools/release.sh) |
 | Linux archive on a host with glibc older than 2.38 | Done: the book states the floor. On Linux the bundled glibc 2.41 headers come before the host headers. With `_GNU_SOURCE` they redirect `strtol`, `scanf` and related functions to `__isoc23_*` names of glibc 2.38. In `debian:bookworm-slim` (glibc 2.36-9+deb12u14, GCC 12.2.0), a `_GNU_SOURCE` `strtol` object of the frozen compiler does not link: `undefined reference to '__isoc23_strtol'`. The same program, linked against glibc 2.41, stops with ``version `GLIBC_2.38' not found``. Without `_GNU_SOURCE`, and with the Debian 12 headers, it links and runs. | [`book/src/install.md`](../book/src/install.md#glibc-on-linux), `usr/include/features.h` of the sysroot |
 | Deterministic archive | Done. On 2026-10-14, three worktrees of commit `34d81cbf` at three paths, each with its own header export, packaged the same programs into archives with the same SHA-256. | [`tools/release.sh`](../tools/release.sh), [`book/src/release.md`](../book/src/release.md) |
-| Path-independent binaries | Open. `evo`, `evocc` and `evocc-checker` hold 23, 75 and 11 strings with the home directory of the build machine. The build does not remap source paths. | `strings -a bin/evocc` |
+| Path-independent binaries | Open. On 2026-10-20 the local release binaries `evo`, `evocc` and `evocc-checker` hold 23, 77 and 10 strings with the home directory of the build machine: paths of the vendored crates, the workspace and the Rust toolchain. The build does not remap source paths. | `strings -a bin/evocc` |
 | Inner `SHA256SUMS` | Done. It lists every file of the archive, the license texts too. The archive check of the sysroot test passes. | [`tools/tests/test_sysroot.py`](../tools/tests/test_sysroot.py) with `EVOCC_RELEASE_ARCHIVE` |
-| One `SHA256SUMS` for both archives | Open for a release without CI. `tools/release.sh` merges digests only in its own output directory, and the two archives build on two hosts. | [`tools/release.sh`](../tools/release.sh) |
+| One `SHA256SUMS` for both archives | Open for a release without CI. `tools/release.sh` merges digests only in its own output directory, and the two archives build on two hosts. The release workflow merges them; hosted CI is paused (2026-10-20). | [`tools/release.sh`](../tools/release.sh) |
 
 ## Notices
 
@@ -50,15 +53,15 @@ an input that this audit did not have.
 | Deliverable | State | Evidence |
 |---|---|---|
 | Version of `evocc` and `evo` | Done. Both print `evocc 0.1.0 (<commit> <date>)`. | `evocc --version`, `evo version` |
-| Version of `evocc-checker` and `evoir-sem` | Done on 2026-10-19 in the working tree. Both print their binary name and `0.1.0`, exit zero and leave stderr empty. Tests run both from an empty directory and compare with Cargo's version. This does not certify a release archive. | [`crates/evocc/tests/evo_cli.rs`](../crates/evocc/tests/evo_cli.rs); full workspace: 3,475 passed, zero failed, eight ignored; all six Lean steps passed |
+| Version of `evocc-checker` and `evoir-sem` | Done on 2026-10-19 and committed in `f81a13d4`. Both print their binary name and `0.1.0`, exit zero and leave stderr empty. Tests run both from an empty directory and compare with Cargo's version. This does not certify a release archive. | [`crates/evocc/tests/evo_cli.rs`](../crates/evocc/tests/evo_cli.rs); full workspace: 3,475 passed, zero failed, eight ignored; all six Lean steps passed |
 | Version policy | Done. `tools/release.sh` accepts only a `0.y.z` version with a matching heading in `CHANGELOG.md`. | [`tools/release.sh`](../tools/release.sh) |
 | Package description | Done. It describes the compiler without internal lab names. | [`crates/evocc/Cargo.toml`](../crates/evocc/Cargo.toml) |
-| Changelog and tag | Partial. The heading `## [0.1.0] - Unreleased` has no date. No `v0.1.0` tag exists. | [`CHANGELOG.md`](../CHANGELOG.md) |
+| Changelog and tag | Partial. The heading `## [0.1.0] - Unreleased` has no date. No `v0.1.0` tag exists. The date and the tag are the last step of the release (R05k). On 2026-10-20 the results section was refreshed: the gate result is current, and the older results keep their dates. | [`CHANGELOG.md`](../CHANGELOG.md) |
 
 ## Proof-claim boundary
 
 | Deliverable | State | Evidence |
 |---|---|---|
 | The claim | Done. Section 1 of the verification contract states the proved path: the subset `core-v1`, the target `aarch64-unknown-linux-gnu`, the trusted base and what is not claimed. | [`spec/verification.md`](../spec/verification.md) |
-| Release-blocking proof tasks | Done. V00 to V06 are complete in their frozen scope. | [`TODO.md`](../TODO.md) |
-| README wording | Partial. The Status section limits proofs to integer functions without pointers, arrays or recursion. The opening paragraph and the Highlights state proofs without that limit. No README line names the Linux target of the proved path. | [`README.md`](../README.md#status) |
+| Release-blocking proof tasks | Done. On 2026-10-20 the tracker records V00 to V08 as complete in their frozen scope. | [`TODO.md`](../TODO.md) |
+| README wording | Done on 2026-10-15 (R05l). The opening paragraph, the Highlights, the proof example, the architecture and the Status section name `core-v1`. The proof example and the architecture name the Linux target. The owner confirms the wording before the tag. | [`README.md`](../README.md#status) |

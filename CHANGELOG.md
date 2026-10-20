@@ -256,15 +256,23 @@ The first public version.
 
 ### Results at this version
 
-These results were recorded between 2026-09-13 and 2026-10-07. [docs/evidence.md](docs/evidence.md)
-keeps their limits.
+The gate result below was recorded on 2026-10-20 and the kernel rebuild on 2026-10-19. The other
+results were recorded between 2026-09-13 and 2026-10-07 and were not run again on the final
+commit. [docs/evidence.md](docs/evidence.md) keeps their limits.
 
+- On 2026-10-20 the full offline workspace gate on clean `537e745a` passes 466 suites and 3,526
+  tests with zero failures; 14 ignored tests run only on request, such as the sealed Linux lanes.
+  Clippy and formatting pass. The Lean gate passes all six steps on the same day: 62 rule
+  theorems against EvoIR 2.11.1. Neither gate expands the verified language subset.
 - The recorded agent repair loop reaches checked assembly in 12.41 seconds in the final
   workspace gate. Its refusal demo returns the three required failures without publishing
   assembly. Paired JSON/proof-record tests pass three consecutive runs and the final gate;
   both the full offline workspace and Lean gates pass on clean commit `200b4e73`.
 - Linux 6.18.44 ARM64 boots with 2,799 of 2,799 target C objects compiled by EvoCC. A second
-  configuration boots with 7,008 objects and 848 modules.
+  configuration boots with 7,008 objects and 848 modules. On 2026-10-19 every target C unit of the
+  first configuration was rebuilt with one identified EvoCC snapshot of a working tree. That
+  kernel boots under HVF with pointer authentication and under TCG, as does the GCC reference,
+  and nine paired upstream self-test programs pass. This is not full Linux acceptance.
 - Ten of fifteen application lanes pass their recorded selection, among them zlib, zstd, cJSON,
   Mbed TLS, TinyCC, jq, Lua, SQLite and PolyBench/C. Two Doom demos give the same framebuffer
   hash for each of 350 frames under EvoCC, GCC 14 and Clang 19.
@@ -279,6 +287,3 @@ keeps their limits.
 - Original CMake builds on macOS pass cJSON 1.7.19's 22 tests and zlib 1.3.2's 16 default
   CTest commands. The zlib coverage-summary command reports a missing .gcno file, but Apple's
   gcov returns 0. Its passing exit does not establish coverage support. No test was excluded.
-- The final product gate on clean `95466ea0` passes 3,225 Rust tests with zero failures and
-  five existing ignored campaigns. Clippy and formatting pass. The existing Lean gate passes
-  all six steps against EvoIR 2.0.1; this check does not expand the verified language subset.
