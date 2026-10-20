@@ -1766,6 +1766,7 @@ pub struct TargetDataLayout {
     binary64_long_double: bool,
     narrow_call_extension: bool,
     sixteen_byte_lock_free: bool,
+    power_of_two_atomics: bool,
 }
 
 impl TargetDataLayout {
@@ -1778,6 +1779,7 @@ impl TargetDataLayout {
             binary64_long_double: false,
             narrow_call_extension: false,
             sixteen_byte_lock_free: false,
+            power_of_two_atomics: false,
         }
     }
 
@@ -1794,6 +1796,7 @@ impl TargetDataLayout {
             binary64_long_double: true,
             narrow_call_extension: true,
             sixteen_byte_lock_free: true,
+            power_of_two_atomics: true,
         }
     }
 
@@ -1803,6 +1806,33 @@ impl TargetDataLayout {
     #[must_use]
     pub const fn sixteen_byte_atomics_are_lock_free(&self) -> bool {
         self.sixteen_byte_lock_free
+    }
+
+    /// The layout of an `_Atomic` type whose non-atomic type has layout
+    /// `natural` (EvoIR 10.1.21). GCC 14 on Linux keeps the size and raises
+    /// the alignment of a 1-, 2-, 4-, 8- or 16-byte type to its size. Apple
+    /// clang rounds a size of at most 16 bytes up to a power of two and uses
+    /// that size as the alignment; the extra bytes are padding. A larger type
+    /// keeps its layout on both targets.
+    #[must_use]
+    pub const fn atomic_layout(&self, natural: TypeLayout) -> TypeLayout {
+        let size = natural.size_bytes;
+        if size == 0 || size > 16 {
+            return natural;
+        }
+        if self.power_of_two_atomics {
+            let rounded = size.next_power_of_two();
+            let align = if natural.align_bytes as u64 > rounded {
+                natural.align_bytes
+            } else {
+                rounded as u32
+            };
+            return TypeLayout::new(rounded, align);
+        }
+        if size.is_power_of_two() && natural.align_bytes < size as u32 {
+            return TypeLayout::new(size, size as u32);
+        }
+        natural
     }
 
     /// Whether a call extends an integer argument or result narrower than 32
@@ -2011,7 +2041,11 @@ impl<'a> LayoutContext<'a> {
         let canonical = self.types.get(ty).ok_or(LayoutError::UnknownType(ty))?;
         let kind = canonical.kind.clone();
         let raised = canonical.qualifiers.aligned;
-        let natural = self.layout_kind(ty, kind)?;
+        let atomic = canonical.qualifiers.is_atomic;
+        let mut natural = self.layout_kind(ty, kind)?;
+        if atomic {
+            natural = self.target.atomic_layout(natural);
+        }
         // `aligned(N)` on a typedef or type name sets the alignment exactly,
         // lowering it if `N` is smaller: sealed GCC-14 and Clang-19 both give
         // `typedef int t __attribute__((aligned(1)))` alignment one. The size

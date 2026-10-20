@@ -584,6 +584,29 @@ impl FunctionRenderer {
                         render_value(&access.address),
                         render_value(value)
                     ),
+                    crate::AtomicOp::Copy {
+                        op,
+                        buffers,
+                        result,
+                        layout,
+                    } => {
+                        let mut results = result.iter().cloned().collect::<Vec<_>>();
+                        results.extend([access.mem_out.clone(), access.world_out.clone()]);
+                        let mut operands = vec![
+                            access.mem_in.clone(),
+                            access.world_in.clone(),
+                            access.address.clone(),
+                        ];
+                        operands.extend(buffers.iter().cloned());
+                        format!(
+                            "({}) = atomic.copy.{} {order}{volatile} {} [size={}, align={}]",
+                            render_values(&results),
+                            op.mnemonic(),
+                            render_values(&operands),
+                            layout.size_bytes,
+                            layout.align_bytes
+                        )
+                    }
                 }
             }
             Inst::VaAccess(access) => {

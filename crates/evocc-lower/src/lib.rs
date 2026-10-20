@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 
 mod allocation;
+mod atomic;
 mod cfg;
 mod complex;
 mod conditions;
@@ -7849,6 +7850,11 @@ impl<'a> FunctionLowerer<'a> {
         if access.weak.is_some() {
             values.pop();
         }
+        let result_buffer = if access.result.is_some() {
+            values.pop().map(|bound| bound.value)
+        } else {
+            None
+        };
         let stored = if access.value.is_some() {
             values.pop().map(|bound| bound.value)
         } else {
@@ -7860,6 +7866,9 @@ impl<'a> FunctionLowerer<'a> {
             None
         };
         let address = values.remove(0).value;
+        if access.memory {
+            return self.lower_atomic_copy(access, address, stored, expected, result_buffer, state);
+        }
         let (ty, integer) = self.c_value_type(access.access_ty, access.span)?;
         // `__atomic_compare_exchange_n` reads the expected value through its
         // pointer with an ordinary load before the atomic operation.
@@ -8127,6 +8136,15 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
         layout: AccessLayout,
     ) -> Result<ExprValue, LowerError> {
+        // A read of an `_Atomic` object is a `seq_cst` atomic load.
+        if self
+            .unit
+            .types()
+            .get(ty)
+            .is_some_and(|canonical| canonical.qualifiers.is_atomic)
+        {
+            return self.emit_atomic_object_load(address, ty, volatile, layout, span, state);
+        }
         let (result_ty, integer) = self.c_value_type(ty, span)?;
         self.emit_typed_memory_load(address, result_ty, integer, volatile, state, layout)
     }
@@ -14047,6 +14065,17 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         self.validate_place(place, target, span)?;
+        if self
+            .unit
+            .types()
+            .get(place.ty())
+            .is_some_and(|ty| ty.qualifiers.is_atomic)
+        {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "atomic update through a direct place",
+            });
+        }
         if self.memory_symbols.contains(&place.symbol()) {
             let address = self.object_address(place.symbol(), span, state)?;
             let address_key = self.retain_temporary(address.clone(), state);
@@ -14244,6 +14273,17 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         self.validate_place(place, target, span)?;
+        if self
+            .unit
+            .types()
+            .get(place.ty())
+            .is_some_and(|ty| ty.qualifiers.is_atomic)
+        {
+            return Err(LowerError::UnsupportedExpression {
+                span,
+                feature: "atomic update through a direct place",
+            });
+        }
         let original = self.local(state, place.symbol(), span)?;
         if evocc_evoir::floating_kind(&original.value.ty).is_some() {
             let updated = self.floating_increment(original.clone(), operator, state)?;
@@ -14433,6 +14473,9 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if place.access_qualifiers().is_atomic {
+            self.require_admitted_atomic_object(place.value_ty(), span)?;
+        }
         let bit_field = self.place_bit_field(place, target_span)?;
         let address = self.lower_place_address(place, target_span, state)?;
         let address_key = self.retain_temporary(address.clone(), state);
@@ -14565,6 +14608,18 @@ impl<'a> FunctionLowerer<'a> {
             .remove(&address_key)
             .expect("retained assignment address")
             .value;
+        if place.access_qualifiers().is_atomic {
+            return self.lower_atomic_assignment(
+                operator,
+                place.value_ty(),
+                volatile,
+                address,
+                right,
+                assigned,
+                span,
+                state,
+            );
+        }
         let original = if operator == AssignmentOp::Simple {
             None
         } else if let Some(field) = bit_field {
@@ -14677,6 +14732,16 @@ impl<'a> FunctionLowerer<'a> {
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
         let address = self.lower_place_address(place, target_span, state)?;
+        if place.access_qualifiers().is_atomic {
+            return self.lower_atomic_update(
+                operator,
+                place.value_ty(),
+                place.access_qualifiers().is_volatile,
+                address,
+                span,
+                state,
+            );
+        }
         let bit_field = self.place_bit_field(place, target_span)?;
         let access_layout = self.place_access_layout(place, target_span)?;
         let original = if let Some(field) = bit_field {

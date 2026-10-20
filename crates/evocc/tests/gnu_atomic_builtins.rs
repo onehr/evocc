@@ -95,11 +95,6 @@ fn both_interpreters_execute_the_value_matrix_on_both_targets() {
         for mode in INTERPRETERS {
             for level in LEVELS {
                 for case in INTERPRETED_CASES {
-                    if case == 8 && mode == "--interpret-c-hir" {
-                        // The C-HIR interpreter still refuses a block-scope
-                        // `_Atomic` object declaration (E3007); L11a owns it.
-                        continue;
-                    }
                     let output = evocc()
                         .arg(format!("--target={target}"))
                         .args(["-std=gnu11", level, mode])
@@ -238,10 +233,10 @@ fn constant_orders_follow_the_gcc_warning_set() {
 
 #[test]
 fn unadmitted_spellings_stay_refused_at_every_warning_level() {
+    // The generic `__atomic_load`, `__atomic_store`, `__atomic_exchange` and
+    // `__atomic_compare_exchange` forms are admitted since L11c
+    // (generic_atomic_records.rs executes them).
     for source in [
-        "int v, r; void f(void){__atomic_load(&v,&r,5);}",
-        "int v, r; void f(void){__atomic_store(&v,&r,5);}",
-        "int v, r, s; void f(void){__atomic_exchange(&v,&r,&s,5);}",
         "int v; int f(void){return __atomic_fetch_min(&v,1,5);}",
         "int v; int f(void){return __sync_fetch_and_min(&v,1);}",
         "int v; int f(void){return __atomic_fetch_add_4(&v,1,5);}",
@@ -253,12 +248,6 @@ fn unadmitted_spellings_stay_refused_at_every_warning_level() {
             &[&[], &["-w"], &["-std=gnu89"], &["-w", "-std=gnu89"]],
         );
     }
-    let scope = std::fs::read_to_string(fixture("atomic-scope-boundaries.c")).unwrap();
-    refused_in(
-        &format!("#define CASE 2\n{scope}"),
-        "E2949",
-        &[&[], &["-w"], &["-std=gnu89"]],
-    );
 }
 
 #[test]
@@ -286,6 +275,10 @@ fn has_builtin_answers_one_for_each_admitted_builtin() {
         "__atomic_is_lock_free",
         "__atomic_load_n",
         "__atomic_store_n",
+        "__atomic_load",
+        "__atomic_store",
+        "__atomic_exchange",
+        "__atomic_compare_exchange",
     ];
     let mut source = String::new();
     for name in names {
@@ -293,7 +286,7 @@ fn has_builtin_answers_one_for_each_admitted_builtin() {
             "#if !__has_builtin({name})\n#error {name}\n#endif\n"
         ));
     }
-    source.push_str("#if __has_builtin(__atomic_load) || __has_builtin(__atomic_fetch_min)\n#error unadmitted\n#endif\nint ok;\n");
+    source.push_str("#if __has_builtin(__atomic_fetch_min) || __has_builtin(__atomic_fetch_add_4)\n#error unadmitted\n#endif\nint ok;\n");
     let output = stdin(&source, &["-E"]);
     assert!(output.status.success(), "{}", text(&output));
 }

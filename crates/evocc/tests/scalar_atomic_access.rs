@@ -127,29 +127,23 @@ fn atomic_type_order_and_constant_context_errors_are_not_silent() {
 }
 
 #[test]
-fn broader_atomic_interfaces_are_not_mistaken_for_implemented_scalar_access() {
+fn the_broader_atomic_interfaces_now_execute() {
+    // CASE 0 is an `_Atomic` update (L11a, atomic_objects.rs), CASE 1 uses
+    // the L11b forms (gnu_atomic_builtins.rs) and CASE 2 the generic record
+    // forms (L11c, generic_atomic_records.rs).
     let source = include_str!("../../../tests/fixtures/atomic-scope-boundaries.c");
-    // An unknown `__atomic_` name is refused as a builtin, never declared
-    // implicitly: E2949 names it at the call. CASE 1 uses the L11b forms,
-    // which gnu_atomic_builtins.rs executes.
-    for (case, code) in [
-        (0, "E2702"),
-        (2, "error[E2949]: unknown-builtin: __atomic_load"),
-    ] {
+    for case in 0..3 {
         let source = format!("#define CASE {case}\n{source}");
-        for mode in ["--interpret-c-hir", "--emit=evoir", "--emit=asm"] {
-            let output = run(&source, mode);
-            assert!(!output.status.success(), "case {case} {mode}");
-            assert!(
-                String::from_utf8_lossy(&output.stderr).contains(code),
-                "case {case} {mode}: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            assert!(
-                output.stdout.is_empty(),
-                "unsupported access emitted a product"
-            );
-        }
+        let output = run(&source, "--interpret-c-hir");
+        assert!(
+            output.status.success(),
+            "case {case}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"0\n", "case {case}");
+        let assembly = run(&source, "--emit=asm");
+        assert!(assembly.status.success(), "case {case}");
+        assert!(!String::from_utf8_lossy(&assembly.stdout).contains("bl __atomic"));
     }
 }
 

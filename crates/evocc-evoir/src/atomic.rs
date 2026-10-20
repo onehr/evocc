@@ -1,5 +1,5 @@
 use crate::*;
-pub use evocc_memory::{AtomicOrder, AtomicRmwOp};
+pub use evocc_memory::{AtomicCopyOp, AtomicOrder, AtomicRmwOp};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AtomicOp {
@@ -10,6 +10,16 @@ pub enum AtomicOp {
         operation: AtomicRmwOp,
         value: Value,
         expected: Option<Value>,
+    },
+    /// A generic form on memory (Section 3.8). `layout` gives the byte count
+    /// of the object access, at natural alignment, and the alignment of the
+    /// ordinary buffer accesses. `buffers` follows [`AtomicCopyOp::buffers`];
+    /// a compare-exchange also defines its `bits<1>` `result`.
+    Copy {
+        op: AtomicCopyOp,
+        buffers: Vec<Value>,
+        result: Option<Value>,
+        layout: AccessLayout,
     },
 }
 
@@ -29,15 +39,19 @@ impl AtomicAccess {
     pub fn is_load(&self) -> bool {
         matches!(self.op, AtomicOp::Load(_))
     }
-    pub fn value(&self) -> &Value {
+    /// The scalar value that a load defines, a store reads or a
+    /// read-modify-write returns; a form on memory has none.
+    pub fn value(&self) -> Option<&Value> {
         match &self.op {
-            AtomicOp::Load(value) | AtomicOp::Store(value) => value,
-            AtomicOp::Rmw { result, .. } => result,
+            AtomicOp::Load(value) | AtomicOp::Store(value) => Some(value),
+            AtomicOp::Rmw { result, .. } => Some(result),
+            AtomicOp::Copy { .. } => None,
         }
     }
     pub fn results(&self) -> Vec<&Value> {
         let mut values = match &self.op {
             AtomicOp::Load(value) | AtomicOp::Rmw { result: value, .. } => vec![value],
+            AtomicOp::Copy { result, .. } => result.iter().collect(),
             _ => vec![],
         };
         values.extend([&self.mem_out, &self.world_out]);
@@ -46,6 +60,7 @@ impl AtomicAccess {
     pub fn results_mut(&mut self) -> Vec<&mut Value> {
         let mut values = match &mut self.op {
             AtomicOp::Load(value) | AtomicOp::Rmw { result: value, .. } => vec![value],
+            AtomicOp::Copy { result, .. } => result.iter_mut().collect(),
             _ => vec![],
         };
         values.extend([&mut self.mem_out, &mut self.world_out]);
@@ -62,6 +77,13 @@ impl AtomicAccess {
             } => {
                 let mut values = vec![result, value];
                 values.extend(expected.iter_mut());
+                values
+            }
+            AtomicOp::Copy {
+                buffers, result, ..
+            } => {
+                let mut values: Vec<&mut Value> = result.iter_mut().collect();
+                values.extend(buffers.iter_mut());
                 values
             }
         };
@@ -86,6 +108,9 @@ impl AtomicAccess {
             values.push(value);
             values.extend(expected.iter());
         }
+        if let AtomicOp::Copy { buffers, .. } = &self.op {
+            values.extend(buffers.iter());
+        }
         values
     }
     pub fn operands_mut(&mut self) -> Vec<&mut Value> {
@@ -99,11 +124,26 @@ impl AtomicAccess {
                 values.push(value);
                 values.extend(expected.iter_mut());
             }
+            AtomicOp::Copy { buffers, .. } => values.extend(buffers.iter_mut()),
         }
         values
     }
+    /// The object access: the scalar's width, or the byte count of a form on
+    /// memory, at natural alignment.
     pub fn layout(&self) -> Result<AccessLayout, String> {
-        let size = match self.value().ty {
+        if let AtomicOp::Copy { layout, .. } = &self.op {
+            if !matches!(layout.size_bytes, 1 | 2 | 4 | 8) {
+                return Err("E3062: invalid-atomic-access: size".into());
+            }
+            return Ok(AccessLayout::new(
+                layout.size_bytes,
+                layout.size_bytes as u32,
+            ));
+        }
+        let Some(value) = self.value() else {
+            return Err("E3062: invalid-atomic-access: type".into());
+        };
+        let size = match value.ty {
             EvoIRType::Bits(1 | 8) => 1,
             EvoIRType::Bits(16) => 2,
             EvoIRType::Bits(32) => 4,
@@ -114,7 +154,29 @@ impl AtomicAccess {
     }
     pub fn validate(&self) -> Result<(), String> {
         self.layout()?;
-        if let AtomicOp::Rmw {
+        if let AtomicOp::Copy {
+            op,
+            buffers,
+            result,
+            layout,
+        } = &self.op
+        {
+            if buffers.len() != op.buffers()
+                || !layout.align_bytes.is_power_of_two()
+                || u64::from(layout.align_bytes) > layout.size_bytes
+                || !op.admits(self.order)
+                || (*op == AtomicCopyOp::CompareExchange)
+                    != result
+                        .as_ref()
+                        .is_some_and(|result| result.ty == EvoIRType::Bits(1))
+                || (*op != AtomicCopyOp::CompareExchange && result.is_some())
+            {
+                return Err("E3062: invalid-atomic-access: memory form".into());
+            }
+            for (index, buffer) in buffers.iter().enumerate() {
+                expect_pointer(&buffer.ty, "atomic buffer", index as u32)?;
+            }
+        } else if let AtomicOp::Rmw {
             result,
             operation,
             value,
@@ -170,6 +232,34 @@ pub(crate) fn execute_atomic(
     let address = read_pointer(values, &access.address, block)?;
     let layout = matching_guard(state, token, address, block)?;
     match &access.op {
+        AtomicOp::Copy {
+            op,
+            buffers,
+            result,
+            layout: buffer,
+        } => {
+            let buffers = buffers
+                .iter()
+                .map(|buffer| read_pointer(values, buffer, block))
+                .collect::<Result<Vec<_>, _>>()?;
+            let (memory, world, exchanged) = state
+                .memory
+                .atomic_copy(
+                    &state.world,
+                    *op,
+                    address,
+                    &buffers,
+                    *buffer,
+                    access.order,
+                    access.volatile,
+                )
+                .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+            state.memory = memory;
+            state.world = world;
+            if let Some(result) = result {
+                write_internal(values, result, InternalValue::Bits(u128::from(exchanged)));
+            }
+        }
         AtomicOp::Rmw {
             result,
             operation,

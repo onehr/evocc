@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.9.0** | **Pinned ground truth** | GNU atomic read-modify-write builtins on 2026-10-20
+**Revision 2.11.0** | **Pinned ground truth** | Generic atomic forms on memory on 2026-10-20
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -955,9 +955,9 @@ order consistent with happens-before; a load reads a write allowed by the
 C11 atomic coherence rules. A release store synchronizes with an acquire
 load that reads it (consume is implemented as acquire). Sequentially
 consistent operations additionally participate in the C11 SC total order.
-Atomic accesses use naturally aligned ordinary shared Normal memory; no
-generic aggregate, 128-bit, MMIO or complete `_Atomic` type-system support is
-implied.
+Atomic accesses use naturally aligned ordinary shared Normal memory. Section
+10.1.21 maps C `_Atomic` objects onto these accesses; no generic aggregate,
+128-bit or MMIO support is implied.
 
 **Atomic read-modify-write.**
 `(%old, %m1, %w1) = atomic.rmw.<op> <order> [volatile] %m0, %w0, %ptr, %value [, %expected] : T`
@@ -980,6 +980,38 @@ equals `%expected`, and a failed comparison stores nothing. Invalid operands,
 type or order are `E3062`. These operations are outside P0; native code uses
 a width-correct exclusive load/store loop that keeps the `cmpxchg` failure
 path.
+
+**Atomic object copies.**
+
+```text
+(%m1, %w1) = atomic.copy.load <order> [volatile] %m0, %w0, %ptr, %dst [size=N, align=A]
+(%m1, %w1) = atomic.copy.store <order> [volatile] %m0, %w0, %ptr, %src [size=N, align=A]
+(%m1, %w1) = atomic.copy.exchange <order> [volatile] %m0, %w0, %ptr, %src, %dst [size=N, align=A]
+(%ok, %m1, %w1) = atomic.copy.cmpxchg <order> [volatile] %m0, %w0, %ptr, %expected, %desired, %observed [size=N, align=A]
+```
+
+These forms access the `N`-byte object at `%ptr` as one atomic object and
+move its representation to or from ordinary buffers. `N` is 1, 2, 4 or 8. The
+object access needs the immediately applicable `access_in_bounds` guard with
+size `N` and alignment `N`, as `atomic.load` does. Every buffer is a
+`ptr<AS>` range of `N` bytes at alignment `A`, with `A` a power of two no
+greater than `N`; the buffers use the access checks of `copy`. A load admits
+the orders of `atomic.load`, a store those of `atomic.store`, and an exchange
+or a compare-exchange every order. Every transfer moves the object
+representation as `copy` does: each byte keeps its initializedness, and
+stored pointer bytes keep their provenance. `atomic.copy.load` moves the
+object to `%dst`. `atomic.copy.store` moves `%src` to the object.
+`atomic.copy.exchange` moves `%src` to the object and the old object to
+`%dst`. `atomic.copy.cmpxchg` reads every byte of the object and of
+`%expected`, so an uninitialized byte is `E3001`; pointer bytes compare by
+address, without their provenance. When all bytes are equal it moves
+`%desired` to the object, and `%ok` is 1; otherwise the object is unchanged
+and `%ok` is 0. In both cases the old object moves to `%observed`, and
+`%expected` is not written. Each form appends one atomic event with the old
+and the new representation. Invalid size, alignment, order, buffer count or
+guard is `E3062`. These operations are outside P0. Native code performs one
+access of the object through a general register, with `LDAR`/`STLR` or the
+exclusive loop of `atomic.rmw`, and ordinary loads and stores of the buffers.
 
 `world` orders execution/scheduling within one thread; it does not establish
 cross-thread sequential consistency. The three interpreters implement only
@@ -1834,6 +1866,7 @@ EffectSummary {
 | `atomic.load` | `{All}` | `{}` | marker | true | false | false | true | false |
 | `atomic.store` | `{}` | `{All}` | marker | true | false | false | true | false |
 | `atomic.rmw.*` | `{All}` | `{All}` | marker | true | false | false | true | false |
+| `atomic.copy.*` | `{All}` | `{All}` | marker | true | false | false | true | false |
 | `call` | depends on callee | depends on callee | depends | depends | depends | depends | depends | depends |
 | `trap.<reason>` | `{}` | `{}` | false | false | false | false | true | false |
 
@@ -2586,6 +2619,8 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2952` | `unsupported-function-attribute` | front end |
 | `E2953` | `incompatible-record-cast` | front end |
 | `E2954` | `constant-string-binding-conflict` | front end |
+| `E2955` | `invalid-atomic-type` | front end |
+| `E2956` | `atomic-member-access` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -3748,6 +3783,9 @@ inst_body :=
   | "(" value_name ", " value_name ", " value_name ") = atomic.rmw." atomic_rmw_op
         " " atomic_order volatile_marker " " value_name ", " value_name ", " value_name
         ", " value_name [", " value_name] " : " type
+  | "(" [value_name ", "] value_name ", " value_name ") = atomic.copy." atomic_copy_op
+        " " atomic_order volatile_marker " " value_name ", " value_name ", " value_name
+        (", " value_name)+ " [size=" integer ", align=" integer "]"
   | "(" value_name ", " value_name ") = copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"] " "
         value_name ", " value_name ", " value_name ", " value_name
         " [size=" integer ", align=" integer "]"
@@ -3807,6 +3845,7 @@ trap_reason      := "scalar_function_fell_off_end" | "unreachable_reached" | "bu
 volatile_marker  := ε | " volatile"
 atomic_order     := "relaxed" | "consume" | "acquire" | "release" | "acq_rel" | "seq_cst"
 atomic_rmw_op    := "add" | "sub" | "and" | "or" | "xor" | "nand" | "exchange" | "cmpxchg"
+atomic_copy_op   := "load" | "store" | "exchange" | "cmpxchg"
 direction        := "add" | "sub"
 index_signedness := "signed" | "unsigned"
 result_list      := value_name ("," " " value_name)*
@@ -3917,6 +3956,7 @@ ub.assume.<> <>
 (<>, <>, <>) = atomic.load <><> <>, <>, <> : <>
 (<>, <>) = atomic.store <><> <>, <>, <>, <>
 (<>, <>, <>) = atomic.rmw.<> <> <>, <>, <>, <> : <>
+(<>) = atomic.copy.<> <><> <> [size=<>, align=<>]
 <> = ptr.offset.<>.<> <>, <> [scale=<>]
 <> = ptr.to_int <>
 <> = block_addr <> : <>
@@ -4186,7 +4226,7 @@ not hard-code target widths, pointer size, or pointer alignment.
 | `const` | No IR effect. Purely a C-HIR check. |
 | `volatile` | Exact `load volatile` / `store volatile` syntax and ordered world-trace events. |
 | `restrict` | Preserved in C-HIR only; `NoAlias` facts are outside this revision (5.5). |
-| `_Atomic` | Typed unsupported; the separately admitted scalar `__atomic` builtins (10.1.14) do not imply a complete `_Atomic` type system. |
+| `_Atomic` | The target's atomic layout; `seq_cst` `atomic.load` and `atomic.store` for a read and a simple assignment of an admitted scalar, and a compare-exchange loop for an update (10.1.21). Other atomic objects are `E2702`. |
 
 #### 10.1.3 Lvalue Lowering
 
@@ -4427,10 +4467,10 @@ declaration order. A complete, naturally aligned 1/2/4/8-byte `volatile`
 union is read or written as one representation access through Section 3.8,
 without selecting a member; unsupported sizes/alignment and volatile record
 copies containing bit-fields retain `E2922` (`volatile-aggregate-copy-unsupported`).
-`_Atomic` objects remain outside this profile (`E2702`). C converts a read of an
-`_Atomic` object with an atomic load, so a read is `E2702` at the read, as an
-assignment or an update is at its target; `sizeof`, `&` and the other operands
-that read nothing stay admitted. The padding bytes of an initialized
+An `_Atomic` object is read and written through atomic accesses (10.1.21).
+A read of an atomic object that 10.1.21 does not admit is `E2702` at the
+read, as an assignment or an update is at its target; `sizeof`, `&` and the
+other operands that read nothing stay admitted. The padding bytes of an initialized
 aggregate are uninitialized, and after a copy so are the destination's. The
 reference compilers differ on padding bytes after `b = a`; both behaviors
 are consistent with "unspecified", so the profile transfers initializedness
@@ -5012,6 +5052,8 @@ compound literals, and a front end must not emit it.
 | `E2952` | an unsupported execution or calling-convention attribute (10.1.9) |
 | `E2953` | a cast to a struct type from an incompatible operand type (10.1.3) |
 | `E2954` | a declaration makes a previously folded string object's binding weak, aliased or assembly-renamed (10.1.17) |
+| `E2955` | `_Atomic` names an array, function, atomic or qualified type, or an atomic bit-field (10.1.21) |
+| `E2956` | an evaluated member access of an atomic record or union (10.1.21) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -5287,9 +5329,9 @@ target-width pointer. A store requires a modifiable pointee; const loads and
 volatile pointers preserve their ordinary meaning. Unsupported types report
 `E2913`, wrong arity `E2909`, and a builtin not called `E2910`. These accesses
 are never ICEs. An `_Atomic`-qualified pointee means its non-atomic type for
-every `__atomic` builtin; this admits no other `_Atomic` operation. The
-admission does not include generic aggregate atomics, 128-bit accesses or
-MMIO.
+every `__atomic` builtin; Section 10.1.21 admits the C operators on `_Atomic`
+objects. The admission does not include 128-bit accesses or MMIO; the
+generic forms on memory follow below.
 
 Source constant order values map 0/1/2/3/4/5 to
 relaxed/consume/acquire/release/acq_rel/seq_cst. Loads admit 0/1/2/5 and stores
@@ -5337,6 +5379,37 @@ its source order. A const pointee, a floating pointee, a record, a 16-byte
 integer, a function-pointer or `_Bool` arithmetic operand, bitwise arithmetic
 on a pointer and a qualified `*e` are `E2913`.
 
+**GNU generic forms.** `__atomic_load(p, ret, order)`, `__atomic_store(p,
+val, order)`, `__atomic_exchange(p, val, ret, order)` and
+`__atomic_compare_exchange(p, expected, desired, weak, success, failure)`
+follow GCC 14 on both targets for an object `*p` of type `T`: an integer,
+enumeration, pointer, floating, record or union type, `_Atomic` or not, whose
+size is 1, 2, 4 or 8 bytes and whose alignment, the atomic layout of 10.1.21
+included, is at least its size. Each other operand except the orders and
+`weak` points to a complete object of a type compatible with the non-atomic
+`T`, ignoring qualifiers, and of the same size. The object of a store,
+exchange or compare-exchange, `ret` and `expected` are not const. The
+operands are evaluated once each, left to right, and the orders follow the
+scalar forms: a load admits the load orders, a store the store orders, an
+exchange every order, and a compare-exchange the pairs above. Lowering uses
+the `atomic.copy` forms of Section 3.8, so the forms move object
+representations: padding bytes and pointer provenance survive. A
+compare-exchange compares every byte, padding included (C23 7.17.7.4p3), and
+an uninitialized compared byte is `E3001` in both interpreters, as their
+`memcmp` is. This is the profile's conservative boundary; C gives such a
+comparison an unspecified result, not undefined behavior. On success the
+desired bytes replace the object and the result is 1. On failure the object
+is unchanged, a `copy` moves the observed bytes into `*expected`, and the
+result is 0; `*expected` is never written on success. A weak request is
+strong. The result has type `_Bool`; the other forms are `void`. An array,
+function, vector or complex `T`, a variably modified `T`, a size outside 1,
+2, 4 and 8 (16-byte records and `__int128` included), an alignment below the
+size, a mismatched buffer, and a const buffer or object that the form writes
+are `E2913`, at every warning level and language mode. EvoCC never calls the run-time library for
+these forms. Clang refuses them on an `_Atomic` object and uses its
+`__c11_atomic_*` builtins; the crossed tests show the two interfaces
+updating one object.
+
 **GNU fences.** `__atomic_thread_fence(order)` and
 `__atomic_signal_fence(order)` are library builtins of type `void (int)`.
 A relaxed constant order has no effect: only the operand is evaluated. Any
@@ -5361,7 +5434,8 @@ this section.
 **Interpreter scope.** Both interpreters run one thread. They show values,
 operand effects, the compare-exchange write-back and the order of atomic
 events. They do not show inter-thread ordering; the crossed native tests of
-`crates/evocc/tests/gnu_atomic_builtins.rs` exercise it against GCC 14,
+`crates/evocc/tests/gnu_atomic_builtins.rs` and
+`crates/evocc/tests/generic_atomic_records.rs` exercise it against GCC 14,
 Clang 19 and Apple clang, and a passing run of them is not a memory-model
 proof.
 
@@ -6501,6 +6575,78 @@ spelling. Diagnostics report the expansion span (the use site) and may add the
 spelling span as a note. Example: in the three-line file `#define TAG s` /
 `struct s { int x; };` / `struct TAG v;`, the tokens of `struct TAG v` have
 expansion spans in the main file and `s` has its spelling span in line 1.
+
+#### 10.1.21 `_Atomic` objects
+
+**Types.** `_Atomic` is a qualifier and, when `(` follows it, the type
+specifier `_Atomic ( type-name )` of C11 6.7.2.4. The type name of the
+specifier must not be an array, function, atomic or qualified type, and the
+qualifier must not apply to an array or function type (C11 6.7.3p3). Each
+violation is `E2955` (`invalid-atomic-type`). An atomic bit-field is also
+`E2955`: C11 6.7.2.1p5 leaves it implementation-defined, and GCC and Clang
+refuse it. An evaluated `.` or `->` that designates a member of an atomic
+record or union is `E2956` (`atomic-member-access`), because C11 6.5.2.3p5
+makes the access undefined. The operand of `sizeof` is not evaluated, so a
+member access there is allowed. A pointer conversion that adds or removes
+`_Atomic` without a cast stays `E2202`.
+
+**Layout.** On `aarch64-unknown-linux-gnu` an atomic type keeps the size of
+its non-atomic type. A size of 1, 2, 4, 8 or 16 bytes raises the alignment
+to that size, as GCC 14 does. On `aarch64-apple-darwin` a size of at most 16
+bytes is rounded up to a power of two, and the alignment is that size, as
+Apple clang does; the added bytes are padding. A larger atomic type keeps its
+layout on both targets. Record members, arrays of atomic elements and calls
+use this layout. Clang 19 on Linux uses the Apple rule. Its objects of an
+atomic record whose size is not a power of two, or whose alignment is below
+its size, do not match GCC's or EvoCC's (llvm-project issue #26836).
+
+**Accesses.** The admitted atomic objects are integers, `_Bool`,
+enumerations, pointers and binary32 or binary64 floating objects of 1, 2, 4
+or 8 bytes. Lvalue conversion of one is a `seq_cst` `atomic.load` (3.8). A
+simple assignment converts the right operand to the type of the object and
+stores it with a `seq_cst` `atomic.store`; its value is the converted value.
+A floating object moves as `bits<32>` or `bits<64>` through `float.to_bits`
+and `float.from_bits`, without a numeric conversion. A compound assignment
+or a prefix or postfix `++` or `--` is one `seq_cst` read-modify-write. The
+place and the right operand are evaluated first. Then a `seq_cst` atomic load
+reads the old value, and a retry block computes the new value with the
+ordinary C computation and stores it with `atomic.rmw.cmpxchg seq_cst`. A
+failed comparison branches back to the retry block with the observed value.
+The computation keeps the obligations of the ordinary operator: signed
+overflow is `E3004`, division by zero `E3002` and an invalid shift `E3005`,
+and a pointer moves by whole elements under the pointer-formation rules. A
+`_Bool` result is 0 or 1. A compound assignment and a prefix form yield the
+new value; a postfix form yields the old value. `volatile` adds the volatile
+marker to the same atomic accesses, so each access is one event. A read of a
+`const` atomic object is an atomic load. Initialization by a declaration or a
+compound literal is not an atomic access.
+
+**Refusals.** A compound assignment, `++` or `--` of a floating atomic
+object, or one whose computation is floating or complex, is `E2702`. The
+rule for the floating flags of a discarded iteration (C11 footnote 113) is
+not part of this revision. A read, assignment or update of an atomic record,
+union, complex or vector object, or of a 16-byte atomic object (Linux `long
+double`, `__int128`), is `E2702` at the read or the target. Declarations,
+initializers, `&` and `sizeof` of these objects stay admitted.
+
+**Values.** The value of an atomic lvalue has the non-atomic type (C11
+6.3.2.1p2). `typeof` of an expression that is not an lvalue, `__auto_type`
+and the controlling expression of `_Generic` see the non-atomic type;
+`typeof` of an atomic lvalue keeps `_Atomic`.
+
+**Interpreter scope.** Both interpreters run one thread. Each atomic access
+appends one atomic event, so they show values, obligations and the order of
+the accesses, and the first compare-exchange of an update succeeds. They do
+not show inter-thread behavior. The crossed native tests of
+`crates/evocc/tests/atomic_objects.rs` share one object among units built by
+EvoCC and GCC 14 on Linux, or by EvoCC and Apple clang on Darwin. Every unit
+must see the same layout, and two threads update the object through C
+operators. A passing run of them is not a memory-model proof.
+
+**Headers.** EvoCC uses the target's `<stdatomic.h>` unchanged. The GCC
+header of the Linux sysroot calls the generic forms of 10.1.14. The Darwin
+header needs Clang's `__c11_atomic_*` builtins and `__CLANG_ATOMIC_*` macros,
+which this revision does not provide.
 
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
@@ -7765,6 +7911,7 @@ Section 3 defines each instruction and Section 9.3 gives its exact spelling.
 | | `atomic.load order [volatile]` | Type, `mem<all>`, `world` | `%m`, `%w`, `%ptr` | yes |
 | | `atomic.store order [volatile]` | `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` | yes |
 | | `atomic.rmw.<op> order [volatile]` | old value, `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` [, `%expected` for `cmpxchg`] | yes |
+| | `atomic.copy.<op> order [volatile]` | [`bits<1>` for `cmpxchg`,] `mem<all>`, `world` | `%m`, `%w`, `%ptr`, buffers, size, align | yes; `E3001` for an uninitialized compared byte |
 | Integer vectors | `vec.pack` | `vec<N, bits<B>>` | N lane values of `bits<B>` | no |
 | | `vec.extract` | `bits<B>` | vector, full-width integer index | yes; `E3011` for an invalid index |
 | | `vec.bitcast` | same-size integer/vector representation | source value | no |
@@ -7818,6 +7965,23 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.11.0, 2026-10-20.** Section 10.1.14 admits the generic
+`__atomic_load`, `__atomic_store`, `__atomic_exchange` and
+`__atomic_compare_exchange` forms on 1-, 2-, 4- and 8-byte objects whose
+alignment is at least their size. Section 3.8 adds the `atomic.copy` forms:
+one atomic access of the object and byte transfers of ordinary buffers, with
+`E3001` for an uninitialized compared byte. 16-byte and misaligned objects
+stay `E2913`. No registry or Lean rule domain changes.
+
+**Revision 2.10.0, 2026-10-20.** Section 10.1.21 admits `_Atomic` objects.
+The layout follows GCC 14 on Linux and Apple clang on Darwin. A read of a 1-,
+2-, 4- or 8-byte atomic scalar is a `seq_cst` `atomic.load`, a simple
+assignment a `seq_cst` `atomic.store`, and a compound assignment, `++` or
+`--` one `seq_cst` compare-exchange loop with the ordinary obligations.
+Floating updates, whole-record accesses and 16-byte objects stay `E2702`.
+`E2955` and `E2956` are new. No new EvoIR instruction, registry or Lean rule
+domain.
 
 **Revision 2.9.0, 2026-10-20.** Section 10.1.14 admits the GNU `__atomic`
 fetch-op, op-fetch, exchange, compare-exchange, test-and-set, clear, fence and

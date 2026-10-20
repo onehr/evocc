@@ -3644,6 +3644,24 @@ fn lower_inst(
                 .insert(mem_out.id, layout.align_bytes);
         }
         Inst::Atomic(access) => {
+            if let evocc_evoir::AtomicOp::Copy {
+                op,
+                buffers,
+                result,
+                layout,
+            } = &access.op
+            {
+                lower_atomic_copy(
+                    lowerer,
+                    insts,
+                    access,
+                    *op,
+                    buffers,
+                    result.as_ref(),
+                    *layout,
+                )?;
+                return Ok(());
+            }
             if let evocc_evoir::AtomicOp::Rmw {
                 result,
                 operation,
@@ -3669,12 +3687,15 @@ fn lower_inst(
                 return Ok(());
             }
             let load = access.is_load();
-            let kind = load_kind(&access.value().ty)?;
+            let scalar = access
+                .value()
+                .ok_or("atomic access without a scalar value")?;
+            let kind = load_kind(&scalar.ty)?;
             let base = lowerer.reg(&access.address)?;
             let value = if load {
-                lowerer.fresh(class_of(&access.value().ty).map_err(|(code, _)| code.to_owned())?)
+                lowerer.fresh(class_of(&scalar.ty).map_err(|(code, _)| code.to_owned())?)
             } else {
-                lowerer.reg(access.value())?
+                lowerer.reg(scalar)?
             };
             insts.push(MInst::Atomic {
                 load,
@@ -3685,7 +3706,7 @@ fn lower_inst(
                 volatile: access.volatile,
             });
             if load {
-                lowerer.bind(access.value(), value);
+                lowerer.bind(scalar, value);
             }
         }
         Inst::Load {
@@ -4189,6 +4210,109 @@ fn address_of(
         kind,
     });
     lowerer.bind(result, dst);
+}
+
+/// A generic form on memory (EvoIR 3.8): one exclusive or acquire/release
+/// access of the whole object through a general register, and ordinary
+/// accesses of the buffers. A compare-exchange stores the observed value in
+/// its observed buffer and sets its result from the comparison.
+#[allow(clippy::too_many_arguments)]
+fn lower_atomic_copy(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    access: &evocc_evoir::AtomicAccess,
+    op: evocc_evoir::AtomicCopyOp,
+    buffers: &[Value],
+    result: Option<&Value>,
+    layout: evocc_evoir::AccessLayout,
+) -> Result<(), String> {
+    use evocc_evoir::AtomicCopyOp as C;
+    let ty = EvoIRType::Bits(layout.size_bytes as u16 * 8);
+    let class = class_of(&ty).map_err(|(code, _)| code.to_owned())?;
+    let (load, store) = (load_kind(&ty)?, store_kind(&ty)?);
+    let align = if u64::from(layout.align_bytes) == layout.size_bytes {
+        0
+    } else {
+        layout.align_bytes
+    };
+    let object = lowerer.reg(&access.address)?;
+    let buffers = buffers
+        .iter()
+        .map(|buffer| lowerer.reg(buffer))
+        .collect::<Result<Vec<_>, _>>()?;
+    let read = |lowerer: &mut Lowerer, insts: &mut Vec<MInst>, base: VReg| {
+        let dst = lowerer.fresh(class);
+        insts.push(MInst::Load {
+            align,
+            dst,
+            base,
+            offset: 0,
+            kind: load,
+            volatile: false,
+        });
+        dst
+    };
+    let write = |insts: &mut Vec<MInst>, base: VReg, src: VReg| {
+        insts.push(MInst::Store {
+            align,
+            src,
+            base,
+            offset: 0,
+            kind: store,
+            volatile: false,
+        });
+    };
+    match op {
+        C::Load => {
+            let value = lowerer.fresh(class);
+            insts.push(MInst::Atomic {
+                load: true,
+                value,
+                base: object,
+                kind: load,
+                order: access.order,
+                volatile: access.volatile,
+            });
+            write(insts, buffers[0], value);
+        }
+        C::Store => {
+            let value = read(lowerer, insts, buffers[0]);
+            insts.push(MInst::Atomic {
+                load: false,
+                value,
+                base: object,
+                kind: load,
+                order: access.order,
+                volatile: access.volatile,
+            });
+        }
+        C::Exchange | C::CompareExchange => {
+            let compare = op == C::CompareExchange;
+            let expected = compare.then(|| read(lowerer, insts, buffers[0]));
+            let value = read(lowerer, insts, buffers[usize::from(compare)]);
+            let old = lowerer.fresh(class);
+            insts.push(MInst::AtomicRmw {
+                dst: old,
+                base: object,
+                value,
+                expected,
+                operation: if compare {
+                    evocc_memory::AtomicRmwOp::CompareExchange
+                } else {
+                    evocc_memory::AtomicRmwOp::Exchange
+                },
+                kind: load,
+                order: access.order,
+                volatile: access.volatile,
+            });
+            write(insts, buffers[if compare { 2 } else { 1 }], old);
+            if let (Some(expected), Some(result)) = (expected, result) {
+                let equal = lowerer.compare_into(insts, old, expected, width_of(class), Cond::Eq);
+                lowerer.bind(result, equal);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn load_kind(ty: &EvoIRType) -> Result<LoadKind, String> {

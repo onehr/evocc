@@ -188,6 +188,10 @@ pub fn names() -> Vec<String> {
     }
     names.extend(
         [
+            "__atomic_load",
+            "__atomic_store",
+            "__atomic_exchange",
+            "__atomic_compare_exchange",
             "__atomic_exchange_n",
             "__atomic_compare_exchange_n",
             "__atomic_test_and_set",

@@ -108,6 +108,59 @@ impl AtomicRmwOp {
     }
 }
 
+/// The generic `__atomic` forms on memory (EvoIR 3.8): one atomic access of
+/// the whole object, with ordinary byte transfers of the buffers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AtomicCopyOp {
+    /// Object to destination buffer.
+    Load,
+    /// Source buffer to object.
+    Store,
+    /// Source buffer to object; the old object to the destination buffer.
+    Exchange,
+    /// Compare the object with the expected buffer byte by byte; on equality
+    /// the desired buffer goes to the object. The old object goes to the
+    /// observed buffer in both cases.
+    CompareExchange,
+}
+
+impl AtomicCopyOp {
+    pub const fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Load => "load",
+            Self::Store => "store",
+            Self::Exchange => "exchange",
+            Self::CompareExchange => "cmpxchg",
+        }
+    }
+    pub fn from_mnemonic(text: &str) -> Option<Self> {
+        [
+            Self::Load,
+            Self::Store,
+            Self::Exchange,
+            Self::CompareExchange,
+        ]
+        .into_iter()
+        .find(|op| op.mnemonic() == text)
+    }
+    /// The buffer operands: destination; source; source and destination;
+    /// expected, desired and observed.
+    pub const fn buffers(self) -> usize {
+        match self {
+            Self::Load | Self::Store => 1,
+            Self::Exchange => 2,
+            Self::CompareExchange => 3,
+        }
+    }
+    pub const fn admits(self, order: AtomicOrder) -> bool {
+        match self {
+            Self::Load => order.valid_for(true),
+            Self::Store => order.valid_for(false),
+            Self::Exchange | Self::CompareExchange => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AtomicRmwResult {
     pub old: AtomicValue,
@@ -325,6 +378,93 @@ impl MemoryState {
         Ok((memory, world))
     }
 
+    /// One generic form on memory. The object access has `buffer.size_bytes`
+    /// bytes at natural alignment; each buffer is an ordinary range of the
+    /// same size at `buffer.align_bytes`. Every transfer moves the object
+    /// representation as `copy` does, with initializedness and pointer
+    /// provenance. A compare-exchange reads each compared byte, so an
+    /// uninitialized one is `E3001`; pointer bytes compare by address. One
+    /// atomic event records the old and the new representation. Returns
+    /// whether a compare-exchange stored; the other forms return true.
+    #[allow(clippy::too_many_arguments)]
+    pub fn atomic_copy(
+        &self,
+        world: &WorldState,
+        op: AtomicCopyOp,
+        object: Pointer,
+        buffers: &[Pointer],
+        buffer: AccessLayout,
+        order: AtomicOrder,
+        volatile: bool,
+    ) -> Result<(Self, WorldState, bool), MemoryFault> {
+        let size = buffer.size_bytes;
+        if !matches!(size, 1 | 2 | 4 | 8)
+            || !buffer.align_bytes.is_power_of_two()
+            || u64::from(buffer.align_bytes) > size
+            || buffers.len() != op.buffers()
+            || !op.admits(order)
+        {
+            return Err(MemoryFault::InvalidAtomicAccess);
+        }
+        let access = AccessLayout::new(size, size as u32);
+        self.check_access(object, access)?;
+        let (old, _) = self.load_representation(world, object, access, false)?;
+        let store =
+            |memory: Self, at: Pointer, layout: AccessLayout, value: &ObjectRepresentation| {
+                memory
+                    .store_representation(world, at, layout, value, false)
+                    .map(|(memory, _)| memory)
+            };
+        let (memory, new, exchanged) = match op {
+            AtomicCopyOp::Load => (
+                store(self.clone(), buffers[0], buffer, &old)?,
+                old.clone(),
+                true,
+            ),
+            AtomicCopyOp::Store | AtomicCopyOp::Exchange => {
+                let (value, _) = self.load_representation(world, buffers[0], buffer, false)?;
+                let mut memory = store(self.clone(), object, access, &value)?;
+                if op == AtomicCopyOp::Exchange {
+                    memory = store(memory, buffers[1], buffer, &old)?;
+                }
+                (memory, value, true)
+            }
+            AtomicCopyOp::CompareExchange => {
+                let current = self.load_bytes(object, access)?;
+                let expected = self.load_bytes(buffers[0], buffer)?;
+                let equal = current.bytes() == expected.bytes();
+                let (mut memory, mut new) = (self.clone(), old.clone());
+                if equal {
+                    let (desired, _) =
+                        self.load_representation(world, buffers[1], buffer, false)?;
+                    memory = store(memory, object, access, &desired)?;
+                    new = desired;
+                }
+                (store(memory, buffers[2], buffer, &old)?, new, equal)
+            }
+        };
+        let observe = |value: &ObjectRepresentation| ObservedValue::Representation {
+            bytes: value.bytes().to_vec(),
+            initialized: value.initialized().to_vec(),
+        };
+        let load = op == AtomicCopyOp::Load || !exchanged;
+        let mut world =
+            self.push_atomic_event(world, object, access, order, volatile, load, observe(&new))?;
+        if matches!(op, AtomicCopyOp::Exchange | AtomicCopyOp::CompareExchange) {
+            let event = world
+                .atomic_trace
+                .last_mut()
+                .expect("atomic event just appended");
+            event.rmw = Some(if op == AtomicCopyOp::Exchange {
+                AtomicRmwOp::Exchange
+            } else {
+                AtomicRmwOp::CompareExchange
+            });
+            event.previous = Some(observe(&old));
+        }
+        Ok((memory, world, exchanged))
+    }
+
     fn validate_atomic_access(
         access: AccessLayout,
         order: AtomicOrder,
@@ -350,13 +490,6 @@ impl MemoryState {
         load: bool,
         value: AtomicValue,
     ) -> Result<WorldState, MemoryFault> {
-        let address = self.resolve_pointer(address)?;
-        let record = self
-            .objects
-            .get(&address.object)
-            .ok_or(MemoryFault::UnknownObject {
-                object: address.object,
-            })?;
         let value = match value {
             AtomicValue::Integer(value) => ObservedValue::RawTargetBits(
                 encode_integer(self.config.byte_order, access.size_bytes, value)?.bytes,
@@ -365,6 +498,27 @@ impl MemoryState {
                 ObservedValue::Pointer(self.observe_pointer_value(value)?)
             }
         };
+        self.push_atomic_event(world, address, access, order, volatile, load, value)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_atomic_event(
+        &self,
+        world: &WorldState,
+        address: Pointer,
+        access: AccessLayout,
+        order: AtomicOrder,
+        volatile: bool,
+        load: bool,
+        value: ObservedValue,
+    ) -> Result<WorldState, MemoryFault> {
+        let address = self.resolve_pointer(address)?;
+        let record = self
+            .objects
+            .get(&address.object)
+            .ok_or(MemoryFault::UnknownObject {
+                object: address.object,
+            })?;
         if world
             .atomic_trace
             .len()

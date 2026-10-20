@@ -135,7 +135,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, L03, L04, L05, L05b, L11a, L11c, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, L03, L04, L05, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT |  | D01-D14 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -3149,6 +3149,26 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     in this slice.
     [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
     [packet](docs/archive/notebook/rules-20261013/l11a-general-atomic-objects.md).
+    October 20 (EvoIR 2.10.0): `_Atomic` objects use GCC's layout on Linux and
+    Apple clang's on Darwin, and `_Atomic(T)` is parsed. A read of a 1-, 2-, 4-
+    or 8-byte scalar is a seq_cst atomic load and a store is a seq_cst atomic
+    store; `+=`, `++` and `--` are one seq_cst compare-exchange loop that keeps
+    E3004, E3002 and E3005. The C-HIR interpreter now admits block-scope
+    `_Atomic` declarations. E2955 (invalid atomic type or atomic bit-field) and
+    E2956 (evaluated member access of an atomic record) are new. Floating
+    updates, whole-record accesses and 16-byte objects stay E2702. Fixture
+    CASE=0 runs in both interpreters and natively. Crossed thread tests pass in
+    both directions against gcc-14 on Linux and Apple clang on Darwin, with the
+    object defined on either side; Clang 19 on Linux uses Apple's layout rule, a
+    recorded incompatibility. Linux `<stdatomic.h>` runs natively; the
+    interpreters run it without its two fences (E3021). L11a stays open: the
+    TinyCC `arm64-libtcc1-usegcc=yes` configuration is NOT_RUN because no pinned
+    TinyCC checkout exists here; unchanged `136_atomic_gcc_style` matches its
+    expect file at O0 and O2, and `124_atomic_counter` stopped at the
+    `pthread.h` E2952 regression of D11; Darwin `<stdatomic.h>` needs
+    `__c11_atomic_*`. [Tests](crates/evocc/tests/atomic_objects.rs). The lead's
+    full-workspace gate of 2026-10-20 passes 465 suites, 3,520 tests, zero
+    failures and 13 ignores, plus Clippy and formatting.
   - [x] **L11b — Additional `__atomic` RMW/CAS/exchange** — `DONE`, P2, 2026-10-20.
     CASE=1 refuses E2001. Specify success/failure orders, weak/strong CAS,
     expected-value updates, dynamic orders and width limits before extending the
@@ -3176,7 +3196,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     [Tests](crates/evocc/tests/gnu_atomic_builtins.rs). The lead's
     full-workspace gate of 2026-10-20 passes 462 suites, 3,497 tests, zero
     failures and 11 ignores, plus Clippy and formatting.
-  - [ ] **L11c — Generic aggregate atomics** — `OPEN`, P2.
+  - [x] **L11c — Generic aggregate atomics** — `DONE`, P2, 2026-10-20.
     CASE=2 refuses E2001 for a naturally aligned eight-byte record. Specify
     representation/initializedness/provenance and lock-free versus runtime-helper
     obligations; qualify target runtime/ABI support. Scalar builtin acceptance
@@ -3187,6 +3207,22 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     uninitialized byte; 16-byte records are refused in this slice.
     [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
     [packet](docs/archive/notebook/rules-20261013/l11c-aggregate-atomics.md).
+    Closed on 2026-10-20 (EvoIR 2.11.0, EvoMIR 1.5.0). The generic
+    `__atomic_load`, `__atomic_store`, `__atomic_exchange` and
+    `__atomic_compare_exchange` forms work on scalar, record and union objects
+    of 1, 2, 4 and 8 bytes whose alignment is at least their size, through the
+    new `atomic.copy` forms. They move bytes, so initializedness and provenance
+    survive; a compare-exchange compares every byte, reports E3001 on an
+    uninitialized one and writes back only on failure. 16-byte, misaligned and
+    other shapes stay E2913 with no `__atomic` library call. The packet's CASE=4
+    record has alignment 2 for size 4, so the rule refuses it; a 4-aligned
+    padding fixture tests the padding rule. Fixture CASE=2 runs in both
+    interpreters and natively. Crossed thread tests pass against gcc-14 and
+    Clang 19 on Linux and Apple clang on Darwin; a passing run is not a
+    memory-model proof. The Section 9 coverage manifest gains the `atomic.copy`
+    sentinel. [Tests](crates/evocc/tests/generic_atomic_records.rs). The lead's
+    full-workspace gate of 2026-10-20 passes 465 suites, 3,520 tests, zero
+    failures and 13 ignores, plus Clippy and formatting.
 
 ## Cross-cutting verification and tooling
 

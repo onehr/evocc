@@ -646,6 +646,15 @@ fn inst_schema(inst: &Inst) -> &'static str {
                     let _ = value;
                     "Inst.Atomic.Store(value,address,order,volatile,mem_in,world_in,mem_out,world_out)"
                 }
+                evocc_evoir::AtomicOp::Copy {
+                    op,
+                    buffers,
+                    result,
+                    layout,
+                } => {
+                    let _ = (op, buffers, result, layout);
+                    "Inst.Atomic.Copy(op,buffers,result,layout,address,order,volatile,mem_in,world_in,mem_out,world_out)"
+                }
             }
         }
         Inst::Load {

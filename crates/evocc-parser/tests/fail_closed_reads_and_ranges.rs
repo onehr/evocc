@@ -1,6 +1,7 @@
 //! T03j (audit findings A06 and A07): two front-end refusals of EvoIR Section
-//! 10.1 that the parser did not make. A read of an `_Atomic` object is
-//! `E2702` at the read, as an update already is, so that no read becomes a
+//! 10.1 that the parser did not make. Since L11a, a read of an admitted
+//! `_Atomic` scalar is a `seq_cst` atomic load; a read of any other atomic
+//! object is `E2702` at the read, as an update is, so that no read becomes a
 //! plain load. The initializer of a range designator must be a constant,
 //! because one written expression serves every element; a nonconstant one is
 //! `E2917` at the expression.
@@ -64,46 +65,62 @@ fn accepted(text: &str) {
 }
 
 #[test]
-fn a_read_of_an_atomic_object_is_refused_at_the_read() {
+fn a_read_of_an_unadmitted_atomic_object_is_refused_at_the_read() {
     // The probe of the audit: before, the read became `ldr` with no order.
+    // A 16-byte, record or complex atomic object stays outside L11a.
     refused_at(
-        "_Atomic int g; int ld(void) { return g; }\n",
+        "_Atomic __int128 g; __int128 ld(void) { return g; }\n",
         "E2702",
         "g",
         1,
     );
     refused_at(
-        "int ld(_Atomic int *p) { return *p + 1; }\n",
+        "struct p { int a, b; }; struct p ld(_Atomic struct p *q) { return *q; }\n",
         "E2702",
-        "*p",
+        "*q",
         1,
     );
     refused_at(
-        "struct s { _Atomic int a; int b; }; int ld(struct s *q) { return q->a; }\n",
+        "struct s { _Atomic __int128 a; int b; }; __int128 ld(struct s *q) { return q->a; }\n",
         "E2702",
         "q->a",
         0,
     );
     refused_at(
-        "_Atomic int table[4]; int ld(void) { return table[1]; }\n",
+        "_Atomic _Complex float table[4]; void ld(void) { _Complex float z = table[1]; (void)z; }\n",
         "E2702",
         "table[1]",
         0,
     );
     refused_at(
-        "int f(void) { _Atomic long x = 0; long y = x; return (int)y; }\n",
-        "E2702",
-        "x;",
-        0,
-    );
-    refused_at(
-        "_Atomic long g; void f(void) { (void)g; }\n",
+        "_Atomic __int128 g; void f(void) { (void)g; }\n",
         "E2702",
         "g;",
         1,
     );
-    // An update stays refused at its target.
-    refused_at("_Atomic int g; void f(void) { g = 3; }\n", "E2702", "g", 1);
+    // An unadmitted update stays refused at its target.
+    refused_at(
+        "_Atomic __int128 g; void f(void) { g = 3; }\n",
+        "E2702",
+        "g",
+        1,
+    );
+    // A member access of an atomic record is E2956 at the access.
+    refused_at(
+        "struct p { int a, b; }; _Atomic struct p g; int f(void) { return g.a; }\n",
+        "E2956",
+        "g.a",
+        0,
+    );
+}
+
+#[test]
+fn a_read_of_an_admitted_atomic_scalar_is_accepted() {
+    accepted("_Atomic int g; int ld(void) { return g; }\n");
+    accepted("int ld(_Atomic int *p) { return *p + 1; }\n");
+    accepted("struct s { _Atomic int a; int b; }; int ld(struct s *q) { return q->a; }\n");
+    accepted("_Atomic int table[4]; int ld(void) { return table[1]; }\n");
+    accepted("int f(void) { _Atomic long x = 0; long y = x; return (int)y; }\n");
 }
 
 #[test]

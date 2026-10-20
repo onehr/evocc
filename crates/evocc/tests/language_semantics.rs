@@ -750,7 +750,15 @@ fn constant_representation_stores_do_not_turn_floating_values_into_integers() {
             assert!(text.contains("ub.assume.signed_overflow"), "{text}");
         }
     }
-    let source = "void f(_Atomic double*p){*p=10;}";
+    // An atomic floating store converts to binary64 and moves its bits.
+    let module = lower_source("void f(_Atomic double*p){*p=10;}").expect("atomic store lowers");
+    let text = evocc_evoir::render_module(&module);
+    assert!(
+        text.contains("f64") && text.contains("atomic.store seq_cst"),
+        "{text}"
+    );
+    // A floating compound assignment on an atomic object stays refused.
+    let source = "void f(_Atomic double*p){*p+=10;}";
     let arena = evocc_common::Arena::new(4096);
     let file = evocc_common::FileId::new(0);
     let mut lexer = evocc_lex::Lexer::new(file, source);

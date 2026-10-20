@@ -206,20 +206,23 @@ fn unknown_reserved_builtins_are_refused_even_without_warnings() {
         }
     }
     // This inventory probe compiled to an implicit call under -w and then
-    // crashed at run time.
+    // crashed at run time. Since L11c `__atomic_load` is a builtin, so the
+    // probe compiles to inline atomic accesses, never an external call.
     let probe =
         std::fs::read_to_string(root().join("tests/fixtures/atomic-scope-boundaries.c")).unwrap();
     let output = run_stdin(
         &["-w", "-DCASE=2", "--error-format=short", "--emit=asm"],
         &probe,
     );
-    assert_eq!(output.status.code(), Some(1));
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("error[E2949]: unknown-builtin: __atomic_load"),
+    assert_eq!(
+        output.status.code(),
+        Some(0),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    let assembly = String::from_utf8_lossy(&output.stdout);
+    assert!(!assembly.contains("bl __atomic") && !assembly.contains("bl ___atomic"));
+    assert!(assembly.contains("ldar"), "{assembly}");
 }
 
 #[test]

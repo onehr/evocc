@@ -376,14 +376,14 @@ int main(void) { value = initial(); return value; }
 
 ### E2702: atomic-update-unsupported
 
-This atomic update is outside EvoCC's supported atomic operations.
-An ordinary compound assignment to an atomic object is one such update.
+This access of an atomic object is outside EvoCC's supported atomic operations.
+A floating compound assignment to an atomic object is one such access.
 
-An atomic read-modify-write must be one operation with the required memory order.
-Separate atomic loads and stores are not a general replacement for that operation.
+EvoCC admits loads, stores and integer or pointer updates of 1-, 2-, 4- and 8-byte atomic scalars.
+A floating update, a whole-record access and a 16-byte atomic object stay refused.
 
 ```c
-static _Atomic unsigned value = 3;
+static _Atomic double value = 3;
 int main(void) { value += 4; return 0; }
 ```
 
@@ -1403,6 +1403,49 @@ const char text[] = "abc";
 enum { length = __builtin_strlen(text) };
 int main(void) { return length - 3; }
 ```
+
+### E2955: invalid-atomic-type
+
+`_Atomic` names a type that cannot be atomic.
+C11 forbids `_Atomic ( type-name )` for an array, function, atomic or qualified type.
+
+The `_Atomic` qualifier also cannot apply to an array or function type.
+EvoCC does not permit an atomic bit-field, as GCC and Clang do not.
+
+```c
+_Atomic(const int) counter;
+int main(void) { return 0; }
+```
+
+```c
+const _Atomic(int) counter;
+int main(void) { return 0; }
+```
+
+Write the other qualifiers outside the specifier.
+For an array, make its elements atomic instead of the array.
+
+### E2956: atomic-member-access
+
+The program accesses a member of an atomic structure or union.
+C11 6.5.2.3p5 makes that access undefined behavior.
+
+The access is an error where it is evaluated; `sizeof` of the member is allowed.
+Atomic operations act on the complete object, not on one member.
+
+```c
+struct pair { int a, b; };
+_Atomic struct pair whole;
+int main(void) { return whole.a; }
+```
+
+```c
+struct pair { _Atomic int a, b; };
+struct pair whole;
+int main(void) { return whole.a; }
+```
+
+Make each member an atomic object when the members change one at a time.
 
 ## E3xxx
 

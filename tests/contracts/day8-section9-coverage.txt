@@ -23,6 +23,7 @@ Inst.BlockAddr(result,block)|%v2040 = block_addr ^b4242 : ptr<stack>
 Inst.ReturnAddress(result)|%v2041 = return_address : ptr<stack>
 Inst.FrameAddress(result,depth)|%v2042 = frame_address depth=3 : ptr<stack>
 UbReason.BitBuiltinZeroOperand|ub.assume.bit_builtin_zero_operand %v1205
+Inst.Atomic.Copy(op,buffers,result,layout,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1990, %v1997, %v1998) = atomic.copy.cmpxchg acquire volatile %v1995, %v1996, %v1991, %v1992, %v1993, %v1994 [size=4, align=2]
 Inst.Atomic.Load(result,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1920, %v1924, %v1925) = atomic.load consume volatile %v1922, %v1923, %v1921 : bits<32>
 Inst.Atomic.Rmw(result,operation,value,expected,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1960, %v1966, %v1967) = atomic.rmw.cmpxchg acq_rel volatile %v1964, %v1965, %v1963, %v1961, %v1962 : bits<16>
 Inst.Atomic.Store(value,address,order,volatile,mem_in,world_in,mem_out,world_out)|(%v1934, %v1935) = atomic.store seq_cst %v1932, %v1933, %v1931, %v1930

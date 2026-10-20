@@ -940,6 +940,22 @@ fn volatile_scalar_update_is_an_accepted_day7_contract() {
 }
 
 #[test]
-fn atomic_update_remains_an_explicit_unsupported_boundary() {
-    assert_diagnostic(DAY7_ATOMIC, "x", 1, "E2702", "atomic-update-unsupported");
+fn atomic_scalar_assignment_is_one_memory_place_and_floating_updates_stay_refused() {
+    // L11a: an `_Atomic` scalar target is read and written through one
+    // memory place, which every consumer lowers to atomic accesses.
+    let arena = Arena::default();
+    let unit = parse_valid(DAY7_ATOMIC, &arena);
+    let body = items(function(&unit, 0));
+    let CHirExpr::MemoryAssign { place, .. } = expression(&body[1]) else {
+        panic!("an atomic target is a memory place");
+    };
+    assert!(place.access_qualifiers().is_atomic);
+    assert_eq!(span_text(DAY7_ATOMIC, expression(&body[1]).span()), "x = 1");
+    assert_diagnostic(
+        "int f(void) { _Atomic double x = 0; x += 1; return 0; }\n",
+        "x",
+        1,
+        "E2702",
+        "atomic-update-unsupported",
+    );
 }

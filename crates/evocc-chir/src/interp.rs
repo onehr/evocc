@@ -37,6 +37,7 @@ use crate::{
     SymbolId, SymbolKind, UnaryOp, UpdateOp, WrittenDeclarator, WrittenDeclaratorLayer,
 };
 
+mod atomic;
 mod complex;
 mod floating;
 mod lifecycle;
@@ -2531,6 +2532,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     if access.weak.is_some() {
                         pop_machine_value(&mut values, access.span)?;
                     }
+                    let result = if access.result.is_some() {
+                        Some(pop_machine_value(&mut values, access.span)?)
+                    } else {
+                        None
+                    };
                     let stored = if access.value.is_some() {
                         Some(pop_machine_value(&mut values, access.span)?)
                     } else {
@@ -2542,7 +2548,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         None
                     };
                     let address = pop_machine_value(&mut values, access.span)?;
-                    values.push(self.apply_atomic(access, address, stored, expected)?);
+                    values.push(if access.memory {
+                        self.apply_atomic_copy(access, address, stored, expected, result)?
+                    } else {
+                        self.apply_atomic(access, address, stored, expected)?
+                    });
                     None
                 }
                 MachineTask::ApplyUnary {
@@ -2791,6 +2801,21 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 } => {
                     let (address, _) =
                         expect_machine_pointer(pop_machine_value(&mut values, span)?, target_span)?;
+                    if qualifiers.is_atomic {
+                        let (old, new) = self.update_atomic_object(
+                            address,
+                            value_type,
+                            qualifiers.is_volatile,
+                            layout,
+                            span,
+                            |this, old| this.step_update_value(old, operator, span),
+                        )?;
+                        values.push(match operator {
+                            UpdateOp::PreIncrement | UpdateOp::PreDecrement => new,
+                            UpdateOp::PostIncrement | UpdateOp::PostDecrement => old,
+                        });
+                        continue;
+                    }
                     let old = if let Some(field) = bit_field {
                         self.load_bit_field(
                             address,
@@ -6495,23 +6520,21 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         // Object storage includes nominal target scalar types as well as
         // ordinary scalars and aggregates. Execution checks their value kind
         // separately; an object declaration is not an arithmetic operation.
-        if canonical.qualifiers.is_atomic
-            || !matches!(
-                canonical.kind,
-                TypeKind::Int(_)
-                    | TypeKind::GnuInt128(_)
-                    | TypeKind::Enum(_)
-                    | TypeKind::Pointer(_)
-                    | TypeKind::Array { .. }
-                    | TypeKind::Vector { .. }
-                    | TypeKind::Struct(_)
-                    | TypeKind::Union(_)
-                    | TypeKind::BuiltinVaList
-                    | TypeKind::Float(_)
-                    | TypeKind::Complex(_)
-                    | TypeKind::TargetBuiltin(_)
-            )
-        {
+        if !matches!(
+            canonical.kind,
+            TypeKind::Int(_)
+                | TypeKind::GnuInt128(_)
+                | TypeKind::Enum(_)
+                | TypeKind::Pointer(_)
+                | TypeKind::Array { .. }
+                | TypeKind::Vector { .. }
+                | TypeKind::Struct(_)
+                | TypeKind::Union(_)
+                | TypeKind::BuiltinVaList
+                | TypeKind::Float(_)
+                | TypeKind::Complex(_)
+                | TypeKind::TargetBuiltin(_)
+        ) {
             return Err(InterpreterError::UnsupportedType {
                 ty: declaration.ty,
                 span: declaration.span,
@@ -8027,10 +8050,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         }
         if qualifiers.is_atomic {
-            return Err(InterpreterError::UnsupportedExpression {
-                feature: "atomic memory access",
-                span,
-            });
+            return self.load_atomic_object(address, ty, qualifiers.is_volatile, layout, span);
         }
         match self.value_type(ty, span)? {
             ValueType::Floating(kind) => {
@@ -8157,12 +8177,6 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         value: CValue,
         span: SourceSpan,
     ) -> Result<CValue, InterpreterError> {
-        if qualifiers.is_atomic {
-            return Err(InterpreterError::UnsupportedExpression {
-                feature: "atomic memory access",
-                span,
-            });
-        }
         let layout = self.access_layout(ty, span)?;
         self.store_memory_value_with_layout(address, ty, qualifiers, value, span, layout)
     }
@@ -8247,6 +8261,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         span: SourceSpan,
         layout: AccessLayout,
     ) -> Result<CValue, InterpreterError> {
+        if qualifiers.is_atomic {
+            return self.store_atomic_object(
+                address,
+                ty,
+                qualifiers.is_volatile,
+                value,
+                span,
+                layout,
+            );
+        }
         match (self.value_type(ty, span)?, value) {
             (ValueType::Floating(kind), value) => {
                 let strict = self.strict_floating();
@@ -8706,7 +8730,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         span: SourceSpan,
     ) -> Result<(), InterpreterError> {
         let binding = self.require_memory_binding(symbol, span)?;
-        let qualifiers = self
+        let mut qualifiers = self
             .unit
             .types()
             .get(binding.ty)
@@ -8715,6 +8739,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span,
             })?
             .qualifiers;
+        // Initialization of an `_Atomic` object is not an atomic access
+        // (C11 7.17.2.2); its updates use memory places.
+        qualifiers.is_atomic = false;
         self.store_memory_value(binding.address, binding.ty, qualifiers, value, span)?;
         Ok(())
     }
@@ -9356,6 +9383,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             let right = self.cast_runtime_value(right, self.value_type(ty, span)?, span)?;
             return self
                 .store_memory_value_with_layout(address, ty, qualifiers, right, span, layout);
+        }
+        if qualifiers.is_atomic {
+            return self
+                .apply_atomic_assignment(operator, address, ty, qualifiers, right, span, layout);
         }
         let left =
             self.load_memory_value_with_layout(address, ty, qualifiers, target_span, layout)?;

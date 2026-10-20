@@ -130,7 +130,9 @@ pub enum LibraryValue {
 }
 
 mod atomic;
-pub use atomic::{AtomicEvent, AtomicOrder, AtomicRmwOp, AtomicRmwResult, AtomicValue};
+pub use atomic::{
+    AtomicCopyOp, AtomicEvent, AtomicOrder, AtomicRmwOp, AtomicRmwResult, AtomicValue,
+};
 mod fenv;
 pub use fenv::FenvRuntime;
 

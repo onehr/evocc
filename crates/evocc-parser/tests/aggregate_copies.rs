@@ -154,8 +154,12 @@ fn by_value_record_return_stays_accepted() {
 }
 
 #[test]
-fn atomic_updates_stay_refused_and_scalar_volatile_updates_stay_accepted() {
-    rejects("void f(_Atomic int *pointer) { *pointer = 1; }\n", "E2702");
+fn atomic_record_copies_stay_refused_and_scalar_volatile_updates_stay_accepted() {
+    rejects(
+        "struct p { int a, b; }; void f(_Atomic struct p *pointer, struct p v) { *pointer = v; }\n",
+        "E2702",
+    );
+    accepts("void f(_Atomic int *pointer) { *pointer = 1; ++*pointer; }\n");
     accepts("void f(volatile int *pointer) { (*pointer)++; *pointer += 2; }\n");
 }
 

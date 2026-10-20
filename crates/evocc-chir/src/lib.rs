@@ -260,7 +260,7 @@ pub use allocation::{
     AllocationSite, AllocationSiteKind, AllocationSiteManifest, AllocationSiteManifestError,
     AllocationSiteOrdinal,
 };
-pub use atomic_reads::atomic_object_reads;
+pub use atomic_reads::{atomic_access_admitted, atomic_access_findings, AtomicFinding};
 pub use constant::{
     attribute_query_target, builtin_constant_p, validate_front_end_builtin_records,
     AttributeQueryTarget,
@@ -744,11 +744,19 @@ pub struct CHirAtomicAccess<'arena> {
     pub weak: Option<&'arena CHirExpr<'arena>>,
     /// The failure order of a compare-exchange, evaluated after `order`.
     pub failure: Option<&'arena CHirExpr<'arena>>,
+    /// A generic form on memory (`__atomic_load`, `__atomic_store`,
+    /// `__atomic_exchange`, `__atomic_compare_exchange`): `value` and
+    /// `expected` point to buffers of `access_ty`, not to values, and the
+    /// transfers move object representations (EvoIR 10.1.14).
+    pub memory: bool,
+    /// The buffer that receives the old object representation of a generic
+    /// load or exchange, evaluated after `value`.
+    pub result: Option<&'arena CHirExpr<'arena>>,
     pub facts: ExprFacts,
     pub span: SourceSpan,
 }
 
-pub use evocc_memory::{AtomicOrder, AtomicRmwOp};
+pub use evocc_memory::{AtomicCopyOp, AtomicOrder, AtomicRmwOp};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AtomicRmwReturn {
@@ -758,12 +766,13 @@ pub enum AtomicRmwReturn {
 }
 
 impl<'arena> CHirAtomicAccess<'arena> {
-    /// The operands in evaluation order: address, expected, value, weak,
-    /// order and failure order.
+    /// The operands in evaluation order: address, expected, value, result,
+    /// weak, order and failure order.
     pub fn operands(&self) -> impl DoubleEndedIterator<Item = &'arena CHirExpr<'arena>> {
         std::iter::once(self.address)
             .chain(self.expected)
             .chain(self.value)
+            .chain(self.result)
             .chain(self.weak)
             .chain(std::iter::once(self.order))
             .chain(self.failure)
@@ -772,6 +781,7 @@ impl<'arena> CHirAtomicAccess<'arena> {
         std::iter::once(&mut self.address)
             .chain(self.expected.iter_mut())
             .chain(self.value.iter_mut())
+            .chain(self.result.iter_mut())
             .chain(self.weak.iter_mut())
             .chain(std::iter::once(&mut self.order))
             .chain(self.failure.iter_mut())

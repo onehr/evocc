@@ -1526,6 +1526,45 @@ fn parse_tuple_instruction(
             },
         }));
     }
+    if let Some(rest) = rhs.strip_prefix("atomic.copy.") {
+        let (operation, rest) = rest.split_once(' ').ok_or("malformed atomic copy")?;
+        let op = crate::AtomicCopyOp::from_mnemonic(operation).ok_or("unknown atomic copy")?;
+        let (order, rest) = rest.split_once(' ').ok_or("missing atomic order")?;
+        let order = crate::AtomicOrder::from_mnemonic(order).ok_or("unknown atomic order")?;
+        let (volatile, rest) = rest
+            .strip_prefix("volatile ")
+            .map_or((false, rest), |rest| (true, rest));
+        let compare = op == crate::AtomicCopyOp::CompareExchange;
+        require_count(&result_ids, 2 + usize::from(compare), "atomic copy results")?;
+        let (operands, attributes) = split_attributes(rest)?;
+        let operands = parse_values(operands, values, false)?;
+        require_count(&operands, 3 + op.buffers(), "atomic copy operands")?;
+        let first = usize::from(compare);
+        return Ok(Inst::Atomic(crate::AtomicAccess {
+            op: crate::AtomicOp::Copy {
+                op,
+                buffers: operands[3..].to_vec(),
+                result: compare.then(|| Value {
+                    id: result_ids[0],
+                    ty: EvoIRType::Bits(1),
+                }),
+                layout: parse_layout(attributes)?,
+            },
+            order,
+            volatile,
+            mem_in: operands[0].clone(),
+            world_in: operands[1].clone(),
+            address: operands[2].clone(),
+            mem_out: Value {
+                id: result_ids[first],
+                ty: operands[0].ty.clone(),
+            },
+            world_out: Value {
+                id: result_ids[first + 1],
+                ty: EvoIRType::World,
+            },
+        }));
+    }
     if let Some(rest) = rhs.strip_prefix("atomic.") {
         let (operation, rest) = rest.split_once(' ').ok_or("malformed atomic operation")?;
         let rmw = operation

@@ -33,6 +33,15 @@ The first public version.
   interpreters run one thread and report E3021 at a non-relaxed fence, as at
   `__sync_synchronize`. Crossed native thread tests pass against GCC 14, Clang 19 and Apple
   clang; they are not a memory-model proof.
+- `_Atomic` objects use GCC's layout on Linux and Apple clang's on Darwin, and `_Atomic(T)` is
+  parsed. Reads and stores of 1-, 2-, 4- and 8-byte scalars are seq_cst atomic accesses, and
+  `+=`, `++` and `--` are one seq_cst compare-exchange loop with the usual overflow checks. E2955
+  and E2956 are new. Floating updates, whole records and 16-byte objects stay E2702.
+- The generic `__atomic_load`, `__atomic_store`, `__atomic_exchange` and
+  `__atomic_compare_exchange` forms work on objects of 1, 2, 4 and 8 bytes whose alignment is at
+  least their size. They move bytes, and a compare-exchange compares every byte. Other shapes stay
+  E2913. Crossed thread tests pass against GCC 14, Clang 19 and Apple clang; they are not a
+  memory-model proof.
 - Three more checked string builtins of the macOS 26 SDK (`__builtin___memccpy_chk`,
   `__builtin___strlcpy_chk`, `__builtin___strlcat_chk`), four checked `printf`-family builtins
   and `__builtin___clear_cache`, which calls the target's runtime helper.

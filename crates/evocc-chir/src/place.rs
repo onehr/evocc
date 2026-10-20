@@ -395,6 +395,7 @@ pub struct MemoryPlace<'arena> {
     modifiable: bool,
     addressable: bool,
     bit_field: bool,
+    atomic_member: bool,
 }
 
 impl<'arena> MemoryPlace<'arena> {
@@ -515,6 +516,7 @@ impl<'arena> MemoryPlace<'arena> {
         };
 
         let mut bit_field = false;
+        let mut atomic_member = false;
         for (projection_index, projection) in projections.iter().enumerate() {
             if bit_field {
                 return Err(MemoryPlaceError::ProjectionAfterBitField);
@@ -593,6 +595,8 @@ impl<'arena> MemoryPlace<'arena> {
                             actual: field_ty,
                         });
                     }
+                    // A member of an atomic record or union (C11 6.5.2.3p5).
+                    atomic_member |= access_qualifiers.is_atomic;
                     access_qualifiers = merge_qualifiers(
                         access_qualifiers,
                         types
@@ -626,6 +630,7 @@ impl<'arena> MemoryPlace<'arena> {
             modifiable,
             addressable,
             bit_field,
+            atomic_member,
         })
     }
 
@@ -754,6 +759,14 @@ impl<'arena> MemoryPlace<'arena> {
     #[must_use]
     pub const fn is_bit_field(&self) -> bool {
         self.bit_field
+    }
+
+    /// Whether a member projection follows an atomic record or union layer.
+    /// C11 6.5.2.3p5 makes that access undefined; the front end refuses it
+    /// with `E2956` where it is evaluated.
+    #[must_use]
+    pub const fn accesses_atomic_member(&self) -> bool {
+        self.atomic_member
     }
 }
 

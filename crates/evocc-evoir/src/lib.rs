@@ -17,7 +17,7 @@ use evocc_types::{AddressSpace, Region, TargetDataLayout};
 mod assembly;
 mod atomic;
 mod floating;
-pub use atomic::{AtomicAccess, AtomicOp, AtomicOrder, AtomicRmwOp};
+pub use atomic::{AtomicAccess, AtomicCopyOp, AtomicOp, AtomicOrder, AtomicRmwOp};
 pub use floating::{floating_kind, FloatingInst, FloatingOp};
 mod strict_floating;
 pub use strict_floating::StrictFloatingInst;
@@ -1057,6 +1057,7 @@ fn inst_effect_summary(inst: &Inst) -> EffectSummary {
             ..EffectSummary::default()
         },
         Inst::Atomic(access) => EffectSummary {
+            // A form on memory also reads or writes its ordinary buffers.
             reads_all: !matches!(access.op, AtomicOp::Store(_)),
             writes_all: !access.is_load(),
             volatile: access.volatile,

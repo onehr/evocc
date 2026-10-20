@@ -47,12 +47,19 @@ enum GnuAtomic {
     Clear,
     AlwaysLockFree,
     IsLockFree,
+    /// `__atomic_load`, `__atomic_store`, `__atomic_exchange` and
+    /// `__atomic_compare_exchange`, whose operands point to buffers.
+    Generic(evocc_chir::AtomicCopyOp),
 }
 
 fn gnu_atomic(name: &str) -> Option<GnuAtomic> {
-    use evocc_chir::{AtomicRmwOp as R, AtomicRmwReturn as V};
+    use evocc_chir::{AtomicCopyOp as C, AtomicRmwOp as R, AtomicRmwReturn as V};
     let name = name.strip_prefix("__atomic_")?;
     Some(match name {
+        "load" => GnuAtomic::Generic(C::Load),
+        "store" => GnuAtomic::Generic(C::Store),
+        "exchange" => GnuAtomic::Generic(C::Exchange),
+        "compare_exchange" => GnuAtomic::Generic(C::CompareExchange),
         "exchange_n" => GnuAtomic::Update(R::Exchange, V::Old),
         "compare_exchange_n" => GnuAtomic::CompareExchange,
         "test_and_set" => GnuAtomic::TestAndSet,
@@ -4896,10 +4903,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let parsed_body = self.parse_compound_statement(false);
         self.loop_depth = outer_loop_depth;
         self.switch_depth = outer_switch_depth;
-        // EvoIR 10.1.3: `_Atomic` objects are outside the profile, so a read
-        // of one is refused where it is written, as an update is.
-        for span in evocc_chir::atomic_object_reads(parsed_body, &self.symbols, &self.types) {
-            self.report("E2702", "atomic-update-unsupported", span);
+        // EvoIR 10.1.21: a read of an `_Atomic` object outside the admitted
+        // scalars is refused where it is written, as an update is, and an
+        // evaluated member access of an atomic record or union is an error.
+        for finding in evocc_chir::atomic_access_findings(
+            parsed_body,
+            &self.symbols,
+            &self.types,
+            &self.target_layout,
+        ) {
+            match finding {
+                evocc_chir::AtomicFinding::UnadmittedRead(span) => {
+                    self.report("E2702", "atomic-update-unsupported", span);
+                }
+                evocc_chir::AtomicFinding::MemberAccess(span) => {
+                    self.report("E2956", "atomic-member-access", span);
+                }
+            }
         }
         let Some((_, function_name_declaration)) = implicit_function_name else {
             return parsed_body;
@@ -6058,6 +6078,44 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(parsed);
         }
 
+        if self.at_atomic_type_specifier() {
+            // C11 6.7.2.4: `_Atomic ( type-name )` names the atomic version of
+            // a type that is not an array, function, atomic or qualified type.
+            let keyword = self.advance().expect("peeked _Atomic specifier");
+            self.expect(TokenKind::LParen)?;
+            let (named, tag_event) = self.parse_type_name()?;
+            let close = self.expect(TokenKind::RParen)?;
+            let span = self.merge_span(keyword.span, close.span);
+            let canonical = self.types.get(named)?.clone();
+            let qualified = canonical.qualifiers.compatibility() != Qualifiers::default();
+            if qualified
+                || matches!(
+                    canonical.kind,
+                    TypeKind::Array { .. } | TypeKind::Function { .. }
+                )
+            {
+                self.report("E2955", "invalid-atomic-type", span);
+                return None;
+            }
+            let trailing = self.parse_qualifiers_with_inline(
+                &mut storage,
+                &mut inline_spans,
+                &mut specifier_attributes,
+            );
+            qualifiers = merge_qualifiers(qualifiers, trailing);
+            qualifiers.is_atomic = true;
+            let resolved = self.qualify_typedef_type(named, qualifiers);
+            return Some(ParsedSpecifier {
+                surface: TypeSpecifier::Typeof {
+                    resolved,
+                    operand: TypeofOperand::TypeName,
+                    span: self.merge_span(start, close.span),
+                },
+                tag_event,
+                inherited_function_parameters: None,
+            });
+        }
+
         if matches!(
             self.peek_kind(),
             Some(TokenKind::Typeof | TokenKind::TypeofUnqual)
@@ -6146,6 +6204,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 &mut specifier_attributes,
             );
             qualifiers = merge_qualifiers(qualifiers, trailing);
+            if qualifiers.is_atomic {
+                self.require_atomic_object_type(base, self.merge_span(start, close.span))?;
+            }
             let resolved = self.qualify_typedef_type(base, qualifiers);
             return Some(ParsedSpecifier {
                 surface: TypeSpecifier::Typeof {
@@ -6174,6 +6235,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .tokens
                 .get(self.pos.saturating_sub(1))
                 .map_or(token.span, |token| token.span);
+            if qualifiers.is_atomic {
+                self.require_atomic_object_type(alias_ty, self.merge_span(start, end))?;
+            }
             let ty = self.qualify_typedef_type(alias_ty, qualifiers);
             return Some(ParsedSpecifier {
                 surface: TypeSpecifier::TypedefName {
@@ -6224,6 +6288,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TokenKind::Const => Some((&mut qualifiers.is_const, true)),
                 TokenKind::Volatile => Some((&mut qualifiers.is_volatile, true)),
                 TokenKind::Restrict => Some((&mut qualifiers.is_restrict, true)),
+                TokenKind::Atomic
+                    if self.tokens.get(self.pos + 1).map(|token| token.kind)
+                        == Some(TokenKind::LParen) =>
+                {
+                    None
+                }
                 TokenKind::Atomic => Some((&mut qualifiers.is_atomic, true)),
                 _ => None,
             };
@@ -6363,12 +6433,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 Some(TokenKind::Const) => qualifiers.is_const = true,
                 Some(TokenKind::Volatile) => qualifiers.is_volatile = true,
                 Some(TokenKind::Restrict) => qualifiers.is_restrict = true,
+                // C11 6.7.2.4p4: `_Atomic (` begins the type specifier.
+                Some(TokenKind::Atomic) if self.at_atomic_type_specifier() => break,
                 Some(TokenKind::Atomic) => qualifiers.is_atomic = true,
                 _ => break,
             }
             self.advance();
         }
         qualifiers
+    }
+
+    /// Whether the next tokens are `_Atomic (`, which C11 6.7.2.4p4 makes
+    /// the atomic type specifier rather than the qualifier.
+    fn at_atomic_type_specifier(&self) -> bool {
+        self.peek_kind() == Some(TokenKind::Atomic)
+            && self.tokens.get(self.pos + 1).map(|token| token.kind) == Some(TokenKind::LParen)
+    }
+
+    /// Report `_Atomic` applied to an array or function type, which C11
+    /// 6.7.3p3 forbids, as `E2955`.
+    fn require_atomic_object_type(&mut self, ty: TypeId, span: SourceSpan) -> Option<()> {
+        let canonical = self.types.get(ty)?;
+        if matches!(
+            canonical.kind,
+            TypeKind::Array { .. } | TypeKind::Function { .. }
+        ) {
+            self.report("E2955", "invalid-atomic-type", span);
+            return None;
+        }
+        Some(())
     }
 
     fn capture_specifier_attribute(
@@ -6995,6 +7088,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         type_span: SourceSpan,
         width_expression: &CHirExpr<'_>,
     ) -> Option<BitFieldSpec> {
+        // C11 6.7.2.1p5 leaves atomic bit-fields implementation-defined.
+        // EvoCC does not permit them, as GCC and Clang do not.
+        if self
+            .types
+            .get(ty)
+            .is_some_and(|canonical| canonical.qualifiers.is_atomic)
+        {
+            self.report("E2955", "invalid-atomic-type", type_span);
+            return None;
+        }
         let Some(base_width_bits) = self.bit_field_base_width(ty) else {
             self.report("E1305", "bit-field-has-non-integer-type", type_span);
             return None;
@@ -9627,6 +9730,27 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         self.require_supported_assignment_promotion(op, target, value)?;
         let mut typed_target = typed_target?;
+        self.require_admitted_atomic_update(
+            &typed_target,
+            op != AssignmentOp::Simple,
+            target.span(),
+        )?;
+        if op != AssignmentOp::Simple
+            && matches!(&typed_target, TypedUpdateTarget::Memory(place) if place.access_qualifiers().is_atomic)
+            && self
+                .converted_expression_type(value)
+                .is_some_and(|inferred| {
+                    matches!(
+                        self.operand_type_class(inferred.ty),
+                        OperandTypeClass::Real(_) | OperandTypeClass::Complex(_)
+                    )
+                })
+        {
+            // A floating computation in an atomic update needs the floating
+            // flag rule of C11 footnote 113, which this revision lacks.
+            self.report("E2702", "atomic-update-unsupported", target.span());
+            return None;
+        }
         let span = self.merge_span(target.span(), value.span());
         if complex_update && !complex_target {
             // A real target is read and written through its object, so the
@@ -9714,10 +9838,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2101", "expected-modifiable-lvalue", target.span());
                 return None;
             }
-            if place.access_qualifiers().is_atomic {
-                self.report("E2702", "atomic-update-unsupported", target.span());
-                return None;
-            }
             return Some(TypedUpdateTarget::Memory(place.clone()));
         }
         let aggregate_target = self.complex_expression_type(target).is_some()
@@ -9739,10 +9859,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2101", "expected-modifiable-lvalue", target.span());
                 return None;
             }
-            if place.access_qualifiers().is_atomic {
-                self.report("E2702", "atomic-update-unsupported", target.span());
-                return None;
-            }
             return Some(TypedUpdateTarget::Memory(place));
         }
         if matches!(
@@ -9760,6 +9876,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if !facts.is_modifiable_lvalue() {
             self.report("E2101", "expected-modifiable-lvalue", target.span());
             return None;
+        }
+        // An `_Atomic` object is read and written through its address, so
+        // every consumer sees one memory place (EvoIR 10.1.21).
+        if self
+            .types
+            .get(facts.ty())
+            .is_some_and(|canonical| canonical.qualifiers.is_atomic)
+        {
+            let Some(place) = self.resolve_memory_place(target) else {
+                self.report("E2101", "expected-modifiable-lvalue", target.span());
+                return None;
+            };
+            return Some(TypedUpdateTarget::Memory(place));
         }
         Some(TypedUpdateTarget::Direct(DirectUpdateTarget {
             symbol: *symbol,
@@ -10198,10 +10327,6 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2101", "expected-modifiable-lvalue", target_span);
                 return None;
             }
-            if place.access_qualifiers().is_atomic {
-                self.report("E2702", "atomic-update-unsupported", target_span);
-                return None;
-            }
             return Some(place);
         }
         let pointer_type = self.pointer_root_descriptor(pointer).or_else(|| {
@@ -10228,11 +10353,38 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2101", "expected-modifiable-lvalue", target_span);
             return None;
         }
-        if place.access_qualifiers().is_atomic {
-            self.report("E2702", "atomic-update-unsupported", target_span);
+        Some(place)
+    }
+
+    /// The admitted `_Atomic` updates (EvoIR 10.1.21). A simple assignment
+    /// stores a 1-, 2-, 4- or 8-byte scalar; a compound assignment, `++` or
+    /// `--` also excludes floating types. Every other update of an atomic
+    /// place is `E2702`.
+    fn require_admitted_atomic_update(
+        &mut self,
+        target: &TypedUpdateTarget<'arena>,
+        compound: bool,
+        span: SourceSpan,
+    ) -> Option<()> {
+        let TypedUpdateTarget::Memory(place) = target else {
+            return Some(());
+        };
+        if !place.access_qualifiers().is_atomic || place.accesses_atomic_member() {
+            // A member of an atomic record is `E2956` at the access.
+            return Some(());
+        }
+        let ty = place.value_ty();
+        let floating = matches!(
+            self.types.get(ty).map(|canonical| &canonical.kind),
+            Some(TypeKind::Float(_))
+        );
+        if !evocc_chir::atomic_access_admitted(&self.types, &self.target_layout, ty)
+            || (compound && floating)
+        {
+            self.report("E2702", "atomic-update-unsupported", span);
             return None;
         }
-        Some(place)
+        Some(())
     }
 
     fn finish_scalar_update_place(
@@ -11858,6 +12010,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let target = self.parse_unary()?;
             self.require_supported_update_promotion(target)?;
             let typed_target = self.typed_update_target(target)?;
+            self.require_admitted_atomic_update(&typed_target, true, target.span())?;
             let op = if token.kind == TokenKind::PlusPlus {
                 UpdateOp::PreIncrement
             } else {
@@ -12520,6 +12673,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     let target = expression;
                     self.require_supported_update_promotion(target)?;
                     let typed_target = self.typed_update_target(target)?;
+                    self.require_admitted_atomic_update(&typed_target, true, target.span())?;
                     let op = if token.kind == TokenKind::PlusPlus {
                         UpdateOp::PostIncrement
                     } else {
@@ -12986,6 +13140,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 writeback: false,
                 weak: None,
                 failure: None,
+                memory: false,
+                result: None,
                 facts: ExprFacts::value(result_ty),
                 span: self.merge_span(keyword.span, close.span),
             })),
@@ -13040,8 +13196,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         let arity = match form {
-            GnuAtomic::Update(..) => 3,
-            GnuAtomic::CompareExchange => 6,
+            GnuAtomic::Generic(
+                evocc_chir::AtomicCopyOp::Load | evocc_chir::AtomicCopyOp::Store,
+            )
+            | GnuAtomic::Update(..) => 3,
+            GnuAtomic::Generic(evocc_chir::AtomicCopyOp::Exchange) => 4,
+            GnuAtomic::Generic(evocc_chir::AtomicCopyOp::CompareExchange)
+            | GnuAtomic::CompareExchange => 6,
             GnuAtomic::TestAndSet
             | GnuAtomic::Clear
             | GnuAtomic::AlwaysLockFree
@@ -13057,6 +13218,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let bool_ty = self.intern(TypeKind::Int(IntRank::Bool), Qualifiers::default());
         if matches!(form, GnuAtomic::AlwaysLockFree | GnuAtomic::IsLockFree) {
             return self.parse_atomic_lock_free(form, operands[0], operands[1], span);
+        }
+        if let GnuAtomic::Generic(op) = form {
+            return self.parse_generic_atomic(op, &operands, span);
         }
         let address = operands[0];
         let inferred = self.converted_expression_type(address)?;
@@ -13115,6 +13279,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 writeback: false,
                 weak: None,
                 failure: None,
+                memory: false,
+                result: None,
                 facts: ExprFacts::value(if set { byte } else { void_ty }),
                 span,
             }));
@@ -13240,6 +13406,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     writeback: true,
                     weak: Some(weak),
                     failure: Some(failure),
+                    memory: false,
+                    result: None,
                     facts: ExprFacts::value(bool_ty),
                     span,
                 })),
@@ -13263,7 +13431,167 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 writeback: false,
                 weak: None,
                 failure: None,
+                memory: false,
+                result: None,
                 facts: ExprFacts::value(access_ty),
+                span,
+            })),
+        )
+    }
+
+    /// The generic forms on memory (EvoIR 10.1.14). `*p` is an integer,
+    /// enumeration, pointer, floating, record or union object, `_Atomic` or
+    /// not, of 1, 2, 4 or 8 bytes whose alignment is at least its size. Every
+    /// buffer points to a complete object of a compatible type and the same
+    /// size; a buffer that the operation writes, and the object of a store,
+    /// exchange or compare-exchange, is not const. Any other shape is
+    /// `E2913`. The orders follow the scalar forms.
+    fn parse_generic_atomic(
+        &mut self,
+        op: evocc_chir::AtomicCopyOp,
+        operands: &[&'arena CHirExpr<'arena>],
+        span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        use evocc_chir::{
+            AtomicCopyOp as C, AtomicOrder as O, AtomicRmwOp as R, AtomicRmwReturn as V,
+        };
+        let refuse = |parser: &mut Self, operand: &CHirExpr<'_>| {
+            parser.report("E2913", "builtin-operand-not-convertible", operand.span());
+        };
+        let address = operands[0];
+        let OperandTypeClass::Pointer(pointer) =
+            self.operand_type_class(self.converted_expression_type(address)?.ty)
+        else {
+            refuse(self, address);
+            return None;
+        };
+        let object = pointer.pointee;
+        let canonical = self.types.get(object)?.clone();
+        let admitted_kind = matches!(
+            canonical.kind,
+            TypeKind::Int(_)
+                | TypeKind::Enum(_)
+                | TypeKind::Pointer(_)
+                | TypeKind::Float(_)
+                | TypeKind::Struct(_)
+                | TypeKind::Union(_)
+        );
+        let access_ty = self.intern(canonical.kind.clone(), Qualifiers::default());
+        let object_layout = self.target_layout.layout_of(&self.types, object).ok();
+        let access_layout = self.target_layout.layout_of(&self.types, access_ty).ok();
+        let admitted = admitted_kind
+            && !self.type_is_variably_modified(object)
+            && (!canonical.qualifiers.is_const || op == C::Load)
+            && object_layout
+                .zip(access_layout)
+                .is_some_and(|(object, access)| {
+                    matches!(access.size_bytes, 1 | 2 | 4 | 8)
+                        && object.size_bytes == access.size_bytes
+                        && u64::from(object.align_bytes) >= access.size_bytes
+                });
+        if !admitted {
+            refuse(self, address);
+            return None;
+        }
+        // The buffers in source order, and whether the operation writes each.
+        let buffers: &[(usize, bool)] = match op {
+            C::Load => &[(1, true)],
+            C::Store => &[(1, false)],
+            C::Exchange => &[(1, false), (2, true)],
+            C::CompareExchange => &[(1, true), (2, false)],
+        };
+        for &(index, written) in buffers {
+            let buffer = operands[index];
+            let class = self.operand_type_class(self.converted_expression_type(buffer)?.ty);
+            let OperandTypeClass::Pointer(target) = class else {
+                refuse(self, buffer);
+                return None;
+            };
+            let same = self.types.get(target.pointee).is_some_and(|ty| {
+                !(written && ty.qualifiers.is_const)
+                    && self
+                        .types
+                        .compatible_ignoring_top_qualifiers(target.pointee, access_ty)
+            }) && self
+                .target_layout
+                .layout_of(&self.types, target.pointee)
+                .ok()
+                .zip(access_layout)
+                .is_some_and(|(buffer, access)| buffer.size_bytes == access.size_bytes);
+            if !same {
+                refuse(self, buffer);
+                return None;
+            }
+        }
+        let int_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        let order_index = match op {
+            C::Load | C::Store => 2,
+            C::Exchange => 3,
+            C::CompareExchange => 4,
+        };
+        let constant_order = match op {
+            C::Load => self.atomic_order_operand(operands[2], &|order| order.valid_for(true))?,
+            C::Store => self.atomic_order_operand(operands[2], &|order| order.valid_for(false))?,
+            C::Exchange => self.atomic_order_operand(operands[3], &|_| true)?,
+            C::CompareExchange => {
+                let weak = operands[3];
+                if !is_scalar_class(
+                    self.operand_type_class(self.converted_expression_type(weak)?.ty),
+                ) {
+                    refuse(self, weak);
+                    return None;
+                }
+                let success = self.atomic_order_operand(operands[4], &|_| true)?;
+                let failure = self.atomic_order_operand(operands[5], &|failure| {
+                    !matches!(failure, O::Release | O::AcqRel)
+                        && success.is_none_or(|success| failure as u8 <= success as u8)
+                })?;
+                success
+                    .zip(failure)
+                    .map(|(success, failure)| merged_exchange_order(success, failure))
+            }
+        };
+        let order = self.alloc_node(CHirExpr::Cast(
+            int_ty,
+            operands[order_index],
+            operands[order_index].span(),
+        ));
+        let compare = op == C::CompareExchange;
+        let failure = compare
+            .then(|| self.alloc_node(CHirExpr::Cast(int_ty, operands[5], operands[5].span())));
+        let result_ty = if compare {
+            self.intern(TypeKind::Int(IntRank::Bool), Qualifiers::default())
+        } else {
+            self.intern(TypeKind::Void, Qualifiers::default())
+        };
+        Some(
+            self.alloc_node(CHirExpr::Atomic(evocc_chir::CHirAtomicAccess {
+                address,
+                value: match op {
+                    C::Load => None,
+                    C::Store | C::Exchange => Some(operands[1]),
+                    C::CompareExchange => Some(operands[2]),
+                },
+                expected: compare.then(|| operands[1]),
+                rmw: match op {
+                    C::Load | C::Store => None,
+                    C::Exchange => Some((R::Exchange, V::Old)),
+                    C::CompareExchange => Some((R::CompareExchange, V::Success)),
+                },
+                order,
+                constant_order,
+                access_ty,
+                volatile: canonical.qualifiers.is_volatile,
+                writeback: compare,
+                weak: compare.then(|| operands[3]),
+                failure,
+                memory: true,
+                result: match op {
+                    C::Load => Some(operands[1]),
+                    C::Exchange => Some(operands[2]),
+                    C::Store | C::CompareExchange => None,
+                },
+                facts: ExprFacts::value(result_ty),
                 span,
             })),
         )

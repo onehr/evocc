@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.4.1** | **Pinned ground truth** | Atomic pointer offsets on 2026-10-20
+**Revision 1.5.0** | **Pinned ground truth** | Atomic object copies on 2026-10-20
 
 ## Status and scope
 
@@ -420,6 +420,17 @@ compare-exchange uses kind `b`. The GNU fences of EvoIR Section 10.1.14
 arrive as barrier `asm` (Section 8.3): `dmb ish`, `dmb ishld`, or an empty
 template for a signal fence.
 
+The `atomic.copy` forms of EvoIR Section 3.8 need no machine form of their
+own. Lowering moves the `N`-byte object through one general register of kind
+`b`, `h`, `w` or `x`, and the buffers through ordinary `ldr` and `str` of that
+width at the buffer alignment. A load is `atomic.load.K` and then `str` to the
+destination buffer. A store is `ldr` from the source buffer and then
+`atomic.store.K`. An exchange is `ldr`, `atomic.rmw.exchange.K` and `str` of
+the old value. A compare-exchange loads the expected and the desired buffers,
+runs `atomic.rmw.cmpxchg.K`, stores the old value in the observed buffer, and
+sets its `bits<1>` result with `cmp` and `cset eq`. The order and the volatile
+marker pass to the atomic form unchanged.
+
 ### 4.3 Arithmetic and logic
 
 | Form | Semantics |
@@ -568,6 +579,7 @@ table or in a family that Sections 2 and 4 admit is refused (Section 10).
 | `store [volatile]` | `str` of the matching width, `str.p` for a pointer (Section 5.4) |
 | `atomic.load`/`atomic.store order [volatile]` | `atomic.load.K`/`atomic.store.K` with the same order, marker and kind |
 | atomic read-modify-write and compare-exchange | `atomic.rmw.OP.K` with the same order and marker |
+| `atomic.copy.*` | the `atomic.load.K`, `atomic.store.K` or `atomic.rmw.OP.K` sequence of Section 4.2 with ordinary buffer accesses |
 | `copy` with static size | `mem.copy` |
 | `copy.volatile.read/write/readwrite` | `mem.copy.volatile.read/write/readwrite`; the validated size 1, 2, 4 or 8 and alignment `>= size` give exactly one source load and one destination store, with only the specified sides observable |
 | `br ^b(args)` | `b ^b(args)` |
@@ -1830,6 +1842,10 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.5.0, 2026-10-20.** Section 4.2 lowers the `atomic.copy` forms
+of EvoIR Section 3.8 to the existing atomic forms and ordinary buffer
+accesses of the object's width. No machine form changes.
 
 **Revision 1.4.1, 2026-10-20.** Section 4.2 names the existing forms that the
 GNU atomic builtins use: pointer `add` and `sub` with a byte count, `bits<1>`

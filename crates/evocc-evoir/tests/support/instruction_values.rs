@@ -35,6 +35,7 @@ fn expected() -> Vec<(&'static [u32], &'static [u32])> {
         (&[1951, 1952], &[1950]),                         // vector
         (&[1922, 1923, 1921], &[1920, 1924, 1925]),       // atomic load
         (&[1932, 1933, 1931, 1930], &[1934, 1935]),       // atomic store
+        (&[1995, 1996, 1991, 1992, 1993, 1994], &[1990, 1997, 1998]), // atomic copy
         (&[1431], &[1430]),                               // pointer cast
         (&[], &[1000]),                                   // constant
         (&[], &[1010]),                                   // uninitialized
@@ -321,6 +322,21 @@ pub fn sentinel_instructions() -> Vec<Inst> {
             world_in: world(1933),
             mem_out: mem(1934),
             world_out: world(1935),
+        }),
+        Inst::Atomic(evocc_evoir::AtomicAccess {
+            op: evocc_evoir::AtomicOp::Copy {
+                op: evocc_evoir::AtomicCopyOp::CompareExchange,
+                buffers: vec![pointer(1992), pointer(1993), pointer(1994)],
+                result: Some(value(1990, EvoIRType::Bits(1))),
+                layout: AccessLayout::new(4, 2),
+            },
+            address: pointer(1991),
+            order: evocc_evoir::AtomicOrder::Acquire,
+            volatile: true,
+            mem_in: mem(1995),
+            world_in: world(1996),
+            mem_out: mem(1997),
+            world_out: world(1998),
         }),
         Inst::PointerCast {
             result: value(1430, EvoIRType::Bits(64)),
