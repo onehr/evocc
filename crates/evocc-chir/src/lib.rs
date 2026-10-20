@@ -367,6 +367,8 @@ pub enum CharPrefix {
     L,
     /// Written `L`, resolved under the target's short-wchar option.
     L16,
+    /// Written `L`, resolved under a target whose `wchar_t` is `int`.
+    LInt,
     U16,
     U,
     U8,
@@ -379,6 +381,7 @@ impl CharLit {
             CharPrefix::None | CharPrefix::U8 => evocc_types::IntRank::Int,
             CharPrefix::L => StringPrefix::L.element_rank(),
             CharPrefix::L16 => StringPrefix::L16.element_rank(),
+            CharPrefix::LInt => StringPrefix::LInt.element_rank(),
             CharPrefix::U16 => evocc_types::IntRank::UShort,
             CharPrefix::U => evocc_types::IntRank::UInt,
         };
@@ -496,6 +499,9 @@ pub enum StringPrefix {
     /// Written `L`, resolved under the target's short-wchar option. Recording
     /// this at parsing makes initializer extents and later decoding agree.
     L16,
+    /// Written `L`, resolved under a target whose `wchar_t` is `int`, such as
+    /// Darwin. The UTF-32 code units have type `int`.
+    LInt,
     /// C11 `u` prefix (`char16_t` code units).
     U16,
     /// C11 `U` prefix (`char32_t` code units).
@@ -513,6 +519,7 @@ impl StringPrefix {
             Self::L16 => TargetDataLayout::aarch64_unknown_linux_gnu()
                 .with_short_wchar(true)
                 .wide_character_rank(),
+            Self::LInt => TargetDataLayout::aarch64_apple_darwin().wide_character_rank(),
             Self::U16 => IntRank::UShort,
             Self::U => IntRank::UInt,
         }

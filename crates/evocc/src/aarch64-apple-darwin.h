@@ -83,13 +83,13 @@
 #undef __UINT_FAST64_MAX__
 #define __UINT_FAST64_MAX__ 0xffffffffffffffffULL
 
-/* wint_t is int. */
+/* wint_t is int, and Apple clang defines no __WINT_MIN__. The driver sets
+ * the wchar_t macros, because -fshort-wchar changes them. */
 #undef __WINT_TYPE__
 #define __WINT_TYPE__ int
 #undef __WINT_MAX__
-#define __WINT_MAX__ 0x7fffffff
+#define __WINT_MAX__ 2147483647
 #undef __WINT_MIN__
-#define __WINT_MIN__ (-__WINT_MAX__ - 1)
 
 /* long double is binary64. */
 #undef __SIZEOF_LONG_DOUBLE__

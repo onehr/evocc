@@ -1888,6 +1888,7 @@ impl std::error::Error for LayoutError {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TargetDataLayout {
     short_wchar: bool,
+    int_wchar: bool,
     signed_char: bool,
     pointer_va_list: bool,
     binary64_long_double: bool,
@@ -1901,6 +1902,7 @@ impl TargetDataLayout {
     pub const fn aarch64_unknown_linux_gnu() -> Self {
         Self {
             short_wchar: false,
+            int_wchar: false,
             signed_char: false,
             pointer_va_list: false,
             binary64_long_double: false,
@@ -1911,13 +1913,14 @@ impl TargetDataLayout {
     }
 
     /// Apple arm64 layout. Its `va_list` is one pointer to the anonymous
-    /// arguments, which the caller passes on the stack, and its `long double`
-    /// has the binary64 format of `double`. Plain `char` signedness stays a
-    /// separate selection.
+    /// arguments, which the caller passes on the stack, its `long double`
+    /// has the binary64 format of `double`, and its `wchar_t` is `int`.
+    /// Plain `char` signedness stays a separate selection.
     #[must_use]
     pub const fn aarch64_apple_darwin() -> Self {
         Self {
             short_wchar: false,
+            int_wchar: true,
             signed_char: false,
             pointer_va_list: true,
             binary64_long_double: true,
@@ -2014,11 +2017,15 @@ impl TargetDataLayout {
         self
     }
 
-    /// Canonical integer rank of `wchar_t` and an `L` literal's elements.
+    /// Canonical integer rank of `wchar_t` and an `L` literal's elements:
+    /// `unsigned short` under the short option, otherwise `int` on Darwin, as
+    /// Apple clang defines it, and `unsigned int` on Linux, as GCC 14 does.
     #[must_use]
     pub const fn wide_character_rank(&self) -> IntRank {
         if self.short_wchar {
             IntRank::UShort
+        } else if self.int_wchar {
+            IntRank::Int
         } else {
             IntRank::UInt
         }

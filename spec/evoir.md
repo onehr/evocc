@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.18.0** | **Pinned ground truth** | `__builtin_tgmath` on 2026-10-21
+**Revision 2.18.1** | **Pinned ground truth** | Darwin `wchar_t` on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -6966,6 +6966,12 @@ Apple clang:
   `__SIZEOF_LONG_DOUBLE__` is 8, and the `__LDBL_*__` macros describe binary64,
   so `<float.h>` agrees. `long double _Complex` has size 16 and alignment 8.
 - Narrow integers cross calls as Section 10.1.3 states.
+- `wchar_t` and `wint_t` are `int`. A wide character constant and the
+  elements of a wide string literal have type `int`. `__WCHAR_TYPE__` is
+  `int`, `__WCHAR_MAX__` is `2147483647`, and `__WINT_MAX__` is
+  `2147483647`; neither `__WCHAR_MIN__` nor `__WINT_MIN__` is defined. With
+  `-fshort-wchar`, `wchar_t` is `unsigned short`, `__WCHAR_MAX__` is `65535`
+  and `__WCHAR_UNSIGNED__` is `1`, and `wint_t` stays `int`.
 
 The EvoIR text of this target names it (Section 9.1).
 
@@ -7225,8 +7231,9 @@ zero, and a wide literal concatenated with a narrow one is wide (`L"" "abc"` is
 
 **Wide characters.** The target layout fixes wide character values, wide
 string element types, decoding, initialization and the `wchar_t` predefined
-macros. By default `wchar_t` is `unsigned int` and a wide literal holds UTF-32
-units. `-fshort-wchar` selects `unsigned short` and UTF-16 units, with a code
+macros. By default a wide literal holds UTF-32 units, and `wchar_t` is
+`unsigned int` on Linux and `int` on Darwin. `-fshort-wchar` selects
+`unsigned short` and UTF-16 units on both targets, with a code
 point above U+FFFF written as a surrogate pair; a wide character constant above
 U+FFFF is then `E1006`, never a truncated value.
 
@@ -8166,6 +8173,12 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.18.1, 2026-10-21.** Section 10.5 corrects the wide character
+types of the Darwin target. They follow Apple clang: `wchar_t` and `wint_t`
+are `int`, wide literals have `int` elements, and the `wchar_t` and `wint_t`
+macros have Apple clang's spellings. Linux keeps GCC 14's `unsigned int`. No
+EvoIR operation, registry or Lean rule domain changes.
 
 **Revision 2.18.0, 2026-10-21.** Section 10.1.14 admits `__builtin_tgmath` as
 GCC 14 documents it: the call goes to the function that the `<tgmath.h>` rules

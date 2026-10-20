@@ -3253,6 +3253,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 | StringPrefix::U8
                                 | StringPrefix::L
                                 | StringPrefix::L16
+                                | StringPrefix::LInt
                         ) {
                             self.report(
                                 "E2205",
@@ -3287,6 +3288,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                     | StringPrefix::U8
                                     | StringPrefix::L
                                     | StringPrefix::L16
+                                    | StringPrefix::LInt
                             ) {
                                 self.report(
                                     "E2205",
@@ -5053,7 +5055,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<()> {
         if !matches!(
             literal.prefix,
-            StringPrefix::None | StringPrefix::U8 | StringPrefix::L | StringPrefix::L16
+            StringPrefix::None
+                | StringPrefix::U8
+                | StringPrefix::L
+                | StringPrefix::L16
+                | StringPrefix::LInt
         ) {
             self.report("E2205", "not-covered-day5: wide-string-initializer", span);
             return None;
@@ -5211,7 +5217,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn string_literal_element_matches(&self, target: TypeId, prefix: StringPrefix) -> bool {
         match prefix {
             StringPrefix::None | StringPrefix::U8 => self.is_narrow_character_type(target),
-            StringPrefix::L | StringPrefix::L16 => {
+            StringPrefix::L | StringPrefix::L16 | StringPrefix::LInt => {
                 self.types.get(target).is_some_and(|canonical| {
                     !canonical.qualifiers.is_atomic
                         && canonical.kind == TypeKind::Int(prefix.element_rank())
@@ -13457,10 +13463,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     end = next.span;
                 }
                 let span = self.merge_span(tok.span, end);
-                if literal.prefix == StringPrefix::L
-                    && self.target_layout.wide_character_rank() == IntRank::UShort
-                {
-                    literal.prefix = StringPrefix::L16;
+                if literal.prefix == StringPrefix::L {
+                    literal.prefix = match self.target_layout.wide_character_rank() {
+                        IntRank::UShort => StringPrefix::L16,
+                        IntRank::Int => StringPrefix::LInt,
+                        _ => StringPrefix::L,
+                    };
                 }
                 if literal.explicit_unit_count().is_none() {
                     self.report("E1006", "invalid-string-literal", span);
@@ -17561,8 +17569,11 @@ fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
         "u8" => CharPrefix::U8,
         "u" => CharPrefix::U16,
         "U" => CharPrefix::U,
-        "L" if target.wide_character_rank() == IntRank::UShort => CharPrefix::L16,
-        "L" => CharPrefix::L,
+        "L" => match target.wide_character_rank() {
+            IntRank::UShort => CharPrefix::L16,
+            IntRank::Int => CharPrefix::LInt,
+            _ => CharPrefix::L,
+        },
         "" => CharPrefix::None,
         _ => return None,
     };

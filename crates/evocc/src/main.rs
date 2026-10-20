@@ -1416,27 +1416,11 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
             pp.define(name.to_owned(), decoded_tokens(&level.to_string())?);
         }
     }
-    let wchar_rank = options.target_layout().wide_character_rank();
-    let wchar_type = evocc_chir::integer::integer_type_for_rank(wchar_rank);
-    let wchar_bits = wchar_type.bits();
-    let wchar_max = (1_u64 << wchar_bits) - 1;
-    for (name, replacement) in [
-        ("__ARM_SIZEOF_WCHAR_T", (wchar_bits / 8).to_string()),
-        ("__SIZEOF_WCHAR_T__", (wchar_bits / 8).to_string()),
-        ("__WCHAR_WIDTH__", wchar_bits.to_string()),
-        ("__WCHAR_MIN__", "0U".to_owned()),
-        ("__WCHAR_MAX__", format!("{wchar_max:#x}U")),
-        (
-            "__WCHAR_TYPE__",
-            match wchar_rank {
-                evocc_types::IntRank::UShort => "short unsigned int",
-                evocc_types::IntRank::UInt => "unsigned int",
-                _ => unreachable!("the selected target has unsigned 16-bit or 32-bit wchar_t"),
-            }
-            .to_owned(),
-        ),
-    ] {
-        pp.define(name.to_owned(), decoded_tokens(&replacement)?);
+    for (name, replacement) in wide_character_macros(options) {
+        match replacement {
+            Some(replacement) => pp.define(name.to_owned(), decoded_tokens(&replacement)?),
+            None => pp.undefine(name),
+        }
     }
     pp.set_signed_char(options.signed_char);
     pp.set_legacy_literal_prefixes(options.language.legacy_literal_prefixes());
@@ -1544,6 +1528,41 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
         }
     }
     Ok(pp)
+}
+
+/// The `wchar_t` macros of the selected target, spelled as its compiler
+/// prints them. GCC 14 on Linux defines `__WCHAR_MIN__`; Apple clang defines
+/// no minimum and marks an unsigned `wchar_t` with `__WCHAR_UNSIGNED__`.
+/// `None` leaves a name undefined.
+fn wide_character_macros(options: &DriverOptions) -> [(&'static str, Option<String>); 7] {
+    let rank = options.target_layout().wide_character_rank();
+    let bits = evocc_chir::integer::integer_type_for_rank(rank).bits();
+    let size = Some((bits / 8).to_string());
+    let width = Some(bits.to_string());
+    let (type_name, minimum, maximum, unsigned) = match (options.target, rank) {
+        (DriverTarget::Aarch64AppleDarwin, evocc_types::IntRank::Int) => {
+            ("int", None, "2147483647", None)
+        }
+        (DriverTarget::Aarch64AppleDarwin, evocc_types::IntRank::UShort) => {
+            ("unsigned short", None, "65535", Some("1".to_owned()))
+        }
+        (DriverTarget::Aarch64UnknownLinuxGnu, evocc_types::IntRank::UInt) => {
+            ("unsigned int", Some("0U".to_owned()), "0xffffffffU", None)
+        }
+        (DriverTarget::Aarch64UnknownLinuxGnu, evocc_types::IntRank::UShort) => {
+            ("short unsigned int", Some("0U".to_owned()), "0xffffU", None)
+        }
+        _ => unreachable!("each target has one wchar_t of each width"),
+    };
+    [
+        ("__ARM_SIZEOF_WCHAR_T", size.clone()),
+        ("__SIZEOF_WCHAR_T__", size),
+        ("__WCHAR_WIDTH__", width),
+        ("__WCHAR_MIN__", minimum),
+        ("__WCHAR_MAX__", Some(maximum.to_owned())),
+        ("__WCHAR_TYPE__", Some(type_name.to_owned())),
+        ("__WCHAR_UNSIGNED__", unsigned),
+    ]
 }
 
 fn same_macro_replacement(left: &[evocc_lex::Token], right: &[evocc_lex::Token]) -> bool {
