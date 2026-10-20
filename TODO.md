@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D19, D22, D23 | D22 and D23 come next; D19 keeps the remaining Darwin SDK groups. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D19, D24, D25 | D19 keeps the remaining Darwin SDK groups; D24 and D25 are follow-ups of D22 and D23. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -5649,7 +5649,7 @@ refusal; changing the P13 demo does not close it.
   offline workspace gate of rust-r7 on the final tree passes 477 suites, 3,580
   tests, zero failures and 20 ignores, plus Clippy and formatting.
 
-- [ ] **D22 — Make `wchar_t` an `int` on Darwin** — `OPEN`, P1.
+- [x] **D22 — Make `wchar_t` an `int` on Darwin** — `DONE`, P1, 2026-10-21.
   Found on 2026-10-21 by rust-r7 and confirmed by the lead. EvoCC gives Darwin
   the Linux `wchar_t`, an `unsigned int`. Apple clang's `wchar_t` and `wint_t`
   are `int`. A program built by EvoCC for Darwin computes `(wchar_t)-1 < 0` as 0
@@ -5657,8 +5657,17 @@ refusal; changing the P13 demo does not close it.
   Exit: on Darwin `wchar_t`, `wint_t`, the wide literals and the predefined
   macros match Apple clang, a crossed test that passes and compares `wchar_t`
   values agrees with Apple clang, and Linux keeps GCC 14's `unsigned int`.
+  Closed on 2026-10-21 (EvoIR 2.18.1, commit 90748f9c). On Darwin, `wchar_t`,
+  `wint_t`, the wide literals and the wide-character macros follow Apple clang;
+  Linux keeps GCC 14's `unsigned int`. The lead's reproducer now matches Apple
+  clang. Crossed calls agree with Apple clang in both directions at O0 and O2,
+  and both interpreters agree.
+  [Tests](crates/evocc/tests/darwin_wide_characters.rs). The full offline
+  workspace gate of rust-r8 passes 481 suites with 3,607 tests passed and 20
+  ignored; its one failure was the Section 9 manifest test, which passes with
+  the manifest that the lead applied. Clippy and formatting pass.
 
-- [ ] **D23 — A bit-field store is not a read of its neighbors** — `OPEN`, P1.
+- [x] **D23 — A bit-field store is not a read of its neighbors** — `DONE`, P1, 2026-10-21.
   Found on 2026-10-21 by rust-r7 and confirmed by the lead. For `struct S {
   unsigned a : 3; unsigned b : 5; }; struct S s; s.a = 1;`, `evo check` reports
   E3001 read-of-uninitialized-object at the store; the program is valid, and
@@ -5667,6 +5676,35 @@ refusal; changing the P13 demo does not close it.
   Exit: a store to a bit-field of an uninitialized object is no finding in
   either interpreter; a later read of a member that was never stored is still
   E3001; both rules have tests on both targets.
+  Closed on 2026-10-21 (EvoIR 2.19.0, EvoMIR 1.7.0, commit 2e2dc319). Memory
+  keeps one initializedness flag per bit. `load` and `store` take an optional
+  `[mask=M]`, which the lowering emits for non-volatile bit-field accesses, and
+  the C-HIR interpreter follows the same rule. A store to a bit-field
+  initializes only its own bits; a read of a member that was never stored is
+  still E3001. Both interpreters and both targets have tests; the assembly of 32
+  bit-field and application inputs is unchanged. Two parts stay open as D25.
+  [Tests](crates/evocc/tests/bit_field_initialization.rs). The full offline
+  workspace gate of rust-r8 passes 481 suites with 3,607 tests passed and 20
+  ignored; its one failure was the Section 9 manifest test, which passes with
+  the manifest that the lead applied. Clippy and formatting pass.
+
+- [ ] **D24 — Give wide character constants the signedness of `wchar_t` in `#if`** — `OPEN`, P2.
+  Found on 2026-10-21 by rust-r8. In `#if`, EvoCC evaluates `L'\0' - 1 < 0` as
+  signed on every target. Apple clang evaluates it as unsigned with
+  `-fshort-wchar`, and Clang for aarch64-unknown-linux-gnu evaluates it as
+  unsigned. `L'\xffffffff'` is E1006 on both targets. Next action: measure GCC
+  14 in the sealed image, then give the constant the type and signedness of
+  `wchar_t` in `#if` and admit every value of the type. Exit: tests pin both
+  forms on both targets against GCC 14 and Apple clang.
+
+- [ ] **D25 — Finish per-bit initializedness for volatile bit-fields and EvoMIR** — `OPEN`, P2.
+  Left open by D23 on 2026-10-21. A store to a volatile bit-field still reads
+  its container, so `evo check` reports E3001 when a neighbor is uninitialized.
+  The EvoMIR interpreter keeps the byte rule, so it reports E3001 for a masked
+  bit-field store that the EvoIR interpreter accepts; the randomized three-lane
+  gate generates no masked access, so it cannot meet the difference today. Exit:
+  both cases follow D23's rule, or each keeps a documented refusal with a test,
+  and the randomized gate generates masked accesses.
 
 ## Codegen quality track — next quarter
 

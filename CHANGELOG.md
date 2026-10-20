@@ -185,6 +185,11 @@ The first public version.
 
 ### Fixed
 
+- On Darwin, `wchar_t` and `wint_t` are `int`, as Apple clang defines them. Before, they were
+  the Linux `unsigned int`, so `(wchar_t)-1 < 0` and `WCHAR_MAX` differed from Apple clang.
+- A store to a bit-field no longer reads the other members of its storage unit, so `evo check`
+  no longer reports E3001 at the first store to a bit-field of an uninitialized object. A read
+  of a member that was never stored is still E3001.
 - Linux programs that include `<pthread.h>` or `<math.h>` compile again. The execution and
   calling-convention attributes of EvoIR 10.1.9 are accepted on a function prototype and
   recorded. A definition and each use stay E2952, except for functions that return twice and
