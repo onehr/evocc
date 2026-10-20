@@ -3984,6 +3984,9 @@ fn canonical_integer(
                 span,
                 feature: "unknown enum type",
             })?;
+            if let Some(rank) = tag.fixed_underlying {
+                return Ok(integer_type_for_rank(rank));
+            }
             let TagState::Complete(TagDefinition::Enum(constants)) = &tag.state else {
                 return Err(LowerError::UnsupportedType {
                     ty,

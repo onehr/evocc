@@ -276,6 +276,43 @@ void stop(void) { return; }
 int main(void) { stop(); return 0; }
 ```
 
+### E1306: enumerator-outside-underlying-type
+
+An enumerator value does not fit the fixed underlying type of its enumeration.
+An enumeration written `enum E : T` has the range of `T`.
+Each value, written or the previous value plus one, must be representable in `T`.
+C23 makes this a constraint violation, and GCC 14 rejects it in every language mode.
+Choose a wider underlying type, or change the value.
+
+```c
+enum level : unsigned char { low = 1, high = 256 };
+int main(void) { return low - 1; }
+```
+
+```c
+enum level : unsigned short { low = 1, high = 256 };
+int main(void) { return low - 1; }
+```
+
+### E1307: invalid-enumeration-underlying-type
+
+The fixed underlying type of an enumeration is not valid here.
+The type after the colon in `enum E : T` must be an integer type, such as `unsigned char`.
+Without an enumerator list, `enum E : T` may only form the declaration `enum E : T;`.
+Every declaration of the enumeration must name the same type, and its definition too.
+
+```c
+enum mode : int;
+enum mode { off, on };
+int main(void) { return off; }
+```
+
+```c
+enum mode : int;
+enum mode : int { off, on };
+int main(void) { return off; }
+```
+
 ## E2xxx
 
 ### E2001: undeclared-identifier
@@ -1474,6 +1511,23 @@ Fix: none
 
 Remove `always_inline` and call `setjmp` in the function that later jumps
 back to it.
+
+### E2958: unsupported-enumeration-underlying-type
+
+EvoCC does not implement this fixed underlying type of an enumeration.
+GCC 14 converts to an enumeration whose underlying type is `_Bool` as to `_Bool`, and Apple clang truncates.
+EvoCC therefore refuses `_Bool` there, and also `__int128`, an atomic type and an aligned typedef.
+Use another integer type, such as `unsigned char`.
+
+```c
+enum flag : _Bool { no, yes };
+int main(void) { return no; }
+```
+
+```c
+enum flag : unsigned char { no, yes };
+int main(void) { return no; }
+```
 
 ## E3xxx
 

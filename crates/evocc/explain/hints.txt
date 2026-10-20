@@ -12,6 +12,8 @@ E0113	Move a pragma outside the macro invocation so its position is explicit.
 E1003	Add the operand, or remove an operator that you did not intend to use.
 E1005	Declare pointers when an array must refer to functions.
 E1207	Return a value of the required type, or declare a void function when appropriate.
+E1306	Choose an underlying type that holds every value, or change the value.
+E1307	Name an integer type after the colon, and the same type in every declaration.
 E2001	Declare the object or function before use, and check the spelling of its name.
 E2002	Correct the conflicting declaration instead of casting each use.
 E2202	Use a compatible value rather than a cast that hides the type error.
@@ -70,6 +72,7 @@ E2954	Keep the string object's binding fixed, or use a runtime call after its fi
 E2955	Write `_Atomic` on an unqualified object type that is not an array or function type.
 E2956	Make each member an atomic object, or copy the whole atomic object first.
 E2957	Call setjmp in the function that jumps back to it, not in an always_inline helper.
+E2958	Use another integer type, such as `unsigned char`, as the underlying type.
 E3001	Initialize the object on every path before reading it.
 E3002	Check the divisor and choose the required error behavior before dividing.
 E3003	Handle zero separately before evaluating `%`.

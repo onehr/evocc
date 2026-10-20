@@ -591,6 +591,28 @@ pub struct Tag {
     pub layout: TagLayoutAttributes,
     /// A GNU union parameter accepts member values, constructed before a call.
     pub transparent_union: bool,
+    /// The fixed underlying type of an enumeration, written `enum E : T`
+    /// (C23 6.7.2.2). Such an enumeration is complete from that declaration
+    /// on, and it has the size, alignment and range of that type.
+    pub fixed_underlying: Option<IntRank>,
+    /// Whether an enumeration with a fixed underlying type has received its
+    /// enumerator list. Its state is complete before the list.
+    pub fixed_enumerators_defined: bool,
+}
+
+/// Why an enumeration cannot take a fixed underlying type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FixedEnumError {
+    UnknownTag(TagId),
+    NotAnEnumeration(TagId),
+    /// An earlier declaration fixed another underlying type.
+    Mismatch {
+        tag: TagId,
+        declared: IntRank,
+        requested: IntRank,
+    },
+    /// An earlier declaration of the enumeration has no fixed type.
+    DeclaredWithout(TagId),
 }
 
 /// Why a canonical type key could not be interned.
@@ -703,6 +725,11 @@ enum TypeInternerUndo {
     TransparentUnionUpdated {
         tag: TagId,
         previous: bool,
+    },
+    FixedEnumUpdated {
+        tag: TagId,
+        previous_underlying: Option<IntRank>,
+        previous_defined: bool,
     },
 }
 
@@ -1019,12 +1046,18 @@ impl TypeInterner {
         }
     }
 
-    /// The frozen target integer rank of a complete enumeration. Nominal tag
-    /// identity is retained separately; two enum tags do not become compatible
-    /// merely because their integer representations agree.
+    /// The frozen target integer rank of a complete enumeration: its fixed
+    /// underlying type, or the rank that its enumerator range selects.
+    /// Nominal tag identity is retained separately; two enum tags do not
+    /// become compatible merely because their integer representations agree.
     #[must_use]
     pub fn enum_representation(&self, tag: TagId) -> Option<IntRank> {
         let tag = self.tag(tag)?;
+        if tag.kind == TagKind::Enum {
+            if let Some(rank) = tag.fixed_underlying {
+                return Some(rank);
+            }
+        }
         let TagState::Complete(TagDefinition::Enum(constants)) = &tag.state else {
             return None;
         };
@@ -1143,6 +1176,8 @@ impl TypeInterner {
             state: TagState::Incomplete,
             layout: TagLayoutAttributes::default(),
             transparent_union: false,
+            fixed_underlying: None,
+            fixed_enumerators_defined: false,
         });
         self.record_undo(TypeInternerUndo::TagDeclared);
         id
@@ -1186,6 +1221,89 @@ impl TypeInterner {
     #[must_use]
     pub fn tag(&self, id: TagId) -> Option<&Tag> {
         self.tags.get(id.raw() as usize)
+    }
+
+    /// Give an enumeration the fixed underlying type `rank`. A first fixed
+    /// declaration completes the enumeration without enumerators; a later one
+    /// must name the same type. An enumeration that an earlier declaration
+    /// left without a fixed type cannot take one.
+    pub fn fix_enum_underlying(&mut self, id: TagId, rank: IntRank) -> Result<(), FixedEnumError> {
+        let Some(tag) = self.tags.get(id.raw() as usize) else {
+            return Err(FixedEnumError::UnknownTag(id));
+        };
+        if tag.kind != TagKind::Enum {
+            return Err(FixedEnumError::NotAnEnumeration(id));
+        }
+        match tag.fixed_underlying {
+            Some(declared) if declared == rank => return Ok(()),
+            Some(declared) => {
+                return Err(FixedEnumError::Mismatch {
+                    tag: id,
+                    declared,
+                    requested: rank,
+                })
+            }
+            None if matches!(tag.state, TagState::Complete(_)) => {
+                return Err(FixedEnumError::DeclaredWithout(id));
+            }
+            None => {}
+        }
+        let tag = &mut self.tags[id.raw() as usize];
+        let previous_underlying = tag.fixed_underlying.replace(rank);
+        let previous_defined = tag.fixed_enumerators_defined;
+        let previous_state = std::mem::replace(
+            &mut tag.state,
+            TagState::Complete(TagDefinition::Enum(Vec::new())),
+        );
+        self.record_undo(TypeInternerUndo::FixedEnumUpdated {
+            tag: id,
+            previous_underlying,
+            previous_defined,
+        });
+        self.record_undo(TypeInternerUndo::TagStateUpdated {
+            tag: id,
+            previous: previous_state,
+        });
+        Ok(())
+    }
+
+    /// Install the enumerator list of an enumeration with a fixed underlying
+    /// type, exactly once.
+    pub fn define_fixed_enumerators(
+        &mut self,
+        id: TagId,
+        constants: Vec<EnumConstant>,
+    ) -> Result<(), TagCompletionError> {
+        let Some(tag) = self.tags.get(id.raw() as usize) else {
+            return Err(TagCompletionError::UnknownTag(id));
+        };
+        if tag.kind != TagKind::Enum || tag.fixed_underlying.is_none() {
+            return Err(TagCompletionError::KindMismatch {
+                tag: id,
+                declared: tag.kind,
+                definition: TagKind::Enum,
+            });
+        }
+        if tag.fixed_enumerators_defined {
+            return Err(TagCompletionError::AlreadyComplete(id));
+        }
+        let tag = &mut self.tags[id.raw() as usize];
+        let previous_underlying = tag.fixed_underlying;
+        tag.fixed_enumerators_defined = true;
+        let previous_state = std::mem::replace(
+            &mut tag.state,
+            TagState::Complete(TagDefinition::Enum(constants)),
+        );
+        self.record_undo(TypeInternerUndo::FixedEnumUpdated {
+            tag: id,
+            previous_underlying,
+            previous_defined: false,
+        });
+        self.record_undo(TypeInternerUndo::TagStateUpdated {
+            tag: id,
+            previous: previous_state,
+        });
+        Ok(())
     }
 
     /// Complete a nominal tag exactly once without changing its identity.
@@ -1265,6 +1383,15 @@ impl TypeInterner {
             }
             TypeInternerUndo::TransparentUnionUpdated { tag, previous } => {
                 self.tags[tag.raw() as usize].transparent_union = previous;
+            }
+            TypeInternerUndo::FixedEnumUpdated {
+                tag,
+                previous_underlying,
+                previous_defined,
+            } => {
+                let tag = &mut self.tags[tag.raw() as usize];
+                tag.fixed_underlying = previous_underlying;
+                tag.fixed_enumerators_defined = previous_defined;
             }
         }
     }

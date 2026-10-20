@@ -169,10 +169,7 @@ pub fn floating_representation_store<'a>(
 }
 
 use evocc_common::SourceSpan;
-use evocc_types::{
-    enum_integer_rank, TagDefinition, TagId, TagState, TargetDataLayout, TypeId, TypeInterner,
-    TypeKind,
-};
+use evocc_types::{TagId, TargetDataLayout, TypeId, TypeInterner, TypeKind};
 
 use crate::integer::{
     eval_binary_integer, eval_bit_builtin, eval_constant_binary_integer,
@@ -1152,27 +1149,7 @@ pub(crate) fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option
         TypeKind::GnuInt128(evocc_types::GnuInt128Signedness::Unsigned) => {
             Some(CIntegerType::UINT128)
         }
-        TypeKind::Enum(tag) => {
-            let definition = types.tag(tag)?;
-            let TagState::Complete(TagDefinition::Enum(constants)) = &definition.state else {
-                return None;
-            };
-            let minimum = constants
-                .iter()
-                .map(|constant| constant.value)
-                .min()
-                .unwrap_or(0);
-            let maximum = constants
-                .iter()
-                .map(|constant| constant.value)
-                .max()
-                .unwrap_or(0);
-            Some(integer_type_for_rank(enum_integer_rank(
-                minimum,
-                maximum,
-                definition.layout.packed,
-            )))
-        }
+        TypeKind::Enum(tag) => types.enum_representation(tag).map(integer_type_for_rank),
         _ => None,
     }
 }

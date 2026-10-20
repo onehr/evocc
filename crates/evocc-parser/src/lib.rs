@@ -124,9 +124,9 @@ use evocc_cpp::{
 };
 use evocc_lex::{Token, TokenKind, TokenText};
 use evocc_types::{
-    enum_integer_rank, ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant,
-    FieldLayoutAttributes, FloatKind, FunctionParameters, GnuInt128Signedness, IntRank, Qualifiers,
-    RecordField, TagDefinition, TagId, TagKind, TagLayoutAttributes, TagState, TargetBuiltinType,
+    ArrayBound, BitFieldSpec, CanonicalType, ComplexBase, EnumConstant, FieldLayoutAttributes,
+    FloatKind, FunctionParameters, GnuInt128Signedness, IntRank, Qualifiers, RecordField,
+    TagDefinition, TagId, TagKind, TagLayoutAttributes, TagState, TargetBuiltinType,
     TargetDataLayout, TypeId, TypeInterner, TypeKind,
 };
 
@@ -6259,12 +6259,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     /// Apply `packed` and `aligned` written on a tag itself.
     fn apply_attributes_to_tag(&mut self, tag: TagId, attributes: &mut [Attribute]) {
+        let fixed_enumeration = self
+            .types
+            .tag(tag)
+            .is_some_and(|tag| tag.fixed_underlying.is_some());
         for attribute in attributes.iter_mut() {
             match attribute.semantic_name().unwrap_or("") {
                 "transparent_union" => self.apply_transparent_union(tag, attribute),
                 "packed" => {
                     if !attribute.arguments.is_empty() {
                         self.report("E2903", "malformed-attribute", attribute.span);
+                        continue;
+                    }
+                    // GCC 14 and Apple clang keep the fixed underlying type.
+                    if fixed_enumeration {
                         continue;
                     }
                     let conflicts = self.types.tag(tag).is_some_and(|definition| {
@@ -6286,9 +6294,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 "aligned" => {
                     if let Some(bytes) = self.aligned_bytes(attribute) {
-                        let conflicts = self.types.tag(tag).is_some_and(|definition| {
-                            definition.kind == TagKind::Enum && definition.layout.packed
-                        });
+                        // GCC 14 ignores it on a fixed enumeration, and Apple
+                        // clang raises the alignment.
+                        let conflicts = fixed_enumeration
+                            || self.types.tag(tag).is_some_and(|definition| {
+                                definition.kind == TagKind::Enum && definition.layout.packed
+                            });
                         if conflicts {
                             self.report("E2903", "malformed-attribute", attribute.span);
                             continue;
@@ -6460,7 +6471,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TokenKind::Enum => TagKind::Enum,
                 _ => unreachable!("tag keyword checked above"),
             };
-            let mut parsed = self.parse_tag_specifier(kind, qualifiers, token.span)?;
+            // `enum E : T;` admits no storage class and no qualifier (C23 6.7.2.2).
+            let bare = matches!(
+                storage.as_deref(),
+                None | Some(None | Some(StorageClass::None))
+            ) && qualifiers == Qualifiers::default();
+            let mut parsed = self.parse_tag_specifier(kind, qualifiers, token.span, bare)?;
             let trailing = self.parse_qualifiers_with_inline(
                 &mut storage,
                 &mut inline_spans,
@@ -7064,6 +7080,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         requested_kind: TagKind,
         qualifiers: Qualifiers,
         keyword_span: SourceSpan,
+        bare: bool,
     ) -> Option<ParsedSpecifier<'arena>> {
         let mut tag_attributes = self.parse_attribute_specifiers(AttributePlacement::TagKeyword);
         let name = if self.peek_kind() == Some(TokenKind::Identifier) {
@@ -7075,6 +7092,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         } else {
             None
         };
+        // C23 6.7.2.2: `enum E : T` fixes the underlying type. As in GCC 14,
+        // only a colon that a type name follows begins it, so a member
+        // `enum E : 3;` stays a bit-field.
+        let fixed = (requested_kind == TagKind::Enum && self.enum_type_specifier_follows())
+            .then(|| self.parse_enum_type_specifier());
         let is_definition = self.peek_kind() == Some(TokenKind::LBrace);
         let is_pure_forward =
             !is_definition && name.is_some() && self.peek_kind() == Some(TokenKind::Semicolon);
@@ -7082,6 +7104,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E1001", "expected-declaration", self.span());
             return None;
         }
+        // Without a list, a fixed type is admitted only in `enum E : T;`.
+        let fixed = match fixed {
+            Some((rank, span)) if !is_definition && !(is_pure_forward && bare) => {
+                if rank.is_some() {
+                    self.report("E1307", "invalid-enumeration-underlying-type", span);
+                }
+                None
+            }
+            fixed => fixed,
+        };
 
         let declaration_scope = self.current_scope;
         let mut fresh = false;
@@ -7133,12 +7165,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TagKind::Enum => TypeKind::Enum(tag),
         };
         let ty = self.intern(semantic_kind, qualifiers);
+        // Every declaration of an enumeration with a fixed underlying type
+        // names that type, and its definition does too (C23 6.7.2.2).
+        let earlier_fixed = self.types.tag(tag).and_then(|tag| tag.fixed_underlying);
+        if requested_kind == TagKind::Enum && binding_kind == TagKind::Enum {
+            match fixed {
+                Some((Some(rank), span)) => {
+                    let declared_without = !fresh && earlier_fixed.is_none();
+                    if declared_without || self.types.fix_enum_underlying(tag, rank).is_err() {
+                        self.report("E1307", "invalid-enumeration-underlying-type", span);
+                    }
+                }
+                None if is_definition && earlier_fixed.is_some() => {
+                    self.report(
+                        "E1307",
+                        "invalid-enumeration-underlying-type",
+                        name.as_ref().map_or(keyword_span, |name| name.span),
+                    );
+                }
+                _ => {}
+            }
+        }
+        let fixed_rank = self.types.tag(tag).and_then(|tag| tag.fixed_underlying);
 
         if is_definition {
-            let duplicate = matches!(
-                self.types.tag(tag).map(|tag| &tag.state),
-                Some(TagState::Complete(_))
-            );
+            let duplicate = match self.types.tag(tag) {
+                Some(tag) if tag.fixed_underlying.is_some() => tag.fixed_enumerators_defined,
+                Some(tag) => matches!(tag.state, TagState::Complete(_)),
+                None => false,
+            };
             if !duplicate && matches!(requested_kind, TagKind::Struct | TagKind::Union) {
                 if let Some(max_align) = self.pack_alignment {
                     self.types.set_tag_layout(
@@ -7164,7 +7219,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TagKind::Struct | TagKind::Union => {
                     self.parse_record_members(requested_kind, tag)?
                 }
-                TagKind::Enum => self.parse_enum_members()?,
+                TagKind::Enum => self.parse_enum_members(fixed_rank.map(|rank| (tag, rank)))?,
             };
             let close = self.expect(TokenKind::RBrace);
             tag_attributes
@@ -7173,15 +7228,20 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let end = close
                 .as_ref()
                 .map_or_else(|| self.span(), |token| token.span);
-            if !duplicate
-                && binding_kind == requested_kind
-                && self.types.complete_tag(tag, definition).is_err()
-            {
-                self.report(
-                    "E1101",
-                    "duplicate-tag-definition",
-                    name.as_ref().map_or(keyword_span, |name| name.span),
-                );
+            if !duplicate && binding_kind == requested_kind {
+                let completed = match (fixed_rank, definition) {
+                    (Some(_), TagDefinition::Enum(constants)) => {
+                        self.types.define_fixed_enumerators(tag, constants)
+                    }
+                    (_, definition) => self.types.complete_tag(tag, definition),
+                };
+                if completed.is_err() {
+                    self.report(
+                        "E1101",
+                        "duplicate-tag-definition",
+                        name.as_ref().map_or(keyword_span, |name| name.span),
+                    );
+                }
             }
             if self.types.tag(tag).is_some_and(|tag| tag.transparent_union)
                 && !self.transparent_union_has_register_representation(tag)
@@ -7603,27 +7663,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TypeKind::Int(rank) => Ok(integer_type_for_rank(rank)),
             TypeKind::GnuInt128(GnuInt128Signedness::Signed) => Ok(CIntegerType::INT128),
             TypeKind::GnuInt128(GnuInt128Signedness::Unsigned) => Ok(CIntegerType::UINT128),
-            TypeKind::Enum(tag) => {
-                let definition = self.types.tag(tag).ok_or(())?;
-                let TagState::Complete(TagDefinition::Enum(constants)) = &definition.state else {
-                    return Err(());
-                };
-                let minimum = constants
-                    .iter()
-                    .map(|constant| constant.value)
-                    .min()
-                    .unwrap_or(0);
-                let maximum = constants
-                    .iter()
-                    .map(|constant| constant.value)
-                    .max()
-                    .unwrap_or(0);
-                Ok(integer_type_for_rank(enum_integer_rank(
-                    minimum,
-                    maximum,
-                    definition.layout.packed,
-                )))
-            }
+            TypeKind::Enum(tag) => self
+                .types
+                .enum_representation(tag)
+                .map(integer_type_for_rank)
+                .ok_or(()),
             TypeKind::Void
             | TypeKind::BuiltinVaList
             | TypeKind::Float(_)
@@ -7922,7 +7966,75 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
-    fn parse_enum_members(&mut self) -> Option<(TagMembers<'arena>, TagDefinition)> {
+    /// Whether `: type-name` follows: the start of an enum type specifier.
+    fn enum_type_specifier_follows(&self) -> bool {
+        self.peek_kind() == Some(TokenKind::Colon)
+            && self
+                .tokens
+                .get(self.pos + 1)
+                .is_some_and(|token| self.token_starts_type_name(token))
+    }
+
+    /// Parse `: specifier-qualifier-list`, the fixed underlying type of an
+    /// enumeration (C23 6.7.2.2). The type is an integer type; `const` and
+    /// `volatile` are dropped, as in GCC 14 and Apple clang. `_Bool`,
+    /// `__int128`, an atomic or an aligned type are refused, because the
+    /// reference compilers convert to them differently or this profile does
+    /// not implement them. `None` means that a diagnostic was reported.
+    fn parse_enum_type_specifier(&mut self) -> (Option<IntRank>, SourceSpan) {
+        let colon = self.advance().expect("peeked enumeration type colon");
+        let mut attributes = Vec::new();
+        let specifier = self.parse_type_specifier_with_attributes(&mut attributes);
+        let end = self
+            .tokens
+            .get(self.pos.saturating_sub(1))
+            .map_or(colon.span, |token| token.span);
+        let span = self.merge_span(colon.span, end);
+        if let Some(attribute) = attributes.first() {
+            self.report("E2903", "malformed-attribute", attribute.span);
+            return (None, span);
+        }
+        let Some(canonical) = specifier
+            .and_then(|specifier| self.types.get(specifier.surface.type_id()))
+            .cloned()
+        else {
+            return (None, span);
+        };
+        let qualifiers = canonical.qualifiers;
+        let rank = match canonical.kind {
+            _ if qualifiers.is_restrict => None,
+            TypeKind::Int(IntRank::Bool) | TypeKind::GnuInt128(_) => {
+                self.report("E2958", "unsupported-enumeration-underlying-type", span);
+                return (None, span);
+            }
+            _ if qualifiers.is_atomic || qualifiers.aligned.is_some() => {
+                self.report("E2958", "unsupported-enumeration-underlying-type", span);
+                return (None, span);
+            }
+            TypeKind::Int(rank) => Some(rank),
+            _ => None,
+        };
+        if rank.is_none() {
+            self.report("E1307", "invalid-enumeration-underlying-type", span);
+        }
+        (rank, span)
+    }
+
+    /// Parse an enumerator list. With a fixed underlying type, each value is
+    /// representable in that type and each enumerator has the enumerated type.
+    fn parse_enum_members(
+        &mut self,
+        fixed: Option<(TagId, IntRank)>,
+    ) -> Option<(TagMembers<'arena>, TagDefinition)> {
+        let fixed = fixed.map(|(tag, rank)| {
+            let ty = self.intern(TypeKind::Enum(tag), Qualifiers::default());
+            let integer = integer_type_for_rank(rank);
+            if integer.is_signed() {
+                (ty, integer.signed_min(), integer.signed_max())
+            } else {
+                (ty, 0, integer.mask() as i128)
+            }
+        });
         let mut members = Vec::new();
         let mut canonical = Vec::new();
         let mut next_value = Some(0_i128);
@@ -7963,9 +8075,23 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     break;
                 }
             };
+            if let Some((_, low, high)) = fixed {
+                if !(low..=high).contains(&mathematical_value) {
+                    self.report(
+                        "E1306",
+                        "enumerator-outside-underlying-type",
+                        written_value.map_or(name.span, CHirExpr::span),
+                    );
+                    while !matches!(self.peek_kind(), Some(TokenKind::RBrace) | None) {
+                        self.advance();
+                    }
+                    break;
+                }
+            }
             let candidate_minimum = minimum.min(mathematical_value);
             let candidate_maximum = maximum.max(mathematical_value);
-            if !enum_range_is_representable(candidate_minimum, candidate_maximum) {
+            if fixed.is_none() && !enum_range_is_representable(candidate_minimum, candidate_maximum)
+            {
                 self.report(
                     "E1303",
                     "enumerator-value-is-not-representable",
@@ -7985,7 +8111,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 name: name.spelling.clone(),
                 value,
             });
-            let expression_ty = self.intern_c_integer_type(enum_integer_type(value, value));
+            let expression_ty = match fixed {
+                Some((ty, ..)) => ty,
+                None => self.intern_c_integer_type(enum_integer_type(value, value)),
+            };
             let symbol =
                 self.declare_symbol(&name, SymbolData::Enumerator { value }, expression_ty);
             self.add_entity_attributes(symbol, &enumerator_attributes);
@@ -8004,11 +8133,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         // Enumerator constants fitting int have type int, independently of
         // the unsigned representation selected for a nonnegative enum object.
-        let expression_ty = self.intern_c_integer_type(enum_integer_type(minimum, maximum));
-        for member in &members {
-            self.symbols
-                .update_symbol_type(member.symbol, expression_ty)
-                .expect("enumerator symbols belong to the parser symbol table");
+        // With a fixed underlying type they keep the enumerated type.
+        if fixed.is_none() {
+            let expression_ty = self.intern_c_integer_type(enum_integer_type(minimum, maximum));
+            for member in &members {
+                self.symbols
+                    .update_symbol_type(member.symbol, expression_ty)
+                    .expect("enumerator symbols belong to the parser symbol table");
+            }
         }
         Some((TagMembers::Enum(members), TagDefinition::Enum(canonical)))
     }

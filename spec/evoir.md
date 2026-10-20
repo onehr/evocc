@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.15.0** | **Pinned ground truth** | `__builtin_fpclassify` on 2026-10-21
+**Revision 2.16.0** | **Pinned ground truth** | Fixed enumeration types on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2596,6 +2596,8 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E1003` | `expected-expression` | front end |
 | `E1005` | `invalid-declarator` | front end |
 | `E1207` | `invalid-return-value` | front end |
+| `E1306` | `enumerator-outside-underlying-type` | front end |
+| `E1307` | `invalid-enumeration-underlying-type` | front end |
 | `E2001` | `undeclared-identifier` | front end |
 | `E2002` | `incompatible-redeclaration` | front end |
 | `E2202` | `invalid-initializer-type` | front end |
@@ -2657,6 +2659,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2955` | `invalid-atomic-type` | front end |
 | `E2956` | `atomic-member-access` | front end |
 | `E2957` | `always-inline-returns-twice` | front end |
+| `E2958` | `unsupported-enumeration-underlying-type` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -5150,6 +5153,7 @@ compound literals, and a front end must not emit it.
 | `E2955` | `_Atomic` names an array, function, atomic or qualified type, or an atomic bit-field (10.1.21) |
 | `E2956` | an evaluated member access of an atomic record or union (10.1.21) |
 | `E2957` | an `always_inline` function that makes a call that returns twice (10.1.9) |
+| `E2958` | `_Bool`, `__int128`, an atomic type or an aligned typedef as the fixed underlying type of an enumeration (10.1.14) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -5397,6 +5401,43 @@ gives an 8-byte enum whose constant has type `unsigned long`; `-1` with
 value that fits no such type is `E1303`. Every constant of such an enum takes
 the underlying type, as in GCC and C23 (all enumerators take the enumerated
 type once the list is complete).
+
+**Fixed underlying types.** `enum E : T { ... }`, `enum E : T;` and
+`typedef enum E : T { ... } name;` follow C23 6.7.2.2 in every language mode,
+as GCC 14 and Apple clang accept them before C23. `T` is a
+specifier-qualifier list that names an integer type, and `const` and
+`volatile` in it are dropped. As in GCC 14, only a colon that a type name
+follows begins the enum type specifier, so a member `enum E : 3;` stays a
+bit-field. The enumeration is complete from the declaration that fixes `T`.
+It has the size, alignment, range, promotions, conversions and call ABI of
+`T`, and it is compatible with `T` and with no other type. Each enumerator
+has the enumerated type, during the list and after it. Its value, written or
+the previous value plus one, must be representable in `T`; a value outside
+that range is `E1306` (`enumerator-outside-underlying-type`). `packed` on such
+an enumeration has no effect, as in both reference compilers. These are
+`E1307` (`invalid-enumeration-underlying-type`):
+
+- a `T` that is not an integer type, such as an enumeration, a floating, a
+  record or a vector type, and a `restrict`-qualified `T`;
+- `enum E : T` without a list anywhere but a declaration `enum E : T;` that
+  has no other specifier: a declarator, a parameter, a cast, a type name, a
+  storage class or a qualifier;
+- a declaration that disagrees with an earlier declaration of the
+  enumeration, by another `T` or by the presence of `T`.
+
+A second list is `E1101`. `_Bool`, `__int128`, an atomic type and an aligned
+typedef as `T` are `E2958` (`unsupported-enumeration-underlying-type`): GCC 14
+converts to a `_Bool`-based enumeration as to `_Bool`, Apple clang truncates,
+and they also disagree on an atomic `T`. `aligned` on such an enumeration and
+any attribute in `T` are `E2903`, because GCC 14 ignores `aligned` there and
+Apple clang applies it. Example: `enum E8 : unsigned char { A8 = 1, B8 = 200 };`
+has size 1, `sizeof(A8)` is 1, `A8 - 2` is `-1`, and `(enum E8)300` is `44`;
+`enum E8 : unsigned char { X = 256 };` is `E1306`.
+
+Note: Apple clang accepts a negative value in an unsigned `T`, a declarator
+after `enum E : T` and a cast to it. GCC 14 refuses them, and so does this
+profile, because C23 makes them constraint violations. Darwin's
+`kern/kcdata.h` and `malloc/malloc.h` declare such enumerations.
 
 **`__attribute` spelling.** `__attribute` is a synonym for `__attribute__`.
 It is read wherever `__attribute__` is.
@@ -8074,6 +8115,13 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.16.0, 2026-10-21.** Section 10.1.14 admits enumerations with a
+fixed underlying type (C23 6.7.2.2) in every language mode. The type sets the
+size, alignment, range, conversions and call ABI, and each enumerator has the
+enumerated type. Section 6.3 adds `E1306`, `E1307` and `E2958`. This repairs
+Darwin's `kern/kcdata.h` and `malloc/malloc.h`. No EvoIR operation, registry or
+Lean rule domain changes.
 
 **Revision 2.15.0, 2026-10-21.** Section 3.13.1 adds `__builtin_fpclassify`
 as GCC 14 documents it. It returns the class argument that names the class of
