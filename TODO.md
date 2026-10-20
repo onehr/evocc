@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L03, L04, L05, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D18, D19, D20, D21 | rust-r7 works on D18, D20, D21 and two D19 groups. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D19, D22, D23 | D22 and D23 come next; D19 keeps the remaining Darwin SDK groups. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -5568,7 +5568,7 @@ refusal; changing the P13 demo does not close it.
   `__target__("popcnt")` definition, as the rule keeps definitions refused; no
   AArch64 unit includes it.
 
-- [ ] **D18 — Implement `__has_include_next` so Darwin `<limits.h>` reaches the SDK** — `OPEN`, P1.
+- [x] **D18 — Implement `__has_include_next` so Darwin `<limits.h>` reaches the SDK** — `DONE`, P1, 2026-10-21.
   Found on 2026-10-20 by the header sweep; also present in the compiler of
   366fd796. Clang's resource `<limits.h>` includes the SDK header only when
   `__has_include_next(<limits.h>)` holds. EvoCC does not define
@@ -5578,6 +5578,15 @@ refusal; changing the P13 demo does not close it.
   `__has_include_next` behaves as in Clang and GCC on both targets, `PATH_MAX`
   and the other SDK limits exist after `<limits.h>`, and the sweep's E0104 group
   is gone.
+  Closed on 2026-10-21 (EvoIR 2.14.0, commit a2b0c708). `__has_include_next`
+  searches as `#include_next` does; in the main file both search as `#include`
+  does, as in GCC and Clang. On Darwin, Clang's resource `<limits.h>` reaches
+  the SDK header, so `PATH_MAX` exists, and the 64 APR headers compile. A header
+  found beside its includer keeps the includer's search position, as in Clang;
+  GCC 14 restarts at the first directory, and a test pins the difference.
+  [Tests](crates/evocc-cpp/tests/has_include_next.rs). The full offline
+  workspace gate of rust-r7 on the final tree passes 477 suites, 3,580 tests,
+  zero failures and 20 ignores, plus Clippy and formatting.
 
 - [ ] **D19 — Close the Darwin SDK header gaps of the header sweep** — `OPEN`, P2.
   Found on 2026-10-20; also present in the compiler of 366fd796. Of 1,259 Darwin
@@ -5592,8 +5601,19 @@ refusal; changing the P13 demo does not close it.
   decide each group, following Apple clang where the SDK depends on it, then
   implement it or refuse it with a named diagnostic. Exit: the sweep's Darwin
   gap count falls to the refusals that a rule keeps.
+  October 21: fixed underlying types of enumerations (EvoIR 2.16.0, commit
+  50f160f8; E1306, E1307 and E2958 are new) and GNU attributes after the
+  parenthesis of a declarator (EvoIR 2.17.0, commit 38fc9fe4) are admitted. A
+  sweep with the final compiler finds no regression; the Darwin gap falls from
+  173 to 47 headers per mode (64 APR, 53 libxml and libexslt, 6 fixed-enum and
+  three more headers compile). Remaining groups: `__API_AVAILABLE` in Spatial
+  (29), framework headers (4), availability macros (4), Blocks (3), `os/log.h`
+  (2), `overloadable` (2, among them `<tgmath.h>`), `arm_acle.h`, `xar.h` and
+  `infiniband/verbs.h`. The full offline workspace gate of rust-r7 on the final
+  tree passes 477 suites, 3,580 tests, zero failures and 20 ignores, plus Clippy
+  and formatting.
 
-- [ ] **D20 — Implement `__builtin_tgmath` for glibc `<tgmath.h>`** — `OPEN`, P2.
+- [x] **D20 — Implement `__builtin_tgmath` for glibc `<tgmath.h>`** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 during D17. glibc's `<tgmath.h>` defines its type-generic
   macros with GCC's `__builtin_tgmath` when the compiler reports GCC 8 or later,
   and EvoCC reports GCC 14. EvoCC does not implement the builtin, so a call such
@@ -5602,8 +5622,17 @@ refusal; changing the P13 demo does not close it.
   a named diagnostic at the macro call. Exit: `<tgmath.h>` calls with real
   floating and integer arguments agree with GCC 14 on Linux; complex arguments
   follow L04.
+  Closed on 2026-10-21 (EvoIR 2.18.0, commit 6d633c77). Real floating and
+  integer arguments select as in GCC 14, and each argument is evaluated once.
+  glibc `<tgmath.h>` calls of unary, binary and ternary functions, `frexp`,
+  `ldexp` and nested calls print GCC 14's 37 lines at O0 and O2 in the sealed
+  lane. A selection that needs a complex function is E2959 until L04. Darwin's
+  `<tgmath.h>` needs Clang's `overloadable` and stays unsupported (D19).
+  [Tests](crates/evocc/tests/builtin_tgmath.rs). The full offline workspace gate
+  of rust-r7 on the final tree passes 477 suites, 3,580 tests, zero failures and
+  20 ignores, plus Clippy and formatting.
 
-- [ ] **D21 — Implement `__builtin_fpclassify` for glibc `fpclassify`** — `OPEN`, P1.
+- [x] **D21 — Implement `__builtin_fpclassify` for glibc `fpclassify`** — `DONE`, P1, 2026-10-21.
   Found on 2026-10-21 by the use probes of the header sweep. glibc's `<math.h>`
   defines `fpclassify` with GCC's `__builtin_fpclassify`, which EvoCC does not
   implement, so on Linux `fpclassify(x)` is E2949. `isnan`, `isinf`, `isfinite`,
@@ -5613,6 +5642,31 @@ refusal; changing the P13 demo does not close it.
   each argument is evaluated once. Exit: each class of `float`, `double` and
   `long double` agrees with GCC 14 at O0 and O2 on both targets and in both
   interpreters. In progress in rust-r7.
+  Closed on 2026-10-21 (EvoIR 2.15.0, commit 26052b0d). Every class of `float`,
+  `double` and `long double` agrees with GCC 14 at O0 and O2 in the sealed lane,
+  through the builtin and through glibc's `fpclassify`, and in both
+  interpreters. [Tests](crates/evocc/tests/fpclassify_builtin.rs). The full
+  offline workspace gate of rust-r7 on the final tree passes 477 suites, 3,580
+  tests, zero failures and 20 ignores, plus Clippy and formatting.
+
+- [ ] **D22 — Make `wchar_t` an `int` on Darwin** — `OPEN`, P1.
+  Found on 2026-10-21 by rust-r7 and confirmed by the lead. EvoCC gives Darwin
+  the Linux `wchar_t`, an `unsigned int`. Apple clang's `wchar_t` and `wint_t`
+  are `int`. A program built by EvoCC for Darwin computes `(wchar_t)-1 < 0` as 0
+  and `WCHAR_MAX` as 4294967295; with Apple clang they are 1 and 2147483647.
+  Exit: on Darwin `wchar_t`, `wint_t`, the wide literals and the predefined
+  macros match Apple clang, a crossed test that passes and compares `wchar_t`
+  values agrees with Apple clang, and Linux keeps GCC 14's `unsigned int`.
+
+- [ ] **D23 — A bit-field store is not a read of its neighbors** — `OPEN`, P1.
+  Found on 2026-10-21 by rust-r7 and confirmed by the lead. For `struct S {
+  unsigned a : 3; unsigned b : 5; }; struct S s; s.a = 1;`, `evo check` reports
+  E3001 read-of-uninitialized-object at the store; the program is valid, and
+  Apple clang's build exits 0. The store reads the other bits of its storage
+  unit, and the interpreter counts that as a read of an indeterminate value.
+  Exit: a store to a bit-field of an uninitialized object is no finding in
+  either interpreter; a later read of a member that was never stored is still
+  E3001; both rules have tests on both targets.
 
 ## Codegen quality track — next quarter
 

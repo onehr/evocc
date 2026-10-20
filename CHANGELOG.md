@@ -42,6 +42,14 @@ The first public version.
   least their size. They move bytes, and a compare-exchange compares every byte. Other shapes stay
   E2913. Crossed thread tests pass against GCC 14, Clang 19 and Apple clang; they are not a
   memory-model proof.
+- `__has_include_next`. On Darwin, `<limits.h>` defines `PATH_MAX` and the other SDK limits, as
+  with Apple clang.
+- Enumerations with a fixed underlying type (`enum E : T`), in every language mode on both
+  targets. E1306, E1307 and E2958 are new.
+- GNU attributes after the parenthesis of a declarator, as libxml writes them. An attribute with
+  an effect is E2903 there.
+- `__builtin_fpclassify` and `__builtin_tgmath`, as GCC 14 documents them, so glibc's
+  `fpclassify` and `<tgmath.h>` work for real and integer arguments. E2959 is new.
 - Three more checked string builtins of the macOS 26 SDK (`__builtin___memccpy_chk`,
   `__builtin___strlcpy_chk`, `__builtin___strlcat_chk`), four checked `printf`-family builtins
   and `__builtin___clear_cache`, which calls the target's runtime helper.
