@@ -1529,6 +1529,25 @@ enum flag : unsigned char { no, yes };
 int main(void) { return no; }
 ```
 
+### E2959: unsupported-complex-type-generic-call
+
+A type-generic call selects a complex function, and EvoCC does not run floating complex values yet.
+`__builtin_tgmath`, which glibc's `<tgmath.h>` uses, selects a complex function for a complex argument.
+It does so for any argument when every listed function takes complex arguments, as for `carg` and `cimag`.
+Call a real function with a real argument instead.
+
+```c
+float real_part_f(_Complex float);
+double real_part(_Complex double);
+int main(void) { return (int)__builtin_tgmath(real_part_f, real_part, 1.0); }
+```
+
+```c
+float half_f(float value) { return value / 2; }
+double half(double value) { return value / 2; }
+int main(void) { return (int)__builtin_tgmath(half_f, half, 1.0); }
+```
+
 ## E3xxx
 
 ### E3001: read-of-uninitialized-object

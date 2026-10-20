@@ -281,6 +281,7 @@ __builtin_strncat
 __builtin_strncmp
 __builtin_strncpy
 __builtin_sub_overflow
+__builtin_tgmath
 __builtin_tolower
 __builtin_toupper
 __builtin_trap

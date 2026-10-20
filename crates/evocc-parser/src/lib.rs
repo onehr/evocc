@@ -5,6 +5,7 @@ mod complex;
 mod floating;
 mod neon;
 mod string_constants;
+mod tgmath;
 mod vector;
 
 fn legacy_atomic(

@@ -73,6 +73,7 @@ E2955	Write `_Atomic` on an unqualified object type that is not an array or func
 E2956	Make each member an atomic object, or copy the whole atomic object first.
 E2957	Call setjmp in the function that jumps back to it, not in an always_inline helper.
 E2958	Use another integer type, such as `unsigned char`, as the underlying type.
+E2959	Call a real function with a real argument.
 E3001	Initialize the object on every path before reading it.
 E3002	Check the divisor and choose the required error behavior before dividing.
 E3003	Handle zero separately before evaluating `%`.

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.17.0** | **Pinned ground truth** | Parenthesized declarator attributes on 2026-10-21
+**Revision 2.18.0** | **Pinned ground truth** | `__builtin_tgmath` on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2660,6 +2660,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2956` | `atomic-member-access` | front end |
 | `E2957` | `always-inline-returns-twice` | front end |
 | `E2958` | `unsupported-enumeration-underlying-type` | front end |
+| `E2959` | `unsupported-complex-type-generic-call` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -5129,7 +5130,7 @@ compound literals, and a front end must not emit it.
 | `E2906` | designator names a member the type lacks, a member ambiguous between two anonymous members, or an index at or beyond a fixed bound |
 | `E2907` | two `_Generic` associations name compatible types, or `default` appears twice |
 | `E2908` | `_Generic` has no association compatible with the controlling type and no `default` |
-| `E2909` | `__builtin_expect`, `__builtin_constant_p` or `__alignof__` called with the wrong number of operands |
+| `E2909` | `__builtin_expect`, `__builtin_constant_p` or `__alignof__` called with the wrong number of operands, or `__builtin_tgmath` with fewer than two functions and their arguments (10.1.14) |
 | `E2910` | a resolved builtin name used without a call |
 | `E2911` | `_Static_assert` condition evaluates to zero |
 | `E2912` | `_Static_assert` condition is not an integer constant expression |
@@ -5167,7 +5168,7 @@ compound literals, and a front end must not emit it.
 | `E2947` | a constant memory order that an atomic builtin does not admit (10.1.14) |
 | `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_` (10.1.14) |
 | `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
-| `E2951` | a floating comparison or classification builtin with an operand of the wrong type, or a class argument of `__builtin_fpclassify` that is not an integer constant expression (3.13.1) |
+| `E2951` | a floating comparison or classification builtin with an operand of the wrong type, a class argument of `__builtin_fpclassify` that is not an integer constant expression (3.13.1), or a `__builtin_tgmath` function list or argument that GCC 14 rejects (10.1.14) |
 | `E2952` | an execution or calling-convention attribute where 10.1.9 does not accept it, or a definition or use of a function that it marks (10.1.9) |
 | `E2953` | a cast to a struct type from an incompatible operand type (10.1.3) |
 | `E2954` | a declaration makes a previously folded string object's binding weak, aliased or assembly-renamed (10.1.17) |
@@ -5175,6 +5176,7 @@ compound literals, and a front end must not emit it.
 | `E2956` | an evaluated member access of an atomic record or union (10.1.21) |
 | `E2957` | an `always_inline` function that makes a call that returns twice (10.1.9) |
 | `E2958` | `_Bool`, `__int128`, an atomic type or an aligned typedef as the fixed underlying type of an enumeration (10.1.14) |
+| `E2959` | a `__builtin_tgmath` call that selects a complex function (10.1.14) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -5391,6 +5393,34 @@ rule both document as permitted.
   is the C11 `_Alignof` with an expression operand admitted, and the same
   target layout answers both. `_Alignof(void)` and `__alignof__(void)` are
   `1`; this does not make `void` an object type. `__alignof` is the same operator.
+
+**`__builtin_tgmath`.** `__builtin_tgmath(functions..., arguments...)` calls
+the function that the rules of `<tgmath.h>` select, as GCC 14 documents and
+implements it; glibc's `<tgmath.h>` defines its macros with it. The leading
+operands are pointers to prototyped functions with fixed parameters and one
+parameter count, at least two of them. That count, taken from the first
+function, says how many trailing operands are arguments. Each parameter
+position and the return type either have one type in every function, or have
+in each function a real or complex floating type: the type-generic type `t` of
+that function or its real type. The first such parameter is the type-generic
+one, and its types are distinct. The type-generic arguments select `t`: an
+integer argument counts as `double`, the usual arithmetic conversions combine
+them, and a complex argument or a list of complex-only functions makes `t`
+complex. The call goes to the function whose `t` is that type. When no
+function matches and every function returns one floating type, it goes to the
+first function whose format has at least the range and precision of that
+type, as GCC 14 does for a narrowing macro. The result is an ordinary call of
+that function, so each argument is evaluated once and converts to its
+parameter type, and the other function operands are not evaluated. A function
+list or an argument that GCC 14 rejects is `E2951`, and too few operands are
+`E2909`. A selection of a complex function is `E2959`
+(`unsupported-complex-type-generic-call`) until floating complex values are
+admitted. Example: `__builtin_tgmath(sqrtf, sqrt, sqrtl, 2)` calls `sqrt`,
+and `__builtin_tgmath(powf, pow, powl, 2.0f, 3.0L)` calls `powl`.
+
+Note: Darwin's `<tgmath.h>`, in the SDK and in Clang's resource directory,
+selects with `overloadable` functions instead. This profile does not
+implement `overloadable`, so that header stops at `E2002`.
 
 **`packed` on an enumeration.** `packed` on an enum type selects the smallest
 integer type that represents every enumerator: by value range `0..255` one
@@ -8136,6 +8166,13 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.18.0, 2026-10-21.** Section 10.1.14 admits `__builtin_tgmath` as
+GCC 14 documents it: the call goes to the function that the `<tgmath.h>` rules
+select, and each argument is evaluated once. `__has_builtin` reports it.
+Section 6.3 adds `E2959` for a selection of a complex function. This repairs
+the type-generic macros of glibc's `<tgmath.h>` for real floating and integer
+arguments. No EvoIR operation, registry or Lean rule domain changes.
 
 **Revision 2.17.0, 2026-10-21.** Section 10.1.9 accepts GNU attributes after
 the `(` of a parenthesized declarator, where GCC 14 and Apple clang accept

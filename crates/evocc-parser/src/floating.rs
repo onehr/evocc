@@ -15,6 +15,7 @@ pub(super) const BUILTINS: &[&str] = &[
     "__builtin_isfinite",
     "__builtin_isnormal",
     "__builtin_fpclassify",
+    "__builtin_tgmath",
     "__builtin_signbit",
     "__builtin_signbitf",
     "__builtin_signbitl",
@@ -84,6 +85,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         use FloatingBuiltin::*;
         if name == "__builtin_fpclassify" {
             return self.resolve_fpclassify(&operands, span);
+        }
+        if name == "__builtin_tgmath" {
+            return self.resolve_tgmath(operands, span);
         }
         let infinity = name.starts_with("__builtin_inf") || name.starts_with("__builtin_huge_val");
         let op = match name {
