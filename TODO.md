@@ -1142,6 +1142,17 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   `tools/experiment/protocol-7.json` is the unregistered machine form. The 26
   harness tests and all 176 experiment tests pass without a model request. The
   pilot has not run.
+  October 20 pilot: the precondition passed (48 of 48 records in both forms
+  after the scope correction). All 10 sessions completed; 9 repaired, and
+  session 10 (`mean-empty`, K) failed its functional score, as `mean-empty` did
+  in experiment 4. Three go criteria hold. Two fail on one escape record: the
+  backstop counted a fixture that a concurrent Rust agent created in the
+  repository during session 10; no tool call or wire log names it. The quota
+  ratio rose by 0.0066. [Pilot
+  note](docs/archive/notebook/agent-feedback-20261013/p22-pilot.md),
+  [receipt](tests/contracts/agent-repair-7-pilot-20261020.json). Next action:
+  the owner chooses a new pilot with no concurrent repository writer, or the
+  measured run.
 
 - [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`, P1.
   All 24 items qualify: six each of E3001/E3010/E3011 and two each of

@@ -1,0 +1,2497 @@
+{
+ "schema": "agent-repair.v4",
+ "phase": "pilot",
+ "date": "2026-10-20T01:55:29+00:00",
+ "plan": {
+  "order": [
+   {
+    "item": "adler-byte",
+    "condition": "c3",
+    "repetition": 1
+   },
+   {
+    "item": "adler-byte",
+    "condition": "k",
+    "repetition": 1
+   },
+   {
+    "item": "crc-reset",
+    "condition": "k",
+    "repetition": 1
+   },
+   {
+    "item": "crc-reset",
+    "condition": "c3",
+    "repetition": 1
+   },
+   {
+    "item": "minify-view",
+    "condition": "c3",
+    "repetition": 1
+   },
+   {
+    "item": "minify-view",
+    "condition": "k",
+    "repetition": 1
+   },
+   {
+    "item": "increment-limit",
+    "condition": "k",
+    "repetition": 1
+   },
+   {
+    "item": "increment-limit",
+    "condition": "c3",
+    "repetition": 1
+   },
+   {
+    "item": "mean-empty",
+    "condition": "c3",
+    "repetition": 1
+   },
+   {
+    "item": "mean-empty",
+    "condition": "k",
+    "repetition": 1
+   }
+  ],
+  "items": "tests/fixtures/agent-repair-4",
+  "model": "kimi-code/k3",
+  "effort": "low",
+  "wall_seconds": 900,
+  "max_steps": 100,
+  "max_sessions": 10,
+  "reps": 1,
+  "max_week_ratio": 0.85,
+  "order_rule": "pilot-b",
+  "max_week_increase": 0.15,
+  "classes": {
+   "adler-byte": "E3011",
+   "crc-reset": "E3001",
+   "minify-view": "E3010",
+   "increment-limit": "E3004",
+   "mean-empty": "E3002"
+  }
+ },
+ "provenance": {
+  "commit": "7fec1ce553a3af65d62d24c920dbbf7eb7e0026a",
+  "dirty": true,
+  "kimi": "/Users/onehrxn/.kimi-code/bin/kimi",
+  "kimi_version": "2.0.2",
+  "kimi_sha256": "c2204148f56c872539ac37bfe1868b597adee3606a3d7698ee9b9687aa537f11",
+  "evo_sha256": "7519053bdbeffe376618cce3dae161f845cf2acfe970dbdfa4afd21f77fb22ad",
+  "evocc_sha256": "49ddc244fbc0c1a95bbfed3f6366e09b4a007e59f7ea210974caa400572504f5",
+  "image": "evo-nexlab:sealed",
+  "image_digest": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+  "harness_sha256": "98cfc5cc45ee36fa7d8eeaaa15da57ed0ab7e43b7f6792625d5c7cea261d6b43",
+  "repair_sha256": "4979683aae02a4ca44756f1fcfdef255af45ba8cb19e69bdb6fc2471a32f3854",
+  "prompt_sha256": "edd2559384603feafa25cfe0c322a1c32bfd0509e3be1ebce7de48bfcec3cc36",
+  "scorer_sha256": "c0c407ed3fb200d060e55d3acaa29d3cec05afaae014df33d43619b003bc5f68",
+  "sysroot": "/Users/onehrxn/dev/30days/c30/sysroot/aarch64-unknown-linux-gnu",
+  "python": "3.9.6"
+ },
+ "mechanism": "seatbelt",
+ "workspaces": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9",
+ "prompt": "The file program.c in the current directory is a C program with defects.\nIts comments describe the intended behavior.\nRun `check FILE.c` to build and run any C file of this workspace. It prints the build output, the program stdout and stderr, and the exit codes. It also prints the diagnostic feedback that this environment offers. Running `check program.c` checks the program you are repairing; you may also write your own C test driver and check it.\nFix every defect in program.c. Edit the file in place.\nKeep the function names, the parameter types and main.\nDo not add I/O to program.c. Do not add preprocessor directives to program.c.\nStop when the program is correct.",
+ "quota": [
+  {
+   "time": "2026-10-20T01:55:30+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0,
+       "resetAt": "2026-10-22T06:39:20Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 01"
+  },
+  {
+   "time": "2026-10-20T01:56:11+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0073,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.0015,
+       "resetAt": "2026-10-22T06:39:20Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 02"
+  },
+  {
+   "time": "2026-10-20T01:56:58+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0107,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.0021,
+       "resetAt": "2026-10-22T06:39:20Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 03"
+  },
+  {
+   "time": "2026-10-20T01:57:50+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0139,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.0028,
+       "resetAt": "2026-10-22T06:39:19Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 04"
+  },
+  {
+   "time": "2026-10-20T01:58:31+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0168,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.0034,
+       "resetAt": "2026-10-22T06:39:20Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 05"
+  },
+  {
+   "time": "2026-10-20T01:59:06+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0198,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.004,
+       "resetAt": "2026-10-22T06:39:20Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 06"
+  },
+  {
+   "time": "2026-10-20T01:59:47+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0226,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.0045,
+       "resetAt": "2026-10-22T06:39:19Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 07"
+  },
+  {
+   "time": "2026-10-20T02:00:36+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0254,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.0051,
+       "resetAt": "2026-10-22T06:39:20Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 08"
+  },
+  {
+   "time": "2026-10-20T02:00:56+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0274,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.0055,
+       "resetAt": "2026-10-22T06:39:20Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 09"
+  },
+  {
+   "time": "2026-10-20T02:01:34+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0303,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.0061,
+       "resetAt": "2026-10-22T06:39:20Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "before 10"
+  },
+  {
+   "time": "2026-10-20T02:02:11+00:00",
+   "data": {
+    "kind": "ok",
+    "quota": {
+     "usages": {
+      "limit5h": {
+       "usedRatio": 0.0329,
+       "resetAt": "2026-10-20T05:39:20Z"
+      },
+      "limit7d": {
+       "usedRatio": 0.0066,
+       "resetAt": "2026-10-22T06:39:20Z"
+      }
+     },
+     "extraUsage": null
+    }
+   },
+   "label": "final"
+  }
+ ],
+ "runs": [
+  {
+   "index": 1,
+   "item": "adler-byte",
+   "condition": "c3",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/01/ws",
+   "started_at": "2026-10-20T01:55:32+00:00",
+   "seconds": 38.0,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 6,
+   "request_kinds": {
+    "loop": 6
+   },
+   "tokens": {
+    "inputOther": 13370,
+    "inputCacheRead": 101632,
+    "inputCacheCreation": 0,
+    "output": 1024,
+    "total": 116026
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Bash": 2,
+    "Edit": 2
+   },
+   "check_runs": 2,
+   "check_served": 2,
+   "bash_commands": [
+    "check program.c",
+    "check program.c"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 0,
+    "scratch": 3
+   },
+   "blocked": [],
+   "escapes": [],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "24cced7fd69c3d4bfb100baf6d69bfc58c8240e333f8547cacb3e906611b3afa",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 903808606\n1 952567451\n2 924386950\n3 915736179\n4 909182586\n5 911541889\n6 890373689\n7 888800835\n8 959645319\n9 943785593\n10 955451034\n11 947062433\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 903808606\n1 952567451\n2 924386950\n3 915736179\n4 909182586\n5 911541889\n6 890373689\n7 888800835\n8 959645319\n9 943785593\n10 955451034\n11 947062433\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 903808606\n1 952567451\n2 924386950\n3 915736179\n4 909182586\n5 911541889\n6 890373689\n7 888800835\n8 959645319\n9 943785593\n10 955451034\n11 947062433\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": true,
+   "diff_size": 11,
+   "span_hits": [
+    true
+   ],
+   "all_spans": true,
+   "changed_inside_spans": 2,
+   "repetition": 1,
+   "retry_of": null
+  },
+  {
+   "index": 2,
+   "item": "adler-byte",
+   "condition": "k",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/02/ws",
+   "started_at": "2026-10-20T01:56:14+00:00",
+   "seconds": 42.3,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 6,
+   "request_kinds": {
+    "loop": 6
+   },
+   "tokens": {
+    "inputOther": 3106,
+    "inputCacheRead": 109568,
+    "inputCacheCreation": 0,
+    "output": 841,
+    "total": 113515
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Bash": 2,
+    "Edit": 2
+   },
+   "check_runs": 2,
+   "check_served": 2,
+   "bash_commands": [
+    "check program.c",
+    "check program.c"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 0,
+    "scratch": 3
+   },
+   "blocked": [],
+   "escapes": [],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "32516572c175e3733b6f52bd4294e41812364c2fc15129a04c38af2f51587c87",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 903808606\n1 952567451\n2 924386950\n3 915736179\n4 909182586\n5 911541889\n6 890373689\n7 888800835\n8 959645319\n9 943785593\n10 955451034\n11 947062433\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 903808606\n1 952567451\n2 924386950\n3 915736179\n4 909182586\n5 911541889\n6 890373689\n7 888800835\n8 959645319\n9 943785593\n10 955451034\n11 947062433\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 903808606\n1 952567451\n2 924386950\n3 915736179\n4 909182586\n5 911541889\n6 890373689\n7 888800835\n8 959645319\n9 943785593\n10 955451034\n11 947062433\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": true,
+   "diff_size": 9,
+   "span_hits": [
+    true
+   ],
+   "all_spans": true,
+   "changed_inside_spans": 2,
+   "repetition": 1,
+   "retry_of": null
+  },
+  {
+   "index": 3,
+   "item": "crc-reset",
+   "condition": "k",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/03/ws",
+   "started_at": "2026-10-20T01:57:00+00:00",
+   "seconds": 49.2,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 5,
+   "request_kinds": {
+    "loop": 5
+   },
+   "tokens": {
+    "inputOther": 2748,
+    "inputCacheRead": 91136,
+    "inputCacheCreation": 0,
+    "output": 801,
+    "total": 94685
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Bash": 2,
+    "Edit": 1
+   },
+   "check_runs": 2,
+   "check_served": 2,
+   "bash_commands": [
+    "check program.c",
+    "check program.c"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 0,
+    "scratch": 2
+   },
+   "blocked": [],
+   "escapes": [],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "ff6b1698bcc3c4c4090b7fe7ec2af90deac7c3fb95e9ae6a57f5367036ab3589",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 331230676\n1 2737666158\n2 3004866366\n3 2452588454\n4 2556066988\n5 2640107529\n6 2305506291\n7 58338591\n8 3541426007\n9 3048224268\n10 1447077789\n11 4094587367\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 331230676\n1 2737666158\n2 3004866366\n3 2452588454\n4 2556066988\n5 2640107529\n6 2305506291\n7 58338591\n8 3541426007\n9 3048224268\n10 1447077789\n11 4094587367\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 331230676\n1 2737666158\n2 3004866366\n3 2452588454\n4 2556066988\n5 2640107529\n6 2305506291\n7 58338591\n8 3541426007\n9 3048224268\n10 1447077789\n11 4094587367\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": true,
+   "diff_size": 7,
+   "span_hits": [
+    true
+   ],
+   "all_spans": true,
+   "changed_inside_spans": 2,
+   "repetition": 1,
+   "retry_of": null
+  },
+  {
+   "index": 4,
+   "item": "crc-reset",
+   "condition": "c3",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/04/ws",
+   "started_at": "2026-10-20T01:57:52+00:00",
+   "seconds": 37.2,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 5,
+   "request_kinds": {
+    "loop": 5
+   },
+   "tokens": {
+    "inputOther": 3087,
+    "inputCacheRead": 91648,
+    "inputCacheCreation": 0,
+    "output": 664,
+    "total": 95399
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Bash": 2,
+    "Edit": 1
+   },
+   "check_runs": 2,
+   "check_served": 2,
+   "bash_commands": [
+    "check program.c",
+    "check program.c"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 0,
+    "scratch": 2
+   },
+   "blocked": [],
+   "escapes": [],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "073e34af8cb6ccb5377b96c167388e3629bbc59c175896b8fa17f8c771054cd5",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 331230676\n1 2737666158\n2 3004866366\n3 2452588454\n4 2556066988\n5 2640107529\n6 2305506291\n7 58338591\n8 3541426007\n9 3048224268\n10 1447077789\n11 4094587367\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 331230676\n1 2737666158\n2 3004866366\n3 2452588454\n4 2556066988\n5 2640107529\n6 2305506291\n7 58338591\n8 3541426007\n9 3048224268\n10 1447077789\n11 4094587367\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 331230676\n1 2737666158\n2 3004866366\n3 2452588454\n4 2556066988\n5 2640107529\n6 2305506291\n7 58338591\n8 3541426007\n9 3048224268\n10 1447077789\n11 4094587367\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": true,
+   "diff_size": 9,
+   "span_hits": [
+    true
+   ],
+   "all_spans": true,
+   "changed_inside_spans": 2,
+   "repetition": 1,
+   "retry_of": null
+  },
+  {
+   "index": 5,
+   "item": "minify-view",
+   "condition": "c3",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/05/ws",
+   "started_at": "2026-10-20T01:58:33+00:00",
+   "seconds": 32.2,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 5,
+   "request_kinds": {
+    "loop": 5
+   },
+   "tokens": {
+    "inputOther": 3649,
+    "inputCacheRead": 92416,
+    "inputCacheCreation": 0,
+    "output": 624,
+    "total": 96689
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Bash": 2,
+    "Edit": 1
+   },
+   "check_runs": 2,
+   "check_served": 2,
+   "bash_commands": [
+    "check program.c",
+    "check program.c"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 0,
+    "scratch": 2
+   },
+   "blocked": [],
+   "escapes": [],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "758dfd1b0dd510cbf62471eddba397b23b698806684a599ec84c9027f2fea437",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 348587610814684881\n1 2033738945470615101\n2 13529489690068867624\n3 1687416750828644885\n4 3960364302780103196\n5 4353588950706621475\n6 17045439652547128748\n7 4264125870124464566\n8 17213228441128388137\n9 8639618430600244507\n10 13734155749646227772\n11 10281492895909436227\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 348587610814684881\n1 2033738945470615101\n2 13529489690068867624\n3 1687416750828644885\n4 3960364302780103196\n5 4353588950706621475\n6 17045439652547128748\n7 4264125870124464566\n8 17213228441128388137\n9 8639618430600244507\n10 13734155749646227772\n11 10281492895909436227\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 348587610814684881\n1 2033738945470615101\n2 13529489690068867624\n3 1687416750828644885\n4 3960364302780103196\n5 4353588950706621475\n6 17045439652547128748\n7 4264125870124464566\n8 17213228441128388137\n9 8639618430600244507\n10 13734155749646227772\n11 10281492895909436227\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": true,
+   "diff_size": 4,
+   "span_hits": [
+    false
+   ],
+   "all_spans": false,
+   "changed_inside_spans": 0,
+   "repetition": 1,
+   "retry_of": null
+  },
+  {
+   "index": 6,
+   "item": "minify-view",
+   "condition": "k",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/06/ws",
+   "started_at": "2026-10-20T01:59:08+00:00",
+   "seconds": 36.7,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 4,
+   "request_kinds": {
+    "loop": 4
+   },
+   "tokens": {
+    "inputOther": 3151,
+    "inputCacheRead": 72704,
+    "inputCacheCreation": 0,
+    "output": 615,
+    "total": 76470
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Bash": 2,
+    "Edit": 1
+   },
+   "check_runs": 2,
+   "check_served": 2,
+   "bash_commands": [
+    "check program.c 2>&1 | head -50",
+    "check program.c 2>&1"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 0,
+    "scratch": 2
+   },
+   "blocked": [],
+   "escapes": [],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "758dfd1b0dd510cbf62471eddba397b23b698806684a599ec84c9027f2fea437",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 348587610814684881\n1 2033738945470615101\n2 13529489690068867624\n3 1687416750828644885\n4 3960364302780103196\n5 4353588950706621475\n6 17045439652547128748\n7 4264125870124464566\n8 17213228441128388137\n9 8639618430600244507\n10 13734155749646227772\n11 10281492895909436227\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 348587610814684881\n1 2033738945470615101\n2 13529489690068867624\n3 1687416750828644885\n4 3960364302780103196\n5 4353588950706621475\n6 17045439652547128748\n7 4264125870124464566\n8 17213228441128388137\n9 8639618430600244507\n10 13734155749646227772\n11 10281492895909436227\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 348587610814684881\n1 2033738945470615101\n2 13529489690068867624\n3 1687416750828644885\n4 3960364302780103196\n5 4353588950706621475\n6 17045439652547128748\n7 4264125870124464566\n8 17213228441128388137\n9 8639618430600244507\n10 13734155749646227772\n11 10281492895909436227\nmain 16\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": true,
+   "diff_size": 4,
+   "span_hits": [
+    false
+   ],
+   "all_spans": false,
+   "changed_inside_spans": 0,
+   "repetition": 1,
+   "retry_of": null
+  },
+  {
+   "index": 7,
+   "item": "increment-limit",
+   "condition": "k",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/07/ws",
+   "started_at": "2026-10-20T01:59:48+00:00",
+   "seconds": 45.9,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 5,
+   "request_kinds": {
+    "loop": 5
+   },
+   "tokens": {
+    "inputOther": 2746,
+    "inputCacheRead": 89856,
+    "inputCacheCreation": 0,
+    "output": 629,
+    "total": 93231
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Bash": 2,
+    "Edit": 1
+   },
+   "check_runs": 2,
+   "check_served": 2,
+   "bash_commands": [
+    "check program.c",
+    "check program.c"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 0,
+    "scratch": 2
+   },
+   "blocked": [],
+   "escapes": [],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "62c6033523cfb45bad9259f84002516d84b289e0957cf497d72da4bb2067900d",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 11331274765958924399\n1 1915167556800545263\n2 9879548148016809703\n3 1589737346153707915\n4 3967912321543467888\n5 11003545322370330601\n6 16289728079020427065\n7 8111735381281920677\n8 6316339254679868929\n9 14384566542105543650\n10 14204816426241044427\n11 15055512421978543763\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 11331274765958924399\n1 1915167556800545263\n2 9879548148016809703\n3 1589737346153707915\n4 3967912321543467888\n5 11003545322370330601\n6 16289728079020427065\n7 8111735381281920677\n8 6316339254679868929\n9 14384566542105543650\n10 14204816426241044427\n11 15055512421978543763\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 11331274765958924399\n1 1915167556800545263\n2 9879548148016809703\n3 1589737346153707915\n4 3967912321543467888\n5 11003545322370330601\n6 16289728079020427065\n7 8111735381281920677\n8 6316339254679868929\n9 14384566542105543650\n10 14204816426241044427\n11 15055512421978543763\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": true,
+   "diff_size": 4,
+   "span_hits": [
+    false
+   ],
+   "all_spans": false,
+   "changed_inside_spans": 0,
+   "repetition": 1,
+   "retry_of": null
+  },
+  {
+   "index": 8,
+   "item": "increment-limit",
+   "condition": "c3",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/08/ws",
+   "started_at": "2026-10-20T02:00:37+00:00",
+   "seconds": 17.1,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 4,
+   "request_kinds": {
+    "loop": 4
+   },
+   "tokens": {
+    "inputOther": 2428,
+    "inputCacheRead": 71168,
+    "inputCacheCreation": 0,
+    "output": 412,
+    "total": 74008
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Edit": 1,
+    "Bash": 1
+   },
+   "check_runs": 1,
+   "check_served": 1,
+   "bash_commands": [
+    "check program.c"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 0,
+    "scratch": 2
+   },
+   "blocked": [],
+   "escapes": [],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "f14a36854600038f67ddd4b13b563f3b76f627572fbbab8e5ca80224a97647bc",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 11331274765958924399\n1 1915167556800545263\n2 9879548148016809703\n3 1589737346153707915\n4 3967912321543467888\n5 11003545322370330601\n6 16289728079020427065\n7 8111735381281920677\n8 6316339254679868929\n9 14384566542105543650\n10 14204816426241044427\n11 15055512421978543763\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 11331274765958924399\n1 1915167556800545263\n2 9879548148016809703\n3 1589737346153707915\n4 3967912321543467888\n5 11003545322370330601\n6 16289728079020427065\n7 8111735381281920677\n8 6316339254679868929\n9 14384566542105543650\n10 14204816426241044427\n11 15055512421978543763\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 11331274765958924399\n1 1915167556800545263\n2 9879548148016809703\n3 1589737346153707915\n4 3967912321543467888\n5 11003545322370330601\n6 16289728079020427065\n7 8111735381281920677\n8 6316339254679868929\n9 14384566542105543650\n10 14204816426241044427\n11 15055512421978543763\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": true,
+   "diff_size": 2,
+   "span_hits": [
+    false
+   ],
+   "all_spans": false,
+   "changed_inside_spans": 0,
+   "repetition": 1,
+   "retry_of": null
+  },
+  {
+   "index": 9,
+   "item": "mean-empty",
+   "condition": "c3",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/09/ws",
+   "started_at": "2026-10-20T02:00:57+00:00",
+   "seconds": 35.3,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 5,
+   "request_kinds": {
+    "loop": 5
+   },
+   "tokens": {
+    "inputOther": 3457,
+    "inputCacheRead": 90880,
+    "inputCacheCreation": 0,
+    "output": 627,
+    "total": 94964
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Bash": 2,
+    "Edit": 1
+   },
+   "check_runs": 2,
+   "check_served": 2,
+   "bash_commands": [
+    "check program.c",
+    "check program.c"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 0,
+    "scratch": 2
+   },
+   "blocked": [],
+   "escapes": [],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "2f50f8eb5ca67d202ba3473b53d12a101a73167d10232f72f59c57bc3980c189",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 2941404450443813488\n1 16130721405847539337\n2 17434839650730984496\n3 12123962770477643194\n4 7258930967480399464\n5 18236893706545336412\n6 10614511768534250729\n7 4256587455826745460\n8 723079878678860859\n9 5023118399741189927\n10 13425176067618061739\n11 9321922988101799217\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 2941404450443813488\n1 16130721405847539337\n2 17434839650730984496\n3 12123962770477643194\n4 7258930967480399464\n5 18236893706545336412\n6 10614511768534250729\n7 4256587455826745460\n8 723079878678860859\n9 5023118399741189927\n10 13425176067618061739\n11 9321922988101799217\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": true,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 2941404450443813488\n1 16130721405847539337\n2 17434839650730984496\n3 12123962770477643194\n4 7258930967480399464\n5 18236893706545336412\n6 10614511768534250729\n7 4256587455826745460\n8 723079878678860859\n9 5023118399741189927\n10 13425176067618061739\n11 9321922988101799217\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": true,
+   "diff_size": 4,
+   "span_hits": [
+    false
+   ],
+   "all_spans": false,
+   "changed_inside_spans": 0,
+   "repetition": 1,
+   "retry_of": null
+  },
+  {
+   "index": 10,
+   "item": "mean-empty",
+   "condition": "k",
+   "model": "kimi-code/k3",
+   "effort": "low",
+   "workspace": "/private/var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/agent-repair-ws-5hqgvaj9/10/ws",
+   "started_at": "2026-10-20T02:01:35+00:00",
+   "seconds": 34.9,
+   "exit_status": 0,
+   "status": "completed",
+   "stop": null,
+   "fatal": [],
+   "models_seen": [
+    "kimi-code/k3"
+   ],
+   "efforts_seen": [
+    "low"
+   ],
+   "steps": 5,
+   "request_kinds": {
+    "loop": 5
+   },
+   "tokens": {
+    "inputOther": 2364,
+    "inputCacheRead": 90624,
+    "inputCacheCreation": 0,
+    "output": 634,
+    "total": 93622
+   },
+   "tool_calls": {
+    "Read": 1,
+    "Bash": 2,
+    "Edit": 1
+   },
+   "check_runs": 2,
+   "check_served": 2,
+   "bash_commands": [
+    "check program.c",
+    "check program.c"
+   ],
+   "audit": {
+    "blocked": 0,
+    "escapes": 1,
+    "scratch": 2
+   },
+   "blocked": [],
+   "escapes": [
+    {
+     "tool": null,
+     "kind": "filesystem",
+     "detail": "tests/fixtures/integer-complex-division-boundaries.c"
+    }
+   ],
+   "scratch": [
+    {
+     "tool": "Read",
+     "kind": "path",
+     "detail": "program.c"
+    },
+    {
+     "tool": "Edit",
+     "kind": "path",
+     "detail": "program.c"
+    }
+   ],
+   "errors": [],
+   "final_sha256": "f10d1b3db29c8a3096f0b56fa7cd5637e75f12203dedc63783f2f2e3be972dd1",
+   "preprocessor": false,
+   "disk_wait": null,
+   "score_builds": {
+    "gcc-14-O0": {
+     "passed": false,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 11859558344420175191\n1 12020329393548755153\n2 15057574642693245144\n3 16204360964160593978\n4 12294679450456911399\n5 4782728803798195587\n6 12822280723600703529\n7 6057853797583650044\n8 14275449202727928147\n9 14187157655193072952\n10 12852134241031095596\n11 16160237155072703553\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O0",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "gcc-14-O2": {
+     "passed": false,
+     "compile": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 11859558344420175191\n1 12020329393548755153\n2 15057574642693245144\n3 16204360964160593978\n4 12294679450456911399\n5 4782728803798195587\n6 12822280723600703529\n7 6057853797583650044\n8 14275449202727928147\n9 14187157655193072952\n10 12852134241031095596\n11 16160237155072703553\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "gcc-14",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    },
+    "clang-19-O2": {
+     "passed": false,
+     "compile": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "-Dmain=program_main",
+       "-c",
+       "input.c",
+       "-o",
+       "input.o"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     },
+     "runs": [
+      {
+       "argv": [
+        "./score"
+       ],
+       "exit_code": 0,
+       "stdout": "0 11859558344420175191\n1 12020329393548755153\n2 15057574642693245144\n3 16204360964160593978\n4 12294679450456911399\n5 4782728803798195587\n6 12822280723600703529\n7 6057853797583650044\n8 14275449202727928147\n9 14187157655193072952\n10 12852134241031095596\n11 16160237155072703553\nmain 32\n",
+       "stderr": "",
+       "truncated": false
+      }
+     ],
+     "link": {
+      "argv": [
+       "clang-19",
+       "-O2",
+       "input.o",
+       "reference_main.c",
+       "-o",
+       "score"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "truncated": false
+     }
+    }
+   },
+   "passed": false,
+   "diff_size": 4,
+   "span_hits": [
+    false
+   ],
+   "all_spans": false,
+   "changed_inside_spans": 0,
+   "repetition": 1,
+   "retry_of": null
+  }
+ ],
+ "totals": {
+  "sessions": 10,
+  "passed": 9,
+  "status": {
+   "completed": 10
+  },
+  "tool_calls": {
+   "Read": 10,
+   "Bash": 19,
+   "Edit": 12
+  },
+  "audit": {
+   "blocked": 0,
+   "escapes": 1,
+   "scratch": 22
+  },
+  "steps": 50,
+  "seconds": 368.8,
+  "check_runs": 19,
+  "check_served": 19,
+  "tokens": {
+   "inputOther": 40106,
+   "inputCacheRead": 901632,
+   "inputCacheCreation": 0,
+   "output": 6871,
+   "total": 948609
+  }
+ },
+ "stop_reason": "escape_detected",
+ "binaries": {
+  "evo_sha256": "7519053bdbeffe376618cce3dae161f845cf2acfe970dbdfa4afd21f77fb22ad",
+  "evocc_sha256": "49ddc244fbc0c1a95bbfed3f6366e09b4a007e59f7ea210974caa400572504f5",
+  "kimi_sha256": "c2204148f56c872539ac37bfe1868b597adee3606a3d7698ee9b9687aa537f11"
+ },
+ "disk_waits": [],
+ "unattempted": 0,
+ "protocol": {
+  "path": "tools/experiment/protocol-7.json",
+  "sha256": "55aeaba2d95f30a8270634971a1062d9fdbe950768a52a213a9ba20d3fc55362",
+  "status": "unregistered"
+ },
+ "precondition": {
+  "path": ".evidence/p22-pilot-20261020/precondition.json",
+  "sha256": "0d1535cdb9004e43f5427eae37a7f75728d607739b40525f3dd2a8dac754f1e0",
+  "passed": true,
+  "summary": {
+   "full_1_identical": 24,
+   "full_1_identical_after_scope": 48,
+   "c3_identical": 24,
+   "concise_1_identical": 24,
+   "concise_1_identical_after_scope": 48,
+   "k_header_identical": 48,
+   "concise_1_form": 48
+  }
+ },
+ "go": {
+  "criteria": [
+   {
+    "criterion": "Zero escapes.",
+    "held": false,
+    "evidence": "1 escapes and 0 blocked attempts in 10 sessions"
+   },
+   {
+    "criterion": "Every K check result with EvoCC output starts its EvoCC part with `{\"form\":\"concise-1\"`.",
+    "held": true,
+    "evidence": "10 of 10 K results with EvoCC output start so; 10 K results; 0 served texts missing"
+   },
+   {
+    "criterion": "When the agent checks the unchanged `program.c`, the EvoCC part of the F result equals the frozen string for that source after path replacement and the T03s scope correction.",
+    "held": true,
+    "evidence": "4 of 4 F results for an unchanged corpus source are equal; 9 F results"
+   },
+   {
+    "criterion": "Every quota read succeeds. The harness records steps, tokens and scores.",
+    "held": true,
+    "evidence": "11 of 11 quota reads succeed for 10 sessions; steps, tokens and three scores recorded: True"
+   },
+   {
+    "criterion": "There is no unknown outcome.",
+    "held": false,
+    "evidence": "10 of 10 planned sessions have a final attempt; unknown outcomes in sessions [10]"
+   }
+  ],
+  "held": false,
+  "checks": {
+   "k": 10,
+   "k_evocc": 10,
+   "k_form": 10,
+   "k_known": 5,
+   "k_equal": 5,
+   "f": 9,
+   "f_known": 4,
+   "f_equal": 4,
+   "missing": 0
+  }
+ },
+ "quota_change": {
+  "first": 0,
+  "last": 0.0066,
+  "increase": 0.0066,
+  "reads": 11
+ },
+ "provenance_after": {
+  "evo_version": "evocc 0.1.0 (7fec1ce553a3 2026-10-20)\nTarget: aarch64-apple-darwin\n",
+  "evocc_version": "evocc 0.1.0 (7fec1ce553a3 2026-10-20)\nTarget: aarch64-apple-darwin\n",
+  "evo_sha256": "7519053bdbeffe376618cce3dae161f845cf2acfe970dbdfa4afd21f77fb22ad",
+  "evocc_sha256": "49ddc244fbc0c1a95bbfed3f6366e09b4a007e59f7ea210974caa400572504f5",
+  "kimi_version": "2.0.2",
+  "kimi_sha256": "c2204148f56c872539ac37bfe1868b597adee3606a3d7698ee9b9687aa537f11"
+ },
+ "binaries_unchanged": true,
+ "analysis": "Pilot data stay out of the measured analysis. The five items stay in the population."
+}
