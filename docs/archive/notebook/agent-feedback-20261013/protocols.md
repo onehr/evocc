@@ -242,9 +242,10 @@ C3 feedback?
 
 - The Rust lane has implemented `concise-1` as `p22-feedback-design.md`
   describes, and its tests pass.
-- `full-1` is byte-identical to the EvoCC part of the 48 frozen C3 strings in
+- `full-1` equals the EvoCC part of the 48 frozen C3 strings in
   `tests/fixtures/agent-repair-4/qualification.json`, after scratch-path
-  replacement.
+  replacement and the scope correction of the amendment below, and differs in
+  no other byte.
 - The 48 `concise-1` strings for the same sources are recorded before
   registration.
 
@@ -290,8 +291,9 @@ C3 feedback?
 - Response budget: the CLI default per request; the wire logs of experiments
   4 and 5 record `maxTokens` 1,048,576. The session limits of 100 steps and
   900 seconds are the effective budget. Record both in the receipt.
-- F, `full-1`: the unchanged experiment 5 C3 feedback: header, check record,
-  one explain record per code, plan record.
+- F, `full-1`: the experiment 5 C3 feedback: header, check record, one
+  explain record per code, plan record, with the current scope sentence of
+  the amendment below.
 - K, `concise-1`: the same header, the line `=== evo diagnostics`, and one
   `evo check FILE.c --json --form=concise-1` record. No explain or plan
   record. In this sandbox the agent cannot call `evo explain`, so K also
@@ -337,6 +339,22 @@ ratio increase to 0.15 in every case.
 The harm-check-only variant uses repetition 1 alone. B1 then holds when
 b − c is at most 1 of 24. Drop B2 and B3, because their power is too low.
 
+### Amendment of 2026-10-20
+
+The owner approved this change. T03s (2026-10-16) corrected the completion
+scope of a clean check, in `full-1` and `concise-1`, so that it names the
+pointer relations that the check does not cover. The old scope is "No
+undefined behavior was found on the executed path. This does not check that
+the results are correct." The new scope is "No finding from the implemented
+checks on the executed path. Pointer subtraction and ordering obligations are
+not checked. This does not check that the results are correct." F is the
+current `full-1`, so F differs from the experiment 4 and 5 feedback in this
+sentence only, in every completed record. The precondition and the go
+criteria allow exactly this difference and record the raw comparison too
+(`current_scope` in `tools/experiment/agent_repair.py`, the same rule as
+`crates/evocc/tests/frozen_feedback.rs`). Results of this protocol are not
+pooled with experiments 4 and 5 in any case.
+
 ### Pilot: 10 sessions
 
 Items: `adler-byte` (E3011), `crc-reset` (E3001), `minify-view` (E3010),
@@ -349,7 +367,8 @@ Go criteria:
 - Every K check result with EvoCC output starts its EvoCC part with
   `{"form":"concise-1"`.
 - When the agent checks the unchanged `program.c`, the EvoCC part of the F
-  result equals the frozen string for that source after path replacement.
+  result equals the frozen string for that source after path replacement and
+  the scope correction.
 - Every quota read succeeds. The harness records steps, tokens and scores.
 - There is no unknown outcome.
 

@@ -1123,6 +1123,16 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   scope correction and scratch paths. Historical replays need their recorded
   compiler. This correction does not authorize a new experiment or change a
   frozen protocol.
+  October 20: the owner approved F as the current `full-1`, with the T03s scope
+  sentence. The [protocol
+  amendment](docs/archive/notebook/agent-feedback-20261013/protocols.md) records
+  the old and new sentences. `tools/experiment/agent_repair.py` adds condition
+  `k`, the Protocol B order and pilot, and a precondition and go evaluation that
+  allow exactly that scope difference and still record the raw comparison
+  (`current_scope`, the rule of `crates/evocc/tests/frozen_feedback.rs`).
+  `tools/experiment/protocol-7.json` is the unregistered machine form. The 26
+  harness tests and all 176 experiment tests pass without a model request. The
+  pilot has not run.
 
 - [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`, P1.
   All 24 items qualify: six each of E3001/E3010/E3011 and two each of

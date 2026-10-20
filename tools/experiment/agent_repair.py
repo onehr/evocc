@@ -31,6 +31,27 @@ HEREDOC = re.compile(r"(<<-?[ \t]*(['\"]?)(\w+)\2[^\n]*)\n(?:.*?\n)??[ \t]*\3[ \
 SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", ";;", "|&"}
 PREFIXES = {"env", "command", "exec", "time", "nice", "nohup", "sudo", "xargs", "builtin", "then", "do", "else", "if", "while", "until", "!"}
 CAPTURE = 64 * 1024 ** 2
+# Protocol B (P22). F is the current full-1 feedback of c3. K is the same header and one concise-1 check record.
+# T03s (2026-10-16) corrected the completion scope of a clean check in both forms. F is therefore the frozen
+# feedback with exactly this correction; every other byte must still match. The owner approved this on 2026-10-20.
+OLD_SCOPE = "No undefined behavior was found on the executed path. This does not check that the results are correct."
+NEW_SCOPE = ("No finding from the implemented checks on the executed path. Pointer subtraction and ordering "
+             "obligations are not checked. This does not check that the results are correct.")
+F_K = ("c3", "k")
+MARK = "=== evo diagnostics\n"
+# The pilot keeps the item order of the protocol text. The rotation then runs F first for items 1, 3 and 5.
+PILOT_B = ("adler-byte", "crc-reset", "minify-view", "increment-limit", "mean-empty")
+# The agent settings and quota limits that Protocol B fixes. They are the experiment 5 settings.
+SETTINGS_B = dict(model="kimi-code/k3", effort="low", wall=900, max_steps=100, prompt="prompt-3.txt",
+                  max_week_ratio=0.85, max_week_increase=0.15)
+GO_B = ("Zero escapes.",
+        'Every K check result with EvoCC output starts its EvoCC part with `{"form":"concise-1"`.',
+        "When the agent checks the unchanged `program.c`, the EvoCC part of the F result equals the frozen string for that "
+        "source after path replacement and the T03s scope correction.",
+        "Every quota read succeeds. The harness records steps, tokens and scores.",
+        "There is no unknown outcome.")
+GIB = 1024 ** 3
+DISK_WAIT = (300.0, 21600.0)  # Protocol B checks the free disk every 5 minutes, for up to 6 hours
 # The agent's check command. It is opaque: it holds no harness, repository or run-directory path. It finds
 # the workspace .check directory by walking up from the current directory, and relays the file name.
 CHECK_CLIENT = r"""#!/bin/sh
@@ -146,10 +167,16 @@ def container_build(stage, mode):
     return result["stdout"] + (("\n" + result["stderr"]) if result["exit_code"] and result["stderr"] else "")
 
 
-def c3_diagnostics(src, stage):
+def evocc_run(src, stage):
+    """The header of c3 and k: the evocc build, then the sealed assembly, link and run."""
     build = repair.run([EVOCC, "-S", "--target=aarch64-unknown-linux-gnu", "-O0", str(src), "-o", str(stage / "input.s")], cwd=stage)
     text = "=== evocc build exit %d\n%s" % (build["exit_code"], build["stderr"][:4000])
     text += container_build(stage, "c3") if build["exit_code"] == 0 else "=== evocc build failed; the container did not run\n"
+    return text
+
+
+def c3_diagnostics(src, stage):
+    text = evocc_run(src, stage)
     check = repair.run([EVO, "check", "--json", str(src)], cwd=stage)
     try: codes = sorted({d["code"] for line in check["stdout"].splitlines() if line.strip() for d in json.loads(line).get("diagnostics", [])})
     except (ValueError, KeyError, TypeError, AttributeError): codes = []
@@ -157,9 +184,18 @@ def c3_diagnostics(src, stage):
     return text + "=== evo diagnostics\n" + "".join(r["stdout"] if r["stdout"].strip() else r["stderr"] for r in records)
 
 
+def k_diagnostics(src, stage):
+    """Protocol B condition K: the c3 header and one concise-1 check record. It has no explain or plan record."""
+    text = evocc_run(src, stage)
+    check = repair.run([EVO, "check", "--json", "--form=concise-1", str(src)], cwd=stage)
+    return text + MARK + (check["stdout"] if check["stdout"].strip() else check["stderr"])
+
+
 def feedback(condition, src, stage):
     shutil.copyfile(src, stage / "input.c")
     if condition == "c3": return c3_diagnostics(stage / "input.c", stage)
+    if condition == "k":
+        return k_diagnostics(stage / "input.c", stage)
     return container_build(stage, condition)
 
 
@@ -172,11 +208,12 @@ def serve(condition, ws, handled, log):
         handled.add(rid)
         name = (req / (rid + ".file")).read_text().strip() if (req / (rid + ".file")).is_file() else "program.c"
         wsr = ws.resolve(); target = (wsr / name).resolve()
-        code, text = 0, ""
+        code, text, source = 0, "", None
         try:
             if not target.is_relative_to(wsr) or not target.is_file(): code, text = 2, "check: name a C file in the working directory\n"
             elif target.stat().st_size > 262144: code, text = 2, "check: the file is larger than 262144 bytes\n"
             else:
+                source = digest(target)  # the log names the checked bytes; the served text does not change
                 with repair.tempfile.TemporaryDirectory(prefix="agent-repair-check-") as scratch:
                     text = feedback(condition, target, Path(scratch))
         except (repair.Failure, repair.Stop, OSError, subprocess.SubprocessError) as error:
@@ -184,7 +221,7 @@ def serve(condition, ws, handled, log):
         (resp / (rid + ".out")).write_text(text)
         (resp / (rid + ".code")).write_text(str(code))
         (resp / (rid + ".done")).write_text("")
-        with open(log, "a") as handle: handle.write(json.dumps(dict(time=now(), file=name, exit=code, bytes=len(text))) + "\n")
+        with open(log, "a") as handle: handle.write(json.dumps(dict(time=now(), file=name, exit=code, bytes=len(text), id=rid, sha256=source)) + "\n")
 
 
 def refusal(record):
@@ -415,6 +452,8 @@ def session(args, out, index, item, condition):
                escapes=classes["escapes"], scratch=classes["scratch"][:40], errors=m["errors"][:20],
                final_sha256=hashlib.sha256(final.encode()).hexdigest(), preprocessor=bool(re.search(r"#|%:|\?\?=", re.sub(r"\\\r?\n", "", final))))
     shutil.move(str(w["ws"]), str(w["sdir"] / "workspace"))
+    if getattr(args, "order", "rotation") != "rotation":  # Protocol B: the scorer refuses below 25 GiB
+        row["disk_wait"] = disk_wait("score %02d" % index)[0]
     try:
         row["score_builds"] = qualify_silent.score_builds(final, item)
         row["passed"] = status == "completed" and all(r["passed"] for r in row["score_builds"].values())
@@ -460,9 +499,50 @@ def archive(out):
             with open(path, "rb") as handle: tar.addfile(info, handle)
 
 
+def disk_wait(label):
+    """Wait until 25 GiB are free: the check and the scorer refuse to run below that. Return the wait record,
+    or None when no wait was needed, and whether the space is free now."""
+    free, waited = shutil.disk_usage(ROOT).free, 0.0
+    if free >= 25 * GIB:
+        return None, True
+    record = dict(label=label, started_at=now(), free_gib=[round(free / GIB, 2)])
+    while free < 25 * GIB and waited < DISK_WAIT[1]:
+        step = min(DISK_WAIT[0], DISK_WAIT[1] - waited)
+        time.sleep(step)
+        waited += step
+        free = shutil.disk_usage(ROOT).free
+        record["free_gib"].append(round(free / GIB, 2))
+    record.update(ended_at=now(), seconds=waited, free=free >= 25 * GIB)
+    return record, record["free"]
+
+
+def binaries(kimi):
+    """The SHA-256 of the frozen binaries. Protocol B stops when one changes."""
+    return dict(evo_sha256=digest(EVO), evocc_sha256=digest(EVOCC), kimi_sha256=digest(kimi))
+
+
+def protocol_b(args, names, rule):
+    """Fix the Protocol B conditions, settings and items. With F_K, the rotation in run() runs F first at even
+    zero-based indices and K first at odd ones, and each repetition reverses the one before it."""
+    if args.condition and tuple(args.condition) != F_K:
+        raise SystemExit("Protocol B runs --condition c3 --condition k, in this order")
+    fixed = {k: SETTINGS_B[k] for k in ("model", "effort", "wall", "max_steps")}
+    if {k: getattr(args, k) for k in fixed} != fixed or Path(args.prompt).resolve() != HERE / SETTINGS_B["prompt"]:
+        raise SystemExit("Protocol B fixes the model, effort, wall, steps and prompt: %s" % json.dumps(SETTINGS_B))
+    if args.max_week_ratio > SETTINGS_B["max_week_ratio"] or args.max_week_increase > SETTINGS_B["max_week_increase"]:
+        raise SystemExit("Protocol B stops at the initial 7-day ratio plus 0.15, or at 0.85")
+    if rule == "pilot-b":
+        if names != sorted(PILOT_B) or args.reps != 1 or getattr(args, "first_repetition", 1) != 1:
+            raise SystemExit("the Protocol B pilot runs its five items once: %s" % ", ".join(PILOT_B))
+        names = list(PILOT_B)
+    return list(F_K), names
+
+
 def run(args):
-    conditions = args.condition or ["c1", "c3"]
-    items = [args.items.resolve() / name for name in sorted(args.item)]
+    conditions, names, rule = args.condition or ["c1", "c3"], sorted(args.item), getattr(args, "order", "rotation")
+    if rule != "rotation":
+        conditions, names = protocol_b(args, names, rule)
+    items = [args.items.resolve() / name for name in names]
     first = getattr(args, "first_repetition", 1)
     if first < 1 or args.reps < 1: raise SystemExit("repetition numbers must be positive")
     order = [(item, c, rep) for rep in range(first, first + args.reps) for i, item in enumerate(items)
@@ -472,8 +552,15 @@ def run(args):
     if any(not (item / "program.c").is_file() or not (item / "fix-spans.json").is_file() for item in items): raise SystemExit("an item is incomplete")
     plan = dict(order=[dict(item=i.name, condition=c, repetition=r) for i, c, r in order], items=str(args.items), model=args.model, effort=args.effort,
                 wall_seconds=args.wall, max_steps=args.max_steps, max_sessions=args.max_sessions, reps=args.reps, max_week_ratio=args.max_week_ratio)
+    if rule != "rotation":
+        plan["order_rule"] = rule
     if args.dry_run: print(json.dumps(plan)); return 0
     if not args.quota_port: raise SystemExit("--quota-port is required for a live run")
+    frozen = binaries(args.kimi) if rule != "rotation" else None
+    if rule != "rotation":  # Protocol B starts only after a passed precondition with the same binaries
+        pre = json.loads(args.precondition.read_text()) if getattr(args, "precondition", None) else {}
+        if not pre.get("passed") or any(pre.get("versions", {}).get(k) != v for k, v in frozen.items()):
+            raise SystemExit("Protocol B needs --precondition: a passed record for these binaries")
     if not 0 < args.max_week_increase <= 0.30 or not 0 < args.max_week_ratio <= 0.85: raise SystemExit("quota limits exceed the approved bounds")
     plan["max_week_increase"] = args.max_week_increase
     plan["classes"] = {item.name: (item / "class").read_text().strip() for item in items}
@@ -484,9 +571,21 @@ def run(args):
     repair.ENV = dict(repair.ENV, EVOCC_SYSROOT=str(SYSROOT))
     receipt = dict(schema="agent-repair.v4", phase=args.phase, date=now(), plan=plan, provenance=provenance(args), mechanism="seatbelt",
                    workspaces=str(args.wroot), prompt=args.prompt_text, quota=[], runs=[], totals=None, stop_reason=None)
+    if rule != "rotation":
+        receipt.update(binaries=frozen, disk_waits=[])
     write(out, receipt)
     retried = {}
     for index, (item, condition, repetition) in enumerate(order, 1):
+        if rule != "rotation":
+            wait, free = disk_wait("before %02d" % index)
+            receipt["disk_waits"] += [wait] if wait else []
+            receipt["stop_reason"] = None if free else "disk_below_25_GiB"
+            if free and binaries(args.kimi) != frozen:
+                receipt["stop_reason"] = "binaries_changed"
+            if receipt["stop_reason"] or wait:
+                write(out, receipt)
+            if receipt["stop_reason"]:
+                break
         if args.quota_port:
             q, decision = pace(args, "before %02d" % index); receipt["quota"].append(q)
             if decision != "ok": receipt["stop_reason"] = decision; write(out, receipt); break
@@ -500,18 +599,199 @@ def run(args):
         if row["status"] == "stopped": receipt["stop_reason"] = receipt["stop_reason"] or "provider_refusal"
         if row.get("escapes"): receipt["stop_reason"] = receipt["stop_reason"] or "escape_detected"
         if receipt["stop_reason"]: break
-    if args.quota_port and receipt["stop_reason"] is None: receipt["quota"].append(pace(args, "final")[0])
+    if rule != "rotation" and receipt["stop_reason"] is None and binaries(args.kimi) != frozen:
+        receipt["stop_reason"] = "binaries_changed"  # a change during the last session
+    # Protocol B reads the quota at the end of a stopped run too, unless a quota read itself stopped it.
+    paced = receipt["stop_reason"] in ("stop_week", "quota_unavailable", "five_hour_quota")
+    if args.quota_port and (receipt["stop_reason"] is None or (rule != "rotation" and not paced)): receipt["quota"].append(pace(args, "final")[0])
     receipt.update(stop_reason=receipt["stop_reason"] or "completed", unattempted=len(order) - len(receipt["runs"]), totals=totals(receipt["runs"]))
     archive(out); write(out, receipt)
     print(json.dumps(dict(runs=len(receipt["runs"]), stop_reason=receipt["stop_reason"], totals=receipt["totals"])))
     return 0 if receipt["stop_reason"] == "completed" else 1
 
 
+def split(text):
+    """The header and the EvoCC part of a c3 or k check result. The EvoCC part is None without the marker."""
+    head, mark, part = text.partition(MARK)
+    return (head, part) if mark else (text, None)
+
+
+def scratch_of(text, prefix):
+    """The scratch directory that a check result names, or None. Every path in it ends with /input.c."""
+    found = re.search(r'(/[^"\s]*/%s[^/"\s]+)/input\.c' % re.escape(prefix), text)
+    return found[1] if found else None
+
+
+def current_scope(text):
+    """The frozen EvoCC part with only the T03s scope correction, as crates/evocc/tests/frozen_feedback.rs applies
+    it: the scope of each completed record changes from OLD_SCOPE to NEW_SCOPE. Other bytes are unchanged."""
+    if text is None:
+        return None
+    field, lines = '"scope":' + json.dumps(OLD_SCOPE), []
+    for line in text.splitlines(keepends=True):
+        try:
+            record = json.loads(line)
+        except ValueError:
+            lines.append(line)
+            continue
+        completion = (record.get("completion") or record) if isinstance(record, dict) else {}
+        if isinstance(completion, dict) and completion.get("status") == "completed" and completion.get("scope") == OLD_SCOPE:
+            if line.count(field) != 1:
+                raise ValueError("the completed record does not hold exactly one old scope field")
+            line = line.replace(field, '"scope":' + json.dumps(NEW_SCOPE))
+        lines.append(line)
+    return "".join(lines)
+
+
+def concise_strings(path):
+    """The recorded concise-1 strings by (item, source), with the scratch directory written as <scratch>."""
+    record = json.loads(Path(path).read_text())
+    return {(i["item"], s): e["concise-1"].replace(e["scratch"], "<scratch>") for i in record["items"] for s, e in i["feedback"].items()}
+
+
+def versions(kimi):
+    """The compiler and agent identity. The Kimi CLI runs without an update check."""
+    def text(*argv):
+        env = dict(os.environ, KIMI_CODE_NO_AUTO_UPDATE="1", KIMI_DISABLE_TELEMETRY="1")
+        try:
+            return subprocess.run([str(x) for x in argv], capture_output=True, text=True, timeout=60, env=env).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+    return dict(evo_version=text(EVO, "version"), evocc_version=text(EVOCC, "--version"), evo_sha256=digest(EVO),
+                evocc_sha256=digest(EVOCC), kimi_version=(text(kimi, "--version") or "").strip() or None, kimi_sha256=digest(kimi))
+
+
+def precondition(args):
+    """Protocol B precondition, without a model request. For the 24 items and both sources, the EvoCC part of the
+    F result must equal the frozen C3 string after scratch-path replacement and the T03s scope correction, and the
+    K record must equal the recorded concise-1 string with the same correction. The K header must equal the frozen
+    header."""
+    frozen = json.loads(args.qualification.read_text())["items"]
+    concise, rows, waits = concise_strings(args.concise), [], []
+    repair.ENV = dict(repair.ENV, EVOCC_SYSROOT=str(SYSROOT))
+    before = versions(args.kimi)
+    for entry in frozen:
+        for source in ("program.c", "fixed.c"):
+            want = entry["feedback"][source]["c3"]
+            recorded, (want_head, want_part) = scratch_of(want, "silent-feedback-"), split(want)
+            got = {}
+            for condition in F_K:
+                wait, free = disk_wait("%s %s %s" % (entry["item"], source, condition))
+                waits += [wait] if wait else []
+                if not free:
+                    raise SystemExit("disk below 25 GiB for 6 hours; the precondition did not finish")
+                with repair.tempfile.TemporaryDirectory(prefix="silent-feedback-") as tmp:
+                    stage = Path(tmp)
+                    stage.chmod(0o755)  # as qualify_silent.qualify, which wrote the frozen strings
+                    text = feedback(condition, args.items / entry["item"] / source, stage)
+                    got[condition] = (text.replace(str(stage), recorded), text.replace(str(stage), "<scratch>"))
+            f_text, (k_head, k_part) = got["c3"][0], split(got["k"][1])
+            rows.append(dict(item=entry["item"], source=source, full_1_bytes=len((split(f_text)[1] or "").encode()),
+                             full_1_identical=split(f_text)[1] == want_part, c3_identical=f_text == want,
+                             full_1_identical_after_scope=split(f_text)[1] == current_scope(want_part),
+                             concise_1_bytes=len((k_part or "").encode()), concise_1_sha256=hashlib.sha256((k_part or "").encode()).hexdigest(),
+                             concise_1_identical=k_part == concise[entry["item"], source],
+                             concise_1_identical_after_scope=k_part == current_scope(concise[entry["item"], source]),
+                             k_header_identical=k_head == want_head,
+                             concise_1_form=(k_part or "").startswith('{"form":"concise-1"')))
+    after = versions(args.kimi)
+    summary = {k: sum(r[k] for r in rows) for k in ("full_1_identical", "full_1_identical_after_scope", "c3_identical",
+                                                    "concise_1_identical", "concise_1_identical_after_scope",
+                                                    "k_header_identical", "concise_1_form")}
+    record = dict(schema="agent-repair.p22-precondition.v1", date=now(), records_expected=48, summary=summary, versions=before,
+                  versions_unchanged=before == after, qualification=dict(path=str(args.qualification), sha256=digest(args.qualification)),
+                  concise=dict(path=str(args.concise), sha256=digest(args.concise)), image=repair.IMAGE, disk_waits=waits,
+                  method="Each source runs once per condition in a fresh silent-feedback- scratch directory, as qualify_silent.qualify "
+                         "did. F replaces the scratch path with the recorded one. K writes it as <scratch>, as the fixture does. "
+                         "Both comparisons allow only the T03s scope correction (current_scope); the raw counts are kept.",
+                  scope_correction=dict(old=OLD_SCOPE, new=NEW_SCOPE),
+                  passed=len(rows) == 48 and summary["full_1_identical_after_scope"] == 48
+                  and summary["concise_1_identical_after_scope"] == 48 and before == after, records=rows)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(record, indent=1) + "\n")
+    print(json.dumps(dict(passed=record["passed"], summary=summary)))
+    return 0 if record["passed"] else 1
+
+
+def served(out, row):
+    """The check results of one session in serving order, as (log record, served text or None)."""
+    sdir, rows = out / "sessions" / ("%02d" % row["index"]), []
+    log, resp = sdir / "checks.jsonl", sdir / "workspace/.check/resp"
+    for line in log.read_text().splitlines() if log.is_file() else []:
+        record = json.loads(line)
+        path = resp / ("%s.out" % record.get("id"))
+        rows.append((record, path.read_text() if path.is_file() else None))
+    return rows
+
+
+def go(args):
+    """Evaluate the go criteria of the Protocol B pilot from a finished run. Write pilot-receipt.json beside it."""
+    out = args.out.resolve()
+    receipt, pre = json.loads((out / "receipt.json").read_text()), json.loads(args.precondition.read_text())
+    frozen = {e["item"]: e["feedback"] for e in json.loads(args.qualification.read_text())["items"]}
+    concise, n = concise_strings(args.concise), dict.fromkeys(("k", "k_evocc", "k_form", "k_known", "k_equal", "f", "f_known", "f_equal", "missing"), 0)
+    for row in receipt["runs"]:
+        known, key = {digest(args.items / row["item"] / s): s for s in ("program.c", "fixed.c")}, "k" if row["condition"] == "k" else "f"
+        for record, text in served(out, row):
+            n[key] += 1
+            source, live = known.get(record.get("sha256")), scratch_of(text or "", "agent-repair-check-")
+            if text is None:
+                n["missing"] += 1
+            elif key == "k":
+                part = split(text.replace(live, "<scratch>") if live else text)[1]
+                if part and part.strip():
+                    n["k_evocc"] += 1
+                    n["k_form"] += part.startswith('{"form":"concise-1"')
+                if source:
+                    n["k_known"] += 1
+                    n["k_equal"] += part == current_scope(concise[row["item"], source])
+            elif source:  # F: an unchanged corpus source must give the frozen bytes
+                want = frozen[row["item"]][source]["c3"]
+                part = split(text.replace(live, scratch_of(want, "silent-feedback-")) if live else text)[1]
+                n["f_known"] += 1
+                n["f_equal"] += part == current_scope(split(want)[1])
+    planned = [(p["item"], p["condition"], p["repetition"]) for p in receipt["plan"]["order"]]
+    cells = {(r["item"], r["condition"], r.get("repetition")): r for r in receipt["runs"]}  # a retry replaces its cell
+    final = [cells[c] for c in planned if c in cells]
+    reads = receipt["quota"]
+    week = [ratios(q)[1].get("usedRatio") for q in reads]
+    escapes, blocked = (sum(r.get("audit", {}).get(k, 0) for r in receipt["runs"]) for k in ("escapes", "blocked"))
+    recorded = all(isinstance(r.get("steps"), int) and r.get("tokens", {}).get("total") and len(r.get("score_builds") or {}) == 3
+                   and "score_error" not in r for r in receipt["runs"])
+    unknown = [r["index"] for r in final if r["status"] not in ("completed", "timeout", "step_limit") or "score_error" in r or r.get("escapes")]
+    held = [escapes == 0 and receipt["stop_reason"] != "escape_detected",
+            n["k_evocc"] > 0 and n["k_form"] == n["k_evocc"] and not n["missing"],
+            n["f_known"] > 0 and n["f_equal"] == n["f_known"] and not n["missing"],
+            len(reads) == len(receipt["runs"]) + 1 and all(isinstance(w, (int, float)) for w in week) and recorded,
+            not unknown and len(final) == len(planned)]
+    evidence = ["%d escapes and %d blocked attempts in %d sessions" % (escapes, blocked, len(receipt["runs"])),
+                "%d of %d K results with EvoCC output start so; %d K results; %d served texts missing" % (n["k_form"], n["k_evocc"], n["k"], n["missing"]),
+                "%d of %d F results for an unchanged corpus source are equal; %d F results" % (n["f_equal"], n["f_known"], n["f"]),
+                "%d of %d quota reads succeed for %d sessions; steps, tokens and three scores recorded: %s"
+                % (sum(isinstance(w, (int, float)) for w in week), len(reads), len(receipt["runs"]), recorded),
+                "%d of %d planned sessions have a final attempt; unknown outcomes in sessions %s" % (len(final), len(planned), unknown)]
+    criteria = list(zip(GO_B, held, evidence))
+    after = versions(args.kimi)
+    numbers = [w for w in week if isinstance(w, (int, float))]
+    pilot = dict(receipt, protocol=dict(path="tools/experiment/protocol-7.json", sha256=digest(HERE / "protocol-7.json"),
+                                        status=json.loads((HERE / "protocol-7.json").read_text())["status"]),
+                 precondition=dict(path=str(args.precondition), sha256=digest(args.precondition), passed=pre["passed"], summary=pre["summary"]),
+                 go=dict(criteria=[dict(criterion=c, held=h, evidence=e) for c, h, e in criteria], held=all(h for _, h, _ in criteria), checks=n),
+                 quota_change=dict(first=numbers[0] if numbers else None, last=numbers[-1] if numbers else None,
+                                   increase=round(numbers[-1] - numbers[0], 6) if numbers else None, reads=len(reads)),
+                 provenance_after=after, binaries_unchanged=all(after[k] == pre["versions"][k] for k in after),
+                 analysis="Pilot data stay out of the measured analysis. The five items stay in the population.")
+    (out / "pilot-receipt.json").write_text(json.dumps(pilot, indent=1) + "\n")
+    print(json.dumps(dict(held=pilot["go"]["held"], criteria=[h for _, h, _ in criteria], quota=pilot["quota_change"])))
+    return 0 if pilot["go"]["held"] else 1
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("run",))
+    top = argparse.ArgumentParser(description=__doc__)
+    commands = top.add_subparsers(dest="command", required=True)
+    parser = commands.add_parser("run", help="run the planned sessions")
     parser.add_argument("--items", type=Path, required=True); parser.add_argument("--item", action="append", required=True)
-    parser.add_argument("--condition", action="append", choices=("c1", "c3")); parser.add_argument("--reps", type=int, default=1)
+    parser.add_argument("--condition", action="append", choices=("c1", "c3", "k")); parser.add_argument("--reps", type=int, default=1)
     parser.add_argument("--first-repetition", type=int, default=1)
     parser.add_argument("--max-sessions", type=int, default=9); parser.add_argument("--phase", default="pilot")
     parser.add_argument("--out", type=Path, required=True); parser.add_argument("--kimi", type=Path, default=KIMI)
@@ -521,7 +801,22 @@ def main(argv=None):
     parser.add_argument("--max-week-ratio", type=float, required=True, help="stop before a session when the 7-day plan ratio is at or above this")
     parser.add_argument("--max-week-increase", type=float, default=0.30)
     parser.add_argument("--max-wait", type=float, default=21600.0); parser.add_argument("--dry-run", action="store_true", help="print the plan; start no session")
-    return run(parser.parse_args(argv))
+    parser.add_argument("--order", choices=("rotation", "protocol-b", "pilot-b"), default="rotation",
+                        help="protocol-b and pilot-b fix the conditions c3 (F) and k (K) and the Protocol B settings")
+    parser.add_argument("--precondition", type=Path, help="a passed precondition record; Protocol B needs one for these binaries")
+    corpus = ROOT / "tests/fixtures/agent-repair-4"
+    checks = {}
+    for name, text in (("precondition", "compare the F and K feedback of the 48 corpus sources with the frozen strings"),
+                       ("go", "evaluate the Protocol B pilot go criteria of a finished run")):
+        checks[name] = commands.add_parser(name, help=text)
+        checks[name].add_argument("--items", type=Path, default=corpus)
+        checks[name].add_argument("--qualification", type=Path, default=corpus / "qualification.json")
+        checks[name].add_argument("--concise", type=Path, default=corpus / "concise-1-feedback.json")
+        checks[name].add_argument("--kimi", type=Path, default=KIMI)
+        checks[name].add_argument("--out", type=Path, required=True, help="the record to write, or the run directory for go")
+    checks["go"].add_argument("--precondition", type=Path, required=True)
+    args = top.parse_args(argv)
+    return dict(run=run, precondition=precondition, go=go)[args.command](args)
 
 
 if __name__ == "__main__":

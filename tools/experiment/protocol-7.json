@@ -1,0 +1,333 @@
+{
+  "schema": "agent-repair.protocol.b1",
+  "name": "P22 Protocol B: the concise check record with a coding agent",
+  "status": "unregistered",
+  "status_note": "Machine form of the proposal. Nothing is registered. The owner approves the measured run and registers it with a commit and a tag. A harness change after the pilot needs a new pilot. Pilot data stay out of the measured analysis.",
+  "source": "docs/archive/notebook/agent-feedback-20261013/protocols.md",
+  "design": "docs/archive/notebook/agent-feedback-20261013/p22-feedback-design.md",
+  "question": "In the experiment 5 agent setup, does the concise-1 C3 feedback keep the repairs, and does it change agent effort, compared with the current full-1 C3 feedback?",
+  "items_root": "tests/fixtures/agent-repair-4",
+  "corpus_tag": "agent-repair-experiment-4",
+  "corpus_commit": "5b765db0467dc92a94077e3f37617c04e16f24b0",
+  "qualification": {
+    "path": "tests/fixtures/agent-repair-4/qualification.json",
+    "sha256": "9c98c41cc4d9942a013e49bfa07181b112382c6e2d29a6168f7df99e19471fef"
+  },
+  "items": [
+    "adler-byte",
+    "adler-reset",
+    "adler-view",
+    "crc-byte",
+    "crc-reset",
+    "crc-view",
+    "increment-limit",
+    "left-count",
+    "magnitude-limit",
+    "mean-empty",
+    "minify-byte",
+    "minify-reset",
+    "minify-view",
+    "pointer-byte",
+    "pointer-reset",
+    "pointer-view",
+    "right-count",
+    "scale-empty",
+    "xxh32-byte",
+    "xxh32-reset",
+    "xxh32-view",
+    "xxh64-byte",
+    "xxh64-reset",
+    "xxh64-view"
+  ],
+  "classes": {
+    "E3001": 6,
+    "E3010": 6,
+    "E3011": 6,
+    "E3002": 2,
+    "E3004": 2,
+    "E3005": 2
+  },
+  "controls": [
+    "increment-limit",
+    "left-count",
+    "magnitude-limit",
+    "mean-empty",
+    "right-count",
+    "scale-empty"
+  ],
+  "repetitions": [
+    1,
+    2
+  ],
+  "pairs": 48,
+  "sessions": 96,
+  "harness": "tools/experiment/agent_repair.py",
+  "agent": {
+    "cli": "Kimi Code CLI",
+    "cli_version": "2.0.2",
+    "cli_version_rule": "Use 2.0.2 if it is still available. Record the actual CLI version and the logged model. Another CLI version needs a statement at registration.",
+    "model": "kimi-code/k3",
+    "effort": "low",
+    "max_steps": 100,
+    "wall": 900,
+    "prompt": "prompt-3.txt",
+    "prompt_sha256": "edd2559384603feafa25cfe0c322a1c32bfd0509e3be1ebce7de48bfcec3cc36",
+    "sandbox": "the existing Seatbelt profile of agent_repair.py",
+    "check_client": "the existing opaque check client of agent_repair.py",
+    "workspace": "a fresh workspace for each session",
+    "concurrency": "one session at a time",
+    "kimi_home": "Do not edit the Kimi home configuration."
+  },
+  "provider": "The Kimi service behind the CLI. The CLI chooses the endpoint.",
+  "response_budget": {
+    "per_request": "The CLI default. The wire logs of experiments 4 and 5 record maxTokens 1,048,576.",
+    "per_session": "100 steps and 900 seconds are the effective budget.",
+    "record": "The receipt records both."
+  },
+  "image": {
+    "name": "evo-nexlab:sealed",
+    "digest": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93"
+  },
+  "conditions": {
+    "F": {
+      "harness_condition": "c3",
+      "form": "full-1",
+      "feedback": "The unchanged experiment 5 C3 feedback: the build and run header, the line === evo diagnostics, the check record, one explain record per code and the plan record.",
+      "commands": [
+        "evocc -S --target=aarch64-unknown-linux-gnu -O0 input.c -o input.s",
+        "the sealed assembly, link and run",
+        "evo check --json input.c",
+        "evo explain CODE --json",
+        "evo fix input.c --plan --json"
+      ]
+    },
+    "K": {
+      "harness_condition": "k",
+      "form": "concise-1",
+      "feedback": "The same header, the line === evo diagnostics, and one concise-1 check record. No explain or plan record.",
+      "commands": [
+        "evocc -S --target=aarch64-unknown-linux-gnu -O0 input.c -o input.s",
+        "the sealed assembly, link and run",
+        "evo check --json --form=concise-1 input.c"
+      ],
+      "treatment_note": "In this sandbox the agent cannot call evo explain, so K also removes the page examples. Report this as part of the treatment."
+    }
+  },
+  "precondition": {
+    "rules": [
+      "The Rust lane has implemented concise-1 as p22-feedback-design.md describes, and its tests pass.",
+      "full-1 equals the EvoCC part of the 48 frozen C3 strings in tests/fixtures/agent-repair-4/qualification.json, after scratch-path replacement and the T03s completion-scope correction, and differs in no other byte. The raw byte-identical count is recorded as well.",
+      "The 48 concise-1 strings for the same sources are recorded before registration."
+    ],
+    "concise_fixture": "tests/fixtures/agent-repair-4/concise-1-feedback.json",
+    "command": "python3 -I tools/experiment/agent_repair.py precondition --out FILE"
+  },
+  "order": {
+    "rule": "Sorted items. Zero-based even indices run F first, odd indices K first. Repetition 2 reverses repetition 1.",
+    "harness": "agent_repair.py run --order protocol-b --reps 2 runs repetition 1, then repetition 2."
+  },
+  "predictions": {
+    "B1": "No repair loss. b counts item-repetition pairs repaired only with full-1; c counts pairs repaired only with concise-1. B1 holds when b - c is at most 2 of the 48 pairs. Report the exact two-sided McNemar p-value as a description.",
+    "B2": "Tokens. concise-1 uses fewer total tokens, including cached input, per item mean. Exact one-sided Wilcoxon signed-rank test over 24 items, with zero differences dropped and midranks for ties, as in experiment 5.",
+    "B3": "Steps. concise-1 uses fewer steps per item mean. Same test.",
+    "B4": "Controls. On the six controls, the concise-1 step total is lower than the full-1 total. This is a point comparison without a test.",
+    "correction": "Holm's correction over B2 and B3 at a family level of 0.05.",
+    "descriptive": "EvoCC feedback bytes per check result, carried feedback tokens, check runs, wall time, audit counts and per-class tables."
+  },
+  "power": {
+    "accounting": "The accounting predicts a token saving of about 1.8% if the agent's behavior does not change.",
+    "smallest_effect": "With 24 items and two repetitions per arm, the smallest effect with 80% power at one-sided 0.05 is about 16% of steps or tokens.",
+    "basis": "In experiment 5 part A, one C3 session varied within an item by a standard deviation of 1.73 steps and 32,690 tokens.",
+    "purpose": "B2 and B3 can show only a large change in behavior. The main purpose is B1: a harm check before any change of default."
+  },
+  "scoring": {
+    "builds": [
+      [
+        "gcc-14",
+        "-O0"
+      ],
+      [
+        "gcc-14",
+        "-O2"
+      ],
+      [
+        "clang-19",
+        "-O2"
+      ]
+    ],
+    "repair": "The unchanged hidden driver under the three sealed builds. A repair needs a completed session and all three builds.",
+    "censored": "A timeout or step limit counts as not repaired and keeps its effort.",
+    "unknown": "A provider failure, scoring error or escape is unknown."
+  },
+  "stopping": {
+    "quota_reads": "Read the quota before every session and at the end. A failed read stops the package.",
+    "week_ratio": "Stop at the initial 7-day ratio plus 0.15, or at an absolute ratio of 0.85, whichever is lower.",
+    "five_hour": "Wait out a 5-hour ratio at or above 0.90, by the existing pacing rule.",
+    "overload": "Allow three CLI 429 overload notices per session. The fourth ends the session as provider_overloaded. Retry it once after all initial sessions.",
+    "refusal": "A quota, limit or usage 429, or an authentication refusal, stops the package.",
+    "reruns": "Rerun no other session. Use the final authorized retry, never the best one.",
+    "disk": "Do not start below 25 GiB of free disk space. Stop below 15 GiB."
+  },
+  "cost": {
+    "basis": "Experiment 5 part A C3 sessions: 5.54 requests and 102,564 tokens per session (98,096 cached input, 3,633 uncached input, 835 output). Part A raised the 7-day ratio by 0.085899 for 12,425,299 tokens: about 6.91e-9 per token. Planning bounds use the largest part A C3 session: 13 steps and 295,444 tokens. The hard cap is 100 requests per session.",
+    "parts": [
+      {
+        "part": "pilot",
+        "sessions": 10,
+        "requests_expected": 55,
+        "requests_planning_bound": 130,
+        "tokens_expected": 1030000,
+        "tokens_planning_bound": 2950000,
+        "week_ratio_expected": 0.007
+      },
+      {
+        "part": "full",
+        "sessions": 96,
+        "requests_expected": 532,
+        "requests_planning_bound": 1248,
+        "tokens_expected": 9850000,
+        "tokens_planning_bound": 28400000,
+        "week_ratio_expected": 0.068
+      },
+      {
+        "part": "harm_check_only",
+        "sessions": 48,
+        "requests_expected": 266,
+        "requests_planning_bound": 624,
+        "tokens_expected": 4920000,
+        "tokens_planning_bound": 14200000,
+        "week_ratio_expected": 0.034
+      }
+    ],
+    "stop_line": "The stop line limits the ratio increase to 0.15 in every case."
+  },
+  "phases": {
+    "pilot": {
+      "items": [
+        "adler-byte",
+        "crc-reset",
+        "minify-view",
+        "increment-limit",
+        "mean-empty"
+      ],
+      "codes": {
+        "adler-byte": "E3011",
+        "crc-reset": "E3001",
+        "minify-view": "E3010",
+        "increment-limit": "E3004",
+        "mean-empty": "E3002"
+      },
+      "order_rule": "Each item runs once in F and once in K, with F first for the first, third and fifth item. The protocol gives no table. The sessions follow the item order of the protocol text: agent_repair.py run --order pilot-b.",
+      "sessions": [
+        {
+          "session": 1,
+          "item": "adler-byte",
+          "arm": "F",
+          "condition": "c3"
+        },
+        {
+          "session": 2,
+          "item": "adler-byte",
+          "arm": "K",
+          "condition": "k"
+        },
+        {
+          "session": 3,
+          "item": "crc-reset",
+          "arm": "K",
+          "condition": "k"
+        },
+        {
+          "session": 4,
+          "item": "crc-reset",
+          "arm": "F",
+          "condition": "c3"
+        },
+        {
+          "session": 5,
+          "item": "minify-view",
+          "arm": "F",
+          "condition": "c3"
+        },
+        {
+          "session": 6,
+          "item": "minify-view",
+          "arm": "K",
+          "condition": "k"
+        },
+        {
+          "session": 7,
+          "item": "increment-limit",
+          "arm": "K",
+          "condition": "k"
+        },
+        {
+          "session": 8,
+          "item": "increment-limit",
+          "arm": "F",
+          "condition": "c3"
+        },
+        {
+          "session": 9,
+          "item": "mean-empty",
+          "arm": "F",
+          "condition": "c3"
+        },
+        {
+          "session": 10,
+          "item": "mean-empty",
+          "arm": "K",
+          "condition": "k"
+        }
+      ],
+      "go_criteria": [
+        "Zero escapes.",
+        "Every K check result with EvoCC output starts its EvoCC part with `{\"form\":\"concise-1\"`.",
+        "When the agent checks the unchanged `program.c`, the EvoCC part of the F result equals the frozen string for that source after path replacement and the T03s scope correction.",
+        "Every quota read succeeds. The harness records steps, tokens and scores.",
+        "There is no unknown outcome."
+      ],
+      "go_command": "python3 -I tools/experiment/agent_repair.py go --out RUN_DIRECTORY --precondition PRECONDITION_FILE",
+      "note": "Pilot data stay out of the analysis. The five items stay in the population."
+    },
+    "measured": {
+      "status": "Not approved. The owner decides on the measured run after the pilot result.",
+      "sessions": 96,
+      "order": "agent_repair.py run --order protocol-b --reps 2 --dry-run prints the 96-session order. Commit it before the first request."
+    },
+    "harm_check_only": {
+      "status": "Not approved. A variant of the measured run.",
+      "sessions": 48,
+      "rule": "Repetition 1 alone. B1 then holds when b - c is at most 1 of 24. Drop B2 and B3, because their power is too low."
+    }
+  },
+  "reporting": [
+    "Report F and K side by side for all 24 items and per class.",
+    "Report unknown, unattempted and censored counts separately.",
+    "State the limits: one model, one effort setting, shared kernels and injected defects.",
+    "Do not claim a causal effect of feedback length unless B2 or B3 holds. Even then, name the whole change: shorter records and no page examples."
+  ],
+  "harness_rules": [
+    "The K record comes from evo check --json --form=concise-1 FILE, the argument order of the recorded fixture. An empty standard output gives standard error, as for each c3 record.",
+    "The c3 and k header come from one function, so K has the F header by construction.",
+    "The check log names the request id and the SHA-256 of the checked file. The go evaluation uses them to find checks of an unchanged corpus source. The served bytes do not change.",
+    "protocol-b and pilot-b fix the conditions c3 and k, the model, effort, wall limit, step limit and prompt. They refuse a 7-day stop line above 0.85 or an increase above 0.15.",
+    "The check and the scorer refuse to run below 25 GiB of free disk space. Before each Protocol B session and before its scoring, the harness waits until 25 GiB are free. It checks every 5 minutes for up to 6 hours. The receipt records each wait.",
+    "When 25 GiB are not free after 6 hours, the package stops before the session. Before scoring, the scorer then fails and the outcome is unknown.",
+    "The harness records the SHA-256 of evo, evocc and the Kimi CLI at the start. A change before a session or after the last session stops the package.",
+    "A live Protocol B run needs --precondition: a passed precondition record with the same binary SHA-256 values.",
+    "A stopped Protocol B run reads the quota at the end, unless a quota read stopped it.",
+    "An escape stops the package, as in experiments 4 and 5.",
+    "An unknown outcome is a final attempt whose status is not completed, timeout or step_limit, a scoring error or an escape. A planned cell without an attempt is unattempted.",
+    "The protocol does not say whether the measured run keeps the initial 7-day ratio of the pilot. The owner decides at registration."
+  ],
+  "amendments": [
+    {
+      "date": "2026-10-20",
+      "approved_by": "owner",
+      "change": "T03s (2026-10-16) changed the completion scope of a clean check in full-1 and concise-1 to name the unchecked pointer relations. F is the current full-1, which differs from the experiment 4 and 5 C3 feedback only in that scope sentence. The precondition and the go criteria allow exactly this difference.",
+      "old_scope": "No undefined behavior was found on the executed path. This does not check that the results are correct.",
+      "new_scope": "No finding from the implemented checks on the executed path. Pointer subtraction and ordering obligations are not checked. This does not check that the results are correct."
+    }
+  ]
+}
