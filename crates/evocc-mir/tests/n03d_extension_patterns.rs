@@ -241,6 +241,7 @@ fn effects_and_fp_admission_end_the_available_segment() {
             offset: 0,
             kind: LoadKind::X,
             volatile: false,
+            mask: None,
         },
         MInst::Store {
             align: 8,
@@ -249,6 +250,7 @@ fn effects_and_fp_admission_end_the_available_segment() {
             offset: 0,
             kind: StoreKind::X,
             volatile: false,
+            mask: None,
         },
     ] {
         let f = function(

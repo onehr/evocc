@@ -33,6 +33,12 @@ pub const WIDTHS: [u16; 14] = [1, 2, 3, 5, 7, 8, 13, 16, 17, 31, 32, 33, 47, 64]
 /// layout its object was allocated with.
 const MEMORY_WIDTHS: [u16; 4] = [8, 16, 32, 64];
 
+/// The tag of the stream that draws masked accesses (D25). The stream is
+/// separate, so the main stream makes the draws that it makes without them:
+/// a configuration with masked accesses gives each module the shape of the
+/// same seed without them, with masked accesses added.
+const MASK_STREAM: u64 = 0x4D41_534B_4544_0019;
+
 /// The object every block carries across its outgoing edges.
 ///
 /// One shape, so a successor never has to ask what it received: eight bytes,
@@ -98,6 +104,11 @@ pub struct GeneratorConfig {
     pub max_loop_trips: u64,
     /// Ordinary return values one function may declare.
     pub max_results: u32,
+    /// D25: emit masked loads and stores, also into objects of which only
+    /// some bits are initialized. Off, the generator never consults the
+    /// masked-access stream, so the pinned seed space names the modules that
+    /// it named before masked accesses existed.
+    pub masked_accesses: bool,
 }
 
 impl Default for GeneratorConfig {
@@ -111,6 +122,7 @@ impl Default for GeneratorConfig {
             max_blocks: 24,
             max_loop_trips: 4,
             max_results: 3,
+            masked_accesses: false,
         }
     }
 }
@@ -125,6 +137,15 @@ impl GeneratorConfig {
             ..Self::default()
         }
     }
+
+    /// The same configuration with masked accesses (D25).
+    #[must_use]
+    pub fn with_masked_accesses(self) -> Self {
+        Self {
+            masked_accesses: true,
+            ..self
+        }
+    }
 }
 
 /// Produce the one module this seed names.
@@ -134,6 +155,7 @@ impl GeneratorConfig {
 #[must_use]
 pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
     let mut rng = Rng::from_seed(seed ^ config.mode.seed_space());
+    let mut masks = Rng::from_seed(seed ^ config.mode.seed_space() ^ MASK_STREAM);
     let mut origins = 0_u64;
     let globals = generate_globals(&mut rng, config, &mut origins);
     let symbols: Vec<String> = globals.iter().map(|global| global.symbol.clone()).collect();
@@ -151,6 +173,7 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
         let signature = random_signature(&mut rng, config, format!("h{index}"), &symbols, false);
         let function = generate_function(
             &mut rng,
+            &mut masks,
             config,
             &signature,
             &signatures,
@@ -177,6 +200,7 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
     };
     functions.push(generate_function(
         &mut rng,
+        &mut masks,
         config,
         &entry,
         &signatures,
@@ -527,6 +551,8 @@ impl OpenBlock {
 
 struct FunctionGen<'a> {
     rng: &'a mut Rng,
+    /// The masked-access stream; see [`MASK_STREAM`].
+    masks: &'a mut Rng,
     config: GeneratorConfig,
     origins: &'a mut u64,
     callees: &'a [Signature],
@@ -539,6 +565,7 @@ struct FunctionGen<'a> {
 
 fn generate_function(
     rng: &mut Rng,
+    masks: &mut Rng,
     config: GeneratorConfig,
     signature: &Signature,
     callees: &[Signature],
@@ -572,6 +599,7 @@ fn generate_function(
 
     let mut generator = FunctionGen {
         rng,
+        masks,
         config,
         origins,
         callees,
@@ -1577,7 +1605,7 @@ impl FunctionGen<'_> {
         let layout = AccessLayout::new(bytes, align);
         for element in elements.clone() {
             let value = self.value_of(block, width);
-            self.emit_store(block, &element, &value, layout, false);
+            self.emit_store(block, &element, &value, layout, false, None);
         }
         let buffer = Buffer {
             elements,
@@ -1658,6 +1686,9 @@ impl FunctionGen<'_> {
     }
 
     fn emit_memory(&mut self, block: &mut OpenBlock) {
+        if self.config.masked_accesses && self.masks.chance(30) {
+            self.emit_partial_object(block);
+        }
         if self.rng.chance(55) {
             self.emit_buffer_access(block);
             return;
@@ -1672,12 +1703,71 @@ impl FunctionGen<'_> {
         let buffer = block.buffers[index].clone();
         let element = self.rng.pick(&buffer.elements).clone();
         let volatile = self.rng.chance(30);
+        // Every bit of a buffer is initialized, so any mask is defined here:
+        // it changes neither a value nor the initializedness of a bit.
+        let mask = (self.config.masked_accesses && self.masks.chance(20))
+            .then(|| self.masks.below(mask(buffer.width)));
         if self.rng.chance(50) {
             let value = self.value_of(block, buffer.width);
-            self.emit_store(block, &element, &value, buffer.layout, volatile);
+            self.emit_store(block, &element, &value, buffer.layout, volatile, mask);
         } else {
-            self.emit_load(block, &element, buffer.width, buffer.layout, volatile);
+            let loaded =
+                self.emit_load(block, &element, buffer.width, buffer.layout, volatile, mask);
+            self.record(block, &loaded);
         }
+    }
+
+    /// D25: an object of which only some bits are initialized. A masked
+    /// store initializes the bits of its mask, though it writes every bit. A
+    /// masked load that demands a subset of them is defined, and the bits it
+    /// does not demand hold no value that the program may use, so the value
+    /// is masked to that subset before anything reads it. The object never
+    /// becomes a buffer, so no unmasked access reaches it. Every draw comes
+    /// from the masked-access stream.
+    fn emit_partial_object(&mut self, block: &mut OpenBlock) {
+        let width = *self.masks.pick(&MEMORY_WIDTHS);
+        let bytes = u64::from(width / 8);
+        let layout = AccessLayout::new(
+            bytes,
+            u32::try_from(bytes).expect("a memory width is at most eight bytes"),
+        );
+        let origin = self.take_origin();
+        let pointer = self.fresh(pointer_type());
+        let mem_out = self.fresh(memory_type());
+        let world_out = self.fresh(world_type());
+        block.insts.push(Inst::Alloca {
+            result: pointer.clone(),
+            mem_in: block.mem.clone(),
+            world_in: block.world.clone(),
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+            origin,
+            layout,
+        });
+        block.mem = mem_out;
+        block.world = world_out;
+
+        let all = mask(width);
+        let value = match block.pool.get(&width).filter(|values| !values.is_empty()) {
+            Some(values) => values[self.masks.below(values.len() as u64) as usize].clone(),
+            None => {
+                let raw = self.masks.next_u64() & all;
+                self.emit_const(block, width, raw)
+            }
+        };
+        // At least one bit initialized and at least one not.
+        let stored = 1 + self.masks.below(all - 1);
+        let volatile = self.masks.chance(40);
+        self.emit_store(block, &pointer, &value, layout, volatile, Some(stored));
+        let demanded = stored & self.masks.next_u64();
+        let volatile = self.masks.chance(40);
+        let loaded = self.emit_load(block, &pointer, width, layout, volatile, Some(demanded));
+        let selector = self.emit_const(block, width, demanded);
+        let defined = self.fresh(EvoIRType::Bits(width));
+        block
+            .insts
+            .push(Inst::And(defined.clone(), loaded, selector));
+        self.record(block, &defined);
     }
 
     fn emit_global(&mut self, block: &mut OpenBlock) {
@@ -1804,6 +1894,7 @@ impl FunctionGen<'_> {
         value: &Value,
         layout: AccessLayout,
         volatile: bool,
+        mask: Option<u64>,
     ) {
         let guarded = self.fresh(memory_type());
         block.insts.push(Inst::AccessInBounds {
@@ -1823,12 +1914,14 @@ impl FunctionGen<'_> {
             mem_out: mem_out.clone(),
             world_out: world_out.clone(),
             volatile,
-            mask: None,
+            mask: mask.map(u128::from),
         });
         block.mem = mem_out;
         block.world = world_out;
     }
 
+    /// A load of `width` bits; the caller decides whether the value may
+    /// reach the pool.
     fn emit_load(
         &mut self,
         block: &mut OpenBlock,
@@ -1836,7 +1929,8 @@ impl FunctionGen<'_> {
         width: u16,
         layout: AccessLayout,
         volatile: bool,
-    ) {
+        mask: Option<u64>,
+    ) -> Value {
         let guarded = self.fresh(memory_type());
         block.insts.push(Inst::AccessInBounds {
             mem_in: block.mem.clone(),
@@ -1856,11 +1950,11 @@ impl FunctionGen<'_> {
             mem_out: mem_out.clone(),
             world_out: world_out.clone(),
             volatile,
-            mask: None,
+            mask: mask.map(u128::from),
         });
         block.mem = mem_out;
         block.world = world_out;
-        self.record(block, &result);
+        result
     }
 
     // -- calls --------------------------------------------------------------

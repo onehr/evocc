@@ -2482,6 +2482,66 @@ impl MemoryState {
         Ok((next_memory, next_world))
     }
 
+    /// A volatile load of which only the bits that `demanded` selects must be
+    /// initialized: [`Self::load_integer_bits`] with one volatile event. The
+    /// read of a volatile bit-field demands the field's bits of its unit, and
+    /// the unit read of a volatile bit-field store demands none.
+    pub fn volatile_load_integer_bits(
+        &self,
+        world: &WorldState,
+        address: Pointer,
+        access: AccessLayout,
+        demanded: u128,
+    ) -> Result<(u128, WorldState), MemoryFault> {
+        let value = self.load_integer_bits(address, access, demanded)?;
+        let observed = self.observed_integer(address, access)?;
+        let next_world =
+            self.append_world(world, VolatileDirection::Load, address, access, observed)?;
+        Ok((value, next_world))
+    }
+
+    /// A volatile store that initializes only the bits that `initializing`
+    /// selects: [`Self::store_integer_bits`] with one volatile event.
+    pub fn volatile_store_integer_bits(
+        &self,
+        world: &WorldState,
+        address: Pointer,
+        access: AccessLayout,
+        value: u128,
+        initializing: u128,
+    ) -> Result<(Self, WorldState), MemoryFault> {
+        let next_memory = self.store_integer_bits(address, access, value, initializing)?;
+        let observed = next_memory.observed_integer(address, access)?;
+        let next_world =
+            next_memory.append_world(world, VolatileDirection::Store, address, access, observed)?;
+        Ok((next_memory, next_world))
+    }
+
+    /// The event value of a masked volatile access: the bits that the access
+    /// transfers, and, when a byte of them is not completely initialized,
+    /// the initializedness of each byte, as a volatile copy records it.
+    fn observed_integer(
+        &self,
+        address: Pointer,
+        access: AccessLayout,
+    ) -> Result<ObservedValue, MemoryFault> {
+        let resolved = self.resolve_pointer(address)?;
+        let range = self.checked_range(resolved, access)?;
+        let object = self
+            .objects
+            .get(&resolved.object)
+            .ok_or(MemoryFault::UnknownObject {
+                object: resolved.object,
+            })?;
+        let bytes = clone_slice(&object.bytes[range.clone()], access.size_bytes)?;
+        let initialized = complete_bytes(&object.initialized[range]);
+        Ok(if initialized.iter().all(|byte| *byte) {
+            ObservedValue::RawTargetBits(bytes)
+        } else {
+            ObservedValue::Representation { bytes, initialized }
+        })
+    }
+
     pub fn volatile_load_pointer(
         &self,
         world: &WorldState,

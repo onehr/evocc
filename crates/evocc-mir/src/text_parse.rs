@@ -268,6 +268,24 @@ impl<'a> Scan<'a> {
         Ok(value)
     }
 
+    /// The optional ` [mask=M]` suffix of an integer load or store, in
+    /// canonical unsigned decimal (Section 4.1).
+    fn access_mask(&mut self) -> Result<Option<u64>, String> {
+        if !self.text.starts_with(" [mask=") {
+            return Ok(None);
+        }
+        self.expect(" [mask=")?;
+        let digits = self.take_while(|ch| ch.is_ascii_digit());
+        if digits.is_empty() || (digits.len() > 1 && digits.starts_with('0')) {
+            return Err("access mask is not canonical unsigned decimal".into());
+        }
+        let value = digits
+            .parse::<u64>()
+            .map_err(|_| "access mask exceeds 64 bits")?;
+        self.expect("]")?;
+        Ok(Some(value))
+    }
+
     fn take_while(&mut self, accept: impl Fn(char) -> bool) -> &'a str {
         let end = self
             .text
@@ -924,6 +942,7 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
             let offset = scan.signed_immediate()?;
             scan.expect("]")?;
             let align = scan.access_alignment()?;
+            let mask = scan.access_mask()?;
             scan.finish()?;
             return Ok(Parsed::Inst(MInst::Store {
                 align,
@@ -932,6 +951,7 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 offset,
                 kind,
                 volatile,
+                mask,
             }));
         }
         if matches!(
@@ -1237,6 +1257,7 @@ fn parse_defining(
         let offset = scan.signed_immediate()?;
         scan.expect("]")?;
         let align = scan.access_alignment()?;
+        let mask = scan.access_mask()?;
         scan.finish()?;
         return Ok(MInst::Load {
             align,
@@ -1245,6 +1266,7 @@ fn parse_defining(
             offset,
             kind,
             volatile,
+            mask,
         });
     }
 

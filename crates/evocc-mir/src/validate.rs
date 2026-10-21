@@ -281,6 +281,29 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             ));
         }
     }
+    // A mask belongs to an integer access and leaves at least one of its
+    // bits unselected, as in EvoIR Section 3.8.
+    let masked = match inst {
+        MInst::Load {
+            kind,
+            mask: Some(mask),
+            ..
+        } => Some((kind.is_integer(), kind.size_bytes(), *mask)),
+        MInst::Store {
+            kind,
+            mask: Some(mask),
+            ..
+        } => Some((kind.is_integer(), kind.size_bytes(), *mask)),
+        _ => None,
+    };
+    if let Some((integer, bytes, mask)) = masked {
+        let all = u64::MAX >> (64 - 8 * bytes);
+        if !integer || mask >= all {
+            return Err(format!(
+                "@{name} block {block}: mask {mask} is not narrower than a {bytes}-byte integer access"
+            ));
+        }
+    }
     match inst {
         MInst::BinaryImm {
             op,

@@ -470,6 +470,7 @@ fn a_frame_slot_is_a_fresh_object_on_every_execution() {
                         offset: 0,
                         kind: evocc_mir::StoreKind::X,
                         volatile: false,
+                        mask: None,
                     },
                     MInst::MovImm { dst: g(3), imm: 9 },
                     MInst::Store {
@@ -479,6 +480,7 @@ fn a_frame_slot_is_a_fresh_object_on_every_execution() {
                         offset: 0,
                         kind: evocc_mir::StoreKind::X,
                         volatile: false,
+                        mask: None,
                     },
                     MInst::Load {
                         align: 0,
@@ -487,6 +489,7 @@ fn a_frame_slot_is_a_fresh_object_on_every_execution() {
                         offset: 0,
                         kind: evocc_mir::LoadKind::X,
                         volatile: false,
+                        mask: None,
                     },
                 ],
                 term: MTerm::Ret { values: vec![g(4)] },
@@ -781,6 +784,7 @@ fn mem_copy_transfers_bytes_and_leaves_the_source_alone() {
                         offset: 0,
                         kind: evocc_mir::StoreKind::X,
                         volatile: false,
+                        mask: None,
                     },
                     MInst::MemCopy {
                         dst: g(2),
@@ -796,6 +800,7 @@ fn mem_copy_transfers_bytes_and_leaves_the_source_alone() {
                         offset: 0,
                         kind: evocc_mir::LoadKind::X,
                         volatile: false,
+                        mask: None,
                     },
                 ],
                 term: MTerm::Ret { values: vec![g(3)] },

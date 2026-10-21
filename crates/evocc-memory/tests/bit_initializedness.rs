@@ -182,3 +182,54 @@ fn a_masked_store_obeys_the_ordinary_store_checks() {
         MemoryFaultKind::ReadOnlyObject
     );
 }
+
+/// D25: the masked volatile forms keep the rule of the masked forms and add
+/// one event each. An event records the bytes and, when one of them is not
+/// completely initialized, the initializedness of each byte.
+#[test]
+fn a_masked_volatile_access_is_one_event_under_the_same_rule() {
+    let (memory, unit) = object(memory(), 1, 2);
+    let world = WorldState::new(WorldLimits {
+        max_volatile_events: 8,
+    });
+    // The read of a volatile bit-field store demands no bit.
+    let (old, world) = memory
+        .volatile_load_integer_bits(&world, unit, HALF, 0)
+        .unwrap();
+    let (memory, world) = memory
+        .volatile_store_integer_bits(&world, unit, HALF, old & !0x0ff0 | 0x0ab0, 0x0ff0)
+        .unwrap();
+    let (value, world) = memory
+        .volatile_load_integer_bits(&world, unit, HALF, 0x0ff0)
+        .unwrap();
+    assert_eq!(value & 0x0ff0, 0x0ab0);
+    uninitialized(memory.volatile_load_integer_bits(&world, unit, HALF, 0x1000));
+    uninitialized(memory.volatile_load_integer(&world, unit, HALF));
+    let trace = world.volatile_trace();
+    assert_eq!(trace.len(), 3);
+    for event in trace {
+        assert!(
+            matches!(
+                &event.value,
+                evocc_memory::ObservedValue::Representation { initialized, .. }
+                    if initialized == &vec![false, false]
+            ),
+            "{event:?}"
+        );
+    }
+    // Once every bit is initialized, the event is the raw bits, as for an
+    // unmasked access.
+    let (memory, world) = memory
+        .volatile_store_integer_bits(&world, unit, HALF, 0xabcd, 0xf00f)
+        .unwrap();
+    let (value, world) = memory
+        .volatile_load_integer_bits(&world, unit, HALF, 0xffff)
+        .unwrap();
+    assert_eq!(value, 0xabcd);
+    assert!(memory.is_range_initialized(unit, HALF).unwrap());
+    let last = world.volatile_trace().last().unwrap();
+    assert_eq!(
+        last.value,
+        evocc_memory::ObservedValue::RawTargetBits(vec![0xcd, 0xab])
+    );
+}

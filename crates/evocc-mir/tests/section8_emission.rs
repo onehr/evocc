@@ -296,6 +296,7 @@ fn temporary_object(origin: u32) -> Vec<MInst> {
             offset: 0,
             kind: StoreKind::X,
             volatile: false,
+            mask: None,
         },
         MInst::Load {
             align: 8,
@@ -304,6 +305,7 @@ fn temporary_object(origin: u32) -> Vec<MInst> {
             offset: 0,
             kind: LoadKind::X,
             volatile: false,
+            mask: None,
         },
     ]
 }
@@ -416,6 +418,7 @@ fn observable_or_overlapping_object_addresses_keep_distinct_frame_bytes() {
                 offset: 0,
                 kind: LoadKind::X,
                 volatile: false,
+                mask: None,
             },
         ),
         (
@@ -434,6 +437,7 @@ fn observable_or_overlapping_object_addresses_keep_distinct_frame_bytes() {
                 offset: 0,
                 kind: StoreKind::X,
                 volatile: false,
+                mask: None,
             },
         ),
         (
@@ -489,6 +493,7 @@ fn observable_or_overlapping_object_addresses_keep_distinct_frame_bytes() {
             offset,
             kind: LoadKind::X,
             volatile,
+            mask: None,
         };
         insts.extend(temporary_object(1));
         let frame = frame_of(&allocated_temporaries(insts));
@@ -515,6 +520,7 @@ fn private_objects_in_different_blocks_reuse_bytes_but_cross_block_addresses_do_
         offset: 0,
         kind: LoadKind::X,
         volatile: false,
+        mask: None,
     });
     let frame = frame_of(&allocated);
     assert_ne!(frame.slots[&0], frame.slots[&1]);

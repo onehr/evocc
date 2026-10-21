@@ -444,7 +444,8 @@ pub enum Inst {
 
     /// Load through `address`, consuming and producing explicit effect tokens.
     /// The loaded type is owned by `result`. A `mask` selects the bits that
-    /// must be initialized; the other bits may be uninitialized (3.8).
+    /// must be initialized; the other bits may be uninitialized (3.8). A
+    /// volatile masked load is still one volatile event.
     Load {
         result: Value,
         address: Value,
@@ -3169,12 +3170,12 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             world_in,
             mem_out,
             world_out,
-            volatile,
+            volatile: _,
             mask,
         } => {
             expect_pointer(&address.ty, "load address", block)?;
             expect_data_type(&result.ty, "load result", block)?;
-            validate_access_mask(*mask, &result.ty, *volatile, "load", block)?;
+            validate_access_mask(*mask, &result.ty, "load", block)?;
             expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "load", block)
         }
         Inst::Store {
@@ -3184,12 +3185,12 @@ fn validate_instruction_types(inst: &Inst, block: BlockId) -> Result<(), String>
             world_in,
             mem_out,
             world_out,
-            volatile,
+            volatile: _,
             mask,
         } => {
             expect_pointer(&address.ty, "store address", block)?;
             expect_data_type(&value.ty, "stored value", block)?;
-            validate_access_mask(*mask, &value.ty, *volatile, "store", block)?;
+            validate_access_mask(*mask, &value.ty, "store", block)?;
             expect_day7_effect_tokens(mem_in, world_in, mem_out, world_out, "store", block)
         }
         Inst::Copy {
@@ -3342,13 +3343,12 @@ fn validate_layout(layout: AccessLayout, operation: &str, block: BlockId) -> Res
     Ok(())
 }
 
-/// A mask belongs to a non-volatile access of `bits<8>` to `bits<128>`. It
-/// selects at least one bit fewer than the access has: an access of every
-/// bit is written without a mask (3.8).
+/// A mask belongs to an access of `bits<8>` to `bits<128>`, volatile or
+/// not. It selects at least one bit fewer than the access has: an access of
+/// every bit is written without a mask (3.8).
 fn validate_access_mask(
     mask: Option<u128>,
     ty: &EvoIRType,
-    volatile: bool,
     operation: &str,
     block: BlockId,
 ) -> Result<(), String> {
@@ -3360,11 +3360,6 @@ fn validate_access_mask(
             "{operation} in block {block} has a mask but is not an integer access"
         ));
     };
-    if volatile {
-        return Err(format!(
-            "{operation} in block {block} has a mask and is volatile"
-        ));
-    }
     if mask >= u128::MAX >> (128 - u32::from(*width)) {
         return Err(format!(
             "{operation} in block {block} has mask {mask}, which is not narrower than bits<{width}>"
@@ -6000,7 +5995,15 @@ fn execute_instruction(
             let address = read_pointer(values, address, block)?;
             let layout = matching_guard(state, memory_token, address, block)?;
             let loaded = match (&result.ty, mask) {
-                (EvoIRType::Bits(_), Some(mask)) if !*volatile => InternalValue::Bits(
+                (EvoIRType::Bits(_), Some(mask)) if *volatile => {
+                    let (raw, world) = state
+                        .memory
+                        .volatile_load_integer_bits(&state.world, address, layout, *mask)
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                    state.world = world;
+                    InternalValue::Bits(raw)
+                }
+                (EvoIRType::Bits(_), Some(mask)) => InternalValue::Bits(
                     state
                         .memory
                         .load_integer_bits(address, layout, *mask)
@@ -6099,7 +6102,15 @@ fn execute_instruction(
             let layout = matching_guard(state, memory_token, address, block)?;
             let stored = read_internal(values, value, block)?;
             match (stored, mask) {
-                (InternalValue::Bits(raw), Some(mask)) if !*volatile => {
+                (InternalValue::Bits(raw), Some(mask)) if *volatile => {
+                    let (memory, world) = state
+                        .memory
+                        .volatile_store_integer_bits(&state.world, address, layout, raw, *mask)
+                        .map_err(|error| InterpreterError::MemoryAccess { block, error })?;
+                    state.memory = memory;
+                    state.world = world;
+                }
+                (InternalValue::Bits(raw), Some(mask)) => {
                     state.memory = state
                         .memory
                         .store_integer_bits(address, layout, raw, *mask)

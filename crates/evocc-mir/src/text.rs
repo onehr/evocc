@@ -135,6 +135,20 @@ fn page_prefix(kind: SymbolKind) -> &'static str {
     }
 }
 
+/// The ` [align=N]` suffix of a load or store; natural alignment has none.
+fn align_suffix(align: u32) -> String {
+    if align == 0 {
+        String::new()
+    } else {
+        format!(" [align={align}]")
+    }
+}
+
+/// The ` [mask=M]` suffix of a masked integer load or store (Section 4.1).
+fn mask_suffix(mask: Option<u64>) -> String {
+    mask.map_or_else(String::new, |mask| format!(" [mask={mask}]"))
+}
+
 fn volatile_marker(volatile: bool) -> &'static str {
     if volatile {
         " volatile"
@@ -343,17 +357,15 @@ pub fn render_inst(inst: &MInst) -> String {
             offset,
             kind,
             volatile,
+            mask,
         } => format!(
-            "{}{}{} [{}, #{offset}]{}",
+            "{}{}{} [{}, #{offset}]{}{}",
             defined(*dst),
             kind.mnemonic(),
             volatile_marker(*volatile),
             use_of(*base),
-            if *align == 0 {
-                String::new()
-            } else {
-                format!(" [align={align}]")
-            }
+            align_suffix(*align),
+            mask_suffix(*mask)
         ),
         MInst::Store {
             align,
@@ -362,17 +374,15 @@ pub fn render_inst(inst: &MInst) -> String {
             offset,
             kind,
             volatile,
+            mask,
         } => format!(
-            "{}{} {}, [{}, #{offset}]{}",
+            "{}{} {}, [{}, #{offset}]{}{}",
             kind.mnemonic(),
             volatile_marker(*volatile),
             use_of(*src),
             use_of(*base),
-            if *align == 0 {
-                String::new()
-            } else {
-                format!(" [align={align}]")
-            }
+            align_suffix(*align),
+            mask_suffix(*mask)
         ),
         MInst::Binary {
             op,

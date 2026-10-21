@@ -631,6 +631,16 @@ impl LoadKind {
     pub const fn is_signed(self) -> bool {
         matches!(self, Self::Sb | Self::Sh | Self::Sw)
     }
+
+    /// Whether the form loads an integer into a general register, the only
+    /// loads that can carry a mask (Section 4.1).
+    #[must_use]
+    pub const fn is_integer(self) -> bool {
+        matches!(
+            self,
+            Self::B | Self::H | Self::W | Self::X | Self::Sb | Self::Sh | Self::Sw
+        )
+    }
 }
 
 /// The store forms of Section 4, with the same pointer distinction as
@@ -690,6 +700,13 @@ impl StoreKind {
             Self::X | Self::P | Self::D => 8,
             Self::Q => 16,
         }
+    }
+
+    /// Whether the form stores an integer from a general register, the only
+    /// stores that can carry a mask (Section 4.1).
+    #[must_use]
+    pub const fn is_integer(self) -> bool {
+        matches!(self, Self::B | Self::H | Self::W | Self::X)
     }
 }
 
@@ -792,6 +809,10 @@ pub enum MInst {
         offset: i64,
         kind: LoadKind,
         volatile: bool,
+        /// The bits of an integer load that must be initialized, from the
+        /// EvoIR mask (Section 4.1). The machine reads every bit, so
+        /// emission ignores it; only the interpreter reads it.
+        mask: Option<u64>,
     },
     /// `str rd, [rn, #off]` in all of its widths.
     Store {
@@ -801,6 +822,9 @@ pub enum MInst {
         offset: i64,
         kind: StoreKind,
         volatile: bool,
+        /// The bits of an integer store that become initialized; the other
+        /// bits keep their initializedness (Section 4.1).
+        mask: Option<u64>,
     },
     /// A register-register arithmetic or logic form.
     Binary {

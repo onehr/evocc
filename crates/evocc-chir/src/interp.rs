@@ -7779,9 +7779,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let at = address
                     .checked_offset(i64::from(offset) - i64::from(field.bit_offset / 8))
                     .map_err(|error| self.memory_error(error, span))?;
+                // One volatile access of the unit, which demands only the
+                // field's own bits of it (D25).
+                let own = (u128::MAX >> (128 - count)) << (first - offset * 8);
                 let (value, world) = self
                     .memory
-                    .volatile_load_integer(&self.world, at, AccessLayout::new(u64::from(bytes), 1))
+                    .volatile_load_integer_bits(
+                        &self.world,
+                        at,
+                        AccessLayout::new(u64::from(bytes), 1),
+                        own,
+                    )
                     .map_err(|error| self.memory_error(error, span))?;
                 self.world = world;
                 let selected = (value >> (first - offset * 8)) & (u128::MAX >> (128 - count));
@@ -7839,9 +7847,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     .checked_offset(i64::from(offset) - i64::from(field.bit_offset / 8))
                     .map_err(|error| self.memory_error(error, span))?;
                 let layout = AccessLayout::new(u64::from(bytes), 1);
+                // The unit read keeps the other bits and is one volatile
+                // access, but it is not a C read of the other members: it
+                // demands no bit, and the store initializes only the
+                // field's bits (D25).
                 let (original, world) = self
                     .memory
-                    .volatile_load_integer(&self.world, at, layout)
+                    .volatile_load_integer_bits(&self.world, at, layout, 0)
                     .map_err(|error| self.memory_error(error, span))?;
                 let mask = (u128::MAX >> (128 - count)) << within;
                 let selected =
@@ -7849,7 +7861,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 let stored = (original & !mask) | selected;
                 let (memory, world) = self
                     .memory
-                    .volatile_store_integer(&world, at, layout, stored)
+                    .volatile_store_integer_bits(&world, at, layout, stored, mask)
                     .map_err(|error| self.memory_error(error, span))?;
                 self.memory = memory;
                 self.world = world;

@@ -1,7 +1,8 @@
-//! Section 3.8 masks of `load` and `store` (D23). A load mask names the bits
-//! that must be initialized; a store mask names the bits that become
-//! initialized, and every other bit keeps its initializedness. The C
-//! lowering of a bit-field access is the only producer.
+//! Section 3.8 masks of `load` and `store` (D23, D25). A load mask names the
+//! bits that must be initialized; a store mask names the bits that become
+//! initialized, and every other bit keeps its initializedness. A volatile
+//! masked access is one volatile event. The C lowering of a bit-field
+//! access is the only producer.
 
 use evocc_evoir::{
     interpret_module, parse_section9_module, render_module, InterpreterLimits, RuntimeValue,
@@ -149,8 +150,54 @@ fn rejected(text: &str, wanted: &str) {
     assert!(error.contains(wanted), "{error}");
 }
 
+/// D25: a volatile access takes a mask as well. It stays one volatile event,
+/// and the mask decides which bits it demands or initializes.
 #[test]
-fn a_mask_is_narrower_than_a_non_volatile_integer_access() {
+fn a_volatile_masked_access_is_one_event_with_the_same_initializedness_rule() {
+    let volatile = |load: &str| {
+        store_then(load)
+            .replace("= store %v6", "= store volatile %v6")
+            .replace("= load %v9", "= load volatile %v9")
+            .replace("volatile=false", "volatile=true")
+    };
+    let trace = |text: &str| {
+        let module = parse_section9_module(text.as_bytes()).unwrap();
+        assert_eq!(render_module(&module), text);
+        interpret_module(
+            &module,
+            "main",
+            &[
+                RuntimeValue::new(EvoIRType::Mem(Region::All), 0),
+                RuntimeValue::new(EvoIRType::World, 0),
+            ],
+            InterpreterLimits::new(200),
+        )
+        .map(|outcome| outcome.world.volatile_trace().to_vec())
+        .map_err(|error| error.code())
+    };
+    for load in [" [mask=7]", " [mask=1]", " [mask=0]"] {
+        let events = trace(&volatile(load)).unwrap();
+        assert_eq!(events.len(), 2, "{load}: {events:?}");
+        // Bits 3 to 7 stay uninitialized, so each event records the
+        // initializedness of its byte.
+        for event in &events {
+            assert_eq!(
+                event.value,
+                evocc_memory::ObservedValue::Representation {
+                    bytes: vec![5],
+                    initialized: vec![false],
+                },
+                "{load}"
+            );
+        }
+    }
+    for load in ["", " [mask=248]", " [mask=8]"] {
+        assert_eq!(trace(&volatile(load)), Err("E3001"), "{load}");
+    }
+}
+
+#[test]
+fn a_mask_is_narrower_than_an_integer_access() {
     // Every bit is written without a mask, and a mask has no bit beyond the
     // access.
     rejected(&store_then(" [mask=255]"), "not narrower than bits<8>");
@@ -162,14 +209,9 @@ fn a_mask_is_narrower_than_a_non_volatile_integer_access() {
         ),
         "not narrower than bits<8>",
     );
-    // A volatile access keeps its one complete event.
     rejected(
-        &store_then(" [mask=7]").replace("= load %v9", "= load volatile %v9"),
-        "has a mask and is volatile",
-    );
-    rejected(
-        &store_then("").replace("= store %v6", "= store volatile %v6"),
-        "has a mask and is volatile",
+        &store_then(" [mask=255]").replace("= load %v9", "= load volatile %v9"),
+        "not narrower than bits<8>",
     );
     // Only an integer access has bits to select.
     let pointer = module_text(

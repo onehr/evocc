@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.23.0** | **Pinned ground truth** | Darwin stdatomic.h on 2026-10-21
+**Revision 2.24.0** | **Pinned ground truth** | volatile bit-field masks on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -879,7 +879,7 @@ integers is thereby PNVI-style: address arithmetic on integers is ordinary
 | `%val` | Value to store. |
 | `Type` | The type being loaded. |
 | `volatile` | Optional access marker; absence means ordinary access. |
-| `mask=M` | Optional bit mask of a non-volatile `bits<N>` access, with `N` 8, 16, 32, 64 or 128. Bit `i` of `M` selects bit `i` of the value. `M` must leave at least one bit unselected: an access of every bit has no mask. |
+| `mask=M` | Optional bit mask of a `bits<N>` access, volatile or not, with `N` 8, 16, 32, 64 or 128. Bit `i` of `M` selects bit `i` of the value. `M` must leave at least one bit unselected: an access of every bit has no mask. |
 
 **Object copy.**
 
@@ -938,9 +938,12 @@ is then one that the program never stored. `store ... [mask=M]` writes every
 bit of `%val`. Afterwards the bits that `M` selects are initialized, and every
 other bit keeps its initializedness. Both forms keep every other check of the
 unmasked forms, and a masked store still makes a later pointer load of the
-bytes it writes fail with `E3013`. A mask changes no value, so native code
-emits the unmasked access. The only producer is the lowering of a
-non-volatile bit-field access (10.1.6).
+bytes it writes fail with `E3013`. A volatile masked access is one volatile
+event, as the unmasked form is. Its event records the bytes that the access
+transfers and, when one of them is not completely initialized, the
+initializedness of each byte; a byte counts as initialized when all eight of
+its bits are. A mask changes no value, so native code emits the unmasked
+access. The only producer is the lowering of a bit-field access (10.1.6).
 
 For an ordinary access, `%w1` denotes the unchanged world state through a
 fresh SSA identity. A successful volatile access appends exactly one ordered
@@ -4890,15 +4893,18 @@ masks of Section 3.8 state the rule:
 A later read of a member that was never stored is `E3001`; a read of a stored
 member is not. A record copy moves the state of each bit. The C-HIR
 interpreter applies the same rule to the same bytes. Native code is the same
-sequence without masks. A volatile bit-field access keeps the container rule
-below: its read of the container is one volatile event, and an uninitialized
-neighbour makes that read `E3001`.
+sequence without masks. A volatile bit-field access keeps the unit accesses
+below, and masks state the same rule for them (D25): the load of each unit
+for a read selects the field's bits of that unit, and for a store the load of
+each unit has `[mask=0]` and the store mask selects the field's bits.
 
 **Volatile bit-fields.** A read of a volatile bit-field accesses its declared
 allocation container. A write is a read-modify-write of that container that
-keeps the neighbouring bits, and a compound update also reads the field. Each
-underlying load and store is one volatile event that advances `world`; none is
-atomic. In a packed record the accesses use power-of-two units of at most 16
+keeps the neighbouring bits, and a compound update also reads the field. The
+read of the container for a write is one volatile access in native code, but
+it is no C read of the other members, so an uninitialized neighbour is no
+finding. Each underlying load and store is one volatile event that advances
+`world`; none is atomic. In a packed record the accesses use power-of-two units of at most 16
 bytes, in increasing byte order and never past the record, and a field that
 crosses units keeps its full value. C-HIR and EvoIR must produce identical
 value-and-access traces. Volatile record copies with bit-field members remain
@@ -8601,6 +8607,18 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.24.0, 2026-10-21.** Section 3.8 admits the mask on a volatile
+`load` or `store`, which stays one volatile event; its event records the
+initializedness of each byte when a byte is not completely initialized.
+Section 10.1.6 gives a volatile bit-field the rule of D23: the unit read of a
+store demands no bit, the store initializes only the field's bits, and a read
+demands only the field's bits, in the lowering and in both interpreters. A
+store to a volatile bit-field with an uninitialized neighbour is no longer
+`E3001`; a read of a member that was never stored still is. Native code does
+not change. The Section 9 grammar already spells the volatile masked forms,
+and no registry or Lean rule domain changes; the `core-v1` path admits no
+bit-field.
 
 **Revision 2.23.0, 2026-10-21.** Section 10.1.21 provides the `<stdatomic.h>`
 of Darwin, which is Clang's resource header. On `aarch64-apple-darwin` the

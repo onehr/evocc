@@ -250,6 +250,7 @@ fn indexed() -> Allocated {
             kind: LoadKind::X,
             align: 8,
             volatile: false,
+            mask: None,
         },
     ])
 }
@@ -306,6 +307,7 @@ fn indexed_memory_checks_alignment_width_offset_and_liveness() {
         kind: StoreKind::X,
         align: 8,
         volatile: false,
+        mask: None,
     };
     assert_eq!(selected(&f, false).unwrap().consumed, 3);
     for aliased in [2, 3] {
@@ -364,6 +366,7 @@ fn scalar_memory_forms_and_opaque_accesses_stay_separate() {
             kind: LoadKind::Q,
             align: 16,
             volatile: false,
+            mask: None,
         },
     ] {
         let mut f = indexed();

@@ -1436,6 +1436,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             offset,
             kind,
             volatile,
+            mask,
         } => {
             let address = read_pointer(frame, *base)?
                 .checked_offset(*offset)
@@ -1443,6 +1444,11 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             let mut access = layout_for(kind.size_bytes());
             if *align != 0 {
                 access.align_bytes = *align;
+            }
+            if mask.is_some() && !kind.is_integer() {
+                return Err(MirError::Invalid {
+                    detail: "a mask on a load that is not an integer load".to_owned(),
+                });
             }
             let value = match kind {
                 LoadKind::S | LoadKind::D | LoadKind::Q => {
@@ -1507,19 +1513,39 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                     };
                     MirValue::Fn(pointer)
                 }
+                // A mask names the bits that must be initialized (EvoIR
+                // 3.8); the load still reads every bit.
                 _ => {
-                    let raw = if *volatile {
-                        let (raw, world) = state
+                    let raw = match (mask, *volatile) {
+                        (Some(mask), true) => {
+                            let (raw, world) = state
+                                .memory
+                                .volatile_load_integer_bits(
+                                    &state.world,
+                                    address,
+                                    access,
+                                    u128::from(*mask),
+                                )
+                                .map_err(|error| memory_error(&error))?;
+                            state.world = world;
+                            raw
+                        }
+                        (Some(mask), false) => state
                             .memory
-                            .volatile_load_integer(&state.world, address, access)
-                            .map_err(|error| memory_error(&error))?;
-                        state.world = world;
-                        raw
-                    } else {
-                        state
+                            .load_integer_bits(address, access, u128::from(*mask))
+                            .map_err(|error| memory_error(&error))?,
+                        (None, true) => {
+                            let (raw, world) = state
+                                .memory
+                                .volatile_load_integer(&state.world, address, access)
+                                .map_err(|error| memory_error(&error))?;
+                            state.world = world;
+                            raw
+                        }
+                        (None, false) => state
                             .memory
                             .load_integer(address, access)
-                            .map_err(|error| memory_error(&error))?
+                            .map_err(|error| memory_error(&error))?,
                     };
                     let raw = u64::try_from(raw).map_err(|_| MirError::Invalid {
                         detail: "an access wider than a register".to_owned(),
@@ -1541,6 +1567,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             offset,
             kind,
             volatile,
+            mask,
         } => {
             let address = read_pointer(frame, *base)?
                 .checked_offset(*offset)
@@ -1548,6 +1575,11 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             let mut access = layout_for(kind.size_bytes());
             if *align != 0 {
                 access.align_bytes = *align;
+            }
+            if mask.is_some() && !kind.is_integer() {
+                return Err(MirError::Invalid {
+                    detail: "a mask on a store that is not an integer store".to_owned(),
+                });
             }
             let value = read(frame, *src)?;
             match (kind, value) {
@@ -1611,23 +1643,53 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                     } else {
                         raw & ((1_u64 << bits) - 1)
                     };
-                    if *volatile {
-                        let (memory, world) = state
-                            .memory
-                            .volatile_store_integer(
-                                &state.world,
-                                address,
-                                access,
-                                u128::from(masked),
-                            )
-                            .map_err(|error| memory_error(&error))?;
-                        state.memory = memory;
-                        state.world = world;
-                    } else {
-                        state.memory = state
-                            .memory
-                            .store_integer(address, access, u128::from(masked))
-                            .map_err(|error| memory_error(&error))?;
+                    // A mask names the bits that become initialized; the
+                    // store still writes every bit (EvoIR 3.8).
+                    match (mask, *volatile) {
+                        (Some(mask), true) => {
+                            let (memory, world) = state
+                                .memory
+                                .volatile_store_integer_bits(
+                                    &state.world,
+                                    address,
+                                    access,
+                                    u128::from(masked),
+                                    u128::from(*mask),
+                                )
+                                .map_err(|error| memory_error(&error))?;
+                            state.memory = memory;
+                            state.world = world;
+                        }
+                        (Some(mask), false) => {
+                            state.memory = state
+                                .memory
+                                .store_integer_bits(
+                                    address,
+                                    access,
+                                    u128::from(masked),
+                                    u128::from(*mask),
+                                )
+                                .map_err(|error| memory_error(&error))?;
+                        }
+                        (None, true) => {
+                            let (memory, world) = state
+                                .memory
+                                .volatile_store_integer(
+                                    &state.world,
+                                    address,
+                                    access,
+                                    u128::from(masked),
+                                )
+                                .map_err(|error| memory_error(&error))?;
+                            state.memory = memory;
+                            state.world = world;
+                        }
+                        (None, false) => {
+                            state.memory = state
+                                .memory
+                                .store_integer(address, access, u128::from(masked))
+                                .map_err(|error| memory_error(&error))?;
+                        }
                     }
                 }
             }

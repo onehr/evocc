@@ -27,6 +27,21 @@ fn config() -> GeneratorConfig {
     GeneratorConfig::default()
 }
 
+/// D25: the pinned configuration with masked accesses added.
+fn masked() -> GeneratorConfig {
+    GeneratorConfig::default().with_masked_accesses()
+}
+
+/// The seed of the masked campaign, disjoint from the standing one.
+const MASKED_GATE_SEED: u64 = 0x5EED_D025;
+
+const MASKED_FAMILIES: [&str; 4] = [
+    "load.masked",
+    "load.volatile.masked",
+    "store.masked",
+    "store.volatile.masked",
+];
+
 fn budget() -> GateBudget {
     GateBudget::default()
 }
@@ -86,13 +101,45 @@ fn family(inst: &Inst) -> &'static str {
         Inst::PointerValid { .. } => "pointer_valid",
         Inst::AccessInBounds { .. } => "access_in_bounds",
         Inst::Load {
-            volatile: false, ..
+            volatile: false,
+            mask: None,
+            ..
         } => "load",
-        Inst::Load { volatile: true, .. } => "load.volatile",
+        Inst::Load {
+            volatile: true,
+            mask: None,
+            ..
+        } => "load.volatile",
+        Inst::Load {
+            volatile: false,
+            mask: Some(_),
+            ..
+        } => "load.masked",
+        Inst::Load {
+            volatile: true,
+            mask: Some(_),
+            ..
+        } => "load.volatile.masked",
         Inst::Store {
-            volatile: false, ..
+            volatile: false,
+            mask: None,
+            ..
         } => "store",
-        Inst::Store { volatile: true, .. } => "store.volatile",
+        Inst::Store {
+            volatile: true,
+            mask: None,
+            ..
+        } => "store.volatile",
+        Inst::Store {
+            volatile: false,
+            mask: Some(_),
+            ..
+        } => "store.masked",
+        Inst::Store {
+            volatile: true,
+            mask: Some(_),
+            ..
+        } => "store.volatile.masked",
         Inst::Copy { .. } => "copy",
         Inst::PtrOffset { .. } => "ptr.offset",
         Inst::PointerCast { result, .. } => {
@@ -580,6 +627,132 @@ fn generated_programs_are_free_of_undefined_behaviour_by_construction() {
     assert!(
         codes.is_empty(),
         "the generator must not emit undefined programs: {codes:?}"
+    );
+}
+
+/// D25: the masked accesses are load-bearing. Without its mask, a masked load
+/// of a partly initialized object is an uninitialized read, so a lane that
+/// ignored masks, as the EvoMIR interpreter did before D25, would stop where
+/// the other lanes run, and the gate would report the mismatch.
+#[test]
+fn masked_loads_read_partly_initialized_objects() {
+    let mut masked_programs = 0;
+    let mut load_bearing = 0;
+    for seed in 0..256_u64 {
+        let module = generate_module(seed, masked());
+        let mut unmasked = module.clone();
+        let mut masked = false;
+        for function in &mut unmasked.functions {
+            for block in &mut function.blocks {
+                for inst in &mut block.insts {
+                    if let Inst::Load {
+                        mask: mask @ Some(_),
+                        ..
+                    } = inst
+                    {
+                        *mask = None;
+                        masked = true;
+                    }
+                }
+            }
+        }
+        if !masked {
+            continue;
+        }
+        masked_programs += 1;
+        let arguments = entry_arguments(&module, seed);
+        assert!(
+            matches!(
+                observe(&module, &arguments, budget().step_budget),
+                Observation::Defined(_)
+            ),
+            "seed {seed}"
+        );
+        if matches!(
+            observe(&unmasked, &arguments, budget().step_budget),
+            Observation::Undefined { code: "E3001", .. }
+        ) {
+            load_bearing += 1;
+        }
+    }
+    println!("maskedPrograms={masked_programs} loadBearing={load_bearing}");
+    assert!(
+        load_bearing * 4 >= masked_programs && load_bearing >= 32,
+        "{load_bearing} of {masked_programs} masked programs depend on a load mask"
+    );
+}
+
+/// D25: the masked configuration reaches the four masked families in both
+/// modes, the pinned one reaches none of them, and every masked program is
+/// free of undefined behaviour by construction.
+#[test]
+fn the_masked_configuration_reaches_the_masked_families_without_undefined_behaviour() {
+    for (base, label) in [
+        (GeneratorConfig::default(), "standard"),
+        (GeneratorConfig::native_main(), "native-main"),
+    ] {
+        let mut seen = BTreeSet::new();
+        let mut plain = BTreeSet::new();
+        let mut codes: BTreeMap<&'static str, usize> = BTreeMap::new();
+        for seed in 0..512_u64 {
+            let module = generate_module(seed, base.with_masked_accesses());
+            seen.extend(families(&module));
+            plain.extend(families(&generate_module(seed, base)));
+            let arguments = entry_arguments(&module, seed);
+            if let Observation::Undefined { code, detail } =
+                observe(&module, &arguments, budget().step_budget)
+            {
+                *codes.entry(code).or_default() += 1;
+                eprintln!("{label} seed {seed}: {code} {detail}");
+            }
+        }
+        for family in MASKED_FAMILIES {
+            assert!(seen.contains(family), "{label} never generated {family}");
+            assert!(
+                !plain.contains(family),
+                "{label} without masks generated {family}"
+            );
+        }
+        assert!(
+            plain.is_subset(&seen),
+            "{label}: masks removed {:?}",
+            plain.difference(&seen).collect::<Vec<_>>()
+        );
+        assert!(codes.is_empty(), "{label} masked programs: {codes:?}");
+    }
+}
+
+#[test]
+fn the_gate_finds_no_mismatch_in_one_thousand_programs_with_masked_accesses() {
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let started = Instant::now();
+    let report = run_campaign(
+        MASKED_GATE_SEED,
+        GATE_PROGRAMS,
+        masked(),
+        budget(),
+        &checker,
+    );
+    println!("{}", report.render());
+    println!("wallTimeSeconds={:.3}", started.elapsed().as_secs_f64());
+    assert_eq!(report.generated, GATE_PROGRAMS);
+    assert_eq!(
+        report.mismatched,
+        0,
+        "mismatches: {:#?}",
+        report.mismatches.first()
+    );
+    assert_eq!(report.discarded_undefined, 0);
+    assert_eq!(report.interpreter_budget_exhausted, 0);
+    assert_eq!(report.compared, GATE_PROGRAMS);
+    assert_eq!(report.certificates_replayed, report.transactions);
+    // The third lane compares every program, masked accesses included.
+    assert!(
+        report
+            .render()
+            .contains(&format!("machineCompared={GATE_PROGRAMS}")),
+        "{}",
+        report.render()
     );
 }
 

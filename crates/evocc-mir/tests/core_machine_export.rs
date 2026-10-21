@@ -60,6 +60,7 @@ fn snapshot_preserves_width_classes_and_offsets() {
             offset: i64::MIN,
             kind: evocc_mir::LoadKind::W,
             volatile: true,
+            mask: None,
         },
     ];
     let text = export_core_machine(&input, CoreMachineMode::Ssa).unwrap();
@@ -73,6 +74,38 @@ fn snapshot_preserves_width_classes_and_offsets() {
         text,
         export_core_machine(&input, CoreMachineMode::PostSsa).unwrap()
     );
+}
+
+/// A mask comes only from a bit-field access, which `core-v1` excludes, so
+/// the export refuses a masked load or store instead of dropping the mask.
+#[test]
+fn a_masked_access_is_outside_the_core_profile() {
+    for inst in [
+        MInst::Load {
+            align: 0,
+            dst: reg(3, RegClass::Gpr32),
+            base: reg(4, RegClass::Gpr64),
+            offset: 0,
+            kind: evocc_mir::LoadKind::W,
+            volatile: false,
+            mask: Some(7),
+        },
+        MInst::Store {
+            align: 0,
+            src: reg(3, RegClass::Gpr32),
+            base: reg(4, RegClass::Gpr64),
+            offset: 0,
+            kind: evocc_mir::StoreKind::W,
+            volatile: false,
+            mask: Some(0),
+        },
+    ] {
+        let mut input = module(MTerm::Ret { values: vec![] });
+        input.functions[0].blocks[0].insts = vec![inst];
+        for mode in [CoreMachineMode::Ssa, CoreMachineMode::PostSsa] {
+            assert!(export_core_machine(&input, mode).is_err());
+        }
+    }
 }
 
 #[test]

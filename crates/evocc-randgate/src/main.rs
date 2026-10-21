@@ -8,7 +8,7 @@ use evocc_eqopt::ScalarEqBudget;
 use evocc_randgate::{run_campaign, CampaignReport, GateBudget, GeneratorConfig, ProofChecker};
 
 const USAGE: &str = "usage: evo-randgate --seed N --count M \
-[--mode standard|native-main] \
+[--mode standard|native-main] [--masks on|off] \
 [--budget-nodes N] [--budget-epochs N] [--steps N] [--out DIRECTORY]";
 
 fn main() -> ExitCode {
@@ -45,6 +45,7 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
     let mut steps = GateBudget::default().step_budget;
     let mut out = None;
     let mut config = GeneratorConfig::default();
+    let mut masks = false;
 
     let mut index = 0;
     while index < arguments.len() {
@@ -64,11 +65,22 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
                     other => return Err(format!("{other} is not a generator mode")),
                 };
             }
+            // D25: masked accesses, in either mode.
+            "--masks" => {
+                masks = match value.as_str() {
+                    "on" => true,
+                    "off" => false,
+                    other => return Err(format!("{other} is not on or off")),
+                };
+            }
             _ => return Err(USAGE.to_owned()),
         }
         index += 2;
     }
 
+    if masks {
+        config = config.with_masked_accesses();
+    }
     Ok(Options {
         seed: seed.ok_or_else(|| USAGE.to_owned())?,
         count: count.ok_or_else(|| USAGE.to_owned())?,

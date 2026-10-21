@@ -7764,7 +7764,13 @@ impl<'a> FunctionLowerer<'a> {
                 .min((offset + bytes) * 8);
             let count = last - first;
             let at = self.bit_field_unit_address(address.clone(), field, offset, state)?;
-            let raw = self.emit_integer_access(at, None, unit_integer, true, None, state)?;
+            // One volatile access of the unit that demands only the field's
+            // bits of it (D25).
+            let own = unit_mask(
+                unit_integer,
+                (u128::MAX >> (128 - count)) << (first - offset * 8),
+            );
+            let raw = self.emit_integer_access(at, None, unit_integer, true, own, state)?;
             let shift = self
                 .constant(state, CIntegerType::UINT, u64::from(first - offset * 8))?
                 .value;
@@ -7844,12 +7850,16 @@ impl<'a> FunctionLowerer<'a> {
             let mask = self.wide_constant(state, unit_integer, mask_bits)?.value;
             let selected = self.emit_raw_binary(state, Inst::And, &positioned, &mask)?;
             let at = self.bit_field_unit_address(address.clone(), field, offset, state)?;
+            // The unit read keeps the other bits but is no C read of them: it
+            // demands no bit, and the store initializes only the field's
+            // bits (D25).
             let original =
-                self.emit_integer_access(at.clone(), None, unit_integer, true, None, state)?;
+                self.emit_integer_access(at.clone(), None, unit_integer, true, Some(0), state)?;
             let keep = self.wide_constant(state, unit_integer, !mask_bits)?.value;
             let kept = self.emit_raw_binary(state, Inst::And, &original, &keep)?;
             let merged = self.emit_raw_binary(state, Inst::Or, &kept, &selected)?;
-            self.emit_integer_access(at, Some(merged), unit_integer, true, None, state)?;
+            let written = unit_mask(unit_integer, mask_bits);
+            self.emit_integer_access(at, Some(merged), unit_integer, true, written, state)?;
         }
         Ok(value)
     }
@@ -15675,6 +15685,13 @@ fn collect_symbols_switch_item(item: &SwitchSegmentItem<'_>, symbols: &mut BTree
         }
         SwitchSegmentItem::Statement(statement) => collect_symbols_stmt(statement, symbols),
     }
+}
+
+/// The mask of a unit access that selects `bits`, or none when they are
+/// every bit of the unit (EvoIR 3.8).
+fn unit_mask(unit: CIntegerType, bits: u128) -> Option<u128> {
+    let all = u128::MAX >> (128 - u32::from(unit.bits()));
+    (bits & all != all).then_some(bits & all)
 }
 
 fn bit_field_unit_integer(bytes: u32) -> CIntegerType {

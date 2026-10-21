@@ -356,6 +356,10 @@ fn instruction(inst: &MInst, locs: &Locations<'_>) -> Result<String> {
             cond.mnemonic(),
             width.mnemonic()
         ),
+        // Only a bit-field access has a mask, and the Core profile has none.
+        MInst::Load { mask: Some(_), .. } | MInst::Store { mask: Some(_), .. } => {
+            return Err("allocated masked access outside the Core profile".into())
+        }
         MInst::Load {
             align,
             dst,
@@ -363,6 +367,7 @@ fn instruction(inst: &MInst, locs: &Locations<'_>) -> Result<String> {
             offset,
             kind,
             volatile,
+            mask: None,
         } => format!(
             "[\"load\",{align},{},{},{offset},\"{}\",{volatile}]",
             l(dst)?,
@@ -376,6 +381,7 @@ fn instruction(inst: &MInst, locs: &Locations<'_>) -> Result<String> {
             offset,
             kind,
             volatile,
+            mask: None,
         } => format!(
             "[\"store\",{align},{},{},{offset},\"{}\",{volatile}]",
             l(src)?,

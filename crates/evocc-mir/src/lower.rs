@@ -2182,6 +2182,7 @@ fn lower_block(
                             offset: offset as i64,
                             kind: simd_store(size),
                             volatile: false,
+                            mask: None,
                         });
                     }
                     lowerer.bind(&arg.value, slot);
@@ -2438,6 +2439,7 @@ fn lower_block(
                     offset: offsets_field,
                     kind: LoadKind::Sw,
                     volatile: false,
+                    mask: None,
                 });
                 let flags = lowerer.fresh(RegClass::Flags);
                 insts.push(MInst::CmpImm {
@@ -2518,6 +2520,7 @@ fn lower_block(
                     offset: offsets_field,
                     kind: StoreKind::W,
                     volatile: false,
+                    mask: None,
                 });
                 let top = lowerer.fresh(RegClass::Gpr64);
                 body.push(MInst::Load {
@@ -2527,6 +2530,7 @@ fn lower_block(
                     offset: top_field,
                     kind: LoadKind::P,
                     volatile: false,
+                    mask: None,
                 });
                 let address = lowerer.binary(&mut body, BinOp::Add, top, aligned, Width::X);
                 if let (Some((count, bytes)), Some(destination)) = (vector_group, destination_index)
@@ -2540,6 +2544,7 @@ fn lower_block(
                             kind: simd_load(bytes),
                             volatile: false,
                             align: bytes as u32,
+                            mask: None,
                         });
                         body.push(MInst::Store {
                             src: v,
@@ -2548,6 +2553,7 @@ fn lower_block(
                             kind: simd_store(bytes),
                             volatile: false,
                             align: bytes as u32,
+                            mask: None,
                         });
                     }
                 }
@@ -2576,6 +2582,7 @@ fn lower_block(
                         offset: offsets_field,
                         kind: StoreKind::W,
                         volatile: false,
+                        mask: None,
                     },
                 ];
                 let mut onward = params[..width].to_vec();
@@ -2604,6 +2611,7 @@ fn lower_block(
                     offset: va_list.stack,
                     kind: LoadKind::P,
                     volatile: false,
+                    mask: None,
                 });
                 let address = if alignment == 16 {
                     round_to_sixteen(lowerer, &mut body, raw)
@@ -2629,6 +2637,7 @@ fn lower_block(
                     offset: va_list.stack,
                     kind: StoreKind::P,
                     volatile: false,
+                    mask: None,
                 });
                 let mut reached = params[..width].to_vec();
                 reached.push(address);
@@ -2659,6 +2668,7 @@ fn lower_block(
                                 offset: 0,
                                 kind: LoadKind::P,
                                 volatile: false,
+                                mask: None,
                             });
                             src
                         } else {
@@ -2695,6 +2705,7 @@ fn lower_block(
                             offset: 0,
                             kind,
                             volatile: false,
+                            mask: None,
                         });
                         lowerer.bind(result, dst);
                     }
@@ -3343,6 +3354,7 @@ fn lower_terminator(
                             offset: i64::from(member) * size as i64,
                             kind: simd_load(size),
                             volatile: false,
+                            mask: None,
                         });
                         results.push(chunk);
                     }
@@ -3829,6 +3841,7 @@ fn lower_inst(
             address,
             mem_in,
             volatile,
+            mask,
             ..
         } => {
             let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
@@ -3852,6 +3865,7 @@ fn lower_inst(
                 offset,
                 kind,
                 volatile: *volatile,
+                mask: register_mask(*mask)?,
             });
             lowerer.bind(result, dst);
         }
@@ -3860,6 +3874,7 @@ fn lower_inst(
             value,
             mem_in,
             volatile,
+            mask,
             ..
         } => {
             let kind = store_kind(&value.ty)?;
@@ -3882,6 +3897,7 @@ fn lower_inst(
                 offset,
                 kind,
                 volatile: *volatile,
+                mask: register_mask(*mask)?,
             });
         }
         // Section 5: `copy` with static size lowers to `mem.copy`, the
@@ -4422,6 +4438,7 @@ fn lower_atomic_copy(
             offset: 0,
             kind: load,
             volatile: false,
+            mask: None,
         });
         dst
     };
@@ -4433,6 +4450,7 @@ fn lower_atomic_copy(
             offset: 0,
             kind: store,
             volatile: false,
+            mask: None,
         });
     };
     match op {
@@ -6036,6 +6054,7 @@ fn lower_va_start(
         offset: va_list.stack,
         kind: StoreKind::P,
         volatile: false,
+        mask: None,
     });
     // The Apple variadic convention: the list is this one pointer.
     if lowerer.anonymous_on_stack {
@@ -6062,6 +6081,7 @@ fn lower_va_start(
             offset,
             kind: StoreKind::P,
             volatile: false,
+            mask: None,
         });
     }
 
@@ -6079,6 +6099,7 @@ fn lower_va_start(
         offset: va_list.general_offset,
         kind: StoreKind::W,
         volatile: false,
+        mask: None,
     });
     let vr_offs = lowerer.fresh(RegClass::Gpr32);
     let vector_save = abi.vector_save_bytes() as i32;
@@ -6094,6 +6115,7 @@ fn lower_va_start(
         offset: va_list.vector_offset,
         kind: StoreKind::W,
         volatile: false,
+        mask: None,
     });
     Ok(())
 }
@@ -6118,6 +6140,7 @@ fn lower_stack_va_arg(
         offset: field,
         kind: LoadKind::P,
         volatile: false,
+        mask: None,
     });
     let address = if alignment == 16 {
         round_to_sixteen(lowerer, insts, raw)
@@ -6132,6 +6155,7 @@ fn lower_stack_va_arg(
         offset: field,
         kind: StoreKind::P,
         volatile: false,
+        mask: None,
     });
     match &access.op {
         VariadicOp::ArgRecord { destination, shape } => {
@@ -6147,6 +6171,7 @@ fn lower_stack_va_arg(
                     offset: 0,
                     kind: LoadKind::P,
                     volatile: false,
+                    mask: None,
                 });
                 source
             } else {
@@ -6183,6 +6208,7 @@ fn lower_stack_va_arg(
                 offset: 0,
                 kind,
                 volatile: false,
+                mask: None,
             });
             lowerer.bind(result, dst);
         }
@@ -6440,11 +6466,15 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
         // "`load`/`store`: `ldp`/`stp` of the halves at the address, which is
         // not single-copy atomic, exactly as both oracles emit for a
         // `volatile u128`."
+        // A masked pair access always takes the two-access form, so that
+        // each half keeps its half of the mask; only a bit-field access has a
+        // mask, and its guard alignment is 1.
         Inst::Load {
             result,
             address,
             mem_in,
             volatile,
+            mask,
             ..
         } if is_pair(&result.ty) => {
             let base = lowerer.reg(address)?;
@@ -6454,15 +6484,19 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
                 .get(&mem_in.id)
                 .copied()
                 .unwrap_or(1);
-            if align < 8 {
-                for (dst, offset) in [(low, 0), (high, 8)] {
+            if align < 8 || mask.is_some() {
+                for (dst, offset, half) in [
+                    (low, 0, pair_mask(*mask, 0)),
+                    (high, 8, pair_mask(*mask, 1)),
+                ] {
                     insts.push(MInst::Load {
-                        align,
+                        align: if align < 8 { align } else { 0 },
                         dst,
                         base,
                         offset,
                         kind: LoadKind::X,
                         volatile: *volatile,
+                        mask: half,
                     });
                 }
             } else {
@@ -6482,6 +6516,7 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
             value,
             mem_in,
             volatile,
+            mask,
             ..
         } if is_pair(&value.ty) => {
             let base = lowerer.reg(address)?;
@@ -6491,15 +6526,19 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
                 .get(&mem_in.id)
                 .copied()
                 .unwrap_or(1);
-            if align < 8 {
-                for (src, offset) in [(low, 0), (high, 8)] {
+            if align < 8 || mask.is_some() {
+                for (src, offset, half) in [
+                    (low, 0, pair_mask(*mask, 0)),
+                    (high, 8, pair_mask(*mask, 1)),
+                ] {
                     insts.push(MInst::Store {
-                        align,
+                        align: if align < 8 { align } else { 0 },
                         src,
                         base,
                         offset,
                         kind: StoreKind::X,
                         volatile: *volatile,
+                        mask: half,
                     });
                 }
             } else {
@@ -6516,6 +6555,21 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
         _ => return Ok(false),
     }
     Ok(true)
+}
+
+/// The mask of a machine access of at most 64 bits (EvoIR 3.8).
+fn register_mask(mask: Option<u128>) -> Result<Option<u64>, String> {
+    mask.map(|mask| {
+        u64::try_from(mask).map_err(|_| "a masked access wider than a register".to_owned())
+    })
+    .transpose()
+}
+
+/// The mask of one half of a masked `bits<128>` access, low half first, or
+/// none when the half has every bit.
+fn pair_mask(mask: Option<u128>, half: u32) -> Option<u64> {
+    let bits = (mask? >> (64 * half)) as u64;
+    (bits != u64::MAX).then_some(bits)
 }
 
 /// Magnitude without signed overflow, including the signed minimum.
@@ -6875,6 +6929,7 @@ fn load_chunk(
             offset: i64::try_from(offset + piece).unwrap_or(0),
             kind: piece_load(width),
             volatile: false,
+            mask: None,
         });
         let placed = if piece == 0 {
             dst
@@ -6911,6 +6966,7 @@ fn store_chunk(
             offset: i64::try_from(offset + piece).unwrap_or(0),
             kind: piece_store(width),
             volatile: false,
+            mask: None,
         });
     }
 }
@@ -7693,6 +7749,7 @@ fn read_apple_stack_argument(
                     offset: at(piece)?,
                     kind: LoadKind::X,
                     volatile: false,
+                    mask: None,
                 });
             }
             lowerer.bind_pair(value, low, high);
@@ -7711,6 +7768,7 @@ fn read_apple_stack_argument(
                     piece_load(piece.size)
                 },
                 volatile: false,
+                mask: None,
             });
             lowerer.bind(value, dst);
         }
@@ -7743,6 +7801,7 @@ fn read_apple_stack_argument(
                     offset: at(piece)?,
                     kind: simd_load(piece.size),
                     volatile: false,
+                    mask: None,
                 });
                 insts.push(MInst::Store {
                     align: shape.align.min(piece.size as u32),
@@ -7751,6 +7810,7 @@ fn read_apple_stack_argument(
                     offset: i64::try_from(piece.offset).map_err(|_| beyond())?,
                     kind: simd_store(piece.size),
                     volatile: false,
+                    mask: None,
                 });
             }
             lowerer.bind(value, destination);
@@ -7935,6 +7995,7 @@ fn call_arguments(
                             offset,
                             kind: simd_load(size),
                             volatile: false,
+                            mask: None,
                         });
                         members.push(reg);
                     }
@@ -7988,6 +8049,7 @@ fn call_arguments(
                         offset: offset as i64,
                         kind: simd_load(size),
                         volatile: false,
+                        mask: None,
                     });
                     registers.push(chunk);
                 }
@@ -8064,6 +8126,7 @@ fn call_record_result(
                 offset: i64::from(member) * size as i64,
                 kind: simd_store(size),
                 volatile: false,
+                mask: None,
             });
         }
         return after;

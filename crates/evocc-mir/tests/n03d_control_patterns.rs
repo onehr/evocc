@@ -453,6 +453,7 @@ fn intervening_effects_and_floating_producers_are_opaque() {
             offset: 0,
             kind: evocc_mir::LoadKind::X,
             volatile: true,
+            mask: None,
         },
         MInst::Bl {
             returns_twice: false,

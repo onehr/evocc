@@ -351,6 +351,34 @@ fn the_gate_runs_four_lanes_over_the_native_corpus() {
     }
 }
 
+/// D25: the four lanes over the native corpus with masked accesses. Their
+/// partly initialized objects stay out of every value that the program
+/// returns, so the host's exit status is defined.
+#[test]
+fn the_gate_runs_four_lanes_over_the_native_corpus_with_masked_accesses() {
+    const MASKED_NATIVE_SEED: u64 = 0x4E41_5400_D025;
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let report = run_campaign(
+        MASKED_NATIVE_SEED,
+        NATIVE_GATE_PROGRAMS / 2,
+        native().with_masked_accesses(),
+        GateBudget::default(),
+        &checker,
+    );
+    println!("{}", report.render());
+    assert_eq!(
+        report.mismatched,
+        0,
+        "mismatches: {:#?}",
+        report.mismatches.first()
+    );
+    assert_eq!(report.compared, NATIVE_GATE_PROGRAMS / 2);
+    if Toolchain::locate().is_ok() {
+        assert_eq!(report.native_run, NATIVE_GATE_PROGRAMS / 2);
+        assert_eq!(report.native_agreeing, report.native_run);
+    }
+}
+
 /// The campaign is a command, not only a test: the mode is a flag.
 #[test]
 fn the_command_line_gate_runs_the_native_corpus() {
