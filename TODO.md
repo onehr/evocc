@@ -135,9 +135,9 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, L03, L04, L05, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, L03, L05, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D19, D24, D25 | D19 keeps the remaining Darwin SDK groups; D24 and D25 are follow-ups of D22 and D23. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D19, D24, D25, D26, D27 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -2515,6 +2515,10 @@ KUnit, and it closes none of those separate tasks.
   command omissions (B08b) remain open;
   no full-library or all-tests-PASS claim follows from the clean relative result.
   [Receipt](tests/contracts/ladder-musl-receipt.json).
+  October 21: after L04, all 68 musl units that refused floating complex
+  interfaces compile with their original commands. A replay of the libc-test
+  complex cases is still NOT_RUN: the only command, `tools/ladder/musl.py`,
+  rebuilds the whole library and runs every case.
 
   - [x] **B08a — Admit scalar FP inline-assembly bindings** — `DONE`, P2, 2026-09-27.
     Explicitly approved and specified in EvoIR 1.9.114 / EvoMIR 0.50. Scalar
@@ -2964,7 +2968,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   refused. [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l03-half-bfloat.md).
 
-- [ ] **L04 — Floating complex execution** — `OPEN`, P2.
+- [x] **L04 — Floating complex execution** — `DONE`, P2, 2026-10-21.
   Torture retains 15 floating-complex originals. Specify complex arithmetic,
   exceptional values, conversions and ABI, with required runtime helpers and
   fenv interactions. Implement shared semantics and close with tailored numerical
@@ -2986,6 +2990,25 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   long double complex is admitted.
   [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l04-floating-complex.md).
+  Closed on 2026-10-21 (EvoIR 2.20.0, EvoMIR 1.8.0, commit bcb9fd0e). Complex
+  values are HFA pairs; real operands, truth tests and conversions follow
+  per-part rules. On Linux, native multiply and divide call libgcc's `__mul?c3`
+  and `__div?c3`. On Darwin a quotient calls compiler-rt, and a product uses
+  Apple clang's inline formula and calls compiler-rt only when both parts are
+  NaN. Both interpreters and constant folding share one bit-exact model of the
+  libgcc 14.2.0 helpers, NaN payloads and flags included; on Darwin they refuse
+  multiply and divide (E3067, E2960). A static value can differ from GCC's MPC
+  folding by one ulp; it equals the run-time result. The packet's 24 finite
+  controls and 36 bit and status observations match; the special-value grid
+  matches the helpers in native code at O0 and O2, and the interpreters run a
+  50-case sample of it. Crossed ABI calls agree with GCC 14 and Apple clang.
+  Plain `_Complex` is `double _Complex`, as in GCC; GCC's `_FloatN` complex
+  types are admitted in declarations, so `<complex.h>` and `<tgmath.h>` compile
+  with `_GNU_SOURCE`. The 68 musl units that refused complex interfaces compile;
+  their libc-test cases are part of B08.
+  [Tests](crates/evocc/tests/floating_complex.rs). The full offline workspace
+  gate passes 483 suites, 3,631 tests, zero failures and 25 ignores, plus Clippy
+  and formatting.
 
 - [ ] **L05 — Floating vector execution and intrinsics** — `OPEN`, P2.
   Six torture originals and other named LLVM paths remain deferred. Define lane
@@ -5705,6 +5728,20 @@ refusal; changing the P13 demo does not close it.
   gate generates no masked access, so it cannot meet the difference today. Exit:
   both cases follow D23's rule, or each keeps a documented refusal with a test,
   and the randomized gate generates masked accesses.
+
+- [ ] **D26 — Run aggregate statement expressions in the EvoIR interpreter** — `OPEN`, P2.
+  Found on 2026-10-21 by rust-r9. `--interpret-evoir` reports E3010 for a
+  statement expression whose value is an aggregate, for example `({ struct S t =
+  { 1, 2 }; t; })`; native code and the C-HIR interpreter run it. Exit: both
+  interpreters run every aggregate statement-expression value, with tests for
+  records, unions and complex values.
+
+- [ ] **D27 — Close the small complex gaps that L04 left** — `OPEN`, P3.
+  Found on 2026-10-21 by rust-r9. Integer complex `++` and `--` stay E2102, but
+  GCC 14 accepts them. GNU imaginary integer constants such as `4il` are E0112.
+  On Darwin the SDK defines `CMPLX` only for Clang, so the L04 probe CASE 1
+  stops at W0003. Exit: each form follows GCC 14 on Linux and Apple clang on
+  Darwin, or keeps a named refusal with a test.
 
 ## Codegen quality track — next quarter
 

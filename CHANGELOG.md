@@ -50,6 +50,12 @@ The first public version.
   an effect is E2903 there.
 - `__builtin_fpclassify` and `__builtin_tgmath`, as GCC 14 documents them, so glibc's
   `fpclassify` and `<tgmath.h>` work for real and integer arguments. E2959 is new.
+- Floating complex values (`float`, `double` and `long double _Complex`) as AAPCS64 HFA pairs.
+  Multiplication and division call libgcc's helpers on Linux and compiler-rt's on Darwin, and
+  the interpreters and static initializers use one bit-exact model of the Linux helpers. Plain
+  `_Complex` is `double _Complex`. `__builtin_complex`, `creal`, `cimag`, `conj`, imaginary
+  floating constants, `_FloatN _Complex` declarations and complex `<tgmath.h>` selections work.
+  E2960 and E3067 are new.
 - Three more checked string builtins of the macOS 26 SDK (`__builtin___memccpy_chk`,
   `__builtin___strlcpy_chk`, `__builtin___strlcat_chk`), four checked `printf`-family builtins
   and `__builtin___clear_cache`, which calls the target's runtime helper.
