@@ -208,6 +208,10 @@ The first public version.
 
 ### Fixed
 
+- Under `-mstrict-align`, a by-value record with alignment 1, 2 or 4 moves through registers
+  with aligned accesses. Before, it could move as one doubleword from an address that only 4
+  divides, which faults with alignment checking or with the MMU off. A new check, E4022, stops
+  compilation when it cannot prove an access aligned. Without the option, output does not change.
 - A store to a volatile bit-field no longer reports E3001 for an uninitialized neighbor, and
   the EvoMIR interpreter follows the same per-bit rule.
 - On Darwin, `wchar_t` and `wint_t` are `int`, as Apple clang defines them. Before, they were
