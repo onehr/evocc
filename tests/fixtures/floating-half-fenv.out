@@ -1,0 +1,69 @@
+Half-format conversions under each rounding direction, GCC 14 references,
+2026-10-21.
+Probe: tests/fixtures/rules-20261013/l03-half-fenv.c
+Probe SHA-256: 93f28ac44c3ea843d7334c2c7099c6812fc1277de3479458fed48e77b290be05
+Image: evo-nexlab:sealed, linux/arm64, network none, digest
+sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93.
+Compiler: gcc-14 (Debian 14.2.0-19) 14.2.0.
+
+Command, for LEVEL in -O0 and -O2 and KIND in 0 and 2:
+  gcc-14 -std=gnu11 LEVEL -w -frounding-math -ffp-contract=off -DKIND=KIND
+         l03-half-fenv.c -o t -lm && ./t
+
+Both levels print the same lines. Each record is KIND=k and one printed
+line: the rounding direction, the binary32 input, the half result and the
+glibc FE_* flags (invalid 1, overflow 4, underflow 8, inexact 16). Clang 19
+and Apple clang give these lines for KIND=0. For KIND=2 they differ in 16
+lines: their bfloat16 conversion rounds to nearest in every direction and
+raises no inexact, overflow or underflow flag. The machine-read lines
+follow the marker.
+
+records:
+KIND=0 nearest 3f801000 -> 3c00 flags 16
+KIND=0 nearest 477ff000 -> 7c00 flags 20
+KIND=0 nearest 33000001 -> 0001 flags 24
+KIND=0 nearest 7f800001 -> 7e00 flags 1
+KIND=0 nearest 3fc00000 -> 3e00 flags 0
+KIND=0 nearest 387ff000 -> 0400 flags 24
+KIND=0 upward 3f801000 -> 3c01 flags 16
+KIND=0 upward 477ff000 -> 7c00 flags 20
+KIND=0 upward 33000001 -> 0001 flags 24
+KIND=0 upward 7f800001 -> 7e00 flags 1
+KIND=0 upward 3fc00000 -> 3e00 flags 0
+KIND=0 upward 387ff000 -> 0400 flags 24
+KIND=0 downward 3f801000 -> 3c00 flags 16
+KIND=0 downward 477ff000 -> 7bff flags 16
+KIND=0 downward 33000001 -> 0000 flags 24
+KIND=0 downward 7f800001 -> 7e00 flags 1
+KIND=0 downward 3fc00000 -> 3e00 flags 0
+KIND=0 downward 387ff000 -> 03ff flags 24
+KIND=0 zero 3f801000 -> 3c00 flags 16
+KIND=0 zero 477ff000 -> 7bff flags 16
+KIND=0 zero 33000001 -> 0000 flags 24
+KIND=0 zero 7f800001 -> 7e00 flags 1
+KIND=0 zero 3fc00000 -> 3e00 flags 0
+KIND=0 zero 387ff000 -> 03ff flags 24
+KIND=2 nearest 3f808000 -> 3f80 flags 16
+KIND=2 nearest 7f7fffff -> 7f80 flags 20
+KIND=2 nearest 00008001 -> 0001 flags 24
+KIND=2 nearest 7f800001 -> 7fc0 flags 1
+KIND=2 nearest 3fc00000 -> 3fc0 flags 0
+KIND=2 nearest 007fc000 -> 0080 flags 24
+KIND=2 upward 3f808000 -> 3f81 flags 16
+KIND=2 upward 7f7fffff -> 7f80 flags 20
+KIND=2 upward 00008001 -> 0001 flags 24
+KIND=2 upward 7f800001 -> 7fc0 flags 1
+KIND=2 upward 3fc00000 -> 3fc0 flags 0
+KIND=2 upward 007fc000 -> 0080 flags 24
+KIND=2 downward 3f808000 -> 3f80 flags 16
+KIND=2 downward 7f7fffff -> 7f7f flags 16
+KIND=2 downward 00008001 -> 0000 flags 24
+KIND=2 downward 7f800001 -> 7fc0 flags 1
+KIND=2 downward 3fc00000 -> 3fc0 flags 0
+KIND=2 downward 007fc000 -> 007f flags 24
+KIND=2 zero 3f808000 -> 3f80 flags 16
+KIND=2 zero 7f7fffff -> 7f7f flags 16
+KIND=2 zero 00008001 -> 0000 flags 24
+KIND=2 zero 7f800001 -> 7fc0 flags 1
+KIND=2 zero 3fc00000 -> 3fc0 flags 0
+KIND=2 zero 007fc000 -> 007f flags 24

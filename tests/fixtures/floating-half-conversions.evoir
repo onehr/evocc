@@ -1,0 +1,98 @@
+func @widen16(%arg0: f16, %arg1: mem<all>, %arg2: world) -> (f32, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f16, %v1: mem<all>, %v2: world):
+    %v3 = fp.convert %v0 : f32
+    ret %v3, %v1, %v2
+}
+
+func @widenb(%arg0: bf16, %arg1: mem<all>, %arg2: world) -> (f32, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bf16, %v1: mem<all>, %v2: world):
+    %v3 = fp.convert %v0 : f32
+    ret %v3, %v1, %v2
+}
+
+func @narrow16(%arg0: f32, %arg1: mem<all>, %arg2: world) -> (f16, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f32, %v1: mem<all>, %v2: world):
+    %v3 = fp.convert %v0 : f16
+    ret %v3, %v1, %v2
+}
+
+func @narrowb(%arg0: f32, %arg1: mem<all>, %arg2: world) -> (bf16, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f32, %v1: mem<all>, %v2: world):
+    %v3 = fp.convert %v0 : bf16
+    ret %v3, %v1, %v2
+}
+
+func @narrowb64(%arg0: f64, %arg1: mem<all>, %arg2: world) -> (bf16, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f64, %v1: mem<all>, %v2: world):
+    %v3 = fp.convert %v0 : bf16
+    ret %v3, %v1, %v2
+}
+
+func @from_int(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (f16, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = fp.from_signed %v0 : f16
+    ret %v3, %v1, %v2
+}
+
+func @from_uint(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bf16, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bits<32>, %v1: mem<all>, %v2: world):
+    %v3 = fp.from_unsigned %v0 : bf16
+    ret %v3, %v1, %v2
+}
+
+func @cross(%arg0: f16, %arg1: mem<all>, %arg2: world) -> (bf16, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f16, %v1: mem<all>, %v2: world):
+    %v3 = fp.convert %v0 : f32
+    %v4 = fp.convert %v3 : bf16
+    ret %v4, %v1, %v2
+}
+
+func @strict_narrowb(%arg0: f32, %arg1: mem<all>, %arg2: world) -> (bf16, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=true, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f32, %v1: mem<all>, %v2: world):
+    (%v3, %v4) = fp.strict.convert %v2, %v0 : bf16
+    ret %v3, %v1, %v4
+}
+
+func @strict_narrow16(%arg0: f64, %arg1: mem<all>, %arg2: world) -> (f16, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=true, may_trap=false, may_unwind=false }
+{
+^entry(%v0: f64, %v1: mem<all>, %v2: world):
+    (%v3, %v4) = fp.strict.convert %v2, %v0 : f16
+    ret %v3, %v1, %v4
+}
+
+func @strict_widenb(%arg0: bf16, %arg1: mem<all>, %arg2: world) -> (f32, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=true, may_trap=false, may_unwind=false }
+{
+^entry(%v0: bf16, %v1: mem<all>, %v2: world):
+    (%v3, %v4) = fp.strict.convert %v2, %v0 : f32
+    ret %v3, %v1, %v4
+}
+
+func @signaling(%arg0: mem<all>, %arg1: world) -> (f16, bf16, bits<16>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: mem<all>, %v1: world):
+    %v2 = const.f16 0x7d01
+    %v3 = const.bf16 0xff81
+    %v4 = fp.to_bits %v2 : bits<16>
+    ret %v2, %v3, %v4, %v0, %v1
+}

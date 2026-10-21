@@ -1,0 +1,150 @@
+Half-format translation-time evaluation, GCC 14 references, 2026-10-21.
+Fixture: tests/fixtures/floating-half-fold.c
+Fixture SHA-256: cea8806475dea9ecc2f376d416f28f20f892060a6c8b14f32da0d7d9cb863a9a
+Image: evo-nexlab:sealed, linux/arm64, network none, digest
+sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93.
+Compiler: gcc-14 (Debian 14.2.0-19) 14.2.0.
+
+Command, for LEVEL in -O0 and -O2, KIND in 0, 1 and 2 and FOLD in 0 and 1:
+  gcc-14 -std=gnu11 LEVEL -w -ffp-contract=off -DKIND=KIND -DFOLD=FOLD
+         floating-half-fold.c -o t && ./t
+
+LEVEL -O0 and -O2 print the same lines. A fold record is the run-time form
+(FOLD=0), which is the reference: EvoCC gives these lines in both forms. A
+gcc-fold record is GCC's translation-time form (FOLD=1). It differs from
+GCC's own run time in two ways. An invalid operation, such as 0 * -inf,
+folds to a NaN with the sign of the exact product or quotient, where the
+machine gives the default NaN; this changes mul and div of every kind.
+An __fp16 sum or difference with a negative NaN operand folds to a
+positive NaN; this changes add and sub of KIND=1, and mul and div there
+too. EvoCC folds as it executes, as it does for float, where GCC 14 folds
+0.0f * -inf to 0xffc00000 and EvoCC to 0x7fc00000. The machine-read lines
+follow the marker.
+
+records:
+fold KIND=0 add 8fb5f5f4def46abe
+fold KIND=0 sub 770b055d7e643c52
+fold KIND=0 mul 7e9e1fb436dc290e
+fold KIND=0 div a0d7994df2d88b34
+fold KIND=0 neg 7b0863a5cc48cef2
+fold KIND=0 eq 47731ffc491bdbdc
+fold KIND=0 ne cfac1b35302a4b1a
+fold KIND=0 lt 7745b5c00d7f2436
+fold KIND=0 le 1d51f28dd370a9a9
+fold KIND=0 gt 0275a223d2c519b7
+fold KIND=0 ge c2fb59cead1051c3
+fold KIND=0 widen32 ce1c68409e95cdc7
+fold KIND=0 widen64 f20e5f45af0a4b35
+fold KIND=0 narrow32 adcef9dbe0b28f7f
+fold KIND=0 narrow64 7a399a311829ac07
+fold KIND=0 to_int 90749716b7eaa4b3
+fold KIND=0 from_int c759aae506fc71f3
+fold KIND=0 from_long 1c2c13452475aedf
+fold KIND=0 from_ulong 96a3f8d02b0abb5b
+fold KIND=0 to_other 8e96b006f719ee94
+fold KIND=0 from_other 2e0622d3b444d519
+fold KIND=1 add 8fb5f5f4def46abe
+fold KIND=1 sub 770b055d7e643c52
+fold KIND=1 mul 7e9e1fb436dc290e
+fold KIND=1 div a0d7994df2d88b34
+fold KIND=1 neg 7b0863a5cc48cef2
+fold KIND=1 eq 47731ffc491bdbdc
+fold KIND=1 ne cfac1b35302a4b1a
+fold KIND=1 lt 7745b5c00d7f2436
+fold KIND=1 le 1d51f28dd370a9a9
+fold KIND=1 gt 0275a223d2c519b7
+fold KIND=1 ge c2fb59cead1051c3
+fold KIND=1 widen32 ce1c68409e95cdc7
+fold KIND=1 widen64 f20e5f45af0a4b35
+fold KIND=1 narrow32 adcef9dbe0b28f7f
+fold KIND=1 narrow64 7a399a311829ac07
+fold KIND=1 to_int 90749716b7eaa4b3
+fold KIND=1 from_int c759aae506fc71f3
+fold KIND=1 from_long 1c2c13452475aedf
+fold KIND=1 from_ulong 96a3f8d02b0abb5b
+fold KIND=1 to_other 8e96b006f719ee94
+fold KIND=1 from_other 2e0622d3b444d519
+fold KIND=2 add 73f7cc070ec6e0fa
+fold KIND=2 sub 983edaf7ad9364f0
+fold KIND=2 mul a065854de8af410a
+fold KIND=2 div 3b3ea5ff887321c3
+fold KIND=2 neg 3ccccd22201b2a05
+fold KIND=2 eq 47731ffc491bdbdc
+fold KIND=2 ne cfac1b35302a4b1a
+fold KIND=2 lt 7745b5c00d7f2436
+fold KIND=2 le 1d51f28dd370a9a9
+fold KIND=2 gt 0275a223d2c519b7
+fold KIND=2 ge c2fb59cead1051c3
+fold KIND=2 widen32 87000f7526b150c2
+fold KIND=2 widen64 a977ed58a1d08fc1
+fold KIND=2 narrow32 ac18838f41cb5adb
+fold KIND=2 narrow64 c17ed9d88c4b22be
+fold KIND=2 to_int 0a423c587b3093e3
+fold KIND=2 from_int e819737d19bfb83a
+fold KIND=2 from_long a71a94d09a6b4620
+fold KIND=2 from_ulong dcb53e82eedce0ff
+fold KIND=2 to_other 2e0622d3b444d519
+fold KIND=2 from_other 8e96b006f719ee94
+gcc-fold KIND=0 add 8fb5f5f4def46abe
+gcc-fold KIND=0 sub 770b055d7e643c52
+gcc-fold KIND=0 mul 18194ee2e3b7560b
+gcc-fold KIND=0 div 97e5fe0dd9aab003
+gcc-fold KIND=0 neg 7b0863a5cc48cef2
+gcc-fold KIND=0 eq 47731ffc491bdbdc
+gcc-fold KIND=0 ne cfac1b35302a4b1a
+gcc-fold KIND=0 lt 7745b5c00d7f2436
+gcc-fold KIND=0 le 1d51f28dd370a9a9
+gcc-fold KIND=0 gt 0275a223d2c519b7
+gcc-fold KIND=0 ge c2fb59cead1051c3
+gcc-fold KIND=0 widen32 ce1c68409e95cdc7
+gcc-fold KIND=0 widen64 f20e5f45af0a4b35
+gcc-fold KIND=0 narrow32 adcef9dbe0b28f7f
+gcc-fold KIND=0 narrow64 7a399a311829ac07
+gcc-fold KIND=0 to_int 90749716b7eaa4b3
+gcc-fold KIND=0 from_int c759aae506fc71f3
+gcc-fold KIND=0 from_long 1c2c13452475aedf
+gcc-fold KIND=0 from_ulong 96a3f8d02b0abb5b
+gcc-fold KIND=0 to_other 8e96b006f719ee94
+gcc-fold KIND=0 from_other 2e0622d3b444d519
+gcc-fold KIND=1 add dd12519023537622
+gcc-fold KIND=1 sub ef861af9676e0779
+gcc-fold KIND=1 mul 53ac080da9658bf9
+gcc-fold KIND=1 div 769164da23b85d8e
+gcc-fold KIND=1 neg 7b0863a5cc48cef2
+gcc-fold KIND=1 eq 47731ffc491bdbdc
+gcc-fold KIND=1 ne cfac1b35302a4b1a
+gcc-fold KIND=1 lt 7745b5c00d7f2436
+gcc-fold KIND=1 le 1d51f28dd370a9a9
+gcc-fold KIND=1 gt 0275a223d2c519b7
+gcc-fold KIND=1 ge c2fb59cead1051c3
+gcc-fold KIND=1 widen32 ce1c68409e95cdc7
+gcc-fold KIND=1 widen64 f20e5f45af0a4b35
+gcc-fold KIND=1 narrow32 adcef9dbe0b28f7f
+gcc-fold KIND=1 narrow64 7a399a311829ac07
+gcc-fold KIND=1 to_int 90749716b7eaa4b3
+gcc-fold KIND=1 from_int c759aae506fc71f3
+gcc-fold KIND=1 from_long 1c2c13452475aedf
+gcc-fold KIND=1 from_ulong 96a3f8d02b0abb5b
+gcc-fold KIND=1 to_other 8e96b006f719ee94
+gcc-fold KIND=1 from_other 2e0622d3b444d519
+gcc-fold KIND=2 add 73f7cc070ec6e0fa
+gcc-fold KIND=2 sub 983edaf7ad9364f0
+gcc-fold KIND=2 mul 1c75d6ead77b74a3
+gcc-fold KIND=2 div cf0d2aaca2389643
+gcc-fold KIND=2 neg 3ccccd22201b2a05
+gcc-fold KIND=2 eq 47731ffc491bdbdc
+gcc-fold KIND=2 ne cfac1b35302a4b1a
+gcc-fold KIND=2 lt 7745b5c00d7f2436
+gcc-fold KIND=2 le 1d51f28dd370a9a9
+gcc-fold KIND=2 gt 0275a223d2c519b7
+gcc-fold KIND=2 ge c2fb59cead1051c3
+gcc-fold KIND=2 widen32 87000f7526b150c2
+gcc-fold KIND=2 widen64 a977ed58a1d08fc1
+gcc-fold KIND=2 narrow32 ac18838f41cb5adb
+gcc-fold KIND=2 narrow64 c17ed9d88c4b22be
+gcc-fold KIND=2 to_int 0a423c587b3093e3
+gcc-fold KIND=2 from_int e819737d19bfb83a
+gcc-fold KIND=2 from_long a71a94d09a6b4620
+gcc-fold KIND=2 from_ulong dcb53e82eedce0ff
+gcc-fold KIND=2 to_other 2e0622d3b444d519
+gcc-fold KIND=2 from_other 8e96b006f719ee94
