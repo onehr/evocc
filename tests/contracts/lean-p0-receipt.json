@@ -17,8 +17,8 @@
       "registry_rules": 51,
       "relation": "byte prefix of p0.scalar.v4: the first 51 rules and their exact bytes are the same, so a certificate naming p0.scalar.v3 fires only rules this receipt covers"
     },
-    "spec_revision": "**Revision 2.24.0** | **Pinned ground truth** | volatile bit-field masks on 2026-10-21",
-    "spec_sha256": "2aa703cbfdee5ad905431d7aad02a2eb1d20008e828eb05f9088c96f0a47fcaf",
+    "spec_revision": "**Revision 2.28.0** | **Pinned ground truth** | Multi-character constants on 2026-10-21",
+    "spec_sha256": "9b6f106da0f95a2825adc7c0951cc77780005e3ca8699bad797b808f0db1a030",
     "lean_commit": "f81a13d420df202b6eefcdfe75158d734574c263",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
