@@ -381,8 +381,15 @@ fn is_pair(ty: &EvoIRType) -> bool {
 }
 
 fn vector_bytes(ty: &EvoIRType) -> Option<u64> {
-    let (lanes, bits) = evocc_evoir::integer_vector_shape(ty)?;
+    let (lanes, bits) = evocc_evoir::vector_shape(ty)?;
     Some(u64::from(lanes) * u64::from(bits) / 8)
+}
+
+/// Whether `ty` is a floating vector below eight bytes: a vector of one
+/// `f32` lane. It is no AAPCS64 short vector, and GCC 14 and Clang 19 pass
+/// it differently, so no call boundary carries it (Section 6.2).
+fn tiny_floating_vector(ty: &EvoIRType) -> bool {
+    evocc_evoir::floating_vector_shape(ty).is_some() && vector_bytes(ty).is_some_and(|b| b < 8)
 }
 
 fn short_vector_bytes(ty: &EvoIRType) -> Option<u64> {
@@ -391,9 +398,8 @@ fn short_vector_bytes(ty: &EvoIRType) -> Option<u64> {
 
 /// The lanes and lane width of an integer vector of 1, 2 or 4 bytes.
 fn tiny_vector_shape(ty: &EvoIRType) -> Option<(u16, u16)> {
-    vector_bytes(ty)
-        .filter(|bytes| matches!(bytes, 1 | 2 | 4))
-        .and_then(|_| evocc_evoir::integer_vector_shape(ty))
+    evocc_evoir::integer_vector_shape(ty)
+        .filter(|(lanes, bits)| matches!(u32::from(*lanes) * u32::from(*bits), 8 | 16 | 32))
 }
 
 /// The Apple convention returns a tiny vector in `v0` with each lane widened
@@ -686,6 +692,14 @@ fn scan_function(
         if let Err(code) = class_of(ty) {
             report(code, entry_block, 0, format!("parameter of type {ty:?}"));
         }
+        if tiny_floating_vector(ty) {
+            report(
+                E4002,
+                entry_block,
+                0,
+                format!("a parameter of type {ty:?} is no AAPCS64 short vector"),
+            );
+        }
     }
     let results = ordinary_types(&function.ret_tys);
     if results.len() > target.abi().general_results() {
@@ -703,6 +717,14 @@ fn scan_function(
     for ty in &results {
         if let Err(code) = class_of(ty) {
             report(code, entry_block, 0, format!("result of type {ty:?}"));
+        }
+        if tiny_floating_vector(ty) {
+            report(
+                E4002,
+                entry_block,
+                0,
+                format!("a result of type {ty:?} is no AAPCS64 short vector"),
+            );
         }
     }
 
@@ -795,6 +817,29 @@ fn scan_inst(
                 );
             }
         }
+    }
+
+    // Section 6.2: a floating vector below eight bytes crosses no call
+    // boundary, as an argument, a result or an anonymous argument.
+    let boundary = match inst {
+        Inst::Call { results, args, .. } | Inst::IndirectCall { results, args, .. } => results
+            .iter()
+            .chain(args)
+            .map(|value| &value.ty)
+            .find(|ty| tiny_floating_vector(ty)),
+        Inst::VaAccess(access) => match &access.op {
+            VariadicOp::Arg(result) => Some(&result.ty).filter(|ty| tiny_floating_vector(ty)),
+            _ => None,
+        },
+        _ => None,
+    };
+    if let Some(ty) = boundary {
+        report(
+            E4002,
+            block,
+            index,
+            format!("a call boundary of type {ty:?} is no AAPCS64 short vector"),
+        );
     }
 
     match inst {
@@ -4883,26 +4928,49 @@ fn lower_vector(
         }
         VectorOp::Pack => {
             let (_, lane_bits) =
-                evocc_evoir::integer_vector_shape(&result.ty).ok_or("invalid vector shape")?;
+                evocc_evoir::vector_shape(&result.ty).ok_or("invalid vector shape")?;
             let dst = lowerer.fresh(class_of(&result.ty).map_err(|e| e.1)?);
-            let (lane_bits, arguments) = if lane_bits == 128 {
-                (
-                    64,
-                    args.iter()
-                        .map(|v| lowerer.registers(v))
-                        .collect::<Result<Vec<_>, _>>()?
-                        .into_iter()
-                        .flatten()
-                        .collect(),
-                )
-            } else {
-                (
-                    lane_bits,
-                    args.iter()
-                        .map(|v| lowerer.reg(v))
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-            };
+            let (lane_bits, arguments) =
+                if let Some((_, kind)) = evocc_evoir::floating_vector_shape(&result.ty) {
+                    // Section 2.7: a floating lane moves to a general register as
+                    // its exact bits, and the integer lane move packs it.
+                    let mut lanes = Vec::with_capacity(args.len());
+                    for value in args {
+                        let source = lowerer.reg(value)?;
+                        let raw = lowerer.fresh(if lane_bits == 32 {
+                            RegClass::Gpr32
+                        } else {
+                            RegClass::Gpr64
+                        });
+                        insts.push(MInst::Floating {
+                            strict: false,
+                            integer_bits: 0,
+                            dst: raw,
+                            op: evocc_evoir::FloatingOp::ToBits,
+                            kind,
+                            args: vec![source],
+                        });
+                        lanes.push(raw);
+                    }
+                    (lane_bits, lanes)
+                } else if lane_bits == 128 {
+                    (
+                        64,
+                        args.iter()
+                            .map(|v| lowerer.registers(v))
+                            .collect::<Result<Vec<_>, _>>()?
+                            .into_iter()
+                            .flatten()
+                            .collect(),
+                    )
+                } else {
+                    (
+                        lane_bits,
+                        args.iter()
+                            .map(|v| lowerer.reg(v))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    )
+                };
             insts.push(MInst::Vector {
                 dst,
                 extract: false,
@@ -4914,7 +4982,7 @@ fn lower_vector(
         }
         VectorOp::Extract => {
             let (_, lane_bits) =
-                evocc_evoir::integer_vector_shape(&args[0].ty).ok_or("invalid vector shape")?;
+                evocc_evoir::vector_shape(&args[0].ty).ok_or("invalid vector shape")?;
             let source = lowerer.reg(&args[0])?;
             let index = vector_index(
                 lowerer,
@@ -4943,6 +5011,31 @@ fn lower_vector(
                     args: vec![source, second],
                 });
                 lowerer.bind_pair(result, low, high);
+            } else if let Some((_, kind)) = evocc_evoir::floating_vector_shape(&args[0].ty) {
+                // Section 2.7: the integer lane move reads the lane's bits,
+                // and an exact bit move gives the floating value.
+                let raw = lowerer.fresh(if lane_bits == 32 {
+                    RegClass::Gpr32
+                } else {
+                    RegClass::Gpr64
+                });
+                insts.push(MInst::Vector {
+                    dst: raw,
+                    extract: true,
+                    lane_bits,
+                    bytes,
+                    args: vec![source, index],
+                });
+                let dst = lowerer.fresh(class_of(&result.ty).map_err(|e| e.1)?);
+                insts.push(MInst::Floating {
+                    strict: false,
+                    integer_bits: 0,
+                    dst,
+                    op: evocc_evoir::FloatingOp::FromBits,
+                    kind,
+                    args: vec![raw],
+                });
+                lowerer.bind(result, dst);
             } else {
                 let dst = lowerer.fresh(class_of(&result.ty).map_err(|e| e.1)?);
                 insts.push(MInst::Vector {

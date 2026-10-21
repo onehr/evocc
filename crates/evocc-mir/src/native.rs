@@ -270,16 +270,46 @@ fn compile_module_with_guard_control(
         if !keep(&function.name) {
             continue;
         }
-        if options.general_registers_only
-            && function.blocks.iter().any(|block| {
-                block
-                    .args
-                    .iter()
-                    .copied()
-                    .chain(block.insts.iter().flat_map(crate::inst_defs))
-                    .chain(block.insts.iter().flat_map(crate::inst_uses))
-                    .any(|reg| reg.class.is_simd())
-            })
+        // EvoMIR 2.7: a floating vector is refused under this option even
+        // where no SIMD class holds it, as a 4-byte vector copy is.
+        let floating_vector = options.general_registers_only
+            && module
+                .functions
+                .iter()
+                .find(|source| source.name == function.name)
+                .is_some_and(|source| {
+                    source
+                        .params
+                        .iter()
+                        .map(|param| &param.ty)
+                        .chain(&source.ret_tys)
+                        .chain(source.blocks.iter().flat_map(|block| {
+                            block.args.iter().map(|arg| &arg.value.ty).chain(
+                                block
+                                    .insts
+                                    .iter()
+                                    .chain(std::iter::once(&block.terminator))
+                                    .flat_map(|inst| {
+                                        evocc_evoir::inst_results(inst)
+                                            .into_iter()
+                                            .chain(evocc_evoir::inst_uses(inst))
+                                            .map(|value| &value.ty)
+                                    }),
+                            )
+                        }))
+                        .any(|ty| evocc_evoir::floating_vector_shape(ty).is_some())
+                });
+        if floating_vector
+            || options.general_registers_only
+                && function.blocks.iter().any(|block| {
+                    block
+                        .args
+                        .iter()
+                        .copied()
+                        .chain(block.insts.iter().flat_map(crate::inst_defs))
+                        .chain(block.insts.iter().flat_map(crate::inst_uses))
+                        .any(|reg| reg.class.is_simd())
+                })
         {
             return Err(NativeStop::Lowering(vec![Refusal {
                 function: function.name.clone(),

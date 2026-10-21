@@ -404,8 +404,8 @@ fn darwin_calls_of_preserving_functions_that_apple_clang_compiled() {
 }
 
 /// Linux: a `<math.h>` program, and an EvoCC caller of a vector-PCS function
-/// that GCC 14 compiled, agree with GCC 14 in the sealed image. EvoCC lowers
-/// no floating vector value (E3050), so the vector-PCS callee takes integers.
+/// that GCC 14 compiled, agree with GCC 14 in the sealed image. The
+/// vector-PCS callee takes integers.
 #[test]
 #[ignore = "sealed Linux lane; needs evo-nexlab:sealed; run explicitly and serially"]
 fn linux_math_and_vector_pcs_calls_agree_with_gcc_14() {

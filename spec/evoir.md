@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.20.0** | **Pinned ground truth** | floating complex execution on 2026-10-21
+**Revision 2.21.0** | **Pinned ground truth** | floating vector execution on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -1052,17 +1052,21 @@ Acquisition does not inspect stored bytes or append a volatile event. It may
 allocate/fail, reads/writes memory state, and is excluded from P0. Unresolved
 external TLS remains an external-object execution error, not a fabricated zero.
 
-**Integer vector representations.** `vec<L, bits<N>>`
-has positive power-of-two L and N in 8/16/32/64/128. `vec.pack` takes L
-bits<N> operands and preserves each lane's initializedness. `vec.extract`
-takes a vector and integer index and returns bits<N>; it checks the entire
-index before narrowing (E3011 when out of range), and consumes only the selected
-lane's initializedness. `vec.bitcast` changes equal-sized integer/vector
+**Vector representations.** An integer vector `vec<L, bits<N>>` has positive
+power-of-two L and N in 8/16/32/64/128. A floating vector `vec<L, f32>` or
+`vec<L, f64>` has positive power-of-two L; its lanes are ordinary `f32` or
+`f64` values. `vec.pack` takes L operands of the lane type and preserves each
+lane's initializedness. `vec.extract` takes a vector and integer index and
+returns a value of the lane type; it checks the entire index before narrowing
+(E3011 when out of range), and consumes only the selected lane's
+initializedness. `vec.bitcast` changes equal-sized integer, floating and vector
 representations without initializing bytes or numerically converting lanes.
-These have one result and no effects; extract may trap. Vector arithmetic
-is expanded lane by lane through the existing checked scalar rules. No vector
-operation is added to the P0 allowlist; proof reconstruction retains all fields.
-Vector loads/stores preserve lane representation, rather than zero-filling
+A pack, an extract and a bitcast move bits: they never quiet a signaling NaN
+or change a payload. These have one result and no effects; extract may trap.
+Vector arithmetic is expanded lane by lane through the existing checked
+scalar rules, the floating ones of 3.13 included. No vector operation is added
+to the P0 allowlist; proof reconstruction retains all fields. Vector
+loads/stores preserve lane representation, rather than zero-filling
 uninitialized lanes. A scalar lane use still observes existing poison rules.
 
 **AES rounds.** `vec.aese` and `vec.aesd` take a data operand and a key
@@ -1238,8 +1242,9 @@ number of them, including none. Their types are not part of the signature and
 are not checked against a declaration; they are recorded at the call and read
 back by `va_arg`. A non-variadic signature admits no argument beyond its
 list. Anonymous arguments carry no `mem<_>`, `world` or `tuple`.
-An anonymous argument can also be an integer `vec<L, bits<N>>`, without lane
-promotion, or an integer homogeneous-vector record with explicit byval/HVA shape. Other
+An anonymous argument can also be a vector `vec<L, bits<N>>`, `vec<L, f32>`
+or `vec<L, f64>`, without lane promotion, or a homogeneous-vector record with
+explicit byval/HVA shape. Other
 records and unions of scalar members pass in the form of 10.1.3, a
 `ptr<generic>` to a caller-made copy, marked `%v byval(size, align)` with
 `size` possibly zero and `align` a nonzero power of two. Only anonymous
@@ -1514,7 +1519,7 @@ it ineligible as a region root or witness, so no rewrite can reach it.
 | Field | Description |
 |---|---|
 | `%ap` | A `ptr<AS>` to a **list object**, the lowering of one `__builtin_va_list` (10.1.5): 32 bytes on Linux, 8 on Darwin, alignment 8 on both targets (10.5). |
-| `Type` | For `va_arg`: one of `bits<32>`, `bits<64>`, `bits<128>`, `f64`, `f128`, `ptr<AS>`, `fnptr<Sig>` or an integer `vec<L, bits<N>>`, the promoted types of Section 3.10. |
+| `Type` | For `va_arg`: one of `bits<32>`, `bits<64>`, `bits<128>`, `f64`, `f128`, `ptr<AS>`, `fnptr<Sig>` or a vector `vec<L, bits<N>>`, `vec<L, f32>` or `vec<L, f64>`, the promoted types of Section 3.10. |
 
 **Semantics.** A variadic function receives, besides its listed parameters,
 the sequence of anonymous arguments its caller passed. `va_start` makes the
@@ -1602,8 +1607,9 @@ existing call/edge rules. Native **E3064** denotes an incompatible FP environmen
 not C UB; no hidden FPCR reset is permitted. Section 3.13.3 admits the bounded
 non-trapping `STDC FENV_ACCESS` profile. Unsupported or malformed requests
 retain **E3065**; unsupported strict/fast/contraction options are not ignored.
-Section 3.13.5 admits the parts of a complex product and quotient; FP vectors
-are outside this revision. Section 3.13.1 specifies the strict IR.
+Section 3.13.5 admits the parts of a complex product and quotient, and
+Section 10.1.14 applies these operations to each lane of a floating vector.
+Section 3.13.1 specifies the strict IR.
 
 The driver advertises source-format evaluation (`__FLT_EVAL_METHOD__=0`) but
 does not advertise Annex F/IEC-60559 conformance, complex FP or fast FMA:
@@ -1829,9 +1835,9 @@ disable such substitution when lexical FP access is present; they are not
 unchecked producer annotations authorizing a fold.
 
 This profile covers the four rounding modes, five sticky flags and §3.13.2's
-non-trapping environment library on admitted scalar formats, and the complex
-parts of 3.13.5. It does not add FP vectors, enabled traps, Annex F or a
-concurrent interpreter.
+non-trapping environment library on admitted scalar formats, the complex
+parts of 3.13.5 and the lanes of floating vectors (10.1.14). It does not add
+enabled traps, Annex F or a concurrent interpreter.
 
 #### 3.13.4 Binary128
 
@@ -1854,8 +1860,8 @@ Quad HFA members use the existing homogeneous classifier and require ABI
 alignment 16. Native quad operations may use audited hosted runtime helpers
 behind EvoMIR; helper names are not EvoIR semantics. Other targets and
 freestanding helper availability fail closed. No `_Float128` value, binary16,
-FP vector, traps, contraction or Annex F claim is implied; 3.13.5 gives the
-binary128 complex parts. All FP is excluded from P0.
+binary128 vector lane, traps, contraction or Annex F claim is implied; 3.13.5
+gives the binary128 complex parts. All FP is excluded from P0.
 
 #### 3.13.5 Complex multiplication and division
 
@@ -4847,11 +4853,9 @@ recursive SCCs are solved together. Every call still consumes and produces
 
 **Floating and arity lowering classes.** A floating scalar, floating complex
 or homogeneous floating aggregate call interface that lowering does not support
-is `E3049` (`not-lowered: floating-call-interface`). So is a parameter, result,
-anonymous argument or `va_arg` type that is a record of one to four short
-vectors (8 or 16 bytes) of one size with a floating lane: AAPCS64 makes it an
-HVA in vector registers, and lowering has no floating vector value to place
-there (the 2026-10-13 decision on L05). A required floating value
+is `E3049` (`not-lowered: floating-call-interface`). A record of one to four
+short vectors (8 or 16 bytes) of one size is an HVA whatever its lane types,
+and it passes in vector registers (10.1.14). A required floating value
 or conversion on an integer-only lowering path is `E3050`
 (`not-lowered: floating-value`). A call whose actual arity differs from its
 resolved canonical interface is `E3051`, not `E3101`.
@@ -5854,7 +5858,9 @@ decrement is also outside the consensus extension set. GNU dynamic
 `__builtin_shufflevector` has constant indices (-1 produces an unspecified
 lane); conversion and equal-size reinterpretation are distinct operations.
 Integer vectors participate in fixed/variadic calls and homogeneous vector
-aggregates through EvoMIR's real ABI, not scalar-parameter substitution.
+aggregates through EvoMIR's real ABI, not scalar-parameter substitution. A
+homogeneous vector aggregate is the AAPCS64 one of the floating-vector
+profile below: its members have one vector size, whatever their lane types.
 General-register-only mode still forbids executed SIMD values.
 
 **Tiny vectors at a call boundary.** A tiny vector is an integer vector of
@@ -5880,6 +5886,53 @@ unspecified.
 
 A record that contains a tiny vector follows the ordinary composite rules; a
 tiny vector is never an HVA member (EvoMIR 6.2 and 6.6).
+
+**Floating-vector profile.** The 2026-10-13 decision on L05 admits GNU
+`vector_size` vectors of `float` and `double` lanes on both targets, with the
+layout of the integer profile. A vector of 8 or 16 bytes is a `vec<L, f32>` or
+`vec<L, f64>` value (3.8); a wider vector is an object, as an integer vector
+is. Lanes of `long double` or a half format stay `E3050`. So do the nominal
+`arm_neon.h` floating types, such as `__Float32x4_t`, whose intrinsics belong
+to L05b.
+
+- `+`, `-`, `*`, `/`, unary `-` and unary `+` are the scalar operations of 3.13
+  on each lane: rounding, NaN selection, signed zeros and subnormals follow the
+  scalar rule. No multiply and add contract into one operation. A scalar
+  operand broadcasts when the integer profile's rule admits it, and so does an
+  exact finite `long double` constant, as GCC 14, Clang 19 and Apple clang
+  accept it.
+- A comparison gives a vector of signed integer lanes of the lane width, all
+  ones for true and zero for false. A relational lane is a signaling
+  comparison and an equality lane is a quiet one (3.13.1). A 64-bit mask lane
+  is `long` on Linux, as in GCC 14, and `long long` on Darwin, as in Apple
+  clang. Both have one representation and one ABI.
+- Lanes execute in ascending order. In a strict region (3.13.1, 3.13.3) each
+  lane is a strict operation, so the vector operation raises the union of the
+  flags of its lanes, and each lane rounds in the current direction.
+- `__builtin_convertvector` is the C cast of each lane. A floating lane that
+  converts to an integer outside the range of the integer type, or a NaN lane,
+  is `E3063` at that lane, as a scalar cast is. An integer lane converts to a
+  floating lane, and a `float` lane to a `double` lane or back, with one
+  rounding.
+- Shuffles, lane reads and writes, copies, loads, stores and equal-size casts
+  between floating and integer vectors move bits. `__builtin_shufflevector` and
+  `__builtin_shuffle` keep the index rules of the integer profile.
+- `!`, `&&`, `||`, `%`, `~`, `&`, `|`, `^`, the shifts and a cast between a
+  floating scalar and a vector are `E2102`, and a vector condition of `?:` is
+  `E2202`, as GCC 14 and Clang 19 refuse them in C. As in GCC 14, `++` and `--`
+  add or subtract one in each lane, and `&v[i]` is the address of lane `i` of
+  the vector object.
+- A short floating vector passes and returns in a SIMD register and uses the
+  shared SIMD cursor (EvoMIR 6.3). A record of one to four short vectors of one
+  size is an HVA whatever its lane types, as AAPCS64 states, and it passes in
+  vector registers. Its `hva` mark records the member count and the lane count
+  and lane width of its first member. A record whose size is not the size of
+  its members has no HVA shape and follows the composite rules. A vector wider
+  than 16 bytes is a composite passed by reference.
+- A 4-byte floating vector is no AAPCS64 short vector. GCC 14 and Clang 19 pass
+  it differently, so a parameter, result, argument or `va_arg` of that type is
+  `E4002`; inside a function it is a value. Under `-mgeneral-regs-only` every
+  floating vector value is `E4002`, a copy included.
 
 **Legacy `__sync` builtins.** `__sync_synchronize()` has type `void`, takes
 no arguments and is a full memory barrier; it is not a constant expression and
@@ -8315,9 +8368,9 @@ Section 3 defines each instruction and Section 9.3 gives its exact spelling.
 | | `atomic.store order [volatile]` | `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` | yes |
 | | `atomic.rmw.<op> order [volatile]` | old value, `mem<all>`, `world` | `%m`, `%w`, `%ptr`, `%val` [, `%expected` for `cmpxchg`] | yes |
 | | `atomic.copy.<op> order [volatile]` | [`bits<1>` for `cmpxchg`,] `mem<all>`, `world` | `%m`, `%w`, `%ptr`, buffers, size, align | yes; `E3001` for an uninitialized compared byte |
-| Integer vectors | `vec.pack` | `vec<N, bits<B>>` | N lane values of `bits<B>` | no |
-| | `vec.extract` | `bits<B>` | vector, full-width integer index | yes; `E3011` for an invalid index |
-| | `vec.bitcast` | same-size integer/vector representation | source value | no |
+| Vectors | `vec.pack` | `vec<N, T>`, `T` = `bits<B>`, `f32` or `f64` | N lane values of `T` | no |
+| | `vec.extract` | the lane type `T` | vector, full-width integer index | yes; `E3011` for an invalid index |
+| | `vec.bitcast` | same-size integer, floating or vector representation | source value | no |
 | | `vec.aese`, `vec.aesd` / `vec.aesmc`, `vec.aesimc` | `vec<16, bits<8>>` | data and key / one value | no |
 | Calls | `call @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends |
 | | `call.returns_twice @callee(args..., %m, %w)` | ret values, `mem`, `world` | callee, args, memory, world | depends; top effects (3.10) |
@@ -8369,6 +8422,20 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.21.0, 2026-10-21.** Section 3.8 admits floating vectors
+`vec<L, f32>` and `vec<L, f64>` in `vec.pack`, `vec.extract` and
+`vec.bitcast`, which move bits. Section 10.1.14 adds the floating-vector
+profile of the 2026-10-13 decision on L05: GNU `float` and `double` vectors
+execute lane by lane with the scalar rules of 3.13, comparisons give integer
+masks, conversions are the C cast of each lane with `E3063`, and `++`, `--` and
+`&v[i]` follow GCC 14. An HVA is one to four short vectors of one size,
+whatever their lane types, so a record of floating vectors passes in vector
+registers and is no longer `E3049` (10.1.7); this also makes a record of two
+integer vectors of different lane shapes an HVA. A 4-byte floating vector at a
+call boundary and any floating vector under `-mgeneral-regs-only` are `E4002`.
+Sections 3.10, 3.12 and 3.13 and Appendix A follow. No grammar production,
+registry or Lean rule domain changes; the `core-v1` path admits no vector.
 
 **Revision 2.20.0, 2026-10-21.** Section 3.13.5 adds the parts of a complex
 product and quotient: `fp.cmul.real`, `fp.cmul.imag`, `fp.cdiv.real` and

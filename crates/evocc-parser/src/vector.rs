@@ -100,10 +100,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .ok()?
             .size_bytes
             * 8;
+        // Darwin follows Apple clang: `double` lanes give `long long` masks.
+        let floating = matches!(
+            self.types.get(element).map(|ty| &ty.kind),
+            Some(TypeKind::Float(_))
+        );
         let signed = match bits {
             8 => TypeKind::Int(IntRank::SChar),
             16 => TypeKind::Int(IntRank::Short),
             32 => TypeKind::Int(IntRank::Int),
+            64 if floating && self.target_layout.long_long_vector_masks() => {
+                TypeKind::Int(IntRank::LongLong)
+            }
             64 => TypeKind::Int(IntRank::Long),
             128 => TypeKind::GnuInt128(GnuInt128Signedness::Signed),
             _ => return None,
@@ -143,6 +151,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 _ => false,
             };
+            let source_format = match source {
+                OperandTypeClass::Real(kind) => Some(layout.float_format(kind)),
+                _ => None,
+            };
             let constant_fits = if let Ok(value) = self.eval_integer_constant_expression(expression)
             {
                 let magnitude = if value.ty().is_signed() {
@@ -154,8 +166,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     || (128 - magnitude.leading_zeros() - magnitude.trailing_zeros()
                         <= precision(target)
                         && (target != FloatKind::F16 || magnitude < 65536))
-            } else if matches!(source, OperandTypeClass::Real(kind)
-                if layout.float_format(kind) == FloatKind::F128)
+            } else if source_format == Some(FloatKind::F128)
+                && !matches!(target, FloatKind::F32 | FloatKind::F64)
             {
                 false
             } else {
@@ -168,6 +180,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .is_some_and(|value| {
                     match target {
                         FloatKind::F32 => {
+                            value.is_finite()
+                                && value
+                                    .convert(target)
+                                    .and_then(|narrowed| narrowed.convert(value.kind()))
+                                    .is_some_and(|roundtrip| {
+                                        roundtrip.compare(value) == Some(std::cmp::Ordering::Equal)
+                                    })
+                        }
+                        // An exact finite binary128 constant broadcasts too,
+                        // as GCC 14, Clang 19 and Apple clang accept it.
+                        FloatKind::F64 if source_format == Some(FloatKind::F128) => {
                             value.is_finite()
                                 && value
                                     .convert(target)
@@ -285,7 +308,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         span: SourceSpan,
     ) -> Option<&'arena CHirExpr<'arena>> {
         let (ty, element, lanes) = self.vector_expression_type(operand)?;
-        if op == UnaryOp::BitNot && self.canonical_integer_type(element).is_err() {
+        // GCC 14 and Clang 19 refuse `!` on a floating vector in C (L05).
+        if matches!(op, UnaryOp::BitNot | UnaryOp::Not)
+            && self.canonical_integer_type(element).is_err()
+        {
             self.report("E2102", "invalid-vector-operand", span);
             return None;
         }

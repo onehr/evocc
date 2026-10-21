@@ -1,5 +1,6 @@
-//! Representation operations for integer vectors. Arithmetic is lowered using
-//! the same checked scalar instructions, independently for every lane.
+//! Representation operations for integer and floating vectors. Arithmetic
+//! is lowered using the same checked scalar instructions, independently for
+//! every lane.
 use crate::*;
 use evocc_memory::ObjectRepresentation;
 use evocc_types::ByteOrder;
@@ -48,8 +49,48 @@ pub fn integer_vector_shape(ty: &EvoIRType) -> Option<(u16, u16)> {
     (*lanes != 0 && lanes.is_power_of_two()).then_some((*lanes, *width))
 }
 
+/// The lane count and lane format of a vector of `f32` or `f64` lanes
+/// (Section 3.8). The lane count is a positive power of two.
+pub fn floating_vector_shape(ty: &EvoIRType) -> Option<(u16, evocc_types::FloatKind)> {
+    let EvoIRType::Vec(lanes, element) = ty else {
+        return None;
+    };
+    let kind = match element.as_ref() {
+        EvoIRType::F32 => evocc_types::FloatKind::F32,
+        EvoIRType::F64 => evocc_types::FloatKind::F64,
+        _ => return None,
+    };
+    (*lanes != 0 && lanes.is_power_of_two()).then_some((*lanes, kind))
+}
+
+/// The lane count and lane width in bits of an integer or floating vector:
+/// the shape that representation operations and the machine use. The lane
+/// type itself is the vector's element type.
+pub fn vector_shape(ty: &EvoIRType) -> Option<(u16, u16)> {
+    integer_vector_shape(ty).or_else(|| {
+        floating_vector_shape(ty).map(|(lanes, kind)| {
+            (
+                lanes,
+                if kind == evocc_types::FloatKind::F32 {
+                    32
+                } else {
+                    64
+                },
+            )
+        })
+    })
+}
+
+fn lane_type(ty: &EvoIRType) -> Option<&EvoIRType> {
+    vector_shape(ty)?;
+    match ty {
+        EvoIRType::Vec(_, element) => Some(element),
+        _ => None,
+    }
+}
+
 fn representation_size(ty: &EvoIRType) -> Option<usize> {
-    if let Some((lanes, width)) = integer_vector_shape(ty) {
+    if let Some((lanes, width)) = vector_shape(ty) {
         return Some(usize::from(lanes) * usize::from(width / 8));
     }
     match ty {
@@ -65,7 +106,7 @@ impl VectorInst {
             .collect()
     }
     pub fn validate(&self) -> Result<(), String> {
-        let invalid = || "invalid integer vector operation".to_owned();
+        let invalid = || "invalid vector operation".to_owned();
         match self.op {
             VectorOp::Aes(op) => {
                 if integer_vector_shape(&self.result.ty) != Some((16, 8))
@@ -76,12 +117,10 @@ impl VectorInst {
                 }
             }
             VectorOp::Pack => {
-                let (lanes, width) = integer_vector_shape(&self.result.ty).ok_or_else(invalid)?;
+                let (lanes, _) = vector_shape(&self.result.ty).ok_or_else(invalid)?;
+                let lane = lane_type(&self.result.ty).ok_or_else(invalid)?;
                 if self.arguments.len() != usize::from(lanes)
-                    || self
-                        .arguments
-                        .iter()
-                        .any(|value| value.ty != EvoIRType::Bits(width))
+                    || self.arguments.iter().any(|value| &value.ty != lane)
                 {
                     return Err(invalid());
                 }
@@ -90,11 +129,11 @@ impl VectorInst {
                 if self.arguments.len() != 2 {
                     return Err(invalid());
                 }
-                let (_, width) = integer_vector_shape(&self.arguments[0].ty).ok_or_else(invalid)?;
+                let lane = lane_type(&self.arguments[0].ty).ok_or_else(invalid)?;
                 if !matches!(self.arguments[1].ty, EvoIRType::Bits(1..=128)) {
                     return Err(invalid());
                 }
-                if self.result.ty != EvoIRType::Bits(width) {
+                if &self.result.ty != lane {
                     return Err(invalid());
                 }
             }
@@ -177,8 +216,7 @@ pub(super) fn execute(
             state.save_vector(result)
         }
         VectorOp::Pack => {
-            let (lanes, width) =
-                integer_vector_shape(&instruction.result.ty).expect("validated integer vector");
+            let (lanes, width) = vector_shape(&instruction.result.ty).expect("validated vector");
             let bytes = usize::from(width / 8);
             let mut result =
                 ObjectRepresentation::uninitialized(usize::from(lanes) * bytes).map_err(fail)?;
@@ -195,8 +233,7 @@ pub(super) fn execute(
             state.save_vector(result)
         }
         VectorOp::Extract => {
-            let (lanes, width) =
-                integer_vector_shape(&arguments[0].ty).expect("validated integer vector");
+            let (lanes, width) = vector_shape(&arguments[0].ty).expect("validated vector");
             let index = read_value(values, &arguments[1], block)?;
             if index >= u128::from(lanes) {
                 return Err(InterpreterError::UndefinedBehavior {
@@ -220,7 +257,7 @@ pub(super) fn execute(
                 &arguments[0].ty,
                 block,
             )?;
-            if integer_vector_shape(&instruction.result.ty).is_some() {
+            if vector_shape(&instruction.result.ty).is_some() {
                 state.save_vector(repr)
             } else {
                 repr.read_integer(0, repr.size(), ByteOrder::Little)

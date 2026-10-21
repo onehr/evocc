@@ -121,7 +121,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 crate::vector::shape(self.unit.types(), types[0]).ok_or_else(unsupported)?;
             if crate::vector::shape(self.unit.types(), ty).is_none() {
                 return self
-                    .vector_lane(
+                    .integer_lane(
                         arguments[0],
                         usize::from(high) * usize::from(lanes) / 2,
                         span,
@@ -166,7 +166,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if let Operation::PolynomialLong { high } = op {
             let mut operand = |value| {
                 if high {
-                    self.vector_lane(value, 1, span).map(CInteger::raw_bits)
+                    self.integer_lane(value, 1, span).map(CInteger::raw_bits)
                 } else {
                     expect_machine_integer(value, span).map(CInteger::raw_bits)
                 }
@@ -352,20 +352,20 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         for lane in 0..usize::from(lanes) {
             let raw = match op {
                 Operation::ReverseByteBits => u128::from(
-                    (self.vector_lane(arguments[0], lane, span)?.raw_bits() as u8).reverse_bits(),
+                    (self.integer_lane(arguments[0], lane, span)?.raw_bits() as u8).reverse_bits(),
                 ),
                 Operation::Combine => {
                     let half = usize::from(lanes) / 2;
-                    self.vector_lane(arguments[usize::from(lane >= half)], lane % half, span)?
+                    self.integer_lane(arguments[usize::from(lane >= half)], lane % half, span)?
                         .raw_bits()
                 }
                 Operation::ShiftRightNarrow => {
-                    self.vector_lane(arguments[0], lane, span)?.raw_bits()
+                    self.integer_lane(arguments[0], lane, span)?.raw_bits()
                         >> count.expect("checked immediate")
                 }
                 Operation::ShiftInsert { right } => {
-                    let a = self.vector_lane(arguments[0], lane, span)?.raw_bits();
-                    let b = self.vector_lane(arguments[1], lane, span)?.raw_bits();
+                    let a = self.integer_lane(arguments[0], lane, span)?.raw_bits();
+                    let b = self.integer_lane(arguments[1], lane, span)?.raw_bits();
                     let n = count.expect("checked immediate");
                     if right {
                         let mask = ((1_u128 << n) - 1) << (u32::from(integer.bits()) - n);
@@ -375,18 +375,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                 }
                 Operation::PolynomialMultiply => {
-                    let a = self.vector_lane(arguments[0], lane, span)?.raw_bits();
-                    let b = self.vector_lane(arguments[1], lane, span)?.raw_bits();
+                    let a = self.integer_lane(arguments[0], lane, span)?.raw_bits();
+                    let b = self.integer_lane(arguments[1], lane, span)?.raw_bits();
                     (0..8).fold(0, |result, bit| {
                         result ^ if b & (1 << bit) != 0 { a << bit } else { 0 }
                     })
                 }
                 Operation::ShiftLeft => {
-                    self.vector_lane(arguments[0], lane, span)?.raw_bits()
+                    self.integer_lane(arguments[0], lane, span)?.raw_bits()
                         << count.expect("checked shift count")
                 }
                 Operation::ShiftRight { signed } => {
-                    let value = self.vector_lane(arguments[0], lane, span)?;
+                    let value = self.integer_lane(arguments[0], lane, span)?;
                     let count = count.expect("checked shift count");
                     if signed {
                         (value.mathematical_value() >> count.min(u32::from(integer.bits()) - 1))
@@ -396,11 +396,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     }
                 }
                 Operation::Table => {
-                    let index = self.vector_lane(arguments[1], lane, span)?.raw_bits();
+                    let index = self.integer_lane(arguments[1], lane, span)?.raw_bits();
                     let (_, table_lanes) = crate::vector::shape(self.unit.types(), types[0])
                         .ok_or_else(unsupported)?;
                     if index < u128::from(table_lanes) {
-                        self.vector_lane(arguments[0], index as usize, span)?
+                        self.integer_lane(arguments[0], index as usize, span)?
                             .raw_bits()
                     } else {
                         0

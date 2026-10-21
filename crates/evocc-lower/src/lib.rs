@@ -3547,11 +3547,27 @@ fn function_value_type(
                 | evocc_types::FloatKind::F64
                 | evocc_types::FloatKind::F128
         )
-    }) || floating_vector_aggregate(types, target, ty)
-    {
+    }) {
         return Err(LowerError::FloatingCallInterface { span });
     }
     match types.get(ty).map(|canonical| &canonical.kind) {
+        // A short vector of `float` or `double` lanes is a `vec<L, f32>` or
+        // `vec<L, f64>` value; a wider one is an object (L05).
+        Some(TypeKind::Vector { lanes, .. })
+            if evocc_chir::vector::floating(types, ty).is_some() =>
+        {
+            let (kind, _) = evocc_chir::vector::floating(types, ty).unwrap();
+            let ir = if is_wide_vector(types, ty) {
+                EvoIRType::Ptr(AddressSpace::Generic)
+            } else {
+                EvoIRType::Vec(*lanes, Box::new(floating::ir_type(kind).unwrap()))
+            };
+            Ok(FunctionValueType {
+                source: ty,
+                ir,
+                integer: CIntegerType::ULONG,
+            })
+        }
         Some(TypeKind::Vector { element, lanes, .. }) => {
             let integer = canonical_integer(types, target, *element, span)?;
             let ir = if is_wide_vector(types, ty) {
@@ -3730,12 +3746,19 @@ fn function_pointer_interface(
     })
 }
 
+/// AAPCS64 homogeneous short-vector aggregate: a record or array of one to
+/// four short vectors (8 or 16 bytes) of one size. AAPCS64 tests only the
+/// size for homogeneity, not the lane type, as GCC 14 and Apple clang do
+/// (L05). The mark keeps the lane count and lane width of the first member,
+/// and a record with padding has no HVA shape.
 fn homogeneous_vector_aggregate(
     types: &TypeInterner,
+    target: &TargetDataLayout,
     ty: TypeId,
 ) -> Option<evocc_types::VectorAggregate> {
     fn visit(
         types: &TypeInterner,
+        target: &TargetDataLayout,
         ty: TypeId,
         visiting: &mut BTreeSet<TypeId>,
     ) -> Option<evocc_types::VectorAggregate> {
@@ -3744,36 +3767,23 @@ fn homogeneous_vector_aggregate(
         }
         let result = (|| match &types.get(ty)?.kind {
             TypeKind::Vector { element, lanes, .. } => {
-                let bits: u16 = match types.get(*element)?.kind {
-                    TypeKind::Int(rank) => match rank {
-                        evocc_types::IntRank::Char
-                        | evocc_types::IntRank::SignedPlainChar
-                        | evocc_types::IntRank::SChar
-                        | evocc_types::IntRank::UChar => 8,
-                        evocc_types::IntRank::Short | evocc_types::IntRank::UShort => 16,
-                        evocc_types::IntRank::Int | evocc_types::IntRank::UInt => 32,
-                        evocc_types::IntRank::Long
-                        | evocc_types::IntRank::ULong
-                        | evocc_types::IntRank::LongLong
-                        | evocc_types::IntRank::ULongLong => 64,
-                        _ => return None,
-                    },
-                    TypeKind::GnuInt128(_) => 128,
-                    _ => return None,
-                };
-                matches!(u64::from(*lanes) * u64::from(bits) / 8, 8 | 16).then_some(
-                    evocc_types::VectorAggregate {
-                        lanes: *lanes,
-                        bits,
-                        count: 1,
-                    },
-                )
+                let bytes = target.layout_of(types, ty).ok()?.size_bytes;
+                let lane = target.layout_of(types, *element).ok()?.size_bytes;
+                let bits = u16::try_from(lane * 8).ok()?;
+                (matches!(bytes, 8 | 16)
+                    && u64::from(*lanes) * lane == bytes
+                    && matches!(bits, 8 | 16 | 32 | 64 | 128))
+                .then_some(evocc_types::VectorAggregate {
+                    lanes: *lanes,
+                    bits,
+                    count: 1,
+                })
             }
             TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(count),
             } => {
-                let mut member = visit(types, *element, visiting)?;
+                let mut member = visit(types, target, *element, visiting)?;
                 member.count = u8::try_from(u64::from(member.count).checked_mul(*count)?).ok()?;
                 (1..=4).contains(&member.count).then_some(member)
             }
@@ -3789,9 +3799,12 @@ fn homogeneous_vector_aggregate(
                     if field.bit_field.is_some() {
                         return None;
                     }
-                    let member = visit(types, field.ty, visiting)?;
+                    let member = visit(types, target, field.ty, visiting)?;
                     if let Some(old) = &mut shape {
-                        if old.lanes != member.lanes || old.bits != member.bits {
+                        let size = |v: &evocc_types::VectorAggregate| {
+                            u32::from(v.lanes) * u32::from(v.bits)
+                        };
+                        if size(old) != size(&member) {
                             return None;
                         }
                         old.count = if matches!(types.get(ty)?.kind, TypeKind::Union(_)) {
@@ -3813,7 +3826,10 @@ fn homogeneous_vector_aggregate(
         visiting.remove(&ty);
         result
     }
-    visit(types, ty, &mut BTreeSet::new())
+    let shape = visit(types, target, ty, &mut BTreeSet::new())?;
+    let size = target.layout_of(types, ty).ok()?.size_bytes;
+    (size == u64::from(shape.lanes) * u64::from(shape.bits) / 8 * u64::from(shape.count))
+        .then_some(shape)
 }
 
 fn record_signature_marks(
@@ -3831,7 +3847,7 @@ fn record_signature_marks(
         Ok(RecordShape {
             size: layout.size_bytes,
             align: layout.align_bytes,
-            vector: homogeneous_vector_aggregate(types, ty),
+            vector: homogeneous_vector_aggregate(types, target, ty),
             floating: evocc_chir::homogeneous_floating_aggregate(types, target, ty),
         })
     };
@@ -3871,7 +3887,11 @@ fn is_wide_vector(types: &TypeInterner, ty: TypeId) -> bool {
     let bits = match types.get(*element).map(|ty| &ty.kind) {
         Some(TypeKind::Int(rank)) => u32::from(integer_type_for_rank(*rank).bits()),
         Some(TypeKind::GnuInt128(_)) => 128,
-        _ => return false,
+        _ => match evocc_chir::vector::floating(types, ty) {
+            Some((evocc_types::FloatKind::F32, _)) => 32,
+            Some(_) => 64,
+            None => return false,
+        },
     };
     u32::from(*lanes) * bits > 128
 }
@@ -3890,80 +3910,6 @@ fn function_result_type(
         value.ir = EvoIRType::Bits(32);
     }
     Ok(value)
-}
-
-/// Whether `ty` is a record that AAPCS64 makes an HVA and that has a vector
-/// with floating lanes: one to four short vectors (8 or 16 bytes) of one size,
-/// whatever their lane types. GCC and Apple clang pass such a record in
-/// vector registers; this lowering has no floating vector values (L05), so a
-/// call interface with one is refused (`E3049`) instead of passing it by the
-/// general record rule.
-fn floating_vector_aggregate(types: &TypeInterner, target: &TargetDataLayout, ty: TypeId) -> bool {
-    /// (vector bytes, member count, a floating lane seen)
-    fn visit(
-        types: &TypeInterner,
-        target: &TargetDataLayout,
-        ty: TypeId,
-        visiting: &mut BTreeSet<TypeId>,
-    ) -> Option<(u64, u64, bool)> {
-        if !visiting.insert(ty) {
-            return None;
-        }
-        let result = (|| match &types.get(ty)?.kind {
-            TypeKind::Vector { element, .. } => {
-                let bytes = target.layout_of(types, ty).ok()?.size_bytes;
-                let floating = matches!(types.get(*element)?.kind, TypeKind::Float(_));
-                matches!(bytes, 8 | 16).then_some((bytes, 1, floating))
-            }
-            TypeKind::Array {
-                element,
-                bound: ArrayBound::Fixed(count),
-            } => {
-                let (bytes, members, floating) = visit(types, target, *element, visiting)?;
-                let members = members.checked_mul(*count)?;
-                (1..=4)
-                    .contains(&members)
-                    .then_some((bytes, members, floating))
-            }
-            TypeKind::Struct(tag) | TypeKind::Union(tag) => {
-                let TagState::Complete(
-                    TagDefinition::Struct(fields) | TagDefinition::Union(fields),
-                ) = &types.tag(*tag)?.state
-                else {
-                    return None;
-                };
-                let union = matches!(types.get(ty)?.kind, TypeKind::Union(_));
-                let mut shape: Option<(u64, u64, bool)> = None;
-                for field in fields {
-                    if field.bit_field.is_some() {
-                        return None;
-                    }
-                    let member = visit(types, target, field.ty, visiting)?;
-                    shape = Some(match shape {
-                        None => member,
-                        Some(old) if old.0 == member.0 => (
-                            old.0,
-                            if union {
-                                old.1.max(member.1)
-                            } else {
-                                old.1 + member.1
-                            },
-                            old.2 || member.2,
-                        ),
-                        Some(_) => return None,
-                    });
-                }
-                shape.filter(|(_, members, _)| (1..=4).contains(members))
-            }
-            _ => None,
-        })();
-        visiting.remove(&ty);
-        result
-    }
-    matches!(
-        types.get(ty).map(|ty| &ty.kind),
-        Some(TypeKind::Struct(_) | TypeKind::Union(_))
-    ) && visit(types, target, ty, &mut BTreeSet::new()).is_some_and(|(_, _, floating)| floating)
 }
 
 /// Whether a call on `target` extends a value of `ty` by its sign: a signed
@@ -6995,6 +6941,15 @@ impl<'a> FunctionLowerer<'a> {
                 let ty = self.record_value_type(left)?;
                 (self.record_value_type(right)? == ty).then_some(ty)?
             }
+            // `*p` names the record that `p` points to, as a variadic
+            // argument does when it passes `*p`.
+            CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
+                let pointer = evocc_chir::vector::expression_type(self.unit.types(), pointer)?;
+                match self.unit.types().get(pointer)?.kind {
+                    TypeKind::Pointer(pointee) => pointee,
+                    _ => return None,
+                }
+            }
             _ => return None,
         };
         self.is_aggregate_type(ty).then_some(ty)
@@ -7255,6 +7210,32 @@ impl<'a> FunctionLowerer<'a> {
                 // A floating member is transported as its exact bits.
                 let value = self.emit_memory_load(source, ty, volatile.reads(), span, state)?;
                 self.emit_memory_store(destination, value, ty, volatile.writes(), span, state)?;
+                Ok(())
+            }
+            TypeKind::Vector { element, lanes, .. } => {
+                if !is_wide_vector(self.unit.types(), ty) {
+                    // A short vector is one access of its size.
+                    let value = self.emit_memory_load(source, ty, volatile.reads(), span, state)?;
+                    self.emit_memory_store(destination, value, ty, volatile.writes(), span, state)?;
+                    return Ok(());
+                }
+                // A wide vector is an object of lanes: it is accessed lane by
+                // lane, as an array is.
+                let width = self.access_layout(element, span)?.size_bytes;
+                for lane in 0..u64::from(lanes) {
+                    let destination =
+                        self.constant_offset_address(destination.clone(), lane * width, state)?;
+                    let source =
+                        self.constant_offset_address(source.clone(), lane * width, state)?;
+                    self.emit_aggregate_transfer(
+                        destination,
+                        source,
+                        element,
+                        volatile,
+                        span,
+                        state,
+                    )?;
+                }
                 Ok(())
             }
             TypeKind::Complex(_) if evocc_chir::complex::admitted(self.unit.types(), ty) => {
@@ -12630,6 +12611,12 @@ impl<'a> FunctionLowerer<'a> {
         {
             return Ok((left, right, CIntegerType::ULONG));
         }
+        // The arms of a conditional of one vector type select a vector value
+        // as it is; the front end gave both arms that type.
+        if left.value.ty == right.value.ty && matches!(left.value.ty, EvoIRType::Vec(..)) {
+            let integer = left.integer;
+            return Ok((left, right, integer));
+        }
         let common = arithmetic_common_type(left.integer, right.integer);
         Ok((
             self.cast(left, common, left_state)?,
@@ -13660,7 +13647,11 @@ impl<'a> FunctionLowerer<'a> {
                 ParamMark::ByVal(RecordShape {
                     size: layout.size_bytes,
                     align: layout.align_bytes,
-                    vector: homogeneous_vector_aggregate(self.unit.types(), expected.source),
+                    vector: homogeneous_vector_aggregate(
+                        self.unit.types(),
+                        self.target,
+                        expected.source,
+                    ),
                     floating: evocc_chir::homogeneous_floating_aggregate(
                         self.unit.types(),
                         self.target,
@@ -14083,9 +14074,6 @@ impl<'a> FunctionLowerer<'a> {
                 if !evocc_chir::is_integer_variadic_record(self.unit.types(), self.target, ty) {
                     return Err(LowerError::VarArgs { span });
                 }
-                if floating_vector_aggregate(self.unit.types(), self.target, ty) {
-                    return Err(LowerError::FloatingCallInterface { span });
-                }
                 let layout = self
                     .target
                     .layout_of(self.unit.types(), ty)
@@ -14093,7 +14081,7 @@ impl<'a> FunctionLowerer<'a> {
                 record_shape = Some(RecordShape {
                     size: layout.size_bytes,
                     align: layout.align_bytes,
-                    vector: homogeneous_vector_aggregate(self.unit.types(), ty),
+                    vector: homogeneous_vector_aggregate(self.unit.types(), self.target, ty),
                     floating: evocc_chir::homogeneous_floating_aggregate(
                         self.unit.types(),
                         self.target,
@@ -14839,6 +14827,16 @@ impl<'a> FunctionLowerer<'a> {
         }
         if evocc_chir::complex::floating(self.unit.types(), place.value_ty()).is_some() {
             return self.lower_complex_update(
+                operator,
+                place.value_ty(),
+                address,
+                place.access_qualifiers().is_volatile,
+                span,
+                state,
+            );
+        }
+        if evocc_chir::vector::floating(self.unit.types(), place.value_ty()).is_some() {
+            return self.lower_floating_vector_update(
                 operator,
                 place.value_ty(),
                 address,

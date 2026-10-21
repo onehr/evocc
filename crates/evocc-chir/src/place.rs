@@ -531,10 +531,14 @@ impl<'arena> MemoryPlace<'arena> {
                         Some(
                             TypeKind::Array { element, .. } | TypeKind::Vector { element, .. },
                         ) if *element == element_ty => {
+                            // GCC 14 gives the address of a lane of a
+                            // floating vector (L05); a lane of an integer
+                            // vector has no address.
                             if matches!(
                                 types.get(current).map(|ty| &ty.kind),
                                 Some(TypeKind::Vector { .. })
-                            ) {
+                            ) && crate::vector::floating(types, current).is_none()
+                            {
                                 addressable = false;
                             }
                             access_qualifiers = merge_qualifiers(

@@ -8158,11 +8158,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 ) || crate::complex::admitted(self.unit.types(), aggregate_type)
                 {
                     let snapshot = self.vector_temporary(aggregate_type, span)?;
-                    if qualifiers.is_volatile
-                        && crate::complex::admitted(self.unit.types(), aggregate_type)
-                    {
+                    if qualifiers.is_volatile {
                         // A volatile complex object is read as its two
-                        // parts, each one volatile access.
+                        // parts, each one volatile access; a volatile vector
+                        // as one access, or lane by lane when it is wide.
                         self.copy_volatile_aggregate(
                             snapshot,
                             aggregate_type,
@@ -8578,6 +8577,51 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 Ok(())
             }
+            TypeKind::Vector { element, lanes, .. } => {
+                let layout = self.access_layout(destination_type, span)?;
+                if layout.size_bytes > 16 {
+                    // A wide vector is an object of lanes: it is accessed
+                    // lane by lane, as an array is.
+                    let width = self.access_layout(element, span)?.size_bytes;
+                    for lane in 0..u64::from(lanes) {
+                        let offset = (lane * width) as i64;
+                        self.copy_volatile_subobject(
+                            destination
+                                .checked_offset(offset)
+                                .map_err(|error| self.memory_error(error, span))?,
+                            element,
+                            destination_qualifiers,
+                            source
+                                .checked_offset(offset)
+                                .map_err(|error| self.memory_error(error, span))?,
+                            element,
+                            source_qualifiers,
+                            span,
+                        )?;
+                    }
+                    return Ok(());
+                }
+                // A short vector is one access of its size, as an EvoIR
+                // `load` or `store` of a vector value is.
+                let (representation, world) = self
+                    .memory
+                    .load_representation(&self.world, source, layout, source_qualifiers.is_volatile)
+                    .map_err(|error| self.memory_error(error, span))?;
+                self.world = world;
+                let (memory, world) = self
+                    .memory
+                    .store_representation(
+                        &self.world,
+                        destination,
+                        layout,
+                        &representation,
+                        destination_qualifiers.is_volatile,
+                    )
+                    .map_err(|error| self.memory_error(error, span))?;
+                self.memory = memory;
+                self.world = world;
+                Ok(())
+            }
             TypeKind::Union(_) => {
                 let layout = self.access_layout(destination_type, span)?;
                 let volatile = CopyVolatility::new(
@@ -8621,15 +8665,16 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .get(destination_type)
             .map(|ty| ty.kind.clone())
         {
-            Some(TypeKind::Struct(_) | TypeKind::Union(_)) => self.copy_volatile_aggregate(
-                destination,
-                destination_type,
-                destination_qualifiers,
-                source,
-                source_type,
-                source_qualifiers,
-                span,
-            ),
+            Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::Vector { .. }) => self
+                .copy_volatile_aggregate(
+                    destination,
+                    destination_type,
+                    destination_qualifiers,
+                    source,
+                    source_type,
+                    source_qualifiers,
+                    span,
+                ),
             Some(TypeKind::Complex(_)) if parts => self.copy_volatile_aggregate(
                 destination,
                 destination_type,
@@ -8779,6 +8824,28 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CValue::FunctionPointer { value, ty } => {
                 self.offset_function_value(value, ty, CInteger::int(1), direction, span)
+            }
+            CValue::Aggregate { ty, .. }
+                if crate::vector::floating(self.unit.types(), ty).is_some() =>
+            {
+                // L05: one is added to or subtracted from each lane, as GCC
+                // does.
+                let (kind, _) = crate::vector::floating(self.unit.types(), ty).unwrap();
+                let operation = crate::vector::VectorExpr {
+                    op: crate::vector::VectorOp::Binary(if direction == OffsetDirection::Add {
+                        BinaryOp::Add
+                    } else {
+                        BinaryOp::Sub
+                    }),
+                    operands: Vec::new(),
+                    facts: ExprFacts::value(ty),
+                    span,
+                };
+                let one = CValue::Floating(evocc_types::floating::FloatBits::from_unsigned(
+                    self.target.float_format(kind),
+                    1,
+                ));
+                self.apply_vector(&operation, &[previous, one])
             }
             CValue::Aggregate { ty, .. }
                 if crate::complex::floating(self.unit.types(), ty).is_some() =>
@@ -9526,7 +9593,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
             }
         }
-        if matches!(left, CValue::Floating(_)) || matches!(right, CValue::Floating(_)) {
+        if crate::vector::shape(self.unit.types(), ty).is_none()
+            && (matches!(left, CValue::Floating(_)) || matches!(right, CValue::Floating(_)))
+        {
             let op =
                 assignment_binary(operator).ok_or(InterpreterError::UnsupportedExpression {
                     feature: "invalid floating compound assignment",

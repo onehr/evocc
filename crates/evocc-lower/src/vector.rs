@@ -84,7 +84,14 @@ impl<'a> FunctionLowerer<'a> {
                 feature: "invalid vector result",
             },
         )?;
-        let integer = canonical_integer(self.unit.types(), self.target, element, span)?;
+        // A floating lane is an `f32` or `f64` value; its integer field is the
+        // placeholder of every floating value.
+        let floating = evocc_chir::vector::floating(self.unit.types(), ty).map(|(kind, _)| kind);
+        let integer = if floating.is_some() {
+            CIntegerType::ULONG
+        } else {
+            canonical_integer(self.unit.types(), self.target, element, span)?
+        };
         if is_wide_vector(self.unit.types(), ty) {
             let origin = self.synthetic_origin()?;
             let destination = self.emit_alloca(ty, span, origin, state)?;
@@ -112,11 +119,13 @@ impl<'a> FunctionLowerer<'a> {
             })
         } else {
             let mut values = Vec::with_capacity(elements.len());
+            let lane =
+                floating.map_or_else(|| bits(integer), |kind| floating::ir_type(kind).unwrap());
             for value in elements {
                 values.push(match value {
                     Some(value) => value,
                     None => {
-                        let value = self.fresh_value(bits(integer));
+                        let value = self.fresh_value(lane.clone());
                         self.emit(state, Inst::Uninitialized(value.clone()))?;
                         value
                     }
@@ -192,6 +201,12 @@ impl<'a> FunctionLowerer<'a> {
         if matches!(op, VectorOp::Shuffle | VectorOp::ShuffleStatic(_)) {
             return self.lower_vector_shuffle(op, types, ty, arguments, span, state);
         }
+        let floating = |ty: &Option<TypeId>| {
+            ty.is_some_and(|ty| evocc_chir::vector::floating(self.unit.types(), ty).is_some())
+        };
+        if floating(&Some(ty)) || types.iter().any(floating) {
+            return self.lower_floating_vector_values(op, types, ty, arguments, span, state);
+        }
         let (element, lanes) = evocc_chir::vector::shape(self.unit.types(), ty).ok_or(
             LowerError::UnsupportedExpression {
                 span,
@@ -243,6 +258,185 @@ impl<'a> FunctionLowerer<'a> {
             elements.push(Some(value.value));
         }
         self.pack_vector(ty, elements, span, state)
+    }
+
+    /// L05: `++` and `--` on a floating vector add or subtract one in each
+    /// lane, as GCC does. The value is the vector before or after the update.
+    pub(super) fn lower_floating_vector_update(
+        &mut self,
+        operator: UpdateOp,
+        ty: TypeId,
+        address: Value,
+        volatile: bool,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let (kind, _) = evocc_chir::vector::floating(self.unit.types(), ty).ok_or(
+            LowerError::UnsupportedExpression {
+                span,
+                feature: "invalid floating vector update",
+            },
+        )?;
+        let wide = is_wide_vector(self.unit.types(), ty);
+        let original = if wide {
+            // A wide vector is an object: the old value is a copy of it.
+            let origin = self.synthetic_origin()?;
+            let copy = self.emit_alloca(ty, span, origin, state)?;
+            self.emit_aggregate_transfer(
+                copy.clone(),
+                address.clone(),
+                ty,
+                CopyVolatility::new(volatile, false),
+                span,
+                state,
+            )?;
+            ExprValue {
+                value: copy,
+                integer: CIntegerType::ULONG,
+            }
+        } else {
+            self.emit_memory_load(address.clone(), ty, volatile, span, state)?
+        };
+        let address = self.retain_temporary(address, state);
+        let kept = self.retain_temporary(original.value.clone(), state);
+        let one = self.floating_constant(
+            evocc_types::floating::FloatBits::from_unsigned(kind, 1),
+            state,
+        )?;
+        let op = if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PostIncrement) {
+            BinaryOp::Add
+        } else {
+            BinaryOp::Sub
+        };
+        let updated = self.lower_vector_values(
+            &VectorOp::Binary(op),
+            &[Some(ty), None],
+            ty,
+            vec![original, one],
+            span,
+            state,
+        )?;
+        let address = state.env.remove(&address).expect("retained address").value;
+        let original = ExprValue {
+            value: state.env.remove(&kept).expect("retained vector").value,
+            integer: CIntegerType::ULONG,
+        };
+        if wide {
+            self.emit_aggregate_transfer(
+                address,
+                updated.value.clone(),
+                ty,
+                CopyVolatility::new(false, volatile),
+                span,
+                state,
+            )?;
+        } else {
+            self.emit_memory_store(address, updated.clone(), ty, volatile, span, state)?;
+        }
+        Ok(
+            if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {
+                updated
+            } else {
+                original
+            },
+        )
+    }
+
+    /// L05: each lane of a floating vector operation is the scalar operation
+    /// of EvoIR 3.13 on that lane, in ascending lane order, so a strict region
+    /// threads its world through the lanes. A comparison gives a mask lane of
+    /// all ones or zero, and a conversion is the C cast of each lane, with
+    /// its `E3063` obligation.
+    fn lower_floating_vector_values(
+        &mut self,
+        op: &VectorOp,
+        types: &[Option<TypeId>],
+        ty: TypeId,
+        arguments: Vec<ExprValue>,
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let (element, lanes) = evocc_chir::vector::shape(self.unit.types(), ty).ok_or(
+            LowerError::UnsupportedExpression {
+                span,
+                feature: "invalid vector result",
+            },
+        )?;
+        let result = evocc_chir::vector::floating(self.unit.types(), ty).map(|(kind, _)| kind);
+        let integer = match result {
+            Some(_) => CIntegerType::ULONG,
+            None => canonical_integer(self.unit.types(), self.target, element, span)?,
+        };
+        let mut keys = Vec::new();
+        for argument in arguments {
+            let key = self.retain_temporary(argument.value, state);
+            state.env.get_mut(&key).unwrap().integer = Some(argument.integer);
+            keys.push(key);
+        }
+        let at = |key: EnvKey, state: &State| {
+            let v = &state.env[&key];
+            ExprValue {
+                value: v.value.clone(),
+                integer: v.integer.unwrap(),
+            }
+        };
+        let mut result_keys = Vec::new();
+        for lane in 0..u64::from(lanes) {
+            let left =
+                self.vector_lane_constant(&at(keys[0], state), types[0], lane, span, state)?;
+            let value = match op {
+                VectorOp::Binary(op) => {
+                    let left = self.retain_temporary(left.value, state);
+                    let right = self.vector_lane_constant(
+                        &at(keys[1], state),
+                        types[1],
+                        lane,
+                        span,
+                        state,
+                    )?;
+                    let left = state.env.remove(&left).unwrap().value;
+                    let left = ExprValue {
+                        value: left,
+                        integer: CIntegerType::ULONG,
+                    };
+                    let value = self.floating_binary(*op, left, right, state)?;
+                    if matches!(
+                        op,
+                        BinaryOp::Eq
+                            | BinaryOp::Ne
+                            | BinaryOp::Lt
+                            | BinaryOp::Le
+                            | BinaryOp::Gt
+                            | BinaryOp::Ge
+                    ) {
+                        self.vector_mask(value.value, integer, state)?
+                    } else {
+                        value
+                    }
+                }
+                VectorOp::Unary(UnaryOp::Plus) => left,
+                VectorOp::Unary(UnaryOp::Neg) => self.floating_unary(UnaryOp::Neg, left, state)?,
+                VectorOp::Convert => match result {
+                    Some(kind) => self.cast_floating(left, kind, state)?,
+                    None => self.cast(left, integer, state)?,
+                },
+                _ => {
+                    return Err(LowerError::UnsupportedExpression {
+                        span,
+                        feature: "invalid floating vector operation",
+                    })
+                }
+            };
+            result_keys.push(self.retain_temporary(value.value, state));
+        }
+        for key in keys {
+            state.env.remove(&key);
+        }
+        let values = result_keys
+            .into_iter()
+            .map(|key| Some(state.env.remove(&key).unwrap().value))
+            .collect();
+        self.pack_vector(ty, values, span, state)
     }
 
     /// Select a representation before reading its lane; unchosen sources and

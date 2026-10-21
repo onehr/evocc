@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.8.0** | **Pinned ground truth** | Complex helper calls on 2026-10-21
+**Revision 1.9.0** | **Pinned ground truth** | Floating vector lanes on 2026-10-21
 
 ## Status and scope
 
@@ -181,11 +181,11 @@ physical registers, spill slots and frame offsets.
 
 | Class | Holds | View |
 |---|---|---|
-| `gpr32` | `bits<N>` with `1 <= N <= 32`; an integer vector of 1, 2 or 4 bytes | `w` |
+| `gpr32` | `bits<N>` with `1 <= N <= 32`; an integer vector of 1, 2 or 4 bytes; a 4-byte floating vector | `w` |
 | `gpr64` | `bits<N>` with `33 <= N <= 64`; every pointer; each half of a `bits<128>` | `x` |
 | `simd32` | `f32` | `s` |
-| `simd64` | `f64`; an 8-byte integer vector | `d` |
-| `simd128` | `f128` (Linux ABI profile only); a 16-byte integer vector; AES operands | `q` |
+| `simd64` | `f64`; an 8-byte integer or floating vector | `d` |
+| `simd128` | `f128` (Linux ABI profile only); a 16-byte integer or floating vector; AES operands | `q` |
 | `flags` | The NZCV result of a comparison or a flag-setting form | none |
 
 The general classes and the SIMD classes are views of two register files.
@@ -297,17 +297,25 @@ format. A part without its partner is one call that uses one result.
   ordinary `bl` of `__mulsc3` or `__muldc3`, and its results replace the
   inline ones. Darwin has no binary128 part.
 
-### 2.7 Integer vectors and AES
+### 2.7 Integer and floating vectors and AES
 
 `vec.pack.N.B (args)` and `vec.extract.N.B (src, index)` keep the lane width
 `N` and the size `B` in bytes: `B` = 8 uses `simd64`, 16 uses `simd128`, and
 1, 2 or 4 uses `gpr32`. Emission expands them to lane moves and indexed
 selection. An invalid index traps with `E3011` before the hardware masks it.
-A `gpr32` vector also crosses a call boundary in a general register
+An integer `gpr32` vector also crosses a call boundary in a general register
 (Section 6.2).
+A floating vector of EvoIR 3.8 has the class of an integer vector of its
+size. Its lanes move through general registers as exact bits: a pack moves
+each `f32` or `f64` lane to a general register with `fp.to_bits` and packs the
+integer lanes, and an extract selects the integer lane and moves it back with
+`fp.from_bits`. No lane move is a numerical operation, so a signaling NaN keeps
+its bits. Lane arithmetic is the scalar code of Section 2.6.
 Wider vectors are local objects with scalarized operations.
 `crypto.aese`, `crypto.aesd`, `crypto.aesmc` and `crypto.aesimc` operate on
-`simd128`. SIMD classes are refused under `-mgeneral-regs-only` (`E4002`).
+`simd128`. SIMD classes are refused under `-mgeneral-regs-only` (`E4002`), and
+so is every function with a floating vector value, also when the value is a
+4-byte vector in `gpr32`.
 
 ## 3. Sub-width Values
 
@@ -879,6 +887,11 @@ register. Under Linux the shapes agree with GCC 14 in both directions;
 Clang 19 returns them in SIMD registers instead, which is a recorded
 incompatibility for results only.
 
+**Floating vectors below eight bytes.** A floating vector of 4 bytes, one
+`f32` lane, is no AAPCS64 short vector, and GCC 14 and Clang 19 pass it
+differently. A parameter, result, argument or `va_arg` of that type is
+`E4002`.
+
 *Informative.* `crates/evocc/tests/tiny_vector_abi.rs` with
 `tests/fixtures/tiny-vector-abi-shapes*` and the probe pair of
 `tests/fixtures/rules-20261013/l06-tiny-vector-*`: GCC 14 and EvoCC agree in
@@ -887,12 +900,13 @@ checks, and Apple clang and EvoCC agree in both directions.
 
 ### 6.3 Floating-point and vector arguments (Linux)
 
-`f32`, `f64`, HFA members, 8- and 16-byte integer vectors and HVA members
-share the `v0` to `v7` counter, independent of `x0` to `x7`; results use
-`v0` to `v3` for a group. An HFA or HVA (one to four identical members,
-marked `hva=Cxvec<L, bits<N>>` in `byval`/`sret`) that does not fit goes
-wholly to the stack with contiguous object bytes; other vectors wider than 16
-bytes use the record convention. Stack transport uses the natural member
+`f32`, `f64`, HFA members, 8- and 16-byte integer and floating vectors and
+HVA members share the `v0` to `v7` counter, independent of `x0` to `x7`;
+results use `v0` to `v3` for a group. An HFA (one to four identical members)
+or an HVA (one to four short vectors of one size, whatever their lane types,
+marked `hva=Cxvec<L, bits<N>>` in `byval`/`sret` with the lane shape of the
+first member) that does not fit goes wholly to the stack with contiguous
+object bytes; other vectors wider than 16 bytes use the record convention. Stack transport uses the natural member
 alignment that EvoIR records (`abi_align=16`, or 8), and the shared cursor
 rounds the physical stack offset. An anonymous `float` becomes `double`.
 
@@ -1723,7 +1737,7 @@ this table, not a withdrawn code or the allocation verifier's separate E4020.
 | Code | Name | Meaning |
 |---|---|---|
 | `E4001` | `not-lowered: floating-point` | Withdrawn: scalar `f32`/`f64` are admitted (Section 2.6); other formats remain front-end refusals. |
-| `E4002` | `not-lowered: vector` | An unsupported vector execution or external vector ABI, or a SIMD class under `-mgeneral-regs-only`, including an Apple tiny-vector result in `v0` (Section 6.2). |
+| `E4002` | `not-lowered: vector` | An unsupported vector execution or external vector ABI, a 4-byte floating vector at a call boundary, or a SIMD class or a floating vector under `-mgeneral-regs-only`, including an Apple tiny-vector result in `v0` (Sections 2.7 and 6.2). |
 | `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`. Width 128 is admitted, including the UB predicates and hosted division. |
 | `E4004` | `not-lowered: tuple` | A tuple-typed value. |
 | `E4005` | `not-lowered: static-pointer-data` | Withdrawn: static relocations are emitted (Section 8.2). |
@@ -1895,6 +1909,15 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.9.0, 2026-10-21.** Section 2.7 lowers the floating vectors of
+EvoIR 2.21.0. A floating vector has the class of an integer vector of its
+size, and its lanes move through general registers as exact bits, so the
+machine forms do not change. Section 6.3 passes a short floating vector like
+an integer one, and an HVA is one to four short vectors of one size, whatever
+their lane types. Section 6.2 refuses a 4-byte floating vector at a call
+boundary, and Section 2.7 refuses every floating vector under
+`-mgeneral-regs-only` (`E4002`).
 
 **Revision 1.8.0, 2026-10-21.** Section 2.6 lowers the complex parts of EvoIR
 2.20.0. On Linux, the two parts of one product or quotient are one fixed or

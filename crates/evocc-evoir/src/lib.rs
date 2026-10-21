@@ -26,7 +26,7 @@ mod text_parse;
 mod variadic;
 mod vector;
 pub use variadic::{call_argument_marks, VariadicAccess, VariadicOp};
-pub use vector::{integer_vector_shape, VectorInst, VectorOp};
+pub use vector::{floating_vector_shape, integer_vector_shape, vector_shape, VectorInst, VectorOp};
 
 /// A terminator edge: positional SSA bindings, independent of its producer.
 pub use assembly::AssemblyEdge as Edge;
@@ -1766,8 +1766,7 @@ fn validate_matching_access_guard(
 pub fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, String> {
     let size = match ty {
         EvoIRType::Vec(..) => {
-            let (lanes, width) =
-                integer_vector_shape(ty).ok_or("unsupported vector memory type")?;
+            let (lanes, width) = vector_shape(ty).ok_or("unsupported vector memory type")?;
             u64::from(lanes) * u64::from(width / 8)
         }
         EvoIRType::Bits(width) if *width > 0 => u64::from(width.div_ceil(8)),

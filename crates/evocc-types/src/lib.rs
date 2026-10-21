@@ -1942,6 +1942,7 @@ pub struct TargetDataLayout {
     sixteen_byte_lock_free: bool,
     power_of_two_atomics: bool,
     compiler_rt_complex: bool,
+    long_long_masks: bool,
 }
 
 impl TargetDataLayout {
@@ -1957,6 +1958,7 @@ impl TargetDataLayout {
             sixteen_byte_lock_free: false,
             power_of_two_atomics: false,
             compiler_rt_complex: false,
+            long_long_masks: false,
         }
     }
 
@@ -1976,6 +1978,7 @@ impl TargetDataLayout {
             sixteen_byte_lock_free: true,
             power_of_two_atomics: true,
             compiler_rt_complex: true,
+            long_long_masks: true,
         }
     }
 
@@ -1986,6 +1989,14 @@ impl TargetDataLayout {
     #[must_use]
     pub const fn compiler_rt_complex(&self) -> bool {
         self.compiler_rt_complex
+    }
+
+    /// Whether a comparison of `double` vector lanes gives `long long` mask
+    /// lanes, as Apple clang does. GCC 14 gives `long`. Both have the same
+    /// representation and ABI.
+    #[must_use]
+    pub const fn long_long_vector_masks(&self) -> bool {
+        self.long_long_masks
     }
 
     /// Whether `__atomic_always_lock_free(16, 0)` is true. Apple clang

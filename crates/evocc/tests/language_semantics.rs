@@ -971,19 +971,17 @@ fn mixed_record_varargs_copy_unused_representation() {
 #[test]
 fn integer_complex_varargs_use_the_composite_abi() {
     check("integer-complex-varargs.c", EXECUTION);
-    // L04: floating complex anonymous arguments use the HFA rules.
+    // L04: floating complex anonymous arguments use the HFA rules. L05: a
+    // record of floating vectors is an HVA.
     for source in [
         "void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,_Complex double);}",
         "struct S{int n;_Complex double value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}",
+        "typedef float v2f __attribute__((vector_size(8)));struct H{v2f a,b;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct H);}",
     ] {
         assert!(lower_source(source).is_ok(), "{source}");
     }
-    for (source, code) in [
-        ("typedef float v2f __attribute__((vector_size(8)));struct H{v2f a,b;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct H);}", "E3049"),
-        ("struct S{int n;__fp16 value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}", "E3030"),
-    ] {
-        assert_eq!(lower_source(source).unwrap_err().code(), code);
-    }
+    let source = "struct S{int n;__fp16 value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}";
+    assert_eq!(lower_source(source).unwrap_err().code(), "E3030");
 }
 #[test]
 fn relative_label_table_dispatches_to_the_same_function() {

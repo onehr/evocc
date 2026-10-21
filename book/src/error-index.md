@@ -2389,14 +2389,15 @@ Replacing it with a scalar would change the public ABI.
 ### E3050: not-lowered: floating-value
 
 The expression needs a floating value operation outside the supported lowering path.
-Arithmetic on vectors with floating lanes is one example of this boundary.
+Arithmetic on vectors of `long double` lanes is one example of this boundary.
+Vectors of `float` and `double` lanes execute lane by lane.
 
 A known type layout does not establish executable arithmetic semantics.
 EvoCC refuses the expression instead of computing only part of its value.
 
 ```c
-typedef double pair __attribute__((vector_size(16)));
-int main(void) { pair a = {1.0, 2.0}; pair b = a + a; return b[1] != 4.0; }
+typedef long double quad __attribute__((vector_size(32)));
+int main(void) { quad a = {1.0L, 2.0L}; quad b = a + a; return b[1] != 4.0L; }
 ```
 
 Fix: none

@@ -82,6 +82,27 @@ pub fn shape(types: &TypeInterner, ty: TypeId) -> Option<(TypeId, u16)> {
     }
 }
 
+/// The lane format and lane count of a GNU vector of `float` or `double`
+/// lanes: the floating vectors that execute (L05). `long double` and half
+/// lanes and the nominal `arm_neon.h` vectors have no executable lanes.
+#[must_use]
+pub fn floating(types: &TypeInterner, ty: TypeId) -> Option<(evocc_types::FloatKind, u16)> {
+    let TypeKind::Vector {
+        element,
+        lanes,
+        family: evocc_types::VectorFamily::Gnu,
+    } = types.get(ty)?.kind
+    else {
+        return None;
+    };
+    match types.get(element)?.kind {
+        TypeKind::Float(kind @ (evocc_types::FloatKind::F32 | evocc_types::FloatKind::F64)) => {
+            Some((kind, lanes))
+        }
+        _ => None,
+    }
+}
+
 /// Implicit integer-vector assignment preserves a lane representation even
 /// when its signedness differs. This is not declaration type compatibility.
 pub fn assignment_compatible(types: &TypeInterner, left: TypeId, right: TypeId) -> bool {

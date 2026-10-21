@@ -1,0 +1,32 @@
+func @lanes(%arg0: f32, %arg1: f32, %arg2: mem<all>, %arg3: world) -> (f32, f32, bits<64>, f32, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: f32, %v1: f32, %v2: mem<all>, %v3: world):
+    %v4 = vec.pack %v0, %v1 : vec<2, f32>
+    %v5 = const.bits<32> 1
+    %v6 = vec.extract %v4, %v5 : f32
+    %v7 = const.bits<32> 0
+    %v8 = vec.extract %v4, %v7 : f32
+    %v9 = vec.bitcast %v4 : bits<64>
+    %v10 = fp.add %v8, %v6 : f32
+    ret %v6, %v8, %v9, %v10, %v2, %v3
+}
+
+func @index(%arg0: f64, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (f64, bits<128>, mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=true, may_unwind=false }
+{
+^entry(%v0: f64, %v1: bits<32>, %v2: mem<all>, %v3: world):
+    %v4 = fp.neg %v0 : f64
+    %v5 = vec.pack %v0, %v4 : vec<2, f64>
+    %v6 = vec.extract %v5, %v1 : f64
+    %v7 = vec.bitcast %v5 : vec<4, bits<32>>
+    %v8 = vec.bitcast %v7 : bits<128>
+    ret %v6, %v8, %v2, %v3
+}
+
+func @take(%arg0: ptr<generic> byval(32, 16, hva=2xvec<4, bits<32>>), %arg1: mem<all>, %arg2: world) -> (mem<all>, world) cc = target_default
+    effects { reads={}, writes={}, volatile=false, atomic=false, io=false, fenv=false, may_trap=false, may_unwind=false }
+{
+^entry(%v0: ptr<generic>, %v1: mem<all>, %v2: world):
+    ret %v1, %v2
+}
