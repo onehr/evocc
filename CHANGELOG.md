@@ -56,6 +56,10 @@ The first public version.
   `_Complex` is `double _Complex`. `__builtin_complex`, `creal`, `cimag`, `conj`, imaginary
   floating constants, `_FloatN _Complex` declarations and complex `<tgmath.h>` selections work.
   E2960 and E3067 are new.
+- GNU `float` and `double` vectors of 8 and 16 bytes execute on both targets with per-lane scalar
+  rules, integer masks, per-lane C casts (E3063) and GCC's `++`, `--` and `&v[i]`. A record of one
+  to four short vectors of one size passes as an HVA whatever its lane types. Floating vectors
+  are E4002 under `-mgeneral-regs-only`.
 - Three more checked string builtins of the macOS 26 SDK (`__builtin___memccpy_chk`,
   `__builtin___strlcpy_chk`, `__builtin___strlcat_chk`), four checked `printf`-family builtins
   and `__builtin___clear_cache`, which calls the target's runtime helper.

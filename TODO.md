@@ -135,9 +135,9 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, L03, L05, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, L03, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D19, D24, D25, D26, D27 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D19, D24, D25, D26, D27, D28 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -3010,7 +3010,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   gate passes 483 suites, 3,631 tests, zero failures and 25 ignores, plus Clippy
   and formatting.
 
-- [ ] **L05 — Floating vector execution and intrinsics** — `OPEN`, P2.
+- [x] **L05 — Floating vector execution and intrinsics** — `DONE`, P2, 2026-10-21.
   Six torture originals and other named LLVM paths remain deferred. Define lane
   FP semantics, conversion/mask operations and required intrinsics while preserving
   `-mgeneral-regs-only` boundaries. Close through interpreter/native/ABI tests
@@ -3029,6 +3029,24 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   Before, it passed by reference where AAPCS64 uses vector registers
   (`crates/evocc/tests/floating_vector_records.rs`). Execution and intrinsics
   remain.
+  Closed on 2026-10-21 (EvoIR 2.21.0, EvoMIR 1.9.0, commit b9e381ab). GNU
+  `float` and `double` vectors of 8 and 16 bytes execute lane by lane with the
+  scalar rules and no contraction. Masks are `long` on Linux and `long long` on
+  Darwin, conversions are a C cast per lane (E3063), and `++`, `--` and `&v[i]`
+  follow GCC. An HVA is decided by vector size alone, as AAPCS64 says, so
+  records of floating vectors lose E3049, and the integer `{int x4; short x8}`
+  record passes as an HVA too. Floating vectors are E4002 under
+  `-mgeneral-regs-only`, and 4-byte ones at a call boundary. A 300-line
+  special-value grid agrees bit for bit, flags included, with GCC 14, Clang 19
+  and Apple clang in four rounding modes at O0 and O2; crossed calls agree in
+  both directions, except two GCC -O2 callee rows that GCC's own `va_arg` HVA
+  defect fails. The deferred originals pass natively on both targets at O0 and
+  O2 (38 of 38 runs each); `build2.c` keeps E2202. The benchmark dispositions
+  stay unchanged until B10 runs the lanes again. Apple clang misplaces an
+  anonymous HVA that follows a by-reference record: a recorded incompatibility.
+  [Tests](crates/evocc/tests/floating_vectors.rs). The full offline workspace
+  gate passes 3,649 tests, zero failures and 28 ignores, plus Clippy and
+  formatting.
 
 - [ ] **L05b — `arm_neon.h` intrinsics for the NEON original** — `OPEN`, P3.
   The 2026-10-13 decision on L05 keeps intrinsics out of L05. The torture and
@@ -5742,6 +5760,17 @@ refusal; changing the P13 demo does not close it.
   On Darwin the SDK defines `CMPLX` only for Clang, so the L04 probe CASE 1
   stops at W0003. Exit: each form follows GCC 14 on Linux and Apple clang on
   Darwin, or keeps a named refusal with a test.
+
+- [ ] **D28 — Close the vector gaps that L05 found** — `OPEN`, P3.
+  Found on 2026-10-21 by rust-r10. The front end accepts a controlling
+  expression of non-scalar type, such as `if (v)` for a vector or a record, and
+  a later stage refuses it (E3007 or E3101) instead of the constraint
+  diagnostic. The interpreters stop on two deferred originals with E3012
+  (20060420-1 and pr92618, alignment model) and on two with E3007 (scal-to-vec1
+  and scal-to-vec3, `main(argc, argv)`); native code passes all four. On Darwin,
+  the masks of integer `long` vectors are `long`, where Apple clang uses `long
+  long`. Exit: each case follows GCC 14 on Linux and Apple clang on Darwin, or
+  keeps a named refusal with a test.
 
 ## Codegen quality track — next quarter
 
