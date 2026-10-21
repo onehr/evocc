@@ -22,7 +22,7 @@ pub(super) type AtomicCompute<'s, 'a> = dyn FnMut(
 impl<'a> FunctionLowerer<'a> {
     /// The EvoIR type that an atomic access of a value of type `value_ty`
     /// transfers: floating values move as their bits.
-    fn atomic_access_type(value_ty: &EvoIRType) -> EvoIRType {
+    pub(super) fn atomic_access_type(value_ty: &EvoIRType) -> EvoIRType {
         match value_ty {
             EvoIRType::F32 => EvoIRType::Bits(32),
             EvoIRType::F64 => EvoIRType::Bits(64),
@@ -103,8 +103,30 @@ impl<'a> FunctionLowerer<'a> {
         Ok(())
     }
 
+    /// The bits that an atomic access transfers for `value`: a floating
+    /// value moves without a numeric conversion.
+    pub(super) fn floating_to_atomic_bits(
+        &mut self,
+        value: Value,
+        state: &mut State,
+    ) -> Result<Value, LowerError> {
+        if evocc_evoir::floating_kind(&value.ty).is_none() {
+            return Ok(value);
+        }
+        let bits = self.fresh_value(Self::atomic_access_type(&value.ty));
+        self.emit(
+            state,
+            Inst::Floating(evocc_evoir::FloatingInst {
+                result: bits.clone(),
+                op: evocc_evoir::FloatingOp::ToBits,
+                arguments: vec![value],
+            }),
+        )?;
+        Ok(bits)
+    }
+
     /// Convert the bits of an atomic access back to a floating value.
-    fn floating_from_atomic_bits(
+    pub(super) fn floating_from_atomic_bits(
         &mut self,
         bits: Value,
         value_ty: EvoIRType,
@@ -162,20 +184,7 @@ impl<'a> FunctionLowerer<'a> {
     ) -> Result<ExprValue, LowerError> {
         self.require_admitted_atomic_object(ty, span)?;
         let layout = self.access_layout(ty, span)?;
-        let stored = if evocc_evoir::floating_kind(&value.value.ty).is_some() {
-            let bits = self.fresh_value(Self::atomic_access_type(&value.value.ty));
-            self.emit(
-                state,
-                Inst::Floating(evocc_evoir::FloatingInst {
-                    result: bits.clone(),
-                    op: evocc_evoir::FloatingOp::ToBits,
-                    arguments: vec![value.value.clone()],
-                }),
-            )?;
-            bits
-        } else {
-            value.value.clone()
-        };
+        let stored = self.floating_to_atomic_bits(value.value.clone(), state)?;
         self.emit_atomic_access(
             evocc_evoir::AtomicOp::Store(stored),
             address,

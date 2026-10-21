@@ -24,7 +24,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     /// The C value of the bits or pointer that an atomic access observed.
-    fn atomic_object_value(
+    pub(super) fn atomic_object_value(
         &self,
         value: evocc_memory::AtomicValue,
         ty: ValueType,
@@ -45,7 +45,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
 
     /// The representation that an atomic access stores for `value`, which
     /// already has the type of the object.
-    fn atomic_object_operand(
+    pub(super) fn atomic_object_operand(
         &mut self,
         value: CValue,
         ty: ValueType,

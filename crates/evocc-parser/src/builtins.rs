@@ -128,6 +128,39 @@ const REFUSED: &[&str] = &["__builtin_puts", "__builtin_exit", "__builtin__Exit"
 /// `__atomic` fetch-op and op-fetch forms.
 const LEGACY_OPERATIONS: &[&str] = &["add", "sub", "and", "or", "xor", "nand"];
 
+/// Clang's `__c11_atomic_*` builtins that Apple clang's `<stdatomic.h>`
+/// uses (EvoIR 10.1.21). They exist only on a target whose header is
+/// Clang's; [`names`] does not list them, because GCC 14 has none.
+pub const CLANG_ATOMICS: &[&str] = &[
+    "__c11_atomic_init",
+    "__c11_atomic_thread_fence",
+    "__c11_atomic_signal_fence",
+    "__c11_atomic_is_lock_free",
+    "__c11_atomic_store",
+    "__c11_atomic_load",
+    "__c11_atomic_exchange",
+    "__c11_atomic_compare_exchange_strong",
+    "__c11_atomic_compare_exchange_weak",
+    "__c11_atomic_fetch_add",
+    "__c11_atomic_fetch_sub",
+    "__c11_atomic_fetch_and",
+    "__c11_atomic_fetch_or",
+    "__c11_atomic_fetch_xor",
+];
+
+/// The keyword token of a Clang atomic spelling, on a target that provides
+/// them. The fences are library builtins of type `void (int)`.
+pub(crate) fn clang_atomic_token(name: &str) -> Option<TokenKind> {
+    if !CLANG_ATOMICS.contains(&name) {
+        return None;
+    }
+    Some(if name.ends_with("_fence") {
+        TokenKind::BuiltinLibrary
+    } else {
+        TokenKind::BuiltinAtomic
+    })
+}
+
 /// The keyword token of a builtin spelling, or `None` for an identifier.
 pub(crate) fn token_kind(name: &str) -> Option<TokenKind> {
     // Every builtin spelling is reserved: it begins with two underscores.

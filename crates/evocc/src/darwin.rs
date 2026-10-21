@@ -34,6 +34,8 @@ pub(crate) fn apply_predefined_profile(pp: &mut Preprocessor) -> Result<(), Stri
     {
         return Err("the Darwin predefined profile is not definitions only".into());
     }
+    // The SDK's <stdatomic.h> is Clang's, which calls these builtins.
+    pp.add_target_builtins(evocc_parser::builtins::CLANG_ATOMICS.iter().copied());
     let version = deployment_version().to_string();
     for name in [
         "__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__",

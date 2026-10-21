@@ -7915,7 +7915,18 @@ impl<'a> FunctionLowerer<'a> {
         if access.memory {
             return self.lower_atomic_copy(access, address, stored, expected, result_buffer, state);
         }
-        let (ty, integer) = self.c_value_type(access.access_ty, access.span)?;
+        let (value_ty, integer) = self.c_value_type(access.access_ty, access.span)?;
+        // A floating object moves as its bits (EvoIR 10.1.21), so a
+        // compare-exchange compares object representations.
+        let (ty, bits_integer) = match value_ty {
+            EvoIRType::F32 => (EvoIRType::Bits(32), CIntegerType::UINT),
+            EvoIRType::F64 => (EvoIRType::Bits(64), CIntegerType::ULONG),
+            _ => (value_ty.clone(), integer),
+        };
+        let stored = match stored {
+            Some(value) => Some(self.floating_to_atomic_bits(value, state)?),
+            None => None,
+        };
         // `__atomic_compare_exchange_n` reads the expected value through its
         // pointer with an ordinary load before the atomic operation.
         let expected_object = if access.writeback {
@@ -7924,16 +7935,12 @@ impl<'a> FunctionLowerer<'a> {
             None
         };
         let expected = match &expected_object {
-            Some(pointer) => Some(
-                self.emit_memory_load(
-                    pointer.clone(),
-                    access.access_ty,
-                    false,
-                    access.span,
-                    state,
-                )?
-                .value,
-            ),
+            Some(pointer) => {
+                let loaded = self
+                    .emit_memory_load(pointer.clone(), access.access_ty, false, access.span, state)?
+                    .value;
+                Some(self.floating_to_atomic_bits(loaded, state)?)
+            }
             None => expected,
         };
         let result = (stored.is_none() || access.rmw.is_some()).then(|| self.fresh_value(ty));
@@ -7985,12 +7992,18 @@ impl<'a> FunctionLowerer<'a> {
             let (value, integer) = match access.rmw {
                 Some((_, K::Success)) => {
                     let observed = value.clone();
-                    let old =
-                        self.cast(ExprValue { value, integer }, CIntegerType::ULONG, state)?;
+                    let old = self.cast(
+                        ExprValue {
+                            value,
+                            integer: bits_integer,
+                        },
+                        CIntegerType::ULONG,
+                        state,
+                    )?;
                     let expected = self.cast(
                         ExprValue {
                             value: expected.expect("CAS expected"),
-                            integer,
+                            integer: bits_integer,
                         },
                         CIntegerType::ULONG,
                         state,
@@ -7999,6 +8012,8 @@ impl<'a> FunctionLowerer<'a> {
                         self.checked_compare(state, CmpOp::Eq, &old.value, &expected.value)?;
                     if let Some(pointer) = expected_object {
                         // A failed comparison stores the observed value back.
+                        let observed =
+                            self.floating_from_atomic_bits(observed, value_ty.clone(), state)?;
                         self.store_on_failure(
                             equal.clone(),
                             pointer,
@@ -8061,7 +8076,10 @@ impl<'a> FunctionLowerer<'a> {
                     }
                     (result, integer)
                 }
-                _ => (value, integer),
+                _ => (
+                    self.floating_from_atomic_bits(value, value_ty.clone(), state)?,
+                    integer,
+                ),
             };
             Ok(ExprValue { value, integer })
         } else {

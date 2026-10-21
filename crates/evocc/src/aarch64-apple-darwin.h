@@ -31,6 +31,19 @@
 #undef __BIGGEST_ALIGNMENT__
 #define __BIGGEST_ALIGNMENT__ 8
 
+/* Clang's <stdatomic.h> reads these lock-free answers; Apple clang
+ * defines the char8_t one only for C23. */
+#define __CLANG_ATOMIC_BOOL_LOCK_FREE 2
+#define __CLANG_ATOMIC_CHAR_LOCK_FREE 2
+#define __CLANG_ATOMIC_CHAR16_T_LOCK_FREE 2
+#define __CLANG_ATOMIC_CHAR32_T_LOCK_FREE 2
+#define __CLANG_ATOMIC_WCHAR_T_LOCK_FREE 2
+#define __CLANG_ATOMIC_SHORT_LOCK_FREE 2
+#define __CLANG_ATOMIC_INT_LOCK_FREE 2
+#define __CLANG_ATOMIC_LONG_LOCK_FREE 2
+#define __CLANG_ATOMIC_LLONG_LOCK_FREE 2
+#define __CLANG_ATOMIC_POINTER_LOCK_FREE 2
+
 /* The 64-bit integer types are long long. */
 #undef __INT64_TYPE__
 #define __INT64_TYPE__ long long int

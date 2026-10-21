@@ -1975,6 +1975,7 @@ pub struct TargetDataLayout {
     narrow_call_extension: bool,
     sixteen_byte_lock_free: bool,
     power_of_two_atomics: bool,
+    clang_atomic_builtins: bool,
     compiler_rt_complex: bool,
     long_long_masks: bool,
     bfloat16_constants: bool,
@@ -1993,6 +1994,7 @@ impl TargetDataLayout {
             narrow_call_extension: false,
             sixteen_byte_lock_free: false,
             power_of_two_atomics: false,
+            clang_atomic_builtins: false,
             compiler_rt_complex: false,
             long_long_masks: false,
             bfloat16_constants: true,
@@ -2015,6 +2017,7 @@ impl TargetDataLayout {
             narrow_call_extension: true,
             sixteen_byte_lock_free: true,
             power_of_two_atomics: true,
+            clang_atomic_builtins: true,
             compiler_rt_complex: true,
             long_long_masks: true,
             bfloat16_constants: false,
@@ -2045,6 +2048,14 @@ impl TargetDataLayout {
     #[must_use]
     pub const fn sixteen_byte_atomics_are_lock_free(&self) -> bool {
         self.sixteen_byte_lock_free
+    }
+
+    /// Whether the target's `<stdatomic.h>` is Clang's, so the front end
+    /// provides the `__c11_atomic_*` builtins that it uses (EvoIR 10.1.21).
+    /// Apple clang has them; GCC 14 on Linux has none.
+    #[must_use]
+    pub const fn provides_clang_atomic_builtins(&self) -> bool {
+        self.clang_atomic_builtins
     }
 
     /// The layout of an `_Atomic` type whose non-atomic type has layout

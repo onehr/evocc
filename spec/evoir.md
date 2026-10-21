@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.22.0** | **Pinned ground truth** | half formats on 2026-10-21
+**Revision 2.23.0** | **Pinned ground truth** | Darwin stdatomic.h on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -5377,7 +5377,7 @@ compound literals, and a front end must not emit it.
 | `E2932` | a cycle of `always_inline` calls, which no substitution order can eliminate |
 | `E2933` | `__builtin_exit` or `__builtin__Exit` (10.1.14) |
 | `E2934` | `_Noreturn` on an object or a typedef (10.1.18) |
-| `E2935` | `__builtin_puts`, a library builtin this profile does not provide, or an `__atomic_is_lock_free` answer that needs the run-time library (10.1.14) |
+| `E2935` | `__builtin_puts`, a library builtin this profile does not provide, or an `__atomic_is_lock_free` or `__c11_atomic_is_lock_free` answer that needs the run-time library (10.1.14, 10.1.21) |
 | `E2937` | a called expression that is not of pointer-to-function type (10.1.18) |
 | `E2938` | an invalid `_Alignas` request or placement (10.1.18) |
 | `E2939` | a wide bit-field use that 10.1.16 does not admit |
@@ -5387,8 +5387,8 @@ compound literals, and a front end must not emit it.
 | `E2944` | a recognized ordinary `alloca` call whose name the unit defines or renames |
 | `E2945` | a jump into the scope of a variably modified declaration |
 | `E2946` | a nonliteral `__builtin_strcmp` with a visible same-named `static` function, or lowering a library symbol that collides with a linked object |
-| `E2947` | a constant memory order that an atomic builtin does not admit (10.1.14) |
-| `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_` (10.1.14) |
+| `E2947` | a constant memory order that an atomic builtin does not admit (10.1.14, 10.1.21) |
+| `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_`, or with `__c11_atomic_` on Darwin (10.1.14) |
 | `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
 | `E2951` | a floating comparison or classification builtin with an operand of the wrong type, a class argument of `__builtin_fpclassify` that is not an integer constant expression (3.13.1), or a `__builtin_tgmath` function list or argument that GCC 14 rejects (10.1.14) |
 | `E2952` | an execution or calling-convention attribute where 10.1.9 does not accept it, or a definition or use of a function that it marks (10.1.9) |
@@ -6138,7 +6138,9 @@ interpreters report `E2950` when they reach one.
 **Unknown builtins.** `__builtin_`, `__atomic_` and `__sync_` begin the GNU
 builtin namespaces. A call of an undeclared identifier that begins with one of
 them is `E2949` (`unknown-builtin`) at that identifier, in every language mode
-and at every warning level, `-w` included. An implicit declaration cannot
+and at every warning level, `-w` included. On `aarch64-apple-darwin`, whose
+`<stdatomic.h>` is Clang's, `__c11_atomic_` is such a namespace as well
+(10.1.21). An implicit declaration cannot
 supply a compiler builtin, so such a call is never an external call. For an
 identifier from a macro expansion, the location is the macro use, as for every
 expanded token.
@@ -7185,9 +7187,80 @@ must see the same layout, and two threads update the object through C
 operators. A passing run of them is not a memory-model proof.
 
 **Headers.** EvoCC uses the target's `<stdatomic.h>` unchanged. The GCC
-header of the Linux sysroot calls the generic forms of 10.1.14. The Darwin
-header needs Clang's `__c11_atomic_*` builtins and `__CLANG_ATOMIC_*` macros,
-which this revision does not provide.
+header of the Linux sysroot calls the generic forms of 10.1.14. On
+`aarch64-apple-darwin` the header is Clang's resource header, which the SDK
+does not replace. It calls the Clang builtins below and reads the ten
+`__CLANG_ATOMIC_*_LOCK_FREE` macros, which EvoCC predefines on Darwin only,
+with Apple clang's value 2. Apple clang defines the `char8_t` one only for
+C23, which EvoCC does not provide. The compiler identity stays GCC's.
+
+**Clang builtins.** On `aarch64-apple-darwin` the front end provides exactly
+the fourteen `__c11_atomic_*` builtins that Clang's `<stdatomic.h>` uses:
+`init`, `load`, `store`, `exchange`, `compare_exchange_strong`,
+`compare_exchange_weak`, `fetch_add`, `fetch_sub`, `fetch_and`, `fetch_or`,
+`fetch_xor`, `thread_fence`, `signal_fence` and `is_lock_free`. Their
+operands and orders are Apple clang's, as measured with Apple clang 21.
+`__has_builtin` answers 1 for them on Darwin. On Linux they are ordinary
+identifiers, as in GCC 14. The first operand of a value form points to an
+`_Atomic` object of a type that the Accesses paragraph admits. Its non-atomic
+type `T` is the value type, and the object is const only for `load`. Each
+form is one access of Section 3.8, and its operands are evaluated once each,
+left to right:
+
+- `__c11_atomic_init(p, v)` converts `v` to `T` as by assignment and stores
+  it with a relaxed `atomic.store`, as GCC's `atomic_init` does. A relaxed
+  store refines the initialization of C11 7.17.2.2, which is not atomic.
+- `__c11_atomic_load(p, order)` is an `atomic.load` of type `T`.
+  `__c11_atomic_store(p, v, order)` converts `v` to `T` and is an
+  `atomic.store` of type `void`. `__c11_atomic_exchange(p, v, order)` is an
+  `atomic.rmw.exchange` that yields the old value.
+- `__c11_atomic_compare_exchange_strong(p, e, d, success, failure)` and the
+  `weak` form have the write-back of `__atomic_compare_exchange_n` (10.1.14):
+  `e` points to an unqualified object of type `T`, `d` converts to `T`, the
+  result is `_Bool`, and a weak request is strong.
+- `__c11_atomic_fetch_OP(p, v, order)` for `OP` in `add`, `sub`, `and`, `or`
+  and `xor` yields the old value. On an integer other than `_Bool`, `v`
+  converts to `T`, and the arithmetic wraps at the width of `T` (C11
+  7.17.7.5p3). On a pointer to a complete object type, `add` and `sub` take
+  `v` as a `ptrdiff_t` count of elements. The count times the element size,
+  wrapping at 64 bits as Apple clang computes it, is the byte count of the
+  `atomic.rmw.add` or `atomic.rmw.sub`.
+- A binary32 or binary64 object moves as `bits<32>` or `bits<64>` through
+  `fp.to_bits` and `fp.from_bits`. A compare-exchange therefore compares
+  object representations, as Apple clang's does: `-0.0` and `0.0` differ,
+  and a NaN equals the same NaN.
+- `__c11_atomic_thread_fence(order)` and `__c11_atomic_signal_fence(order)`
+  are the GNU fences of 10.1.14.
+- `__c11_atomic_is_lock_free(size)` is an integer constant expression of type
+  `_Bool`. It is 1 for the sizes for which `__atomic_always_lock_free` is 1.
+  For another constant size Apple clang calls the run-time library, so that
+  size is `E2935`. A size that is not an integer constant expression is
+  `E2913`.
+
+Constant orders follow Apple clang's `-Watomic-memory-ordering` diagnostics.
+A load admits relaxed, consume, acquire and seq_cst, and a store relaxed,
+release and seq_cst. A compare-exchange admits every success order and a
+failure order that is not release or acq_rel. Unlike GCC 14, Apple clang
+admits a failure order stronger than the success order; the compare-exchange
+then carries the failure order, which is at least as strong as both halves.
+Every other constant, and every constant outside 0 to 5, is `E2947`. Apple
+clang does not diagnose a fence constant outside 0 to 5; EvoCC refuses it, as
+for the GNU fences. A run-time order is evaluated once and makes the
+operation seq_cst.
+
+These shapes are `E2913`: a first operand that does not point to an `_Atomic`
+object; a const object that the form writes; a record, union, complex,
+vector or 16-byte object; arithmetic on `_Bool`, which C11 7.17.7.5p1
+excludes; arithmetic on a floating object; arithmetic on a pointer to `void`,
+to a function, or to an incomplete or variably modified type; bitwise
+arithmetic on a pointer; an `e` that does not point to an unqualified object
+of type `T`; and a value that does not convert to `T`. Apple clang admits the
+`_Bool`, floating and function-pointer arithmetic, and its `fetch_add` on
+`_Bool` stores 2. Clang's other `__c11_atomic_*` spellings, such as
+`fetch_nand`, `fetch_max` and `fetch_min`, are `E2949` on Darwin (10.1.14).
+The crossed native tests of `crates/evocc/tests/darwin_stdatomic.rs` update
+one object from units built by EvoCC and Apple clang through the header's
+generic functions. A passing run of them is not a memory-model proof.
 
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
@@ -8528,6 +8601,21 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.23.0, 2026-10-21.** Section 10.1.21 provides the `<stdatomic.h>`
+of Darwin, which is Clang's resource header. On `aarch64-apple-darwin` the
+front end has the fourteen `__c11_atomic_*` builtins that the header uses,
+with Apple clang's operands and orders, and predefines the ten
+`__CLANG_ATOMIC_*_LOCK_FREE` macros with the value 2. `__has_builtin` answers
+1 for the builtins. Each form is a scalar access of Section 3.8: `init` is a
+relaxed store, a pointer `fetch_add` or `fetch_sub` moves by whole elements,
+and a floating object moves as its bits, so its compare-exchange compares
+representations. A compare-exchange admits a failure order stronger than its
+success order and carries the stronger one. Other shapes are `E2913`, Clang's
+other `__c11_atomic_*` spellings are `E2949`, and a size that is not lock-free
+is `E2935`. Linux is unchanged, because GCC 14 has none of these names.
+Section 10.1.14 follows. No grammar production, registry or Lean rule domain
+changes; the `core-v1` path admits no atomic.
 
 **Revision 2.22.0, 2026-10-21.** Section 3.13.6 admits the half storage
 formats `f16` and `bf16` of the 2026-10-13 decision on L03. `_Float16` and

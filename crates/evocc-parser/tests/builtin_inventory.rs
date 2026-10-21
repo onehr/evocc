@@ -97,3 +97,54 @@ fn each_listed_builtin_is_resolved_by_the_front_end() {
         );
     }
 }
+
+/// Clang's `__c11_atomic_*` builtins of the Darwin `<stdatomic.h>` resolve on
+/// the Apple layout only; on Linux the spelling is an ordinary undeclared
+/// function, as in GCC 14. The common table does not list them.
+#[test]
+fn each_clang_atomic_builtin_is_resolved_on_darwin_only() {
+    let names = evocc_parser::builtins::names();
+    for name in evocc_parser::builtins::CLANG_ATOMICS {
+        assert!(name.starts_with("__c11_atomic_"), "{name}");
+        assert!(!names.iter().any(|known| known == name), "{name}");
+        assert!(!has_builtin(name), "{name}");
+        for (layout, provided) in [
+            (evocc_types::TargetDataLayout::aarch64_apple_darwin(), true),
+            (
+                evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
+                false,
+            ),
+        ] {
+            let source = format!("int probe(void) {{ return sizeof {name}; }}\n");
+            let arena = Arena::default();
+            let mut parser = Parser::new(lex(&source), FileId::new(1), &source);
+            parser.set_target_layout(layout);
+            parser.enable_lints();
+            parser.parse_translation_unit_in(&arena);
+            let implicit = parser
+                .lint_findings()
+                .iter()
+                .any(|finding| finding.lint == 2);
+            let unknown = parser
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| matches!(diagnostic.code, "E2949" | "E2001"));
+            assert_eq!(
+                !implicit && !unknown,
+                provided,
+                "{name}: {:?}",
+                parser.diagnostics()
+            );
+        }
+    }
+    let mut preprocessor = evocc_cpp::Preprocessor::new();
+    preprocessor.add_target_builtins(evocc_parser::builtins::CLANG_ATOMICS.iter().copied());
+    let source = "#if __has_builtin(__c11_atomic_load) && !__has_builtin(__c11_atomic_fetch_nand)\nyes\n#endif\n";
+    let output = preprocessor
+        .process(evocc_cpp::TokenStream::new(lex(source)), source)
+        .into_vec();
+    assert!(preprocessor.errors().is_empty());
+    assert!(output
+        .iter()
+        .any(|token| token.kind == TokenKind::Identifier));
+}

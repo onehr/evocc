@@ -736,6 +736,9 @@ pub struct Preprocessor {
     next_file_id: u32,
     counter: u32,
     builtin_feature_queries: HashSet<String>,
+    /// Builtins of the target profile that `__has_builtin` answers 1 for,
+    /// beside the ones every target has.
+    target_builtins: HashSet<String>,
     poisoned_identifiers: HashSet<String>,
     ignored_pragma_count: u64,
     ignored_pragma_counts: BTreeMap<String, u64>,
@@ -777,6 +780,7 @@ impl Preprocessor {
             next_file_id: 1,
             counter: 0,
             builtin_feature_queries: HashSet::new(),
+            target_builtins: HashSet::new(),
             poisoned_identifiers: HashSet::new(),
             ignored_pragma_count: 0,
             ignored_pragma_counts: BTreeMap::new(),
@@ -790,6 +794,17 @@ impl Preprocessor {
             .define("__DATE__".into(), vec![make_date_token()], Vec::new());
         preprocessor.set_predefined_time("00:00:00");
         Ok(preprocessor)
+    }
+
+    /// Make `__has_builtin` answer 1 for `names`, which the target profile
+    /// provides in addition to the builtins of every target.
+    pub fn add_target_builtins<I, S>(&mut self, names: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.target_builtins
+            .extend(names.into_iter().map(Into::into));
     }
 
     fn install_feature_query_macros(&mut self) {
@@ -2049,8 +2064,12 @@ impl Preprocessor {
                 "__has_attribute" => one_query_token(arguments, source)
                     .map(normalize_attribute_name)
                     .map(attribute_answer),
-                "__has_builtin" => one_query_token(arguments, source)
-                    .map(|name| i64::from(HAS_BUILTIN_NAMES.lines().any(|known| known == name))),
+                "__has_builtin" => one_query_token(arguments, source).map(|name| {
+                    i64::from(
+                        HAS_BUILTIN_NAMES.lines().any(|known| known == name)
+                            || self.target_builtins.contains(name),
+                    )
+                }),
                 "__has_feature" => one_query_token(arguments, source).map(|_| 0),
                 "__has_include" | "__has_include_next" => {
                     let start = if query == "__has_include_next" {

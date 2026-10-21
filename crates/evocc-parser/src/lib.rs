@@ -80,6 +80,39 @@ fn gnu_atomic(name: &str) -> Option<GnuAtomic> {
     })
 }
 
+/// Clang's `__c11_atomic_*` builtins that the Darwin `<stdatomic.h>` uses
+/// (EvoIR 10.1.21), except the two fences, which are library builtins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClangAtomic {
+    Init,
+    Load,
+    Store,
+    Exchange,
+    /// `compare_exchange_strong` and `compare_exchange_weak`; a weak request
+    /// is strong.
+    CompareExchange,
+    Fetch(evocc_chir::AtomicRmwOp),
+    IsLockFree,
+}
+
+fn clang_atomic(name: &str) -> Option<ClangAtomic> {
+    use evocc_chir::AtomicRmwOp as R;
+    Some(match name.strip_prefix("__c11_atomic_")? {
+        "init" => ClangAtomic::Init,
+        "load" => ClangAtomic::Load,
+        "store" => ClangAtomic::Store,
+        "exchange" => ClangAtomic::Exchange,
+        "compare_exchange_strong" | "compare_exchange_weak" => ClangAtomic::CompareExchange,
+        "fetch_add" => ClangAtomic::Fetch(R::Add),
+        "fetch_sub" => ClangAtomic::Fetch(R::Sub),
+        "fetch_and" => ClangAtomic::Fetch(R::And),
+        "fetch_or" => ClangAtomic::Fetch(R::Or),
+        "fetch_xor" => ClangAtomic::Fetch(R::Xor),
+        "is_lock_free" => ClangAtomic::IsLockFree,
+        _ => return None,
+    })
+}
+
 /// The order a compare-exchange carries in EvoIR: its success order,
 /// strengthened to acq_rel when a release success pairs with an acquiring
 /// failure. Each half of an admitted pair is at most as strong as this order.
@@ -92,6 +125,21 @@ fn merged_exchange_order(
         O::AcqRel
     } else {
         success
+    }
+}
+
+/// The order of a Clang compare-exchange. Apple clang admits a failure order
+/// stronger than the success order. Such a failure order is consume or
+/// acquire after a relaxed or consume success, or seq_cst, so it is at least
+/// as strong as both halves; the other pairs merge as the GNU ones do.
+fn merged_clang_exchange_order(
+    success: evocc_chir::AtomicOrder,
+    failure: evocc_chir::AtomicOrder,
+) -> evocc_chir::AtomicOrder {
+    if failure as u8 > success as u8 {
+        failure
+    } else {
+        merged_exchange_order(success, failure)
     }
 }
 
@@ -923,6 +971,24 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.target_layout = layout;
         if !layout.accepts_bfloat16_constants() {
             self.refuse_bfloat16_constants();
+        }
+        if layout.provides_clang_atomic_builtins() {
+            self.promote_clang_atomic_builtins();
+        }
+    }
+
+    /// Apple clang's `<stdatomic.h>` calls Clang's `__c11_atomic_*`
+    /// builtins, so on such a target their spellings are builtin tokens
+    /// (EvoIR 10.1.21). Elsewhere they stay identifiers, as in GCC 14.
+    fn promote_clang_atomic_builtins(&mut self) {
+        debug_assert_eq!(self.pos, 0, "the target is selected before parsing");
+        for token in &mut self.tokens {
+            if token.kind != TokenKind::Identifier {
+                continue;
+            }
+            if let Some(kind) = token.text.spelling().and_then(builtins::clang_atomic_token) {
+                token.kind = kind;
+            }
         }
     }
 
@@ -13503,10 +13569,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let resolved = self
                     .resolve_expression_symbol(resolved_spelling)
                     .or_else(|| self.resolve_neon_builtin(resolved_spelling, tok.span));
-                if resolved.is_none()
-                    && reserved_builtin_spelling(resolved_spelling)
-                    && self.peek_kind() == Some(TokenKind::LParen)
-                {
+                // Where Clang's `<stdatomic.h>` is the header, Clang's other
+                // `__c11_atomic_*` spellings are builtins EvoCC lacks.
+                let reserved = reserved_builtin_spelling(resolved_spelling)
+                    || (self.target_layout.provides_clang_atomic_builtins()
+                        && resolved_spelling.starts_with("__c11_atomic_"));
+                if resolved.is_none() && reserved && self.peek_kind() == Some(TokenKind::LParen) {
                     // An implicit declaration cannot supply a builtin. Name
                     // the builtin where it is spelled, before any lint about
                     // the call that it would have declared; `-w` and the
@@ -13744,6 +13812,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_builtin_atomic(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
         let name = self.token_text(&keyword);
+        if let Some(form) = clang_atomic(name) {
+            return self.parse_clang_atomic(keyword, form);
+        }
         if let Some(form) = gnu_atomic(name) {
             return self.parse_gnu_atomic(keyword, form);
         }
@@ -14428,6 +14499,279 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
         let evaluated = self.alloc_node(CHirExpr::Cast(void_ty, pointer, pointer.span()));
         Some(self.alloc_node(CHirExpr::Comma(evaluated, answer(self, true), span)))
+    }
+
+    /// Clang's `__c11_atomic_*` builtins of the Darwin `<stdatomic.h>` (EvoIR
+    /// 10.1.21). The first operand points to an `_Atomic` object of a type
+    /// that `_Atomic` objects admit, and its non-atomic type is the value
+    /// type. The forms are the scalar accesses of the GNU builtins: `init` is
+    /// a relaxed store, and `fetch_add` and `fetch_sub` move a pointer by
+    /// whole elements. Any other shape is `E2913`; an order constant that
+    /// Apple clang diagnoses is `E2947`.
+    fn parse_clang_atomic(
+        &mut self,
+        keyword: Token,
+        form: ClangAtomic,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        use evocc_chir::{AtomicOrder as O, AtomicRmwOp as R, AtomicRmwReturn as V};
+        if !self.match_kind(TokenKind::LParen) {
+            self.report("E2910", "builtin-not-called", keyword.span);
+            return None;
+        }
+        let mut operands = Vec::new();
+        if self.peek_kind() != Some(TokenKind::RParen) {
+            loop {
+                operands.push(self.parse_argument_expression()?);
+                if !self.match_kind(TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        let arity = match form {
+            ClangAtomic::IsLockFree => 1,
+            ClangAtomic::Init | ClangAtomic::Load => 2,
+            ClangAtomic::Store | ClangAtomic::Exchange | ClangAtomic::Fetch(_) => 3,
+            ClangAtomic::CompareExchange => 5,
+        };
+        if operands.len() != arity || self.peek_kind() != Some(TokenKind::RParen) {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let close = self.advance()?;
+        let span = self.merge_span(keyword.span, close.span);
+        if form == ClangAtomic::IsLockFree {
+            return self.parse_clang_lock_free(operands[0], span);
+        }
+        let address = operands[0];
+        let OperandTypeClass::Pointer(pointer) =
+            self.operand_type_class(self.converted_expression_type(address)?.ty)
+        else {
+            self.report("E2913", "builtin-operand-not-convertible", address.span());
+            return None;
+        };
+        let canonical = self.types.get(pointer.pointee)?.clone();
+        // Only a load reads a const object.
+        if !canonical.qualifiers.is_atomic
+            || (canonical.qualifiers.is_const && form != ClangAtomic::Load)
+            || !evocc_chir::atomic_access_admitted(
+                &self.types,
+                &self.target_layout,
+                pointer.pointee,
+            )
+        {
+            self.report("E2913", "builtin-operand-not-convertible", address.span());
+            return None;
+        }
+        let access_ty = self.intern(canonical.kind.clone(), Qualifiers::default());
+        let int_ty = self.intern(TypeKind::Int(IntRank::Int), Qualifiers::default());
+        let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
+        let bool_ty = self.intern(TypeKind::Int(IntRank::Bool), Qualifiers::default());
+        let value = match form {
+            ClangAtomic::Load => None,
+            ClangAtomic::Fetch(operation) => {
+                Some(self.clang_atomic_operand(operation, access_ty, operands[1])?)
+            }
+            ClangAtomic::CompareExchange => {
+                Some(self.converted_atomic_value(access_ty, operands[2])?)
+            }
+            _ => Some(self.converted_atomic_value(access_ty, operands[1])?),
+        };
+        let expected = if form == ClangAtomic::CompareExchange {
+            // The expected object is an unqualified object of the value type:
+            // its ordinary load and store carry no qualifier of their own.
+            let expected = operands[1];
+            let class = self.operand_type_class(self.converted_expression_type(expected)?.ty);
+            let same = matches!(class, OperandTypeClass::Pointer(target)
+            if self.types.get(target.pointee).is_some_and(|ty| {
+                ty.qualifiers == Qualifiers::default()
+                    && self.types.compatible_ignoring_top_qualifiers(target.pointee, access_ty)
+            }));
+            if !same {
+                self.report("E2913", "builtin-operand-not-convertible", expected.span());
+                return None;
+            }
+            Some(expected)
+        } else {
+            None
+        };
+        let (order, constant_order, failure) = match form {
+            // Initialization is a relaxed store, as GCC's `atomic_init` is.
+            ClangAtomic::Init => (
+                self.alloc_node(CHirExpr::Lit(
+                    IntLit {
+                        value: 0,
+                        suffix: IntSuffix::None,
+                        base: IntBase::Dec,
+                    },
+                    span,
+                )),
+                Some(O::Relaxed),
+                None,
+            ),
+            ClangAtomic::Load | ClangAtomic::Store => {
+                let load = form == ClangAtomic::Load;
+                let order = operands[if load { 1 } else { 2 }];
+                let constant = self.atomic_order_operand(order, &|order| order.valid_for(load))?;
+                (order, constant, None)
+            }
+            ClangAtomic::Exchange | ClangAtomic::Fetch(_) => {
+                let order = operands[2];
+                (order, self.atomic_order_operand(order, &|_| true)?, None)
+            }
+            ClangAtomic::CompareExchange => {
+                let success = self.atomic_order_operand(operands[3], &|_| true)?;
+                let failure = self.atomic_order_operand(operands[4], &|failure| {
+                    !matches!(failure, O::Release | O::AcqRel)
+                })?;
+                let merged = success
+                    .zip(failure)
+                    .map(|(success, failure)| merged_clang_exchange_order(success, failure));
+                let failure =
+                    self.alloc_node(CHirExpr::Cast(int_ty, operands[4], operands[4].span()));
+                (operands[3], merged, Some(failure))
+            }
+            ClangAtomic::IsLockFree => unreachable!("answered above"),
+        };
+        let order = self.alloc_node(CHirExpr::Cast(int_ty, order, order.span()));
+        let (rmw, result_ty) = match form {
+            ClangAtomic::Init | ClangAtomic::Store => (None, void_ty),
+            ClangAtomic::Load => (None, access_ty),
+            ClangAtomic::Exchange => (Some((R::Exchange, V::Old)), access_ty),
+            ClangAtomic::Fetch(operation) => (Some((operation, V::Old)), access_ty),
+            ClangAtomic::CompareExchange => (Some((R::CompareExchange, V::Success)), bool_ty),
+            ClangAtomic::IsLockFree => unreachable!("answered above"),
+        };
+        Some(
+            self.alloc_node(CHirExpr::Atomic(evocc_chir::CHirAtomicAccess {
+                address,
+                value,
+                expected,
+                rmw,
+                order,
+                constant_order,
+                access_ty,
+                volatile: canonical.qualifiers.is_volatile,
+                writeback: form == ClangAtomic::CompareExchange,
+                weak: None,
+                failure,
+                memory: false,
+                result: None,
+                facts: ExprFacts::value(result_ty),
+                span,
+            })),
+        )
+    }
+
+    /// A value operand of an atomic builtin, converted to the value type as
+    /// by assignment, or `E2913`.
+    fn converted_atomic_value(
+        &mut self,
+        access_ty: TypeId,
+        value: &'arena CHirExpr<'arena>,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        if !matches!(
+            self.assignment_constraint(AssignmentOp::Simple, access_ty, value),
+            UpdateConstraint::Scalar
+        ) {
+            self.report("E2913", "builtin-operand-not-convertible", value.span());
+            return None;
+        }
+        Some(self.alloc_node(CHirExpr::Cast(access_ty, value, value.span())))
+    }
+
+    /// The operand of a Clang fetch-and-modify builtin. An integer object
+    /// other than `_Bool` takes a value of its type. An object pointer takes
+    /// a `ptrdiff_t` count of elements for add and subtract, which becomes a
+    /// byte count that wraps at 64 bits, as Apple clang computes it.
+    fn clang_atomic_operand(
+        &mut self,
+        operation: evocc_chir::AtomicRmwOp,
+        access_ty: TypeId,
+        value: &'arena CHirExpr<'arena>,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        use evocc_chir::AtomicRmwOp as R;
+        let refuse = |parser: &mut Self, operand: &CHirExpr<'_>| {
+            parser.report("E2913", "builtin-operand-not-convertible", operand.span());
+        };
+        if self
+            .canonical_integer_type(access_ty)
+            .is_ok_and(|integer| integer != CIntegerType::BOOL)
+        {
+            return self.converted_atomic_value(access_ty, value);
+        }
+        let element = match self.types.get(access_ty).map(|ty| ty.kind.clone()) {
+            Some(TypeKind::Pointer(element)) if matches!(operation, R::Add | R::Sub) => element,
+            _ => {
+                refuse(self, value);
+                return None;
+            }
+        };
+        let complete_object = !matches!(
+            self.types.get(element).map(|ty| &ty.kind),
+            Some(TypeKind::Void | TypeKind::Function { .. }) | None
+        ) && !self.type_is_variably_modified(element);
+        let size = complete_object
+            .then(|| self.target_layout.layout_of(&self.types, element).ok())
+            .flatten()
+            .map(|layout| layout.size_bytes);
+        let class = self.operand_type_class(self.converted_expression_type(value)?.ty);
+        let Some(size) = size.filter(|_| is_arithmetic_class(class)) else {
+            refuse(self, value);
+            return None;
+        };
+        let long_ty = self.intern(TypeKind::Int(IntRank::Long), Qualifiers::default());
+        let bytes_ty = self.intern(TypeKind::Int(IntRank::ULong), Qualifiers::default());
+        let difference = self.alloc_node(CHirExpr::Cast(long_ty, value, value.span()));
+        let count = self.alloc_node(CHirExpr::Cast(bytes_ty, difference, value.span()));
+        if size == 1 {
+            return Some(count);
+        }
+        let scale = self.alloc_node(CHirExpr::Lit(
+            IntLit {
+                value: size,
+                suffix: IntSuffix::UL,
+                base: IntBase::Dec,
+            },
+            value.span(),
+        ));
+        Some(self.alloc_node(CHirExpr::Binary(BinaryOp::Mul, count, scale, value.span())))
+    }
+
+    /// `__c11_atomic_is_lock_free(size)`: an integer constant expression of
+    /// type `_Bool` that is 1 for the sizes that `__atomic_always_lock_free`
+    /// answers 1 for. Apple clang calls the run-time library for any other
+    /// size, so that is `E2935`; a size that is not an integer constant
+    /// expression is `E2913`.
+    fn parse_clang_lock_free(
+        &mut self,
+        size: &'arena CHirExpr<'arena>,
+        span: SourceSpan,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let Ok(bytes) = self.eval_integer_constant_expression(size) else {
+            self.report("E2913", "builtin-operand-not-convertible", size.span());
+            return None;
+        };
+        let bytes = bytes.try_mathematical_value().unwrap_or(-1);
+        let lock_free = matches!(bytes, 1 | 2 | 4 | 8)
+            || (bytes == 16 && self.target_layout.sixteen_byte_atomics_are_lock_free());
+        if !lock_free {
+            self.report(
+                "E2935",
+                "unsupported-library-builtin: __c11_atomic_is_lock_free",
+                span,
+            );
+            return None;
+        }
+        let bool_ty = self.intern(TypeKind::Int(IntRank::Bool), Qualifiers::default());
+        let one = self.alloc_node(CHirExpr::Lit(
+            IntLit {
+                value: 1,
+                suffix: IntSuffix::None,
+                base: IntBase::Dec,
+            },
+            span,
+        ));
+        Some(self.alloc_node(CHirExpr::Cast(bool_ty, one, span)))
     }
 
     fn parse_builtin_expect(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
@@ -15181,10 +15525,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         // A fence admits the six constant orders and any run-time order. A
-        // relaxed fence has no effect: only its operand is evaluated.
-        if matches!(builtin, "__atomic_thread_fence" | "__atomic_signal_fence")
-            && self.atomic_order_operand(arguments[0], &|_| true)?
-                == Some(evocc_chir::AtomicOrder::Relaxed)
+        // relaxed fence has no effect: only its operand is evaluated. Clang's
+        // fences are the GNU ones under another name (EvoIR 10.1.21).
+        if matches!(
+            builtin,
+            "__atomic_thread_fence"
+                | "__atomic_signal_fence"
+                | "__c11_atomic_thread_fence"
+                | "__c11_atomic_signal_fence"
+        ) && self.atomic_order_operand(arguments[0], &|_| true)?
+            == Some(evocc_chir::AtomicOrder::Relaxed)
         {
             let void_ty = self.intern(TypeKind::Void, Qualifiers::default());
             return Some(self.alloc_node(CHirExpr::Cast(
@@ -15556,6 +15906,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             "__sync_synchronize" => ("__sync_synchronize", void_ty, Vec::new()),
             "__atomic_thread_fence" | "__atomic_signal_fence" => (builtin, void_ty, vec![int_ty]),
+            "__c11_atomic_thread_fence" => ("__atomic_thread_fence", void_ty, vec![int_ty]),
+            "__c11_atomic_signal_fence" => ("__atomic_signal_fence", void_ty, vec![int_ty]),
             "__builtin___clear_cache" => {
                 ("__clear_cache", void_ty, vec![void_pointer, void_pointer])
             }

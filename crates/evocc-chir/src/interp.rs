@@ -7982,9 +7982,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     bytes.raw_bits() as u64,
                 )
             } else {
-                let value = self.atomic_operand_value(stored, ty, span)?;
+                // A floating object moves as its bits, so a compare-exchange
+                // compares object representations.
+                let value = self.atomic_object_operand(stored, ty, span)?;
                 let expected = expected
-                    .map(|value| self.atomic_operand_value(value, ty, span))
+                    .map(|value| self.atomic_object_operand(value, ty, span))
                     .transpose()?;
                 self.memory.atomic_rmw(
                     &self.world,
@@ -8003,7 +8005,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             self.world = world;
             if let Some(pointer) = expected_object.filter(|_| !result.exchanged) {
                 // A failed comparison stores the observed value back.
-                let observed = self.atomic_result_value(result.old, ty, span)?;
+                let observed = self.atomic_object_value(result.old, ty, span)?;
                 self.store_memory_value(
                     pointer,
                     access.access_ty,
@@ -8013,8 +8015,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 )?;
             }
             return match result_kind {
-                crate::AtomicRmwReturn::Old => self.atomic_result_value(result.old, ty, span),
-                crate::AtomicRmwReturn::New => self.atomic_result_value(result.new, ty, span),
+                crate::AtomicRmwReturn::Old => self.atomic_object_value(result.old, ty, span),
+                crate::AtomicRmwReturn::New => self.atomic_object_value(result.new, ty, span),
                 crate::AtomicRmwReturn::Success => Ok(CValue::Integer(CInteger::new(
                     u64::from(result.exchanged),
                     CIntegerType::BOOL,
@@ -8022,9 +8024,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             };
         }
         if let Some(stored) = stored {
-            let stored = self.cast_runtime_value(stored, ty, span)?;
+            // The front end converted the value to the type of the object; a
+            // floating value moves as its bits.
+            let stored = match stored {
+                CValue::Floating(value) if matches!(ty, ValueType::Floating(_)) => {
+                    CValue::Floating(value)
+                }
+                stored => self.cast_runtime_value(stored, ty, span)?,
+            };
             let stored = match stored {
                 CValue::Integer(value) => evocc_memory::AtomicValue::Integer(value.raw_bits()),
+                CValue::Floating(value) => evocc_memory::AtomicValue::Integer(value.bits()),
                 CValue::Pointer { value, .. } => {
                     evocc_memory::AtomicValue::Pointer(PointerValue::object(value))
                 }
@@ -8077,6 +8087,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     };
                     Ok(CValue::Pointer { value, ty })
                 }
+                (value, ValueType::Floating(_)) => self.atomic_object_value(value, ty, span),
                 _ => Err(InterpreterError::UnsupportedType {
                     ty: access.access_ty,
                     span,
