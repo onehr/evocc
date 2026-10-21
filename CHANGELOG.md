@@ -65,6 +65,14 @@ The first public version.
   The `f16` suffix works on both targets, and the `bf16` suffix on Linux, as in GCC 14. A
   `__bf16` HFA is E3049, and `_Float16` with `__bf16` in one operation is the new E2961.
 - On Darwin, `<stdatomic.h>` compiles and runs through Clang's `__c11_atomic_*` builtins.
+- Darwin framework headers, `-F`, `-iframework` and `-framework`, and `#import` on both targets.
+- Apple clang availability for the macOS deployment target (`-mmacosx-version-min`,
+  `MACOSX_DEPLOYMENT_TARGET`, default 11.0). E2962 and E0114 are new.
+- Named refusals on Darwin for Blocks, `overloadable`, the os_log builtins and the ACLE builtins
+  (E2963 to E2966).
+- Multi-character constants such as `'TEXT'`, with the values of GCC 14 and Apple clang.
+- The EvoMIR interpreter runs records passed in general registers, padding and unstored members
+  included, and the randomized gate covers them.
 - Three more checked string builtins of the macOS 26 SDK (`__builtin___memccpy_chk`,
   `__builtin___strlcpy_chk`, `__builtin___strlcat_chk`), four checked `printf`-family builtins
   and `__builtin___clear_cache`, which calls the target's runtime helper.

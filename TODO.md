@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D19, D24, D26, D27, D28, D29 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D19, D24, D26, D27, D28, D30, D31 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -5689,6 +5689,20 @@ refusal; changing the P13 demo does not close it.
   `infiniband/verbs.h`. The full offline workspace gate of rust-r7 on the final
   tree passes 477 suites, 3,580 tests, zero failures and 20 ignores, plus Clippy
   and formatting.
+  October 21 (EvoIR 2.25.0 to 2.28.0, commits 6e0f6841 to 6e60deb7): framework
+  headers, `-F`, `-iframework`, `-framework` and `#import`; Apple clang
+  availability for the macOS deployment target (the last `-mmacosx-version-min`,
+  then `MACOSX_DEPLOYMENT_TARGET`, then 11.0, where Apple clang uses the host
+  version; E2962 and E0114); named refusals for Blocks, `overloadable`, the
+  os_log builtins and the ACLE builtins (E2963 to E2966); and the GCC 14 and
+  Apple clang values of multi-character constants. A sweep with the final binary
+  finds no regression: 1,222 of 1,259 SDK headers compile per mode, and 221 of
+  the 237 headers that the CoreFoundation, IOKit, Security and CoreServices
+  umbrellas include. A CFString program agrees with Apple clang at O0 and O2.
+  D19 stays open for Spatial (29 headers: `ext_vector_type` and `overloadable`),
+  the headers that need `__BLOCKS__` and `infiniband/verbs.h` (GCC 14 refuses
+  it). The full offline workspace gate passes 498 suites, 3,766 tests, zero
+  failures and 38 ignores, plus Clippy and formatting.
 
 - [x] **D20 — Implement `__builtin_tgmath` for glibc `<tgmath.h>`** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 during D17. glibc's `<tgmath.h>` defines its type-generic
@@ -5821,7 +5835,7 @@ refusal; changing the P13 demo does not close it.
   __attribute__((vector_size(32)))` ends in E3101, an internal lowering error,
   instead of a named refusal; the release binary of 2026-10-20 does the same.
 
-- [ ] **D29 — Run by-value records in general registers in the EvoMIR interpreter** — `OPEN`, P2.
+- [x] **D29 — Run by-value records in general registers in the EvoMIR interpreter** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 by rust-r12. A by-value `struct { char c; int i; }` stops
   the EvoMIR interpreter with E3012, because its `ldr.x` and `str.x` from a
   4-aligned slot carry no `[align=4]`. The EvoMIR interpreter also requires a
@@ -5829,6 +5843,38 @@ refusal; changing the P13 demo does not close it.
   that EvoMIR 9.1 records). Native code and the EvoIR interpreter run both
   cases. Exit: the EvoMIR interpreter runs such records, padding and partly
   initialized members included, and the randomized gate covers them.
+  Closed on 2026-10-21 (EvoMIR 1.12.0, commit 091bf91c). The chunk loads and
+  stores that move a by-value record through general registers carry a
+  `[transport]` mark, and the EvoMIR interpreter keeps the initializedness of
+  each bit and the pointer fragments through them; the 9.1 exception is removed.
+  Native assembly of 1,016 fixtures is unchanged on both targets at O0 and O2,
+  with and without `-mstrict-align`. The randomized gate gains `--records on`
+  and gives zero mismatches in 2,000 programs.
+  [Tests](crates/evocc/tests/record_registers.rs). The full offline workspace
+  gate passes 498 suites, 3,766 tests, zero failures and 38 ignores, plus Clippy
+  and formatting.
+
+- [ ] **D30 — Evaluate `defined` from macro expansion in `#if`, and UTF-8 character constants** — `OPEN`, P2.
+  Found on 2026-10-21 by rust-r13. When macro expansion produces `defined` in
+  `#if`, EvoCC evaluates it as 0, but GCC 14 and Apple clang evaluate it, so
+  `os/trace_base.h` takes its legacy path. The standard leaves this undefined,
+  and both references define it the same way. A UTF-8 character in a plain
+  character constant, such as 'é', is 233 in EvoCC; GCC 14 gives the
+  multi-character value 0xC3A9, and Apple clang refuses it. Exit: `defined` from
+  expansion follows both references; a UTF-8 character constant follows GCC 14
+  on Linux and Apple clang on Darwin, with tests.
+
+- [ ] **D31 — Keep record chunk accesses aligned under `-mstrict-align`** — `OPEN`, P1.
+  Found on 2026-10-21 by rust-r13. A by-value record with 4-byte alignment moves
+  through general registers with 8-byte `ldr x` and `str x` chunk accesses. The
+  frame does not guarantee an 8-aligned offset for such a record, so under
+  `-mstrict-align`, with alignment checking enabled, an access can fault. Next
+  action: probe a 4-aligned record argument and result under `-mstrict-align` on
+  both targets at O0 and O2, and find which programs and lanes use the option.
+  Exit: under `-mstrict-align` every access EvoCC emits is aligned to its size,
+  a test runs with alignment checking enabled (SCTLR.A in the sealed image, if
+  the lane allows it, or an exhaustive offset check of the emitted assembly),
+  and native code without the option is unchanged.
 
 ## Codegen quality track — next quarter
 
