@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.27.0** | **Pinned ground truth** | Clang extension refusals on 2026-10-21
+**Revision 2.28.0** | **Pinned ground truth** | Multi-character constants on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -7860,6 +7860,19 @@ macros. By default a wide literal holds UTF-32 units, and `wchar_t` is
 point above U+FFFF written as a surrogate pair; a wide character constant above
 U+FFFF is then `E1006`, never a truncated value.
 
+**Multi-character constants.** An unprefixed character constant with two or
+more elements has type `int` on both targets when each element is an ASCII
+character or an escape sequence with a value of at most 255. Apple's SDK
+headers use such constants as four-character codes. The value starts at 0,
+and each element in turn shifts it left by eight bits and adds its byte. The
+value keeps its low 32 bits as an `int`, and plain char signedness does not
+apply. `'ab'` is 24930, `'\xff\xff'` is 65535, `'\xff\xff\xff\xff'` is -1 and
+`'abcde'` is 1650680933, as GCC 14 and Apple clang 21 compute them. In `#if`
+the constant has the same value. A multi-character constant with a prefix, an
+element outside ASCII, a universal character name or an escape above 255
+stays `E1006`, because the two compilers read it differently or refuse it.
+Fixture: `tests/fixtures/multicharacter-constants/`.
+
 **Rescanning.** After a macro's replacement list has its arguments
 substituted, it is rescanned for further macro names together with the
 tokens that follow it in the sequence it was expanded in: the rest of the
@@ -8798,6 +8811,12 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.28.0, 2026-10-21.** Section 10.5 admits the multi-character
+constants of GCC 14 and Apple clang 21 on both targets: an unprefixed
+constant of two or more ASCII characters or escapes of at most 255 is an
+`int`, in C expressions and in `#if`. The other multi-character forms stay
+`E1006`. No grammar production, registry or Lean rule domain changes.
 
 **Revision 2.27.0, 2026-10-21.** Sections 10.1.9 and 10.1.14 refuse the Clang
 extensions of Apple's SDK by name on Darwin, at their first use: Blocks are the

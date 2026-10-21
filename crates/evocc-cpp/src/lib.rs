@@ -2371,6 +2371,7 @@ impl Preprocessor {
         if let Some(token) = expanded.iter().find(|token| {
             token.kind == TokenKind::CharLiteral
                 && evocc_lex::decode_character_literal(token_lexeme(token, source)).is_none()
+                && evocc_lex::decode_multicharacter_literal(token_lexeme(token, source)).is_none()
         }) {
             self.errors.push(PreprocessError {
                 code: "E1006",
@@ -3620,6 +3621,13 @@ fn parse_pp_integer_checked(spelling: &str) -> Option<PpInteger> {
 }
 
 fn parse_pp_character(spelling: &str, signed_char: bool) -> PpInteger {
+    // A multi-character constant is an `int` (EvoIR 10.5).
+    if let Some(value) = evocc_lex::decode_multicharacter_literal(spelling) {
+        return PpInteger {
+            bits: (value as i32 as i64) as u64,
+            unsigned: false,
+        };
+    }
     let (value, prefix) = evocc_lex::decode_character_literal(spelling)
         .expect("conditional character operands were validated before evaluation");
     PpInteger {

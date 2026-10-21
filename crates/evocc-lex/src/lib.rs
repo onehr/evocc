@@ -393,6 +393,68 @@ pub fn decode_character_literal(text: &str) -> Option<(u32, &str)> {
     Some((value, prefix))
 }
 
+/// The value of an ordinary multi-character constant, such as `'TEXT'`, as
+/// GCC 14 and Clang give it: each element shifts the value left by eight bits
+/// and adds its byte, the value keeps its low 32 bits, and its type is `int`.
+/// An element is an ASCII character or an escape sequence with a value of at
+/// most 255. `None` is a constant with one element or with a prefix, and one
+/// with an element that the two compilers read differently: a universal
+/// character name, a character outside ASCII or a larger escape.
+#[must_use]
+pub fn decode_multicharacter_literal(text: &str) -> Option<u32> {
+    let contents = text.strip_prefix('\'')?.strip_suffix('\'')?;
+    let mut value = 0_u32;
+    let mut elements = 0;
+    let mut characters = contents.chars().peekable();
+    while let Some(character) = characters.next() {
+        let element = if character == '\\' {
+            match characters.next()? {
+                '\'' => u32::from(b'\''),
+                '"' => u32::from(b'"'),
+                '?' => u32::from(b'?'),
+                '\\' => u32::from(b'\\'),
+                'a' => 7,
+                'b' => 8,
+                'f' => 12,
+                'n' => 10,
+                'r' => 13,
+                't' => 9,
+                'v' => 11,
+                'e' => 27,
+                'x' => {
+                    let mut digits = String::new();
+                    while let Some(digit) = characters.next_if(char::is_ascii_hexdigit) {
+                        digits.push(digit);
+                    }
+                    u32::from_str_radix(&digits, 16).ok()?
+                }
+                first @ '0'..='7' => {
+                    let mut digits = String::from(first);
+                    while digits.len() < 3 {
+                        let Some(digit) = characters.next_if(|digit| matches!(digit, '0'..='7'))
+                        else {
+                            break;
+                        };
+                        digits.push(digit);
+                    }
+                    u32::from_str_radix(&digits, 8).ok()?
+                }
+                _ => return None,
+            }
+        } else if character.is_ascii() && character != '\'' && character != '\n' {
+            u32::from(character)
+        } else {
+            return None;
+        };
+        if element > u32::from(u8::MAX) {
+            return None;
+        }
+        value = (value << 8) | element;
+        elements += 1;
+    }
+    (elements >= 2).then_some(value)
+}
+
 /// Return the byte length of a syntactically complete universal character
 /// name beginning at `pos`. Identifier and preprocessing-number recognition
 /// share this spelling-level predicate so the two token grammars cannot

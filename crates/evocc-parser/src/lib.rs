@@ -18879,6 +18879,14 @@ fn concatenate_string_prefix(left: StringPrefix, right: StringPrefix) -> Option<
 }
 
 fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
+    // A multi-character constant has type `int` and the value that GCC 14
+    // and Clang give it; plain char signedness does not apply (EvoIR 10.5).
+    if let Some(value) = evocc_lex::decode_multicharacter_literal(text) {
+        return Some(CharLit {
+            value,
+            prefix: CharPrefix::None,
+        });
+    }
     let (value, prefix) = evocc_lex::decode_character_literal(text)?;
     let prefix = match prefix {
         "u8" => CharPrefix::U8,
