@@ -718,8 +718,11 @@ pub struct Preprocessor {
     macro_stacks: HashMap<String, Vec<SavedMacro>>,
     include_guard_seen: bool,
     pragma_once_files: HashSet<String>,
-    include_paths: Vec<String>,
+    include_paths: Vec<SearchDirectory>,
     current_include_path: Option<usize>,
+    /// The files whose include directives are open, outermost first. The
+    /// current file is not in the list. A subframework search reads them.
+    includers: Vec<String>,
     /// The number of included sources that are open. Zero is the main file.
     include_depth: usize,
     forced_includes: Vec<String>,
@@ -765,6 +768,7 @@ impl Preprocessor {
             pragma_once_files: HashSet::new(),
             include_paths: Vec::new(),
             current_include_path: None,
+            includers: Vec::new(),
             include_depth: 0,
             forced_includes: Vec::new(),
             macro_prefix_maps: Vec::new(),
@@ -863,11 +867,27 @@ impl Preprocessor {
     }
 
     pub fn add_include_path(&mut self, path: String) {
-        self.include_paths.push(path);
+        self.include_paths.push(SearchDirectory {
+            path,
+            framework: false,
+        });
     }
 
-    pub fn include_paths(&self) -> &[String] {
-        &self.include_paths
+    /// Add a framework directory, as Clang's `-F` and `-iframework` do: it
+    /// serves `<Name/Header.h>` from `Name.framework` (EvoIR 10.5).
+    pub fn add_framework_path(&mut self, path: String) {
+        self.include_paths.push(SearchDirectory {
+            path,
+            framework: true,
+        });
+    }
+
+    /// The search directories in order, normal and framework ones alike.
+    pub fn include_paths(&self) -> Vec<&str> {
+        self.include_paths
+            .iter()
+            .map(|directory| directory.path.as_str())
+            .collect()
     }
 
     /// Configure a command-line `-include FILE` input for this compilation.
@@ -986,6 +1006,7 @@ impl Preprocessor {
         self.errors.clear();
         self.include_guard_seen = false;
         self.pragma_once_files.clear();
+        self.includers.clear();
         self.counter = 0;
         self.poisoned_identifiers.clear();
         self.ignored_pragma_count = 0;
@@ -1109,6 +1130,7 @@ impl Preprocessor {
             }
         }
         let previous_file = std::mem::replace(&mut self.current_file, resolved.to_owned());
+        self.includers.push(previous_file);
         let conditional_floor = self.cond_stack.len();
         self.include_depth += 1;
         let processed = self.process_impl(
@@ -1119,7 +1141,7 @@ impl Preprocessor {
             conditional_floor,
         );
         self.include_depth -= 1;
-        self.current_file = previous_file;
+        self.current_file = self.includers.pop().expect("the includer was pushed above");
         Ok(processed)
     }
 
@@ -1499,7 +1521,7 @@ impl Preprocessor {
                         }
                         skip_line(&raw, &mut i, source);
                     }
-                    "include" | "include_next" => {
+                    "include" | "include_next" | "import" => {
                         if self.cond_active() {
                             let directive_span = tok.span;
                             let argument = collect_line_tokens(&raw, &mut i, source);
@@ -1522,6 +1544,7 @@ impl Preprocessor {
                                     &include_text,
                                     include_kind,
                                     &self.current_file,
+                                    &self.includers,
                                     &self.include_paths,
                                     self.standard_includes,
                                     if dir_name == "include_next" {
@@ -1531,9 +1554,23 @@ impl Preprocessor {
                                     },
                                 );
                                 if let Some((resolved, origin)) = path {
-                                    if !self.pragma_once_files.contains(&resolved) {
+                                    // `#import` enters a file only if no
+                                    // directive entered it before, and every
+                                    // later directive skips it, as in GCC 14
+                                    // and Clang.
+                                    let enter = !self.pragma_once_files.contains(&resolved)
+                                        && (dir_name != "import"
+                                            || !self.source_contents.contains_key(&resolved));
+                                    if dir_name == "import" {
+                                        self.pragma_once_files.insert(resolved.clone());
+                                    }
+                                    if enter {
                                         let previous_origin = self.current_include_path;
-                                        self.current_include_path = origin.or(previous_origin);
+                                        self.current_include_path = match origin {
+                                            IncludeOrigin::Directory(index) => Some(index),
+                                            IncludeOrigin::Beside => previous_origin,
+                                            IncludeOrigin::Unpositioned => None,
+                                        };
                                         let processed =
                                             self.process_resolved_source(&resolved, expanding);
                                         self.current_include_path = previous_origin;
@@ -2083,6 +2120,7 @@ impl Preprocessor {
                                 &name,
                                 kind,
                                 &self.current_file,
+                                &self.includers,
                                 &self.include_paths,
                                 self.standard_includes,
                                 start,
@@ -2737,47 +2775,135 @@ fn read_include_argument(
     None
 }
 
+/// One directory of the include search. A framework directory serves
+/// `<Name/Header.h>` from `Name.framework`, as Clang's `-F` does.
+#[derive(Debug, Clone)]
+struct SearchDirectory {
+    path: String,
+    framework: bool,
+}
+
+/// Where the include search found a file. `#include_next` in that file
+/// starts after a directory, keeps the position of the includer for a file
+/// found beside it, and starts at the first directory for a subframework
+/// header, as in Clang.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IncludeOrigin {
+    Directory(usize),
+    Beside,
+    Unpositioned,
+}
+
 /// Try to resolve an include file name to an absolute path, and return the
 /// index of the search directory that found it. For quoted includes, first
 /// search relative to the current directory, then the include path list. For
 /// angle-bracket includes, only search the include path list. `search_start`
 /// is the first index of an `#include_next` search, which skips the current
-/// directory.
+/// directory. When the list does not find the file, the frameworks of the
+/// current file and of its includers, innermost first, are searched for a
+/// subframework, as Clang does (EvoIR 10.5).
 fn resolve_include_with_origin(
     name: &str,
     kind: IncludeKind,
     current_file: &str,
-    include_paths: &[String],
+    includers: &[String],
+    include_paths: &[SearchDirectory],
     standard_includes: bool,
     search_start: Option<usize>,
-) -> Option<(String, Option<usize>)> {
+) -> Option<(String, IncludeOrigin)> {
     // Quoted include: try beside the active source, then the process working
     // directory. `read_include_argument` has already removed the delimiters.
     if search_start.is_none() && kind == IncludeKind::Quote && !name.starts_with('/') {
         if let Some(parent) = std::path::Path::new(current_file).parent() {
             let candidate = parent.join(name);
             if let Some(resolved) = resolved_existing_path(&candidate) {
-                return Some((resolved, None));
+                return Some((resolved, IncludeOrigin::Beside));
             }
         }
         let local = std::path::Path::new(name);
         if let Some(resolved) = resolved_existing_path(local) {
-            return Some((resolved, None));
+            return Some((resolved, IncludeOrigin::Beside));
         }
     }
     // Search include paths.
-    let system_paths = ["/usr/include", "/usr/local/include"];
+    let system_paths = ["/usr/include", "/usr/local/include"]
+        .into_iter()
+        .filter(|_| standard_includes)
+        .map(|path| SearchDirectory {
+            path: path.to_owned(),
+            framework: false,
+        });
     let search_paths = include_paths
         .iter()
-        .map(String::as_str)
-        .chain(system_paths.into_iter().filter(|_| standard_includes));
-    for (index, dir) in search_paths.enumerate().skip(search_start.unwrap_or(0)) {
-        let candidate = std::path::Path::new(dir).join(name);
-        if let Some(resolved) = resolved_existing_path(&candidate) {
-            return Some((resolved, Some(index)));
+        .cloned()
+        .chain(system_paths)
+        .collect::<Vec<_>>();
+    for (index, directory) in search_paths
+        .iter()
+        .enumerate()
+        .skip(search_start.unwrap_or(0))
+    {
+        let found = if directory.framework {
+            framework_header(&search_paths, index, name)
+        } else {
+            resolved_existing_path(&std::path::Path::new(&directory.path).join(name))
+        };
+        if let Some(resolved) = found {
+            return Some((resolved, IncludeOrigin::Directory(index)));
         }
     }
-    None
+    std::iter::once(current_file)
+        .chain(includers.iter().rev().map(String::as_str))
+        .find_map(|context| subframework_header(context, name))
+        .map(|resolved| (resolved, IncludeOrigin::Unpositioned))
+}
+
+/// `Name/Rest` in the framework directory `search[index]`. The first
+/// framework directory of the list that holds `Name.framework` owns the
+/// name, so a later directory never serves it, as in Clang. The framework's
+/// `Headers` come before its `PrivateHeaders`.
+fn framework_header(search: &[SearchDirectory], index: usize, name: &str) -> Option<String> {
+    let (framework, rest) = name.split_once('/')?;
+    let bundle = format!("{framework}.framework");
+    let owner = search.iter().position(|directory| {
+        directory.framework && std::path::Path::new(&directory.path).join(&bundle).is_dir()
+    })?;
+    if owner != index {
+        return None;
+    }
+    let bundle = std::path::Path::new(&search[index].path).join(bundle);
+    framework_file(&bundle, rest)
+}
+
+/// `Name/Rest` as a subframework of the framework that holds `context`:
+/// `Outer.framework/Frameworks/Name.framework`, as Clang searches it for a
+/// header inside `Outer.framework`.
+fn subframework_header(context: &str, name: &str) -> Option<String> {
+    let (framework, rest) = name.split_once('/')?;
+    // Clang reads the first `.framework` of the path only.
+    let end = context.find(".framework")? + ".framework".len();
+    if !context[end..].starts_with('/') {
+        return None;
+    }
+    let bundle = std::path::Path::new(&context[..end])
+        .join("Frameworks")
+        .join(format!("{framework}.framework"));
+    if !bundle.is_dir() {
+        return None;
+    }
+    framework_file(&bundle, rest)
+}
+
+fn framework_file(bundle: &std::path::Path, rest: &str) -> Option<String> {
+    ["Headers", "PrivateHeaders"]
+        .into_iter()
+        .find_map(|headers| {
+            let candidate = bundle.join(headers).join(rest);
+            candidate
+                .is_file()
+                .then(|| resolved_existing_path(&candidate))
+                .flatten()
+        })
 }
 
 fn resolved_existing_path(path: &std::path::Path) -> Option<String> {

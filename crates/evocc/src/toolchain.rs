@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::sync::OnceLock;
 
-use crate::{DriverOptions, DriverTarget};
+use crate::{DriverOptions, DriverTarget, SearchPath};
 
 /// The image whose GCC assembles and links for the Linux target when the host
 /// is not Linux. `tools/ladder/subject.py` assembles with the same image.
@@ -76,26 +76,41 @@ pub(crate) fn linux_sysroot(explicit: Option<&str>) -> Result<String, String> {
         })
 }
 
-/// The system header directories of the target, in search order, or `None`
-/// when the preprocessor keeps its built-in directories.
+/// The header directories of a target. Apple clang searches the user ones
+/// after the command line's -I and -F directories and before its -isystem
+/// and -iframework directories; the system ones follow every directory that
+/// the command line names.
+pub(crate) struct TargetDirectories {
+    pub user: Vec<SearchPath>,
+    pub system: Vec<SearchPath>,
+}
+
+/// The header directories of the target, in search order, or `None` when
+/// the preprocessor keeps its built-in directories.
 ///
-/// Darwin uses the clang resource headers and the macOS SDK. Linux uses the
-/// directories of `--sysroot`. A cc compilation for Linux on a Linux host uses
-/// the host's directories. The development actions without `--sysroot` keep
-/// the built-in directories, so their output does not change.
-pub(crate) fn target_system_directories(options: &DriverOptions) -> Option<Vec<String>> {
+/// Darwin uses the clang resource headers, the macOS SDK and its framework
+/// directories. Linux uses the directories of `--sysroot`. A cc compilation
+/// for Linux on a Linux host uses the host's directories. The development
+/// actions without `--sysroot` keep the built-in directories, so their output
+/// does not change.
+pub(crate) fn target_system_directories(options: &DriverOptions) -> Option<TargetDirectories> {
     if !options.standard_includes {
         return None;
     }
+    let linux = |root: &Path| TargetDirectories {
+        user: Vec::new(),
+        system: linux_directories(root)
+            .into_iter()
+            .map(SearchPath::normal)
+            .collect(),
+    };
     match options.target {
         DriverTarget::Aarch64AppleDarwin => {
             Some(darwin_directories(options.system_root.as_deref()))
         }
         DriverTarget::Aarch64UnknownLinuxGnu => match &options.system_root {
-            Some(root) => Some(linux_directories(Path::new(root))),
-            None if options.cc_mode && cfg!(target_os = "linux") => {
-                Some(linux_directories(Path::new("/")))
-            }
+            Some(root) => Some(linux(Path::new(root))),
+            None if options.cc_mode && cfg!(target_os = "linux") => Some(linux(Path::new("/"))),
             None => None,
         },
     }
@@ -103,9 +118,19 @@ pub(crate) fn target_system_directories(options: &DriverOptions) -> Option<Vec<S
 
 /// Every directory whose headers are system headers for `-MM` and `-MMD`.
 pub(crate) fn system_header_directories(options: &DriverOptions) -> Vec<String> {
-    let mut directories = options.system_include_paths.clone();
+    let mut directories: Vec<String> = options
+        .system_include_paths
+        .iter()
+        .map(|directory| directory.path.clone())
+        .collect();
     match target_system_directories(options) {
-        Some(target) => directories.extend(target),
+        Some(target) => directories.extend(
+            target
+                .user
+                .into_iter()
+                .chain(target.system)
+                .map(|directory| directory.path),
+        ),
         None if options.standard_includes => {
             directories.extend(["/usr/include".to_owned(), "/usr/local/include".to_owned()]);
         }
@@ -158,21 +183,43 @@ fn linux_directories(root: &Path) -> Vec<String> {
     )
 }
 
-/// The local headers, the clang resource headers, then the SDK headers, as
-/// Apple clang searches them.
-fn darwin_directories(root: Option<&str>) -> Vec<String> {
+/// The directories of Apple clang 21 for arm64 macOS, in its order: the
+/// local headers as a user directory when no SDK root is named, then the
+/// clang resource headers, the SDK headers, the toolchain headers, and the
+/// SDK's framework and subframework directories.
+fn darwin_directories(root: Option<&str>) -> TargetDirectories {
     let sdk = root.map(PathBuf::from).or_else(darwin_sdk);
     let local = if root.is_none() {
         Some(PathBuf::from("/usr/local/include"))
     } else {
         None
     };
-    existing(
-        local
-            .into_iter()
+    let toolchain = darwin_resource_headers()
+        .and_then(|headers| Some(headers.ancestors().nth(4)?.join("include")));
+    let headers = existing(
+        sdk.iter()
+            .map(|sdk| sdk.join("usr/local/include"))
             .chain(darwin_resource_headers())
-            .chain(sdk.map(|sdk| sdk.join("usr/include"))),
-    )
+            .chain(sdk.iter().map(|sdk| sdk.join("usr/include")))
+            .chain(toolchain),
+    );
+    let frameworks = existing(sdk.iter().flat_map(|sdk| {
+        [
+            sdk.join("System/Library/Frameworks"),
+            sdk.join("System/Library/SubFrameworks"),
+        ]
+    }));
+    TargetDirectories {
+        user: existing(local)
+            .into_iter()
+            .map(SearchPath::normal)
+            .collect(),
+        system: headers
+            .into_iter()
+            .map(SearchPath::normal)
+            .chain(frameworks.into_iter().map(SearchPath::framework))
+            .collect(),
+    }
 }
 
 /// The macOS SDK: `SDKROOT`, then `xcrun`, then the Command Line Tools.

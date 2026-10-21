@@ -69,6 +69,7 @@ language of the next inputs: c, assembler, assembler-with-cpp or none.
 
 Compilation:
   -I DIR -D NAME[=VALUE] -U NAME -include FILE -isystem DIR -nostdinc
+  -F DIR -iframework DIR   Framework directories (aarch64-apple-darwin).
   -std=c89|c99|c11|c17|gnu89|gnu99|gnu11|gnu17  -O0 -O1 -O2 -O3 -Os -Og -g
   -f... -m...        The known options take effect. The driver ignores
                      the others with one warning.
@@ -84,6 +85,7 @@ Compilation:
 Dependencies: -M -MM -MD -MMD -MF FILE -MT TARGET -MQ TARGET -MP
 
 Linking: -l LIB -L DIR -Wl,ARGS -Xlinker ARG -shared -static -pthread
+  -framework NAME
 Tools: --assembler=CMD (EVOCC_AS), --linker=CMD (EVOCC_CC)
 Information: --version -v -dumpmachine -dumpversion --help
 Development actions: --emit=asm|evoir|c-hir, --parse-only, --check and
@@ -391,6 +393,16 @@ impl Command {
                 let value = take(args, index, arg)?;
                 self.ignored.push(format!("--param {value}"));
             }
+            // Apple clang searches a framework directory for headers and
+            // gives it to the linker for `-framework` (EvoIR 10.5).
+            "-F" | "-iframework" => {
+                let value = take(args, index, arg)?.to_owned();
+                self.compile.push(arg.to_owned());
+                self.compile.push(value.clone());
+                self.preprocessor.push(arg.to_owned());
+                self.preprocessor.push(value.clone());
+                self.link.push(LinkItem::Argument(format!("-F{value}")));
+            }
             "-iquote" | "-idirafter" => {
                 let value = take(args, index, arg)?.to_owned();
                 let spelling = if arg == "-iquote" { "-I" } else { "-isystem" };
@@ -451,6 +463,16 @@ impl Command {
             _ if arg.starts_with("-isystem") => {
                 self.compile.push(arg.to_owned());
                 self.preprocessor.push(arg.to_owned());
+            }
+            _ if (arg.starts_with("-iframework") && !arg.starts_with("-iframeworkwithsysroot"))
+                || arg.starts_with("-F") =>
+            {
+                let directory = arg
+                    .strip_prefix("-iframework")
+                    .unwrap_or_else(|| &arg["-F".len()..]);
+                self.compile.push(arg.to_owned());
+                self.preprocessor.push(arg.to_owned());
+                self.link.push(LinkItem::Argument(format!("-F{directory}")));
             }
             "-g0" => {
                 self.debug = false;

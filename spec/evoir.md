@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.24.0** | **Pinned ground truth** | volatile bit-field masks on 2026-10-21
+**Revision 2.25.0** | **Pinned ground truth** | framework headers on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -7553,6 +7553,47 @@ file named by `-include` searches from the first directory. In the main file,
 as `__has_include` does, as in GCC 14 and Clang. Example: on Darwin, Clang's
 resource `<limits.h>` includes the SDK `<limits.h>` only when
 `__has_include_next(<limits.h>)` holds, and the SDK header defines `PATH_MAX`.
+A header that the subframework search below finds has no search position, so
+an `#include_next` in it starts at the first directory, as in Clang.
+
+**`#import`.** `#import` searches as `#include` does. It enters the file only
+when no directive entered that file before, and every later `#include`,
+`#include_next` or `#import` of it is skipped, as GCC 14 and Clang do on both
+targets. `#pragma once` and `#import` mark a file the same way.
+
+**Framework headers.** On `aarch64-apple-darwin` a search directory is a
+normal directory or a framework directory, as in Apple clang. `-F DIR` names a
+framework directory in the position of an `-I` directory, and `-iframework
+DIR` names one in the position of an `-isystem` directory; the joined forms
+`-FDIR` and `-iframeworkDIR` are the same options. Both are refused on Linux.
+A framework directory serves a name `Name/Rest` and no other name:
+
+- The first framework directory of the search list that holds a directory
+  `Name.framework` owns `Name`; a later framework directory never serves it,
+  even when the owner lacks `Rest`.
+- In the owner, `Name.framework/Headers/Rest` is found first, then
+  `Name.framework/PrivateHeaders/Rest`; only a regular file is found.
+- When the whole list finds no file, the search tries the subframeworks of the
+  current file and then of each open includer, innermost first. A file whose
+  path has `Outer.framework/` at the first `.framework` of the path offers
+  `Outer.framework/Frameworks/Name.framework`, with the same two directories.
+
+`__has_include` and `__has_include_next` use the same search. Without
+`-nostdinc`, the search list of this target is the -I and -F directories in
+command-line order, then `/usr/local/include` when no `--sysroot` or
+`-isysroot` names the SDK, then the -isystem and -iframework directories in
+command-line order, then the SDK's `usr/local/include`, Clang's resource
+headers, the SDK's `usr/include` and the toolchain's `usr/include`, and last
+the SDK's `System/Library/Frameworks` and `System/Library/SubFrameworks`
+framework directories; a directory that does not exist is left out. This is
+the order of the `-cc1` arguments of Apple clang 21, and `xcrun clang -v -E`
+prints the directories of it that exist. The cc command
+line also gives each -F and -iframework directory to the linker, and
+`-framework Name` links the framework. Example: `#include
+<CoreFoundation/CoreFoundation.h>` and `-framework CoreFoundation` compile and
+link a CoreFoundation program, and `#include <CarbonCore/CarbonCore.h>` in
+`CoreServices.framework/Headers/CoreServices.h` finds the subframework
+`CarbonCore`.
 
 **Pragmas.** `_Pragma("text")` destringizes and is processed as `#pragma text`.
 `#pragma once` is honoured. `#pragma GCC diagnostic ...`, `#pragma GCC
@@ -8607,6 +8648,17 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.25.0, 2026-10-21.** Section 10.5 adds the framework headers of
+Darwin: `-F` and `-iframework` directories, the SDK's framework and
+subframework directories, the ownership of a framework name by its first
+framework directory, `Headers` before `PrivateHeaders`, and the subframework
+search from the frameworks of the open files. It states the whole Darwin
+search order of Apple clang 21, which puts `/usr/local/include` before the
+-isystem directories and adds the toolchain's `usr/include`. `#import` is
+admitted on both targets with the meaning of GCC 14 and Clang. The cc command
+line gives the framework directories to the linker. Linux search lists do not
+change. No grammar production, registry or Lean rule domain changes.
 
 **Revision 2.24.0, 2026-10-21.** Section 3.8 admits the mask on a volatile
 `load` or `store`, which stays one volatile event; its event records the

@@ -158,8 +158,10 @@ struct DriverOptions {
     target: DriverTarget,
     input: String,
     source_from_stdin: bool,
-    include_paths: Vec<String>,
-    system_include_paths: Vec<String>,
+    /// `-I` and `-F` directories in command-line order.
+    include_paths: Vec<SearchPath>,
+    /// `-isystem` and `-iframework` directories in command-line order.
+    system_include_paths: Vec<SearchPath>,
     forced_includes: Vec<String>,
     macro_prefix_maps: Vec<(String, String)>,
     macro_actions: Vec<MacroAction>,
@@ -326,6 +328,31 @@ impl DriverOptions {
 enum MacroAction {
     Define(String),
     Undefine(String),
+}
+
+/// One directory of the include search. A framework directory (`-F`,
+/// `-iframework`) serves `<Name/Header.h>` from `Name.framework`, as Apple
+/// clang searches it (EvoIR 10.5).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SearchPath {
+    pub path: String,
+    pub framework: bool,
+}
+
+impl SearchPath {
+    pub(crate) fn normal(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            framework: false,
+        }
+    }
+
+    pub(crate) fn framework(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            framework: true,
+        }
+    }
 }
 
 const SUPPORTED_TARGET: &str = "aarch64-unknown-linux-gnu";
@@ -534,6 +561,9 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     let mut source_from_stdin = false;
     let mut include_paths = Vec::new();
     let mut system_include_paths = Vec::new();
+    // Framework directories exist only on Darwin; the target is known at
+    // the end of the command line.
+    let mut framework_options: Vec<String> = Vec::new();
     let mut forced_includes = Vec::new();
     let mut macro_prefix_maps = Vec::new();
     let mut macro_actions = Vec::new();
@@ -945,15 +975,23 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             }
             "-P" | "-undef" => {}
             "-nostdinc" => standard_includes = false,
-            "-I" | "-D" | "-U" | "-include" | "-isystem" => {
+            "-I" | "-D" | "-U" | "-include" | "-isystem" | "-F" | "-iframework" => {
                 index += 1;
                 let value = args
                     .get(index)
                     .ok_or_else(|| format!("{arg} requires an argument"))?
                     .clone();
                 match arg.as_str() {
-                    "-I" => include_paths.push(value),
-                    "-isystem" => system_include_paths.push(value),
+                    "-I" => include_paths.push(SearchPath::normal(value)),
+                    "-isystem" => system_include_paths.push(SearchPath::normal(value)),
+                    "-F" => {
+                        framework_options.push(arg.clone());
+                        include_paths.push(SearchPath::framework(value));
+                    }
+                    "-iframework" => {
+                        framework_options.push(arg.clone());
+                        system_include_paths.push(SearchPath::framework(value));
+                    }
                     "-D" => macro_actions.push(MacroAction::Define(value)),
                     "-U" => macro_actions.push(MacroAction::Undefine(value)),
                     "-include" => forced_includes.push(value),
@@ -961,10 +999,21 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
                 }
             }
             _ if arg.starts_with("-I") && arg.len() > 2 => {
-                include_paths.push(arg[2..].to_owned());
+                include_paths.push(SearchPath::normal(&arg[2..]));
             }
             _ if arg.starts_with("-isystem") && arg.len() > "-isystem".len() => {
-                system_include_paths.push(arg["-isystem".len()..].to_owned());
+                system_include_paths.push(SearchPath::normal(&arg["-isystem".len()..]));
+            }
+            _ if arg.starts_with("-iframework")
+                && arg.len() > "-iframework".len()
+                && !arg.starts_with("-iframeworkwithsysroot") =>
+            {
+                framework_options.push(arg.clone());
+                system_include_paths.push(SearchPath::framework(&arg["-iframework".len()..]));
+            }
+            _ if arg.starts_with("-F") && arg.len() > 2 => {
+                framework_options.push(arg.clone());
+                include_paths.push(SearchPath::framework(&arg[2..]));
             }
             _ if arg.starts_with("-D") && arg.len() > 2 => {
                 macro_actions.push(MacroAction::Define(arg[2..].to_owned()));
@@ -1136,6 +1185,9 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         return Err("--regalloc-opt is native-only and has no meaning for --check".into());
     }
     let target = target.unwrap_or(DriverTarget::Aarch64UnknownLinuxGnu);
+    if let Some(option) = framework_options.first().filter(|_| !target.is_darwin()) {
+        return Err(format!("unsupported option `{option}`"));
+    }
     // Apple's arm64 convention passes every anonymous argument on the stack,
     // and its `va_list` is one pointer.
     codegen.anonymous_on_stack = target.is_darwin();
@@ -1448,31 +1500,51 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     }
     // Quoted includes search the active file's parent in the preprocessor.
     // Do not add it to the angle search chain ahead of explicit -I roots.
-    // System directories follow every -I directory regardless of option
-    // order. A directory in both lists keeps only its system position, so
-    // include_next sees the same ordered search chain as include/has_include.
-    let directory_identity = |path: &String| {
-        std::fs::canonicalize(path).unwrap_or_else(|_| std::path::PathBuf::from(path))
+    // System directories follow every -I and -F directory regardless of
+    // option order. A directory in both lists keeps only its system
+    // position, so include_next sees the same ordered search chain as
+    // include/has_include.
+    let directory_identity = |directory: &SearchPath| {
+        (
+            std::fs::canonicalize(&directory.path)
+                .unwrap_or_else(|_| std::path::PathBuf::from(&directory.path)),
+            directory.framework,
+        )
     };
+    let add = |pp: &mut Preprocessor, directory: &SearchPath| {
+        if directory.framework {
+            pp.add_framework_path(directory.path.clone());
+        } else {
+            pp.add_include_path(directory.path.clone());
+        }
+    };
+    let target_directories = toolchain::target_system_directories(options);
     let system_directories = options
         .system_include_paths
         .iter()
         .map(directory_identity)
         .collect::<std::collections::BTreeSet<_>>();
-    for include_path in &options.include_paths {
-        if !system_directories.contains(&directory_identity(include_path)) {
-            pp.add_include_path(include_path.clone());
+    // Apple clang searches the user directories of the target, such as
+    // `/usr/local/include`, after the command line's -I and -F directories
+    // and before its -isystem and -iframework directories.
+    for directory in options
+        .include_paths
+        .iter()
+        .chain(target_directories.iter().flat_map(|target| &target.user))
+    {
+        if !system_directories.contains(&directory_identity(directory)) {
+            add(&mut pp, directory);
         }
     }
-    for include_path in &options.system_include_paths {
-        pp.add_include_path(include_path.clone());
+    for directory in &options.system_include_paths {
+        add(&mut pp, directory);
     }
     // The target's own system directories follow every directory that the
     // command line names, as the platform compilers search them.
-    if let Some(directories) = toolchain::target_system_directories(options) {
+    if let Some(target) = &target_directories {
         pp.set_standard_includes_enabled(false);
-        for directory in directories {
-            pp.add_include_path(directory);
+        for directory in &target.system {
+            add(&mut pp, directory);
         }
     }
     for forced_include in &options.forced_includes {
