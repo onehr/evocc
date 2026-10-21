@@ -52,8 +52,8 @@ pub use linscan::{
     CALLER_SAVED,
 };
 pub use lower::{
-    lower_module, lower_module_for, lower_module_for_profile, lower_module_with, Refusal,
-    UbCheckProfile,
+    lower_module, lower_module_for, lower_module_for_options, lower_module_for_profile,
+    lower_module_with, Refusal, UbCheckProfile,
 };
 pub use native::{
     compile_module, compile_module_for, compile_module_with, compile_module_with_entries,

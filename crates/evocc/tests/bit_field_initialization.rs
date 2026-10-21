@@ -4,7 +4,9 @@
 //! bit-field too. A later read of a member that was never stored is still
 //! `E3001`; a read of a stored member is not. Each case runs on both
 //! targets, in the C-HIR and EvoIR interpreters, through `--check`, and in
-//! the EvoMIR interpreter on the lowered EvoIR that the driver emits.
+//! the EvoMIR interpreter on the lowered EvoIR that the driver emits. Its
+//! native build under `-mstrict-align` passes the strict-alignment check
+//! (EvoMIR 9.5, D31).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -115,10 +117,31 @@ fn machine(module: &evocc_evoir::Module, target: &str) -> (Result<i64, String>, 
     }
 }
 
+/// The native build of `path` under `-mstrict-align` on both targets at both
+/// levels: the strict-alignment check refuses no access.
+fn compiles_with_strict_alignment(path: &Path) {
+    for target in TARGETS {
+        for level in LEVELS {
+            let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
+                .arg(format!("--target={target}"))
+                .args(["-w", level, "-mstrict-align", "-S", "-o", "-"])
+                .arg(path)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{target} {level} -mstrict-align\n{}",
+                text(&output)
+            );
+        }
+    }
+}
+
 /// `main` of `source` completes in every mode and returns `expected`.
 fn completes(name: &str, source: &str, expected: i64) {
     let work = Work::new(name);
     let path = work.source(&format!("{name}.c"), source);
+    compiles_with_strict_alignment(&path);
     for target in TARGETS {
         for mode in MODES {
             let output = evocc(&path, target, mode);
@@ -150,6 +173,7 @@ fn uninitialized_read_at(name: &str, source: &str, line: u32, column: u32) {
         "{}:{line}:{column}: error[E3001]: read-of-uninitialized-object",
         path.display()
     );
+    compiles_with_strict_alignment(&path);
     for target in TARGETS {
         for mode in MODES {
             let output = evocc(&path, target, mode);

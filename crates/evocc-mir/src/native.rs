@@ -20,8 +20,7 @@ use evocc_types::EvoIRType;
 use crate::isa::aarch64::abi::{ProfileFeature, KERNEL};
 use crate::lane::is_register_type;
 use crate::{
-    allocate_for_with_options, lower_module_for_profile, verify_allocation_against, Refusal,
-    RelocationModel, Target,
+    allocate_for_with_options, verify_allocation_against, Refusal, RelocationModel, Target,
 };
 
 /// Where the native pipeline stopped.
@@ -249,15 +248,8 @@ fn compile_module_with_guard_control(
             &|name| !keep(name),
             claimed,
         )
-    } else if options.anonymous_on_stack {
-        crate::lower::lower_module_with_anonymous_on_stack(
-            target,
-            module,
-            &|name| !keep(name),
-            options.ub_checks,
-        )
     } else {
-        lower_module_for_profile(target, module, &|name| !keep(name), options.ub_checks)
+        crate::lower::lower_module_for_options(target, module, &|name| !keep(name), options)
     }
     .map_err(NativeStop::Lowering)?;
     // Allocation cannot repair a malformed SSA program. Check the complete

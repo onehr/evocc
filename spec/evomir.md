@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.12.0** | **Pinned ground truth** | Record transport accesses on 2026-10-21
+**Revision 1.13.0** | **Pinned ground truth** | Aligned accesses under strict alignment on 2026-10-22
 
 ## Status and scope
 
@@ -980,7 +980,13 @@ Every load and store of a chunk carries the ` [transport]` suffix (Section
 4.1), so padding and members that were never stored travel with their
 initializedness, and a pointer member keeps its provenance. A chunk that is
 not a power of two in size is a sequence of narrower pieces, joined by `lsl`
-and `orr` and taken apart by `lsr`.
+and `orr` and taken apart by `lsr`. Under `-mstrict-align` (Section 8.9), no
+piece is wider than the alignment that the record's slot or copy and the
+piece's offset give its address, so a chunk of a 4-aligned record is two
+words. The frame slot that lowering gives such a record (an incoming
+argument, a named Apple stack argument or the callee's own result of at most
+16 bytes) is then aligned to 8, so that each of its chunks moves whole. The
+caller's copy keeps the alignment of its `byval` or `sret` mark.
 
 *Informative.* Probes: `.evidence/builtin-probes/20260902-2c23684c/p35-int128.c`,
 `.evidence/builtin-probes/20260906-b10/`.
@@ -1613,12 +1619,28 @@ an interposable one.
 
 Scalar loads and stores keep the alignment of the EvoIR access guard as the
 ` [align=N]` suffix (Section 4.1); the operation still transfers the whole
-value, including provenance. Under `-mstrict-align`, emission expands an
-insufficiently aligned scalar access into byte accesses through the scratch
-registers; a 128-bit pair uses two individually aligned halves.
-`-mno-strict-align` restores ordinary emission; the last option wins.
+value, including provenance. Under `-mstrict-align`, every load, store and
+pair that emission writes is aligned to the bytes that it moves, to the
+element width for a pair. Alignment checking (`SCTLR_ELx.A`) then never traps
+on it, and neither does code that runs with the MMU off, where every access
+is a Device access:
 
-*Informative.* Measurements: `tests/fixtures/strict-alignment.out`.
+- emission expands an insufficiently aligned scalar access into byte
+  accesses through the scratch registers, and a 128-bit pair uses two
+  individually aligned halves;
+- lowering moves a record in general registers in pieces no wider than the
+  alignment of their addresses, and aligns the frame slots that it gives
+  such records to 8 (Section 6.4);
+- the strict-alignment check (Section 9.5) refuses every access that it
+  cannot prove aligned (`E4022`).
+
+`-mno-strict-align` restores ordinary emission; the last option wins.
+Without the option, lowering, the frame and emission do not change.
+
+*Informative.* Measurements: `tests/fixtures/strict-alignment.out`. The
+Linux programs of `crates/evocc/tests/strict_alignment.rs` run in
+qemu-system-aarch64 at EL1 with the MMU off and `SCTLR_EL1.A` set, with the
+harness of `tests/fixtures/strict-align-qemu/`.
 
 ### 8.10 Encodings, constants and branch relaxation
 
@@ -1792,6 +1814,47 @@ randomized generator, so the native lane uses a second generator mode,
 `native-main`, with its own seeds. Its `main` takes no arguments and returns
 one `bits<32>`; programs are compared by exit status modulo 256.
 
+### 9.5 The strict-alignment check
+
+Under `-mstrict-align`, `crates/evocc-mir/src/strict_alignment.rs` checks
+every allocated function after the allocation verifier and before emission.
+It reads the post-SSA input, the allocated blocks and the frame that
+emission lays out. It does not read the widths that lowering chose. It knows
+each address as a residue modulo a power of two:
+
+- `sp` after the prologue is a multiple of the frame alignment. `x29`, the
+  incoming stack area and the outgoing stack area are multiples of 16.
+- A fixed object lies at its laid-out offset. A `stack.alloc` result is a
+  multiple of its alignment and of 16. A data symbol of the unit is a
+  multiple of its alignment. A constant is known exactly.
+- `add`, `sub`, `and`, `orr`, `eor`, `lsl`, `mul`, `adds`, `subs`, `mov`,
+  the extensions, `csel` and block arguments carry these facts. Every other
+  value is unknown.
+
+The check refuses (`E4022`) when:
+
+- the frame does not keep `sp` aligned, or a fixed object is not at its
+  declared alignment;
+- a save slot, the canary slot, a variadic save slot, a spill slot or a stack
+  argument is not aligned to the bytes of its register;
+- a transport access (Section 4.1) is not aligned to its width by these facts
+  alone;
+- the header that `stack.release` reads is not aligned to 8.
+
+An access that EvoIR performs keeps the alignment of its guard: its
+` [align=N]` suffix, or natural alignment without one. The EvoIR interpreter
+traps when that guard fails. An ` [align=N]` below the width makes emission
+move single bytes (Section 8.9). A pair has the natural alignment of its
+elements (Section 4.1), a `mem.copy` the alignment of its copy, and an atomic
+access natural alignment. GOT entries and the global stack guard are aligned
+by the platform. A system-register stack guard must lie at a multiple of 8
+from its register. The check does not read an `asm` template. Every refusal
+prevents emission; there is no unchecked fallback. This is a Rust check, not
+a Lean theorem.
+
+*Informative.* Mutation tests:
+`crates/evocc-mir/tests/strict_alignment_check.rs`.
+
 ## 10. Diagnostics
 
 Active refusals are reported at the EvoIR instruction that could not be
@@ -1821,6 +1884,7 @@ this table, not a withdrawn code or the allocation verifier's separate E4020.
 | `E4013` | `abi: too-many-results` | More than eight ordinary results. |
 | `E4020` | `allocation: verifier-refused` | The allocation verifier found a violation. Internal; it must never reach a user of a released build. |
 | `E4021` | `transport: verifier-refused` | The SSA transport check found a violation. Internal; it must never reach a user of a released build. |
+| `E4022` | `alignment: verifier-refused` | Under `-mstrict-align`, the strict-alignment check found an access that it cannot prove aligned to its width (Section 9.5). Internal; it must never reach a user of a released build. |
 
 ## Appendix A. Textual Form
 
@@ -1979,6 +2043,15 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.13.0, 2026-10-22.** Section 8.9 states that under
+`-mstrict-align` every access that emission writes is aligned to its width.
+Section 6.4 makes lowering move a record in general registers in pieces no
+wider than the alignment of their addresses, and align the frame slots that
+it gives such records to 8. Before, a chunk of a 4-aligned record moved as
+one doubleword from a slot that only 4 could divide. Section 9.5 adds the
+strict-alignment check, and Section 10 its code `E4022`. Without the option,
+native code does not change.
 
 **Revision 1.12.0, 2026-10-21.** Section 4.1 adds the ` [transport]` suffix of
 an integer load or store. Section 6.4 puts it on every access that moves a

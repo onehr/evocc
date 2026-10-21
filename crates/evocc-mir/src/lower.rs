@@ -129,7 +129,7 @@ pub fn lower_module_with(
 ///
 /// Section 6.1: on Linux an argument that finds no register goes to the stack
 /// in an 8-byte slot. On Darwin, only the Apple convention
-/// (`lower_module_with_anonymous_on_stack`) packs named stack arguments by
+/// (`lower_module_for_options`) packs named stack arguments by
 /// natural size and alignment; this entry refuses them with `E4010`. The
 /// target also decides whether a 16-byte-aligned argument starts at an even
 /// register (Section 6.5).
@@ -148,20 +148,38 @@ pub fn lower_module_for_profile(
     external: &dyn Fn(&str) -> bool,
     ub_checks: UbCheckProfile,
 ) -> Result<MModule, Vec<Refusal>> {
-    lower_module_with_guard_control(target, module, external, ub_checks, &BTreeMap::new(), false)
+    lower_module_with_guard_control(
+        target,
+        module,
+        external,
+        ub_checks,
+        &BTreeMap::new(),
+        false,
+        false,
+    )
 }
 
-/// The same, with the Apple arm64 variadic convention: every anonymous
-/// argument of a variadic call goes to the stack in 8-byte slots, and
-/// `va_list` is one pointer to the next anonymous argument
-/// (`CodegenOptions::anonymous_on_stack`).
-pub(crate) fn lower_module_with_anonymous_on_stack(
+/// The lowering that native code generation selects with `options`: its
+/// UB-check profile; the Apple arm64 variadic convention, in which every
+/// anonymous argument of a variadic call goes to the stack in 8-byte slots
+/// and `va_list` is one pointer to the next anonymous argument
+/// (`CodegenOptions::anonymous_on_stack`); and `-mstrict-align`, which
+/// moves a record in general registers in aligned pieces (Section 8.9).
+pub fn lower_module_for_options(
     target: Target,
     module: &Module,
     external: &dyn Fn(&str) -> bool,
-    ub_checks: UbCheckProfile,
+    options: &crate::emit::CodegenOptions,
 ) -> Result<MModule, Vec<Refusal>> {
-    lower_module_with_guard_control(target, module, external, ub_checks, &BTreeMap::new(), true)
+    lower_module_with_guard_control(
+        target,
+        module,
+        external,
+        options.ub_checks,
+        &BTreeMap::new(),
+        options.anonymous_on_stack,
+        options.strict_alignment,
+    )
 }
 
 /// UNVERIFIED_DIAGNOSTIC, not a certified lowering or a driver profile.
@@ -179,6 +197,7 @@ pub fn lower_module_for_guard_attribution(
         UbCheckProfile::Checked,
         true_predicates,
         false,
+        false,
     )
 }
 
@@ -189,6 +208,7 @@ fn lower_module_with_guard_control(
     ub_checks: UbCheckProfile,
     true_predicates: &BTreeMap<String, BTreeSet<u32>>,
     anonymous_on_stack: bool,
+    strict_alignment: bool,
 ) -> Result<MModule, Vec<Refusal>> {
     let mut refusals = Vec::new();
     for function in &module.functions {
@@ -253,6 +273,7 @@ fn lower_module_with_guard_control(
                 .cloned()
                 .unwrap_or_default(),
             anonymous_on_stack,
+            strict_alignment,
         ) {
             Ok(lowered) => functions.push(lowered),
             Err(detail) => refusals.push(Refusal {
@@ -1181,6 +1202,10 @@ struct Lowerer {
     named_arguments: Option<(u8, u8, u64)>,
     /// The Apple variadic convention (`CodegenOptions::anonymous_on_stack`).
     anonymous_on_stack: bool,
+    /// `-mstrict-align` (`CodegenOptions::strict_alignment`): a record that
+    /// moves through general registers is read and written in pieces no wider
+    /// than the alignment of their addresses (Section 8.9).
+    strict_alignment: bool,
     /// Literal definitions and their integer conversions, by value id.
     ///
     /// EvoIR Section 3.11 admits immediate assembly operands (`I`, `J`, `K`,
@@ -1215,6 +1240,18 @@ struct AddressPreparation {
 }
 
 impl Lowerer {
+    /// The alignment of a frame slot that this lowering gives a record that
+    /// moves through general registers: the record's own alignment, and under
+    /// `-mstrict-align` at least the eight bytes of a chunk, so that each
+    /// chunk moves as one aligned access (Section 8.9).
+    fn record_slot_alignment(&self, shape: RecordShape) -> u32 {
+        if self.strict_alignment && shape.simd_members().is_none() {
+            shape.align.max(8)
+        } else {
+            shape.align
+        }
+    }
+
     fn immediate_pointer_delta(
         &self,
         index: &Value,
@@ -1903,6 +1940,7 @@ fn dynamic_addresses(function: &Function) -> HashSet<u32> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn lower_function(
     target: Target,
     signatures: &Signatures<'_>,
@@ -1911,6 +1949,7 @@ fn lower_function(
     ub_checks: UbCheckProfile,
     diagnostic_true_predicates: BTreeSet<u32>,
     anonymous_on_stack: bool,
+    strict_alignment: bool,
 ) -> Result<MFunction, String> {
     let entry = function
         .blocks
@@ -1941,6 +1980,7 @@ fn lower_function(
             .variadic
             .then(|| named_argument_extent(target, function, anonymous_on_stack)),
         anonymous_on_stack,
+        strict_alignment,
         constants: HashMap::new(),
         null_pointers: HashSet::new(),
         symbolic_addresses: HashMap::new(),
@@ -2139,18 +2179,28 @@ fn lower_block(
                     let shape = param_mark(&function.param_marks, index)
                         .shape()
                         .expect("a chunked argument is a marked record");
+                    let align = lowerer.record_slot_alignment(shape);
                     prologue.push(MInst::FrameSlot {
                         dst: slot,
                         origin: RECORD_ORIGIN_BASE + lowerer.record_origins,
                         size: shape.size,
-                        align: shape.align,
+                        align,
                     });
                     lowerer.record_origins += 1;
                     let mut offset = 0;
                     for size in chunks {
                         let chunk = lowerer.fresh(RegClass::Gpr64);
                         args.push(chunk);
-                        store_chunk(lowerer, &mut prologue, chunk, slot, offset, size);
+                        let base_align = u64::from(align);
+                        store_chunk(
+                            lowerer,
+                            &mut prologue,
+                            chunk,
+                            slot,
+                            base_align,
+                            offset,
+                            size,
+                        );
                         offset += size;
                     }
                     lowerer.bind(&arg.value, slot);
@@ -2202,7 +2252,7 @@ fn lower_block(
                             dst: slot,
                             origin: RECORD_ORIGIN_BASE + lowerer.record_origins,
                             size: shape.size,
-                            align: shape.align,
+                            align: lowerer.record_slot_alignment(shape),
                         });
                         lowerer.record_origins += 1;
                         lowerer.bind(&arg.value, slot);
@@ -3372,9 +3422,10 @@ fn lower_terminator(
                     }
                     return Ok(MTerm::Ret { values: results });
                 }
+                let base_align = u64::from(lowerer.record_slot_alignment(shape));
                 let mut offset = 0;
                 for size in record_chunks(shape.size) {
-                    let chunk = load_chunk(lowerer, insts, base, offset, size);
+                    let chunk = load_chunk(lowerer, insts, base, base_align, offset, size);
                     results.push(chunk);
                     offset += size;
                 }
@@ -6893,7 +6944,7 @@ fn record_chunks(size: u64) -> Vec<u64> {
 }
 
 /// The accesses one chunk of `size` bytes decomposes into, as `(offset, width)`
-/// pairs of descending power-of-two widths.
+/// pairs of power-of-two widths.
 ///
 /// A record's size is not a multiple of eight in general (`struct { int a, b,
 /// c; }` is twelve), and the oracles read exactly the bytes the record has:
@@ -6901,18 +6952,40 @@ fn record_chunks(size: u64) -> Vec<u64> {
 /// (`.evidence/builtin-probes/20260906-b10/b10-callsites-linux-gcc14.s`). Every
 /// other size follows from the same rule, so a chunk of three bytes is a
 /// halfword and a byte and nothing is read past the object.
-fn chunk_pieces(size: u64) -> Vec<(u64, u64)> {
+///
+/// `aligned` is the alignment of the chunk's first byte under `-mstrict-align`
+/// (Section 8.9), and `None` without it. Each piece is then the widest that
+/// both the bytes left and the alignment of its own address admit, so a chunk
+/// of a 4-aligned record is two words. Without the option the widths only
+/// descend.
+fn chunk_pieces(size: u64, aligned: Option<u64>) -> Vec<(u64, u64)> {
     let mut pieces = Vec::new();
     let mut offset = 0;
-    let mut left = size;
-    for width in [8_u64, 4, 2, 1] {
-        while left >= width {
-            pieces.push((offset, width));
-            offset += width;
-            left -= width;
-        }
+    while offset < size {
+        let left = size - offset;
+        let width = [8_u64, 4, 2, 1]
+            .into_iter()
+            .find(|width| {
+                *width <= left
+                    && aligned.is_none_or(|align| *width <= align && offset.is_multiple_of(*width))
+            })
+            .unwrap_or(1);
+        pieces.push((offset, width));
+        offset += width;
     }
     pieces
+}
+
+/// The alignment of the chunk at `offset` from a base aligned to
+/// `base_align`, when the lowering limits piece widths by it.
+fn chunk_alignment(lowerer: &Lowerer, base_align: u64, offset: u64) -> Option<u64> {
+    lowerer.strict_alignment.then(|| {
+        if offset == 0 {
+            base_align
+        } else {
+            base_align.min(1 << offset.trailing_zeros())
+        }
+    })
 }
 
 fn piece_load(width: u64) -> LoadKind {
@@ -6944,11 +7017,13 @@ fn load_chunk(
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
     base: VReg,
+    base_align: u64,
     offset: u64,
     size: u64,
 ) -> VReg {
     let mut accumulated: Option<VReg> = None;
-    for (piece, width) in chunk_pieces(size) {
+    let aligned = chunk_alignment(lowerer, base_align, offset);
+    for (piece, width) in chunk_pieces(size, aligned) {
         let dst = lowerer.fresh(RegClass::Gpr64);
         insts.push(MInst::Load {
             align: 0,
@@ -6980,10 +7055,12 @@ fn store_chunk(
     insts: &mut Vec<MInst>,
     src: VReg,
     base: VReg,
+    base_align: u64,
     offset: u64,
     size: u64,
 ) {
-    for (piece, width) in chunk_pieces(size) {
+    let aligned = chunk_alignment(lowerer, base_align, offset);
+    for (piece, width) in chunk_pieces(size, aligned) {
         let value = if piece == 0 {
             src
         } else {
@@ -7758,13 +7835,13 @@ fn read_apple_stack_argument(
             .and_then(|offset| i64::try_from(offset).ok())
             .ok_or_else(beyond)
     };
-    let slot = |lowerer: &mut Lowerer, insts: &mut Vec<MInst>, shape: RecordShape| {
+    let slot = |lowerer: &mut Lowerer, insts: &mut Vec<MInst>, shape: RecordShape, align| {
         let slot = lowerer.fresh(RegClass::Gpr64);
         insts.push(MInst::FrameSlot {
             dst: slot,
             origin: RECORD_ORIGIN_BASE + lowerer.record_origins,
             size: shape.size,
-            align: shape.align,
+            align,
         });
         lowerer.record_origins += 1;
         slot
@@ -7809,7 +7886,11 @@ fn read_apple_stack_argument(
             let shape = mark
                 .shape()
                 .ok_or("a chunked argument is a marked record")?;
-            let destination = slot(lowerer, insts, shape);
+            let align = lowerer.record_slot_alignment(shape);
+            let destination = slot(lowerer, insts, shape, align);
+            // The incoming area starts at `x29 + 16`, which the ABI keeps
+            // aligned to the stack alignment.
+            let incoming = lowerer.abi.facts.stack_alignment_bytes;
             let mut within = 0;
             for ((chunk, size), piece) in chunks.iter().enumerate().zip(&pieces) {
                 // `load_chunk` reads up to eight bytes from its offset, so the
@@ -7817,14 +7898,15 @@ fn read_apple_stack_argument(
                 let at = at(piece)?;
                 at.checked_add(8).ok_or_else(beyond)?;
                 debug_assert_eq!(piece.offset, 8 * chunk as u64);
-                let word = load_chunk(lowerer, insts, base, at as u64, *size);
-                store_chunk(lowerer, insts, word, destination, within, *size);
+                let word = load_chunk(lowerer, insts, base, incoming, at as u64, *size);
+                let base_align = u64::from(align);
+                store_chunk(lowerer, insts, word, destination, base_align, within, *size);
                 within += size;
             }
             lowerer.bind(value, destination);
         }
         Passing::Vectors { shape, .. } => {
-            let destination = slot(lowerer, insts, *shape);
+            let destination = slot(lowerer, insts, *shape, shape.align);
             for piece in &pieces {
                 let member = lowerer.fresh(piece.class);
                 insts.push(MInst::Load {
@@ -8005,10 +8087,11 @@ fn call_arguments(
                 Passing::Pointer => vec![lowerer.reg(value)?],
                 Passing::Chunks(chunks) => {
                     let base = lowerer.reg(value)?;
+                    let base_align = copy_alignment(&marked, position);
                     let mut offset = 0;
                     let mut words = Vec::new();
                     for size in chunks {
-                        words.push(load_chunk(lowerer, insts, base, offset, *size));
+                        words.push(load_chunk(lowerer, insts, base, base_align, offset, *size));
                         offset += size;
                     }
                     words
@@ -8055,9 +8138,10 @@ fn call_arguments(
             // general registers as 8-byte chunks".
             Passing::Chunks(chunks) => {
                 let base = lowerer.reg(value)?;
+                let base_align = copy_alignment(&marked, position);
                 let mut offset = 0;
                 for size in chunks {
-                    let chunk = load_chunk(lowerer, insts, base, offset, *size);
+                    let chunk = load_chunk(lowerer, insts, base, base_align, offset, *size);
                     registers.push(chunk);
                     offset += size;
                 }
@@ -8169,12 +8253,32 @@ fn call_record_result(
         }
         return after;
     }
+    // The destination is the caller's copy, at the record's alignment.
+    let base_align = u64::from(shape.align);
     let mut offset = 0;
     for size in record_chunks(shape.size) {
         let chunk = lowerer.fresh(RegClass::Gpr64);
         outputs.push(chunk);
-        store_chunk(lowerer, &mut after, chunk, destination, offset, size);
+        store_chunk(
+            lowerer,
+            &mut after,
+            chunk,
+            destination,
+            base_align,
+            offset,
+            size,
+        );
         offset += size;
     }
     after
+}
+
+/// The alignment of the caller's copy of the by-value record at `position`:
+/// the alignment of its `byval` mark (EvoIR Section 10.1.3), one byte for an
+/// argument without a record mark.
+fn copy_alignment(marked: &[(EvoIRType, ParamMark)], position: usize) -> u64 {
+    marked
+        .get(position)
+        .and_then(|(_, mark)| mark.shape())
+        .map_or(1, |shape| u64::from(shape.align))
 }
