@@ -9,6 +9,7 @@ E0110	Use separate tokens for an arithmetic operation.
 E0111	Use an integer condition instead of a floating constant.
 E0112	Remove the stray character or correct the macro that produced it.
 E0113	Move a pragma outside the macro invocation so its position is explicit.
+E0114	Write the attribute on each declaration instead of in the pragma.
 E1003	Add the operand, or remove an operator that you did not intend to use.
 E1005	Declare pointers when an array must refer to functions.
 E1207	Return a value of the required type, or declare a void function when appropriate.
@@ -76,6 +77,7 @@ E2958	Use another integer type, such as `unsigned char`, as the underlying type.
 E2959	Use a `float`, `double` or `long double` complex argument.
 E2960	Write the value of the product or quotient, or compute it at run time.
 E2961	Convert one operand to the format of the other, or convert both operands to `float`.
+E2962	Use the replacement API, or select a deployment target where the declaration is available.
 E3001	Initialize the object on every path before reading it.
 E3002	Check the divisor and choose the required error behavior before dividing.
 E3003	Handle zero separately before evaluating `%`.

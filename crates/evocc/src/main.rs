@@ -203,6 +203,9 @@ struct DriverOptions {
     /// code for what it requires wants the whole set, or it takes one build
     /// per unsupported construct to enumerate.
     survey: bool,
+    /// The macOS deployment target on `aarch64-apple-darwin`, `None` on
+    /// Linux. It gives the availability attributes their meaning.
+    darwin_deployment: Option<evocc_cpp::availability::Version>,
     /// `--sysroot=DIR` or `-isysroot DIR`: the root of the target's headers.
     system_root: Option<String>,
     /// The cc command line runs this compilation. On a host of the same
@@ -607,6 +610,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     let mut signed_char = None;
     let mut position_independence = None;
     let mut survey = false;
+    let mut deployment_option: Option<String> = None;
     let mut system_root = None;
     let mut ignored_options = Vec::new();
     let mut index = 0;
@@ -935,6 +939,12 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
                         .map_err(|_| format!("invalid stack guard offset `{arg}`"))?,
                 );
             }
+            // Apple clang's deployment target options; the last one wins.
+            _ if arg.starts_with("-mmacosx-version-min=")
+                || arg.starts_with("-mmacos-version-min=") =>
+            {
+                deployment_option = Some(arg.clone());
+            }
             "-fshort-wchar" => short_wchar = true,
             "-fno-short-wchar" => short_wchar = false,
             "-fsigned-char" | "-fno-unsigned-char" => signed_char = Some(true),
@@ -1188,6 +1198,17 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     if let Some(option) = framework_options.first().filter(|_| !target.is_darwin()) {
         return Err(format!("unsupported option `{option}`"));
     }
+    let darwin_deployment = if target.is_darwin() {
+        Some(darwin::deployment_target(deployment_option.as_deref())?)
+    } else {
+        if let Some(option) = deployment_option {
+            if !lenient {
+                return Err(format!("unsupported option `{option}`"));
+            }
+            ignored_options.push(option);
+        }
+        None
+    };
     // Apple's arm64 convention passes every anonymous argument on the stack,
     // and its `va_list` is one pointer.
     codegen.anonymous_on_stack = target.is_darwin();
@@ -1249,6 +1270,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             PositionIndependence::Pie(2)
         }),
         survey,
+        darwin_deployment,
         system_root,
         cc_mode: false,
         ignored_options,
@@ -1381,7 +1403,12 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     // compiler predefines for arm64 macOS applied on top.
     let mut pp = Preprocessor::for_target(SUPPORTED_TARGET)?;
     if options.target.is_darwin() {
-        darwin::apply_predefined_profile(&mut pp)?;
+        darwin::apply_predefined_profile(
+            &mut pp,
+            options
+                .darwin_deployment
+                .ok_or("the Darwin target has a deployment target")?,
+        )?;
     }
     // Keep GNU header compatibility while exposing the actual compiler identity.
     pp.define("__EVOCC__".into(), decoded_tokens("1")?);
@@ -1830,6 +1857,9 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     let arena = Arena::default();
     let mut parser = Parser::from_tokens(processed, FileId::new(1));
     parser.set_target_layout(options.target_layout());
+    if let Some(deployment) = options.darwin_deployment {
+        parser.set_availability_target(deployment);
+    }
     parser.set_standard_builtins(options.standard_builtins);
     parser.set_legacy_declarations(options.language.legacy_declarations());
     parser.enable_lints();

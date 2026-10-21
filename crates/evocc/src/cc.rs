@@ -78,6 +78,8 @@ Compilation:
   -w                 Do not print warnings.
   --target=aarch64-apple-darwin|aarch64-unknown-linux-gnu
   --sysroot=DIR, -isysroot DIR   The root of the target's headers.
+  -mmacosx-version-min=V, -mmacos-version-min=V   The macOS deployment
+                     target; MACOSX_DEPLOYMENT_TARGET otherwise; 11.0 without both.
   EVOCC_SYSROOT       Linux header root when --sysroot is absent.
                      Otherwise use ../sysroot/TARGET beside the executable directory.
                      Then try sysroot/TARGET at its enclosing source-checkout root.
@@ -193,6 +195,9 @@ struct Command {
     query: Option<Query>,
     /// Options that the cc command line itself ignores.
     ignored: Vec<String>,
+    /// The last deployment target option, which the Darwin assembler and
+    /// linker drivers also receive, as Apple clang's do.
+    deployment: Option<String>,
 }
 
 fn take<'a>(args: &'a [String], index: &mut usize, option: &str) -> Result<&'a str, String> {
@@ -277,6 +282,7 @@ impl Command {
             linker: None,
             query: None,
             ignored: Vec::new(),
+            deployment: None,
         };
         let mut language = None;
         let mut index = 0;
@@ -473,6 +479,12 @@ impl Command {
                 self.compile.push(arg.to_owned());
                 self.preprocessor.push(arg.to_owned());
                 self.link.push(LinkItem::Argument(format!("-F{directory}")));
+            }
+            _ if arg.starts_with("-mmacosx-version-min=")
+                || arg.starts_with("-mmacos-version-min=") =>
+            {
+                self.compile.push(arg.to_owned());
+                self.deployment = Some(arg.to_owned());
             }
             "-g0" => {
                 self.debug = false;
@@ -1215,6 +1227,9 @@ impl Session {
                         }
                     }
                 }
+                if self.target.is_darwin() {
+                    arguments.extend(self.command.deployment.clone());
+                }
                 arguments.extend(flags);
             }
             Style::Assembler => {
@@ -1280,6 +1295,9 @@ impl Session {
         let sysroot = self.command.sysroot.clone();
         let target = self.target;
         let tool = self.tools()?.linker.clone();
+        if target.is_darwin() && tool.style == Style::Driver {
+            arguments.extend(self.command.deployment.clone());
+        }
         if let Some(root) = sysroot {
             if target.is_darwin() {
                 arguments.extend(["-isysroot".to_owned(), root]);

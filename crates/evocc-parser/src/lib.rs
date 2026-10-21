@@ -168,6 +168,7 @@ use evocc_chir::{
     WrittenDesignator, WrittenInitializer,
 };
 use evocc_common::{Arena, FileId, SourceSpan};
+use evocc_cpp::availability::{self, Availability};
 use evocc_cpp::{
     pragma_pack_action, pragma_visibility_action, PragmaPackAction, PragmaVisibilityAction,
 };
@@ -745,8 +746,70 @@ impl BinaryExpressionIdentity {
     }
 }
 
+/// The availability of one declared entity for a macOS deployment target,
+/// merged over its declarations in source order (EvoIR 10.1.9).
+#[derive(Debug, Clone, Default)]
+struct DeclarationAvailability {
+    merged: availability::Merged,
+    /// The text of the first `unavailable` attribute's message; empty
+    /// without one.
+    unavailable: Option<String>,
+    weak_import: bool,
+}
+
+impl DeclarationAvailability {
+    /// Why a use is refused, or `None` when the entity is available.
+    fn unavailable(&self, deployment: availability::Version) -> Option<String> {
+        if let Some(message) = &self.unavailable {
+            return Some(message.clone());
+        }
+        match self.merged.effect(deployment) {
+            availability::Effect::Unavailable(reason) => Some(reason),
+            _ => None,
+        }
+    }
+
+    /// Whether a function or object declaration is a weak import.
+    fn weak_import(&self, deployment: availability::Version) -> bool {
+        self.weak_import || self.merged.effect(deployment) == availability::Effect::NotYetIntroduced
+    }
+}
+
+/// A use of an unavailable entity, reported unless its context is
+/// unavailable too.
+#[derive(Debug, Clone)]
+struct UnavailableUse {
+    message: String,
+    span: SourceSpan,
+    preceding: usize,
+}
+
+/// A context of the availability rule: a declaration, a declarator, a
+/// record or a function body. A use in a context whose entity is
+/// unavailable is not refused, as in Apple clang.
+#[derive(Debug, Clone)]
+struct AvailabilityFrame {
+    /// Whether the entity is unavailable; `None` until its attributes are
+    /// complete.
+    exempt: Option<bool>,
+    /// The enclosing context of the rule. A record's is the enclosing
+    /// function body, because a C record does not nest in another record.
+    parent: Option<usize>,
+    /// A function definition, whose body encloses local records.
+    function: bool,
+    pending: Vec<UnavailableUse>,
+}
+
 pub struct Parser<'src, 'arena> {
     target_layout: TargetDataLayout,
+    /// The macOS deployment target of `aarch64-apple-darwin`. It gives the
+    /// availability, `unavailable` and `weak_import` attributes their
+    /// meaning; without it they are preserved without effect.
+    availability_target: Option<availability::Version>,
+    symbol_availability: HashMap<SymbolId, DeclarationAvailability>,
+    tag_availability: HashMap<TagId, DeclarationAvailability>,
+    member_availability: HashMap<MemberAttributeKey, DeclarationAvailability>,
+    availability_frames: Vec<AvailabilityFrame>,
     standard_builtins: bool,
     legacy_declarations: bool,
     lint_declarations: bool,
@@ -909,6 +972,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             diagnostics: lexical_diagnostic.into_iter().collect(),
             arena: None,
             target_layout: TargetDataLayout::aarch64_unknown_linux_gnu(),
+            availability_target: None,
+            symbol_availability: HashMap::new(),
+            tag_availability: HashMap::new(),
+            member_availability: HashMap::new(),
+            availability_frames: Vec::new(),
             types: TypeInterner::new(),
             symbols,
             current_scope,
@@ -974,6 +1042,25 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         if layout.provides_clang_atomic_builtins() {
             self.promote_clang_atomic_builtins();
+        }
+    }
+
+    /// Give Clang's availability attributes the meaning of Apple clang for
+    /// the macOS deployment target `version` (EvoIR 10.1.9). A version in
+    /// an `availability` attribute, such as `10.14.4`, is no stray token.
+    pub fn set_availability_target(&mut self, version: availability::Version) {
+        debug_assert_eq!(self.pos, 0, "the target is selected before parsing");
+        self.availability_target = Some(version);
+        if !self.diagnostics.is_empty() {
+            // Only the lexical diagnostic precedes parsing.
+            let versions = availability_version_tokens(&self.tokens);
+            self.diagnostics = lexical_diagnostic_except(&self.tokens, &versions)
+                .into_iter()
+                .collect();
+            let refused = usize::from(!self.diagnostics.is_empty());
+            self.had_error = refused != 0;
+            self.error_count = refused;
+            self.rollback_error_count = refused;
         }
     }
 
@@ -1144,12 +1231,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 observed.insert(symbol, parameters);
             }
         }
+        self.pop_availability_frames(0);
         let conventions = self.take_convention_records();
         let mut unit = CHirUnit::new(
             decls,
             std::mem::take(&mut self.types),
             std::mem::take(&mut self.symbols),
         );
+        if let Some(deployment) = self.availability_target {
+            unit.set_weak_imports(
+                self.symbol_availability
+                    .iter()
+                    .filter(|(_, state)| state.weak_import(deployment))
+                    .map(|(symbol, _)| *symbol)
+                    .collect(),
+            );
+        }
         let mut inline_refusals =
             always_inline_returns_twice(&unit, &conventions.uses, self.diagnostics.len());
         let (late_refusals, mut convention_uses) = convention_refusals(&unit, conventions);
@@ -1358,9 +1455,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.error_count += 1;
         // An unresolved use is removed at the expression/statement boundary,
         // so a surrounding function can still retain its fully resolved
-        // declarations and scopes for diagnostics. Declaration-shape and
+        // declarations and scopes for diagnostics. A use of an unavailable
+        // declaration leaves a well-formed declaration. Declaration-shape and
         // redefinition errors remain transactional.
-        if code != "E2001" {
+        if code != "E2001" && code != "E2962" {
             self.rollback_error_count += 1;
         }
         {
@@ -1370,6 +1468,95 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 code,
                 message: message.into(),
             });
+        }
+    }
+
+    // ── availability contexts (EvoIR 10.1.9) ──────────────────────────
+
+    fn push_availability_frame(&mut self, exempt: Option<bool>, parent: Option<usize>) -> usize {
+        self.availability_frames.push(AvailabilityFrame {
+            exempt,
+            parent,
+            function: false,
+            pending: Vec::new(),
+        });
+        self.availability_frames.len() - 1
+    }
+
+    fn innermost_availability_frame(&self) -> Option<usize> {
+        self.availability_frames.len().checked_sub(1)
+    }
+
+    /// The innermost function body, which encloses a local record.
+    fn function_availability_frame(&self) -> Option<usize> {
+        self.availability_frames
+            .iter()
+            .rposition(|frame| frame.function)
+    }
+
+    /// Refuse a use of the unavailable entity `name` unless its context is
+    /// unavailable too. The context may settle later in the declaration.
+    fn use_unavailable(&mut self, name: &str, reason: &str, span: SourceSpan) {
+        let message = if reason.is_empty() {
+            format!("unavailable-declaration: {name}")
+        } else {
+            format!("unavailable-declaration: {name}: {reason}")
+        };
+        let usage = UnavailableUse {
+            message,
+            span,
+            preceding: self.diagnostics.len(),
+        };
+        self.dispatch_unavailable_uses(self.innermost_availability_frame(), vec![usage]);
+    }
+
+    fn dispatch_unavailable_uses(&mut self, from: Option<usize>, uses: Vec<UnavailableUse>) {
+        let mut refused = Vec::new();
+        'uses: for usage in uses {
+            let mut frame = from;
+            while let Some(index) = frame {
+                match self.availability_frames[index].exempt {
+                    Some(true) => continue 'uses,
+                    Some(false) => frame = self.availability_frames[index].parent,
+                    None => {
+                        self.availability_frames[index].pending.push(usage);
+                        continue 'uses;
+                    }
+                }
+            }
+            refused.push(usage);
+        }
+        // Each refusal takes its place in encounter order; later ones are
+        // inserted first so that equal positions keep their order.
+        for usage in refused.into_iter().rev() {
+            self.report("E2962", usage.message, usage.span);
+            let diagnostic = self.diagnostics.pop().expect("just reported diagnostic");
+            let index = usage.preceding.min(self.diagnostics.len());
+            self.diagnostics.insert(index, diagnostic);
+        }
+    }
+
+    /// Settle a context once the attributes of its entity are complete.
+    fn resolve_availability_frame(&mut self, frame: usize, exempt: bool) {
+        let state = &mut self.availability_frames[frame];
+        if state.exempt.is_some() {
+            return;
+        }
+        state.exempt = Some(exempt);
+        let pending = std::mem::take(&mut state.pending);
+        let parent = state.parent;
+        if !exempt {
+            self.dispatch_unavailable_uses(parent, pending);
+        }
+    }
+
+    /// Leave every context above `depth`. A context that never settled is
+    /// not unavailable.
+    fn pop_availability_frames(&mut self, depth: usize) {
+        while self.availability_frames.len() > depth {
+            let index = self.availability_frames.len() - 1;
+            self.resolve_availability_frame(index, false);
+            self.availability_frames.pop();
         }
     }
 
@@ -1880,7 +2067,84 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    /// Merge the availability, `unavailable` and `weak_import` attributes of
+    /// one declaration into the state of its entity (EvoIR 10.1.9). A
+    /// malformed `availability` attribute is `E2903`. Without a deployment
+    /// target nothing is merged.
+    fn merged_availability(
+        &mut self,
+        mut state: DeclarationAvailability,
+        attributes: &[Attribute],
+    ) -> DeclarationAvailability {
+        if self.availability_target.is_none() {
+            return state;
+        }
+        for attribute in attributes {
+            match attribute.semantic_name() {
+                Some("availability") => {
+                    let arguments = attribute
+                        .arguments
+                        .iter()
+                        .map(|argument| argument.text.as_str())
+                        .collect::<Vec<_>>();
+                    match Availability::parse(&arguments) {
+                        Ok(clause) => state.merged.merge(clause),
+                        Err(index) => {
+                            let span = attribute
+                                .arguments
+                                .get(index)
+                                .map_or(attribute.span, |argument| argument.span);
+                            self.report("E2903", "malformed-attribute", span);
+                        }
+                    }
+                }
+                Some("unavailable") if state.unavailable.is_none() => {
+                    let message = match attribute.arguments.as_slice() {
+                        [] => String::new(),
+                        [argument] => match argument
+                            .text
+                            .strip_prefix('"')
+                            .and_then(|text| text.strip_suffix('"'))
+                        {
+                            Some(message) => message.to_owned(),
+                            None => {
+                                self.report("E2903", "malformed-attribute", argument.span);
+                                String::new()
+                            }
+                        },
+                        [_, extra, ..] => {
+                            self.report("E2903", "malformed-attribute", extra.span);
+                            String::new()
+                        }
+                    };
+                    state.unavailable = Some(message);
+                }
+                Some("weak_import") => state.weak_import = true,
+                _ => {}
+            }
+        }
+        state
+    }
+
+    /// Why a use of `symbol` is refused here: the symbol is unavailable for
+    /// the deployment target.
+    fn symbol_unavailable(&self, symbol: SymbolId) -> Option<String> {
+        let deployment = self.availability_target?;
+        self.symbol_availability
+            .get(&symbol)?
+            .unavailable(deployment)
+    }
+
     fn add_entity_attributes(&mut self, symbol: SymbolId, attributes: &[Attribute]) {
+        if self.availability_target.is_some() {
+            let previous = self
+                .symbol_availability
+                .get(&symbol)
+                .cloned()
+                .unwrap_or_default();
+            let merged = self.merged_availability(previous, attributes);
+            self.symbol_availability.insert(symbol, merged);
+        }
         for attribute in attributes {
             if attribute.semantic_name() == Some("patchable_function_entry")
                 && (!self
@@ -1923,6 +2187,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn set_member_attributes(&mut self, tag: TagId, field_index: usize, attributes: &[Attribute]) {
         let key = (tag, field_index);
+        if self.availability_target.is_some() {
+            let merged = self.merged_availability(DeclarationAvailability::default(), attributes);
+            self.member_availability.insert(key, merged);
+        }
         let previous = self.member_attributes.get(&key).cloned();
         self.member_attributes.insert(
             key,
@@ -2334,8 +2602,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let front_end_builtin_checkpoint = self.front_end_builtins.len();
         let rollback_error_checkpoint = self.rollback_error_count;
         let side_start = declaration_transaction.side_declarations;
+        let availability_depth = self.availability_frames.len();
 
         let result = self.parse_declaration_inner(context, side_start);
+        if result.is_some() {
+            self.pop_availability_frames(availability_depth);
+        } else {
+            // A failed declaration has reported its error already.
+            self.availability_frames.truncate(availability_depth);
+        }
         if result.is_none() || self.rollback_error_count != rollback_error_checkpoint {
             self.types
                 .rollback_transaction(&types_transaction)
@@ -2369,6 +2644,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<Vec<&'arena CHirDecl<'arena>>> {
         let start_span = self.span();
         let visibility = self.visibility_stack.last().copied();
+        // EvoIR 10.1.9: at file scope a use in the declaration specifiers
+        // takes the context of the first declarator, as in Apple clang. In a
+        // block it takes the context of the enclosing function.
+        let file_scope = context == DeclarationContext::File;
+        let declaration_frame = self.push_availability_frame(
+            (!file_scope).then_some(false),
+            self.innermost_availability_frame(),
+        );
         let gnu_extension_spans = self.parse_extension_prefix();
         let mut storage = None;
         let mut inline_spans = Vec::new();
@@ -2421,6 +2704,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return Some(declarations);
         }
 
+        let mut declarator_frame = if file_scope {
+            declaration_frame
+        } else {
+            self.push_availability_frame(None, Some(declaration_frame))
+        };
         let Some(mut declarator) = self.parse_declarator(true) else {
             self.report("E1001", "expected-declaration", self.span());
             return None;
@@ -2549,6 +2837,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.apply_visibility_default(symbol, &mut attributes, visibility);
             }
             self.add_entity_attributes(symbol, &attributes);
+            let unavailable = self.symbol_unavailable(symbol).is_some();
+            self.resolve_availability_frame(declarator_frame, unavailable);
+            self.availability_frames[declarator_frame].function = true;
             self.record_assembly_name(symbol, &asm_label);
             let has_body = self.peek_kind() == Some(TokenKind::LBrace);
             if has_body && inherited_from_specifier {
@@ -2807,6 +3098,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.apply_visibility_default(symbol, &mut attributes, visibility);
             }
             self.add_entity_attributes(symbol, &attributes);
+            let unavailable = self.symbol_unavailable(symbol).is_some();
+            self.resolve_availability_frame(declarator_frame, unavailable);
             self.record_assembly_name(symbol, &asm_label);
             full_type = self
                 .symbols
@@ -2919,6 +3212,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.report("E2915", "auto-type-misuse", current_declarator_span);
                 return None;
             }
+            if declarator_frame != declaration_frame {
+                self.pop_availability_frames(declarator_frame);
+            }
+            declarator_frame = self.push_availability_frame(
+                None,
+                if file_scope {
+                    self.availability_frames[declaration_frame].parent
+                } else {
+                    Some(declaration_frame)
+                },
+            );
             let mut next_attributes = specifier_attributes.clone();
             next_attributes
                 .extend(self.parse_attribute_specifiers(AttributePlacement::BeforeDeclarator));
@@ -6403,6 +6707,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     /// Apply `packed` and `aligned` written on a tag itself.
+    fn merge_tag_availability(&mut self, tag: TagId, attributes: &[Attribute]) {
+        if self.availability_target.is_some() && !attributes.is_empty() {
+            let previous = self.tag_availability.get(&tag).cloned().unwrap_or_default();
+            let merged = self.merged_availability(previous, attributes);
+            self.tag_availability.insert(tag, merged);
+        }
+    }
+
+    fn tag_unavailable(&self, tag: TagId) -> Option<String> {
+        let deployment = self.availability_target?;
+        self.tag_availability.get(&tag)?.unavailable(deployment)
+    }
+
     fn apply_attributes_to_tag(&mut self, tag: TagId, attributes: &mut [Attribute]) {
         let fixed_enumeration = self
             .types
@@ -6796,6 +7113,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 spelling: self.token_text(&token).to_owned(),
                 span: token.span,
             };
+            if let Some(reason) = self.symbol_unavailable(symbol) {
+                self.use_unavailable(&name.spelling, &reason, token.span);
+            }
             let trailing = self.parse_qualifiers_with_inline(
                 &mut storage,
                 &mut inline_spans,
@@ -7332,6 +7652,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         }
         let fixed_rank = self.types.tag(tag).and_then(|tag| tag.fixed_underlying);
+        // A reference to a declared tag uses it; a definition and a
+        // declaration of the tag alone do not.
+        if !fresh && !is_definition && !is_pure_forward {
+            if let (Some(name), Some(reason)) = (&name, self.tag_unavailable(tag)) {
+                self.use_unavailable(&name.spelling, &reason, name.span);
+            }
+        }
+        self.merge_tag_availability(tag, &tag_attributes);
 
         if is_definition {
             let duplicate = match self.types.tag(tag) {
@@ -7367,8 +7695,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 TagKind::Enum => self.parse_enum_members(fixed_rank.map(|rank| (tag, rank)))?,
             };
             let close = self.expect(TokenKind::RBrace);
-            tag_attributes
-                .extend(self.parse_attribute_specifiers(AttributePlacement::TagClosingBrace));
+            let closing = self.parse_attribute_specifiers(AttributePlacement::TagClosingBrace);
+            self.merge_tag_availability(tag, &closing);
+            tag_attributes.extend(closing);
             self.apply_attributes_to_tag(tag, &mut tag_attributes);
             let end = close
                 .as_ref()
@@ -7454,6 +7783,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<(TagMembers<'arena>, TagDefinition)> {
         let mut members = Vec::new();
         let mut canonical = Vec::new();
+        // EvoIR 10.1.9: a member's context is the record and then the
+        // function that encloses the record, as a C record does not nest.
+        let record_frame = self.push_availability_frame(
+            Some(self.tag_unavailable(containing_tag).is_some()),
+            self.function_availability_frame(),
+        );
         while self.peek_kind() != Some(TokenKind::RBrace) && !self.is_done() {
             // A pack marker changes layout between declarations, not midway
             // through the member list of one record. Do not mutate the pack
@@ -7470,6 +7805,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 continue;
             }
             let start = self.span();
+            let member_frame = self.push_availability_frame(None, Some(record_frame));
+            let mut declarator_frame = member_frame;
             self.parse_extension_prefix();
             let mut specifier_attributes =
                 self.parse_attribute_specifiers(AttributePlacement::DeclarationSpecifiers);
@@ -7478,6 +7815,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             else {
                 self.report("E1001", "expected-declaration", self.span());
                 self.advance();
+                self.pop_availability_frames(member_frame);
                 continue;
             };
             // `__u64 __attribute__((aligned(8))) name;`: attributes between the
@@ -7500,6 +7838,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             loop {
                 let mut member_attributes = specifier_attributes.clone();
                 if !first {
+                    if declarator_frame != member_frame {
+                        self.pop_availability_frames(declarator_frame);
+                    }
+                    declarator_frame = self.push_availability_frame(None, Some(record_frame));
                     member_attributes.extend(
                         self.parse_attribute_specifiers(AttributePlacement::BeforeDeclarator),
                     );
@@ -7581,6 +7923,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     |decl| self.written_declarator(decl),
                 );
                 self.set_member_attributes(containing_tag, canonical.len(), &member_attributes);
+                let unavailable = self.availability_target.is_some_and(|deployment| {
+                    self.member_availability
+                        .get(&(containing_tag, canonical.len()))
+                        .is_some_and(|member| member.unavailable(deployment).is_some())
+                });
+                self.resolve_availability_frame(declarator_frame, unavailable);
                 canonical.push(RecordField {
                     layout: member_layout,
                     name: name.as_ref().map(|name| name.spelling.clone()),
@@ -7600,12 +7948,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     break;
                 }
             }
+            self.pop_availability_frames(member_frame);
             if let Some(event) = specifier.tag_event {
                 let span = self.merge_span(start, declaration_end);
                 let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
         }
+        self.pop_availability_frames(record_frame);
         self.validate_record_member_types(kind, containing_tag, &canonical, &members);
         Some(match kind {
             TagKind::Struct => (
@@ -9203,6 +9553,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 } else {
                     let declarator_start = self.pos;
                     let error_checkpoint = self.error_count;
+                    let frames = self.availability_frames.len();
+                    let pending = frames
+                        .checked_sub(1)
+                        .map(|frame| self.availability_frames[frame].pending.len());
                     match self.parse_declarator(false) {
                         Some(declarator) => {
                             let written = self.written_declarator(&declarator);
@@ -9219,8 +9573,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             // and parenthesis tokens as a named declarator. Retry
                             // from the exact token checkpoint with the bounded
                             // abstract grammar instead of silently dropping the
-                            // consumed layers.
+                            // consumed layers. Its uses are read again.
                             self.pos = declarator_start;
+                            self.availability_frames.truncate(frames);
+                            if let Some(pending) = pending {
+                                self.availability_frames[frames - 1]
+                                    .pending
+                                    .truncate(pending);
+                            }
                             if let Some(declarator) = self.parse_abstract_declarator() {
                                 let written = self.written_abstract_declarator(&declarator);
                                 specifier_attributes.extend(declarator.attributes);
@@ -13464,6 +13824,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.report("E2906", "designator-outside-object", member.span);
                         return None;
                     }
+                    let unavailable = self.availability_target.and_then(|deployment| {
+                        let last = *record_ty
+                            .and_then(|ty| self.record_member_path(ty, &name))?
+                            .last()?;
+                        self.member_availability
+                            .get(&(last.tag(), last.field_index()))?
+                            .unavailable(deployment)
+                    });
+                    if let Some(reason) = unavailable {
+                        self.use_unavailable(&name, &reason, member.span);
+                    }
                     let span = self.merge_span(expression.span(), member.span);
                     let projected = if pointer {
                         self.alloc_node(CHirExpr::PtrMember(expression, name, span))
@@ -13610,6 +13981,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 }
                 self.lint_uses.insert(symbol);
                 self.note_function_use(symbol, tok.span);
+                if let Some(reason) = self.symbol_unavailable(symbol) {
+                    self.use_unavailable(resolved_spelling, &reason, tok.span);
+                }
                 let facts = self.facts_for_symbol(symbol);
                 CHirExpr::Ident {
                     symbol,
@@ -18013,8 +18387,16 @@ fn parse_int_literal(text: &str) -> Option<IntLit> {
 /// The first token without a C token form after preprocessing, at the exact
 /// preserved token: `E0002` for an encoding error, else `E0112`.
 fn lexical_diagnostic(tokens: &[Token]) -> Option<ParseDiagnostic> {
+    lexical_diagnostic_except(tokens, &HashSet::new())
+}
+
+/// The first token without a C token form, skipping the tokens at `exempt`.
+fn lexical_diagnostic_except(tokens: &[Token], exempt: &HashSet<usize>) -> Option<ParseDiagnostic> {
     tokens
         .iter()
+        .enumerate()
+        .filter(|(index, _)| !exempt.contains(index))
+        .map(|(_, token)| token)
         .find(|token| {
             matches!(
                 token.kind,
@@ -18031,6 +18413,53 @@ fn lexical_diagnostic(tokens: &[Token]) -> Option<ParseDiagnostic> {
             },
             message: "stray-token".to_owned(),
         })
+}
+
+/// The indexes of the preprocessing numbers that are versions of an
+/// `availability` attribute: a number after `introduced =`, `deprecated =`
+/// or `obsoleted =` inside `availability ( ... )`. Clang reads `10.14.4` and
+/// `10_14_4` there, which have no C token form.
+fn availability_version_tokens(tokens: &[Token]) -> HashSet<usize> {
+    fn spelling(token: &Token) -> &str {
+        token.text.spelling().unwrap_or("")
+    }
+    let mut versions = HashSet::new();
+    let mut index = 0;
+    while index + 1 < tokens.len() {
+        let name = spelling(&tokens[index]);
+        if !matches!(name, "availability" | "__availability__")
+            || tokens[index + 1].kind != TokenKind::LParen
+        {
+            index += 1;
+            continue;
+        }
+        let mut depth = 0_usize;
+        index += 1;
+        while index < tokens.len() {
+            match tokens[index].kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                TokenKind::PpNumber
+                    if index >= 2
+                        && tokens[index - 1].kind == TokenKind::Assign
+                        && matches!(
+                            spelling(&tokens[index - 2]),
+                            "introduced" | "deprecated" | "obsoleted"
+                        ) =>
+                {
+                    versions.insert(index);
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+    }
+    versions
 }
 
 /// A literal rounds once, directly into the format of its type. An `L`

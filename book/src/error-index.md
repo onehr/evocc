@@ -222,6 +222,28 @@ ID(int value;)
 int main(void) { return 0; }
 ```
 
+### E0114: unsupported-attribute-pragma
+
+A `#pragma clang attribute` would apply an attribute with an effect, and EvoCC does not implement the pragma.
+On Darwin, such a pragma can make declarations unavailable or weak imports through `availability`, `unavailable` or `weak_import`.
+EvoCC refuses it rather than compile the declarations without the attribute.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+#pragma clang attribute push (__attribute__((availability(macos, unavailable))), apply_to = function)
+int helper(void);
+#pragma clang attribute pop
+int main(void) { return 0; }
+```
+
+```c
+int helper(void) __attribute__((availability(macos, unavailable)));
+int main(void) { return 0; }
+```
+
+Write the attribute on each declaration instead of in the pragma.
+
 ## E1xxx
 
 ### E1003: expected-expression
@@ -1599,6 +1621,26 @@ int main(void) {
     return (float)a + (float)b > 2;
 }
 ```
+
+### E2962: unavailable-declaration
+
+The declaration is unavailable for the macOS deployment target, and the use is not inside an unavailable declaration.
+Apple's SDK marks such declarations with Clang's `availability` or `unavailable` attribute, and Apple clang refuses the use too.
+EvoCC assumes macOS 11.0 unless `-mmacosx-version-min` or `MACOSX_DEPLOYMENT_TARGET` names another target.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+int removed(void) __attribute__((availability(macos, unavailable)));
+int main(void) { return removed(); }
+```
+
+```c
+int removed(void) __attribute__((availability(macos, unavailable)));
+int main(void) { return 0; }
+```
+
+Use the replacement that the declaration names, or select a deployment target where the declaration is available.
 
 ## E3xxx
 

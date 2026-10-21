@@ -80,6 +80,8 @@ impl SymbolLinkage {
             .map(|d| d as *const CHirDecl<'_>)
             .collect::<std::collections::HashSet<_>>();
         let mut declarations = Vec::new();
+        let mut defined_symbols = BTreeSet::new();
+        let mut internal_symbols = BTreeSet::new();
         crate::inline::for_each_declaration_ordered(unit, |d| declarations.push(d));
         for (position, declaration) in declarations.into_iter().enumerate() {
             if let CHirDecl::Function(function) = declaration {
@@ -112,6 +114,12 @@ impl SymbolLinkage {
                 ),
                 _ => continue,
             };
+            if defined {
+                defined_symbols.insert(symbol);
+            }
+            if storage.base() == StorageClass::Static {
+                internal_symbols.insert(symbol);
+            }
             let file_scope = file_declarations.contains(&(declaration as *const CHirDecl<'_>));
             for attribute in attributes
                 .iter()
@@ -373,6 +381,14 @@ impl SymbolLinkage {
                         span: written_aliases[&symbol].1,
                     });
                 }
+            }
+        }
+        // EvoIR 10.1.9: a function or object declaration that the macOS
+        // deployment target makes a weak import is a weak reference, unless
+        // the unit defines it or gives it internal linkage, as in Apple clang.
+        for &symbol in unit.weak_imports() {
+            if !defined_symbols.contains(&symbol) && !internal_symbols.contains(&symbol) {
+                result.weak.insert(symbol);
             }
         }
         Ok(result)

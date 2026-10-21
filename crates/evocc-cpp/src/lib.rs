@@ -2,6 +2,8 @@
 #![allow(clippy::should_implement_trait)]
 //! C preprocessor: macro expansion, directives, token stream
 
+pub mod availability;
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 pub use evocc_common::{FileId, SourceSpan};
@@ -742,6 +744,14 @@ pub struct Preprocessor {
     /// Builtins of the target profile that `__has_builtin` answers 1 for,
     /// beside the ones every target has.
     target_builtins: HashSet<String>,
+    /// `__has_attribute` answers of the target profile that replace the
+    /// answers of every target.
+    target_attributes: HashMap<String, i64>,
+    /// Features that `__has_feature` answers 1 for on the target profile.
+    target_features: HashSet<String>,
+    /// The macOS deployment target, which decides whether a `#pragma clang
+    /// attribute` with an availability attribute has an effect.
+    availability_target: Option<availability::Version>,
     poisoned_identifiers: HashSet<String>,
     ignored_pragma_count: u64,
     ignored_pragma_counts: BTreeMap<String, u64>,
@@ -785,6 +795,9 @@ impl Preprocessor {
             counter: 0,
             builtin_feature_queries: HashSet::new(),
             target_builtins: HashSet::new(),
+            target_attributes: HashMap::new(),
+            target_features: HashSet::new(),
+            availability_target: None,
             poisoned_identifiers: HashSet::new(),
             ignored_pragma_count: 0,
             ignored_pragma_counts: BTreeMap::new(),
@@ -809,6 +822,33 @@ impl Preprocessor {
     {
         self.target_builtins
             .extend(names.into_iter().map(Into::into));
+    }
+
+    /// Make `__has_attribute` give `answer` for each name, which the target
+    /// profile implements with another meaning than every target.
+    pub fn add_target_attributes<'a, I>(&mut self, answers: I)
+    where
+        I: IntoIterator<Item = (&'a str, i64)>,
+    {
+        self.target_attributes.extend(
+            answers
+                .into_iter()
+                .map(|(name, answer)| (name.to_owned(), answer)),
+        );
+    }
+
+    /// Make `__has_feature` answer 1 for `names` on the target profile.
+    pub fn add_target_features<'a, I>(&mut self, names: I)
+    where
+        I: IntoIterator<Item = &'a str>,
+    {
+        self.target_features
+            .extend(names.into_iter().map(str::to_owned));
+    }
+
+    /// Select the macOS deployment target of the availability rules.
+    pub fn set_availability_target(&mut self, version: availability::Version) {
+        self.availability_target = Some(version);
     }
 
     fn install_feature_query_macros(&mut self) {
@@ -2100,14 +2140,21 @@ impl Preprocessor {
             match query {
                 "__has_attribute" => one_query_token(arguments, source)
                     .map(normalize_attribute_name)
-                    .map(attribute_answer),
+                    .map(|name| {
+                        self.target_attributes
+                            .get(name)
+                            .copied()
+                            .unwrap_or_else(|| attribute_answer(name))
+                    }),
                 "__has_builtin" => one_query_token(arguments, source).map(|name| {
                     i64::from(
                         HAS_BUILTIN_NAMES.lines().any(|known| known == name)
                             || self.target_builtins.contains(name),
                     )
                 }),
-                "__has_feature" => one_query_token(arguments, source).map(|_| 0),
+                "__has_feature" => one_query_token(arguments, source)
+                    .map(normalize_attribute_name)
+                    .map(|name| i64::from(self.target_features.contains(name))),
                 "__has_include" | "__has_include_next" => {
                     let start = if query == "__has_include_next" {
                         self.include_next_start()
@@ -2236,6 +2283,23 @@ impl Preprocessor {
                 message: "invalid-or-conflicting-symbol-attribute".into(),
             });
             return None;
+        }
+
+        // EvoIR 10.5: `#pragma clang attribute` is not implemented. It is
+        // ignored-safe unless it would apply an availability attribute that
+        // makes a declaration unavailable or a weak import for the macOS
+        // deployment target, or `unavailable` or `weak_import`.
+        if first == "clang" && second == "attribute" {
+            if let Some(deployment) = self.availability_target {
+                if attribute_pragma_has_effect(tokens, source, deployment) {
+                    self.errors.push(PreprocessError {
+                        code: "E0114",
+                        span,
+                        message: "unsupported-attribute-pragma".into(),
+                    });
+                    return None;
+                }
+            }
         }
 
         if matches!(first, "push_macro" | "pop_macro") {
@@ -2919,6 +2983,85 @@ fn one_query_token<'a>(tokens: &'a [Token], source: &'a [u8]) -> Option<&'a str>
     } else {
         None
     }
+}
+
+/// Whether the attribute list of a `#pragma clang attribute` has an
+/// availability attribute whose effect for `deployment` is a refused use or a
+/// weak import, or an `unavailable` or `weak_import` attribute.
+fn attribute_pragma_has_effect(
+    tokens: &[Token],
+    source: &[u8],
+    deployment: availability::Version,
+) -> bool {
+    let lexemes: Vec<&str> = tokens
+        .iter()
+        .map(|token| token_lexeme(token, source))
+        .collect();
+    let mut index = 0;
+    while index + 2 < lexemes.len() {
+        if normalize_attribute_name(lexemes[index]) != "attribute"
+            || lexemes[index + 1] != "("
+            || lexemes[index + 2] != "("
+        {
+            index += 1;
+            continue;
+        }
+        index += 3;
+        while index < lexemes.len() && lexemes[index] != ")" {
+            let name = normalize_attribute_name(lexemes[index]);
+            index += 1;
+            let mut arguments = Vec::new();
+            if lexemes.get(index) == Some(&"(") {
+                let mut depth = 0_usize;
+                let mut argument = String::new();
+                while let Some(lexeme) = lexemes.get(index) {
+                    index += 1;
+                    match *lexeme {
+                        "(" => {
+                            depth += 1;
+                            if depth == 1 {
+                                continue;
+                            }
+                        }
+                        ")" => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        "," if depth == 1 => {
+                            arguments.push(std::mem::take(&mut argument));
+                            continue;
+                        }
+                        _ => {}
+                    }
+                    argument.push_str(lexeme);
+                }
+                arguments.push(argument);
+            }
+            let effect = match name {
+                "unavailable" | "weak_import" => true,
+                "availability" => {
+                    availability::Availability::parse(&arguments).is_ok_and(|attribute| {
+                        attribute.applies_to_macos()
+                            && matches!(
+                                attribute.effect(deployment),
+                                availability::Effect::NotYetIntroduced
+                                    | availability::Effect::Unavailable(_)
+                            )
+                    })
+                }
+                _ => false,
+            };
+            if effect {
+                return true;
+            }
+            if lexemes.get(index) == Some(&",") {
+                index += 1;
+            }
+        }
+    }
+    false
 }
 
 fn normalize_attribute_name(name: &str) -> &str {

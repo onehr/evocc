@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.25.0** | **Pinned ground truth** | framework headers on 2026-10-21
+**Revision 2.26.0** | **Pinned ground truth** | availability attributes on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2780,6 +2780,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E0111` | `conditional-operand-not-integer` | preprocessor |
 | `E0112` | `stray-token` | front end |
 | `E0113` | `directive-in-macro-argument` | preprocessor |
+| `E0114` | `unsupported-attribute-pragma` | preprocessor |
 | `E1003` | `expected-expression` | front end |
 | `E1005` | `invalid-declarator` | front end |
 | `E1207` | `invalid-return-value` | front end |
@@ -2850,6 +2851,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2959` | `unsupported-complex-type-generic-call` | front end |
 | `E2960` | `unmodeled-complex-constant` | front end |
 | `E2961` | `mixed-half-formats` | front end |
+| `E2962` | `unavailable-declaration` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -5138,6 +5140,58 @@ attributes, unknown models and a model on a non-TLS object are E2943. Instance
 identity, escaped addresses and lifetimes obey Section 3.8, not process-global
 substitution.
 
+**Availability.** On `aarch64-apple-darwin` the attributes `availability`,
+`unavailable` and `weak_import` have the meaning of Apple clang for the macOS
+deployment target of Section 10.5, because Apple's SDK marks its declarations
+with them through `__API_AVAILABLE` and the related macros. On Linux they are
+preserved without effect, as GCC 14 has none of them.
+
+- The arguments of `availability` are a platform name, then any of
+  `introduced=V`, `deprecated=V`, `obsoleted=V`, `unavailable`, `strict`,
+  `message="..."`, `replacement="..."` and `environment=E`. A version `V` has
+  one to three decimal components, separated by `.` or by `_`, and a missing
+  component is zero. `introduced=NA` means `unavailable` and `deprecated=NA`
+  means nothing, as in Clang. Any other argument is `E2903`. A version such
+  as `10.14.4` after `introduced=`, `deprecated=` or `obsoleted=` inside the
+  attribute is no stray token on this target.
+- Only the platform `macos`, also spelled `macosx` and `macOS`, applies. Every
+  other platform, the application extension platforms included, and an
+  attribute with `environment=` are preserved without effect.
+- The macOS attributes of every declaration of an entity merge in source
+  order, as Apple clang 21 merges them: an attribute that disagrees with the
+  merged one, by a different version where both have one or by a different
+  `unavailable`, removes both; an agreeing one fills in the missing versions;
+  and a merge whose versions are out of order, such as `deprecated` before
+  `introduced`, removes the attribute. The tests list the measured cases.
+- For the deployment target `D`, `unavailable` makes the entity unavailable,
+  "not available on macOS". Otherwise an `introduced` version above `D` makes
+  it not yet introduced, or unavailable, "introduced in macOS V", with
+  `strict`. Otherwise an `obsoleted` version at or below `D` makes it
+  unavailable, "obsoleted in macOS V". A `message` follows the reason after
+  ` - `. Deprecation has no effect here; Apple clang warns. The `unavailable`
+  attribute makes the entity unavailable with its optional message.
+- A use of an unavailable entity is `E2962` (`unavailable-declaration`) at the
+  use: an identifier that names a function, an object or an enumerator, in an
+  evaluated or unevaluated operand; a typedef name; a reference to a tag other
+  than its definition or a declaration of the tag alone; and a member access.
+  The use is reported in a function that the unit drops too, as Apple clang
+  reports it.
+- A use is not refused when its context is unavailable, as in Apple clang. The
+  context of a use in a declarator, its parameters, its array bounds and its
+  initializer is the entity of that declarator. At file scope and in a record,
+  the declaration specifiers take the context of the first declarator; in a
+  block they take the context of the enclosing function. The context of a
+  member is its record and then the function that encloses the record, as C
+  records do not nest; the context of a body is its function. The entity of a
+  context is unavailable when its attributes are complete, so a later
+  redeclaration does not change it.
+- A function or object declaration that is not yet introduced, or that
+  `weak_import` marks, is a weak import: it is the weak declaration of
+  Section 5.2, emitted as `.weak_reference`, unless the unit defines it or
+  gives it internal linkage. Example: with the deployment target 11.0, a use
+  of the SDK's `strchrnul`, introduced in macOS 15.4, is a weak reference, and
+  `strchrnul != NULL` is tested at run time, as with Apple clang.
+
 **Scalar storage order.** `scalar_storage_order`, with or without surrounding
 underscores, is `E2940` (`unsupported-scalar-storage-order`); it is never
 preserved as an ignored attribute.
@@ -5407,6 +5461,7 @@ compound literals, and a front end must not emit it.
 | `E2959` | a `__builtin_tgmath` call that selects a complex function, or has a complex argument, of a type without admitted values: `_Float16 _Complex` and the other `_FloatN _Complex` and `_FloatNx _Complex` types (10.1.14) |
 | `E2960` | a translation-time product or quotient of floating complex values on a target whose complex helpers have no model, Darwin in this revision (3.13.5, 10.1.14) |
 | `E2961` | an arithmetic, relational, equality or conditional operator, or a compound assignment, with a `_Float16` operand and a `__bf16` operand (3.13.6) |
+| `E2962` | a use of a declaration that is unavailable for the macOS deployment target, outside an unavailable context (10.1.9) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -7407,6 +7462,23 @@ Apple clang:
 
 The EvoIR text of this target names it (Section 9.1).
 
+The macOS deployment target is the last `-mmacosx-version-min=V` or
+`-mmacos-version-min=V` option, then a nonempty `MACOSX_DEPLOYMENT_TARGET`,
+as Apple clang selects them. Without both, EvoCC assumes macOS 11.0, the first
+release for arm64; Apple clang infers its default from the SDK and the host
+instead, so a comparison names the target for both compilers. `V` has one to
+three decimal components, each below 100, and a major version of at least 10;
+any other value is a command-line error, "invalid version number". A target
+below 11.0 is kept for the compilation, and the platform tools give the
+object a minimum of 11.0, as for Apple clang. `__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__`
+and `__ENVIRONMENT_OS_VERSION_MIN_REQUIRED__` encode the target as Clang does:
+12.3.1 is `120301`, and a version before 10.10 has four digits, so 10.9.5 is
+`1095`. The cc command line gives the option to the Darwin assembler and
+linker drivers too. For Linux, the development command line refuses the
+options, and the cc command line ignores them with a warning, as it ignores
+other `-m` options. The availability rules of Section 10.1.9 read the
+target.
+
 **Language modes.** The last language-mode option wins, and every macro it
 selects is set before the user's `-D`/`-U` actions.
 
@@ -7538,7 +7610,19 @@ header name; anything else is `E0106` (`feature-query-malformed`).
   prototype needs no tuple type of the `arm_neon.h` pragma.
   `crates/evocc-parser/tests/builtin_inventory.rs` checks the list against
   the front end in both directions.
-- `__has_feature(name)`: `0` for every name, as in GCC 14.
+- `__has_feature(name)`: `name` with a surrounding `__` pair stripped. The
+  answer is `0` for every name, as in GCC 14, except on Darwin.
+- On `aarch64-apple-darwin`, `__has_attribute` answers `1` for
+  `availability`, `unavailable` and `weak_import`, and `__has_feature` answers
+  `1` for `attribute_availability`, `attribute_availability_with_message`,
+  `attribute_availability_app_extension`,
+  `attribute_availability_with_version_underscores`,
+  `attribute_availability_tvos`, `attribute_availability_watchos`,
+  `attribute_availability_driverkit`, `attribute_availability_with_strict`,
+  `attribute_availability_with_replacement` and
+  `attribute_availability_swift`, as Apple clang 21 does. Section 10.1.9
+  gives each of these forms its meaning; the SDK takes its attribute paths
+  only with these answers.
 - `__has_include(<h>)` and `__has_include("h")`: `1` when the include search
   the directive would perform finds the file, else `0`.
 - `__has_include_next(<h>)` and `__has_include_next("h")`: `1` when the search
@@ -7639,6 +7723,14 @@ and are independent of the `pack` stack. The `_Pragma` spelling is the same
 directive. Ignoring these two pragmas is not safe, so they are not in the
 ignored-safe set. An argument that is not exactly one string literal is
 handled as any other unrecognized pragma content: ignored-safe.
+
+`#pragma clang attribute` is not implemented. On Darwin, a `push` or an
+attribute list of it is `E0114` (`unsupported-attribute-pragma`) when it
+would apply `unavailable`, `weak_import` or an `availability` attribute that
+makes a declaration unavailable or a weak import for the deployment target,
+because ignoring it would change which declarations Section 10.1.9 refuses or
+imports weakly. Other `clang attribute` pragmas, such as the deprecation range
+of the SDK's `<dns_util.h>`, are ignored-safe, and on Linux all of them are.
 
 Any other pragma is ignored-safe.
 
@@ -7745,7 +7837,7 @@ Diagnostics of this section are front-end (preprocessor) diagnostics: `E0102`
 `pragma-pack-unsupported`, `E0108` `poisoned-identifier-used`, `E0109`
 `counter-overflow`, `E0110` `invalid-token-paste`, `E0111`
 `conditional-operand-not-integer`, `E0112` `stray-token`, `E0113`
-`directive-in-macro-argument`.
+`directive-in-macro-argument`, `E0114` `unsupported-attribute-pragma`.
 
 ---
 
@@ -8648,6 +8740,19 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.26.0, 2026-10-21.** Section 10.1.9 gives Clang's `availability`,
+`unavailable` and `weak_import` attributes the meaning of Apple clang on
+Darwin: a use of a declaration that is unavailable for the macOS deployment
+target is the new `E2962` outside an unavailable context, and a declaration
+introduced after the target is a weak import. Section 10.5 selects the
+deployment target from `-mmacosx-version-min`, `-mmacos-version-min` and
+`MACOSX_DEPLOYMENT_TARGET`, assumes 11.0 without them, and refuses an invalid
+version. Darwin's `__has_attribute` and `__has_feature` answer the
+availability queries as Apple clang does, and a `#pragma clang attribute`
+that would apply such an attribute with an effect is the new `E0114`. Linux
+keeps the attributes without effect. No grammar production, registry or Lean
+rule domain changes.
 
 **Revision 2.25.0, 2026-10-21.** Section 10.5 adds the framework headers of
 Darwin: `-F` and `-iframework` directories, the SDK's framework and

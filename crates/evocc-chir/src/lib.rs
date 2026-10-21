@@ -2079,6 +2079,10 @@ pub struct CHirUnit<'arena> {
     stack_protector: bool,
     minimum_function_alignment: u32,
     profile_refusals: Vec<ProfileRefusal>,
+    /// Functions and objects that the macOS deployment target makes weak
+    /// imports (EvoIR 10.1.9). Linkage keeps only the declarations without
+    /// a definition and with external linkage.
+    weak_imports: std::collections::BTreeSet<SymbolId>,
     // Declarations and their symbol inventory are immutable outside the
     // substitution pass, which invalidates this result on its rewritten unit.
     resolved_linkage: std::sync::OnceLock<Result<linkage::SymbolLinkage, linkage::LinkageError>>,
@@ -2141,6 +2145,7 @@ impl<'arena> CHirUnit<'arena> {
             stack_protector: false,
             minimum_function_alignment: 4,
             profile_refusals: Vec::new(),
+            weak_imports: std::collections::BTreeSet::new(),
             resolved_linkage: std::sync::OnceLock::new(),
         }
     }
@@ -2170,6 +2175,17 @@ impl<'arena> CHirUnit<'arena> {
 
     pub fn set_profile_refusals(&mut self, refusals: Vec<ProfileRefusal>) {
         self.profile_refusals = refusals;
+    }
+
+    /// Record the weak imports of the unit before its linkage is resolved.
+    pub fn set_weak_imports(&mut self, symbols: std::collections::BTreeSet<SymbolId>) {
+        self.weak_imports = symbols;
+        self.resolved_linkage.take();
+    }
+
+    #[must_use]
+    pub fn weak_imports(&self) -> &std::collections::BTreeSet<SymbolId> {
+        &self.weak_imports
     }
 
     #[must_use]
