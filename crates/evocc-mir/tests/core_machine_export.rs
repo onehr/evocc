@@ -61,6 +61,7 @@ fn snapshot_preserves_width_classes_and_offsets() {
             kind: evocc_mir::LoadKind::W,
             volatile: true,
             mask: None,
+            transport: false,
         },
     ];
     let text = export_core_machine(&input, CoreMachineMode::Ssa).unwrap();
@@ -89,6 +90,7 @@ fn a_masked_access_is_outside_the_core_profile() {
             kind: evocc_mir::LoadKind::W,
             volatile: false,
             mask: Some(7),
+            transport: false,
         },
         MInst::Store {
             align: 0,
@@ -98,6 +100,7 @@ fn a_masked_access_is_outside_the_core_profile() {
             kind: evocc_mir::StoreKind::W,
             volatile: false,
             mask: Some(0),
+            transport: false,
         },
     ] {
         let mut input = module(MTerm::Ret { values: vec![] });

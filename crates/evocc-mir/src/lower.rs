@@ -2183,6 +2183,7 @@ fn lower_block(
                             kind: simd_store(size),
                             volatile: false,
                             mask: None,
+                            transport: false,
                         });
                     }
                     lowerer.bind(&arg.value, slot);
@@ -2440,6 +2441,7 @@ fn lower_block(
                     kind: LoadKind::Sw,
                     volatile: false,
                     mask: None,
+                    transport: false,
                 });
                 let flags = lowerer.fresh(RegClass::Flags);
                 insts.push(MInst::CmpImm {
@@ -2521,6 +2523,7 @@ fn lower_block(
                     kind: StoreKind::W,
                     volatile: false,
                     mask: None,
+                    transport: false,
                 });
                 let top = lowerer.fresh(RegClass::Gpr64);
                 body.push(MInst::Load {
@@ -2531,6 +2534,7 @@ fn lower_block(
                     kind: LoadKind::P,
                     volatile: false,
                     mask: None,
+                    transport: false,
                 });
                 let address = lowerer.binary(&mut body, BinOp::Add, top, aligned, Width::X);
                 if let (Some((count, bytes)), Some(destination)) = (vector_group, destination_index)
@@ -2545,6 +2549,7 @@ fn lower_block(
                             volatile: false,
                             align: bytes as u32,
                             mask: None,
+                            transport: false,
                         });
                         body.push(MInst::Store {
                             src: v,
@@ -2554,6 +2559,7 @@ fn lower_block(
                             volatile: false,
                             align: bytes as u32,
                             mask: None,
+                            transport: false,
                         });
                     }
                 }
@@ -2583,6 +2589,7 @@ fn lower_block(
                         kind: StoreKind::W,
                         volatile: false,
                         mask: None,
+                        transport: false,
                     },
                 ];
                 let mut onward = params[..width].to_vec();
@@ -2612,6 +2619,7 @@ fn lower_block(
                     kind: LoadKind::P,
                     volatile: false,
                     mask: None,
+                    transport: false,
                 });
                 let address = if alignment == 16 {
                     round_to_sixteen(lowerer, &mut body, raw)
@@ -2638,6 +2646,7 @@ fn lower_block(
                     kind: StoreKind::P,
                     volatile: false,
                     mask: None,
+                    transport: false,
                 });
                 let mut reached = params[..width].to_vec();
                 reached.push(address);
@@ -2669,6 +2678,7 @@ fn lower_block(
                                 kind: LoadKind::P,
                                 volatile: false,
                                 mask: None,
+                                transport: false,
                             });
                             src
                         } else {
@@ -2706,6 +2716,7 @@ fn lower_block(
                             kind,
                             volatile: false,
                             mask: None,
+                            transport: false,
                         });
                         lowerer.bind(result, dst);
                     }
@@ -3355,6 +3366,7 @@ fn lower_terminator(
                             kind: simd_load(size),
                             volatile: false,
                             mask: None,
+                            transport: false,
                         });
                         results.push(chunk);
                     }
@@ -3866,6 +3878,7 @@ fn lower_inst(
                 kind,
                 volatile: *volatile,
                 mask: register_mask(*mask)?,
+                transport: false,
             });
             lowerer.bind(result, dst);
         }
@@ -3898,6 +3911,7 @@ fn lower_inst(
                 kind,
                 volatile: *volatile,
                 mask: register_mask(*mask)?,
+                transport: false,
             });
         }
         // Section 5: `copy` with static size lowers to `mem.copy`, the
@@ -4439,6 +4453,7 @@ fn lower_atomic_copy(
             kind: load,
             volatile: false,
             mask: None,
+            transport: false,
         });
         dst
     };
@@ -4451,6 +4466,7 @@ fn lower_atomic_copy(
             kind: store,
             volatile: false,
             mask: None,
+            transport: false,
         });
     };
     match op {
@@ -6055,6 +6071,7 @@ fn lower_va_start(
         kind: StoreKind::P,
         volatile: false,
         mask: None,
+        transport: false,
     });
     // The Apple variadic convention: the list is this one pointer.
     if lowerer.anonymous_on_stack {
@@ -6082,6 +6099,7 @@ fn lower_va_start(
             kind: StoreKind::P,
             volatile: false,
             mask: None,
+            transport: false,
         });
     }
 
@@ -6100,6 +6118,7 @@ fn lower_va_start(
         kind: StoreKind::W,
         volatile: false,
         mask: None,
+        transport: false,
     });
     let vr_offs = lowerer.fresh(RegClass::Gpr32);
     let vector_save = abi.vector_save_bytes() as i32;
@@ -6116,6 +6135,7 @@ fn lower_va_start(
         kind: StoreKind::W,
         volatile: false,
         mask: None,
+        transport: false,
     });
     Ok(())
 }
@@ -6141,6 +6161,7 @@ fn lower_stack_va_arg(
         kind: LoadKind::P,
         volatile: false,
         mask: None,
+        transport: false,
     });
     let address = if alignment == 16 {
         round_to_sixteen(lowerer, insts, raw)
@@ -6156,6 +6177,7 @@ fn lower_stack_va_arg(
         kind: StoreKind::P,
         volatile: false,
         mask: None,
+        transport: false,
     });
     match &access.op {
         VariadicOp::ArgRecord { destination, shape } => {
@@ -6172,6 +6194,7 @@ fn lower_stack_va_arg(
                     kind: LoadKind::P,
                     volatile: false,
                     mask: None,
+                    transport: false,
                 });
                 source
             } else {
@@ -6209,6 +6232,7 @@ fn lower_stack_va_arg(
                 kind,
                 volatile: false,
                 mask: None,
+                transport: false,
             });
             lowerer.bind(result, dst);
         }
@@ -6497,6 +6521,7 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
                         kind: LoadKind::X,
                         volatile: *volatile,
                         mask: half,
+                        transport: false,
                     });
                 }
             } else {
@@ -6539,6 +6564,7 @@ fn lower_pair(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, inst: &Inst) -> Res
                         kind: StoreKind::X,
                         volatile: *volatile,
                         mask: half,
+                        transport: false,
                     });
                 }
             } else {
@@ -6911,7 +6937,9 @@ fn piece_store(width: u64) -> StoreKind {
 ///
 /// The bytes a chunk does not have are unspecified in the convention: both
 /// oracles leave whatever the register held there, and the callee reads only
-/// the width its member has.
+/// the width its member has. Each piece is a transport load (Section 4.1):
+/// padding and members that were never stored travel with their
+/// initializedness, and a pointer member with its provenance.
 fn load_chunk(
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
@@ -6930,6 +6958,7 @@ fn load_chunk(
             kind: piece_load(width),
             volatile: false,
             mask: None,
+            transport: true,
         });
         let placed = if piece == 0 {
             dst
@@ -6944,7 +6973,8 @@ fn load_chunk(
     accumulated.expect("a record chunk has at least one byte")
 }
 
-/// Store one chunk of `size` bytes held in `src` at `offset` from `base`.
+/// Store one chunk of `size` bytes held in `src` at `offset` from `base`, with
+/// transport stores (Section 4.1).
 fn store_chunk(
     lowerer: &mut Lowerer,
     insts: &mut Vec<MInst>,
@@ -6967,6 +6997,7 @@ fn store_chunk(
             kind: piece_store(width),
             volatile: false,
             mask: None,
+            transport: true,
         });
     }
 }
@@ -7750,6 +7781,7 @@ fn read_apple_stack_argument(
                     kind: LoadKind::X,
                     volatile: false,
                     mask: None,
+                    transport: false,
                 });
             }
             lowerer.bind_pair(value, low, high);
@@ -7769,6 +7801,7 @@ fn read_apple_stack_argument(
                 },
                 volatile: false,
                 mask: None,
+                transport: false,
             });
             lowerer.bind(value, dst);
         }
@@ -7802,6 +7835,7 @@ fn read_apple_stack_argument(
                     kind: simd_load(piece.size),
                     volatile: false,
                     mask: None,
+                    transport: false,
                 });
                 insts.push(MInst::Store {
                     align: shape.align.min(piece.size as u32),
@@ -7811,6 +7845,7 @@ fn read_apple_stack_argument(
                     kind: simd_store(piece.size),
                     volatile: false,
                     mask: None,
+                    transport: false,
                 });
             }
             lowerer.bind(value, destination);
@@ -7996,6 +8031,7 @@ fn call_arguments(
                             kind: simd_load(size),
                             volatile: false,
                             mask: None,
+                            transport: false,
                         });
                         members.push(reg);
                     }
@@ -8050,6 +8086,7 @@ fn call_arguments(
                         kind: simd_load(size),
                         volatile: false,
                         mask: None,
+                        transport: false,
                     });
                     registers.push(chunk);
                 }
@@ -8127,6 +8164,7 @@ fn call_record_result(
                 kind: simd_store(size),
                 volatile: false,
                 mask: None,
+                transport: false,
             });
         }
         return after;

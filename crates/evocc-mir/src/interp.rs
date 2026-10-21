@@ -12,6 +12,9 @@
 //! holds either raw bits or a provenance-carrying pointer, and memory is the
 //! same `evocc-memory` object model both interpreters share. A register file
 //! of plain 64-bit words could not produce the trace the comparison needs.
+//! For the same reason a register that transport loads filled with the bytes
+//! of a record holds them with the initializedness of each bit and their
+//! pointer fragments (Section 4.1), as the EvoIR copy of the record does.
 //!
 //! Sub-width values are modelled exactly as Section 3 describes them and not
 //! more kindly: a `bits<N>` with `N` below the register width lives in the low
@@ -61,6 +64,11 @@ pub enum MirValue {
     Ptr(Pointer),
     Fn(PointerValue),
     Vector(evocc_memory::ObjectRepresentation),
+    /// The eight bytes of a general register that transport loads filled
+    /// with the bytes of a record (Section 4.1), with the initializedness of
+    /// each bit and their pointer fragments. A register whose bits are all
+    /// initialized and that holds no pointer fragment is an `Int` instead.
+    Transport(evocc_memory::ObjectRepresentation),
 }
 
 /// The condition-code register's content.
@@ -841,6 +849,15 @@ fn read(frame: &Frame, reg: VReg) -> Result<MirValue, MirError> {
     }
 }
 
+/// A compared register; record bytes that a transport load left
+/// uninitialized or with a pointer fragment are not compared.
+fn comparable(frame: &Frame, reg: VReg) -> Result<MirValue, MirError> {
+    match read(frame, reg)? {
+        MirValue::Transport(_) => Err(transport_use(reg)),
+        value => Ok(value),
+    }
+}
+
 fn read_all(frame: &Frame, regs: &[VReg]) -> Result<Vec<MirValue>, MirError> {
     regs.iter().map(|reg| read(frame, *reg)).collect()
 }
@@ -863,6 +880,43 @@ fn read_bits(frame: &Frame, reg: VReg) -> Result<u64, MirError> {
         MirValue::Ptr(_) | MirValue::Fn(_) | MirValue::Vector(_) => Err(MirError::Invalid {
             detail: format!("%v{} holds a pointer and is read as raw bits", reg.id),
         }),
+        MirValue::Transport(_) => Err(transport_use(reg)),
+    }
+}
+
+/// A register that holds record bytes with an uninitialized bit or a pointer
+/// fragment is read by something other than a transport store, a shift by
+/// whole bytes or an `orr` (Section 4.1).
+fn transport_use(reg: VReg) -> MirError {
+    MirError::Invalid {
+        detail: format!(
+            "%v{} holds record bytes, which only transport forms read",
+            reg.id
+        ),
+    }
+}
+
+/// The register value of eight transported record bytes: an `Int` when
+/// every bit is initialized and no byte holds a pointer fragment.
+fn transport_value(bytes: evocc_memory::ObjectRepresentation) -> MirValue {
+    match bytes.plain_integer(evocc_memory::ByteOrder::Little) {
+        Some(raw) => MirValue::Int(raw as u64),
+        None => MirValue::Transport(bytes),
+    }
+}
+
+/// The eight bytes of a register that a transport shift or `orr` combines.
+fn transport_bytes(value: MirValue) -> Option<evocc_memory::ObjectRepresentation> {
+    match value {
+        MirValue::Transport(bytes) => Some(bytes),
+        MirValue::Int(raw) => {
+            let mut bytes = evocc_memory::ObjectRepresentation::uninitialized(8).ok()?;
+            bytes
+                .write_integer(0, 8, Some(u128::from(raw)), evocc_memory::ByteOrder::Little)
+                .ok()?;
+            Some(bytes)
+        }
+        MirValue::Ptr(_) | MirValue::Fn(_) | MirValue::Vector(_) => None,
     }
 }
 
@@ -873,10 +927,12 @@ fn read_pointer(frame: &Frame, reg: VReg) -> Result<Pointer, MirError> {
             code: "E3009",
             detail: "null-pointer-access".to_owned(),
         }),
-        MirValue::Int(_) | MirValue::Fn(_) | MirValue::Vector(_) => Err(MirError::Memory {
-            code: "E3013",
-            detail: "invalid-pointer-representation".to_owned(),
-        }),
+        MirValue::Int(_) | MirValue::Fn(_) | MirValue::Vector(_) | MirValue::Transport(_) => {
+            Err(MirError::Memory {
+                code: "E3013",
+                detail: "invalid-pointer-representation".to_owned(),
+            })
+        }
     }
 }
 
@@ -887,7 +943,7 @@ fn pointer_value(value: MirValue) -> Option<PointerValue> {
         MirValue::Int(0) => Some(PointerValue::Null),
         MirValue::Ptr(pointer) => Some(PointerValue::object(pointer)),
         MirValue::Fn(pointer) => Some(pointer),
-        MirValue::Int(_) | MirValue::Vector(_) => None,
+        MirValue::Int(_) | MirValue::Vector(_) | MirValue::Transport(_) => None,
     }
 }
 
@@ -908,6 +964,9 @@ fn read_flags(frame: &Frame, reg: VReg) -> Result<Flags, MirError> {
 fn write(frame: &mut Frame, reg: VReg, value: MirValue) {
     let value = match (reg.class, value) {
         (RegClass::Gpr32, MirValue::Int(raw)) => MirValue::Int(raw & Width::W.mask()),
+        (RegClass::Gpr32, MirValue::Transport(bytes)) => {
+            transport_value(bytes.placed(4, 0).placed(8, 0))
+        }
         (_, value) => value,
     };
     frame.regs.insert(reg.id, Slot::Value(value));
@@ -927,7 +986,7 @@ enum Identity {
 
 fn identity(value: MirValue) -> Identity {
     match value {
-        MirValue::Vector(value) => Identity::Vector(value),
+        MirValue::Vector(value) | MirValue::Transport(value) => Identity::Vector(value),
         MirValue::Int(0) => Identity::Null,
         MirValue::Int(raw) => Identity::Bits(raw),
         MirValue::Ptr(pointer) if pointer == Pointer::NULL => Identity::Null,
@@ -1418,6 +1477,11 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                                 detail: "vector used as scalar atomic value".into(),
                             })
                         }
+                        MirValue::Transport(_) => {
+                            return Err(MirError::Invalid {
+                                detail: "record bytes used as a scalar atomic value".into(),
+                            })
+                        }
                     };
                     evocc_memory::AtomicValue::Integer(u128::from(raw))
                 };
@@ -1437,11 +1501,18 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             kind,
             volatile,
             mask,
+            transport,
         } => {
             let address = read_pointer(frame, *base)?
                 .checked_offset(*offset)
                 .map_err(|error| memory_error(&error))?;
             let mut access = layout_for(kind.size_bytes());
+            if *transport {
+                // EvoIR passes a record as a pointer and reads none of its
+                // bytes at the call, so a transport access demands only the
+                // alignment that its suffix names (Section 4.1).
+                access.align_bytes = 1;
+            }
             if *align != 0 {
                 access.align_bytes = *align;
             }
@@ -1449,6 +1520,18 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                 return Err(MirError::Invalid {
                     detail: "a mask on a load that is not an integer load".to_owned(),
                 });
+            }
+            if *transport {
+                // The bytes keep their initializedness and pointer
+                // fragments; the bytes above them are zero, as `ldrb`,
+                // `ldrh` and `ldr w` make them.
+                let (bytes, world) = state
+                    .memory
+                    .load_representation(&state.world, address, access, *volatile)
+                    .map_err(|error| memory_error(&error))?;
+                state.world = world;
+                write(frame, *dst, transport_value(bytes.placed(8, 0)));
+                return Ok(());
             }
             let value = match kind {
                 LoadKind::S | LoadKind::D | LoadKind::Q => {
@@ -1568,11 +1651,15 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             kind,
             volatile,
             mask,
+            transport,
         } => {
             let address = read_pointer(frame, *base)?
                 .checked_offset(*offset)
                 .map_err(|error| memory_error(&error))?;
             let mut access = layout_for(kind.size_bytes());
+            if *transport {
+                access.align_bytes = 1;
+            }
             if *align != 0 {
                 access.align_bytes = *align;
             }
@@ -1583,6 +1670,24 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             }
             let value = read(frame, *src)?;
             match (kind, value) {
+                // A transport store writes the low bytes of the register with
+                // their initializedness and pointer fragments (Section 4.1).
+                (_, MirValue::Transport(bytes)) if *transport => {
+                    let width = usize::try_from(kind.size_bytes()).unwrap_or(8);
+                    let (memory, world) = state
+                        .memory
+                        .store_representation(
+                            &state.world,
+                            address,
+                            access,
+                            &bytes.placed(width, 0),
+                            *volatile,
+                        )
+                        .map_err(|error| memory_error(&error))?;
+                    state.memory = memory;
+                    state.world = world;
+                }
+                (_, MirValue::Transport(_)) => return Err(transport_use(*src)),
                 // `str h` writes the low two bytes of the `s` view.
                 (StoreKind::Hv, MirValue::Vector(value)) => {
                     let mut narrow = evocc_memory::ObjectRepresentation::uninitialized(2)
@@ -1636,6 +1741,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                                 detail: "vector stored using a scalar width".into(),
                             })
                         }
+                        MirValue::Transport(_) => return Err(transport_use(*src)),
                     };
                     let bits = kind.size_bytes() * 8;
                     let masked = if bits >= 64 {
@@ -1881,8 +1987,8 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             rhs,
             width,
         } => {
-            let left = read(frame, *lhs)?;
-            let right = read(frame, *rhs)?;
+            let left = comparable(frame, *lhs)?;
+            let right = comparable(frame, *rhs)?;
             frame
                 .regs
                 .insert(dst.id, Slot::Flags(compare(left, right, *width)));
@@ -1893,7 +1999,7 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             imm,
             width,
         } => {
-            let left = read(frame, *lhs)?;
+            let left = comparable(frame, *lhs)?;
             frame.regs.insert(
                 dst.id,
                 Slot::Flags(compare(left, MirValue::Int(*imm), *width)),
@@ -2176,6 +2282,39 @@ fn compare(left: MirValue, right: MirValue, width: Width) -> Flags {
     }
 }
 
+/// Section 4.1: a shift by whole bytes and an `orr` move record bytes that a
+/// transport load put in a register, as a chunk of a record that is not a
+/// power of two in size is assembled and taken apart. Nothing else reads
+/// them.
+fn transport_binary(
+    op: BinOp,
+    left: MirValue,
+    right: MirValue,
+    width: Width,
+) -> Result<MirValue, MirError> {
+    let invalid = || MirError::Invalid {
+        detail: format!("{} on a register that holds record bytes", op.mnemonic()),
+    };
+    if width != Width::X {
+        return Err(invalid());
+    }
+    let bytes = match (op, left, right) {
+        (BinOp::Lsl | BinOp::Lsr, MirValue::Transport(bytes), MirValue::Int(amount))
+            if amount % 8 == 0 && amount < 64 =>
+        {
+            let shift = isize::try_from(amount / 8).map_err(|_| invalid())?;
+            bytes.placed(8, if op == BinOp::Lsl { shift } else { -shift })
+        }
+        (BinOp::Orr, left, right) => {
+            let left = transport_bytes(left).ok_or_else(invalid)?;
+            let right = transport_bytes(right).ok_or_else(invalid)?;
+            left.or(&right).ok_or_else(invalid)?
+        }
+        _ => return Err(invalid()),
+    };
+    Ok(transport_value(bytes))
+}
+
 fn binary(
     state: &mut State,
     op: BinOp,
@@ -2183,6 +2322,9 @@ fn binary(
     right: MirValue,
     width: Width,
 ) -> Result<MirValue, MirError> {
+    if matches!(left, MirValue::Transport(_)) || matches!(right, MirValue::Transport(_)) {
+        return transport_binary(op, left, right, width);
+    }
     // ptr.to_int/from_int need no native instruction. An address used by
     // machine arithmetic therefore exposes its code identity here rather
     // than rejecting the representation-preserving IR conversion.

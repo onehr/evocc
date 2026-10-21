@@ -550,6 +550,7 @@ fn the_allocated_form_names_physical_registers_and_no_block_arguments() {
                     kind: evocc_mir::LoadKind::W,
                     volatile: false,
                     mask: None,
+                    transport: false,
                 },
                 MInst::Load {
                     align: 0,
@@ -559,6 +560,7 @@ fn the_allocated_form_names_physical_registers_and_no_block_arguments() {
                     kind: evocc_mir::LoadKind::W,
                     volatile: false,
                     mask: None,
+                    transport: false,
                 },
                 MInst::Binary {
                     op: BinOp::Mul,

@@ -341,6 +341,7 @@ impl<'a> Selector<'a> {
                 volatile,
                 dst,
                 mask: _,
+                transport: _,
             } if matches!(
                 kind,
                 crate::LoadKind::B
@@ -372,6 +373,7 @@ impl<'a> Selector<'a> {
                 volatile,
                 src,
                 mask: _,
+                transport: _,
             } if matches!(
                 kind,
                 crate::StoreKind::B

@@ -117,11 +117,6 @@ fn machine(module: &evocc_evoir::Module, target: &str) -> (Result<i64, String>, 
 
 /// `main` of `source` completes in every mode and returns `expected`.
 fn completes(name: &str, source: &str, expected: i64) {
-    completes_in(name, source, expected, true);
-}
-
-/// The same, with or without the EvoMIR lane.
-fn completes_in(name: &str, source: &str, expected: i64, machine_lane: bool) {
     let work = Work::new(name);
     let path = work.source(&format!("{name}.c"), source);
     for target in TARGETS {
@@ -139,7 +134,7 @@ fn completes_in(name: &str, source: &str, expected: i64, machine_lane: bool) {
                 );
             }
         }
-        for level in LEVELS.iter().filter(|_| machine_lane) {
+        for level in LEVELS {
             let (value, _) = machine(&emitted(&path, target, level), target);
             assert_eq!(value, Ok(expected), "{name} {target} {level} EvoMIR");
         }
@@ -149,11 +144,6 @@ fn completes_in(name: &str, source: &str, expected: i64, machine_lane: bool) {
 /// Every mode stops with `E3001` at `line:column` of `source`, and at no
 /// earlier position.
 fn uninitialized_read_at(name: &str, source: &str, line: u32, column: u32) {
-    uninitialized_read_at_in(name, source, line, column, true);
-}
-
-/// The same, with or without the EvoMIR lane.
-fn uninitialized_read_at_in(name: &str, source: &str, line: u32, column: u32, machine_lane: bool) {
     let work = Work::new(name);
     let path = work.source(&format!("{name}.c"), source);
     let expected = format!(
@@ -173,7 +163,7 @@ fn uninitialized_read_at_in(name: &str, source: &str, line: u32, column: u32, ma
             );
         }
         // EvoMIR has no source positions; it stops with the same code.
-        for level in LEVELS.iter().filter(|_| machine_lane) {
+        for level in LEVELS {
             let (value, _) = machine(&emitted(&path, target, level), target);
             assert_eq!(
                 value,
@@ -430,9 +420,9 @@ fn a_compound_update_reads_only_its_own_field() {
 
 /// A copy of the record moves each bit's initializedness: the copy of a
 /// stored member has its value, and the copy of an unstored one does not.
-/// EvoMIR passes a record argument in general registers, which hold no
-/// initializedness, so its interpreter requires every bit of such a record
-/// to be initialized; the two argument cases leave the EvoMIR lane out.
+/// EvoMIR passes a record argument in general registers with transport
+/// accesses, which move the same state (D29), so every case runs in the
+/// EvoMIR lane too.
 #[test]
 fn record_copies_keep_the_initializedness_of_each_bit() {
     let declaration = "struct S { unsigned a : 3; unsigned b : 5; };\n\
@@ -444,7 +434,7 @@ fn record_copies_keep_the_initializedness_of_each_bit() {
          int main(void) { struct S s; s.a = 6; struct S t = s; t.b = 1; struct S u = t; return u.a * 10 + u.b; }\n",
         61,
     );
-    completes_in(
+    completes(
         "copy",
         &format!(
             "{declaration}int main(void) {{\n\
@@ -455,7 +445,6 @@ fn record_copies_keep_the_initializedness_of_each_bit() {
              }}\n"
         ),
         66,
-        false,
     );
     uninitialized_read_at(
         "copy-unstored",
@@ -470,7 +459,7 @@ fn record_copies_keep_the_initializedness_of_each_bit() {
         8,
         12,
     );
-    uninitialized_read_at_in(
+    uninitialized_read_at(
         "argument-unstored",
         &format!(
             "{declaration}int main(void) {{\n\
@@ -481,7 +470,6 @@ fn record_copies_keep_the_initializedness_of_each_bit() {
         ),
         3,
         45,
-        false,
     );
 }
 

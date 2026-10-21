@@ -360,6 +360,13 @@ fn instruction(inst: &MInst, locs: &Locations<'_>) -> Result<String> {
         MInst::Load { mask: Some(_), .. } | MInst::Store { mask: Some(_), .. } => {
             return Err("allocated masked access outside the Core profile".into())
         }
+        // Only a record argument or result has a transport access.
+        MInst::Load {
+            transport: true, ..
+        }
+        | MInst::Store {
+            transport: true, ..
+        } => return Err("allocated transport access outside the Core profile".into()),
         MInst::Load {
             align,
             dst,
@@ -368,6 +375,7 @@ fn instruction(inst: &MInst, locs: &Locations<'_>) -> Result<String> {
             kind,
             volatile,
             mask: None,
+            transport: false,
         } => format!(
             "[\"load\",{align},{},{},{offset},\"{}\",{volatile}]",
             l(dst)?,
@@ -382,6 +390,7 @@ fn instruction(inst: &MInst, locs: &Locations<'_>) -> Result<String> {
             kind,
             volatile,
             mask: None,
+            transport: false,
         } => format!(
             "[\"store\",{align},{},{},{offset},\"{}\",{volatile}]",
             l(src)?,

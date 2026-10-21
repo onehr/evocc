@@ -91,6 +91,7 @@ fn dce_attribution_retains_the_same_dead_witnesses_only_in_the_off_control() {
                     volatile: false,
                     align: 4,
                     mask: None,
+                    transport: false,
                 },
             ],
             term: MTerm::Ret { values: vec![w(0)] },
@@ -210,6 +211,7 @@ fn unused_symbol_addresses_do_not_become_linker_dependencies() {
                         volatile: true,
                         align: 8,
                         mask: None,
+                        transport: false,
                     },
                 ],
                 term: MTerm::B {

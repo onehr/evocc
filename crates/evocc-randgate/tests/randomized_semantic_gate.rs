@@ -35,6 +35,19 @@ fn masked() -> GeneratorConfig {
 /// The seed of the masked campaign, disjoint from the standing one.
 const MASKED_GATE_SEED: u64 = 0x5EED_D025;
 
+/// D29: the pinned configuration with record calls added.
+fn records() -> GeneratorConfig {
+    GeneratorConfig::default().with_record_calls()
+}
+
+/// The seed of the record campaign; its thousand seeds are disjoint from
+/// those of every other campaign here.
+const RECORD_GATE_SEED: u64 = 0x5EED_E029;
+
+/// The helpers that the record configuration calls: one takes a record by
+/// value and one returns a record.
+const RECORD_HELPERS: [&str; 2] = ["byval0", "sret0"];
+
 const MASKED_FAMILIES: [&str; 4] = [
     "load.masked",
     "load.volatile.masked",
@@ -747,6 +760,104 @@ fn the_gate_finds_no_mismatch_in_one_thousand_programs_with_masked_accesses() {
     assert_eq!(report.compared, GATE_PROGRAMS);
     assert_eq!(report.certificates_replayed, report.transactions);
     // The third lane compares every program, masked accesses included.
+    assert!(
+        report
+            .render()
+            .contains(&format!("machineCompared={GATE_PROGRAMS}")),
+        "{}",
+        report.render()
+    );
+}
+
+/// D29: in both modes, `@main` of every program with record calls calls both
+/// record helpers, the pinned configuration passes no record, and every
+/// program with record calls is free of undefined behaviour by construction.
+#[test]
+fn the_record_configuration_calls_record_helpers_without_undefined_behaviour() {
+    for (base, label) in [
+        (GeneratorConfig::default(), "standard"),
+        (GeneratorConfig::native_main(), "native-main"),
+    ] {
+        let mut calls: BTreeMap<&'static str, usize> = BTreeMap::new();
+        let mut seen = BTreeSet::new();
+        let mut plain = BTreeSet::new();
+        let mut codes: BTreeMap<&'static str, usize> = BTreeMap::new();
+        for seed in 0..512_u64 {
+            let module = generate_module(seed, base.with_record_calls());
+            let main = render_module(&Module {
+                functions: module
+                    .functions
+                    .iter()
+                    .filter(|function| function.name == "main")
+                    .cloned()
+                    .collect(),
+                ..Module::default()
+            });
+            for helper in RECORD_HELPERS {
+                if main.contains(&format!("call @{helper}(")) {
+                    *calls.entry(helper).or_default() += 1;
+                }
+            }
+            let pinned = generate_module(seed, base);
+            let pinned_text = render_module(&pinned);
+            assert!(
+                !pinned_text.contains(" byval(") && !pinned_text.contains(" sret("),
+                "{label} seed {seed} passes a record without record calls"
+            );
+            seen.extend(families(&module));
+            plain.extend(families(&pinned));
+            let arguments = entry_arguments(&module, seed);
+            if let Observation::Undefined { code, detail } =
+                observe(&module, &arguments, budget().step_budget)
+            {
+                *codes.entry(code).or_default() += 1;
+                eprintln!("{label} seed {seed}: {code} {detail}");
+            }
+        }
+        for helper in RECORD_HELPERS {
+            assert_eq!(
+                calls.get(helper).copied(),
+                Some(512),
+                "{label} does not call every record helper: {calls:?}"
+            );
+        }
+        assert!(
+            plain.is_subset(&seen),
+            "{label}: record calls removed {:?}",
+            plain.difference(&seen).collect::<Vec<_>>()
+        );
+        assert!(
+            codes.is_empty(),
+            "{label} programs with record calls: {codes:?}"
+        );
+    }
+}
+
+#[test]
+fn the_gate_finds_no_mismatch_in_one_thousand_programs_with_record_calls() {
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let started = Instant::now();
+    let report = run_campaign(
+        RECORD_GATE_SEED,
+        GATE_PROGRAMS,
+        records(),
+        budget(),
+        &checker,
+    );
+    println!("{}", report.render());
+    println!("wallTimeSeconds={:.3}", started.elapsed().as_secs_f64());
+    assert_eq!(report.generated, GATE_PROGRAMS);
+    assert_eq!(
+        report.mismatched,
+        0,
+        "mismatches: {:#?}",
+        report.mismatches.first()
+    );
+    assert_eq!(report.discarded_undefined, 0);
+    assert_eq!(report.interpreter_budget_exhausted, 0);
+    assert_eq!(report.compared, GATE_PROGRAMS);
+    assert_eq!(report.certificates_replayed, report.transactions);
+    // The third lane compares every program, record calls included.
     assert!(
         report
             .render()

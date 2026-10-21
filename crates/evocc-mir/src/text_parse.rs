@@ -286,6 +286,15 @@ impl<'a> Scan<'a> {
         Ok(Some(value))
     }
 
+    /// The optional ` [transport]` suffix of a load or store (Section 4.1).
+    fn access_transport(&mut self) -> Result<bool, String> {
+        if !self.text.starts_with(" [transport]") {
+            return Ok(false);
+        }
+        self.expect(" [transport]")?;
+        Ok(true)
+    }
+
     fn take_while(&mut self, accept: impl Fn(char) -> bool) -> &'a str {
         let end = self
             .text
@@ -943,6 +952,7 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
             scan.expect("]")?;
             let align = scan.access_alignment()?;
             let mask = scan.access_mask()?;
+            let transport = scan.access_transport()?;
             scan.finish()?;
             return Ok(Parsed::Inst(MInst::Store {
                 align,
@@ -952,6 +962,7 @@ fn parse_body(body: &str, classes: &HashMap<u32, RegClass>) -> Result<Parsed, St
                 kind,
                 volatile,
                 mask,
+                transport,
             }));
         }
         if matches!(
@@ -1258,6 +1269,7 @@ fn parse_defining(
         scan.expect("]")?;
         let align = scan.access_alignment()?;
         let mask = scan.access_mask()?;
+        let transport = scan.access_transport()?;
         scan.finish()?;
         return Ok(MInst::Load {
             align,
@@ -1267,6 +1279,7 @@ fn parse_defining(
             kind,
             volatile,
             mask,
+            transport,
         });
     }
 

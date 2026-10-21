@@ -17,7 +17,7 @@ use evocc_evoir::{
     GlobalKind, GlobalObject, GlobalVisibility, IndexSignedness, Inst, Module, OffsetDirection,
     RuntimeValue, UbReason, Value,
 };
-use evocc_types::{AddressSpace, EvoIRType, Region};
+use evocc_types::{AddressSpace, EvoIRType, ParamMark, RecordShape, Region};
 
 use crate::rng::Rng;
 
@@ -38,6 +38,116 @@ const MEMORY_WIDTHS: [u16; 4] = [8, 16, 32, 64];
 /// a configuration with masked accesses gives each module the shape of the
 /// same seed without them, with masked accesses added.
 const MASK_STREAM: u64 = 0x4D41_534B_4544_0019;
+
+/// The tag of the stream that draws record calls (D29). It is separate for
+/// the reason that [`MASK_STREAM`] is: without record calls the generator
+/// never consults it.
+const RECORD_STREAM: u64 = 0x5245_434F_5244_0029;
+
+/// D29: one record shape that a module passes by value or returns.
+struct RecordKind {
+    size: u64,
+    align: u32,
+    /// The byte offset and the bit width of each member; width 0 is a
+    /// pointer to a global.
+    members: &'static [(u64, u16)],
+    /// The members that the by-value helper reads. Each caller stores them,
+    /// stores every other member by a draw, and never stores the padding.
+    read: &'static [usize],
+    /// The members that the result helper stores and its caller reads. The
+    /// helper stores no other member.
+    written: &'static [usize],
+}
+
+impl RecordKind {
+    fn has_pointer(&self) -> bool {
+        self.members.iter().any(|(_, width)| *width == 0)
+    }
+
+    fn layout(&self) -> AccessLayout {
+        AccessLayout::new(self.size, self.align)
+    }
+}
+
+/// The record shapes of D29: each passes in general registers (EvoMIR 6.4),
+/// with padding, with a chunk that is not a power of two in size, in two
+/// registers, or with a pointer member.
+const RECORD_KINDS: [RecordKind; 8] = [
+    // `struct { char c; int i; }`, with three bytes of padding.
+    RecordKind {
+        size: 8,
+        align: 4,
+        members: &[(0, 8), (4, 32)],
+        read: &[0, 1],
+        written: &[1],
+    },
+    // Three bytes: a halfword and a byte in one register.
+    RecordKind {
+        size: 3,
+        align: 1,
+        members: &[(0, 8), (1, 8), (2, 8)],
+        read: &[0, 2],
+        written: &[0, 2],
+    },
+    // Five bytes: a word and a byte.
+    RecordKind {
+        size: 5,
+        align: 1,
+        members: &[(0, 8), (2, 8), (4, 8)],
+        read: &[0, 2],
+        written: &[1],
+    },
+    // Six bytes: a word and a halfword, with one byte of padding.
+    RecordKind {
+        size: 6,
+        align: 2,
+        members: &[(0, 16), (2, 8), (4, 16)],
+        read: &[0, 2],
+        written: &[2],
+    },
+    // Seven bytes: a word, a halfword and a byte.
+    RecordKind {
+        size: 7,
+        align: 1,
+        members: &[(0, 8), (3, 8), (6, 8)],
+        read: &[1, 2],
+        written: &[0, 2],
+    },
+    // Twelve bytes in two registers.
+    RecordKind {
+        size: 12,
+        align: 4,
+        members: &[(0, 32), (4, 8), (8, 32)],
+        read: &[0, 2],
+        written: &[0],
+    },
+    // Sixteen bytes with seven bytes of padding.
+    RecordKind {
+        size: 16,
+        align: 8,
+        members: &[(0, 8), (8, 64)],
+        read: &[0, 1],
+        written: &[1],
+    },
+    // A pointer to a global and a word.
+    RecordKind {
+        size: 16,
+        align: 8,
+        members: &[(0, 0), (8, 32)],
+        read: &[0, 1],
+        written: &[0],
+    },
+];
+
+/// D29: a helper that takes a record by value or returns one.
+#[derive(Debug, Clone)]
+struct RecordHelper {
+    name: String,
+    kind: usize,
+    /// The helper returns the record through an `sret` destination;
+    /// otherwise it takes it through a `byval` pointer.
+    result: bool,
+}
 
 /// The object every block carries across its outgoing edges.
 ///
@@ -109,6 +219,10 @@ pub struct GeneratorConfig {
     /// masked-access stream, so the pinned seed space names the modules that
     /// it named before masked accesses existed.
     pub masked_accesses: bool,
+    /// D29: emit calls that pass records of at most sixteen bytes by value
+    /// and return them, with padding and members that are never stored.
+    /// Off, the generator never consults the record stream.
+    pub record_calls: bool,
 }
 
 impl Default for GeneratorConfig {
@@ -123,6 +237,7 @@ impl Default for GeneratorConfig {
             max_loop_trips: 4,
             max_results: 3,
             masked_accesses: false,
+            record_calls: false,
         }
     }
 }
@@ -146,6 +261,15 @@ impl GeneratorConfig {
             ..self
         }
     }
+
+    /// The same configuration with record calls (D29).
+    #[must_use]
+    pub fn with_record_calls(self) -> Self {
+        Self {
+            record_calls: true,
+            ..self
+        }
+    }
 }
 
 /// Produce the one module this seed names.
@@ -156,12 +280,23 @@ impl GeneratorConfig {
 pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
     let mut rng = Rng::from_seed(seed ^ config.mode.seed_space());
     let mut masks = Rng::from_seed(seed ^ config.mode.seed_space() ^ MASK_STREAM);
+    let mut records = Rng::from_seed(seed ^ config.mode.seed_space() ^ RECORD_STREAM);
     let mut origins = 0_u64;
     let globals = generate_globals(&mut rng, config, &mut origins);
     let symbols: Vec<String> = globals.iter().map(|global| global.symbol.clone()).collect();
 
     let mut signatures: Vec<Signature> = Vec::new();
     let mut functions: Vec<Function> = Vec::new();
+    let helpers = if config.record_calls {
+        record_helpers(&mut records, &symbols, &mut origins, &mut functions)
+    } else {
+        Vec::new()
+    };
+    let mut streams = Streams {
+        masks: &mut masks,
+        records: &mut records,
+        record_helpers: &helpers,
+    };
     if rng.chance(45) {
         let (signature, function) = recursive_helper(&mut rng);
         signatures.push(signature);
@@ -173,7 +308,7 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
         let signature = random_signature(&mut rng, config, format!("h{index}"), &symbols, false);
         let function = generate_function(
             &mut rng,
-            &mut masks,
+            &mut streams,
             config,
             &signature,
             &signatures,
@@ -200,7 +335,7 @@ pub fn generate_module(seed: u64, config: GeneratorConfig) -> Module {
     };
     functions.push(generate_function(
         &mut rng,
-        &mut masks,
+        &mut streams,
         config,
         &entry,
         &signatures,
@@ -514,6 +649,351 @@ fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
     )
 }
 
+/// D29: the record helpers of one module, from the record stream: one that
+/// takes a record by value and one that returns one. A shape with a pointer
+/// member needs a global for the pointer to name.
+fn record_helpers(
+    records: &mut Rng,
+    globals: &[String],
+    origins: &mut u64,
+    functions: &mut Vec<Function>,
+) -> Vec<RecordHelper> {
+    let usable: Vec<usize> = (0..RECORD_KINDS.len())
+        .filter(|kind| !RECORD_KINDS[*kind].has_pointer() || !globals.is_empty())
+        .collect();
+    let argument = usable[records.below(usable.len() as u64) as usize];
+    let result = usable[records.below(usable.len() as u64) as usize];
+    let global = (!globals.is_empty())
+        .then(|| globals[records.below(globals.len() as u64) as usize].clone());
+    functions.push(record_argument_helper("byval0", &RECORD_KINDS[argument]));
+    let origin = *origins;
+    *origins += 1;
+    functions.push(record_result_helper(
+        "sret0",
+        &RECORD_KINDS[result],
+        origin,
+        global.as_deref(),
+    ));
+    vec![
+        RecordHelper {
+            name: "byval0".to_owned(),
+            kind: argument,
+            result: false,
+        },
+        RecordHelper {
+            name: "sret0".to_owned(),
+            kind: result,
+            result: true,
+        },
+    ]
+}
+
+/// The natural layout of a member of `width` bits; width 0 is a pointer.
+fn member_layout(width: u16) -> AccessLayout {
+    let bytes = if width == 0 { 8 } else { u64::from(width / 8) };
+    AccessLayout::new(
+        bytes,
+        u32::try_from(bytes).expect("a member is at most eight bytes"),
+    )
+}
+
+/// The straight-line body of a record helper.
+struct HelperBody {
+    next: u32,
+    insts: Vec<Inst>,
+    mem: Value,
+    world: Value,
+}
+
+impl HelperBody {
+    fn new() -> Self {
+        Self {
+            next: 0,
+            insts: Vec::new(),
+            mem: Value {
+                id: 0,
+                ty: memory_type(),
+            },
+            world: Value {
+                id: 0,
+                ty: world_type(),
+            },
+        }
+    }
+
+    fn fresh(&mut self, ty: EvoIRType) -> Value {
+        let id = self.next;
+        self.next += 1;
+        Value { id, ty }
+    }
+
+    fn constant(&mut self, width: u16, raw: u64) -> Value {
+        let value = self.fresh(EvoIRType::Bits(width));
+        self.insts
+            .push(Inst::Const(value.clone(), raw & mask(width)));
+        value
+    }
+
+    /// The address of the member at `offset` of the record at `base`.
+    fn member_address(&mut self, base: &Value, offset: u64) -> Value {
+        if offset == 0 {
+            return base.clone();
+        }
+        let index = self.constant(64, offset);
+        let address = self.fresh(pointer_type());
+        self.insts.push(Inst::PtrOffset {
+            result: address.clone(),
+            base: base.clone(),
+            index,
+            direction: OffsetDirection::Add,
+            signedness: IndexSignedness::Unsigned,
+            scale: 1,
+        });
+        let guarded = self.fresh(memory_type());
+        self.insts.push(Inst::PointerValid {
+            mem_in: self.mem.clone(),
+            pointer: address.clone(),
+            mem_out: guarded.clone(),
+        });
+        self.mem = guarded;
+        address
+    }
+
+    fn load(&mut self, address: &Value, ty: EvoIRType, layout: AccessLayout) -> Value {
+        let guarded = self.fresh(memory_type());
+        self.insts.push(Inst::AccessInBounds {
+            mem_in: self.mem.clone(),
+            pointer: address.clone(),
+            mem_out: guarded.clone(),
+            layout,
+        });
+        let result = self.fresh(ty);
+        let mem_out = self.fresh(memory_type());
+        let world_out = self.fresh(world_type());
+        self.insts.push(Inst::Load {
+            result: result.clone(),
+            address: address.clone(),
+            mem_in: guarded,
+            world_in: self.world.clone(),
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+            volatile: false,
+            mask: None,
+        });
+        self.mem = mem_out;
+        self.world = world_out;
+        result
+    }
+
+    fn store(&mut self, address: &Value, value: &Value, layout: AccessLayout) {
+        let guarded = self.fresh(memory_type());
+        self.insts.push(Inst::AccessInBounds {
+            mem_in: self.mem.clone(),
+            pointer: address.clone(),
+            mem_out: guarded.clone(),
+            layout,
+        });
+        let mem_out = self.fresh(memory_type());
+        let world_out = self.fresh(world_type());
+        self.insts.push(Inst::Store {
+            address: address.clone(),
+            value: value.clone(),
+            mem_in: guarded,
+            world_in: self.world.clone(),
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+            volatile: false,
+            mask: None,
+        });
+        self.mem = mem_out;
+        self.world = world_out;
+    }
+
+    /// The member at `member` of the record at `base`, as a `bits<64>`: an
+    /// integer member zero-extended, and for a pointer member the eight bytes
+    /// of the global that it names.
+    fn member_value(&mut self, base: &Value, (offset, width): (u64, u16)) -> Value {
+        let address = self.member_address(base, offset);
+        if width == 0 {
+            let pointer = self.load(&address, pointer_type(), member_layout(0));
+            return self.load(&pointer, EvoIRType::Bits(CARRIER_WIDTH), CARRIER);
+        }
+        let loaded = self.load(&address, EvoIRType::Bits(width), member_layout(width));
+        if width == 64 {
+            return loaded;
+        }
+        let widened = self.fresh(EvoIRType::Bits(64));
+        self.insts
+            .push(Inst::ZExt(widened.clone(), loaded, EvoIRType::Bits(64)));
+        widened
+    }
+}
+
+/// A function that takes a record by value and returns the sum of the
+/// members that `kind` reads.
+fn record_argument_helper(name: &str, kind: &RecordKind) -> Function {
+    let mut body = HelperBody::new();
+    let record = body.fresh(pointer_type());
+    let mem = body.fresh(memory_type());
+    let world = body.fresh(world_type());
+    body.mem = mem.clone();
+    body.world = world.clone();
+    let mut sum = body.constant(64, 0);
+    for &member in kind.read {
+        let value = body.member_value(&record, kind.members[member]);
+        let next = body.fresh(EvoIRType::Bits(64));
+        body.insts.push(Inst::Add(next.clone(), sum, value));
+        sum = next;
+    }
+    let shape = RecordShape::new(kind.size, kind.align);
+    record_helper_function(
+        name,
+        vec![pointer_type()],
+        vec![EvoIRType::Bits(64)],
+        vec![record, mem, world],
+        body.insts,
+        vec![sum, body.mem, body.world],
+        vec![ParamMark::ByVal(shape), ParamMark::None, ParamMark::None],
+    )
+}
+
+/// A function that returns a record of which it stores only the members
+/// that `kind` writes: a pointer to `global`, or its input plus a constant.
+fn record_result_helper(
+    name: &str,
+    kind: &RecordKind,
+    origin: u64,
+    global: Option<&str>,
+) -> Function {
+    let mut body = HelperBody::new();
+    let input = body.fresh(EvoIRType::Bits(64));
+    let destination = body.fresh(pointer_type());
+    let mem = body.fresh(memory_type());
+    let world = body.fresh(world_type());
+    body.mem = mem.clone();
+    body.world = world.clone();
+    let local = body.fresh(pointer_type());
+    let mem_out = body.fresh(memory_type());
+    let world_out = body.fresh(world_type());
+    body.insts.push(Inst::Alloca {
+        result: local.clone(),
+        mem_in: body.mem.clone(),
+        world_in: body.world.clone(),
+        mem_out: mem_out.clone(),
+        world_out: world_out.clone(),
+        origin,
+        layout: kind.layout(),
+    });
+    body.mem = mem_out;
+    body.world = world_out;
+    for (index, &member) in kind.written.iter().enumerate() {
+        let (offset, width) = kind.members[member];
+        let address = body.member_address(&local, offset);
+        let value = if width == 0 {
+            let pointer = body.fresh(pointer_type());
+            body.insts.push(Inst::GlobalAddr {
+                result: pointer.clone(),
+                symbol: global.expect("a pointer member names a global").to_owned(),
+            });
+            pointer
+        } else {
+            let addend = body.constant(64, index as u64 + 1);
+            let sum = body.fresh(EvoIRType::Bits(64));
+            body.insts
+                .push(Inst::Add(sum.clone(), input.clone(), addend));
+            if width == 64 {
+                sum
+            } else {
+                let narrow = body.fresh(EvoIRType::Bits(width));
+                body.insts
+                    .push(Inst::Trunc(narrow.clone(), sum, EvoIRType::Bits(width)));
+                narrow
+            }
+        };
+        body.store(&address, &value, member_layout(width));
+    }
+    let mem_out = body.fresh(memory_type());
+    let world_out = body.fresh(world_type());
+    body.insts.push(Inst::Copy {
+        destination: destination.clone(),
+        source: local,
+        mem_in: body.mem.clone(),
+        world_in: body.world.clone(),
+        mem_out: mem_out.clone(),
+        world_out: world_out.clone(),
+        layout: kind.layout(),
+        volatile: evocc_evoir::CopyVolatility::None,
+    });
+    let shape = RecordShape::new(kind.size, kind.align);
+    record_helper_function(
+        name,
+        vec![EvoIRType::Bits(64), pointer_type()],
+        Vec::new(),
+        vec![input, destination, mem, world],
+        body.insts,
+        vec![mem_out, world_out],
+        vec![
+            ParamMark::None,
+            ParamMark::Sret(shape),
+            ParamMark::None,
+            ParamMark::None,
+        ],
+    )
+}
+
+/// One record helper: `params` and `results` without the memory and world
+/// tokens, which every signature ends with.
+fn record_helper_function(
+    name: &str,
+    params: Vec<EvoIRType>,
+    results: Vec<EvoIRType>,
+    arguments: Vec<Value>,
+    insts: Vec<Inst>,
+    returned: Vec<Value>,
+    param_marks: Vec<ParamMark>,
+) -> Function {
+    let params: Vec<EvoIRType> = params
+        .into_iter()
+        .chain([memory_type(), world_type()])
+        .collect();
+    Function {
+        section: None,
+        patchable_entry: None,
+        stack_protect: false,
+        alignment: 4,
+        variadic: false,
+        linkage: evocc_evoir::Linkage::Strong,
+        visibility: evocc_evoir::GlobalVisibility::External,
+        name: name.to_owned(),
+        params: params
+            .iter()
+            .enumerate()
+            .map(|(index, ty)| FunctionParam {
+                name: format!("arg{index}"),
+                ty: ty.clone(),
+            })
+            .collect(),
+        ret_tys: results
+            .into_iter()
+            .chain([memory_type(), world_type()])
+            .collect(),
+        effects: EffectSummary::default(),
+        blocks: vec![Block {
+            id: 0,
+            args: arguments
+                .iter()
+                .map(|value| BlockArg {
+                    name: format!("v{}", value.id),
+                    value: value.clone(),
+                })
+                .collect(),
+            insts,
+            terminator: Inst::Ret(returned),
+        }],
+        param_marks,
+    }
+}
+
 /// One allocated object and the block-local pointers naming its elements.
 #[derive(Debug, Clone)]
 struct Buffer {
@@ -549,10 +1029,23 @@ impl OpenBlock {
     }
 }
 
+/// The streams of the optional configurations, and the record helpers that
+/// the record stream drew.
+struct Streams<'a> {
+    /// The masked-access stream; see [`MASK_STREAM`].
+    masks: &'a mut Rng,
+    /// The record stream; see [`RECORD_STREAM`].
+    records: &'a mut Rng,
+    record_helpers: &'a [RecordHelper],
+}
+
 struct FunctionGen<'a> {
     rng: &'a mut Rng,
     /// The masked-access stream; see [`MASK_STREAM`].
     masks: &'a mut Rng,
+    /// The record stream; see [`RECORD_STREAM`].
+    records: &'a mut Rng,
+    record_helpers: &'a [RecordHelper],
     config: GeneratorConfig,
     origins: &'a mut u64,
     callees: &'a [Signature],
@@ -565,7 +1058,7 @@ struct FunctionGen<'a> {
 
 fn generate_function(
     rng: &mut Rng,
-    masks: &mut Rng,
+    streams: &mut Streams<'_>,
     config: GeneratorConfig,
     signature: &Signature,
     callees: &[Signature],
@@ -599,7 +1092,9 @@ fn generate_function(
 
     let mut generator = FunctionGen {
         rng,
-        masks,
+        masks: &mut *streams.masks,
+        records: &mut *streams.records,
+        record_helpers: streams.record_helpers,
         config,
         origins,
         callees,
@@ -610,7 +1105,14 @@ fn generate_function(
         blocks: Vec::new(),
     };
 
-    let (params, entry) = generator.open_entry(signature);
+    let (params, mut entry) = generator.open_entry(signature);
+    // D29: `@main` calls each record helper before anything else, so every
+    // program with record calls runs both of them.
+    if signature.name == "main" {
+        for helper in 0..generator.record_helpers.len() {
+            generator.emit_record_call_to(&mut entry, helper);
+        }
+    }
     let mut block = generator.emit_region(entry, config.max_region_depth);
     let mut returned = Vec::new();
     for ty in signature.results.clone() {
@@ -1689,6 +2191,9 @@ impl FunctionGen<'_> {
         if self.config.masked_accesses && self.masks.chance(30) {
             self.emit_partial_object(block);
         }
+        if self.config.record_calls && !self.record_helpers.is_empty() && self.records.chance(35) {
+            self.emit_record_call(block);
+        }
         if self.rng.chance(55) {
             self.emit_buffer_access(block);
             return;
@@ -1768,6 +2273,189 @@ impl FunctionGen<'_> {
             .insts
             .push(Inst::And(defined.clone(), loaded, selector));
         self.record(block, &defined);
+    }
+
+    /// D29: a call of a record helper, from the record stream. Before a call
+    /// by value, the caller stores the members that the helper reads and
+    /// some of the others, never the padding, and copies the record to the
+    /// argument object as the C lowering does. After a call that returns a
+    /// record, the caller reads only the members that the helper stored.
+    fn emit_record_call(&mut self, block: &mut OpenBlock) {
+        let helper = self.records.below(self.record_helpers.len() as u64) as usize;
+        self.emit_record_call_to(block, helper);
+    }
+
+    /// A call of the record helper at `index`.
+    fn emit_record_call_to(&mut self, block: &mut OpenBlock, index: usize) {
+        let helper = self.record_helpers[index].clone();
+        let kind = &RECORD_KINDS[helper.kind];
+        let mem_out = self.fresh(memory_type());
+        let world_out = self.fresh(world_type());
+        if helper.result {
+            let destination = self.emit_record_object(block, kind.layout());
+            let input = self.record_value(block, 64);
+            block.insts.push(Inst::Call {
+                arg_marks: Vec::new(),
+                returns_twice: false,
+                results: Vec::new(),
+                callee: helper.name.clone(),
+                args: vec![input, destination.clone()],
+                mem_in: block.mem.clone(),
+                world_in: block.world.clone(),
+                mem_out: mem_out.clone(),
+                world_out: world_out.clone(),
+            });
+            block.mem = mem_out;
+            block.world = world_out;
+            for &member in kind.written {
+                let value = self.emit_member_value(block, &destination, kind.members[member]);
+                self.record(block, &value);
+            }
+            return;
+        }
+        let object = self.emit_record_object(block, kind.layout());
+        for (index, &(offset, width)) in kind.members.iter().enumerate() {
+            if !kind.read.contains(&index) && !self.records.chance(50) {
+                continue;
+            }
+            let address = self.emit_member_address(block, &object, offset);
+            let value = if width == 0 {
+                let symbol =
+                    self.globals[self.records.below(self.globals.len() as u64) as usize].clone();
+                let pointer = self.fresh(pointer_type());
+                block.insts.push(Inst::GlobalAddr {
+                    result: pointer.clone(),
+                    symbol,
+                });
+                pointer
+            } else {
+                self.record_value(block, width)
+            };
+            self.emit_store(block, &address, &value, member_layout(width), false, None);
+        }
+        let copy = self.emit_record_object(block, kind.layout());
+        let copied_mem = self.fresh(memory_type());
+        let copied_world = self.fresh(world_type());
+        block.insts.push(Inst::Copy {
+            destination: copy.clone(),
+            source: object,
+            mem_in: block.mem.clone(),
+            world_in: block.world.clone(),
+            mem_out: copied_mem.clone(),
+            world_out: copied_world.clone(),
+            layout: kind.layout(),
+            volatile: evocc_evoir::CopyVolatility::None,
+        });
+        let result = self.fresh(EvoIRType::Bits(64));
+        block.insts.push(Inst::Call {
+            arg_marks: Vec::new(),
+            returns_twice: false,
+            results: vec![result.clone()],
+            callee: helper.name.clone(),
+            args: vec![copy],
+            mem_in: copied_mem,
+            world_in: copied_world,
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+        });
+        block.mem = mem_out;
+        block.world = world_out;
+        self.record(block, &result);
+    }
+
+    /// A fresh record object that nothing else reaches.
+    fn emit_record_object(&mut self, block: &mut OpenBlock, layout: AccessLayout) -> Value {
+        let origin = self.take_origin();
+        let pointer = self.fresh(pointer_type());
+        let mem_out = self.fresh(memory_type());
+        let world_out = self.fresh(world_type());
+        block.insts.push(Inst::Alloca {
+            result: pointer.clone(),
+            mem_in: block.mem.clone(),
+            world_in: block.world.clone(),
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+            origin,
+            layout,
+        });
+        block.mem = mem_out;
+        block.world = world_out;
+        pointer
+    }
+
+    /// A value of `width` bits from the pool, or a constant, drawn from the
+    /// record stream. A constant made here does not join the pool.
+    fn record_value(&mut self, block: &mut OpenBlock, width: u16) -> Value {
+        if let Some(values) = block.pool.get(&width).filter(|values| !values.is_empty()) {
+            return values[self.records.below(values.len() as u64) as usize].clone();
+        }
+        let value = self.fresh(EvoIRType::Bits(width));
+        let raw = self.records.next_u64() & mask(width);
+        block.insts.push(Inst::Const(value.clone(), raw));
+        value
+    }
+
+    /// The address of the member at `offset` of the record at `base`.
+    fn emit_member_address(&mut self, block: &mut OpenBlock, base: &Value, offset: u64) -> Value {
+        if offset == 0 {
+            return base.clone();
+        }
+        let index = self.fresh(EvoIRType::Bits(64));
+        block.insts.push(Inst::Const(index.clone(), offset));
+        let address = self.fresh(pointer_type());
+        block.insts.push(Inst::PtrOffset {
+            result: address.clone(),
+            base: base.clone(),
+            index,
+            direction: OffsetDirection::Add,
+            signedness: IndexSignedness::Unsigned,
+            scale: 1,
+        });
+        let guarded = self.fresh(memory_type());
+        block.insts.push(Inst::PointerValid {
+            mem_in: block.mem.clone(),
+            pointer: address.clone(),
+            mem_out: guarded.clone(),
+        });
+        block.mem = guarded;
+        address
+    }
+
+    /// A member of the record at `base`, as [`HelperBody::member_value`]
+    /// reads it, but at its own width: an integer member is not widened.
+    fn emit_member_value(
+        &mut self,
+        block: &mut OpenBlock,
+        base: &Value,
+        (offset, width): (u64, u16),
+    ) -> Value {
+        let address = self.emit_member_address(block, base, offset);
+        if width != 0 {
+            return self.emit_load(block, &address, width, member_layout(width), false, None);
+        }
+        let guarded = self.fresh(memory_type());
+        block.insts.push(Inst::AccessInBounds {
+            mem_in: block.mem.clone(),
+            pointer: address.clone(),
+            mem_out: guarded.clone(),
+            layout: member_layout(0),
+        });
+        let pointer = self.fresh(pointer_type());
+        let mem_out = self.fresh(memory_type());
+        let world_out = self.fresh(world_type());
+        block.insts.push(Inst::Load {
+            result: pointer.clone(),
+            address,
+            mem_in: guarded,
+            world_in: block.world.clone(),
+            mem_out: mem_out.clone(),
+            world_out: world_out.clone(),
+            volatile: false,
+            mask: None,
+        });
+        block.mem = mem_out;
+        block.world = world_out;
+        self.emit_load(block, &pointer, CARRIER_WIDTH, CARRIER, false, None)
     }
 
     fn emit_global(&mut self, block: &mut OpenBlock) {

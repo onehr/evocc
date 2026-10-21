@@ -379,6 +379,37 @@ fn the_gate_runs_four_lanes_over_the_native_corpus_with_masked_accesses() {
     }
 }
 
+/// D29: the four lanes over the native corpus with record calls. A record
+/// passes in general registers and returns in them, with its padding and the
+/// members that are never stored, and the program returns only values that
+/// it stored.
+#[test]
+fn the_gate_runs_four_lanes_over_the_native_corpus_with_record_calls() {
+    // Apart from every other range of this file: the tests run at once, and
+    // a seed names the files of its native run.
+    const RECORD_NATIVE_SEED: u64 = 0x4E41_5401_D029;
+    let checker = ProofChecker::locate().expect("evo-proofcheck");
+    let report = run_campaign(
+        RECORD_NATIVE_SEED,
+        NATIVE_GATE_PROGRAMS / 2,
+        native().with_record_calls(),
+        GateBudget::default(),
+        &checker,
+    );
+    println!("{}", report.render());
+    assert_eq!(
+        report.mismatched,
+        0,
+        "mismatches: {:#?}",
+        report.mismatches.first()
+    );
+    assert_eq!(report.compared, NATIVE_GATE_PROGRAMS / 2);
+    if Toolchain::locate().is_ok() {
+        assert_eq!(report.native_run, NATIVE_GATE_PROGRAMS / 2);
+        assert_eq!(report.native_agreeing, report.native_run);
+    }
+}
+
 /// The campaign is a command, not only a test: the mode is a flag.
 #[test]
 fn the_command_line_gate_runs_the_native_corpus() {

@@ -813,6 +813,10 @@ pub enum MInst {
         /// EvoIR mask (Section 4.1). The machine reads every bit, so
         /// emission ignores it; only the interpreter reads it.
         mask: Option<u64>,
+        /// The load moves bytes of a record that passes in general
+        /// registers (Section 4.1): the register takes their initializedness
+        /// and pointer fragments. Emission ignores it.
+        transport: bool,
     },
     /// `str rd, [rn, #off]` in all of its widths.
     Store {
@@ -825,6 +829,9 @@ pub enum MInst {
         /// The bits of an integer store that become initialized; the other
         /// bits keep their initializedness (Section 4.1).
         mask: Option<u64>,
+        /// The store writes the record bytes that a transport load put in
+        /// the register, with their initializedness (Section 4.1).
+        transport: bool,
     },
     /// A register-register arithmetic or logic form.
     Binary {

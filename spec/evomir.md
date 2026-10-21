@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.11.0** | **Pinned ground truth** | Masked machine accesses on 2026-10-21
+**Revision 1.12.0** | **Pinned ground truth** | Record transport accesses on 2026-10-21
 
 ## Status and scope
 
@@ -456,6 +456,7 @@ virtual register.
 | ` volatile` marker | The access appears in the volatile trace (EvoIR Section 4.3) and is never merged with a neighbor. |
 | ` [align=N]` suffix on a scalar load or store | The alignment that the EvoIR access guard proves, a power of two; without it, natural alignment. It changes only strict-alignment emission (Section 8.9). |
 | ` [mask=M]` suffix on an integer load or store | The mask of the EvoIR access (EvoIR Section 3.8), after any ` [align=N]`. A load requires only the bits that `M` selects to be initialized; a store initializes only those bits, and every other bit keeps its initializedness. The access still reads or writes every bit, so emission drops the suffix. `M` leaves at least one bit of the access unselected, and a floating, vector or pointer access has no mask. |
+| ` [transport]` suffix on `ldrb`, `ldrh`, `ldr.w`, `ldr.x`, `strb`, `strh`, `str.w` or `str.x` | The access moves bytes of a record that passes in general registers (Section 6.4), after any ` [align=N]`. A load gives the register the bytes it reads with the initializedness of each bit and their pointer fragments, and zero bytes above them; it reports no uninitialized read. A store writes the low bytes of the register in the same way. A register whose bits are all initialized and that holds no pointer fragment is an ordinary integer. Otherwise only a transport store, an `lsl` or `lsr` by a multiple of eight and an `orr` read it: a shift moves whole bytes and fills with initialized zeros, and an `orr` keeps the byte of one operand where the other operand's byte is an initialized zero. Any other use is invalid input (`E3007`). EvoIR passes a record as a pointer and reads none of its bytes at the call, so the access demands only the alignment of its ` [align=N]` suffix, one byte without one. Only lowering makes the suffix; such an access is not volatile and has no mask. Emission drops the suffix, so native code does not change. |
 
 ### 4.2 Atomic memory operations
 
@@ -975,6 +976,11 @@ Darwin), never split between the last register and the stack, and the callee
 stores it into a fixed object. A larger `byval` record stays a pointer to the
 caller's copy. An `sret` result of at most 16 bytes returns in `x0` and `x1`;
 above 16 bytes, the destination pointer travels in `x8` (`indirect.result`).
+Every load and store of a chunk carries the ` [transport]` suffix (Section
+4.1), so padding and members that were never stored travel with their
+initializedness, and a pointer member keeps its provenance. A chunk that is
+not a power of two in size is a sequence of narrower pieces, joined by `lsl`
+and `orr` and taken apart by `lsr`.
 
 *Informative.* Probes: `.evidence/builtin-probes/20260902-2c23684c/p35-int128.c`,
 `.evidence/builtin-probes/20260906-b10/`.
@@ -1649,20 +1655,25 @@ Every Section 4 form except `asm`, `asm.goto` and the allocator forms
 executable semantics. The interpreter runs EvoMIR before allocation, and the
 allocator forms exist only after it, so the interpreter refuses them as
 invalid input. The interpreter must agree with the EvoIR interpreter on
-results, traps and the volatile trace, with one exception. A record argument
-or result that passes in general registers moves through integer registers,
-which hold no initializedness. This interpreter therefore requires every bit
-of such a record to be initialized, where the EvoIR interpreter moves the
-state of each bit. A masked access follows the EvoIR rule: its
-` [mask=M]` suffix (Section 4.1) decides which bits a load demands and a store
-initializes, also for a volatile access. The randomized semantic gate runs it
-as a third lane (EvoIR before and after optimization, EvoMIR after lowering);
-a mismatch is shrunk, and a lowering refusal is counted by code, not
-compared. A generator configuration with masked accesses adds masked loads
-and stores, volatile ones and objects of which only some bits are
-initialized included, to either mode. It draws them from a stream of their
-own, so the pinned seed space names the modules that it named, and the gate
-runs both configurations.
+results, traps and the volatile trace. A masked access follows the EvoIR
+rule: its ` [mask=M]` suffix (Section 4.1) decides which bits a load demands
+and a store initializes, also for a volatile access. A record argument or
+result that passes in general registers moves with transport accesses
+(Sections 4.1 and 6.4), which carry the state of each bit as the EvoIR
+interpreter does, padding and pointer fragments included. The randomized
+semantic gate runs it as a third lane (EvoIR before and after optimization,
+EvoMIR after lowering); a mismatch is shrunk, and a lowering refusal is
+counted by code, not compared. A generator configuration with masked
+accesses adds masked loads and stores, volatile ones and objects of which
+only some bits are initialized included, to either mode. A configuration
+with record calls adds a helper that takes a record of at most 16 bytes by
+value and one that returns one, with padding, chunks that are not a power of
+two in size, two-register records and pointer members. `@main` calls each
+helper first, and other calls follow at random; a caller stores only some
+members and never the padding, and a helper returns a record of which it
+stored only some members. Each configuration draws from a stream of its own,
+so the pinned seed space names the modules that it named, and the gate runs
+every configuration.
 
 ### 9.2 The allocation verifier
 
@@ -1835,7 +1846,7 @@ instruction     := def " = " value-form
                  | def ", " def " = " ("adds" | "subs") W " " use ", " use
                  | def ", " def " = ldp" [" volatile"] " [" use ", #" int "]" ["!"]
                  | "stp" [" volatile"] " " use ", " use ", [" use ", #" int "]" ["!"]
-                 | store-op [" volatile"] " " use ", [" use ", #" int "]" [" [align=" int "]"] [" [mask=" int "]"]
+                 | store-op [" volatile"] " " use ", [" use ", #" int "]" [" [align=" int "]"] [" [mask=" int "]"] [" [transport]"]
                  | "atomic.store." atomic-kind " " atomic-order [" volatile"] " " use ", [" use "]"
                  | "stack.release " use
                  | "mem.copy" [".volatile.read" | ".volatile.write" | ".volatile.readwrite"]
@@ -1849,7 +1860,7 @@ value-form      := "mov " use | "mov #" int
                  | "adrp @" ident "@" ["FUNC"] "PAGE"
                  | "add " use ", @" ident "@" ["FUNC"] "PAGEOFF"
                  | "adr ^b" int
-                 | load-op [" volatile"] " [" use ", #" int "]" [" [align=" int "]"] [" [mask=" int "]"]
+                 | load-op [" volatile"] " [" use ", #" int "]" [" [align=" int "]"] [" [mask=" int "]"] [" [transport]"]
                  | binop W " " use ", " (use | "#" int)
                  | ("msub" | "madd") W " " use ", " use ", " use
                  | ("adc" | "sbc" | "adcs" | "sbcs") W " " use ", " use ", " use
@@ -1963,11 +1974,22 @@ and the checked UB-check profile; each exporter refuses other forms.
 
 | Format | Producer | Reader | Content |
 |---|---|---|---|
-| `core-mir-v1` | `crates/evocc-mir/src/core_machine_export.rs` | `lean/EvoIR/MachineReader.lean` | EvoMIR before allocation: classes `gpr32`, `gpr64`, `flags`; `mov`, `mov #imm`, binary and flag-setting arithmetic, `smull`/`smulh`/`umulh`, `msub`, `madd`, extensions, bitfield extracts, `cmp`, `tst`, `cset`, `csel`, W and X loads and stores without a mask, `frame.slot`, `stack.release`, ordinary `bl` (not `bl.returns_twice`); terminators `b`, `b.cond`, `cbz`/`cbnz`, `tbz`/`tbnz`, `ret`, `brk` |
+| `core-mir-v1` | `crates/evocc-mir/src/core_machine_export.rs` | `lean/EvoIR/MachineReader.lean` | EvoMIR before allocation: classes `gpr32`, `gpr64`, `flags`; `mov`, `mov #imm`, binary and flag-setting arithmetic, `smull`/`smulh`/`umulh`, `msub`, `madd`, extensions, bitfield extracts, `cmp`, `tst`, `cset`, `csel`, W and X loads and stores without a mask or a transport suffix, `frame.slot`, `stack.release`, ordinary `bl` (not `bl.returns_twice`); terminators `b`, `b.cond`, `cbz`/`cbnz`, `tbz`/`tbnz`, `ret`, `brk` |
 | `core-alloc-v1`, `core-alloc-pair-v1` | `crates/evocc-mir/src/verify_alloc.rs` (`evo-alloc-export`) | `lean/EvoIR/Alloc/Reader.lean` | The post-SSA program and its allocation, with spill, reload and stack-argument forms |
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.12.0, 2026-10-21.** Section 4.1 adds the ` [transport]` suffix of
+an integer load or store. Section 6.4 puts it on every access that moves a
+chunk of a record in general registers. The register then holds the bytes
+with the initializedness of each bit and their pointer fragments, and a
+transport access demands only the alignment of its ` [align=N]` suffix. The
+EvoMIR interpreter therefore runs such records, padding and members that
+were never stored included, and Section 9.1 has no exception left. Emission
+drops the suffix, so native code does not change, and the Core exchange
+formats refuse it. The randomized gate gains a configuration with record
+calls. Appendix A follows.
 
 **Revision 1.11.0, 2026-10-21.** Section 4.1 adds the ` [mask=M]` suffix of
 an integer load or store. It carries the mask of the EvoIR access, volatile

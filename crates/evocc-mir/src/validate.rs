@@ -9,8 +9,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::isa::aarch64::abi::{general_bank, vector_bank};
 use crate::{
-    inst_defs, inst_uses, term_edges, term_uses, writes_flags, MBlock, MFunction, MInst, MModule,
-    MTerm, RegClass, VReg,
+    inst_defs, inst_uses, term_edges, term_uses, writes_flags, LoadKind, MBlock, MFunction, MInst,
+    MModule, MTerm, RegClass, StoreKind, VReg,
 };
 
 /// Verify every function of a module.
@@ -303,6 +303,40 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
                 "@{name} block {block}: mask {mask} is not narrower than a {bytes}-byte integer access"
             ));
         }
+    }
+    // A transport access moves record bytes through a general register: a
+    // zero-extending integer width, never volatile and without a mask.
+    let transport = match inst {
+        MInst::Load {
+            kind,
+            volatile,
+            mask,
+            transport: true,
+            ..
+        } => Some(
+            matches!(kind, LoadKind::B | LoadKind::H | LoadKind::W | LoadKind::X)
+                && !*volatile
+                && mask.is_none(),
+        ),
+        MInst::Store {
+            kind,
+            volatile,
+            mask,
+            transport: true,
+            ..
+        } => Some(
+            matches!(
+                kind,
+                StoreKind::B | StoreKind::H | StoreKind::W | StoreKind::X
+            ) && !*volatile
+                && mask.is_none(),
+        ),
+        _ => None,
+    };
+    if transport == Some(false) {
+        return Err(format!(
+            "@{name} block {block}: a transport access is a byte, halfword, word or doubleword integer access without a mask and not volatile"
+        ));
     }
     match inst {
         MInst::BinaryImm {

@@ -251,6 +251,7 @@ fn indexed() -> Allocated {
             align: 8,
             volatile: false,
             mask: None,
+            transport: false,
         },
     ])
 }
@@ -308,6 +309,7 @@ fn indexed_memory_checks_alignment_width_offset_and_liveness() {
         align: 8,
         volatile: false,
         mask: None,
+        transport: false,
     };
     assert_eq!(selected(&f, false).unwrap().consumed, 3);
     for aliased in [2, 3] {
@@ -367,6 +369,7 @@ fn scalar_memory_forms_and_opaque_accesses_stay_separate() {
             align: 16,
             volatile: false,
             mask: None,
+            transport: false,
         },
     ] {
         let mut f = indexed();

@@ -589,6 +589,88 @@ impl ObjectRepresentation {
             }
         }
     }
+
+    /// The integer that the bytes form when every bit is initialized and no
+    /// byte holds a pointer fragment.
+    #[must_use]
+    pub fn plain_integer(&self, order: ByteOrder) -> Option<u128> {
+        if self.value.pointer_fragments.iter().any(Option::is_some) {
+            return None;
+        }
+        self.read_integer(0, self.size(), order)
+    }
+
+    /// A representation of `size` bytes that holds byte `i` of this one at
+    /// byte `i + offset`, as a register shift moves bytes. A byte that falls
+    /// outside the result is dropped, and every other byte of the result is
+    /// an initialized zero. It is meant for register-sized representations.
+    #[must_use]
+    pub fn placed(&self, size: usize, offset: isize) -> Self {
+        let mut placed = Self {
+            value: ByteSequence {
+                bytes: vec![0; size],
+                pointer_fragments: vec![None; size],
+            },
+            initialized: vec![INITIALIZED_BYTE; size],
+        };
+        for source in 0..self.size() {
+            let Some(target) = isize::try_from(source)
+                .ok()
+                .and_then(|source| source.checked_add(offset))
+                .and_then(|target| usize::try_from(target).ok())
+                .filter(|target| *target < size)
+            else {
+                continue;
+            };
+            placed.value.bytes[target] = self.value.bytes[source];
+            placed.value.pointer_fragments[target] = self.value.pointer_fragments[source];
+            placed.initialized[target] = self.initialized[source];
+        }
+        placed
+    }
+
+    /// The bitwise or of two representations of one size, as an `orr` of two
+    /// registers combines them. Where one byte is an initialized zero without
+    /// a pointer fragment, the result is the other byte, with its pointer
+    /// fragment and its initializedness. Otherwise a bit of the result is
+    /// initialized when both bits are, or when one of them is an initialized
+    /// one. `None` is two sizes, or a pointer fragment that meets a byte that
+    /// is not an initialized zero.
+    #[must_use]
+    pub fn or(&self, other: &Self) -> Option<Self> {
+        if self.size() != other.size() {
+            return None;
+        }
+        let mut result = self.clone();
+        for index in 0..self.size() {
+            if other.is_initialized_zero(index) {
+                continue;
+            }
+            if self.is_initialized_zero(index) {
+                result.value.bytes[index] = other.value.bytes[index];
+                result.value.pointer_fragments[index] = other.value.pointer_fragments[index];
+                result.initialized[index] = other.initialized[index];
+                continue;
+            }
+            if self.value.pointer_fragments[index].is_some()
+                || other.value.pointer_fragments[index].is_some()
+            {
+                return None;
+            }
+            let (left, right) = (self.value.bytes[index], other.value.bytes[index]);
+            let (known_left, known_right) = (self.initialized[index], other.initialized[index]);
+            result.value.bytes[index] = left | right;
+            result.initialized[index] =
+                (known_left & known_right) | (known_left & left) | (known_right & right);
+        }
+        Some(result)
+    }
+
+    fn is_initialized_zero(&self, index: usize) -> bool {
+        self.initialized[index] == INITIALIZED_BYTE
+            && self.value.bytes[index] == 0
+            && self.value.pointer_fragments[index].is_none()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

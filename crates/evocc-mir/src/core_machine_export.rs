@@ -259,11 +259,13 @@ fn instruction(inst: &MInst) -> Result<Node> {
             kind,
             volatile,
             mask,
+            transport,
         } => {
-            // Only a bit-field access has a mask, and `core-v1` has none.
+            // Only a bit-field access has a mask, only a record argument or
+            // result has a transport access, and `core-v1` has neither.
             let kind = match kind {
-                LoadKind::W if mask.is_none() => "w",
-                LoadKind::X if mask.is_none() => "x",
+                LoadKind::W if mask.is_none() && !transport => "w",
+                LoadKind::X if mask.is_none() && !transport => "x",
                 _ => return Err("machine load outside the Core profile".into()),
             };
             Node::tagged(
@@ -286,10 +288,11 @@ fn instruction(inst: &MInst) -> Result<Node> {
             kind,
             volatile,
             mask,
+            transport,
         } => {
             let kind = match kind {
-                StoreKind::W if mask.is_none() => "w",
-                StoreKind::X if mask.is_none() => "x",
+                StoreKind::W if mask.is_none() && !transport => "w",
+                StoreKind::X if mask.is_none() && !transport => "x",
                 _ => return Err("machine store outside the Core profile".into()),
             };
             Node::tagged(

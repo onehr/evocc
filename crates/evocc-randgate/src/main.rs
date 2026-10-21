@@ -8,7 +8,7 @@ use evocc_eqopt::ScalarEqBudget;
 use evocc_randgate::{run_campaign, CampaignReport, GateBudget, GeneratorConfig, ProofChecker};
 
 const USAGE: &str = "usage: evo-randgate --seed N --count M \
-[--mode standard|native-main] [--masks on|off] \
+[--mode standard|native-main] [--masks on|off] [--records on|off] \
 [--budget-nodes N] [--budget-epochs N] [--steps N] [--out DIRECTORY]";
 
 fn main() -> ExitCode {
@@ -46,6 +46,7 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
     let mut out = None;
     let mut config = GeneratorConfig::default();
     let mut masks = false;
+    let mut records = false;
 
     let mut index = 0;
     while index < arguments.len() {
@@ -66,13 +67,9 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
                 };
             }
             // D25: masked accesses, in either mode.
-            "--masks" => {
-                masks = match value.as_str() {
-                    "on" => true,
-                    "off" => false,
-                    other => return Err(format!("{other} is not on or off")),
-                };
-            }
+            "--masks" => masks = switch(value)?,
+            // D29: record calls, in either mode.
+            "--records" => records = switch(value)?,
             _ => return Err(USAGE.to_owned()),
         }
         index += 2;
@@ -80,6 +77,9 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
 
     if masks {
         config = config.with_masked_accesses();
+    }
+    if records {
+        config = config.with_record_calls();
     }
     Ok(Options {
         seed: seed.ok_or_else(|| USAGE.to_owned())?,
@@ -91,6 +91,14 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
         },
         out,
     })
+}
+
+fn switch(text: &str) -> Result<bool, String> {
+    match text {
+        "on" => Ok(true),
+        "off" => Ok(false),
+        other => Err(format!("{other} is not on or off")),
+    }
 }
 
 fn number(text: &str) -> Result<u64, String> {

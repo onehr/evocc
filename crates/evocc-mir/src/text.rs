@@ -149,6 +149,16 @@ fn mask_suffix(mask: Option<u64>) -> String {
     mask.map_or_else(String::new, |mask| format!(" [mask={mask}]"))
 }
 
+/// The ` [transport]` suffix of a load or store that moves record bytes
+/// through a general register (Section 4.1).
+fn transport_suffix(transport: bool) -> &'static str {
+    if transport {
+        " [transport]"
+    } else {
+        ""
+    }
+}
+
 fn volatile_marker(volatile: bool) -> &'static str {
     if volatile {
         " volatile"
@@ -358,14 +368,16 @@ pub fn render_inst(inst: &MInst) -> String {
             kind,
             volatile,
             mask,
+            transport,
         } => format!(
-            "{}{}{} [{}, #{offset}]{}{}",
+            "{}{}{} [{}, #{offset}]{}{}{}",
             defined(*dst),
             kind.mnemonic(),
             volatile_marker(*volatile),
             use_of(*base),
             align_suffix(*align),
-            mask_suffix(*mask)
+            mask_suffix(*mask),
+            transport_suffix(*transport)
         ),
         MInst::Store {
             align,
@@ -375,14 +387,16 @@ pub fn render_inst(inst: &MInst) -> String {
             kind,
             volatile,
             mask,
+            transport,
         } => format!(
-            "{}{} {}, [{}, #{offset}]{}{}",
+            "{}{} {}, [{}, #{offset}]{}{}{}",
             kind.mnemonic(),
             volatile_marker(*volatile),
             use_of(*src),
             use_of(*base),
             align_suffix(*align),
-            mask_suffix(*mask)
+            mask_suffix(*mask),
+            transport_suffix(*transport)
         ),
         MInst::Binary {
             op,

@@ -42,6 +42,7 @@ fn appendix_a_module() -> MModule {
                         kind: LoadKind::W,
                         volatile: false,
                         mask: None,
+                        transport: false,
                     },
                     MInst::Load {
                         align: 0,
@@ -51,6 +52,7 @@ fn appendix_a_module() -> MModule {
                         kind: LoadKind::W,
                         volatile: false,
                         mask: None,
+                        transport: false,
                     },
                     MInst::Binary {
                         op: BinOp::Mul,
@@ -118,6 +120,7 @@ fn every_form() -> MModule {
                             kind: LoadKind::B,
                             volatile: true,
                             mask: None,
+                            transport: false,
                         },
                         MInst::Store {
                             align: 0,
@@ -127,6 +130,7 @@ fn every_form() -> MModule {
                             kind: StoreKind::H,
                             volatile: false,
                             mask: None,
+                            transport: false,
                         },
                         MInst::BinaryImm {
                             op: BinOp::Add,
