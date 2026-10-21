@@ -31,6 +31,16 @@ pub(super) const BUILTINS: &[&str] = &[
     "__builtin_huge_val",
     "__builtin_huge_valf",
     "__builtin_huge_vall",
+    "__builtin_complex",
+    "__builtin_creal",
+    "__builtin_crealf",
+    "__builtin_creall",
+    "__builtin_cimag",
+    "__builtin_cimagf",
+    "__builtin_cimagl",
+    "__builtin_conj",
+    "__builtin_conjf",
+    "__builtin_conjl",
 ];
 
 pub(super) fn is_builtin(name: &str) -> bool {
@@ -88,6 +98,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         if name == "__builtin_tgmath" {
             return self.resolve_tgmath(operands, span);
+        }
+        if name == "__builtin_complex" {
+            return self.resolve_builtin_complex(operands, span);
+        }
+        if ["__builtin_creal", "__builtin_cimag", "__builtin_conj"]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+        {
+            return self.resolve_complex_builtin(name, operands, span);
         }
         let infinity = name.starts_with("__builtin_inf") || name.starts_with("__builtin_huge_val");
         let op = match name {

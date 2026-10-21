@@ -438,5 +438,8 @@ pub(crate) fn emit(
             let _ = writeln!(text, "    fcvtz{} {dest}, {}\n    b {label}_done\n{label}_invalid:\n{invalid_status}    mov {dest}, #0\n{label}_done:", if op == ToSigned { "s" } else { "u" }, name(args[0]));
         }
         Constant(_) => unreachable!("constants lower via exact bit moves"),
+        ComplexMul { .. } | ComplexDiv { .. } => {
+            unreachable!("complex parts lower to helper calls")
+        }
     }
 }

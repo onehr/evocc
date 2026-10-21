@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.19.0** | **Pinned ground truth** | bit-field initializedness on 2026-10-21
+**Revision 2.20.0** | **Pinned ground truth** | floating complex execution on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -1602,8 +1602,8 @@ existing call/edge rules. Native **E3064** denotes an incompatible FP environmen
 not C UB; no hidden FPCR reset is permitted. Section 3.13.3 admits the bounded
 non-trapping `STDC FENV_ACCESS` profile. Unsupported or malformed requests
 retain **E3065**; unsupported strict/fast/contraction options are not ignored.
-FP complex and FP vectors are outside this revision. Section 3.13.1 specifies
-the strict IR.
+Section 3.13.5 admits the parts of a complex product and quotient; FP vectors
+are outside this revision. Section 3.13.1 specifies the strict IR.
 
 The driver advertises source-format evaluation (`__FLT_EVAL_METHOD__=0`) but
 does not advertise Annex F/IEC-60559 conformance, complex FP or fast FMA:
@@ -1706,7 +1706,8 @@ a quiet addend does not hide invalid zero*infinity, which yields default NaN.
 ```
 
 Strict forms exist for add/sub/mul/div/fma, oeq/une/olt/ole/ogt/oge, convert,
-from_signed/from_unsigned and to_signed/to_unsigned. Numeric operand/result
+from_signed/from_unsigned, to_signed/to_unsigned and the complex parts of
+3.13.5. Numeric operand/result
 types obey the baseline rules; the first operand is the currently live world
 token and the second result is a fresh world token. Negation, constants, bits
 transport and to_int_defined have no strict form. Strict effects read no memory,
@@ -1828,8 +1829,9 @@ disable such substitution when lexical FP access is present; they are not
 unchecked producer annotations authorizing a fold.
 
 This profile covers the four rounding modes, five sticky flags and §3.13.2's
-non-trapping environment library on admitted scalar formats. It does not add
-FP vectors/complex, enabled traps, Annex F or a concurrent interpreter.
+non-trapping environment library on admitted scalar formats, and the complex
+parts of 3.13.5. It does not add FP vectors, enabled traps, Annex F or a
+concurrent interpreter.
 
 #### 3.13.4 Binary128
 
@@ -1851,9 +1853,70 @@ modes, before-rounding tininess and five sticky flags use the shared adapter.
 Quad HFA members use the existing homogeneous classifier and require ABI
 alignment 16. Native quad operations may use audited hosted runtime helpers
 behind EvoMIR; helper names are not EvoIR semantics. Other targets and
-freestanding helper availability fail closed. No `_Float128` spelling,
-binary16, FP vector/complex, traps, contraction or Annex F claim is implied.
-All FP is excluded from P0.
+freestanding helper availability fail closed. No `_Float128` value, binary16,
+FP vector, traps, contraction or Annex F claim is implied; 3.13.5 gives the
+binary128 complex parts. All FP is excluded from P0.
+
+#### 3.13.5 Complex multiplication and division
+
+```text
+%x = fp.cmul.real %a, %b, %c, %d : T
+%y = fp.cmul.imag %a, %b, %c, %d : T
+%x = fp.cdiv.real %a, %b, %c, %d : T
+%y = fp.cdiv.imag %a, %b, %c, %d : T
+(%x, %w1) = fp.strict.cmul.real %w0, %a, %b, %c, %d : T
+(%y, %w2) = fp.strict.cmul.imag %w1, %a, %b, %c, %d : T
+```
+
+The four operands and the result have one format `T`: f32, f64 or f128.
+The operands are the parts of `a + bi` and `c + di`. `cmul.real` and
+`cmul.imag` give the real and the imaginary part of the product. `cdiv.real`
+and `cdiv.imag` give the parts of the quotient. Each part is the part that
+the target's complex helper computes, with its NaN sign and payload. Each part
+also raises every status flag that the helper raises. The flags are sticky,
+so the two parts of one operation raise the helper's flags once. A pure form
+uses RNE and needs the fixed environment of 3.13. A strict form takes and
+returns the world token as 3.13.1 specifies, and uses the rounding direction
+of the world. C lowering emits the real part, then the imaginary part, with
+the same operands and nothing between them. A part has no other effect, and
+no rewrite can replace it by the ordinary operations.
+
+On the Linux GNU target, the helpers are `__mulsc3`, `__muldc3`, `__multc3`,
+`__divsc3`, `__divdc3` and `__divtc3` of the libgcc.a of GCC 14.2.0 (Debian
+14.2.0-19, SHA-256
+`60dbf748e1c310aa50300a33f30bf4ee070061071aee74a52cf115a7b8765e50`).
+`crates/evocc-types/src/floating/complex.rs` is their model. It follows the
+instruction sequence of each helper:
+
+- The product computes `ac`, `bd`, `ad` and `cb` (a NaN `c` wins over a NaN
+  `b`), then `ac - bd` and `ad + cb`. When both parts are NaN, the helper
+  recovers an infinite operand or product as Annex G.5.1 recommends. The
+  binary32 and binary64 recovery fuses `ac - bd` and `ad + bc`; binary128
+  uses separate soft-fp operations.
+- `__divsc3` computes the quotient in binary64 with fused sums and rounds each
+  part once to binary32.
+- `__divdc3` and `__divtc3` use Smith's method with libgcc's scaling. Their
+  magnitude comparisons signal invalid for a NaN. `__divdc3` fuses each
+  product-plus-term; `__divtc3` does not.
+- When both parts of a quotient are NaN, the helper recovers a zero divisor
+  of a dividend that is not NaN, an infinite dividend of a finite divisor and
+  an infinite divisor of a finite dividend.
+
+The model gives the recorded hashes of the special-value grid of
+`tests/fixtures/floating-complex-grid.c` and of its sample, in the four
+rounding modes. The two interpreters and translation-time evaluation use this
+model.
+
+On the Darwin target, the helpers are compiler-rt's, and this revision has no
+model of them. An interpreter that reaches a part stops with `E3067`
+(`not-executed: complex-arithmetic`). Translation-time evaluation of a product
+or quotient is `E2960` (`unmodeled-complex-constant`). Native code uses the
+platform helpers as EvoMIR specifies.
+
+The pure parts are baseline operations: they are pure and excluded from P0,
+as 3.13 states. The strict forms have the `fp.strict.*` row of Section 4.
+Validation rejects a part with another operand count, with formats that
+differ, or with a format other than f32, f64 or f128.
 
 ## 4. Effect Model
 
@@ -2682,6 +2745,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2957` | `always-inline-returns-twice` | front end |
 | `E2958` | `unsupported-enumeration-underlying-type` | front end |
 | `E2959` | `unsupported-complex-type-generic-call` | front end |
+| `E2960` | `unmodeled-complex-constant` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -2733,6 +2797,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E3061` | `alias-target-not-defined` | module validation |
 | `E3062` | `invalid-atomic-access` | validation / interpreter access contract |
 | `E3066` | `object-size-check-failed` | runtime |
+| `E3067` | `not-executed: complex-arithmetic` | runtime |
 | `E3101` | `evoir-lowering-failed` | lowering |
 | `W0001` | `unused variable` | front-end lint |
 | `W0002` | `unused parameter` | front-end lint |
@@ -3890,11 +3955,13 @@ fp_op            := "add" | "sub" | "mul" | "div" | "fma" | "neg"
                   | "convert" | "from_signed" | "from_unsigned"
                   | "to_signed" | "to_unsigned" | "to_bits" | "from_bits"
                   | "to_int_defined." ("s" | "u") positive_int
+                  | complex_fp_op
 strict_fp_op     := "add" | "sub" | "mul" | "div" | "fma"
                   | "oeq" | "une" | "olt" | "ole" | "ogt" | "oge"
                   | "quiet_olt" | "quiet_ole" | "quiet_ogt" | "quiet_oge"
                   | "convert" | "from_signed" | "from_unsigned"
-                  | "to_signed" | "to_unsigned"
+                  | "to_signed" | "to_unsigned" | complex_fp_op
+complex_fp_op    := "cmul.real" | "cmul.imag" | "cdiv.real" | "cdiv.imag"
 bit_op           := "ctlz" | "cttz" | "ctpop" | "bswap"
 binary_predicate := "signed_add_defined" | "signed_sub_defined"
                   | "signed_mul_defined" | "signed_div_rem_no_overflow"
@@ -5224,7 +5291,8 @@ compound literals, and a front end must not emit it.
 | `E2956` | an evaluated member access of an atomic record or union (10.1.21) |
 | `E2957` | an `always_inline` function that makes a call that returns twice (10.1.9) |
 | `E2958` | `_Bool`, `__int128`, an atomic type or an aligned typedef as the fixed underlying type of an enumeration (10.1.14) |
-| `E2959` | a `__builtin_tgmath` call that selects a complex function (10.1.14) |
+| `E2959` | a `__builtin_tgmath` call that selects a complex function, or has a complex argument, of a type without admitted values: `_Float16 _Complex` and the other `_FloatN _Complex` and `_FloatNx _Complex` types (10.1.14) |
+| `E2960` | a translation-time product or quotient of floating complex values on a target whose complex helpers have no model, Darwin in this revision (3.13.5, 10.1.14) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -5461,10 +5529,16 @@ type, as GCC 14 does for a narrowing macro. The result is an ordinary call of
 that function, so each argument is evaluated once and converts to its
 parameter type, and the other function operands are not evaluated. A function
 list or an argument that GCC 14 rejects is `E2951`, and too few operands are
-`E2909`. A selection of a complex function is `E2959`
-(`unsupported-complex-type-generic-call`) until floating complex values are
-admitted. Example: `__builtin_tgmath(sqrtf, sqrt, sqrtl, 2)` calls `sqrt`,
-and `__builtin_tgmath(powf, pow, powl, 2.0f, 3.0L)` calls `powl`.
+`E2909`. The functions can take GCC's `_FloatN` and `_FloatNx` types and their
+complex types, as glibc's lists do with `_GNU_SOURCE`; a `float`, `double` or
+`long double` argument still selects the function of that type. A selection
+of a `float`, `double` or `long double` complex function is an ordinary call.
+A selection of another complex function, or a complex argument of another
+type, is `E2959` (`unsupported-complex-type-generic-call`), because those
+types have no admitted values. Example: `__builtin_tgmath(sqrtf, sqrt, sqrtl,
+2)` calls `sqrt`, `__builtin_tgmath(powf, pow, powl, 2.0f, 3.0L)` calls
+`powl`, and `__builtin_tgmath(sqrtf, sqrt, sqrtl, csqrtf, csqrt, csqrtl,
+1.0i)` calls `csqrt`.
 
 Note: Darwin's `<tgmath.h>`, in the SDK and in Clang's resource directory,
 selects with `overloadable` functions instead. This profile does not
@@ -5945,12 +6019,84 @@ non-constant (`E2208` in a static initializer). `-fcx-limited-range` and
 instead, so Darwin results can differ from Apple clang's.
 
 **Integer-complex updates.** For `x op= y` with `op` one of `+`, `-`, `*`
-and `/`, where either side is integer complex, `y` converts to `_Complex U`
-for the component type of `x` and of `y`. A complex `x` gets each component
-of the result converted back to its component type. A real `x` must be an
-integer; it is evaluated once as an object and gets the result converted to
-its type, so a `_Bool` target tests both components. A floating or pointer
-target is `E2102`.
+and `/`, where either side is integer complex and the other has an integer
+type, `y` converts to `_Complex U` for the component type of `x` and of `y`.
+A complex `x` gets each component of the result converted back to its
+component type. A real `x` is evaluated once as an object and gets the result
+converted to its type, so a `_Bool` target tests both components. When either
+side has a floating type, the update follows the floating complex rules
+below. A pointer target is `E2102`.
+
+**Floating complex.** `float _Complex`, `double _Complex` and `long double
+_Complex` have two adjacent parts of the real type, real then imaginary, so
+the size is twice that of the real type and the alignment is the same. Plain
+`_Complex` is `double _Complex`, as GCC and Clang read it. `long double` has
+the target's format: binary128 on Linux, binary64 on Darwin. A value passes
+under AAPCS64 as an HFA of its two parts, also as a variadic argument and in
+a record, with the HFA rules of 3.13. Lowering keeps a value in memory, as
+for integer complex; it is not a vector.
+
+These operations work per part with the scalar rules of 3.13, and their
+strict forms in strict regions:
+
+- Unary `+` copies, and unary `-` negates each part. `~` and the `conj`
+  builtins negate the imaginary part.
+- `__real__` and `__imag__` of a complex lvalue are lvalues of the part and
+  access only that part. Of a real operand, `__real__` is its value and
+  `__imag__` is a zero of its type. The `creal` and `cimag` builtins give the
+  parts as values.
+- `__builtin_complex(x, y)` takes two operands of one real floating type,
+  after lvalue conversion and without promotion, and copies them exactly: no
+  arithmetic and no status. A floating imaginary constant, such as `2.5i`, has
+  a positive zero real part. `x + y * I` is arithmetic: `0 * inf` gives NaN.
+- Addition and subtraction add or subtract each part. A real operand is not
+  converted to complex (C11 6.3.1.8, G.5.1), as GCC and Clang compute: the
+  usual arithmetic conversions give the real type of each part, `r - x` has
+  the negated imaginary part of `x`, and multiplication or division by a real
+  operand works per part.
+- Conversion between complex types converts each part. Conversion to a real
+  or integer type converts the real part; the imaginary part takes no part
+  and raises no status. Conversion from a real or integer type gives a
+  positive zero imaginary part.
+- `==` and `!=` compare both parts with the quiet `oeq`. An ordered
+  comparison is `E2102`. A truth test (`!`, `&&`, `||`, a condition, a
+  conversion to `_Bool`) compares the real part with zero by the quiet `une`,
+  and the imaginary part only when the real part is zero, as GCC builds it.
+  Strict code branches, so the second comparison executes only then.
+- A compound assignment converts its operands as the binary operator does,
+  then converts the result to the type of the target. GNU `++` and `--` add
+  one to the real part or subtract one from it.
+- A volatile complex object is read and written as two volatile accesses, one
+  of each part, real part first. Integer complex follows the same rule.
+
+A product of two complex values, a quotient of two complex values and a
+quotient of a real by a complex value lower to the parts of 3.13.5, after
+both operands convert to the common complex type; the real dividend gets a
+positive zero imaginary part. GCC's `-fcx-limited-range`, `-fcx-fortran-rules`,
+`-fcomplex-arithmetic=basic` and `-ffast-math` stay refused.
+
+**Floating-complex constants.** Translation-time evaluation, as in a static
+initializer, computes a product or quotient with the helper model of 3.13.5
+in RNE, and the other operations per part with the scalar rules. GCC 14 folds
+a constant product or quotient correctly rounded with MPC, so an inexact
+constant can differ from GCC's static value in the last bit; it is equal to
+the run-time result of both compilers. Example: `(1.0 + 1.0i) / (0.2 + 0.5i)`
+has the imaginary part `-0x1.08d3dcb08d3ddp+0` here and at run time, and
+`-0x1.08d3dcb08d3dcp+0` in a static initializer of GCC 14. On Darwin, a
+translation-time product or quotient is `E2960`.
+
+**Interchange complex types.** `_Float16 _Complex`, `_Float32 _Complex`,
+`_Float64 _Complex`, `_Float128 _Complex`, `_Float32x _Complex` and
+`_Float64x _Complex`, in either word order, are the types that GCC 14 admits
+on aarch64 Linux. Each is distinct from the complex type of the standard type
+of the same format, and has twice the size and the alignment of its real
+type. They are admitted in declarations, so glibc's `<complex.h>` and
+`<tgmath.h>` compile with `_GNU_SOURCE`. Their values are refused: an
+initializer, an argument, a returned value or an operand of one is `E2202` or
+`E2102`. A function definition with such a parameter is `E3049` where it is
+lowered, and a cast of such a value is `E3101`, as for the real `_FloatN`
+types. `__fp16 _Complex` and `__bf16 _Complex` are `E1007`, as GCC rejects
+them.
 
 **Scalar broadcast.** An integer scalar no wider than an unsigned lane converts
 to the lane's unsigned representation before broadcast, negative values
@@ -8223,6 +8369,24 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.20.0, 2026-10-21.** Section 3.13.5 adds the parts of a complex
+product and quotient: `fp.cmul.real`, `fp.cmul.imag`, `fp.cdiv.real` and
+`fp.cdiv.imag`, with strict forms. On Linux each part is the part that
+libgcc's helper of GCC 14 computes, NaN payloads and status flags included.
+One model gives them, and both interpreters and translation-time evaluation
+use it. On Darwin, compiler-rt has no model: the interpreters stop with
+`E3067`, and translation-time evaluation reports `E2960`. Section 10.1.14
+admits `float`, `double` and `long double` complex values: per-part
+operations, HFA calls, mixed real operands, truth and equality tests,
+volatile part accesses and constants. Plain `_Complex` is `double _Complex`.
+A volatile integer complex object is also accessed part by part, and an
+integer-complex update with a floating side follows the floating rules.
+GCC's `_FloatN _Complex` types are admitted in declarations, and
+`__builtin_tgmath` selects `float`, `double` and `long double` complex
+functions. Section 9.3 adds the four mnemonics, and Section 6.3 adds `E2960`
+and `E3067`. No registry or Lean rule domain changes; the `core-v1` path
+admits no floating operation.
 
 **Revision 2.19.0, 2026-10-21.** Section 5.2 tracks initializedness per bit,
 and Section 3.8 adds an optional `mask` field to `load` and `store` of

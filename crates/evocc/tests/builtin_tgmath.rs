@@ -5,8 +5,9 @@
 //! usual arithmetic conversions combine the type-generic arguments. Each
 //! argument is evaluated once. glibc's `<tgmath.h>` defines its macros with
 //! the builtin when the compiler reports GCC 8 or later; before D20 a call such
-//! as `sqrt(x)` was E2949. A selection that needs a complex function is E2959
-//! until L04 admits floating complex values.
+//! as `sqrt(x)` was E2949. Since L04, a selection of a `float`, `double` or
+//! `long double` complex function is an ordinary call; a selection of another
+//! complex function, such as a `_Float32 _Complex` one, stays E2959.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -175,7 +176,8 @@ fn selection_follows_the_tgmath_rules_in_every_execution_path() {
     }
 }
 
-/// Function lists and arguments that GCC 14 refuses, and complex selections.
+/// Function lists and arguments that GCC 14 refuses, and selections of a
+/// complex function whose type has no admitted values.
 #[test]
 fn malformed_and_complex_calls_keep_named_diagnostics() {
     let work = Work::new("diagnostics");
@@ -183,6 +185,7 @@ fn malformed_and_complex_calls_keep_named_diagnostics() {
                    int sf(float); int sd(double);\n\
                    _Complex double cd(_Complex double); _Complex float cf(_Complex float);\n\
                    _Complex long double cl(_Complex long double);\n\
+                   _Float32 _Complex c32(_Float32 _Complex); _Float32 t32(_Float32);\n\
                    double ad(_Complex double); float af(_Complex float); long double al(_Complex long double);\n";
     for (name, call, code) in [
         ("too-few", "__builtin_tgmath(tf, 1.0f)", "E2909"),
@@ -200,16 +203,15 @@ fn malformed_and_complex_calls_keep_named_diagnostics() {
         ),
         ("no-match", "__builtin_tgmath(sf, sd, 1.0L)", "E2951"),
         (
-            "complex-argument",
-            "__builtin_tgmath(tf, td, tl, cf, cd, cl, z)",
+            "interchange-complex",
+            "__builtin_tgmath(tf, td, tl, t32, cf, cd, cl, c32, w)",
             "E2959",
         ),
-        ("complex-only", "__builtin_tgmath(af, ad, al, 1.0)", "E2959"),
     ] {
         let path = work.source(
             &format!("{name}.c"),
             &format!(
-                "{prelude}int x; _Complex double z;\n\
+                "{prelude}int x; _Complex double z; _Float32 _Complex w;\n\
                  int f(void) {{ return (int)({call}); }}\nint main(void) {{ return 0; }}\n"
             ),
         );
@@ -223,6 +225,77 @@ fn malformed_and_complex_calls_keep_named_diagnostics() {
                     .next()
                     .is_some_and(|line| line.contains(code)),
                 "{name} {target}: expected {code}\n{stderr}"
+            );
+        }
+    }
+}
+
+/// Complex arguments and complex-only lists select complex functions, as
+/// GCC 14 does: a complex argument asks for the complex function of the
+/// combined real type, and an integer complex argument counts as
+/// `_Complex double`. Both interpreters run the selected functions.
+const COMPLEX_SELECTION: &str = r#"static int tag_f(float x) { return 1; }
+static int tag_d(double x) { return 2; }
+static int tag_l(long double x) { return 3; }
+static int tag_cf(float _Complex x) { return 11; }
+static int tag_cd(double _Complex x) { return 12; }
+static int tag_cl(long double _Complex x) { return 13; }
+static float part_cf(float _Complex x) { return __imag__ x; }
+static double part_cd(double _Complex x) { return __imag__ x * 10; }
+static long double part_cl(long double _Complex x) { return __imag__ x * 100; }
+static double _Complex twice_cd(double _Complex x) { return x * 2; }
+static float _Complex twice_cf(float _Complex x) { return x * 2; }
+static long double _Complex twice_cl(long double _Complex x) { return x * 2; }
+#define TAG(x) __builtin_tgmath(tag_f, tag_d, tag_l, tag_cf, tag_cd, tag_cl, x)
+#define PART(x) __builtin_tgmath(part_cf, part_cd, part_cl, x)
+#define TWICE(x) __builtin_tgmath(twice_cf, twice_cd, twice_cl, x)
+_Static_assert(_Generic(TWICE(1.0f), float _Complex: 1, default: 0), "real to complex");
+_Static_assert(_Generic(PART(1.0), double: 1, default: 0), "complex-only list");
+int main(void) {
+    int wrong = 0;
+    volatile float _Complex f = 1.0f + 2.0if;
+    volatile long double _Complex l = 3.0L;
+    volatile _Complex int i = 2 + 3i;
+    wrong += TAG(1.0f) != 1;
+    wrong += TAG(f) != 11;
+    wrong += TAG(1.0 + 2.0i) != 12;
+    wrong += TAG(l) != 13;
+    wrong += TAG(i) != 12;
+    wrong += PART(f) != 2.0f;
+    wrong += PART(1.0) != 0;
+    wrong += PART(i) != 30;
+    wrong += PART(l) != 0;
+    wrong += __imag__ TWICE(f) != 4.0f;
+    wrong += __real__ TWICE(2) != 4.0;
+    return wrong;
+}
+"#;
+
+#[test]
+fn complex_selections_follow_the_tgmath_rules() {
+    let work = Work::new("complex-selection");
+    let path = work.source("complex.c", COMPLEX_SELECTION);
+    for target in TARGETS {
+        for mode in [&["--interpret-c-hir"][..], &["--interpret-evoir"]] {
+            let output = evocc(&path, target, mode);
+            assert!(
+                output.status.success(),
+                "{target} {mode:?}\n{}",
+                text(&output)
+            );
+            assert_eq!(
+                output.stdout,
+                b"0\n",
+                "{target} {mode:?}\n{}",
+                text(&output)
+            );
+        }
+        for level in ["-O0", "-O2"] {
+            let output = evocc(&path, target, &[level, "--emit=asm"]);
+            assert!(
+                output.status.success(),
+                "{target} {level}\n{}",
+                text(&output)
             );
         }
     }

@@ -105,6 +105,8 @@ pub fn expression_type(types: &TypeInterner, expression: &CHirExpr<'_>) -> Optio
         | CHirExpr::MemoryRead { facts, .. }
         | CHirExpr::Assign { facts, .. }
         | CHirExpr::MemoryAssign { facts, .. }
+        | CHirExpr::Update { facts, .. }
+        | CHirExpr::MemoryUpdate { facts, .. }
         | CHirExpr::BuiltinVarArgs { facts, .. }
         | CHirExpr::StatementExpr { facts, .. } => Some(facts.ty()),
         CHirExpr::Cast(ty, _, _) | CHirExpr::CompoundLit(ty, _, _) => Some(*ty),

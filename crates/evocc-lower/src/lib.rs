@@ -2279,6 +2279,20 @@ fn apply_static_initializer(
                 write_static_integer_bytes(bits.raw_bits(), target, target_bytes);
                 return Ok(());
             }
+            if evocc_chir::complex::floating(unit.types(), destination).is_some() {
+                let parts = evocc_chir::constant::floating_complex_constant(
+                    value,
+                    unit.types(),
+                    unit.symbols(),
+                    target,
+                )
+                .map_err(|_| LowerError::StaticRelocation { span })?;
+                let width = target_bytes.len() / 2;
+                for (bytes, part) in target_bytes.chunks_mut(width).zip(parts) {
+                    write_static_integer_bytes(part.bits(), target, bytes);
+                }
+                return Ok(());
+            }
             if let Some(element) = evocc_chir::complex::element(unit.types(), destination) {
                 let pair = evocc_chir::complex::constant_components(
                     value,
@@ -3593,6 +3607,14 @@ fn function_value_type(
             ir: EvoIRType::Ptr(AddressSpace::Generic),
             integer: CIntegerType::ULONG,
         }),
+        // AAPCS64 passes a floating complex value as an HFA of its two parts.
+        Some(TypeKind::Complex(base)) if base.executable_part().is_some() => {
+            Ok(FunctionValueType {
+                source: ty,
+                ir: EvoIRType::Ptr(AddressSpace::Generic),
+                integer: CIntegerType::ULONG,
+            })
+        }
         Some(
             TypeKind::Complex(_)
             | TypeKind::TargetBuiltin(
@@ -3835,7 +3857,7 @@ fn record_signature_marks(
 
 fn is_aggregate_type(types: &TypeInterner, ty: TypeId) -> bool {
     is_wide_vector(types, ty)
-        || evocc_chir::complex::rank(types, ty).is_some()
+        || evocc_chir::complex::admitted(types, ty)
         || matches!(
             types.get(ty).map(|canonical| &canonical.kind),
             Some(TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList)
@@ -6947,7 +6969,9 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::Ident { facts, .. }
             | CHirExpr::StatementExpr { facts, .. }
             | CHirExpr::BuiltinVarArgs { facts, .. }
-            | CHirExpr::MemoryAssign { facts, .. } => facts.ty(),
+            | CHirExpr::MemoryAssign { facts, .. }
+            | CHirExpr::Update { facts, .. }
+            | CHirExpr::MemoryUpdate { facts, .. } => facts.ty(),
             CHirExpr::MemoryRead { place, .. } => place.value_ty(),
             CHirExpr::CompoundLit(ty, ..) | CHirExpr::Cast(ty, ..) => *ty,
             CHirExpr::Call(callee, ..) => {
@@ -7223,6 +7247,34 @@ impl<'a> FunctionLowerer<'a> {
             TypeKind::Pointer(_) | TypeKind::Int(_) | TypeKind::Enum(_) => {
                 let value = self.emit_memory_load(source, ty, volatile.reads(), span, state)?;
                 self.emit_memory_store(destination, value, ty, volatile.writes(), span, state)?;
+                Ok(())
+            }
+            TypeKind::Float(kind)
+                if floating::ir_type(self.target.float_format(kind)).is_some() =>
+            {
+                // A floating member is transported as its exact bits.
+                let value = self.emit_memory_load(source, ty, volatile.reads(), span, state)?;
+                self.emit_memory_store(destination, value, ty, volatile.writes(), span, state)?;
+                Ok(())
+            }
+            TypeKind::Complex(_) if evocc_chir::complex::admitted(self.unit.types(), ty) => {
+                // A volatile complex object is accessed part by part.
+                let element = evocc_chir::complex::element(self.unit.types(), ty)
+                    .ok_or(LowerError::UnknownType { ty, span })?;
+                let width = self.access_layout(element, span)?.size_bytes;
+                for offset in [0, width] {
+                    let destination =
+                        self.constant_offset_address(destination.clone(), offset, state)?;
+                    let source = self.constant_offset_address(source.clone(), offset, state)?;
+                    self.emit_aggregate_transfer(
+                        destination,
+                        source,
+                        element,
+                        volatile,
+                        span,
+                        state,
+                    )?;
+                }
                 Ok(())
             }
             _ => Err(LowerError::UnsupportedType {
@@ -8502,6 +8554,12 @@ impl<'a> FunctionLowerer<'a> {
                 }
                 self.emit_zero_complex(address, ty, span, state)
             }
+            TypeKind::Complex(base) if base.executable_part().is_some() => {
+                if mode == ZeroInitializer::PointerProvenance {
+                    return Ok(());
+                }
+                self.emit_zero_complex(address, ty, span, state)
+            }
             TypeKind::Vector { element, lanes, .. } => {
                 let layout = self.access_layout(element, span)?;
                 for index in 0..u64::from(lanes) {
@@ -8969,7 +9027,7 @@ impl<'a> FunctionLowerer<'a> {
                         .remove(&action_key)
                         .expect("retained initializer destination")
                         .value;
-                    if evocc_chir::complex::rank(self.unit.types(), *destination_type).is_some() {
+                    if evocc_chir::complex::admitted(self.unit.types(), *destination_type) {
                         self.emit_representation_copy(
                             action_address,
                             lowered.value,
@@ -9027,7 +9085,7 @@ impl<'a> FunctionLowerer<'a> {
                         )?;
                         continue;
                     }
-                    if evocc_chir::complex::rank(self.unit.types(), *destination_type).is_some() {
+                    if evocc_chir::complex::admitted(self.unit.types(), *destination_type) {
                         self.emit_zero_complex(
                             action_address,
                             *destination_type,
@@ -14515,14 +14573,18 @@ impl<'a> FunctionLowerer<'a> {
         let volatile = place.access_qualifiers().is_volatile;
         let access_layout = self.place_access_layout(place, target_span)?;
         if operator != AssignmentOp::Simple
-            && evocc_chir::complex::rank(self.unit.types(), place.value_ty()).is_some()
+            && evocc_chir::complex::admitted(self.unit.types(), place.value_ty())
         {
             let right = self.lower_expr(assigned, state)?;
             let address = state.env[&address_key].value.clone();
-            let left = ExprValue {
+            let mut left = ExprValue {
                 value: address,
                 integer: CIntegerType::ULONG,
             };
+            if volatile {
+                // Read each part of the volatile object once.
+                left = self.complex_snapshot(left, place.value_ty(), target_span, state)?;
+            }
             let op = evocc_chir::vector::assignment_binary(operator)
                 .expect("compound complex operation");
             let result = self.lower_complex_values(
@@ -14537,7 +14599,7 @@ impl<'a> FunctionLowerer<'a> {
                 state,
             )?;
             let address = state.env.remove(&address_key).unwrap().value;
-            self.emit_representation_copy(
+            self.emit_aggregate_transfer(
                 address.clone(),
                 result.value,
                 place.value_ty(),
@@ -14679,7 +14741,7 @@ impl<'a> FunctionLowerer<'a> {
         } else {
             let original = original.expect("memory compound assignment loaded its left value");
             let complex = evocc_chir::vector::expression_type(self.unit.types(), assigned)
-                .filter(|ty| evocc_chir::complex::rank(self.unit.types(), *ty).is_some());
+                .filter(|ty| evocc_chir::complex::admitted(self.unit.types(), *ty));
             if let Some(complex) = complex {
                 // A real target with a complex value: the front end converted
                 // the value to the common complex type. Compute there, then
@@ -14771,6 +14833,16 @@ impl<'a> FunctionLowerer<'a> {
                 place.value_ty(),
                 place.access_qualifiers().is_volatile,
                 address,
+                span,
+                state,
+            );
+        }
+        if evocc_chir::complex::floating(self.unit.types(), place.value_ty()).is_some() {
+            return self.lower_complex_update(
+                operator,
+                place.value_ty(),
+                address,
+                place.access_qualifiers().is_volatile,
                 span,
                 state,
             );
@@ -14914,8 +14986,9 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         if let Some(ty) = evocc_chir::vector::expression_type(self.unit.types(), expression)
-            .filter(|ty| evocc_chir::complex::rank(self.unit.types(), *ty).is_some())
+            .filter(|ty| evocc_chir::complex::admitted(self.unit.types(), *ty))
         {
+            let value = self.complex_operand(value, expression, state)?;
             return self.complex_truth(value, ty, expression.span(), state);
         }
         self.lower_condition_value(value, state)

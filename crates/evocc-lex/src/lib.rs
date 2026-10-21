@@ -187,6 +187,9 @@ pub enum TokenKind {
     IntLiteral,
     ImaginaryIntLiteral,
     FloatLiteral,
+    /// A floating constant with a GNU imaginary suffix, such as `2.5i` or
+    /// `1.0iF`.
+    ImaginaryFloatLiteral,
     CharLiteral,
     StringLiteral,
     // Operators and punctuators. Multi-character operators (>>=, ...) each
@@ -483,9 +486,32 @@ fn classify_c_number(spelling: &str) -> Option<TokenKind> {
         Some(TokenKind::IntLiteral)
     } else if is_c_floating_constant(spelling) {
         Some(TokenKind::FloatLiteral)
+    } else if imaginary_floating_spelling(spelling)
+        .is_some_and(|real| is_c_floating_constant(&real))
+    {
+        Some(TokenKind::ImaginaryFloatLiteral)
     } else {
         None
     }
+}
+
+/// The spelling of a GNU imaginary floating constant without its `i`, `I`,
+/// `j` or `J`. GCC accepts the imaginary letter before or after an `f`, `F`,
+/// `l` or `L` suffix, as in `2.5if` and `2.5fi`.
+#[must_use]
+pub fn imaginary_floating_spelling(spelling: &str) -> Option<String> {
+    let imaginary = |c: char| matches!(c, 'i' | 'I' | 'j' | 'J');
+    if let Some(real) = spelling.strip_suffix(imaginary) {
+        return Some(real.to_owned());
+    }
+    let mut characters = spelling.chars().rev();
+    let suffix = characters.next()?;
+    let letter = characters.next()?;
+    (matches!(suffix, 'f' | 'F' | 'l' | 'L') && imaginary(letter)).then(|| {
+        let mut real = spelling[..spelling.len() - 2].to_owned();
+        real.push(suffix);
+        real
+    })
 }
 
 fn split_integer_suffix(spelling: &str) -> (&str, &str) {
@@ -1537,6 +1563,30 @@ mod tests {
     #[test]
     fn lex_keyword_generic() {
         assert_kinds("_Generic", &[TokenKind::Generic, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn lex_imaginary_floating_constants() {
+        for spelling in [
+            "2.5i", "2.5fi", "2.5if", "1.0iF", "2.5Li", "2.5iL", "2.5j", "0x1p3i", "1e5J",
+        ] {
+            assert_kinds(
+                spelling,
+                &[TokenKind::ImaginaryFloatLiteral, TokenKind::Eof],
+            );
+        }
+        assert_eq!(
+            imaginary_floating_spelling("1.0iF").as_deref(),
+            Some("1.0F")
+        );
+        assert_eq!(
+            imaginary_floating_spelling("2.5fi").as_deref(),
+            Some("2.5f")
+        );
+        assert_kinds("3i", &[TokenKind::ImaginaryIntLiteral, TokenKind::Eof]);
+        // Two imaginary letters, or one in the middle, are no constant.
+        assert_kinds("2.5ii", &[TokenKind::PpNumber, TokenKind::Eof]);
+        assert_kinds("2.i5", &[TokenKind::PpNumber, TokenKind::Eof]);
     }
 
     #[test]

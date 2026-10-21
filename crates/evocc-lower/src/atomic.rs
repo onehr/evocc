@@ -336,7 +336,7 @@ impl<'a> FunctionLowerer<'a> {
         }
         if evocc_evoir::floating_kind(&right.value.ty).is_some()
             || evocc_chir::vector::expression_type(self.unit.types(), assigned)
-                .is_some_and(|ty| evocc_chir::complex::rank(self.unit.types(), ty).is_some())
+                .is_some_and(|ty| evocc_chir::complex::admitted(self.unit.types(), ty))
         {
             return Err(LowerError::UnsupportedExpression {
                 span,

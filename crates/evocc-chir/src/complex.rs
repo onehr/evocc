@@ -1,16 +1,23 @@
-//! GNU integer-complex values retain both component types, independently of vectors.
+//! Complex values: GNU integer complex and the C floating complex types.
+//! Both retain their component type, independently of vectors.
 use crate::integer::{CInteger, CIntegerType, IntegerError};
 use crate::{BinaryOp, CHirExpr, ExprFacts, UnaryOp};
 use evocc_common::SourceSpan;
-use evocc_types::{ComplexBase, IntRank, TypeId, TypeInterner, TypeKind};
+use evocc_types::{
+    ComplexBase, FloatKind, IntRank, TargetDataLayout, TypeId, TypeInterner, TypeKind,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComplexOp {
     Imaginary,
-    Component { imaginary: bool },
+    Component {
+        imaginary: bool,
+    },
     Unary(UnaryOp),
     Binary(BinaryOp),
     Convert,
+    /// `__builtin_complex(x, y)`: the two operands become the two parts.
+    Construct,
 }
 
 #[derive(Debug, Clone)]
@@ -28,9 +35,41 @@ pub fn rank(types: &TypeInterner, ty: TypeId) -> Option<IntRank> {
     }
 }
 
+/// The C part type of a floating complex type whose values are admitted:
+/// `float`, `double` or `long double`.
+pub fn floating(types: &TypeInterner, ty: TypeId) -> Option<FloatKind> {
+    match types.get(ty)?.kind {
+        TypeKind::Complex(base) => base.executable_part(),
+        _ => None,
+    }
+}
+
+/// The value format of the parts of a floating complex type on `target`:
+/// a Darwin `long double _Complex` has binary64 parts.
+pub fn floating_format(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+) -> Option<FloatKind> {
+    floating(types, ty).map(|kind| target.float_format(kind))
+}
+
+/// Whether `ty` is a complex type whose values are admitted: integer
+/// complex or a floating complex type with `float`, `double` or
+/// `long double` parts.
+pub fn admitted(types: &TypeInterner, ty: TypeId) -> bool {
+    rank(types, ty).is_some() || floating(types, ty).is_some()
+}
+
+/// The unqualified part type of an admitted complex type.
 pub fn element(types: &TypeInterner, ty: TypeId) -> Option<TypeId> {
+    let kind = if let Some(rank) = rank(types, ty) {
+        TypeKind::Int(rank)
+    } else {
+        TypeKind::Float(floating(types, ty)?)
+    };
     types.find(&evocc_types::CanonicalType {
-        kind: TypeKind::Int(rank(types, ty)?),
+        kind,
         qualifiers: Default::default(),
     })
 }

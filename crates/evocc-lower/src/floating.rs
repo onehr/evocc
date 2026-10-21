@@ -269,6 +269,17 @@ impl<'a> FunctionLowerer<'a> {
         Ok(result)
     }
 
+    /// One complex part instruction (EvoIR 3.13.5), strict in a strict region.
+    pub(super) fn floating_part(
+        &mut self,
+        op: FloatingOp,
+        arguments: Vec<Value>,
+        ty: EvoIRType,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        self.floating_instruction(op, arguments, ty, state)
+    }
+
     fn floating_instruction(
         &mut self,
         op: FloatingOp,

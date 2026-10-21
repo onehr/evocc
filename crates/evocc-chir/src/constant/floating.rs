@@ -1,8 +1,9 @@
 //! Fold pure binary32/binary64 expressions with the runtime target semantics.
 
 use super::*;
+use crate::complex::ComplexOp;
 use crate::{FloatConstant, FloatLit, FloatSuffix};
-use evocc_types::floating::{FiniteOp, FloatBits};
+use evocc_types::floating::{libgcc_complex, ComplexArithmetic, FiniteOp, FloatBits, FpRounding};
 use evocc_types::FloatKind;
 use std::cmp::Ordering;
 
@@ -148,6 +149,7 @@ impl Folder<'_> {
         }
         match expression {
             CHirExpr::Floating(operation) => self.declared_type(operation.facts.ty()),
+            CHirExpr::Complex(operation) => self.declared_type(operation.facts.ty()),
             CHirExpr::FloatLit(literal, _) => Some(NumberType::Real(self.target.float_format(
                 match literal.suffix {
                     FloatSuffix::None => FloatKind::F64,
@@ -215,6 +217,7 @@ impl Folder<'_> {
                     },
                 )
             }
+            CHirExpr::Complex(operation) => self.complex_projection(operation, depth),
             CHirExpr::FloatLit(literal, _) => {
                 let ty = self.ty(expression, depth)?;
                 match (literal.value, ty) {
@@ -342,6 +345,234 @@ impl Folder<'_> {
     }
 }
 
+/// Why a floating complex expression has no translation-time value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComplexConstantError {
+    /// The expression is not an arithmetic constant expression.
+    NotConstant,
+    /// A multiplication or division needs a runtime helper that has no
+    /// execution model on this target: Darwin's compiler-rt.
+    UnmodeledHelper,
+}
+
+/// One operand of complex arithmetic: a real value stays real.
+#[derive(Clone, Copy)]
+enum Operand {
+    Real(FloatBits),
+    Complex([FloatBits; 2]),
+}
+
+impl Folder<'_> {
+    /// The part format of the floating complex type of `expression`.
+    fn complex_format(&self, expression: &CHirExpr<'_>) -> Option<FloatKind> {
+        let ty = crate::vector::expression_type(self.types, expression)?;
+        crate::complex::floating_format(self.types, self.target, ty)
+    }
+
+    /// An operand of complex arithmetic in `kind`: a floating complex
+    /// operand gives its parts, and a real or integer complex operand
+    /// converts.
+    fn complex_operand(
+        &mut self,
+        expression: &CHirExpr<'_>,
+        kind: FloatKind,
+        depth: usize,
+    ) -> Result<Operand, ComplexConstantError> {
+        use ComplexConstantError::NotConstant;
+        if self.complex_format(expression).is_some() {
+            let parts = self.complex(expression, depth + 1)?;
+            return parts
+                .iter()
+                .map(|part| part.target_convert(kind))
+                .collect::<Option<Vec<_>>>()
+                .map(|parts| Operand::Complex([parts[0], parts[1]]))
+                .ok_or(NotConstant);
+        }
+        let ty = crate::vector::expression_type(self.types, expression);
+        if ty.is_some_and(|ty| crate::complex::rank(self.types, ty).is_some()) {
+            let parts = crate::complex::constant_components(
+                expression,
+                self.types,
+                self.symbols,
+                self.target,
+            )
+            .ok_or(NotConstant)?;
+            let parts = parts
+                .iter()
+                .map(|part| Number::Integer(*part).real(kind))
+                .collect::<Option<Vec<_>>>()
+                .ok_or(NotConstant)?;
+            return Ok(Operand::Complex([parts[0], parts[1]]));
+        }
+        let value = self.eval(expression, depth + 1).ok_or(NotConstant)?;
+        value.real(kind).map(Operand::Real).ok_or(NotConstant)
+    }
+
+    /// The parts of a constant floating complex expression, folded at
+    /// translation time in round-to-nearest.
+    fn complex(
+        &mut self,
+        expression: &CHirExpr<'_>,
+        depth: usize,
+    ) -> Result<[FloatBits; 2], ComplexConstantError> {
+        use ComplexConstantError::{NotConstant, UnmodeledHelper};
+        if depth >= 128 {
+            return Err(NotConstant);
+        }
+        let operation = match expression {
+            CHirExpr::Complex(operation) => operation,
+            CHirExpr::EvaluateOnce(value, _) => return self.complex(value, depth + 1),
+            _ => return Err(NotConstant),
+        };
+        let kind = self.complex_format(expression).ok_or(NotConstant)?;
+        let zero = FloatBits::from_bits(kind, 0).ok_or(NotConstant)?;
+        let operand = |this: &mut Self, index: usize| {
+            let operand = operation.operands.get(index).ok_or(NotConstant)?;
+            this.complex_operand(operand, kind, depth)
+        };
+        let real = |value: Operand| match value {
+            Operand::Real(value) => Ok(value),
+            Operand::Complex(_) => Err(NotConstant),
+        };
+        let parts = |value: Operand| match value {
+            Operand::Real(value) => [value, zero],
+            Operand::Complex(parts) => parts,
+        };
+        let arithmetic = |a: FloatBits, b: FloatBits, op| a.target_binary(b, op).ok_or(NotConstant);
+        Ok(match operation.op {
+            ComplexOp::Imaginary => [zero, real(operand(self, 0)?)?],
+            ComplexOp::Construct => [real(operand(self, 0)?)?, real(operand(self, 1)?)?],
+            ComplexOp::Convert | ComplexOp::Unary(UnaryOp::Plus) => parts(operand(self, 0)?),
+            ComplexOp::Unary(UnaryOp::Neg) => parts(operand(self, 0)?).map(FloatBits::negated),
+            ComplexOp::Unary(UnaryOp::BitNot) => {
+                let [a, b] = parts(operand(self, 0)?);
+                [a, b.negated()]
+            }
+            ComplexOp::Binary(op @ (BinaryOp::Add | BinaryOp::Sub)) => {
+                let finite = if op == BinaryOp::Add {
+                    FiniteOp::Add
+                } else {
+                    FiniteOp::Sub
+                };
+                match (operand(self, 0)?, operand(self, 1)?) {
+                    (Operand::Complex([a, b]), Operand::Complex([c, d])) => {
+                        [arithmetic(a, c, finite)?, arithmetic(b, d, finite)?]
+                    }
+                    (Operand::Complex([a, b]), Operand::Real(r)) => [arithmetic(a, r, finite)?, b],
+                    (Operand::Real(r), Operand::Complex([a, b])) => [
+                        arithmetic(r, a, finite)?,
+                        if op == BinaryOp::Add { b } else { b.negated() },
+                    ],
+                    (Operand::Real(_), Operand::Real(_)) => return Err(NotConstant),
+                }
+            }
+            ComplexOp::Binary(op @ (BinaryOp::Mul | BinaryOp::Div)) => {
+                let finite = if op == BinaryOp::Mul {
+                    FiniteOp::Mul
+                } else {
+                    FiniteOp::Div
+                };
+                match (operand(self, 0)?, operand(self, 1)?) {
+                    (Operand::Complex([a, b]), Operand::Complex([c, d])) => {
+                        if self.target.compiler_rt_complex() {
+                            return Err(UnmodeledHelper);
+                        }
+                        let op = if op == BinaryOp::Mul {
+                            ComplexArithmetic::Multiply
+                        } else {
+                            ComplexArithmetic::Divide
+                        };
+                        libgcc_complex(op, [a, b, c, d], FpRounding::NearestEven)
+                            .ok_or(NotConstant)?
+                            .value
+                    }
+                    (Operand::Complex([a, b]), Operand::Real(r)) => {
+                        [arithmetic(a, r, finite)?, arithmetic(b, r, finite)?]
+                    }
+                    (Operand::Real(r), Operand::Complex([a, b])) if op == BinaryOp::Mul => {
+                        [arithmetic(r, a, finite)?, arithmetic(r, b, finite)?]
+                    }
+                    _ => return Err(NotConstant),
+                }
+            }
+            _ => return Err(NotConstant),
+        })
+    }
+
+    /// A real or integer result of a complex node: a conversion, a part, a
+    /// truth value or an equality.
+    fn complex_projection(
+        &mut self,
+        operation: &crate::complex::ComplexExpr<'_>,
+        depth: usize,
+    ) -> Option<Number> {
+        let source = operation.operands.first()?;
+        let source_kind = self.complex_format(source);
+        let declared = self.declared_type(operation.facts.ty());
+        match operation.op {
+            ComplexOp::Convert => {
+                source_kind?;
+                let [real, imaginary] = self.complex(source, depth + 1).ok()?;
+                if declared.is_some_and(
+                    |ty| matches!(ty, NumberType::Integer(ty) if ty == CIntegerType::BOOL),
+                ) {
+                    let truth = !real.is_zero() || !imaginary.is_zero();
+                    return Some(Number::Integer(CInteger::new(
+                        u64::from(truth),
+                        CIntegerType::BOOL,
+                    )));
+                }
+                convert(Number::Real(real), declared?)
+            }
+            ComplexOp::Component { imaginary } => {
+                if source_kind.is_some() {
+                    let parts = self.complex(source, depth + 1).ok()?;
+                    return Some(Number::Real(parts[usize::from(imaginary)]));
+                }
+                let NumberType::Real(kind) = declared? else {
+                    return None;
+                };
+                let value = self.eval(source, depth + 1)?;
+                if imaginary {
+                    Some(Number::Real(FloatBits::from_bits(kind, 0)?))
+                } else {
+                    convert(value, NumberType::Real(kind))
+                }
+            }
+            ComplexOp::Binary(op @ (BinaryOp::Eq | BinaryOp::Ne)) => {
+                let left = self.complex(source, depth + 1).ok()?;
+                let right = self.complex(operation.operands.get(1)?, depth + 1).ok()?;
+                let equal = left[0].compare(right[0]) == Some(Ordering::Equal)
+                    && left[1].compare(right[1]) == Some(Ordering::Equal);
+                Some(Number::Integer(CInteger::int(i32::from(
+                    equal == (op == BinaryOp::Eq),
+                ))))
+            }
+            ComplexOp::Unary(UnaryOp::Not) => {
+                let [real, imaginary] = self.complex(source, depth + 1).ok()?;
+                Some(Number::Integer(CInteger::int(i32::from(
+                    real.is_zero() && imaginary.is_zero(),
+                ))))
+            }
+            _ => None,
+        }
+    }
+}
+
+pub(super) fn complex_value(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Result<[FloatBits; 2], ComplexConstantError> {
+    Folder {
+        types,
+        symbols,
+        target,
+    }
+    .complex(expression, 0)
+}
+
 pub(super) fn value(
     expression: &CHirExpr<'_>,
     types: &TypeInterner,
@@ -389,6 +620,13 @@ pub(super) fn fold(
     // Avoid reevaluating every integer subtree at each ordinary lowering node.
     let relevant = match expression {
         CHirExpr::Floating(_) => true,
+        CHirExpr::Complex(operation) => {
+            crate::complex::floating(types, operation.facts.ty()).is_none()
+                && operation.operands.iter().any(|operand| {
+                    crate::vector::expression_type(types, operand)
+                        .is_some_and(|ty| crate::complex::floating(types, ty).is_some())
+                })
+        }
         CHirExpr::Cast(ty, operand, _) if canonical_integer_type(types, *ty).is_some() => {
             matches!(folder.ty(operand, 0), Some(NumberType::Real(_)))
         }
@@ -446,7 +684,15 @@ pub(super) fn representation(
     } = value
     {
         if source_kind != kind {
-            return None;
+            // A format conversion quiets the NaN and keeps its sign and its
+            // highest payload bits, as at run time.
+            let value = value.real(kind)?;
+            return Some(match kind {
+                FloatKind::F32 => CInteger::from_raw(value.bits(), CIntegerType::UINT),
+                FloatKind::F64 => CInteger::from_raw(value.bits(), CIntegerType::ULONG),
+                FloatKind::F128 => CInteger::from_raw(value.bits(), CIntegerType::UINT128),
+                FloatKind::F16 => return None,
+            });
         }
         let (width, fraction, exponent, ty) = match kind {
             FloatKind::F32 => (32, 23, 0xff, CIntegerType::UINT),

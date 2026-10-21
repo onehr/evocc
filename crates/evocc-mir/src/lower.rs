@@ -2623,6 +2623,21 @@ fn lower_block(
             }
         }
 
+        // A Darwin complex product branches to its helper, so it is written
+        // here, where a block can be split.
+        if let Some(length) = lower_darwin_product(
+            target,
+            lowerer,
+            &mut insts,
+            (&mut current_id, &mut current_args),
+            block,
+            index,
+        )? {
+            selected_until = index + length;
+            lowerer.address_preparation = AddressPreparation::default();
+            continue;
+        }
+
         // Section 5: an `icmp` "when the only consumer is a cond_br in the same
         // block" becomes `cmp` then `b.cond` with no `cset`. The fusion is
         // taken only when the comparison is the block's last instruction,
@@ -2659,6 +2674,9 @@ fn lower_block(
             && lower_checked_result(lowerer, &mut insts, block, index)?
         {
             computed_result = Some(index + 2);
+        } else if let Some(length) = lower_complex_parts(target, lowerer, &mut insts, block, index)?
+        {
+            selected_until = index + length;
         } else {
             lower_inst(target, signatures, lowerer, &mut insts, inst, external)?;
         }
@@ -4586,6 +4604,229 @@ fn lower_floating(
     }
     lowerer.bind(result, dst);
     Ok(())
+}
+
+/// The parts of a complex product or quotient (EvoIR 3.13.5) call the
+/// target's runtime helper: libgcc's `__mul?c3` and `__div?c3` on Linux,
+/// compiler-rt's on Darwin. Two adjacent parts with the same operands are one
+/// call; the helper returns both parts. Helper names stay below EvoIR.
+/// One part of a complex product or quotient, and whether it is strict.
+fn complex_part(inst: &Inst) -> Option<(&evocc_evoir::FloatingInst, bool)> {
+    match inst {
+        Inst::Floating(operation) if operation.is_complex_helper() => Some((operation, false)),
+        Inst::StrictFloating(operation) if operation.instruction.is_complex_helper() => {
+            Some((&operation.instruction, true))
+        }
+        _ => None,
+    }
+}
+
+/// Whether a complex part is a quotient, and whether it is the imaginary part.
+fn complex_family(op: evocc_evoir::FloatingOp) -> (bool, bool) {
+    match op {
+        evocc_evoir::FloatingOp::ComplexMul { imaginary } => (false, imaginary),
+        evocc_evoir::FloatingOp::ComplexDiv { imaginary } => (true, imaginary),
+        _ => unreachable!("complex part"),
+    }
+}
+
+/// The part at `index` and the other part, when it follows with the same
+/// operands. Strict parts chain their world, so nothing runs between them.
+fn complex_pair(
+    block: &evocc_evoir::Block,
+    index: usize,
+) -> Option<(
+    &evocc_evoir::FloatingInst,
+    Option<&evocc_evoir::FloatingInst>,
+    bool,
+)> {
+    let (first, strict) = complex_part(&block.insts[index])?;
+    let (division, imaginary) = complex_family(first.op);
+    let second = block
+        .insts
+        .get(index + 1)
+        .and_then(complex_part)
+        .filter(|(other, other_strict)| {
+            *other_strict == strict
+                && complex_family(other.op) == (division, !imaginary)
+                && other.arguments == first.arguments
+        })
+        .map(|(other, _)| other);
+    Some((first, second, strict))
+}
+
+/// Darwin: the parts of a complex product are Apple clang's inline form,
+/// `(ac - bd) + (ad + bc)i`. Only a result whose two parts are both NaN
+/// calls compiler-rt's helper, which computes the product again. A NaN
+/// result of an arithmetic operation is quiet, so the two comparisons
+/// raise no status.
+fn lower_darwin_product(
+    target: Target,
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    (current_id, current_args): (&mut u32, &mut Vec<VReg>),
+    block: &evocc_evoir::Block,
+    index: usize,
+) -> Result<Option<usize>, String> {
+    use evocc_evoir::FloatingOp::{Add, Mul, Sub, Une};
+    if target == Target::Linux {
+        return Ok(None);
+    }
+    let Some((first, second, strict)) = complex_pair(block, index) else {
+        return Ok(None);
+    };
+    if complex_family(first.op).0 {
+        return Ok(None);
+    }
+    let kind = evocc_evoir::floating_kind(&first.result.ty).ok_or("complex part format")?;
+    let suffix = match kind {
+        evocc_types::FloatKind::F32 => "sc3",
+        evocc_types::FloatKind::F64 => "dc3",
+        _ => return Err("binary128 complex helpers are qualified only for Linux".into()),
+    };
+    let [a, b, c, d]: [VReg; 4] = first
+        .arguments
+        .iter()
+        .map(|value| lowerer.reg(value))
+        .collect::<Result<Vec<_>, _>>()?
+        .try_into()
+        .map_err(|_| "complex part arity")?;
+    let class = crate::floating::class(kind);
+    let mut floating = |lowerer: &mut Lowerer, op, args: Vec<VReg>, dst_class| {
+        let dst = lowerer.fresh(dst_class);
+        insts.push(MInst::Floating {
+            strict,
+            integer_bits: 0,
+            dst,
+            op,
+            kind,
+            args,
+        });
+        dst
+    };
+    let ac = floating(lowerer, Mul, vec![a, c], class);
+    let bd = floating(lowerer, Mul, vec![b, d], class);
+    let ad = floating(lowerer, Mul, vec![a, d], class);
+    let bc = floating(lowerer, Mul, vec![b, c], class);
+    let x = floating(lowerer, Sub, vec![ac, bd], class);
+    let y = floating(lowerer, Add, vec![ad, bc], class);
+    let x_nan = floating(lowerer, Une, vec![x, x], RegClass::Gpr32);
+    let y_nan = floating(lowerer, Une, vec![y, y], RegClass::Gpr32);
+    let both = lowerer.binary(insts, BinOp::And, x_nan, y_nan, Width::W);
+    let length = 1 + usize::from(second.is_some());
+    let carried = live_across(lowerer, block, index + length);
+    let width = carried.len();
+    let helper = lowerer.fresh_block();
+    let merge = lowerer.fresh_block();
+    let mut to_helper = carried.clone();
+    to_helper.extend([a, b, c, d]);
+    let mut to_merge = carried.clone();
+    to_merge.extend([x, y]);
+    lowerer.blocks.push(MBlock {
+        id: *current_id,
+        args: std::mem::take(current_args),
+        insts: std::mem::take(insts),
+        term: MTerm::Tb {
+            nonzero: true,
+            src: both,
+            bit: 0,
+            taken: helper,
+            taken_args: to_helper.clone(),
+            untaken: merge,
+            untaken_args: to_merge.clone(),
+        },
+    });
+    let params = fresh_like(lowerer, &to_helper);
+    let results = vec![lowerer.fresh(class), lowerer.fresh(class)];
+    let mut reached = params[..width].to_vec();
+    reached.extend(results.iter().copied());
+    lowerer.blocks.push(MBlock {
+        id: helper,
+        args: params.clone(),
+        insts: vec![MInst::Bl {
+            symbol: format!("__mul{suffix}"),
+            args: params[width..].to_vec(),
+            results,
+            fp_mode: None,
+            returns_twice: false,
+        }],
+        term: MTerm::B {
+            target: merge,
+            args: reached,
+        },
+    });
+    let params = fresh_like(lowerer, &to_merge);
+    let rebind: HashMap<u32, VReg> = carried
+        .iter()
+        .zip(params.iter())
+        .map(|(old, fresh)| (old.id, *fresh))
+        .collect();
+    for reg in lowerer.map.values_mut().chain(lowerer.high.values_mut()) {
+        if let Some(fresh) = rebind.get(&reg.id) {
+            *reg = *fresh;
+        }
+    }
+    for operation in std::iter::once(first).chain(second) {
+        let imaginary = complex_family(operation.op).1;
+        lowerer.bind(&operation.result, params[width + usize::from(imaginary)]);
+    }
+    *current_id = merge;
+    *current_args = params;
+    Ok(Some(length))
+}
+
+fn lower_complex_parts(
+    target: Target,
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    block: &evocc_evoir::Block,
+    index: usize,
+) -> Result<Option<usize>, String> {
+    let Some((first, second, strict)) = complex_pair(block, index) else {
+        return Ok(None);
+    };
+    let division = complex_family(first.op).0;
+    let kind = evocc_evoir::floating_kind(&first.result.ty).ok_or("complex part format")?;
+    if target != Target::Linux && kind == evocc_types::FloatKind::F128 {
+        return Err("binary128 complex helpers are qualified only for Linux".into());
+    }
+    let suffix = match kind {
+        evocc_types::FloatKind::F32 => "sc3",
+        evocc_types::FloatKind::F64 => "dc3",
+        _ => "tc3",
+    };
+    let symbol = format!("__{}{suffix}", if division { "div" } else { "mul" });
+    let args = first
+        .arguments
+        .iter()
+        .map(|value| lowerer.reg(value))
+        .collect::<Result<Vec<_>, _>>()?;
+    let class = crate::floating::class(kind);
+    let results = vec![lowerer.fresh(class), lowerer.fresh(class)];
+    // The Linux helpers are the qualified hosted runtime; Darwin's are an
+    // ordinary call into the platform runtime, which owns their status.
+    let fp_mode = (target == Target::Linux).then_some(if strict {
+        crate::FpCallMode::Strict
+    } else {
+        crate::FpCallMode::Fixed
+    });
+    if fp_mode.is_some() {
+        insts.push(MInst::FpEnvCheck { strict });
+    }
+    insts.push(MInst::Bl {
+        symbol,
+        args,
+        results: results.clone(),
+        fp_mode,
+        returns_twice: false,
+    });
+    for operation in std::iter::once(first).chain(second) {
+        lowerer.bind(
+            &operation.result,
+            results[usize::from(complex_family(operation.op).1)],
+        );
+    }
+    Ok(Some(1 + usize::from(second.is_some())))
 }
 
 fn floating_select_zero(

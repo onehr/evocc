@@ -602,6 +602,7 @@ impl Writer {
                         ComplexBase::CF32 => float_name(FloatKind::F32),
                         ComplexBase::CF64 => float_name(FloatKind::F64),
                         ComplexBase::CF128 => float_name(FloatKind::F128),
+                        ComplexBase::Interchange(kind) => kind.spelling(),
                     }
                 ),
                 target

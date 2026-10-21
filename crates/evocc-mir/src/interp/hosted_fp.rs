@@ -57,14 +57,33 @@ pub(super) fn execute(
         return Err(invalid());
     }
     let environment = world.fp_environment();
-    let result = helper.evaluate(
-        &values,
+    let rounding = if strict {
+        environment.rounding
+    } else {
+        FpRounding::NearestEven
+    };
+    if helper.is_complex() {
+        // Both parts return in two SIMD registers of the part format.
+        let result = helper.evaluate_parts(&values, rounding);
         if strict {
-            environment.rounding
-        } else {
-            FpRounding::NearestEven
-        },
-    );
+            *world = world.with_fp_environment(environment.raised(result.status));
+        }
+        let bytes = match helper.result_type() {
+            EvoIRType::F32 => 4,
+            EvoIRType::F64 => 8,
+            _ => 16,
+        };
+        let mut outputs = Vec::with_capacity(2);
+        for part in result.value {
+            let mut repr = evocc_memory::ObjectRepresentation::uninitialized(bytes)
+                .map_err(|e| memory_error(&e))?;
+            repr.write_integer(0, bytes, Some(part), evocc_memory::ByteOrder::Little)
+                .map_err(|e| memory_error(&e))?;
+            outputs.push(MirValue::Vector(repr));
+        }
+        return Ok(Some(outputs));
+    }
+    let result = helper.evaluate(&values, rounding);
     if strict {
         *world = world.with_fp_environment(environment.raised(result.status));
     }

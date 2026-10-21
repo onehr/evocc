@@ -2292,7 +2292,7 @@ impl<'a> Substitution<'a, '_> {
         value: &'a CHirExpr<'a>,
         span: SourceSpan,
     ) -> &'a CHirExpr<'a> {
-        if crate::complex::rank(&self.unit.types, ty).is_some() {
+        if crate::complex::admitted(&self.unit.types, ty) {
             // C complex is scalar, but its value/conversion is a pair, not the
             // generic scalar Cast path. Use the parser's ordinary conversion
             // node and StoreScalar initializer; do not widen InitPlan rules.
@@ -3626,12 +3626,12 @@ impl<'a> Substitution<'a, '_> {
                             .is_some()
                         });
                         // Match the parser's update-target classification:
-                        // integer complex is a C scalar, but its two-component
-                        // value is assigned through a complete memory place.
+                        // complex is a C scalar, but its two-component value
+                        // is assigned through a complete memory place.
                         if let Some(place) =
                             ScalarPlace::bind(&self.unit.symbols, &self.unit.types, result)
                                 .ok()
-                                .filter(|_| crate::complex::rank(&self.unit.types, ty).is_none())
+                                .filter(|_| !crate::complex::admitted(&self.unit.types, ty))
                         {
                             self.alloc(CHirExpr::Assign {
                                 op: AssignmentOp::Simple,
@@ -4049,7 +4049,7 @@ impl<'a> Substitution<'a, '_> {
             c.result = Some(s);
             let object = self.object(s, None, span);
             if self.complete_object_value(return_type)
-                || crate::complex::rank(&self.unit.types, return_type).is_some()
+                || crate::complex::admitted(&self.unit.types, return_type)
             {
                 // Like the existing call-result buffer, an aggregate result
                 // belongs to the caller, not the callee's ended block.

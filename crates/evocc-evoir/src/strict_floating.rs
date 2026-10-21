@@ -48,6 +48,8 @@ impl StrictFloatingInst {
                 | FromUnsigned
                 | ToSigned
                 | ToUnsigned
+                | ComplexMul { .. }
+                | ComplexDiv { .. }
         ) {
             return Err("representation-only operation has no strict form".into());
         }
@@ -89,6 +91,7 @@ impl FloatingInst {
                     .target_fma_round(float(1), float(2), rounding)
                     .unwrap(),
             ),
+            ComplexMul { .. } | ComplexDiv { .. } => self.evaluate_complex(inputs, rounding),
             Convert => pack(float(0).target_convert_round(target(), rounding).unwrap()),
             FromSigned => {
                 let EvoIRType::Bits(width) = self.arguments[0].ty else {

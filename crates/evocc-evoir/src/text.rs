@@ -289,10 +289,11 @@ pub fn render_pre_fenv_module(module: &Module) -> Result<String, String> {
             matches!(inst, Inst::StrictFloating(_))
                 || matches!(inst, Inst::Floating(fp) if matches!(fp.op,
                 crate::FloatingOp::Fma | crate::FloatingOp::QuietOlt | crate::FloatingOp::QuietOle
-                | crate::FloatingOp::QuietOgt | crate::FloatingOp::QuietOge))
+                | crate::FloatingOp::QuietOgt | crate::FloatingOp::QuietOge
+                | crate::FloatingOp::ComplexMul { .. } | crate::FloatingOp::ComplexDiv { .. }))
         })
     {
-        return Err("strict FP and FMA have no pre-fenv text representation".into());
+        return Err("strict FP, FMA and complex parts have no pre-fenv text representation".into());
     }
     if module
         .functions

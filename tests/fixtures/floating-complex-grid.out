@@ -1,0 +1,45 @@
+Floating-complex special-value grid, libgcc helper references, 2026-10-21.
+Fixture: tests/fixtures/floating-complex-grid.c
+Fixture SHA-256: 2bb47cbe7135e6eee4c856894df7f1b2321a398dbf0e715b871d97c0603dcacc
+Image: evo-nexlab:sealed, linux/arm64, network none, digest
+sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93.
+Helpers: libgcc.a of gcc-14 (Debian 14.2.0-19) 14.2.0, SHA-256
+60dbf748e1c310aa50300a33f30bf4ee070061071aee74a52cf115a7b8765e50.
+
+Command, for CC in gcc-14 and clang-19, LEVEL in -O0 and -O2, KIND in 32, 64
+and 128, FORM in 1 (the helper through a pointer) and 0 (the operators), and
+SELECT empty (the grid) or -DSAMPLE (the 50 sample operand sets):
+  CC -std=gnu11 LEVEL -frounding-math -ffp-contract=off -DKIND=KIND
+     -DFORM=FORM -DMODES=4 SELECT floating-complex-grid.c -o grid -lm && ./grid
+
+All 48 executions print the same four lines for each KIND and selection.
+Each record is K=KIND for the grid or S=KIND for the sample, the rounding
+mode (0 nearest, 1 upward, 2 downward, 3 toward zero), then the bits hash
+and the flags hash of the products and of the quotients. The machine-read
+lines follow the marker.
+
+records:
+K=32 mode 0 mul 87d8f661532e50f5 8faab76b6b062ba5 div 33b8c7eece6d4f8d 96ee02a202e57405
+K=32 mode 1 mul 38c875e53c9a8489 ecc7702148c05281 div d8986f57073ed105 eb7ddf38db768125
+K=32 mode 2 mul cf816910ff03ffd1 57af6e16858247e9 div 3a076ee0bd14e60d 5bbbfdb09b8d3d85
+K=32 mode 3 mul 5935bebf1ff85775 ea78b9b29ea96635 div 9af7c42485fdefcd 3a87a08a09abe085
+K=64 mode 0 mul 4dc2831059ee50f5 8faab76b6b062ba5 div 68f9ac9aaa79fb0d 1a084a8dc7529815
+K=64 mode 1 mul b9245e91c6fa8489 ecc7702148c05281 div dd08615e452e3639 e67eb07f52227d8b
+K=64 mode 2 mul f4917c2d7e63ffd1 57af6e16858247e9 div 40df1fc97f9f8a76 49f743d0ec749e03
+K=64 mode 3 mul e1fee33ac8385775 ea78b9b29ea96635 div 13f82bbb6b8e4c4d 0b38501ed81b4065
+K=128 mode 0 mul 29a2704822d425c5 8faab76b6b062ba5 div 62f1a7628472db45 772d0950f11cff95
+K=128 mode 1 mul 557fe2e883db9ebd ecc7702148c05281 div c3b9e68d74076323 323f19646960be1b
+K=128 mode 2 mul 78ca18791134aa8d 57af6e16858247e9 div d80366fd6717ac42 54af13ae90d8c78b
+K=128 mode 3 mul f5149e07559ee6c5 ea78b9b29ea96635 div b86c00b4bdee1805 5ed832f5e0dac165
+S=32 mode 0 mul 4f62d203accff9af 90bdf6a15451b18c div a380f2fab02caf50 1f7047b311ea5d60
+S=32 mode 1 mul 7a181d6bb9919f3f d9a7d0eff5052272 div e53e640229eb8628 1f7047b311ea5d60
+S=32 mode 2 mul 3de9475e4a8c5855 660267045d37b026 div 6a2ad46166f4227c 1f7047b311ea5d60
+S=32 mode 3 mul 9a73e17a4e8c5855 a0a0d9872260099c div 07c6d816fcf0cad4 1f7047b311ea5d60
+S=64 mode 0 mul 8a4bd402568ff9af 90bdf6a15451b18c div 4b1ecd4ae66e2800 183c4b087a0f3193
+S=64 mode 1 mul 3264a95d3ad19f3f d9a7d0eff5052272 div b6d1213273922ab0 183c4b087a0f3193
+S=64 mode 2 mul e148fe2d124c5855 660267045d37b026 div c4311f025ac63b54 42e73d9e5ca66a51
+S=64 mode 3 mul c428fe2d124c5855 a0a0d9872260099c div bd2498cc4ede082c 42e73d9e5ca66a51
+S=128 mode 0 mul 5d569f09e4358db7 90bdf6a15451b18c div 21f727839c68ec76 183c4b087a0f3193
+S=128 mode 1 mul 63d772ee39035a2b d9a7d0eff5052272 div 999134b3d2e30006 183c4b087a0f3193
+S=128 mode 2 mul 4a1224a5fec62c07 660267045d37b026 div d6079d22d4a77ee6 42e73d9e5ca66a51
+S=128 mode 3 mul a8b21b570cf3199b a0a0d9872260099c div 3ed727839c68ec76 42e73d9e5ca66a51

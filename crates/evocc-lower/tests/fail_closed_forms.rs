@@ -63,33 +63,27 @@ fn asm_binding_ir(source: &str, optimize: bool) -> String {
 
 #[test]
 fn measured_refusal_classes_do_not_hide_behind_the_lowering_wrapper() {
-    for (ordinal, source, code, message) in [
-        (
-            306,
-            "int f() { return 1; } int main(void) { return f(1); }",
-            "E3051",
-            "malformed function f: call arity disagrees with the canonical prototype",
-        ),
-        (
-            307,
-            "_Complex float f(_Complex float x) { return x; }",
-            "E3049",
-            "not-lowered: floating-call-interface",
-        ),
-        (
-            308,
-            "_Complex double f(_Complex double x) { return x; }",
-            "E3049",
-            "not-lowered: floating-call-interface",
-        ),
-        (
-            309,
-            "_Complex long double f(_Complex long double x) { return x; }",
-            "E3049",
-            "not-lowered: floating-call-interface",
-        ),
+    assert_lowering_error(
+        "int f() { return 1; } int main(void) { return f(1); }",
+        306,
+        "E3051",
+        "malformed function f: call arity disagrees with the canonical prototype",
+    );
+}
+
+/// L04: a `float`, `double` or `long double` complex value passes as an
+/// HFA of its two parts, so these interfaces lower; the measured refusals
+/// 307 to 309 no longer apply.
+#[test]
+fn floating_complex_call_interfaces_lower() {
+    for source in [
+        "_Complex float f(_Complex float x) { return x; }",
+        "_Complex double f(_Complex double x) { return x; }",
+        "_Complex long double f(_Complex long double x) { return x; }",
     ] {
-        assert_lowering_error(source, ordinal, code, message);
+        for optimize in [false, true] {
+            asm_binding_ir(source, optimize);
+        }
     }
 }
 
@@ -269,18 +263,34 @@ fn function_pointer_arithmetic_uses_exposed_address_instructions() {
     );
 }
 
+/// L04: a record of floating complex members is an HFA or a general
+/// composite, also as an anonymous argument.
 #[test]
-fn floating_complex_record_variable_arguments_remain_outside_the_executable_abi() {
+fn floating_complex_record_variable_arguments_lower() {
+    for source in [
+        "struct S { _Complex long double x; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
+        "struct S { _Complex long double x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
+        "struct S { char tag; _Complex double z; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
+    ] {
+        for optimize in [false, true] {
+            asm_binding_ir(source, optimize);
+        }
+    }
+}
+
+/// A record with a half-precision member has no executable variadic ABI.
+#[test]
+fn half_precision_record_variable_arguments_remain_outside_the_executable_abi() {
     for (ordinal, source, code, message) in [
         (
             5,
-            "struct S { _Complex long double x; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
+            "struct S { __fp16 x; int tag; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
             "E3030",
             "not-lowered: varargs",
         ),
         (
             6,
-            "struct S { _Complex long double x; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
+            "struct S { __fp16 x; int tag; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
             "E3030",
             "not-lowered: varargs",
         ),

@@ -701,13 +701,25 @@ fn automatic_zero_single_pass_keeps_padding_values_and_pointer_provenance() {
 
 #[test]
 fn prezeroed_bytes_do_not_admit_deferred_value_types() {
+    // L04 admits floating complex values; their zero is two zero parts.
     for ty in ["_Complex long double", "_Complex double"] {
+        let source =
+            format!("extern void observe(void *); void f(void) {{ {ty} r; observe(&r); }}");
+        successful(run(
+            &["--emit=evoir", "-ftrivial-auto-var-init=zero"],
+            &source,
+        ));
+    }
+    for ty in ["_Float32", "__fp16", "_Float64x"] {
         let source =
             format!("extern void observe(void *); void f(void) {{ {ty} r; observe(&r); }}");
         let output = run(&["--emit=evoir", "-ftrivial-auto-var-init=zero"], &source);
         assert!(!output.status.success());
         let diagnostic = String::from_utf8_lossy(&output.stderr);
-        assert!(diagnostic.contains("not-lowered:"), "{diagnostic}");
+        assert!(
+            diagnostic.contains("no admitted value execution"),
+            "{diagnostic}"
+        );
     }
 }
 

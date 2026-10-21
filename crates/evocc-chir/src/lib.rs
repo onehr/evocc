@@ -98,9 +98,11 @@ pub fn is_integer_variadic_record(
             Some(TypeKind::Array { element, .. }) => member(types, *element, active),
             Some(TypeKind::Vector { element, .. }) => member(types, *element, active),
             // Integer complex has two ordinary integer components and uses
-            // the composite ABI, including when nested in a record. Floating
-            // complex must not slip into this path as a non-HFA record.
+            // the composite ABI, including when nested in a record. A
+            // floating complex value is an HFA of its two parts, and a
+            // member of a mixed record, as a floating member is.
             Some(TypeKind::Complex(evocc_types::ComplexBase::Integer(_))) => true,
+            Some(TypeKind::Complex(base)) => base.executable_part().is_some(),
             Some(
                 TypeKind::Int(_)
                 | TypeKind::Float(_)
@@ -164,6 +166,11 @@ pub fn homogeneous_floating_aggregate(
     ) -> Shape {
         match types.get(ty).map(|ty| &ty.kind) {
             Some(TypeKind::Float(kind)) => Shape::Float(target.float_format(*kind), 1),
+            // AAPCS64 lays out a complex type as a record of its two parts.
+            Some(TypeKind::Complex(base)) => match base.executable_part() {
+                Some(kind) => Shape::Float(target.float_format(kind), 2),
+                None => Shape::General,
+            },
             Some(TypeKind::Array {
                 element,
                 bound: ArrayBound::Fixed(count),

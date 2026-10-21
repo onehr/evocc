@@ -199,6 +199,11 @@ pub enum InterpreterError {
     FrameAddressUnavailable {
         span: SourceSpan,
     },
+    /// A complex multiplication or division whose target helper has no
+    /// execution model: Darwin's compiler-rt sequence.
+    ComplexHelper {
+        span: SourceSpan,
+    },
     UnsupportedDeclaration {
         feature: &'static str,
         span: SourceSpan,
@@ -326,6 +331,7 @@ impl InterpreterError {
             Self::VarArgPack { .. } => "E2950",
             Self::WideInteger { .. } => "E3033",
             Self::FrameAddressUnavailable { .. } => "E3031",
+            Self::ComplexHelper { .. } => "E3067",
             Self::Memory { error, .. } => match error.runtime_diagnostic() {
                 Some(diagnostic) => diagnostic.code,
                 None => "E3007",
@@ -434,6 +440,7 @@ impl InterpreterError {
             Self::VarArgPack { .. } => "invalid-va-arg-pack".to_owned(),
             Self::WideInteger { .. } => "not-executed: wide-integer".to_owned(),
             Self::FrameAddressUnavailable { .. } => "not-executed: frame-address".to_owned(),
+            Self::ComplexHelper { .. } => "not-executed: complex-arithmetic".to_owned(),
             Self::UnsupportedDeclaration { feature, .. } => {
                 format!("unsupported-interpreter-declaration: {feature}")
             }
@@ -486,6 +493,7 @@ impl InterpreterError {
             | Self::VarArgPack { span }
             | Self::WideInteger { span }
             | Self::FrameAddressUnavailable { span }
+            | Self::ComplexHelper { span }
             | Self::UnsupportedDeclaration { span, .. }
             | Self::MalformedFunctionDeclaration { span, .. }
             | Self::DuplicateFunctionBody { span, .. }
@@ -1432,6 +1440,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         )?;
                         continue;
                     }
+                    if crate::complex::floating(self.unit.types(), *destination_type).is_some() {
+                        self.store_static_complex(address, *destination_type, value, span)?;
+                        continue;
+                    }
                     if let Some(element) =
                         crate::complex::element(self.unit.types(), *destination_type)
                     {
@@ -1502,7 +1514,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         )?;
                         continue;
                     }
-                    if crate::complex::rank(self.unit.types(), *destination_type).is_some() {
+                    if crate::complex::admitted(self.unit.types(), *destination_type) {
                         let layout = self.access_layout(*destination_type, span)?;
                         self.memory = self
                             .memory
@@ -6291,6 +6303,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 | TypeKind::Complex(evocc_types::ComplexBase::Integer(_))
                 | TypeKind::Vector { .. },
             ) => Ok(ValueType::Aggregate(ty)),
+            Some(TypeKind::Complex(base)) if base.executable_part().is_some() => {
+                Ok(ValueType::Aggregate(ty))
+            }
             Some(TypeKind::Pointer(_)) => {
                 PointerTypeDesc::from_canonical_pointer(self.unit.types(), ty)
                     .map(ValueType::Pointer)
@@ -6915,7 +6930,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     }
 
     fn zero_value(&mut self, ty: TypeId, span: SourceSpan) -> Result<CValue, InterpreterError> {
-        if crate::complex::rank(self.unit.types(), ty).is_some() {
+        if crate::complex::admitted(self.unit.types(), ty) {
             let address = self.vector_temporary(ty, span)?;
             let layout = self.access_layout(ty, span)?;
             self.memory = self
@@ -7165,7 +7180,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if let Some(ty) =
             crate::vector::expression_type(self.unit.types(), expression).filter(|ty| {
                 crate::vector::shape(self.unit.types(), *ty).is_some()
-                    || crate::complex::rank(self.unit.types(), *ty).is_some()
+                    || crate::complex::admitted(self.unit.types(), *ty)
             })
         {
             return self.value_type(ty, expression.span());
@@ -8139,12 +8154,30 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             ValueType::Aggregate(aggregate_type) => {
                 if matches!(
                     self.unit.types().get(aggregate_type).map(|ty| &ty.kind),
-                    Some(
-                        TypeKind::Vector { .. }
-                            | TypeKind::Complex(evocc_types::ComplexBase::Integer(_))
-                    )
-                ) {
+                    Some(TypeKind::Vector { .. })
+                ) || crate::complex::admitted(self.unit.types(), aggregate_type)
+                {
                     let snapshot = self.vector_temporary(aggregate_type, span)?;
+                    if qualifiers.is_volatile
+                        && crate::complex::admitted(self.unit.types(), aggregate_type)
+                    {
+                        // A volatile complex object is read as its two
+                        // parts, each one volatile access.
+                        self.copy_volatile_aggregate(
+                            snapshot,
+                            aggregate_type,
+                            Qualifiers::default(),
+                            address,
+                            aggregate_type,
+                            qualifiers,
+                            span,
+                        )?;
+                        return Ok(CValue::Aggregate {
+                            address: snapshot,
+                            ty: aggregate_type,
+                            qualifiers: Qualifiers::default(),
+                        });
+                    }
                     let (memory, world) = self
                         .memory
                         .copy_with_volatile(
@@ -8399,7 +8432,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         matches!(
             (self.unit.types().get(left), self.unit.types().get(right)),
             (Some(left), Some(right))
-                if matches!(left.kind, TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList | TypeKind::Vector { .. } | TypeKind::Complex(evocc_types::ComplexBase::Integer(_)))
+                if (matches!(left.kind, TypeKind::Struct(_) | TypeKind::Union(_) | TypeKind::BuiltinVaList | TypeKind::Vector { .. } | TypeKind::Complex(evocc_types::ComplexBase::Integer(_)))
+                    || matches!(left.kind, TypeKind::Complex(base) if base.executable_part().is_some()))
                     && left.kind == right.kind
         )
     }
@@ -8515,6 +8549,35 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 }
                 Ok(())
             }
+            TypeKind::Complex(_)
+                if crate::complex::admitted(self.unit.types(), destination_type) =>
+            {
+                let element = crate::complex::element(self.unit.types(), destination_type).ok_or(
+                    InterpreterError::UnsupportedType {
+                        ty: destination_type,
+                        span,
+                    },
+                )?;
+                let width = self.access_layout(element, span)?.size_bytes as i64;
+                for offset in [0, width] {
+                    let destination = destination
+                        .checked_offset(offset)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    let source = source
+                        .checked_offset(offset)
+                        .map_err(|error| self.memory_error(error, span))?;
+                    self.copy_volatile_subobject(
+                        destination,
+                        element,
+                        destination_qualifiers,
+                        source,
+                        element,
+                        source_qualifiers,
+                        span,
+                    )?;
+                }
+                Ok(())
+            }
             TypeKind::Union(_) => {
                 let layout = self.access_layout(destination_type, span)?;
                 let volatile = CopyVolatility::new(
@@ -8550,6 +8613,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         source_qualifiers: Qualifiers,
         span: SourceSpan,
     ) -> Result<(), InterpreterError> {
+        // A complex member is copied as its two parts.
+        let parts = crate::complex::admitted(self.unit.types(), destination_type);
         match self
             .unit
             .types()
@@ -8557,6 +8622,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .map(|ty| ty.kind.clone())
         {
             Some(TypeKind::Struct(_) | TypeKind::Union(_)) => self.copy_volatile_aggregate(
+                destination,
+                destination_type,
+                destination_qualifiers,
+                source,
+                source_type,
+                source_qualifiers,
+                span,
+            ),
+            Some(TypeKind::Complex(_)) if parts => self.copy_volatile_aggregate(
                 destination,
                 destination_type,
                 destination_qualifiers,
@@ -8705,6 +8779,22 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CValue::FunctionPointer { value, ty } => {
                 self.offset_function_value(value, ty, CInteger::int(1), direction, span)
+            }
+            CValue::Aggregate { ty, .. }
+                if crate::complex::floating(self.unit.types(), ty).is_some() =>
+            {
+                // GNU C: one is added to or subtracted from the real part.
+                let operation = crate::complex::ComplexExpr {
+                    op: crate::complex::ComplexOp::Binary(if direction == OffsetDirection::Add {
+                        BinaryOp::Add
+                    } else {
+                        BinaryOp::Sub
+                    }),
+                    operands: Vec::new(),
+                    facts: ExprFacts::value(ty),
+                    span,
+                };
+                self.apply_complex(&operation, &[previous, CValue::Integer(CInteger::int(1))])
             }
             CValue::Aggregate { .. } => Err(InterpreterError::UnsupportedExpression {
                 feature: "aggregate update",
@@ -9394,18 +9484,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         }
         let left =
             self.load_memory_value_with_layout(address, ty, qualifiers, target_span, layout)?;
-        if matches!(left, CValue::Floating(_)) || matches!(right, CValue::Floating(_)) {
-            let op =
-                assignment_binary(operator).ok_or(InterpreterError::UnsupportedExpression {
-                    feature: "invalid floating compound assignment",
-                    span,
-                })?;
-            let result = self.apply_machine_binary(op, left, right, span)?;
-            let result = self.cast_runtime_value(result, self.value_type(ty, span)?, span)?;
-            return self
-                .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
-        }
-        if crate::complex::rank(self.unit.types(), ty).is_some() {
+        if crate::complex::admitted(self.unit.types(), ty) {
             let op = crate::vector::assignment_binary(operator).ok_or(
                 InterpreterError::UnsupportedExpression {
                     feature: "invalid complex assignment",
@@ -9423,7 +9502,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
         }
         if let CValue::Aggregate { ty: complex, .. } = right {
-            if crate::complex::rank(self.unit.types(), complex).is_some() {
+            if crate::complex::admitted(self.unit.types(), complex) {
                 // A real target with a complex value: the front end converted
                 // the value to the common complex type. Compute there, then
                 // convert the result to the target type (EvoIR 10.1.14).
@@ -9446,6 +9525,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 return self
                     .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
             }
+        }
+        if matches!(left, CValue::Floating(_)) || matches!(right, CValue::Floating(_)) {
+            let op =
+                assignment_binary(operator).ok_or(InterpreterError::UnsupportedExpression {
+                    feature: "invalid floating compound assignment",
+                    span,
+                })?;
+            let result = self.apply_machine_binary(op, left, right, span)?;
+            let result = self.cast_runtime_value(result, self.value_type(ty, span)?, span)?;
+            return self
+                .store_memory_value_with_layout(address, ty, qualifiers, result, span, layout);
         }
         if crate::vector::shape(self.unit.types(), ty).is_some() {
             let op = crate::vector::assignment_binary(operator).ok_or(
@@ -11445,14 +11535,15 @@ fn cast_machine_value(
                 .get(ty)
                 .zip(types.get(target))
                 .is_some_and(|(source, target)| {
-                    matches!(
+                    (matches!(
                         source.kind,
                         TypeKind::Struct(_)
                             | TypeKind::Union(_)
                             | TypeKind::BuiltinVaList
                             | TypeKind::Complex(evocc_types::ComplexBase::Integer(_))
                             | TypeKind::Vector { .. }
-                    ) && source.kind == target.kind
+                    ) || matches!(source.kind, TypeKind::Complex(base) if base.executable_part().is_some()))
+                        && source.kind == target.kind
                 }) =>
         {
             Ok(CValue::Aggregate {

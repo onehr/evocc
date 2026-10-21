@@ -3400,6 +3400,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     InitAction::StoreScalar { value, .. }
                         if !self.static_initializer_expression_is_constant(value) =>
                     {
+                        if evocc_chir::constant::unmodeled_complex_arithmetic(
+                            value,
+                            &self.types,
+                            &self.target_layout,
+                        ) {
+                            // Darwin folds no complex product or quotient:
+                            // its compiler-rt sequence has no model yet.
+                            self.report("E2960", "unmodeled-complex-constant", value.span());
+                            return None;
+                        }
                         self.report("E2208", "non-constant-static-initializer", value.span());
                         return None;
                     }
@@ -3574,13 +3584,30 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 .is_some()
             }
             CHirExpr::BuiltinExpect(..) | CHirExpr::Atomic(_) | CHirExpr::Vector(_) => false,
-            CHirExpr::Complex(_) => evocc_chir::complex::constant_components(
-                expression,
-                &self.types,
-                &self.symbols,
-                &self.target_layout,
-            )
-            .is_some(),
+            CHirExpr::Complex(operation) => {
+                evocc_chir::complex::constant_components(
+                    expression,
+                    &self.types,
+                    &self.symbols,
+                    &self.target_layout,
+                )
+                .is_some()
+                    || evocc_chir::constant::floating_complex_constant(
+                        expression,
+                        &self.types,
+                        &self.symbols,
+                        &self.target_layout,
+                    )
+                    .is_ok()
+                    || evocc_chir::constant::floating_constant_representation(
+                        expression,
+                        operation.facts.ty(),
+                        &self.types,
+                        &self.symbols,
+                        &self.target_layout,
+                    )
+                    .is_some()
+            }
             CHirExpr::Ident { symbol, .. } => self
                 .symbols
                 .symbol(*symbol)
@@ -10299,6 +10326,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         {
             return self.complex_conversion(target, expression, expression.span());
         }
+        // A floating complex target converts its value part by part, and a
+        // floating complex value converts to a real floating target through
+        // its real part (C11 6.3.1.6, 6.3.1.7).
+        if evocc_chir::complex::floating(&self.types, target).is_some()
+            || (self.complex_expression_type(expression).is_some()
+                && matches!(
+                    self.types.get(target).map(|ty| &ty.kind),
+                    Some(TypeKind::Float(_))
+                ))
+        {
+            return self.complex_conversion(target, expression, expression.span());
+        }
         if self.canonical_integer_type(target).is_ok()
             && self.expression_type(expression).is_some_and(|inferred| {
                 matches!(
@@ -10874,12 +10913,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
         };
         if !self.is_loadable_scalar(value_ty)
+            && !evocc_chir::complex::admitted(&self.types, value_ty)
             && !matches!(
                 self.types.get(value_ty).map(|ty| &ty.kind),
                 Some(
                     TypeKind::Array { .. }
                         | TypeKind::Vector { .. }
-                        | TypeKind::Complex(ComplexBase::Integer(_))
                         | TypeKind::Struct(_)
                         | TypeKind::Union(_)
                         | TypeKind::BuiltinVaList
@@ -11178,6 +11217,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             OperandTypeClass::Integer(_)
             | OperandTypeClass::WideInteger { .. }
             | OperandTypeClass::Real(_) => UpdateConstraint::Scalar,
+            // GNU C: `++` and `--` add or subtract one on the real part of a
+            // floating complex object, as GCC does.
+            OperandTypeClass::Complex(base) if base.executable_part().is_some() => {
+                UpdateConstraint::Scalar
+            }
             OperandTypeClass::Pointer(pointee) => {
                 if self.pointer_arithmetic_is_valid(pointee.pointee) {
                     UpdateConstraint::PointerBoundary
@@ -12240,7 +12284,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         match ty {
             InferredType::Integer(integer) => OperandTypeClass::Integer(integer),
             InferredType::Real(real) => OperandTypeClass::Real(real),
-            InferredType::Complex(complex) => OperandTypeClass::Complex(complex),
+            InferredType::Complex(complex) => complex_class(complex),
             InferredType::Pointer(pointee) => OperandTypeClass::Pointer(pointee),
             InferredType::StringArray(_) => OperandTypeClass::Other,
             InferredType::StringPointer(prefix) => OperandTypeClass::StringPointer(prefix),
@@ -12265,7 +12309,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         .map(OperandTypeClass::Integer)
                         .unwrap_or(OperandTypeClass::Other),
                     TypeKind::Float(real) => OperandTypeClass::Real(real),
-                    TypeKind::Complex(complex) => OperandTypeClass::Complex(complex),
+                    TypeKind::Complex(complex) => complex_class(complex),
                     TypeKind::Pointer(pointee) => self
                         .inferred_pointer_type(pointee)
                         .map(OperandTypeClass::Pointer)
@@ -12563,6 +12607,29 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(lhs)
     }
 
+    /// The operand of `&`: a projected aggregate lvalue keeps its resolved
+    /// place, so address-of consumers recover it without executing a load.
+    fn address_operand(&mut self, operand: &'arena CHirExpr<'arena>) -> &'arena CHirExpr<'arena> {
+        if matches!(operand, CHirExpr::Ident { .. }) {
+            return operand;
+        }
+        if let Some(place) = self
+            .resolve_memory_place(operand)
+            .filter(MemoryPlace::is_addressable)
+            .filter(|place| !self.is_loadable_scalar(place.value_ty()))
+        {
+            let facts = ExprFacts::value(place.value_ty());
+            self.alloc_node(CHirExpr::MemoryRead {
+                place,
+                facts,
+                target_span: operand.span(),
+                span: operand.span(),
+            })
+        } else {
+            operand
+        }
+    }
+
     fn parse_unary(&mut self) -> Option<&'arena CHirExpr<'arena>> {
         self.parse_extension_prefix();
         if let Some(token) = self
@@ -12713,22 +12780,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // consumers recover this place without executing a load.
             // A direct object already carries its authoritative symbol. Do not
             // snapshot its modifiability: its record tag may be completed later.
-            let operand = if op == UnaryOp::AddrOf && !matches!(operand, CHirExpr::Ident { .. }) {
-                if let Some(place) = self
-                    .resolve_memory_place(operand)
-                    .filter(MemoryPlace::is_addressable)
-                    .filter(|place| !self.is_loadable_scalar(place.value_ty()))
-                {
-                    let facts = ExprFacts::value(place.value_ty());
-                    self.alloc_node(CHirExpr::MemoryRead {
-                        place,
-                        facts,
-                        target_span: operand.span(),
-                        span: operand.span(),
-                    })
-                } else {
-                    operand
-                }
+            let operand = if op == UnaryOp::AddrOf {
+                self.address_operand(operand)
             } else {
                 operand
             };
@@ -12896,7 +12949,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             {
                 return self.make_vector_cast(ty, operand, span);
             }
-            if evocc_chir::complex::rank(&self.types, ty).is_some()
+            if evocc_chir::complex::admitted(&self.types, ty)
                 || self.complex_expression_type(operand).is_some()
             {
                 let target = self.operand_type_class(InferredType::Canonical(ty));
@@ -13421,6 +13474,32 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return None;
                 };
                 CHirExpr::FloatLit(literal, tok.span)
+            }
+            TokenKind::ImaginaryFloatLiteral => {
+                // GNU `2.5i`: the real part is +0 and the imaginary part is
+                // the literal, rounded once to its format.
+                let literal = evocc_lex::imaginary_floating_spelling(self.token_text(&tok))
+                    .and_then(|text| parse_float_literal(&text, self.target_layout));
+                let Some(literal) = literal else {
+                    self.report("E1006", "invalid-floating-literal", tok.span);
+                    return None;
+                };
+                let kind = match literal.suffix {
+                    FloatSuffix::F => FloatKind::F32,
+                    FloatSuffix::None => FloatKind::F64,
+                    FloatSuffix::L => FloatKind::F128,
+                };
+                let ty = self.intern(
+                    TypeKind::Complex(complex_base_for_float(kind)),
+                    Qualifiers::default(),
+                );
+                let value = self.alloc_node(CHirExpr::FloatLit(literal, tok.span));
+                return Some(self.complex_node(
+                    evocc_chir::complex::ComplexOp::Imaginary,
+                    vec![value],
+                    ty,
+                    tok.span,
+                ));
             }
             TokenKind::CharLiteral => {
                 let Some(literal) = parse_char_literal(self.token_text(&tok), self.target_layout)
@@ -16348,7 +16427,7 @@ fn floating_kind(class: OperandTypeClass) -> Option<FloatKind> {
     match class {
         OperandTypeClass::Real(kind) => Some(kind),
         OperandTypeClass::Complex(base) => Some(match base {
-            ComplexBase::Integer(_) => return None,
+            ComplexBase::Integer(_) | ComplexBase::Interchange(_) => return None,
             ComplexBase::CF16 => FloatKind::F16,
             ComplexBase::CF32 => FloatKind::F32,
             ComplexBase::CF64 => FloatKind::F64,
@@ -16422,6 +16501,16 @@ fn widest_floating_kind(left: OperandTypeClass, right: OperandTypeClass) -> Opti
         }),
         (Some(kind), None) | (None, Some(kind)) => Some(kind),
         (None, None) => None,
+    }
+}
+
+/// The operand class of a complex type. Complex types over `_FloatN`,
+/// `_FloatNx` and half formats have no admitted value operation, as their
+/// real types have none.
+fn complex_class(complex: ComplexBase) -> OperandTypeClass {
+    match complex {
+        ComplexBase::Interchange(_) | ComplexBase::CF16 => OperandTypeClass::Other,
+        complex => OperandTypeClass::Complex(complex),
     }
 }
 
@@ -16534,7 +16623,9 @@ fn can_start_expression(kind: TokenKind) -> bool {
         TokenKind::Identifier
             | TokenKind::GnuExtension
             | TokenKind::IntLiteral
+            | TokenKind::ImaginaryIntLiteral
             | TokenKind::FloatLiteral
+            | TokenKind::ImaginaryFloatLiteral
             | TokenKind::CharLiteral
             | TokenKind::StringLiteral
             | TokenKind::LParen
@@ -17240,7 +17331,17 @@ struct BuiltinTypeWord {
 /// rejects contradictory or duplicate words.
 fn resolve_builtin_type(words: &[BuiltinTypeWord]) -> Option<TypeKind> {
     if let Some(target) = words.iter().find_map(|word| word.target_builtin) {
-        return (words.len() == 1).then_some(TypeKind::TargetBuiltin(target));
+        // GCC 14 admits `_Complex` with exactly the six interchange types on
+        // aarch64; `__fp16 _Complex` and `__bf16 _Complex` are errors there.
+        let complex = words
+            .iter()
+            .filter(|word| word.kind == TokenKind::Complex)
+            .count();
+        return match (words.len(), complex) {
+            (1, 0) => Some(TypeKind::TargetBuiltin(target)),
+            (2, 1) => ComplexBase::interchange(target).map(TypeKind::Complex),
+            _ => None,
+        };
     }
     let count = |needle| words.iter().filter(|word| word.kind == needle).count();
     let void = count(TokenKind::Void);
@@ -17304,18 +17405,14 @@ fn resolve_builtin_type(words: &[BuiltinTypeWord]) -> Option<TypeKind> {
 
     if complex == 1 {
         if float == 0 && double == 0 {
-            let mut component = words
+            let component = words
                 .iter()
                 .filter(|word| word.kind != TokenKind::Complex)
                 .copied()
                 .collect::<Vec<_>>();
             if component.is_empty() {
-                component.push(BuiltinTypeWord {
-                    kind: TokenKind::Int,
-                    target_builtin: None,
-                    target_vector: None,
-                    forced_int128_signedness: None,
-                });
+                // GCC and Clang read plain `_Complex` as `double _Complex`.
+                return Some(TypeKind::Complex(ComplexBase::CF64));
             }
             return match resolve_builtin_type(&component)? {
                 TypeKind::Int(rank) if rank != IntRank::Bool => {

@@ -15,6 +15,9 @@ enum Comparison {
 pub(crate) struct Helper {
     instruction: FloatingInst,
     comparison: Option<Comparison>,
+    /// A complex helper returns both parts of its product or quotient;
+    /// `instruction` names its real part.
+    complex: bool,
 }
 fn registers(ty: &EvoIRType) -> Vec<RegClass> {
     match ty {
@@ -26,14 +29,39 @@ fn registers(ty: &EvoIRType) -> Vec<RegClass> {
 }
 impl Helper {
     pub(crate) fn classes(&self) -> (Vec<RegClass>, Vec<RegClass>) {
+        let mut results = registers(&self.instruction.result.ty);
+        if self.complex {
+            results.extend(registers(&self.instruction.result.ty));
+        }
         (
             self.instruction
                 .arguments
                 .iter()
                 .flat_map(|a| registers(&a.ty))
                 .collect(),
-            registers(&self.instruction.result.ty),
+            results,
         )
+    }
+    pub(crate) fn is_complex(&self) -> bool {
+        self.complex
+    }
+    /// Both parts of a complex helper's result and the status of the call.
+    pub(crate) fn evaluate_parts(
+        &self,
+        bits: &[u128],
+        rounding: FpRounding,
+    ) -> FpResult<[u128; 2]> {
+        let real = self.instruction.evaluate_strict(bits, rounding);
+        let mut imaginary = self.instruction.clone();
+        imaginary.op = match self.instruction.op {
+            FloatingOp::ComplexMul { .. } => FloatingOp::ComplexMul { imaginary: true },
+            _ => FloatingOp::ComplexDiv { imaginary: true },
+        };
+        let imaginary = imaginary.evaluate_strict(bits, rounding);
+        FpResult {
+            value: [real.value, imaginary.value],
+            status: real.status.union(imaginary.status),
+        }
     }
     pub(crate) fn argument_types(&self) -> Vec<EvoIRType> {
         self.instruction
@@ -96,6 +124,7 @@ pub(crate) fn qualified(symbol: &str) -> Option<Helper> {
     use EvoIRType::{Bits, F128, F32, F64};
     use FloatingOp::*;
     let mut comparison = None;
+    let mut complex = false;
     let (op, arguments, result) = if let Some((from, signed, kind)) = hosted_conversion(symbol) {
         let fp = ty(kind);
         if from {
@@ -144,6 +173,20 @@ pub(crate) fn qualified(symbol: &str) -> Option<Helper> {
                 });
                 (Oeq, vec![F128; 2], Bits(32))
             }
+            "__mulsc3" | "__muldc3" | "__multc3" | "__divsc3" | "__divdc3" | "__divtc3" => {
+                complex = true;
+                let ty = match &symbol[5..] {
+                    "sc3" => F32,
+                    "dc3" => F64,
+                    _ => F128,
+                };
+                let op = if symbol.starts_with("__mul") {
+                    ComplexMul { imaginary: false }
+                } else {
+                    ComplexDiv { imaginary: false }
+                };
+                (op, vec![ty.clone(); 4], ty)
+            }
             _ => return None,
         }
     };
@@ -161,5 +204,6 @@ pub(crate) fn qualified(symbol: &str) -> Option<Helper> {
                 .collect(),
         },
         comparison,
+        complex,
     })
 }

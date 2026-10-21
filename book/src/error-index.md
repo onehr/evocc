@@ -1531,22 +1531,48 @@ int main(void) { return no; }
 
 ### E2959: unsupported-complex-type-generic-call
 
-A type-generic call selects a complex function, and EvoCC does not run floating complex values yet.
+A type-generic call selects a complex function, or has a complex argument, of a type whose values EvoCC does not run.
+These types are GCC's `_Float16 _Complex` and the other `_FloatN _Complex` and `_FloatNx _Complex` types.
 `__builtin_tgmath`, which glibc's `<tgmath.h>` uses, selects a complex function for a complex argument.
-It does so for any argument when every listed function takes complex arguments, as for `carg` and `cimag`.
-Call a real function with a real argument instead.
+Use a `float`, `double` or `long double` complex argument.
 
 ```c
-float real_part_f(_Complex float);
-double real_part(_Complex double);
-int main(void) { return (int)__builtin_tgmath(real_part_f, real_part, 1.0); }
+double real(double);
+float realf(float);
+_Float32 _Complex value;
+int main(void) { return (int)__builtin_tgmath(realf, real, value); }
 ```
 
 ```c
-float half_f(float value) { return value / 2; }
-double half(double value) { return value / 2; }
-int main(void) { return (int)__builtin_tgmath(half_f, half, 1.0); }
+static double twice(double value) { return 2 * value; }
+static float twicef(float value) { return 2 * value; }
+static double _Complex ctwice(double _Complex value) { return 2 * value; }
+static float _Complex ctwicef(float _Complex value) { return 2 * value; }
+int main(void) {
+    double _Complex value = __builtin_tgmath(twicef, twice, ctwicef, ctwice, 1.0 + 2.0i);
+    return __real__ value == 2.0 && __imag__ value == 4.0 ? 0 : 1;
+}
 ```
+
+### E2960: unmodeled-complex-constant
+
+A constant product or quotient of floating complex values needs a model of the target's complex helpers, and EvoCC has none for this target.
+On Darwin, compiler-rt computes complex multiplication and division.
+EvoCC has no model of those helpers, so it cannot give the value during translation.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+static const double _Complex product = (1.0 + 2.0i) * (3.0 + 4.0i);
+int main(void) { return product == -5.0 + 10.0i ? 0 : 1; }
+```
+
+```c
+static const double _Complex product = -5.0 + 10.0i;
+int main(void) { return product == -5.0 + 10.0i ? 0 : 1; }
+```
+
+Write the value of the product or quotient, or compute it at run time.
 
 ## E3xxx
 
@@ -2057,7 +2083,7 @@ Each anonymous argument must be passed and retrieved using its real ABI classifi
 EvoCC refuses unsupported forms instead of assigning them an unrelated scalar layout.
 
 ```c
-struct S { _Complex long double value; };
+struct S { __fp16 half; int tag; };
 int take(int n, ...) {
     __builtin_va_list ap;
     __builtin_va_start(ap, n);
@@ -2345,13 +2371,13 @@ int main(void) { void *target = &&done; goto *target; done: return 0; }
 ### E3049: not-lowered: floating-call-interface
 
 A function interface uses a floating type outside the supported executable ABI.
-Scalar `float` and `double` support does not imply support for floating complex interfaces.
+Support for `float`, `double` and `long double` does not imply support for `_Float32` interfaces.
 
 Arguments and results must keep their actual representation and calling convention.
 EvoCC refuses an unsupported interface instead of substituting another type.
 
 ```c
-_Complex float identity(_Complex float value) { return value; }
+_Float32 identity(_Float32 value) { return value; }
 int main(void) { return 0; }
 ```
 
@@ -2363,19 +2389,20 @@ Replacing it with a scalar would change the public ABI.
 ### E3050: not-lowered: floating-value
 
 The expression needs a floating value operation outside the supported lowering path.
-Floating complex operations are one example of this boundary.
+Arithmetic on vectors with floating lanes is one example of this boundary.
 
 A known type layout does not establish executable arithmetic semantics.
 EvoCC refuses the expression instead of computing only part of its value.
 
 ```c
-int main(void) { return (_Complex double)0.0 != (_Complex double)(-0.0); }
+typedef double pair __attribute__((vector_size(16)));
+int main(void) { pair a = {1.0, 2.0}; pair b = a + a; return b[1] != 4.0; }
 ```
 
 Fix: none
 
-Use an implemented arithmetic contract that preserves both components and special values.
-Discarding the imaginary component is not a general fix.
+Use an implemented arithmetic contract that preserves each lane and its special values.
+Discarding lanes is not a general fix.
 
 ### E3060: weak-internal-symbol
 
@@ -2454,6 +2481,33 @@ int main(void) {
     return buffer[0];
 }
 ```
+
+### E3067: not-executed: complex-arithmetic
+
+The interpreter reached a floating complex product or quotient that it cannot compute for this target.
+On Darwin, compiler-rt computes complex multiplication and division.
+EvoCC has no model of those helpers, so neither interpreter executes the operation.
+Native code calls the helpers, and the other complex operations run in the interpreters.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+int main(void) {
+    volatile double _Complex a = 1.0 + 2.0i;
+    double _Complex product = a * a;
+    return __real__ product == -3.0 ? 0 : 1;
+}
+```
+
+```c
+int main(void) {
+    volatile double _Complex a = 1.0 + 2.0i;
+    double _Complex sum = a + a;
+    return __real__ sum == 2.0 ? 0 : 1;
+}
+```
+
+Check the product or quotient with the Linux target, or run the native program.
 
 ### E3101: evoir-lowering-failed
 

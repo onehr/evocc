@@ -48,7 +48,9 @@ macro_rules! with_format {
     };
 }
 
+mod complex;
 mod environment;
+pub use complex::{libgcc_complex, ComplexArithmetic};
 pub use environment::{FpEnvironment, FpResult, FpRounding, FpStatus};
 
 impl FloatBits {

@@ -144,6 +144,42 @@ pub enum ComplexBase {
     CF32,
     CF64,
     CF128,
+    /// GCC's `_FloatN _Complex` and `_FloatNx _Complex`: a complex type over
+    /// one of the nominal `_FloatN` and `_FloatNx` types, with GCC's layout.
+    /// It is distinct from the complex type of the standard type of the same
+    /// format, and, as for its real type, no operation on its values is
+    /// admitted.
+    Interchange(TargetBuiltinType),
+}
+
+impl ComplexBase {
+    /// The part format of a floating complex type whose values are admitted:
+    /// `float`, `double` or `long double` parts. `long double` is the
+    /// target's format, which [`TargetDataLayout::complex_format`] gives.
+    #[must_use]
+    pub const fn executable_part(self) -> Option<FloatKind> {
+        match self {
+            Self::CF32 => Some(FloatKind::F32),
+            Self::CF64 => Some(FloatKind::F64),
+            Self::CF128 => Some(FloatKind::F128),
+            Self::Integer(_) | Self::CF16 | Self::Interchange(_) => None,
+        }
+    }
+
+    /// The GCC complex form of a nominal interchange floating type, which
+    /// GCC 14 admits on aarch64 Linux for exactly these six types.
+    #[must_use]
+    pub const fn interchange(kind: TargetBuiltinType) -> Option<Self> {
+        match kind {
+            TargetBuiltinType::GnuFloat16
+            | TargetBuiltinType::GnuFloat32
+            | TargetBuiltinType::GnuFloat64
+            | TargetBuiltinType::GnuFloat128
+            | TargetBuiltinType::GnuFloat32x
+            | TargetBuiltinType::GnuFloat64x => Some(Self::Interchange(kind)),
+            _ => None,
+        }
+    }
 }
 
 /// Type qualifiers. Bitmask-style: multiple qualifiers can apply.
@@ -844,6 +880,16 @@ impl TypeInterner {
         self.validate_type(&ty)?;
         if let Some(id) = self.canonical.get(&ty) {
             return Ok(*id);
+        }
+        // A floating complex value is read and written through its parts, so
+        // the unqualified part type exists whenever the complex type does.
+        if let TypeKind::Complex(base) = ty.kind {
+            if let Some(part) = base.executable_part() {
+                self.try_intern(CanonicalType {
+                    kind: TypeKind::Float(part),
+                    qualifiers: Qualifiers::default(),
+                })?;
+            }
         }
 
         let raw = u32::try_from(self.types.len()).expect("canonical type table exhausted u32 IDs");
@@ -1895,6 +1941,7 @@ pub struct TargetDataLayout {
     narrow_call_extension: bool,
     sixteen_byte_lock_free: bool,
     power_of_two_atomics: bool,
+    compiler_rt_complex: bool,
 }
 
 impl TargetDataLayout {
@@ -1909,6 +1956,7 @@ impl TargetDataLayout {
             narrow_call_extension: false,
             sixteen_byte_lock_free: false,
             power_of_two_atomics: false,
+            compiler_rt_complex: false,
         }
     }
 
@@ -1927,7 +1975,17 @@ impl TargetDataLayout {
             narrow_call_extension: true,
             sixteen_byte_lock_free: true,
             power_of_two_atomics: true,
+            compiler_rt_complex: true,
         }
+    }
+
+    /// Whether complex multiplication and division call compiler-rt's
+    /// helpers, as on Darwin, rather than libgcc's. Only the qualified
+    /// libgcc helpers have an execution model ([`floating::libgcc_complex`]);
+    /// the interpreters and constant folding refuse the others.
+    #[must_use]
+    pub const fn compiler_rt_complex(&self) -> bool {
+        self.compiler_rt_complex
     }
 
     /// Whether `__atomic_always_lock_free(16, 0)` is true. Apple clang
@@ -2643,6 +2701,12 @@ fn complex_layout(base: ComplexBase) -> TypeLayout {
         ComplexBase::CF32 => TypeLayout::new(8, 4),
         ComplexBase::CF64 => TypeLayout::new(16, 8),
         ComplexBase::CF128 => TypeLayout::new(32, 16),
+        ComplexBase::Interchange(kind) => {
+            let part = kind
+                .layout()
+                .expect("an interchange floating type has a layout");
+            TypeLayout::new(2 * part.size_bytes, part.align_bytes)
+        }
     }
 }
 

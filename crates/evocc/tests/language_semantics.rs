@@ -308,18 +308,17 @@ fn floating_target_header_constants_narrow_their_exact_source_representation() {
     assert_eq!(result.return_values[0].value(), 0x3ff0000000000000);
 }
 
+/// L04 admits floating complex values: the comparison that was the
+/// refused form lowers to two part comparisons.
 #[test]
-fn floating_complex_value_refusal_is_not_an_unclassified_integer_error() {
+fn floating_complex_values_lower_as_two_parts() {
     for kind in ["float", "double", "long double"] {
-        let source =
-            format!("int main(void){{ return (_Complex {kind})0.0 != (_Complex {kind})(-0.0); }}");
-        assert_eq!(
-            lower_source(&source)
-                .expect_err("floating complex execution is deferred")
-                .code(),
-            "E3050",
-            "{source}",
+        let source = format!(
+            "int main(void){{ volatile _Complex {kind} a = 0.0, b = -0.0; return a != b; }}"
         );
+        let module = lower_source(&source).unwrap_or_else(|error| panic!("{source}: {error}"));
+        let text = evocc_evoir::render_module(&module);
+        assert_eq!(text.matches("fp.oeq").count(), 2, "{source}\n{text}");
     }
 }
 
@@ -972,9 +971,16 @@ fn mixed_record_varargs_copy_unused_representation() {
 #[test]
 fn integer_complex_varargs_use_the_composite_abi() {
     check("integer-complex-varargs.c", EXECUTION);
+    // L04: floating complex anonymous arguments use the HFA rules.
+    for source in [
+        "void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,_Complex double);}",
+        "struct S{int n;_Complex double value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}",
+    ] {
+        assert!(lower_source(source).is_ok(), "{source}");
+    }
     for (source, code) in [
-        ("void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,_Complex double);}", "E3049"),
-        ("struct S{int n;_Complex double value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}", "E3030"),
+        ("typedef float v2f __attribute__((vector_size(8)));struct H{v2f a,b;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct H);}", "E3049"),
+        ("struct S{int n;__fp16 value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}", "E3030"),
     ] {
         assert_eq!(lower_source(source).unwrap_err().code(), code);
     }
@@ -1086,12 +1092,15 @@ fn integer_complex_division_parses_without_the_withdrawn_refusal() {
 }
 
 #[test]
-fn integer_complex_updates_refuse_non_integer_real_targets() {
+fn integer_complex_updates_refuse_pointer_targets() {
+    // L04: a floating target computes in the floating complex type.
     for source in [
-        "int main(void){double d=3;d*=1+2i;return 0;}",
-        "int main(void){double d=3;d/=1+2i;return 0;}",
-        "int main(void){int *p=0;p+=1+2i;return 0;}",
+        "int main(void){double d=3;d*=1+2i;return d!=3;}",
+        "int main(void){double d=3;d/=1+2i;return d!=0.6;}",
     ] {
+        assert!(lower_source(source).is_ok(), "{source}");
+    }
+    for source in ["int main(void){int *p=0;p+=1+2i;return 0;}"] {
         let arena = evocc_common::Arena::new(64 * 1024);
         let file = evocc_common::FileId::new(0);
         let mut lexer = evocc_lex::Lexer::new(file, source);

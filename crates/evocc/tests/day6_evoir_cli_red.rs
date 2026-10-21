@@ -242,10 +242,7 @@ fn computed_goto_is_emitted_and_executed_through_the_public_driver() {
 #[test]
 fn malformed_lowering_and_runtime_failures_are_diagnostics_not_panics() {
     let malformed = TempSource::new("malformed", "int +;\n");
-    let lowering = TempSource::new(
-        "lowering",
-        "_Complex long double f(_Complex long double x) { return x; }\n",
-    );
+    let lowering = TempSource::new("lowering", "_Float32 f(_Float32 x) { return x; }\n");
     let runtime = TempSource::new(
         "runtime",
         "int main(void) { int left = 7; int zero = 0; return left / zero; }\n",

@@ -1,0 +1,36 @@
+Floating-complex boundary probe, recorded reference executions, 2026-10-21.
+Fixture: tests/fixtures/floating-complex-boundaries.c
+Fixture SHA-256: 43f5ab813dfc8dcd4b3b521d59068a94174a85839c381c54dd10ba5514cdc268
+Image: evo-nexlab:sealed, linux/arm64, network none, digest
+sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93.
+References: gcc-14 (Debian 14.2.0-19) 14.2.0 and Debian clang 19.1.7, glibc 2.41.
+
+Command, for CC in gcc-14 and clang-19, LEVEL in -O0 and -O2, KIND in 32, 64
+and 128, and CASE in 0 to 4:
+  CC -std=gnu11 LEVEL -frounding-math -ffp-contract=off -DKIND=KIND
+     -DCASE=CASE floating-complex-boundaries.c -o t -lm && ./t
+
+These are the 60 executions that the 2026-09-27 capture recorded
+(tests/fixtures/remaining-boundaries-20260927.out). All 60 exit 0. Within
+each KIND and CASE the four executions print the same line. CASE 0 and 1
+are the 24 finite controls; CASE 2 to 4 are the 36 bit and status
+observations. The records below are those lines. flags uses the glibc
+values FE_INVALID=1 and FE_DIVBYZERO=2. The machine-read lines follow the
+marker; a test compares each EvoCC result with its line.
+
+records:
+KIND=32 CASE=0 real=40400000 imag=c0800000 flags=0 size=8 align=4
+KIND=32 CASE=1 real=40a00000 imag=3f800000 flags=0 size=8 align=4
+KIND=32 CASE=2 real=80000000 imag=7f800000 flags=0 size=8 align=4
+KIND=32 CASE=3 real=3f800000 imag=00000000 flags=0 size=8 align=4
+KIND=32 CASE=4 real=7f800000 imag=7f800000 flags=1 size=8 align=4
+KIND=64 CASE=0 real=4008000000000000 imag=c010000000000000 flags=0 size=16 align=8
+KIND=64 CASE=1 real=4014000000000000 imag=3ff0000000000000 flags=0 size=16 align=8
+KIND=64 CASE=2 real=8000000000000000 imag=7ff0000000000000 flags=0 size=16 align=8
+KIND=64 CASE=3 real=3ff0000000000000 imag=0000000000000000 flags=0 size=16 align=8
+KIND=64 CASE=4 real=7ff0000000000000 imag=7ff0000000000000 flags=3 size=16 align=8
+KIND=128 CASE=0 real=40008000000000000000000000000000 imag=c0010000000000000000000000000000 flags=0 size=32 align=16
+KIND=128 CASE=1 real=40014000000000000000000000000000 imag=3fff0000000000000000000000000000 flags=0 size=32 align=16
+KIND=128 CASE=2 real=80000000000000000000000000000000 imag=7fff0000000000000000000000000000 flags=0 size=32 align=16
+KIND=128 CASE=3 real=3fff0000000000000000000000000000 imag=00000000000000000000000000000000 flags=0 size=32 align=16
+KIND=128 CASE=4 real=7fff0000000000000000000000000000 imag=7fff0000000000000000000000000000 flags=3 size=32 align=16

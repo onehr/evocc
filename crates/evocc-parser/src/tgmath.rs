@@ -17,23 +17,36 @@ struct Candidate {
     parameters: Vec<TypeId>,
 }
 
-fn complex_real(kind: &TypeKind) -> Option<FloatKind> {
+/// The real type of a complex floating type, including GCC's
+/// `_FloatN _Complex` and `_FloatNx _Complex` types.
+fn complex_part(kind: &TypeKind) -> Option<TypeKind> {
     match kind {
-        TypeKind::Complex(ComplexBase::CF16) => Some(FloatKind::F16),
-        TypeKind::Complex(ComplexBase::CF32) => Some(FloatKind::F32),
-        TypeKind::Complex(ComplexBase::CF64) => Some(FloatKind::F64),
-        TypeKind::Complex(ComplexBase::CF128) => Some(FloatKind::F128),
+        TypeKind::Complex(ComplexBase::CF16) => Some(TypeKind::Float(FloatKind::F16)),
+        TypeKind::Complex(ComplexBase::CF32) => Some(TypeKind::Float(FloatKind::F32)),
+        TypeKind::Complex(ComplexBase::CF64) => Some(TypeKind::Float(FloatKind::F64)),
+        TypeKind::Complex(ComplexBase::CF128) => Some(TypeKind::Float(FloatKind::F128)),
+        TypeKind::Complex(ComplexBase::Interchange(kind)) => Some(TypeKind::TargetBuiltin(*kind)),
         _ => None,
     }
 }
 
+/// A real floating type: a standard one, or one of GCC's `_FloatN` and
+/// `_FloatNx` types, which glibc lists with `_GNU_SOURCE`.
+fn real_floating(kind: &TypeKind) -> bool {
+    match kind {
+        TypeKind::Float(_) => true,
+        TypeKind::TargetBuiltin(kind) => ComplexBase::interchange(*kind).is_some(),
+        _ => false,
+    }
+}
+
 fn floating(kind: &TypeKind) -> bool {
-    matches!(kind, TypeKind::Float(_)) || complex_real(kind).is_some()
+    real_floating(kind) || complex_part(kind).is_some()
 }
 
 /// The real type of a real or complex floating type.
 fn real_part(kind: &TypeKind) -> TypeKind {
-    complex_real(kind).map_or_else(|| kind.clone(), TypeKind::Float)
+    complex_part(kind).unwrap_or_else(|| kind.clone())
 }
 
 /// The C rank of a real floating type, which orders the usual arithmetic
@@ -133,7 +146,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             variation.push(
                 if candidates
                     .iter()
-                    .any(|c| complex_real(&c.kinds[position]).is_some())
+                    .any(|c| complex_part(&c.kinds[position]).is_some())
                 {
                     Variation::Complex
                 } else {
@@ -181,7 +194,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // the usual arithmetic conversions apply, and a complex argument or a
         // complex-only list asks for a complex type.
         let arguments = &operands[functions..];
-        let all_complex = generic_types.iter().all(|ty| complex_real(ty).is_some());
+        let all_complex = generic_types.iter().all(|ty| complex_part(ty).is_some());
         let mut complex = all_complex;
         let mut combined: Option<FloatKind> = None;
         for (index, argument) in arguments.iter().enumerate() {
@@ -197,20 +210,31 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     FloatKind::F64
                 }
                 OperandTypeClass::Real(kind) if kind != FloatKind::F16 => kind,
-                OperandTypeClass::Complex(base) => {
+                // A complex integer counts as `_Complex double`.
+                OperandTypeClass::Complex(ComplexBase::Integer(_)) => {
                     complex = true;
-                    match complex_real(&TypeKind::Complex(base)) {
-                        Some(kind) if kind != FloatKind::F16 => kind,
-                        // A complex integer counts as `_Complex double`.
-                        None => FloatKind::F64,
-                        Some(_) => {
-                            self.report("E2951", "builtin-argument-type", argument.span());
-                            return None;
-                        }
-                    }
+                    FloatKind::F64
+                }
+                OperandTypeClass::Complex(base) if base.executable_part().is_some() => {
+                    complex = true;
+                    base.executable_part().unwrap()
                 }
                 _ => {
-                    self.report("E2951", "builtin-argument-type", argument.span());
+                    // A complex argument whose type has no admitted values.
+                    let complex_argument = match inferred.ty {
+                        InferredType::Canonical(ty) => self
+                            .types
+                            .get(ty)
+                            .is_some_and(|ty| complex_part(&ty.kind).is_some()),
+                        InferredType::Complex(_) => true,
+                        _ => false,
+                    };
+                    let code = if complex_argument {
+                        ("E2959", "unsupported-complex-type-generic-call")
+                    } else {
+                        ("E2951", "builtin-argument-type")
+                    };
+                    self.report(code.0, code.1, argument.span());
                     return None;
                 }
             };
@@ -241,7 +265,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let target = self.target_layout;
             let format = |kind: FloatKind| floating_rank(target.float_format(kind));
             selected = generic_types.iter().position(|ty| {
-                complex_real(ty).is_some() == complex
+                complex_part(ty).is_some() == complex
                     && match real_part(ty) {
                         TypeKind::Float(kind) => format(kind) >= format(real),
                         _ => false,
@@ -252,7 +276,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2951", "builtin-argument-type", span);
             return None;
         };
-        if complex_real(&generic_types[selected]).is_some() {
+        // A complex function of a type without admitted values stays refused.
+        if matches!(&generic_types[selected], TypeKind::Complex(base) if base.executable_part().is_none())
+        {
             self.report("E2959", "unsupported-complex-type-generic-call", span);
             return None;
         }

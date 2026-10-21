@@ -2,7 +2,62 @@
 
 mod floating;
 mod object_size;
+pub use floating::ComplexConstantError;
 pub use object_size::builtin_object_size;
+
+/// The parts of a constant floating complex expression, folded at
+/// translation time in round-to-nearest. Each part follows the scalar
+/// rules; complex multiplication and division follow the qualified Linux
+/// helper model, which the interpreters share. A target whose helpers have
+/// no model refuses them.
+/// Whether `expression` multiplies or divides two floating complex values
+/// on a target whose complex helpers have no execution model, so that
+/// translation-time folding refuses it.
+pub fn unmodeled_complex_arithmetic(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+) -> bool {
+    if !target.compiler_rt_complex() {
+        return false;
+    }
+    let complex = |operand: &CHirExpr<'_>| {
+        crate::vector::expression_type(types, operand)
+            .is_some_and(|ty| crate::complex::floating(types, ty).is_some())
+    };
+    match expression {
+        CHirExpr::Complex(operation) => {
+            (matches!(
+                operation.op,
+                crate::complex::ComplexOp::Binary(BinaryOp::Mul | BinaryOp::Div)
+            ) && operation.operands.iter().all(|operand| complex(operand)))
+                || operation
+                    .operands
+                    .iter()
+                    .any(|operand| unmodeled_complex_arithmetic(operand, types, target))
+        }
+        CHirExpr::Cast(_, operand, _)
+        | CHirExpr::EvaluateOnce(operand, _)
+        | CHirExpr::Unary(_, operand, _) => unmodeled_complex_arithmetic(operand, types, target),
+        CHirExpr::Binary(_, left, right, _) | CHirExpr::Comma(left, right, _) => {
+            unmodeled_complex_arithmetic(left, types, target)
+                || unmodeled_complex_arithmetic(right, types, target)
+        }
+        CHirExpr::Ternary(condition, left, right, _) => [condition, left, right]
+            .into_iter()
+            .any(|operand| unmodeled_complex_arithmetic(operand, types, target)),
+        _ => false,
+    }
+}
+
+pub fn floating_complex_constant(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+    target: &TargetDataLayout,
+) -> Result<[evocc_types::floating::FloatBits; 2], ComplexConstantError> {
+    floating::complex_value(expression, types, symbols, target)
+}
 
 /// Unevaluated scalar FP classification, including both conditional arms.
 /// This query never folds an executed expression or observes its FP state.

@@ -299,6 +299,9 @@ pub(super) fn lower(
             }
             l.bind(result, dst);
         }
+        ComplexMul { .. } | ComplexDiv { .. } => {
+            return Err("complex parts lower to helper calls".into());
+        }
     }
     Ok(())
 }

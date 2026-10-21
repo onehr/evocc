@@ -4,6 +4,16 @@ use evocc_types::floating::{FiniteOp, FloatBits, FpResult, FpStatus};
 use evocc_types::FloatKind;
 use std::cmp::Ordering;
 
+/// The fixed-environment admission of a baseline operation; a strict one
+/// needs none.
+pub(super) fn admit_environment(
+    world: &WorldState,
+    strict: bool,
+    span: SourceSpan,
+) -> Result<(), InterpreterError> {
+    admit(world, strict, span)
+}
+
 fn admit(world: &WorldState, strict: bool, span: SourceSpan) -> Result<(), InterpreterError> {
     if !strict {
         world

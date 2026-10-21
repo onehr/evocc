@@ -3856,6 +3856,8 @@ struct ExecutionState {
     /// The next unused activation-address identity, numbered past the function
     /// and block identities so no activation address ever equals one of those.
     next_activation: u64,
+    /// The target's complex helpers are compiler-rt's, which have no model.
+    compiler_rt_complex: bool,
 }
 
 /// The two addresses Section 3.7 gives one activation, minted when it begins.
@@ -3903,6 +3905,7 @@ impl ExecutionState {
             access_guards: HashMap::new(),
             next_token: 1,
             next_activation: 1,
+            compiler_rt_complex: target.compiler_rt_complex(),
         })
     }
 
@@ -4037,6 +4040,11 @@ pub enum InterpreterError {
         block: BlockId,
         depth: u16,
     },
+    /// A complex product or quotient whose target helper has no execution
+    /// model: Darwin's compiler-rt sequence (3.13.5).
+    ComplexHelperUnavailable {
+        block: BlockId,
+    },
     CallThroughNullFunctionPointer {
         block: BlockId,
     },
@@ -4073,6 +4081,7 @@ impl InterpreterError {
             Self::IndirectCallDynamicSignatureMismatch { .. } => "E3019",
             Self::UnsupportedBitWidth { .. } => "E3033",
             Self::FrameAddressUnavailable { .. } => "E3031",
+            Self::ComplexHelperUnavailable { .. } => "E3067",
             _ => "E3007",
         }
     }
@@ -4113,6 +4122,7 @@ impl InterpreterError {
             }
             Self::UnsupportedBitWidth { .. } => "not-executed: wide-integer".to_owned(),
             Self::FrameAddressUnavailable { .. } => "not-executed: frame-address".to_owned(),
+            Self::ComplexHelperUnavailable { .. } => "not-executed: complex-arithmetic".to_owned(),
             _ => self.to_string(),
         }
     }
@@ -4220,6 +4230,10 @@ impl fmt::Display for InterpreterError {
             Self::FrameAddressUnavailable { block, depth } => write!(
                 formatter,
                 "not-executed: frame-address (depth {depth} in block {block})"
+            ),
+            Self::ComplexHelperUnavailable { block } => write!(
+                formatter,
+                "not-executed: complex-arithmetic (the target helper has no model) in block {block}"
             ),
             Self::CallThroughNullFunctionPointer { block } => write!(
                 formatter,
@@ -5459,6 +5473,9 @@ fn execute_instruction(
     match inst {
         Inst::Vector(operation) => vector::execute(operation, block, values, state)?,
         Inst::Floating(operation) => {
+            if operation.is_complex_helper() && state.compiler_rt_complex {
+                return Err(InterpreterError::ComplexHelperUnavailable { block });
+            }
             if operation.needs_environment() {
                 state
                     .world
@@ -5468,6 +5485,9 @@ fn execute_instruction(
             floating::execute(operation, block, values)?;
         }
         Inst::StrictFloating(operation) => {
+            if operation.instruction.is_complex_helper() && state.compiler_rt_complex {
+                return Err(InterpreterError::ComplexHelperUnavailable { block });
+            }
             strict_floating::execute(operation, block, values, state)?
         }
         Inst::VaAccess(access) => execute_variadic_access(access, &[], block, values, state)?,

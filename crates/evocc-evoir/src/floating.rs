@@ -1,6 +1,8 @@
 //! Exact binary32/binary64 operations, excluded from the scalar EqSat allowlist.
 use crate::*;
-use evocc_types::floating::{FiniteOp, FloatBits};
+use evocc_types::floating::{
+    libgcc_complex, ComplexArithmetic, FiniteOp, FloatBits, FpResult, FpRounding,
+};
 use evocc_types::FloatKind;
 use std::cmp::Ordering;
 
@@ -28,9 +30,22 @@ pub enum FloatingOp {
     FromUnsigned,
     ToSigned,
     ToUnsigned,
-    ToIntDefined { width: u16, signed: bool },
+    ToIntDefined {
+        width: u16,
+        signed: bool,
+    },
     ToBits,
     FromBits,
+    /// One part of the product of `a + bi` and `c + di`, as the target's
+    /// complex multiplication helper computes it (3.13.5).
+    ComplexMul {
+        imaginary: bool,
+    },
+    /// One part of the quotient of `a + bi` by `c + di`, as the target's
+    /// complex division helper computes it (3.13.5).
+    ComplexDiv {
+        imaginary: bool,
+    },
 }
 
 impl FloatingOp {
@@ -60,6 +75,10 @@ impl FloatingOp {
             Self::ToUnsigned => "to_unsigned",
             Self::ToBits => "to_bits",
             Self::FromBits => "from_bits",
+            Self::ComplexMul { imaginary: false } => "cmul.real",
+            Self::ComplexMul { imaginary: true } => "cmul.imag",
+            Self::ComplexDiv { imaginary: false } => "cdiv.real",
+            Self::ComplexDiv { imaginary: true } => "cdiv.imag",
             Self::ToIntDefined { width, signed } => {
                 return format!("to_int_defined.{}{width}", if signed { "s" } else { "u" })
             }
@@ -91,6 +110,10 @@ impl FloatingOp {
             "to_unsigned" => Self::ToUnsigned,
             "to_bits" => Self::ToBits,
             "from_bits" => Self::FromBits,
+            "cmul.real" => Self::ComplexMul { imaginary: false },
+            "cmul.imag" => Self::ComplexMul { imaginary: true },
+            "cdiv.real" => Self::ComplexDiv { imaginary: false },
+            "cdiv.imag" => Self::ComplexDiv { imaginary: true },
             _ => {
                 let rest = name.strip_prefix("to_int_defined.")?;
                 let (signed, width) = if let Some(n) = rest.strip_prefix('s') {
@@ -177,6 +200,9 @@ impl FloatingInst {
             }
             ToBits => fp_unary && *result == bits(&args[0].ty),
             FromBits => unary && fp_result && args[0].ty == bits(result),
+            ComplexMul { .. } | ComplexDiv { .. } => {
+                args.len() == 4 && fp_result && args.iter().all(|a| a.ty == *result)
+            }
         };
         if valid {
             Ok(())
@@ -240,6 +266,9 @@ impl FloatingInst {
                 u128::from(float(0).to_integer(width, signed).is_some())
             }
             ToBits | FromBits => inputs[0],
+            ComplexMul { .. } | ComplexDiv { .. } => {
+                self.evaluate_complex(inputs, FpRounding::NearestEven).value
+            }
             Oeq | Une | Olt | Ole | Ogt | Oge | QuietOlt | QuietOle | QuietOgt | QuietOge => {
                 let order = float(0).compare(float(1));
                 u128::from(match self.op {
@@ -253,6 +282,35 @@ impl FloatingInst {
                 })
             }
             Constant(_) => unreachable!(),
+        }
+    }
+}
+
+impl FloatingInst {
+    /// Whether this is a part of a complex product or quotient, whose value
+    /// the target's runtime helper defines.
+    pub fn is_complex_helper(&self) -> bool {
+        matches!(
+            self.op,
+            FloatingOp::ComplexMul { .. } | FloatingOp::ComplexDiv { .. }
+        )
+    }
+
+    /// The part of the qualified Linux helper's result that this
+    /// instruction names, in `rounding`, with the status of the whole helper.
+    pub(crate) fn evaluate_complex(&self, inputs: &[u128], rounding: FpRounding) -> FpResult<u128> {
+        let kind = floating_kind(&self.result.ty).expect("validated complex part format");
+        let part = |index: usize| FloatBits::from_bits(kind, inputs[index]).expect("operand bits");
+        let (op, imaginary) = match self.op {
+            FloatingOp::ComplexMul { imaginary } => (ComplexArithmetic::Multiply, imaginary),
+            FloatingOp::ComplexDiv { imaginary } => (ComplexArithmetic::Divide, imaginary),
+            _ => unreachable!("validated complex part"),
+        };
+        let result = libgcc_complex(op, [part(0), part(1), part(2), part(3)], rounding)
+            .expect("validated complex operands share one executable format");
+        FpResult {
+            value: result.value[usize::from(imaginary)].bits(),
+            status: result.status,
         }
     }
 }

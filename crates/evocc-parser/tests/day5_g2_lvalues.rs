@@ -60,7 +60,8 @@ const INVALID_STRUCT_COMPOUND: &str = concat!(
 const INVALID_POINTER_MULTIPLY: &str = "int f(int *p) { p *= 2; return 0; }\n";
 const INVALID_POINTER_FLOAT_ADD: &str = "int f(int *p) { p += 1.5; return 0; }\n";
 const INVALID_FLOAT_SHIFT: &str = "int f(void) { float x = 1.0; x <<= 1; return 0; }\n";
-const INVALID_COMPLEX_UPDATE: &str = "int f(void) { double _Complex z = 0; z++; return 0; }\n";
+// L04 admits GNU `++` on floating complex values; integer complex stays refused.
+const INVALID_COMPLEX_UPDATE: &str = "int f(void) { _Complex int z = 0; z++; return 0; }\n";
 const DAY7_POINTER_ADD: &str = "int f(int *p) { p += 1; return 0; }\n";
 const DAY7_POINTER_UPDATE: &str = "int f(int *p) { p++; return 0; }\n";
 const SCALAR_CONVERSION_CONTROLS: &str = concat!(
@@ -620,20 +621,30 @@ fn scalar_assignment_conversions_and_real_updates_are_retained() {
     }
 }
 
+/// A floating complex value has two parts, so its update assigns the
+/// complete object through one memory place, as integer complex does (L04).
 #[test]
-fn complex_addition_assignment_is_a_valid_scalar_control() {
+fn complex_addition_assignment_updates_one_complex_object() {
     let arena = Arena::default();
     let unit = parse_valid(COMPLEX_ADD_CONTROL, &arena);
     let body = items(function(&unit, 0));
-    assert_direct_scalar_node(
-        &unit,
-        object(&body[0]),
-        expression(&body[1]),
-        COMPLEX_ADD_CONTROL,
-        "z += 1.0",
-        "Assign {",
-        "Add",
-    );
+    let declaration = object(&body[0]);
+    let update = expression(&body[1]);
+    assert_eq!(span_text(COMPLEX_ADD_CONTROL, update.span()), "z += 1.0");
+    let CHirExpr::MemoryAssign {
+        op, place, facts, ..
+    } = update
+    else {
+        panic!("expected a complex memory update, got {update:?}");
+    };
+    assert_eq!(format!("{op:?}"), "Add");
+    assert!(matches!(
+        place.root(),
+        PlaceRoot::Object { symbol } if *symbol == declaration.symbol
+    ));
+    assert!(place.projections().is_empty());
+    assert_eq!(place.value_ty(), declaration.ty);
+    assert_eq!(facts.ty(), declaration.ty);
 }
 
 #[test]

@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.7.0** | **Pinned ground truth** | Masked EvoIR accesses on 2026-10-21
+**Revision 1.8.0** | **Pinned ground truth** | Complex helper calls on 2026-10-21
 
 ## Status and scope
 
@@ -279,6 +279,23 @@ conversions are ordinary ABI calls of `__addtf3`, `__subtf3`, `__multf3`,
 Comparisons use the equality/unordered and ordered helper families and test
 signs; quiet ordered predicates first test unordered status, replace
 unordered inputs with zero, and mask the result to false.
+
+**Complex parts.** The two parts of one complex product or quotient of EvoIR
+Section 3.13.5, adjacent and with the same operands, become one call. The
+call takes `a`, `b`, `c` and `d` in `v0` to `v3` and returns the real part in
+`v0` and the imaginary part in `v1`, in the `s`, `d` or `q` registers of the
+format. A part without its partner is one call that uses one result.
+
+- Linux: the call is `bl.fixed_fp` for pure parts and `bl.strict_fp` for
+  strict parts, after `fp.env.check` or `fp.env.check.strict`, of
+  `__mulsc3`, `__muldc3`, `__multc3`, `__divsc3`, `__divdc3` or `__divtc3`.
+  The interpreter executes the helper model of EvoIR Section 3.13.5.
+- Darwin: a quotient is an ordinary `bl` of compiler-rt's `__divsc3` or
+  `__divdc3`. A product is Apple clang's sequence. FMUL computes `ac`, `bd`,
+  `ad` and `bc`, FSUB `ac - bd` and FADD `ad + bc`. A quiet FCMP tests each
+  result for NaN. Only when both results are NaN, a block of its own makes an
+  ordinary `bl` of `__mulsc3` or `__muldc3`, and its results replace the
+  inline ones. Darwin has no binary128 part.
 
 ### 2.7 Integer vectors and AES
 
@@ -1878,6 +1895,13 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.8.0, 2026-10-21.** Section 2.6 lowers the complex parts of EvoIR
+2.20.0. On Linux, the two parts of one product or quotient are one fixed or
+strict call of the libgcc helper, which the interpreter executes with the
+shared model. On Darwin, a quotient calls compiler-rt, and a product is Apple
+clang's inline sequence, which calls compiler-rt only when both parts are
+NaN. No machine form changes.
 
 **Revision 1.7.0, 2026-10-21.** Section 5.1 lowers the masked `load` and
 `store` of EvoIR 2.19.0 to the unmasked machine access, so native code does not

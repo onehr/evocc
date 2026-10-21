@@ -2261,7 +2261,10 @@ impl Preprocessor {
         if let Some(token) = expanded.iter().find(|token| {
             matches!(
                 token.kind,
-                TokenKind::IntLiteral | TokenKind::FloatLiteral | TokenKind::PpNumber
+                TokenKind::IntLiteral
+                    | TokenKind::FloatLiteral
+                    | TokenKind::ImaginaryFloatLiteral
+                    | TokenKind::PpNumber
             ) && parse_pp_integer_checked(token_lexeme(token, source)).is_none()
         }) {
             self.errors.push(PreprocessError {

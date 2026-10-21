@@ -314,12 +314,13 @@ fn every_other_placement_stays_refused_at_the_attribute() {
 #[test]
 fn linux_math_headers_compile() {
     let work = Work::new("math");
-    for (header, options, expected) in [
-        ("math.h", &[][..], None),
-        ("math.h", &["-D_GNU_SOURCE"][..], None),
-        ("tgmath.h", &[][..], None),
-        // L04: `_Float32 _Complex` is a separate gap, not this rule.
-        ("tgmath.h", &["-D_GNU_SOURCE"][..], Some("error[E1007]")),
+    // L04 admits GCC's `_Float32 _Complex` and the other interchange complex
+    // types in declarations, so `<tgmath.h>` compiles with `_GNU_SOURCE` too.
+    for (header, options) in [
+        ("math.h", &[][..]),
+        ("math.h", &["-D_GNU_SOURCE"][..]),
+        ("tgmath.h", &[][..]),
+        ("tgmath.h", &["-D_GNU_SOURCE"][..]),
     ] {
         let path = work.source(
             "unit.c",
@@ -329,24 +330,11 @@ fn linux_math_headers_compile() {
             let mut mode = vec![level, "-S", "-o", "/dev/null"];
             mode.extend(options);
             let output = evocc(&path, LINUX, &mode);
-            match expected {
-                None => assert!(
-                    output.status.success(),
-                    "{header} {mode:?}\n{}",
-                    text(&output)
-                ),
-                Some(code) => {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    assert_eq!(output.status.code(), Some(1), "{header} {mode:?}\n{stderr}");
-                    assert!(
-                        stderr
-                            .lines()
-                            .next()
-                            .is_some_and(|line| line.contains(code)),
-                        "{header} {mode:?}\n{stderr}"
-                    );
-                }
-            }
+            assert!(
+                output.status.success(),
+                "{header} {mode:?}\n{}",
+                text(&output)
+            );
         }
     }
 }
