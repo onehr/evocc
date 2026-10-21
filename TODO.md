@@ -135,7 +135,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, L03, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, B08b, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D19, D24, D25, D26, D27, D28 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -2947,7 +2947,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   including c-testsuite's remaining case and torture's 18 binary128 deferrals.
   Binary64 substitution is forbidden. [Brief §B][semantics].
 
-- [ ] **L03 — Binary16/bfloat16 executable boundaries** — `OPEN`, P2.
+- [x] **L03 — Binary16/bfloat16 executable boundaries** — `DONE`, P2, 2026-10-21.
   Bind each requested type/operation to the existing named LLVM/application
   refusal; specify its numerical and ABI contract independently. Implement only
   the approved scope and retain explicit refusals elsewhere. Close with
@@ -2967,6 +2967,31 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   binary32 and rounds once; AAPCS64 scalars and HFAs pass, and `__bf16` HFAs are
   refused. [Decision](docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](docs/archive/notebook/rules-20261013/l03-half-bfloat.md).
+  Closed on 2026-10-21 (EvoIR 2.22.0, EvoMIR 1.10.0, commit 4b4f8e2f).
+  `_Float16`, `__fp16` and `__bf16` are the storage formats `f16` and `bf16`.
+  Each operation converts to binary32, evaluates there and rounds once, as GCC
+  14 does; a half conditional evaluates in binary32, and `__fp16` promotes to
+  `float`. Conversions round once and follow the rounding direction and the
+  status flags. Both interpreters and constant folding follow the same rules;
+  folding gives the run-time bits, which differ from GCC 14's own folding in the
+  sign of two NaN results. Halves pass in the `h` view of the SIMD registers,
+  and binary16 HFAs pass. The `f16` suffix works on both targets; the `bf16`
+  suffix and the `__BFLT16_*` macros exist on Linux only, as GCC 14 and Apple
+  clang define them. A record that mixes `__bf16` and `_Float16` passes in
+  general registers on Linux, as GCC 14 passes it; Apple clang and Clang 19 pass
+  it in vector registers, so Darwin refuses it (E3049) and Clang 19 on Linux is
+  a recorded incompatibility. `__bf16` HFAs (E3049), the two half formats in one
+  operation (E2961), binary16 HFAs on the stack and Darwin stack halves (E4010),
+  and any half under `-mgeneral-regs-only` (E4002) are named refusals. The
+  special-value grid, the fold and rounding-direction probes and crossed calls
+  agree with GCC 14 and Apple clang; the six cases of the fixed batch and the
+  eight T01b commands compile, and `float16-smoke.c` replays unchanged. An ABI
+  test that returned a failure mask in an 8-bit exit status could not report
+  shapes 8 and 9; it now returns the first failed shape.
+  [Tests](crates/evocc/tests/half_formats.rs). The lead's full offline workspace
+  gate on the final tree passes 488 suites, 3,682 tests, zero failures and 35
+  ignores, plus Clippy and formatting, and the seven sealed-lane half tests
+  pass.
 
 - [x] **L04 — Floating complex execution** — `DONE`, P2, 2026-10-21.
   Torture retains 15 floating-complex originals. Specify complex arithmetic,
@@ -5771,6 +5796,9 @@ refusal; changing the P13 demo does not close it.
   the masks of integer `long` vectors are `long`, where Apple clang uses `long
   long`. Exit: each case follows GCC 14 on Linux and Apple clang on Darwin, or
   keeps a named refusal with a test.
+  Also found by rust-r11 on 2026-10-21: on Linux, `long double
+  __attribute__((vector_size(32)))` ends in E3101, an internal lowering error,
+  instead of a named refusal; the release binary of 2026-10-20 does the same.
 
 ## Codegen quality track — next quarter
 

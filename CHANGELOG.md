@@ -60,6 +60,10 @@ The first public version.
   rules, integer masks, per-lane C casts (E3063) and GCC's `++`, `--` and `&v[i]`. A record of one
   to four short vectors of one size passes as an HVA whatever its lane types. Floating vectors
   are E4002 under `-mgeneral-regs-only`.
+- `_Float16`, `__fp16` and `__bf16` values execute on both targets. Each operation evaluates in
+  binary32 and rounds once, as in GCC 14, and halves and binary16 HFAs pass in SIMD registers.
+  The `f16` suffix works on both targets, and the `bf16` suffix on Linux, as in GCC 14. A
+  `__bf16` HFA is E3049, and `_Float16` with `__bf16` in one operation is the new E2961.
 - Three more checked string builtins of the macOS 26 SDK (`__builtin___memccpy_chk`,
   `__builtin___strlcpy_chk`, `__builtin___strlcat_chk`), four checked `printf`-family builtins
   and `__builtin___clear_cache`, which calls the target's runtime helper.
