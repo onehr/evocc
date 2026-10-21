@@ -387,6 +387,29 @@ fn compile_module_with_guard_control(
                 function.name, refusal.code, refusal.name, refusal.block, refusal.detail
             ))
         })?;
+        // Section 9.5: under `-mstrict-align`, every access that emission
+        // writes is aligned to its width, in the frame that emission lays out.
+        if options.strict_alignment {
+            let frame = crate::emit::emission_frame(
+                target,
+                &allocated,
+                options,
+                source.and_then(|source| source.patchable_entry),
+                source.is_some_and(|source| source.stack_protect),
+            );
+            crate::strict_alignment::verify_strict_alignment(
+                target,
+                &allocated,
+                &frame,
+                &module.globals,
+            )
+            .map_err(|refusal| {
+                NativeStop::Verification(format!(
+                    "@{}: {} {} in block {}: {}",
+                    function.name, refusal.code, refusal.name, refusal.block, refusal.detail
+                ))
+            })?;
+        }
         functions.push(allocated);
     }
     let assembly = crate::emit::emit_linked_module(target, &functions, module, relocation, options);

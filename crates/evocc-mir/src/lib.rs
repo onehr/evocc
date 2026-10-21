@@ -30,6 +30,7 @@ pub mod linscan;
 pub mod lower;
 pub mod native;
 pub mod regalloc;
+pub mod strict_alignment;
 pub mod text;
 pub mod text_parse;
 pub mod validate;

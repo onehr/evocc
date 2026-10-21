@@ -1339,30 +1339,7 @@ fn emit_function(
     stack_protect: bool,
 ) {
     let abi = target.abi();
-    let mut frame = frame_of_for(target, allocated);
-    frame.unwind_tables = options.unwind_tables;
-    frame.strict_alignment = options.strict_alignment;
-    frame.general_registers_only = options.general_registers_only;
-    let protected = options.protects_codegen(patchable_entry);
-    frame.paired_saves = options.frame.paired_saves && !protected;
-    frame.shared_epilogue = options.frame.shared_epilogue && !protected;
-    frame.compact_constants = options.compact_constants && !protected;
-    frame.local_selection = options.local_selection && !protected;
-    if stack_protect {
-        frame.stack_guard = Some((frame.size, options.stack_guard.clone()));
-        frame.size += KERNEL.stack_guard_slot_bytes;
-    }
-    // A frame-pointer request applies to functions that need a frame. Only
-    // the independent leaf-frame request keeps an otherwise unused record.
-    // Inspect the allocated function: lowering may have introduced a helper
-    // call or allocation may have introduced a spill after the C leaf test.
-    frame.frameless = (options.frame.leaf_frames || options.sign_returns)
-        && !options.leaf_frame_pointer_required
-        && is_frameless_leaf(allocated, &frame);
-    // Every framed function stores x30, including a leaf with local storage.
-    // Never omit signing on that path. An admitted frameless leaf leaves x30
-    // in its register, so only the explicit leaf-signing scope signs it.
-    frame.sign_returns = options.sign_returns && (!frame.frameless || options.sign_leaf_returns);
+    let frame = emission_frame(target, allocated, options, patchable_entry, stack_protect);
     let prefix = target.symbol_prefix();
     // Section 8 (revision 0.16): "An EvoIR function or global whose
     // `visibility` is `internal` is emitted without `.globl`, so its symbol is
@@ -1470,6 +1447,43 @@ fn emit_function(
                 allocated.name);
         }
     }
+}
+
+/// The frame that emission lays out for one allocated function under
+/// `options`: the Section 6 layout, the canary slot of a protected function
+/// and the emission variants that the function admits.
+pub(crate) fn emission_frame(
+    target: Target,
+    allocated: &Allocated,
+    options: &CodegenOptions,
+    patchable_entry: Option<(u16, u16)>,
+    stack_protect: bool,
+) -> Frame {
+    let mut frame = frame_of_for(target, allocated);
+    frame.unwind_tables = options.unwind_tables;
+    frame.strict_alignment = options.strict_alignment;
+    frame.general_registers_only = options.general_registers_only;
+    let protected = options.protects_codegen(patchable_entry);
+    frame.paired_saves = options.frame.paired_saves && !protected;
+    frame.shared_epilogue = options.frame.shared_epilogue && !protected;
+    frame.compact_constants = options.compact_constants && !protected;
+    frame.local_selection = options.local_selection && !protected;
+    if stack_protect {
+        frame.stack_guard = Some((frame.size, options.stack_guard.clone()));
+        frame.size += KERNEL.stack_guard_slot_bytes;
+    }
+    // A frame-pointer request applies to functions that need a frame. Only
+    // the independent leaf-frame request keeps an otherwise unused record.
+    // Inspect the allocated function: lowering may have introduced a helper
+    // call or allocation may have introduced a spill after the C leaf test.
+    frame.frameless = (options.frame.leaf_frames || options.sign_returns)
+        && !options.leaf_frame_pointer_required
+        && is_frameless_leaf(allocated, &frame);
+    // Every framed function stores x30, including a leaf with local storage.
+    // Never omit signing on that path. An admitted frameless leaf leaves x30
+    // in its register, so only the explicit leaf-signing scope signs it.
+    frame.sign_returns = options.sign_returns && (!frame.frameless || options.sign_leaf_returns);
+    frame
 }
 
 /// Emission-only admission: inspect the allocated function, including inserted
