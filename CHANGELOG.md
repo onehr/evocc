@@ -64,6 +64,7 @@ The first public version.
   binary32 and rounds once, as in GCC 14, and halves and binary16 HFAs pass in SIMD registers.
   The `f16` suffix works on both targets, and the `bf16` suffix on Linux, as in GCC 14. A
   `__bf16` HFA is E3049, and `_Float16` with `__bf16` in one operation is the new E2961.
+- On Darwin, `<stdatomic.h>` compiles and runs through Clang's `__c11_atomic_*` builtins.
 - Three more checked string builtins of the macOS 26 SDK (`__builtin___memccpy_chk`,
   `__builtin___strlcpy_chk`, `__builtin___strlcat_chk`), four checked `printf`-family builtins
   and `__builtin___clear_cache`, which calls the target's runtime helper.
@@ -199,6 +200,8 @@ The first public version.
 
 ### Fixed
 
+- A store to a volatile bit-field no longer reports E3001 for an uninitialized neighbor, and
+  the EvoMIR interpreter follows the same per-bit rule.
 - On Darwin, `wchar_t` and `wint_t` are `int`, as Apple clang defines them. Before, they were
   the Linux `unsigned int`, so `(wchar_t)-1 < 0` and `WCHAR_MAX` differed from Apple clang.
 - A store to a bit-field no longer reads the other members of its storage unit, so `evo check`

@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D19, D24, D25, D26, D27, D28 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D19, D24, D26, D27, D28, D29 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -3235,6 +3235,17 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     `__c11_atomic_*`. [Tests](crates/evocc/tests/atomic_objects.rs). The lead's
     full-workspace gate of 2026-10-20 passes 465 suites, 3,520 tests, zero
     failures and 13 ignores, plus Clippy and formatting.
+    October 21 (EvoIR 2.23.0, commit e00f9871): Darwin `<stdatomic.h>` compiles
+    and runs through the 14 `__c11_atomic_*` builtins that Clang's header uses,
+    on the existing EvoIR 3.8 forms, with the ten `__CLANG_ATOMIC_*_LOCK_FREE`
+    macros. The stdatomic probe and every macro and generic function of the
+    header agree with Apple clang natively and in both interpreters; crossed
+    thread tests with Apple clang pass in both directions (142 checks per run).
+    Linux keeps glibc's GCC path. L11a stays open only for the TinyCC
+    `arm64-libtcc1-usegcc=yes` and zlib `DYNAMIC_CRC_TABLE` replays, which need
+    pinned checkouts that this host does not have, and for floating compound
+    updates (E2702). The full offline workspace gate passes 490 suites, 3,710
+    tests, zero failures and 35 ignores, plus Clippy and formatting.
   - [x] **L11b — Additional `__atomic` RMW/CAS/exchange** — `DONE`, P2, 2026-10-20.
     CASE=1 refuses E2001. Specify success/failure orders, weak/strong CAS,
     expected-value updates, dynamic orders and width limits before extending the
@@ -5763,7 +5774,7 @@ refusal; changing the P13 demo does not close it.
   `wchar_t` in `#if` and admit every value of the type. Exit: tests pin both
   forms on both targets against GCC 14 and Apple clang.
 
-- [ ] **D25 — Finish per-bit initializedness for volatile bit-fields and EvoMIR** — `OPEN`, P2.
+- [x] **D25 — Finish per-bit initializedness for volatile bit-fields and EvoMIR** — `DONE`, P2, 2026-10-21.
   Left open by D23 on 2026-10-21. A store to a volatile bit-field still reads
   its container, so `evo check` reports E3001 when a neighbor is uninitialized.
   The EvoMIR interpreter keeps the byte rule, so it reports E3001 for a masked
@@ -5771,6 +5782,16 @@ refusal; changing the P13 demo does not close it.
   gate generates no masked access, so it cannot meet the difference today. Exit:
   both cases follow D23's rule, or each keeps a documented refusal with a test,
   and the randomized gate generates masked accesses.
+  Closed on 2026-10-21 (EvoIR 2.24.0, EvoMIR 1.11.0, commit 671205d5). A store
+  to a volatile bit-field still reads its container as one volatile access, but
+  that read demands no bit and the store initializes only the field's bits.
+  EvoMIR loads and stores carry `[mask=M]`, and the EvoMIR interpreter follows
+  the D23 rule. The randomized gate can generate masked accesses: 1,000 programs
+  give zero mismatches, and 500 native-main programs agree. The assembly of
+  1,072 inputs on both targets at O0 and O2 is unchanged.
+  [Tests](crates/evocc-mir/tests/masked_accesses.rs). The full offline workspace
+  gate passes 490 suites, 3,710 tests, zero failures and 35 ignores, plus Clippy
+  and formatting.
 
 - [ ] **D26 — Run aggregate statement expressions in the EvoIR interpreter** — `OPEN`, P2.
   Found on 2026-10-21 by rust-r9. `--interpret-evoir` reports E3010 for a
@@ -5799,6 +5820,15 @@ refusal; changing the P13 demo does not close it.
   Also found by rust-r11 on 2026-10-21: on Linux, `long double
   __attribute__((vector_size(32)))` ends in E3101, an internal lowering error,
   instead of a named refusal; the release binary of 2026-10-20 does the same.
+
+- [ ] **D29 — Run by-value records in general registers in the EvoMIR interpreter** — `OPEN`, P2.
+  Found on 2026-10-21 by rust-r12. A by-value `struct { char c; int i; }` stops
+  the EvoMIR interpreter with E3012, because its `ldr.x` and `str.x` from a
+  4-aligned slot carry no `[align=4]`. The EvoMIR interpreter also requires a
+  record that passes in general registers to be fully initialized (an exception
+  that EvoMIR 9.1 records). Native code and the EvoIR interpreter run both
+  cases. Exit: the EvoMIR interpreter runs such records, padding and partly
+  initialized members included, and the randomized gate covers them.
 
 ## Codegen quality track — next quarter
 
